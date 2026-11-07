@@ -246,7 +246,10 @@ a landing gate refuses (drive.toml's `landing_gates` at
 with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
 each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never rebuilds what `next` keeps; a merge
-with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A ready mark
+with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A PR whose
+merge a gate can't judge (it exits neither 0 nor 1, as the unread gate does while no facts of the Lean it reads are published) isn't
+left out: it waits, recorded (the state's `waiting`) with its mark kept, as the PRs that contain it do, and each sync tries it
+again; a gate that refuses it as well leaves it out.  A ready mark
 admits a PR: the sync runs no preflight and waits on none, and its merge onto `next` (with the gates and lock drops above, and
 the codemod and the move below) is the only check before the PR joins it; what a merge breaks past that, drive's landing
 compile gate (`Driver._compiles`) and the after-landing run find.  The PRs of drive's priority list (`Queue.priority`), with
@@ -2467,17 +2470,21 @@ class Queue:
             dropped.add(n)
             conflicts[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
 
+        def wait(n: int, why: str) -> None:
+            e = entries[n]
+            e.state, e.why = "waiting", why
+            dropped.add(n)
+            waits[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
+            if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
+                self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {why}")
+
         for n in order[k:]:
             e = entries[n]
             if why := self._stale_carry(e.pr, entries):
                 refuse(n, why)
                 continue
             if blocked := [a for a in e.after if a in dropped]:
-                e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which didn't merge"
-                dropped.add(n)
-                waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
-                if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
-                    self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
+                wait(n, f"contains {e.contains(blocked[0])}, which didn't merge")
                 continue
             if e.pr.move:
                 commit, why = self._regenerate(tip, e.pr, main)
@@ -2490,6 +2497,9 @@ class Queue:
                 commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
                 refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
+                if unjudged and not refused:
+                    wait(n, f"a landing gate can't judge it yet: {' | '.join(unjudged)}; retried next sync")
+                    continue
                 if refused or unjudged:
                     commit, why = None, " | ".join(refused + unjudged)
             if commit is None:
@@ -4403,7 +4413,8 @@ class Preflight:
 
     def _gates(self, pr: PR, notes: list[str]) -> list[str]:
         """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge is a note: the sync
-        that would merge the head onto `next` runs the gates again, and leaves out a head they don't pass."""
+        that would merge the head onto `next` runs the gates again, leaves out a head they refuse, and holds one they can't
+        judge waiting, its mark kept, until a sync's gates can."""
         main = _out(self.repo, "rev-parse", "refs/queue/preflight/main")
         try:
             gates = gates_at(self.repo, main)

@@ -804,10 +804,10 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     assert [m.pr for m in members] == [1, 4] == world.on_next(q)
     assert entries[2].state == "refused" and entries[2].why == _gate_says(main, "touches bad.txt", merged=True)
     assert entries[3].state == "waiting" and entries[3].why == "contains #2, which didn't merge"
-    assert entries[5].state == "refused" and entries[5].why == (
-        f"the landing gate gates/g.py can't judge its merge onto `next` ({judged[h5][:12]}) on `main` {main[:12]} "
-        f"(exit 2: gate: can't read crash.txt)")
-    assert {n: c["why"] for n, c in q.load_state()["conflicts"].items()} == {"2": entries[2].why, "5": entries[5].why}
+    assert entries[5].state == "waiting" and entries[5].why == (
+        f"a landing gate can't judge it yet: the landing gate gates/g.py can't judge its merge onto `next` "
+        f"({judged[h5][:12]}) on `main` {main[:12]} (exit 2: gate: can't read crash.txt); retried next sync")
+    assert {n: c["why"] for n, c in q.load_state()["conflicts"].items()} == {"2": entries[2].why}
     assert q.status()[2].why == entries[2].why + " (at the last sync)"
 
     judged.clear()
@@ -819,6 +819,31 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     members, entries = q.sync()
     assert [m.pr for m in members] == [4]
     assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt", merged=True)
+
+
+def test_a_pr_a_landing_gate_can_t_judge_waits_with_its_mark_and_merges_once_a_sync_s_gates_judge_it(world):
+    """A gate that exits 2 says nothing against a PR (the unread gate does until a Lean landing's facts are published, about an
+    hour after it), so the PR isn't left out as a refused one is, whose mark its owner gives again: it waits with its mark,
+    logged once a head, and so does a PR that contains it, and a later sync whose gates judge it merges both."""
+    _move_main(world, GATED)
+    world.gh.put(1, h1 := world.change({"crash.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}, base=h1))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [3] == world.on_next(q)
+    assert entries[1].state == "waiting" and entries[1].why.startswith(
+        "a landing gate can't judge it yet: the landing gate gates/g.py can't judge its merge onto `next`")
+    assert entries[1].why.endswith("(exit 2: gate: can't read crash.txt); retried next sync"), entries[1].why
+    assert entries[2].state == "waiting" and entries[2].why == "contains #1, which didn't merge"
+    state = q.load_state()
+    assert state["conflicts"] == {} and set(state["waiting"]) == {"1", "2"} and "1" not in state.get("ejected", {})
+    assert (q.status()[1].state, q.status()[1].why) == ("waiting", entries[1].why + " (at the last sync)")
+    q.sync()
+    assert sum(f"#1 at {h1[:8]} waits off `next`" in s for s in world.logs) == 1, "logged once a head"
+    _move_main(world, {"gates/g.py": GATE.replace('if "crash.txt" in files:', "if False:")})
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["waiting"] == {}
 
 
 def test_a_member_merged_again_onto_the_tree_it_was_judged_on_takes_its_verdict_and_main_moving_judges_it_again(
