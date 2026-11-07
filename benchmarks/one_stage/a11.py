@@ -629,6 +629,25 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
 
 
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the template and layout
+    mode META holds (``d/unit.tmpl``, ``d/unit.layout``)."""
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("--layout stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text("\n".join(st.meta["template"]) + "\n")
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
+
+
 def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of every instance's first output word flipped before the set is committed."""
     from types import SimpleNamespace
@@ -649,25 +668,6 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts, public_words={},
              digests=(st.pin, st.class_sha512), indices=[int(u) for u in indices])
     return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
-
-
-def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
-    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
-    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the template and layout
-    mode META holds (``d/unit.tmpl``, ``d/unit.layout``)."""
-    if st.meta.get("statement") != FC.TMPL_STATEMENT:
-        return {}
-    if not tmpl_unit_bin:
-        raise SystemExit("--layout stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
-    placed = d / "unit.placed"
-    if not placed.exists():
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "unit.tmpl").write_text("\n".join(st.meta["template"]) + "\n")
-        (d / "unit.layout").write_text(st.meta["layout"])
-        p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
-        if p.returncode:
-            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
-    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
 
 
 def session_port(base: int, j: int) -> int:
@@ -769,12 +769,12 @@ def main() -> int:
     ap.add_argument("--unit-gates", type=int, default=4096)
     ap.add_argument("--full-gates", type=int, default=4_000_000, help="a Call up to this many gates is evaluated whole")
     ap.add_argument("--tamper", default=None, help="the kind whose member is tampered (default: the first staged; none: no tampered member)")
-    ap.add_argument("--delta", type=float, default=2.0 ** -20)
-    ap.add_argument("--port", type=int, default=0, help="the sessions' base port (default: a free port each)")
-    ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
     ap.add_argument("--layout", default=None, help="a layout mode (iv/hybrid/4): each template a templated statement; default flat")
     ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit, which places a templated unit's rows for the prover")
     ap.add_argument("--structural", action="store_true", help="with --layout, struct_lower's template, the flat unit never built")
+    ap.add_argument("--delta", type=float, default=2.0 ** -20)
+    ap.add_argument("--port", type=int, default=0, help="the sessions' base port (default: a free port each)")
+    ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -853,10 +853,11 @@ def main() -> int:
         kv0 = rows_of_kind[tpl["kinds"][0]]
         with K.no_cyclic_gc():
             st = CS.UnitStager(tpl["defn"], f"unit/a11-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
-                               circuit=sdir / "circuit.txt", bind=bound, layout=a.layout, structural=a.structural)
-        form = templated(st, sdir, a.tmpl_unit_bin)
+                               layout=a.layout, structural=a.structural,
+                               circuit=sdir / "circuit.txt", bind=bound)
         tpl["stager"], t_build = st, round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
+        form = templated(st, sdir, a.tmpl_unit_bin)
         salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
