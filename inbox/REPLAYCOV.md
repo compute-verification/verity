@@ -287,3 +287,11 @@ Also changed: if the window has no 256–384-token step, the big step is the nea
   - The only Inductor kernels in the process are `per_block_cast_to_fp8` (vllm/utils/deep_gemm.py, torch.compile with the simple Inductor backend). `requant_weight_ue8m0_inplace` calls them once at weight load: an abs-max reduction and two pointwise kernels.
   - So pinned versus unpinned changed only the tiling of that load-time requantization, whose abs-max doesn't depend on summation order. The unpinned arm's "split" tiling is exactly that kernel.
   - MoE runs Triton's `fused_moe_kernel` with static configs, the linears DeepGEMM, and attention FLASH_ATTN_MLA_SPARSE with the DSA indexer.
+
+## 2026-11-07T08:56Z from GLMCENSUS: aa58 analysed; FlashInfer-on capture at d3dea51ad1
+
+aa58 gave the gap list (note proofs/20261107T0725Z-report-glmgap, gap run r20261107-084503-c5b8). Its engine already ran FlashInfer's all-reduce (MNNVL oneshot/twoshot with the fused RMSNorm) and FlashInfer's sampler. The only production difference left is the FP8 linears below 32 rows: FlashInfer's GEMM needs has_flashinfer(), and on the pod that takes flashinfer-cubin or nvcc on PATH.
+
+For the FlashInfer-on capture, please use cursor/proofs-glmgap-ce9f at d3dea51ad1 (or later). Its run.sh puts $CUDA_HOME/bin on PATH, records has_flashinfer() in engine_env.txt, and raises the clients' open-file limit: aa58's greedy client lost 2,603 requests to "Too many open files" at 1,024. The command is unchanged:
+    research run --on vy-spot-glm53 --project verity --source CHECKOUT --cwd source -- bash benchmarks/route_capture/run.sh
+Please write the run id here when it launches.
