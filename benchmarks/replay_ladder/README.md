@@ -18,11 +18,15 @@ For each model:
   vLLM's compile cache (the first fills it: the server's entries don't match an offline engine's, so it compiles) and
   one that compiles from empty caches (`VLLM_DISABLE_COMPILE_CACHE=1`, fresh Inductor and Triton directories); each
   replay's summary says which. Replays differing from each other at the same schedule are run-to-run variation.
-- The arms: `run.sh` serves and replays each model twice, `pinned` with Inductor's reduction tiling fixed
-  (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`; unpinned, a fused add + RMSNorm kernel benchmarks two tilings on its first
-  launch in each process and keeps the faster, which changes its sum order) and `unpinned` without, three replays, which
-  say whether the model needs the pin. Each arm compiles into its own caches, since a graph compiled unpinned keeps both
-  tilings when a pinned process loads it.
+- The arms: `run.sh` serves and replays each model twice. `pinned` gives every Inductor reduction one config
+  (`TORCHINDUCTOR_DETERMINISTIC=1`, with `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`). Unpinned, a reduction with several
+  candidate configs, such as a norm's tilings, benchmarks them on its first launch in each process and keeps the faster,
+  which can change the order of its sums. `unpinned` runs three replays without the pin, which say whether the model
+  needs it. `rblock` (on request) sets only `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`, which drops the halved-R0_BLOCK
+  candidate but leaves a reduction's static candidates to the benchmark. Each arm compiles into its own caches, since
+  the pin is baked into the generated code and a graph compiled in one arm keeps its candidates when another loads it.
+  Each replay process logs the configs its reductions kept (`tilings.PID.jsonl`); the summary counts the distinct sets
+  over replays.
 - `alone`: 64 of the window's requests, evenly spaced in arrival order, each served by itself on an empty prefix cache in
   one compiled engine, compared with serving and with the first replay: how far a request's tokens depend on its batch,
   which is why a replay needs the recorded schedule.
@@ -46,8 +50,8 @@ research run --on NODE --project verity --source . --cwd source --send c4-val-00
 python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder OUT/summary.json --out DIR
 ~~~
 
-`run.sh` takes `ARMS` (`pinned unpinned`), `REPLAYS` (3), `FRESH` (1) and `ALONE` (64) for the pinned arm,
-`UNPINNED_REPLAYS` (3), and `SPAN_S`, `OVER` and `BURST` for the window
+`run.sh` takes `ARMS` (`pinned unpinned`; `rblock` too on request), `REPLAYS` (3), `FRESH` (1) and `ALONE` (64) for the pinned arm,
+`UNPINNED_REPLAYS` (3) for each other arm, and `SPAN_S`, `OVER` and `BURST` for the window
 (`ladder.py serve --docs` caps the shard's documents a plan takes prompts from). A TP2 or TP4
 model needs a node with that many GPUs. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`

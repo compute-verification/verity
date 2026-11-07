@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -83,6 +84,7 @@ class Autotuner:
     def __init__(self, keep: int):
         self.launchers, self.keep = [Launcher(1024), Launcher(512)], keep
         self.inductor_meta, self.fn = {"kernel_name": "triton_red_fused_add_rms_norm_1"}, None
+        self.heuristic_type = SimpleNamespace(name="REDUCTION")
 
     def autotune_to_one_config(self, *args, **kwargs):
         self.launchers = [x for x in self.launchers if x.config.kwargs["R0_BLOCK"] == self.keep]
@@ -98,20 +100,22 @@ def test_the_tiling_log_records_each_runtime_choice(tmp_path, monkeypatch):
     L.patch_autotuner(Tuner)
     Tuner(512).autotune_to_one_config()
     recs = [json.loads(x) for f in (tmp_path / "replay-1").glob("tilings.*.jsonl") for x in f.read_text().splitlines()]
-    assert recs == [{"kernel": "triton_red_fused_add_rms_norm_1", "kept": {"XBLOCK": 2, "R0_BLOCK": 512, "num_warps": 8,
-                                                                          "num_stages": 1},
+    assert recs == [{"kernel": "triton_red_fused_add_rms_norm_1", "heuristic": "REDUCTION",
+                     "kept": {"XBLOCK": 2, "R0_BLOCK": 512, "num_warps": 8, "num_stages": 1},
                      "candidates": [{"XBLOCK": 2, "R0_BLOCK": r, "num_warps": 8, "num_stages": 1} for r in (1024, 512)]}]
 
 
-def tiling_log(d: Path, *kept: int) -> None:
+def tiling_log(d: Path, *kept: int, xblock: int = 1024) -> None:
     d.mkdir(parents=True, exist_ok=True)
     for pid, r0 in enumerate(kept):
-        (d / f"tilings.{pid}.jsonl").write_text(json.dumps({"kernel": "k", "candidates": [], "kept": {"R0_BLOCK": r0}}) + "\n")
+        recs = [{"kernel": "k", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": r0}},
+                {"kernel": "p", "heuristic": "POINTWISE", "candidates": [], "kept": {"XBLOCK": xblock}}]
+        (d / f"tilings.{pid}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
 
 
 def test_replays_that_kept_different_tilings_get_different_digests(tmp_path):
     tiling_log(tmp_path / "a", 512)
-    tiling_log(tmp_path / "b", 512)
+    tiling_log(tmp_path / "b", 512, xblock=512)
     tiling_log(tmp_path / "c", 1024)
     tiling_log(tmp_path / "tp", 1024, 512)
     a, b, c, tp = (L.tilings(tmp_path / n) for n in ("a", "b", "c", "tp"))
@@ -129,18 +133,29 @@ def replay_json(d: Path, differing: int, against: int | None = None) -> None:
     (d / "replay.json").write_text(json.dumps(r))
 
 
+def test_only_a_reductions_choice_can_change_a_sum():
+    assert L.sums({"kernel": "k", "heuristic": "PERSISTENT_REDUCTION", "candidates": []})
+    assert not L.sums({"kernel": "triton_red_x", "heuristic": "POINTWISE", "candidates": []})
+    assert L.sums({"kernel": "triton_red_fused_rms_norm_0", "candidates": [{"XBLOCK": 1}]})
+    assert L.sums({"kernel": "Placeholder.DESCRIPTIVE_NAME", "candidates": [{"XBLOCK": 1, "R0_BLOCK": 2048}]})
+    assert not L.sums({"kernel": "triton_poi_fused_1", "candidates": [{"XBLOCK": 1024}, {"XBLOCK": 512}]})
+
+
 def test_the_pin_is_read_from_the_environment(monkeypatch):
     monkeypatch.delenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", raising=False)
-    assert not L.pinned()
+    monkeypatch.delenv("TORCHINDUCTOR_DETERMINISTIC", raising=False)
+    assert L.pin() == "unpinned"
     monkeypatch.setenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "0")
-    assert L.pinned()
+    assert L.pin() == "rblock"
+    monkeypatch.setenv("TORCHINDUCTOR_DETERMINISTIC", "1")
+    assert L.pin() == "pinned" and set(L.PIN_ENV) == {"pinned", "rblock", "unpinned"}
 
 
 def test_summary_reads_a_model_directory(tmp_path):
     d = tmp_path / "out" / "pinned" / "qwen3-8b"
     d.mkdir(parents=True)
     (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "checkpoint": "Qwen/Qwen3-8B@b", "tp": 1, "run_id": "r1",
-                                              "rate": 87.0, "inductor_pin": True, "capacity": {"req_per_s": 60.0},
+                                              "rate": 87.0, "inductor_pin": "pinned", "capacity": {"req_per_s": 60.0},
                                               "window": {"sent": 4, "ok": 4}}))
     replay_json(d / "replay-1", 0)
     replay_json(d / "replay-2", 4, against=1)
@@ -152,11 +167,15 @@ def test_summary_reads_a_model_directory(tmp_path):
                                                         "requests_tokens_differing": 1, "token_positions_differing": 5,
                                                         "against_replay": {"requests_tokens_differing": 1}}))
     row = L.model_row(d)
-    assert (row["model"], row["pin"]) == ("qwen3-8b", True)
+    assert (row["model"], row["pin"]) == ("qwen3-8b", "pinned")
     assert [r["bit_exact"] for r in row["replays"]] == [True, False]
     assert row["replays"][1]["rows_exact_share"] == pytest.approx(0.9)
     assert row["replays"][1]["compile"] == "compile"
     assert row["alone"]["requests_tokens_differing"] == 1
     md = L.markdown([row])
     assert row["tilings"] == {"replays": 2, "distinct": 2, "choices": 1}
-    assert "| qwen3-8b | 1 | yes | 4, 10, 40 | 1 of 2 | 90.000000% | 0, 1 (fresh compile) | 1 | 2 of 2 (1) | 1 of 2 |" in md
+    assert ("| qwen3-8b | 1 | TORCHINDUCTOR_DETERMINISTIC=1 TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 | 4, 10, 40 | 1 of 2 | "
+            "90.000000% | 0, 1 (fresh compile) | 1 | 2 of 2 (1) | 1 of 2 |") in md
+    for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
+        (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))
+        assert L.model_row(d)["pin"] == arm

@@ -52,7 +52,7 @@ def test_rows_are_grouped_by_architecture_then_sorted_by_size():
     assert "| Big | MoE, DSA | 753B (42B) | BF16 | 1x H200 | ○ | ○ | ○ | ○ |" in md
 
 
-def ladder_model(pin: bool, run: str, shares: list[float]) -> dict:
+def ladder_model(pin: str, run: str, shares: list[float]) -> dict:
     return {"model": "mid", "pin": pin, "serve_run_id": run, "alone": {"requests": 2, "requests_tokens_differing": 1},
             "replays": [{"run_id": run, "bit_exact": s == 1, "rows_exact_share": s, "requests": 4, "tokens_served": 40,
                          "requests_tokens_differing": int(s < 1), "compile": "compile" if i else "load"}
@@ -60,7 +60,7 @@ def ladder_model(pin: bool, run: str, shares: list[float]) -> dict:
 
 
 def test_the_ladder_fills_each_replay_column_from_its_arm():
-    summary = {"models": [ladder_model(True, "r1", [1.0, 1.0]), ladder_model(False, "r0", [1.0, 0.9])]}
+    summary = {"models": [ladder_model("pinned", "r1", [1.0, 1.0]), ladder_model("unpinned", "r0", [1.0, 0.9])]}
     cov = C.merge(copy.deepcopy(COV), [summary])
     pinned, unpinned = cov["rows"][1]["cells"]["replay"], cov["rows"][1]["cells"]["replay_unpinned"]
     assert (pinned["status"], pinned["evidence"], pinned["replays_exact"]) == ("measured", ["r1"], "2 of 2")
@@ -70,10 +70,10 @@ def test_the_ladder_fills_each_replay_column_from_its_arm():
 
 
 def test_the_footnote_names_the_models_that_need_the_pin():
-    big = ladder_model(False, "r2", [1.0, 1.0]) | {"model": "big", "tilings": {"replays": 2, "distinct": 2, "choices": 1}}
-    mid = ladder_model(False, "r0", [1.0, 1.0]) | {"tilings": {"replays": 2, "distinct": 1, "choices": 1}}
-    small = ladder_model(False, "r3", [1.0, 0.9]) | {"model": "small"}
-    tiny = ladder_model(False, "r4", [1.0]) | {"model": "tiny"}
+    big = ladder_model("unpinned", "r2", [1.0, 1.0]) | {"model": "big", "tilings": {"replays": 2, "distinct": 2, "choices": 1}}
+    mid = ladder_model("unpinned", "r0", [1.0, 1.0]) | {"tilings": {"replays": 2, "distinct": 1, "choices": 1}}
+    small = ladder_model("unpinned", "r3", [1.0, 0.9]) | {"model": "small"}
+    tiny = ladder_model("unpinned", "r4", [1.0]) | {"model": "tiny"}
     cov = copy.deepcopy(COV)
     for row, name in zip(cov["rows"], ("big", "mid", "small", "tiny")):
         row["ladder"] = name
@@ -84,6 +84,6 @@ def test_the_footnote_names_the_models_that_need_the_pin():
 
 
 def test_an_arm_the_ladder_did_not_run_keeps_its_sidecar_cell():
-    cov = C.merge(copy.deepcopy(COV), [{"models": [ladder_model(False, "r0", [1.0])]}])
+    cov = C.merge(copy.deepcopy(COV), [{"models": [ladder_model("unpinned", "r0", [1.0]), ladder_model("rblock", "r5", [1.0])]}])
     assert cov["rows"][1]["cells"]["replay"]["status"] == "representable"
     assert cov["rows"][1]["cells"]["replay_unpinned"]["status"] == "measured"

@@ -21,9 +21,9 @@ engine: vLLM's own OpenAI server, compiled with CUDA graphs, chunked prefill, pr
 - ``alone`` serves an evenly spaced sample of the window's requests one at a time, each on an empty prefix cache, in the
   same compiled engine, and compares their tokens with serving's: how far a request's tokens depend on its batch, which
   is why the replay needs the recorded schedule.
-- ``summary`` reads each model's directory into summary.json and summary.md, one row per model and arm (with or without
-  Inductor's reduction tiling pinned, `pinned`). A row of output is one request's token at one position; its share exact
-  is the window's output tokens less those that differ, over the window's output tokens.
+- ``summary`` reads each model's directory into summary.json and summary.md, one row per model and arm (the Inductor
+  environment it served and replayed in, `pin`). A row of output is one request's token at one position; its share
+  exact is the window's output tokens less those that differ, over the window's output tokens.
 """
 from __future__ import annotations
 
@@ -113,11 +113,20 @@ def tp_engine(tp: int) -> Any:
 
 # ------------------------------------------------------------------------------------------------------------ serve
 
-def pinned() -> bool:
-    """Whether Inductor's reduction tiling is pinned (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`). Unpinned, a fused
-    add + RMSNorm kernel benchmarks two tilings on its first launch in each process and keeps the faster, so two
-    processes can sum in different orders."""
-    return os.environ.get("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK") == "0"
+#: each arm's Inductor environment, which run.sh sets and `pin` reads back
+PIN_ENV = {"pinned": "TORCHINDUCTOR_DETERMINISTIC=1 TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0",
+           "rblock": "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0", "unpinned": "none"}
+
+
+def pin() -> str:
+    """The arm whose Inductor environment this process runs in. Unpinned, a reduction with more than one candidate
+    config benchmarks them on its first launch in each process and keeps the faster, so two processes can sum in
+    different orders. ``pinned`` (`TORCHINDUCTOR_DETERMINISTIC=1`) gives every reduction one config; ``rblock``
+    (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`) only drops the halved-R0_BLOCK candidate, leaving a reduction's static
+    candidates to the benchmark."""
+    if os.environ.get("TORCHINDUCTOR_DETERMINISTIC") == "1":
+        return "pinned"
+    return "rblock" if os.environ.get("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK") == "0" else "unpinned"
 
 
 def native_tokens(tok: Any) -> tuple[int, int]:
@@ -153,7 +162,7 @@ def serve(a: argparse.Namespace) -> int:
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
         "tp": LADDER[a.model].tp, "bos": traffic.BOS, "blank_line": traffic.BLANK_LINE, "capacity": burst, "over": a.over,
-        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pinned(),
+        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pin(),
         "window": (rec["loads"].get(LOAD) or [None])[0], "error": rec.get("error"), "run_id": S.SHARED.RESEARCH_RUN_ID,
     }, indent=1))
     return rc
@@ -188,7 +197,8 @@ def patch_autotuner(autotuner: Any = None) -> None:
     def autotune_to_one_config(self: Any, *args: Any, **kwargs: Any) -> Any:
         candidates = [cfg(x.config) for x in self.launchers]
         out = real(self, *args, **kwargs)
-        rec = {"kernel": self.inductor_meta.get("kernel_name") or self.fn.__name__, "candidates": candidates,
+        rec = {"kernel": self.inductor_meta.get("kernel_name") or self.fn.__name__,
+               "heuristic": getattr(getattr(self, "heuristic_type", None), "name", None), "candidates": candidates,
                "kept": cfg(self.launchers[0].config)}
         with open(Path(d) / f"tilings.{os.getpid()}.jsonl", "a") as f:
             f.write(json.dumps(rec) + "\n")
@@ -198,13 +208,22 @@ def patch_autotuner(autotuner: Any = None) -> None:
     autotuner.autotune_to_one_config = autotune_to_one_config
 
 
+def sums(rec: dict) -> bool:
+    """Whether a logged choice can change the order of a sum: a reduction's, never a pointwise kernel's (logs written
+    before the heuristic was recorded: a reduction block among the candidates, or a reduction's kernel name)."""
+    if rec.get("heuristic"):
+        return rec["heuristic"] != "POINTWISE"
+    return any(re.fullmatch(r"R\d*_BLOCK", k) for c in rec["candidates"] for k in c) or \
+        any(s in rec["kernel"] for s in ("_red_", "_per_"))
+
+
 def tilings(d: Path) -> dict | None:
-    """A replay's runtime tiling choices (log_tilings): how many kernels chose among configs in its busiest process,
-    and a digest of every process's choices in launch order, equal between two replays that chose alike."""
+    """A replay's runtime choices among reduction configs (log_tilings): how many reductions chose in its busiest
+    process, and a digest of every process's choices in launch order, equal between two replays that chose alike."""
     files = sorted(d.glob("tilings.*.jsonl"))
     if not files:
         return None
-    procs = sorted(json.dumps([[r["kernel"], r["kept"]] for r in map(json.loads, f.read_text().splitlines())],
+    procs = sorted(json.dumps([[r["kernel"], r["kept"]] for r in map(json.loads, f.read_text().splitlines()) if sums(r)],
                               sort_keys=True) for f in files)
     return {"processes": len(procs), "choices": max(len(json.loads(p)) for p in procs),
             "digest": hashlib.sha512("\n".join(procs).encode()).hexdigest()[:16]}
@@ -292,7 +311,9 @@ def compile_mode(log: Path) -> str | None:
 def model_row(d: Path) -> dict:
     """One model's directory: its window, its replays and its alone sample."""
     serve_meta = json.loads((d / "serve.json").read_text()) if (d / "serve.json").exists() else {}
-    row: dict[str, Any] = {"model": serve_meta.get("model") or d.name, "pin": bool(serve_meta.get("inductor_pin")),
+    p = serve_meta.get("inductor_pin")
+    row: dict[str, Any] = {"model": serve_meta.get("model") or d.name,
+                           "pin": p if isinstance(p, str) else "rblock" if p else "unpinned",
                            "checkpoint": serve_meta.get("checkpoint"), "tp": serve_meta.get("tp"),
                            "serve_run_id": serve_meta.get("run_id"), "capacity_req_s": (serve_meta.get("capacity") or {}).get("req_per_s"),
                            "rate_req_s": serve_meta.get("rate"), "replays": [], "alone": None, "error": serve_meta.get("error"),
@@ -347,7 +368,7 @@ def markdown(rows: list[dict]) -> str:
         win = (f"{w.get('requests', '—')}, {w.get('steps', '—')}, {w.get('tokens_served', '—')}" if w else "—")
         t = r.get("tilings")
         tiling = f"{t['distinct']} of {t['replays']} ({t['choices']})" if t else "—"
-        lines.append(f"| {r['model']} | {r['tp'] or '—'} | {'yes' if r['pin'] else 'no'} | {win} | {exact} | {worst} | {per} | "
+        lines.append(f"| {r['model']} | {r['tp'] or '—'} | {PIN_ENV[r['pin']]} | {win} | {exact} | {worst} | {per} | "
                      f"{first} | {tiling} | {alone_s} |")
     return "\n".join(lines) + "\n"
 

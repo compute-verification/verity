@@ -3,10 +3,13 @@
 #   run.sh MODEL...   for each model (ladder.LADDER) and each arm of ARMS: serve its saturated window (a capacity burst,
 #                     then the record arm), replays of it compiled, and some of its requests served alone; then
 #                     summary.json and summary.md over every model and arm.
-# The arms: `pinned` serves and replays with Inductor's reduction tiling pinned (TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0):
+# The arms (ladder.pin): `pinned` serves and replays with one config per Inductor reduction (TORCHINDUCTOR_DETERMINISTIC=1,
+# and TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0, which deterministic mode doesn't imply at every torch):
 # REPLAYS replays from vLLM's compile cache, FRESH more each compiled from empty caches, and ALONE requests alone.
-# `unpinned` serves and replays without it: UNPINNED_REPLAYS replays, which say whether the model needs the pin. Each
-# arm compiles into caches of its own: a graph compiled unpinned and loaded pinned would keep both tilings.
+# `unpinned` serves and replays without it, and `rblock` with only the halved-R0_BLOCK candidate dropped
+# (TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0): UNPINNED_REPLAYS replays each, which say whether the model needs the pin. Each
+# arm compiles into caches of its own: the pin is baked into the generated code, so a graph compiled in one arm and
+# loaded in another would keep the first arm's candidates.
 # VENV's vLLM must be d9105ea80, the integration's pin; the checkpoints are the ones checkpoints.json pins, under HF_HOME
 # (pod_bootstrap.sh --cases ROLE,... fetches and checks them).  SPAN_S, OVER and BURST set the window (ladder.py serve).
 set -uo pipefail
@@ -28,7 +31,7 @@ ARMS=${ARMS:-pinned unpinned}
 REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}; UNPINNED_REPLAYS=${UNPINNED_REPLAYS:-3}
 [ $# -gt 0 ] || { echo "replay-ladder: name the models (ladder.py's LADDER)"; exit 2; }
 [ -f "$C4" ] || { echo "replay-ladder: no C4 shard (--send it, or C4=PATH)"; exit 2; }
-for arm in $ARMS; do case $arm in pinned|unpinned) ;; *) echo "replay-ladder: ARMS takes pinned and unpinned, not $arm"; exit 2 ;; esac; done
+for arm in $ARMS; do case $arm in pinned|rblock|unpinned) ;; *) echo "replay-ladder: ARMS takes pinned, rblock and unpinned, not $arm"; exit 2 ;; esac; done
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "replay-ladder: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
@@ -41,11 +44,13 @@ for m in "$@"; do
     d=$OUT/$arm/$m; mkdir -p "$d"
     cache=$(mktemp -d)
     export VLLM_CACHE_ROOT=$cache/vllm TORCHINDUCTOR_CACHE_DIR=$cache/inductor TRITON_CACHE_DIR=$cache/triton
-    if [ "$arm" = pinned ]; then
-      export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0; replays=$REPLAYS; fresh=$FRESH; alone=$ALONE
-    else
-      unset TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK; replays=$UNPINNED_REPLAYS; fresh=0; alone=0
-    fi
+    unset TORCHINDUCTOR_DETERMINISTIC TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK
+    replays=$UNPINNED_REPLAYS; fresh=0; alone=0
+    case $arm in
+      pinned) export TORCHINDUCTOR_DETERMINISTIC=1 TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0; replays=$REPLAYS; fresh=$FRESH
+              alone=$ALONE ;;
+      rblock) export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 ;;
+    esac
     echo "== $m $arm serve $(date -u +%FT%TZ)"
     if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
         ${BURST:+--burst "$BURST"} > "$d/serve.log" 2>&1; then
