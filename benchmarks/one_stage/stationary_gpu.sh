@@ -12,8 +12,9 @@
 #      ST_PROVE_CPUS=0-31 (the prover's and the build's cores; the stagers take the rest)
 #      ST_HOLD (a file whose text names this run's slot: written once the file is gone, waiting up to ST_HOLD_WAIT=600 s, and
 #      removed at exit)  ST_DEADLINE (UTC epoch seconds after which no point starts)
-#      ST_OVERLAP=1,2,4,8 (each point proved by that many prover processes at once on the one GPU, each with its own verifier,
-#      the GPU's utilization sampled every 0.5 s into overlap/pP-kK/busy.csv; unset: one)
+#      ST_OVERLAP=1,2,4,8 (each point proved by that many prover processes at once on the one GPU against one verifier,
+#      zk_cost.py prove --provers K; unset: one)  ST_CACHE=1 (then FC_STMT_CACHE=1, at one prover and the best K)
+#      ST_KEEP_BIN (a path the built prover is copied to)  ST_BIN (a prover built so: no build)
 #      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
@@ -74,46 +75,50 @@ if [ $GPU = 1 ]; then
   [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || { log "no CUDA 13.3"; tail -5 "$O/cuda-unpack.log"; exit 1; }
   export CUDA_TK=$CR/usr/local/cuda-13.3 LD_LIBRARY_PATH=$CR/usr/local/cuda-13.3/compat:$CR/usr/local/cuda-13.3/lib64:${LD_LIBRARY_PATH:-}
 fi
-mkdir -p "$O/m0-build"
-log "build: building flock-circuit (GPU=$GPU)"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$X MODE=build GPU=$GPU taskset -c "$PC" bash verity/ml/flock/pod/60-circuit.sh \
-  > "$O/m0-build/build.log" 2>&1 || { tail -40 "$O/m0-build/build.log"; exit 6; }
-BIN=$X/flock-gpu-link/flock/target/release/flock-circuit
+if [ -x "${ST_BIN:-}" ]; then
+  BIN=$ST_BIN; log "build: reusing $BIN"
+else
+  mkdir -p "$O/m0-build"
+  log "build: building flock-circuit (GPU=$GPU)"
+  RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$X MODE=build GPU=$GPU taskset -c "$PC" bash verity/ml/flock/pod/60-circuit.sh \
+    > "$O/m0-build/build.log" 2>&1 || { tail -40 "$O/m0-build/build.log"; exit 6; }
+  BIN=$X/flock-gpu-link/flock/target/release/flock-circuit
+  [ -n "${ST_KEEP_BIN:-}" ] && mkdir -p "$(dirname "$ST_KEEP_BIN")" && cp "$BIN" "$ST_KEEP_BIN" && log "build: kept as $ST_KEEP_BIN"
+fi
 sha256sum "$BIN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export CUDA_VISIBLE_DEVICES=${ST_GPU:-0} FC_PHASE_TIMES=1
 CPUFLAG=(); [ $GPU = 1 ] || CPUFLAG=(--cpu)
 
-# prove P: plan point P, by one prover (ST_OVERLAP unset), or by K provers at once for each K of ST_OVERLAP, each with its own
-# out dir (a copy of the plan; zk_cost.py prove starts its own verifier) and the GPU's utilization sampled meanwhile
+# zk P [ARGS]: plan point P's warm process (zk_cost.py prove), its ZKCOST lines into job.log
+zk() {
+  local p=$1; shift
+  taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
+    --runs "${ST_RUNS:-2}" --points "$p" --out "$Z" "${CPUFLAG[@]}" "$@" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST | tee -a "$O/job.log"
+  return "${PIPESTATUS[0]}"
+}
+
+# prove P: plan point P by one prover, or with ST_OVERLAP by K provers at once against one verifier for each K; then with
+# ST_CACHE=1 the statement cache on, at one prover and at the K whose provers proved the most sessions a second
 prove() {
-  local p=$1 k i d rcs
-  if [ -z "${ST_OVERLAP:-}" ]; then
-    taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
-      --runs "${ST_RUNS:-2}" --points "$p" --out "$Z" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST | tee -a "$O/job.log"
-    return "${PIPESTATUS[0]}"
-  fi
-  rcs=0
+  local p=$1 k rcs=0 best
+  [ -n "${ST_OVERLAP:-}" ] || { zk "$p" || rcs=1; }
   for k in ${ST_OVERLAP//,/ }; do
     if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, $k at once: past the deadline"; continue; fi
-    d=$Z/overlap/p$p-k$k; mkdir -p "$d"
-    local smi=
-    if [ $GPU = 1 ]; then
-      nvidia-smi -i "${ST_GPU:-0}" --query-gpu=timestamp,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500 \
-        > "$d/busy.csv" 2>/dev/null & smi=$!
-    fi
-    local pids=()
-    for i in $(seq 1 "$k"); do
-      mkdir -p "$d/s$i/records" && cp "$Z/plan.json" "$d/s$i/"
-      taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
-        --runs "${ST_RUNS:-2}" --points "$p" --out "$d/s$i" "${CPUFLAG[@]}" > "$d/s$i/zk.log" 2>&1 &
-      pids+=($!)
-    done
-    date -u +%s.%N > "$d/t0"
-    for i in "${pids[@]}"; do wait "$i" || rcs=1; done
-    date -u +%s.%N > "$d/t1"
-    [ -n "$smi" ] && kill "$smi" 2>/dev/null
-    log "point $p, $k at once: $(awk -v a="$(cat "$d/t0")" -v b="$(cat "$d/t1")" 'BEGIN {printf "%.1f", b - a}') s wall"
-    grep -h ZKCOST "$d"/s*/zk.log | sed "s/^/k=$k /" | tee -a "$O/job.log"
+    zk "$p" --provers "$k" || rcs=1
+  done
+  [ "${ST_CACHE:-0}" = 1 ] || return $rcs
+  best=$("$PY" - "$Z/records/prove.jsonl" "$p" "$Z/plan.json" <<'EOF2'
+import json, sys
+plan = json.load(open(sys.argv[3]))[int(sys.argv[2])]
+recs = [json.loads(x) for x in open(sys.argv[1]) if x.strip()]
+rate = {r["provers"]: r["provers"] / (sum(r["cycle_s"]) / len(r["cycle_s"])) for r in recs
+        if r.get("cycle_s") and r["accepted"] and not r.get("stmt_cache") and (r["tag"], r["c"]) == (plan["tag"], plan["c"])}
+print(max(rate, key=rate.get) if rate else 1)
+EOF2
+)
+  for k in $(echo 1 "$best" | tr ' ' '\n' | sort -nu); do
+    if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, cache, $k at once: past the deadline"; continue; fi
+    zk "$p" --provers "$k" --stmt-cache || rcs=1
   done
   return $rcs
 }

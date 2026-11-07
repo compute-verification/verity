@@ -45,6 +45,10 @@ sessions.
 * **CPU** (`--cpu`, `zk_cost_cpu.sh`): the same sessions by `flock-circuit prove --zk` on the node's CPUs, as the CPU nodes
   prove a block's sample. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
   and the ZK server's Lean's resident memory summed, which is what a node holds for one session.
+* **Overlap** (`--provers K`): the warm process is K prover processes at once on the one device, each proving `--warm` +
+  `--runs` sessions against one `serve --zk --concurrency K`. Each live line keeps its prover and the host clock it ended
+  at, and on a GPU the record carries the device's busy fraction (`nvidia-smi`'s utilization.gpu, every 0.5 s, its
+  samples in the point's busy.csv) over the span every prover was in its timed sessions.
 """
 from __future__ import annotations
 
@@ -149,6 +153,34 @@ class Peak:
         self._stop.set()
         self._t.join()
         return self.peak_kb
+
+
+class Busy:
+    """The device's utilization.gpu (the share of each sample period a kernel ran) every `ms` milliseconds, each sample
+    stamped with this host's clock."""
+
+    def __init__(self, ms: int = 500) -> None:
+        import threading
+        dev = (os.environ.get("CUDA_VISIBLE_DEVICES") or "0").split(",")[0]
+        self.samples: list[tuple[float, int, int]] = []
+        self._p = subprocess.Popen(["nvidia-smi", "-i", dev, "--query-gpu=utilization.gpu,memory.used",
+                                    "--format=csv,noheader,nounits", "-lms", str(ms)], stdout=subprocess.PIPE, text=True)
+        self._t = threading.Thread(target=self._run, daemon=True)
+        self._t.start()
+
+    def _run(self) -> None:
+        for line in self._p.stdout:
+            try:
+                u, m = (int(x) for x in line.split(","))
+            except ValueError:
+                continue
+            self.samples.append((time.time(), u, m))
+
+    def stop(self) -> list[tuple[float, int, int]]:
+        self._p.terminate()
+        self._p.wait(timeout=30)
+        self._t.join(timeout=30)
+        return self.samples
 
 
 def environ(env: dict | None) -> dict:
@@ -298,10 +330,13 @@ def stage(a) -> int:
 # ---- prove ----------------------------------------------------------------------------------------------------------------
 
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
-    """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample."""
+    """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample; a warm
+    one with ``--provers K``, K such processes at once against one verifier."""
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
     warm, runs = (0, 1) if mode == "cold" else (a.warm, a.runs)
-    o = out / (f"{pt['tag']}-c{c}-k{k}" if "unit" in pt else f"k{pt['K']}-c{c}-k{k}") / f"{arm}-{mode}{rep}"
+    n = a.provers if mode == "warm" else 1
+    o = out / (f"{pt['tag']}-c{c}-k{k}" if "unit" in pt else f"k{pt['K']}-c{c}-k{k}") / \
+        f"{arm}-{mode}{rep}{f'-p{n}' * (n > 1)}{'-sc' * a.stmt_cache}"
     o.mkdir(parents=True, exist_ok=True)
     port = free_port()
     if "unit" in pt:
@@ -311,23 +346,35 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
         fw_files = {"partition_file": sd / "partition.json", "program_file": sd / "program.json"}
     env = {"FC_HOST_WITNESS": None if arm == "dev" else "1", "FC_FIREWALL": "1" if arm == "fw" else "0",
+           "FC_STMT_CACHE": "1" if a.stmt_cache else None,
            **(a0.firewall_env(fw_files) if arm == "fw" else {})}
     serve_log = open(o / "serve.log", "w")
     serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
                               "--instances", pub, "--circuit", str(d / "circuit.txt"), *tables,
                               "--pin", pt["pin"], "--operator", "zk-cost", "--draw-file", str(sd / f"draw-k{k}.json"),
-                              "--sessions", str(warm + runs)], stdout=serve_log, stderr=subprocess.STDOUT, text=True,
-                             env=environ(env))
+                              "--concurrency", str(n), "--sessions", str(n * (warm + runs))], stdout=serve_log,
+                             stderr=subprocess.STDOUT, text=True, env=environ(env))
     peak = Peak()
     peak.roots.append(serve.pid)
     serve_usage = None
+    busy = None if a.cpu or mode != "warm" else Busy()
+    cmd = [a.bin, "prove", "--zk", *([] if a.cpu else ["--gpu"]), "--verifier", f"127.0.0.1:{port}", "--instances", inst,
+           "--circuit", str(d / "circuit.txt"), *tables, "--runs", str(runs), "--warm", str(warm)]
+
+    def one(i: int) -> tuple:
+        sfx = str(i) * (n > 1)
+        with open(o / f"prove{sfx}.out", "w") as fo, open(o / f"prove{sfx}.err", "w") as fe:
+            t0 = time.time()
+            return (i, sfx, t0, *timed(cmd, fo, fe, env, peak))
     try:
         while "SERVING" not in (o / "serve.log").read_text() and serve.poll() is None:
             time.sleep(0.2)
-        with open(o / "prove.out", "w") as fo, open(o / "prove.err", "w") as fe:
-            rc, usage, lines = timed([a.bin, "prove", "--zk", *([] if a.cpu else ["--gpu"]), "--verifier", f"127.0.0.1:{port}",
-                                      "--instances", inst, "--circuit", str(d / "circuit.txt"),
-                                      *tables, "--runs", str(runs), "--warm", str(warm)], fo, fe, env, peak)
+        if n == 1:
+            provers = [one(0)]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(n) as ex:
+                provers = list(ex.map(one, range(n)))
         deadline = time.monotonic() + 900
         while serve.returncode is None and time.monotonic() < deadline:
             pid, status, ru = os.wait4(serve.pid, os.WNOHANG)
@@ -342,32 +389,57 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
             serve.wait(timeout=60)
         serve_log.close()
         peak_kb = peak.stop()
-    lives = []
-    for t, line in lines:
-        if line.startswith("LIVE\t"):
-            v = json.loads(line[5:])
-            fw = {}
-            for b in v.get("buckets") or []:
-                for key, x in (b or {}).items():
-                    if (key.startswith("t.firewall") or key.startswith("cpu.firewall")) and isinstance(x, (int, float)):
-                        fw[key] = fw.get(key, 0.0) + float(x)
-            lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
-                          **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
-                                                   "witness_prebuilt_s", "prove_total_s", "wait_s", "wire_sent", "wire_recv",
-                                                   "k_log", "dense_m", "instances", "gpu", "prover")}})
-    built = next((float(x.rsplit("built in ", 1)[1].rstrip("s")) for x in (o / "prove.err").read_text().splitlines()
-                  if x.startswith("statement ") and " built in " in x), None)
+        samples = busy.stop() if busy else []
+    lives, builts = [], []
+    for i, sfx, t0, _, _, lines in provers:
+        for t, line in lines:
+            if line.startswith("LIVE\t"):
+                v = json.loads(line[5:])
+                fw = {}
+                for b in v.get("buckets") or []:
+                    for key, x in (b or {}).items():
+                        if (key.startswith("t.firewall") or key.startswith("cpu.firewall")) and isinstance(x, (int, float)):
+                            fw[key] = fw.get(key, 0.0) + float(x)
+                lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
+                              "p": i, "t_end": round(t0 + t, 3),
+                              **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
+                                                       "witness_prebuilt_s", "prove_total_s", "wait_s", "wire_sent",
+                                                       "wire_recv", "k_log", "dense_m", "instances", "gpu", "prover")}})
+        builts.append(next((float(x.rsplit("built in ", 1)[1].rstrip("s")) for x in (o / f"prove{sfx}.err").read_text()
+                            .splitlines() if x.startswith("statement ") and " built in " in x), None))
+    built, rc = builts[0], max((p[3] for p in provers), key=abs)
+    usage = provers[0][4] if n == 1 else {"wall_s": max(p[4]["wall_s"] for p in provers),
+                                          "user_s": sum(p[4]["user_s"] for p in provers),
+                                          "sys_s": sum(p[4]["sys_s"] for p in provers),
+                                          "maxrss_kb": max(p[4]["maxrss_kb"] for p in provers)}
+    over = {}
+    if mode == "warm" and runs:
+        # the span every prover was in its timed sessions: from the last prover's last warm session to the first's last
+        # session; a prover's timed session j spans its (j-1)th live line to its jth
+        ends = [[x["t_end"] for x in lives if x["p"] == i] for i in range(n)]
+        if all(len(e) == warm + runs for e in ends):
+            lo, hi = max(e[warm - 1] if warm else p[2] for e, p in zip(ends, provers)), min(e[-1] for e in ends)
+            inside = [u for t, u, _ in samples if lo <= t <= hi]
+            with open(o / "busy.csv", "w") as f:
+                f.writelines(f"{t:.3f},{u},{m}\n" for t, u, m in samples)
+            over = {"overlap_s": round(hi - lo, 3), "busy": round(sum(inside) / len(inside) / 100, 4) if inside else None,
+                    "busy_samples": len(inside), "gpu_mem_max_mib": max((m for *_, m in samples), default=None),
+                    # the timed sessions' throughput while every prover was in them: K over each prover's mean cycle
+                    "cycle_s": [round((e[-1] - (e[warm - 1] if warm else p[2])) / runs, 3) for e, p in zip(ends, provers)]}
     sessions = sorted((o / "sessions").glob("*/session.json"), key=lambda f: f.stat().st_mtime)
     served = [json.loads(f.read_text()) for f in sessions]
     rec = {"K": pt.get("K"), "unit": pt.get("unit"), "tag": pt.get("tag"),
            "c": c, "k": k, "arm": arm, "mode": mode, "rep": rep, "warm": warm, "runs": runs, "rc": rc,
            "gpu_uuid": os.environ.get("GPU_LEASE_UUID"), "cpu": bool(a.cpu), "threads": os.environ.get("RAYON_NUM_THREADS"),
            **{x: round(y, 3) for x, y in {**usage, **(serve_usage or {})}.items()}, "peak_rss_kb": peak_kb,
-           "built_s": built, "lives": lives, "dir": str(o),
+           "built_s": built, "lives": lives, "dir": str(o), "provers": n, "stmt_cache": a.stmt_cache, **over,
+           **({"built_all_s": builts} if n > 1 else {}),
            "sessions": [str(f.parent) for f in sessions],
            "serve_verify_s": [((r or {}).get("verdict") or {}).get("verify_s") for r in served],
-           "accepted": rc == 0 and len(lives) == warm + runs and all(x["accepted"] is True for x in lives)}
-    print(f"ZKCOST prove {pt.get('unit') or 'K=%s' % pt['K']} c={c} k={k} {arm} {mode}{rep}: rc {rc}, wall {usage['wall_s']:.2f} s, built {built} s, "
+           "accepted": rc == 0 and len(lives) == n * (warm + runs) and all(x["accepted"] is True for x in lives)}
+    many = f"{' cache' * a.stmt_cache} x{n}, busy {over.get('busy')}, cycle {over.get('cycle_s')}" if over else ""
+    print(f"ZKCOST prove {pt.get('unit') or 'K=%s' % pt['K']} c={c} k={k} {arm} {mode}{rep}{many}: "
+          f"rc {rc}, wall {usage['wall_s']:.2f} s, built {built} s, "
           f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, k_log {[x['k_log'] for x in lives]}, "
           f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and firewall summed), "
           f"accepted {rec['accepted']}"
@@ -726,6 +798,10 @@ def main() -> int:
     ap.add_argument("--warm", type=int, default=1)
     ap.add_argument("--runs", type=int, default=3, help="the warm process's timed sessions; 0: no warm process")
     ap.add_argument("--cpu", action="store_true", help="prove: on the node's CPUs (no --gpu), as the CPU nodes prove a sample")
+    ap.add_argument("--provers", type=int, default=1, help="prove: the warm process is this many provers at once against "
+                                                           "one verifier")
+    ap.add_argument("--stmt-cache", action="store_true", help="prove: FC_STMT_CACHE=1 on the verifier and the provers, each "
+                                                              "side reusing its drawn statement across sessions")
     ap.add_argument("--run", default=os.environ.get("RESEARCH_RUN_ID"), help="fit: the run id the observations name")
     a = ap.parse_args()
     a.sizes = a.sizes or ("half,full" if a.units else "1,8,64,512")
