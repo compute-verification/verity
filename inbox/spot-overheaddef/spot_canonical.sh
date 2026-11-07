@@ -4,7 +4,10 @@
 # serve_logprobs.patch (applied to the clone: the ladder's --serve-logprobs, SERVE_LOGPROBS in run.sh, client.jsonl's
 # logprobs), dsa_topk.py and dsa_topk_kernels.py (cursor/proofs-topk-7adf), capture.py, stage.py and spot_job.sh
 # (cursor/proofs-overheaddef-1d19), spot_tp8.sh, gpu-lease and sitecustomize.py (the TP8 shims), and this file.
-#   [HOLD=/workspace/research/holds/glm53-sessions] [DEADLINE=UNIX_TIME] bash "$RESEARCH_RUN_DIR/inputs/spot_canonical.sh"
+#   [HOLD=/workspace/research/holds/glm53-sessions] [DEADLINE=UNIX_TIME] [SERVED_OUT=RUN/out] [OLD=DIR] \
+#     bash "$RESEARCH_RUN_DIR/inputs/spot_canonical.sh"
+# SERVED_OUT skips step 1 and replays against an earlier run's serve (its record arm, OUT/served and engine env); OLD is the
+# capture removed first when /workspace has under NEED_G (250) GB free.
 # 0. HOLD=FILE: vllm's session job (glm53_sessions.sh) waits while FILE exists. It is written first, then the job waits up to
 #    IDLE_MIN (40) minutes for every GPU to be under 1 GiB used, and FILE is removed when this script exits.
 # 1. serve (no capture plugin): run.sh glm53's pinned arm as fe57 served it (fe57's plan and C4 shard, MAX_MODEL_LEN 40960,
@@ -44,7 +47,7 @@ if [ -n "${HOLD:-}" ]; then
   echo "canonical: GPUs idle $(date -u +%FT%TZ)"
 fi
 # the whole-step capture wants room: this lane's earlier capture (its staged values are in its runs' records) goes first
-OLD=/workspace/spot-capture/r20261107-103343-2364
+OLD=${OLD:-/workspace/spot-capture/r20261107-103343-2364}
 free=$(df -BG --output=avail /workspace | tail -1 | tr -dc 0-9)
 if [ "${free:-0}" -lt "${NEED_G:-250}" ] && [ -d "$OLD" ]; then echo "canonical: ${free}G free, removing $OLD"; rm -rf "$OLD"; fi
 df -BG /workspace | tee "$OUT/disk_before.txt"
@@ -67,6 +70,14 @@ print(json.dumps({"dir": sys.argv[1], "processes": len(per), "processes_rewritin
 sys.exit(0 if sum(per) > 0 else 1)
 EOF
 }
+if [ -n "${SERVED_OUT:-}" ]; then
+  R=$SERVED_OUT/pinned/glm53/record
+  [ -f "$R/meta.json" ] && [ -f "$SERVED_OUT/served.json" ] && [ -f "$SERVED_OUT/serve_engine_env.txt" ] \
+    || { echo "canonical: $SERVED_OUT holds no serve (record arm, served.json, serve_engine_env.txt)"; exit 3; }
+  echo "== the serve is $SERVED_OUT's $(date -u +%FT%TZ)"
+  cp -r "$SERVED_OUT/served" "$OUT/served" && cp "$SERVED_OUT/served.json" "$SERVED_OUT/serve_engine_env.txt" "$OUT/" || exit 2
+  cp "$SERVED_OUT/topk-serve.json" "$OUT/" 2>/dev/null
+else
 echo "== serve $(date -u +%FT%TZ)"
 PYTHONPATH="$T/trace:$PYTHONPATH" VERITY_TRACE_DIR=$OUT/sched/raw SERVE_LOGPROBS=1 \
   VERITY_DSA_TOPK_LOG=$OUT/topk-serve PLAN=$PLAN C4=$C4 MAX_MODEL_LEN=40960 FLASHINFER=1 CUDA_HOME=/usr/local/cuda-12.9 \
@@ -99,6 +110,7 @@ if len(lps) == len(toks):
 print(json.dumps({"requests": len(toks), "tokens": sum(map(len, toks.values())), "requests_with_logprobs": len(lps),
                   "steps": len(w["steps"]), "logprobs_written": len(lps) == len(toks)}))
 EOF
+fi
 echo "== replay with every hook on $(date -u +%FT%TZ)"
 VERITY_DSA_TOPK_LOG=$OUT/topk-capture ARM=$R LOAD=saturated ENGINE_ENV=$OUT/serve_engine_env.txt HF_HOME=/workspace/hf \
   KEEP_TENSORS=all LONG=1 GATE_EVERY=${GATE_EVERY:-1} STAGE=${STAGE:-1} DEADLINE=${DEADLINE:-0} \

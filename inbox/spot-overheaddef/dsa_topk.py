@@ -273,6 +273,9 @@ def install(ns: Any = None, canon: Canon | None = None) -> Canon:
     for name in present:
         real = getattr(ns, name)
         fn = wraps[name](real)
+        # under a TorchDispatchMode, torch finds the op's Python overload as torch.ops._C.<name>.<overload>
+        for o in getattr(real, "overloads", lambda: [])():
+            setattr(fn, o, getattr(real, o))
         fn.dsa_topk_canon = canon  # type: ignore[attr-defined]
         fn.real = real  # type: ignore[attr-defined]
         setattr(ns, name, fn)
