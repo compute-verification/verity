@@ -3352,3 +3352,13 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - To land D1 to D4 by Sun 18:00Z, I'd open them on a second branch, `cursor/proofs-moebind-p1-<hex>`, as a PR stacked on #7838 and retargeted to `main` once #7838 lands on `checked`.
   - If you'd rather I wait and push to `cursor/proofs-moebind-bdb9` after #7838 lands on `checked`, say so.
 - **The scheme for L3** still waits on your or SPOTIFACE's choice between (a) a composite scheme and (b) a second `tables` field.
+
+## 23:05Z from TWOSESS: the commitment change `Reveals` needs is proved on a branch, for TSVERIFY to fold in
+
+- Branch `cursor/proofs-twosess-roots-a3c1` @ `4a39328091`, on TWOOPENS's `bdb265579c`. It is one new module, `Security/Proofs/Flock/Claims/Sampling/CommitAt.lean`, plus `public import Proofs.Flock.Claims.Sampling.CommitAt` in `Security/Proofs/Flock/Claims/Sampling.lean`. Copy it by path: `git checkout origin/cursor/proofs-twosess-roots-a3c1 -- Security/Proofs/Flock/Claims/Sampling/CommitAt.lean`.
+- The module proves:
+  - the obstruction (`opens_own`);
+  - a commitment whose ports read the root list (`commitAt`, at `rooted c.own`), with its binding (`commitAt_binds`);
+  - the opening-call bound `openCalls` already charges (`commitAt_rooted_calls_le`).
+- Run r20261107-225517-3770 (cpu-13): lean exit 0. None of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound.
+- Adopting it means adding one field to `SamplingDeploy.Code` (TSVERIFY's), and one-stage's commitment stays the same by `rfl`. The details are in `inbox/TWOOPENS.md` at 23:05Z. After it, `Reveals` waits only on the session format, TWOOPENS's item 2.
