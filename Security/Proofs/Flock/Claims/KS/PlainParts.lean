@@ -40,16 +40,16 @@ import Mathlib.Topology.Sheaves.Init
 # The plain chain from the concrete simulator's parts
 
 The plain table bound asks, at each plain statement some run accepts, for a simulator of each prover at the verdict
-at the draw (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform law
+at the sample (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform law
 (`Pr_plainΦ`), its roots (`plainSim_root`), the simulation (`plainSimRun`), the abort (`plainSimAbortAt`) and, at the
 coupling's chances, the slack's fit (`plain_slack_fits`) and the fork's slack (`plain_fork_le_fnAt`). What it does not
 have yet is two parts, each a named Prop here:
 
-* `PlainSimClashAt`: a live outcome decoded at the verdict at the draw with a self-clash, where `P`'s run accepts,
+* `PlainSimClashAt`: a live outcome decoded at the verdict at the sample with a self-clash, where `P`'s run accepts,
   gives that run a raw clash at some level or a collision (`PlainRawClashL`);
 * `PlainSimForkLe`: the strategies' fork advantage at each plain fork round is at most the simulated fork there.
 
-* `plainDecQ`, `PlainClashQ`: the live outcome decoded at the verdict at the draw with a property `Q` of the table's
+* `plainDecQ`, `PlainClashQ`: the live outcome decoded at the verdict at the sample with a property `Q` of the table's
   output, and `Q` giving `P`'s accepting runs a raw clash; `LiveSelfClash` is `plainDecQ` at `SelfClashL`.
 * `plainAdv`: the strategies' fork advantage `PlainSimWrPAtD` bounds, at the concrete simulator.
 * `plainRawClashRunL_of_abort`, `plainSimWrPAtD_of_parts`, `plainSimWD_of_parts`: so `PlainSimWD` holds from
@@ -109,7 +109,7 @@ theorem plainRawClashRunL_of_abort {Ω : Type} {P : Claims.Prover Ω} {x : Claim
     PlainRawClashRunL P x ω mPts N dg w P' Φ pL :=
   plainRawClashRunL_of_abortK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (pL := pL) (habort := habort) (hclash := hclash)
 
-/-- **A live outcome decoded at the verdict at the draw, with a property `Q` of table 0's output**: the verdict
+/-- **A live outcome decoded at the verdict at the sample, with a property `Q` of table 0's output**: the verdict
 `plainVerdictAt I d C rootB₀` holds, the reps' decoded tapes play to pendings, and the output at them and the
 openings `opn` has `Q`. At `Q := SelfClashL` it is `LiveSelfClash` at the plain decoders. -/
 def plainDecQ {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) (T : TabSpec mPts) (I : Exec.Inputs)
@@ -218,7 +218,7 @@ def PlainSimForkLe (x : Claims.Msg) : Prop :=
             (plainJ (tables_head_one h) hsch r ℓ).val)
 
 open Classical in
-/-- **The concrete simulator at the verdict at the draw, from its clash and its fork bound**: `PlainSimWrPAtD` at any
+/-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound**: `PlainSimWrPAtD` at any
 openings `opn` and decoders `hdec`, with `plainSim P`, `plainΦ x` and the coupling's chances
 `FnFork.δN GF128 65536 (plainNOf x spec st)`, where its live self-clashes give `P`'s accepting runs a raw clash and its
 fork advantage is at most its simulated fork. -/
