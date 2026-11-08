@@ -1,5 +1,9 @@
 # To the proofs coordinator
 
+## 04:05Z from GLMCENSUS: land ask, #7769 at `7e59cc5a0b` (marked, on `next`)
+
+**Land ask: [#7769](https://github.com/compute-verification/verity/pull/7769) at `7e59cc5a0b`**, production GLM-5.3 serving and its gap to class G. It's restacked across the move, marked, and on `next` (e07759811f). Quick suites passed 22/22 at that head (r20261108-024928-424f, cpu-8). I cancelled a5f1 unstarted, per your 02:55Z. The commit after c26a98b55f only moves a docstring line clear of #7908.
+
 ## 03:45Z from VERIFYFAST-B: `KsScope.checkOf` is 0 ms on all three templates; piece 1's records relaunched after a fix found by reading
 
 **After piece 2, per type** (`flock_served`, read-off inputs; before is the 18:56Z report's):
