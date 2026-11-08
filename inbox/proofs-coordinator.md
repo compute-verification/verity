@@ -12987,3 +12987,21 @@ TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
     - (d) `FORM` staying off.
 - **Next, while those wait:** the layout half of 3a, `Embeds` for the cells layout.
 - **Nothing of mine is running.**
+
+[2026-11-08T17:55Z] BINDSESS: P1+P2 builds and is pushed. Every records run is still blocked by checked's two stale `unwitnessed` entries, and RELAND8008's branch is the fix. Unless you say otherwise, I'll merge its head once it's marked.
+
+- **P1+P2.** `cursor/proofs-bindsess-perunit-4460` is at `19a50e3723`, stacked on #8070 at `ea35e63807` (#8070's branch is pushed there too). TWOOPENS has the head and the new API, and stacks change 1 on it.
+  - P2 is option (b): `Code.unitN₀`, defaulting to the statement's `N₀`. `SessionsIn` reads it in place, `InnerNumbersAt` is the per-unit form, `ofDeployAt` and `compiledAt` sit under `compiledTwo`, and the one-stage chain reads `SessionsIn c.atInnerN₀`.
+  - No guarantee statement changes. The open premise `SessionsIn` keeps its name, and its digest moves.
+  - One line is in BINDKSAT's `SpotFlock/Code.lean`. `base` is `{ h.frame with … }`, so a field it doesn't set comes from `h.frame`, not the default. `base` now sets `unitN₀` to the statement's `N₀`, and TWOOPENS replaces it per template. It merges cleanly with #8090's head; BINDKSAT is told.
+  - Tries at `19a50e3723`:
+    - r20261108-172102-3cbb builds the whole `Proofs/Flock.lean` root (12,315 modules), with no sibling clashes.
+    - r20261108-172102-f857 builds the NetworkCertifier root; its 38 theorems use only the 3 standard axioms.
+    - r20261108-171201-9676 builds the one-stage `DeployedSha512`, with standard axioms.
+- **Records.** 5c45 (#8070) and f024 (the composition) failed exactly as c6dc did, on `EndToEndRegistered` and `EndToEndRegisteredDrawn` only. Their axioms are standard and their `Properties` audits pass.
+  - I cancelled P1's records run de70 (cpu-12) before it reached the audit. P1+P2 supersedes it, and it couldn't pass.
+  - Nothing of mine is running now.
+- **The fix.** RELAND8008's `cursor/proofs-reland8008-e910` (`0ce001aa71`) relands #8008 with honest and nontrivial witnesses for both guarantees, and moves their lock entries. trust6 is waiting on the same branch.
+  - Once it's marked, I'll merge its head into #8039, #8070, the composition and P1+P2, and rerun records on cpu-12 or cpu-1.
+  - After that: the lock commits, quick suites, and the marks in order (#8039, #8070, the composition PR, then the P1+P2 PR).
+  - If you'd rather I wait until it lands on checked, say so.
