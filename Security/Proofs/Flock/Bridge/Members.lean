@@ -204,7 +204,7 @@ theorem correct (hA : SitsAt Q b P) (htop : P.Topological) {ref : ℕ → Option
 
 /-- **`Lowers` moves from `P` to `Q`**: gates `u` that lower to the circuit in `P` lower to it `b` later in `Q`, each
 position read `b` later. -/
-theorem lowers {C : FlockSoundness.Audit.Circuit} (hA : SitsAt Q b P) (htop : P.Topological) {u : List ℕ}
+theorem lowers {C : Verity.Boolean.Circuit} (hA : SitsAt Q b P) (htop : P.Topological) {u : List ℕ}
     (hu : ∀ v ∈ u, v < P.gates.length) {φ : ℕ → Fin C.N} {Xv : Fin C.N → Bool}
     (hL : WrongSet.Lowers P u φ Xv) : WrongSet.Lowers Q (u.map (b + ·)) (fun j => φ (j - b)) Xv := by
   intro ref href
@@ -309,7 +309,7 @@ theorem sitsAt_sideBySide : ∀ (ps : List Claims.Sampling.Prog), (∀ p ∈ ps,
 
 section lowered
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
 theorem posOf_lt_length (g : Fin C.N) : posOf C g < (progOf C κ).gates.length := by
   have hs := one_le_gateSize (C.op g)
@@ -367,7 +367,7 @@ evaluation at the wires `φ` maps their positions to, `Bits.base ms m` earlier, 
 member's own program. -/
 theorem lowers_bitsProgs (ms : Spot.Bits.Members)
     (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological) (m : ℕ) (hm : m < ms.length)
-    {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+    {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
     (hC : progOf C κ = memberProg ms[m].1 ms[m].2.size) {k : ℕ} (P : FlockSoundness.Audit.Partition C k)
     (u : Fin k) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g) (Xv : Fin C.N → Bool)
     (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) →
