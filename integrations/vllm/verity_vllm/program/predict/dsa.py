@@ -459,7 +459,10 @@ class _Model:
         C, tp, M = self.C, self.net.tp, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
-        w = lambda f: self.w[(L, f)]  # noqa: E731
+
+        def w(f: str):
+            return self.w[(L, f)]
+
         if VH != D:
             _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
         if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):
