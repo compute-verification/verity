@@ -39,7 +39,7 @@ import numpy as np
 from verity.core.protocols.pouw import core_check as CC
 from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment

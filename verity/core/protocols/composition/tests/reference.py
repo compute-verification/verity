@@ -8,9 +8,9 @@ certificates and one-stage's answers, `verity/core/protocols/network/tests/test_
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
-`sampled_proofs`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
+`spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
-`verity/core/service/sampled_proofs/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
+`verity/core/service/spot/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
 recursive form refused where the case names none of its files, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
@@ -51,7 +51,7 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.core.protocols.pouw import core_check, credit, period_check
-from verity.core.protocols.sampled_proofs import challenger as CH
+from verity.core.protocols.spot import challenger as CH
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -73,7 +73,7 @@ def module(name: str, path: Path) -> ModuleType:
 
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
 #: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
-ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
+ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/spot/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
@@ -282,8 +282,8 @@ def _form_evidence(b: bytes) -> dict:
     raise Reject(f"the evidence's form {form} is not one-stage or recursive")
 
 
-def sampled_proofs(case: Any) -> dict:
-    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`SampledProofs.OneStageZk`,
+def spot(case: Any) -> dict:
+    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`Spot.OneStageZk`,
     `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence name the form
     ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name and of any other form on the
     cases the mirror decides."""
@@ -305,9 +305,9 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
+#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`) or the
 #: recursive audit, as the params' form names it; one-stage v1 refused.
-SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
+SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")

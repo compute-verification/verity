@@ -1,4 +1,4 @@
-import SampledProofs
+import Spot
 
 /-!
 `registration-time FILE [--no-ref]`: `Registration.check` and `Registration.checkRef` (R3 as first written, quadratic in
@@ -7,7 +7,7 @@ it, each timed after the input is parsed, one `PHASE {json}` line each on stdout
 `registration.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
 -/
 
-open Lean SampledProofs
+open Lean Spot
 
 def statusKb (field : String) : IO Nat := do
   let s ← IO.FS.readFile "/proc/self/status"
