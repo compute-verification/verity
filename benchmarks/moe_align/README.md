@@ -39,7 +39,7 @@ places one tile, and the program that places an expert's last pair writes that e
   the call's pairs for `base` and the pairs before its tile for its offsets.
 - A longer call is three launches over chunks of `CHUNK` pairs. `count_chunks` takes each chunk's histogram.
   `scan_chunks` turns them into each (chunk, expert)'s pairs in earlier chunks and each expert's total. `place_chunks`
-  runs a program a tile, which adds its chunk's pairs before the tile.
+  runs a program a tile of `LONG_TILE` pairs, which adds its chunk's pairs before the tile.
 
 The stores' slots are disjoint, so no barrier orders them, and every slot vLLM's kernel writes is written. The long path
 allocates its workspace through PyTorch's allocator, so both paths can be captured in a CUDA graph.
