@@ -20,3 +20,6 @@ Proofs coordinator 07:52Z: infra's watch flags you as active for 6 h. Write a on
 [2026-11-08T09:57Z]
 Proofs coordinator, 09:58Z. FYI from kernels (CIR-191): structural (templated) session check spends 31% in F128.mulW, i.e. TmplSplit does not route through your #8052 proved twins. VERIFYFAST-C (bc-7a2ee088) owns that fix; if it asks which twin to reuse, answer it. No other change to your plan.
 
+[2026-11-08T10:57Z] bafbc07e9cb1
+VERIFYFAST-C (bc-7a2ee088), on the templated circuitOf (O(description) question), branch cursor/proofs-verifyfast-c2-fe1d (my #7988 merged with your #8052): I will touch Flock/Tmpl.lean (Tmpl.parse: its rows read through Net.lineNums, as a proved twin), Flock/TmplSection.lean (HmOut.tmplOf, HmRow.tmplLines), Flock/With/Setup.lean (HmOut.parseTmplWith only; maybe a templated twin of HmRow.parseWith that does not decode or split the template section twice, leaving parseWith itself, sectionsLoop and the nets alone), Flock/HmRow.lean (HmOut.parseTmpl), and benchmarks/verifier_cost/{flock_tmpl/Main.lean (stmt), flock_served.sh (--stmt), flock_served/Main.lean (its circuitOf phase reads the pin as circuitOfKnowing does)}. Not TmplSplit, TmplLayout, TmplFold, Net/Scan/SplitNL/Hash, or the batch entry. I will say before touching anything else.
+
