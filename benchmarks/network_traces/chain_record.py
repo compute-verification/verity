@@ -561,11 +561,17 @@ def scan_exit(s: dict | None, job: dict) -> str | None:
                       *(["scan_zk's ok is not true"] if s is not None and s.get("ok") is not True else [])])
 
 
-def free_inputs(circuit: dict) -> int:
+#: the value a window circuit registers the scan's state rows as, which no pin holds: the verifier fixes it before no run,
+#: so its reads stay free (`NetworkCheck.Period.stateValue`)
+SCAN_STATE = "verity/certifier/scan-state/v1"
+
+
+def free_inputs(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
     """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``: every proof block's input-row
     bits (each template's proof blocks times its statement's ``in_rows`` widths), less each proof block's rows whose
-    every port a wire feeds from another proof block's output (``wires``) or ``external`` names as the system's I/O. A
-    row the registration's anchors register still counts, an overcount."""
+    every port a wire feeds from another proof block's output (``wires``) or ``external`` names as the system's I/O, and
+    less the rows the registration registers (`registered_bits`): its registered reads, table reads and openings of a
+    parameter held to the verifier's pin (``pins``), where the window's registration records that root (``roots``)."""
     from verity.ml.windows.interface import Wire
 
     units = {t: n for t, n in circuit["templates"]}
@@ -588,17 +594,60 @@ def free_inputs(circuit: dict) -> int:
             gone = 0 if not fed else n if all(f is None for f in fed) else len(set(range(n)).intersection(
                 *(set(range(n)) if f is None else f for f in fed)))
             bits += (n - gone) * width
-    return bits
+    return bits - registered_bits(circuit, pins, roots)
 
 
-def audit_of(d: Path) -> dict:
+def registered_bits(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
+    """The bits of a window circuit's input rows its registration registers, as `NetworkCheck.Circuit.countsOf` counts
+    them (`interface.input_count`'s ``registered``): each registered read of a held parameter fills its reader rows, and
+    each table read and opening of a table over one its port's rows. A parameter is held where the verifier's pin of it
+    (``pins``, ``{param: root}``, the verifier's own, never the record's) is the root the window's registration records
+    for it (``roots``, its ``registered_roots``; `interface.held_params`); a read of any other parameter stays free, and
+    with no pins every one does. Refused (ValueError) where a pin names `SCAN_STATE`, or a held read fills a port
+    ``external`` names, whose rows `free_inputs` takes out already."""
+    from verity.ml.windows import interface as IF
+
+    held = IF.held_params(pins, roots)
+    if SCAN_STATE in (pins or {}):
+        raise ValueError(f"a pin of {SCAN_STATE}: the scan's state is no value the verifier fixes before the run, so its "
+                         "reads count free")
+    reg = IF.declarations(circuit)[2] if held else None
+    if reg is None:
+        return 0
+    pinned = {t.name for t in reg.tables if t.param in held}
+    filled = ([(r.reader, r.port) for r in reg.reads if r.param in held]
+              + [(r.reader, r.port) for r in reg.roots if r.table in pinned]
+              + [(o.reader, p) for o in reg.openings if o.table in pinned for p in o.ports])
+    if both := sorted({f"{t}/{p}" for t, p in filled} & set(circuit.get("external") or ())):
+        raise ValueError(f"external ports {both} are registered reads of a held parameter too: their rows would be "
+                         "taken out twice")
+    return IF.input_count(circuit, pins=pins, roots=roots)["registered"]
+
+
+def audit_of(d: Path, pins: dict | None = None) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
     `NetworkCheck.Period` counts them), the
     least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
-    within a bucket."""
+    (`free_inputs`, the registered rows taken out at the verifier's ``pins`` the registration's window records as its
+    ``registered_roots``, ``registered`` their bits); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts
+    exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
+    (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
+    bind."""
+    from verity.ml.windows import interface as IF
+
     reg = json.loads((d / "registration.json").read_text())
+    body = (d / "circuit.json").read_bytes()
+    window = reg.get("window") if isinstance(reg.get("window"), dict) else {}
+    try:
+        roots = IF.registered_roots(window)
+        circuit = json.loads(body)
+        registered = registered_bits(circuit, pins, roots)
+    except ValueError as e:
+        raise SystemExit(f"--audit {d}: {e}") from e
+    if registered and window.get("circuit") != hashlib.sha512(body).hexdigest():
+        raise SystemExit(f"--audit {d}: its registration's window binds another circuit record than circuit.json, so "
+                         "the registered rows counted there are none the registration registers")
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
         drawn, q = law["k"], Fraction(law["k"], n)
@@ -610,8 +659,8 @@ def audit_of(d: Path) -> dict:
     else:
         raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
-            "units": n, "drawn": drawn, "q": str(q),
-            "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
+            "units": n, "drawn": drawn, "q": str(q), "free": free_inputs(circuit, pins, roots),
+            "registered": registered, "held": sorted(IF.held_params(pins, roots)), "jitter": 0}
 
 
 def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
@@ -974,7 +1023,10 @@ def report(a) -> dict:
                  **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audit_dirs = [Path(d) for d in getattr(a, "audit", None) or []]
-    audits = [audit_of(d) for d in audit_dirs]
+    pins = getattr(a, "pins", None)
+    if pins is not None and not Path(pins).is_file():
+        raise SystemExit(f"--pins {pins}: no such file")
+    audits = [audit_of(d, _json(pins)) for d in audit_dirs]
     verdict = ("scan " if scan_only else "") + ("accepted" if accepted else "refused")
     runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
                               if r))
@@ -1064,6 +1116,9 @@ def main(argv=None) -> int:
     r.add_argument("--warden-run")
     r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
                                               "circuit.json each), whose sample and free inputs d1's K counts")
+    r.add_argument("--pins", help="the verifier's own pins, a JSON {param: root} of the roots it fixed before the run: "
+                                  "an --audit window's reads of a parameter whose registered root is its pin leave its "
+                                  "free inputs (chain_record.registered_bits); with none, every registered read counts")
     r.add_argument("--period-answer", help="certifier/v0's network-period check answer on the period "
                                            "(certifier.answer.json), the block record's certifier entry's")
     r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to this "
