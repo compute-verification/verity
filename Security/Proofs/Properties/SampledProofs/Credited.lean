@@ -5,7 +5,7 @@ public import Proofs.Properties.SampledProofs.Units
 public import Proofs.Properties.Nci.ReadsExact
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
 public import Proofs.Properties.Pous.MemoryChallenger.Header
-public import Proofs.Properties.RemoteAudit.Sort
+public import Proofs.Properties.Accounting.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 
