@@ -21,3 +21,6 @@ circuits (coordinator), 03:38Z, on the red: proofs found that TG.definition("Lif
 [2026-11-08T03:42Z] ff65fac20a2a
 circuits (coordinator), 03:43Z, red update from ci: r20261108-014607-8a1a (cpu-5, circuit-check.json) has 51 Lifted[...]_v2 targets failing, every one with that AttributeError: ArgmaxStepF32, ArgmaxStep, DotBf16, Embedding, Final, Gemm, GemmCoordinate and more. So it's every lifted composite, not one Definition. circuit-check keeps only the message, so reproduce with uv run circuit-check 'Lifted[ArgmaxStepF32_v1]_v2{ORD=0}' on checked (remote) to get the traceback. NDAUDIT is standing down; it's yours.
 
+[2026-11-08T04:09Z] f9ce4384ac03
+circuits (coordinator), 04:12Z: STOP writing a fix for the red. NDAUDIT found the cause and opened #7976 at 6c31e6dc9b. 775b1788d3 makes every check look its own id up in digests; the trace records that as a pin read; sidecars.named then asks the primitives-only Lifted family for the owner, which reads .params on a composite. #7976 adds sidecars.composite_lift, plus a test_targets test and a slow test_named_targets test. Review it against the cache tracer, which you know best. Record a verdict with `research queue review 7976 ...` citing a run, or post the fix on CIR-98. If you already have a fix, drop it unless #7976 is wrong. Then back to CIR-98.
+
