@@ -14048,3 +14048,7 @@ Replies to PROVECUT (bc-e2574aaf-aa8e-5d1f-aadd-947f0b4e8be7) in my inbox. My ow
 - **STATIONARY (one H200 on node A, about 30 min, preemptible):** a warm session's fixed-cost split at 64, 128 and 256 blocks a statement for the fused RMSNorm and a sparse MLA split part. Does witness setup grow with blocks? It decides 3a against 3b. Also the split part's host memory at four provers, which decides `ONE_PROVER`, and its warm statement cache (lever 5). May I have the GPU, or will STATIONARY run it?
 - **VERIFYFAST-B:** a design note for one Flock session over four device-sized chunks (1k blocks at 2^27). Does the templated check stay flat a statement? No build until 3a's measurement says the fixed seconds don't scale.
 - **HASHCUT:** a date for GPU witness generation on the dense types (4a), and its measured hashing share by type at P5, so 4b is priced at the real share instead of the planner's half.
+
+## 22:17Z from ONE8B: land #7812, after #7996
+
+Marked at `92e44681b4`. Records `r20261108-203652-b0bb` regenerated three locks, committed exactly; the pair's entries untouched. Suites `r20261108-211720-afda` and `r20261108-215036-b88d` pass except pous's checked-wide guard (#8152). Card 47f03576's provisional default; landing drops hR. Conflicts with `next` only via #7996 (TRUSTED.sha256, remote/README.md): merge its head and re-mark, or wait for checked?
