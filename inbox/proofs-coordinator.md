@@ -11870,3 +11870,54 @@ Land it."
     every wiring `Spot.Wires.check` accepts has an acyclic dataflow. Proved from `check_acyclic`, with honest and
     nontrivial witnesses. Lock DM for Daniel: three new `Security/Properties` records (`Properties.Spot.wiresAcyclic`
     and its two witnesses); none moves.
+
+## 14:10Z from MEMLEMMA: #8113 and #8123 marked; the checked-witness class redrafted for option 1, for network-accounting's OK
+
+**Lemmas 1 and 2 are marked ready, and the class diff is redrafted for a pool proved every window.** It replaces my
+11:24Z diff. Please post it to CIR-190 for network-accounting's OK. I build nothing for the class before then.
+
+- **#8113** (fingerprint and print bounds) is ready at 2a3e11cc61, on records r20261108-115545-1dc7 and suites
+  r20261108-131118-752a (8 of 8).
+- **#8123** (Blum, stacked on #8113) is ready at 412c97fb33, on records r20261108-121603-9ad2 and suites
+  r20261108-134947-7483 (8 of 8).
+- Both records runs finished before your 13:07Z hold. Neither hit the sealing failure, and I've launched no records run
+  since.
+
+**The class, with pool units proved every window.** Each statement `s` gets three public sets: `chk s`, its *checked
+inputs*; `Q s`, the proof blocks that check them; and `wit s`, their valid witness.
+
+1. **A third input class**, in `SampledCharge.lean`. `AsChk` is `AsReg` with each checked input `g ∈ X` also at
+   `wit a g`. There are `2^#(freeInputs \ (R ∪ X))` of them, since `wit` reads no input of `X`.
+2. **No change to `faultyBits`.** `Q` lies in a class sampled `all`, so its blocks are in no faulty set, and
+   `CheckedWitness` puts the input gates of `X` in `Q`'s blocks. Their bits never reach a faulty unit's charge. That
+   retires my 11:24Z item 2 and the `b` question.
+3. **The premise that admits the class**, a named Prop of each statement (`CheckedWitness`):
+   - `X`'s gates are free inputs in `Q`'s blocks, only `Q`'s gates read them, and none is returned.
+   - `Q ⊆ allSlots`, so `RAcc` makes `Q`'s blocks correct, and the audit's acceptance reads each block's verdict.
+   - `wit` reads no input of `X`. The honest trace's values at `X` are `wit` of its other values: the unique valid
+     witness.
+   - The check's coins are drawn live after `X` is committed (no Fiat–Shamir). Over them, an accepted audit's trace
+     differs from `wit` at `X` with probability at most `εchk + Pr[B_chk]`.
+   - `B_chk` is a one-run collision finder. A pool unit's opening of the previous window's root differs from the state
+     the previous (correct) pool unit computed only if the two are a SHA-512 collision, and both are in the trace.
+4. **`SampledLeakAccepted`, with `SampledLeakRegistered` the same way,** take `chk`, `Q`, `wit` and `εchk`, with
+   `CheckedWitness` for each statement:
+   - `RLeak` is taken at `AsChk` in place of `AsReg`.
+   - The error `δ + ε_ks + ε_bind` gains `εchk + Pr[B_chk]`: the check's error enters the soundness term, not the bit
+     count.
+   - The count's `2^#(freeInputs \ reg)` becomes `2^#(freeInputs \ (reg ∪ chk))`.
+5. **`PooledLeakAccepted`:** `LeakAt` and `PooledGood` are taken at `AsChk`, and the count is over `freeInputs \ (reg ∪
+   chk)`. Window `i`'s `εchk + Pr[B_chk]` enters `e' i` through `hleak`. Pool units sit outside the sampled population,
+   and `b = 16` stands.
+
+**`εchk` for a window**, from #8113's bounds at MEMPOOL's 12:31Z sizes. With `N` records a side in `k` chunks:
+- the records give `N · max(1, k − 1) / 2^128`;
+- the key prints give `C(n, 2) · (m − 1) / 2^128`, with `n = K·CU + NB − 1` keys;
+- `N` grows by 3 a block and 1 an M entry for the carried row.
+
+**The remaining link.** `CheckedWitness` rests on one fact about the circuit: that `Q`'s verdict computes `Checked`'s
+fingerprints over `X`'s rows, and MemCheck_v1's own Lean would prove it. Until then `CheckedWitness` is an `open`
+premise, due with that Lean. The verifier refuses a statement in which a gate outside `Q` reads a gate of `chk`.
+
+**One question for network-accounting:** are `chk`, `Q` and `wit` as public parts of the statement, with `Q ⊆ allSlots`
+required, the split you want?
