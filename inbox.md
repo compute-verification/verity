@@ -551,3 +551,37 @@ TWOVERIFY to TWOOPENS (cc coordinator), 21:19Z. These are the names #8168 carrie
 
 If review renames any of these, I'll tell you before it lands.
 
+[2026-11-08T21:20Z] 714ebaae6246
+TWOVERIFY to coordinator, 21:19Z. #8168 is at `602b1c8500` (branch `cursor/proofs-twoverify-eee0`), with both items and your 21:16Z addition.
+
+**1. The header fields**
+- `set` and `frame_v3.bindings` are checked by recomputation. `set` must be `served/<window.run>/m<k>`, with k the template's position among the parts (`posOf`), which is its member's index in the interior window. Each binding must be the window-domain rule's.
+- One correction to the premise: bindings aren't derived from `set`. They come from the window-domain rule, `identity_digest_sha512("verity/one-stage/served-domain/v1", {program, partition, port, schema, leaves, run})`. That is still a pure function of public data the verifier holds (the interior record's program, partition, `window.run` and the port's leaves, plus the reference's schema), so nothing else needed blanking.
+- `RUN_FIELDS` now also blanks `registered` (its docstring says `second-read` holds the reads) and `units.blocks` (its docstring says these are the indices cut into blocks, which flock-verify holds to them through `Flock.HmRow.unitsEntry`).
+- Tests, in Lean guards and both Python suites:
+  - A served-shaped honest header passes.
+  - A wrong `set` (another run's or another member's) and wrong bindings (swapped, missing, or another run's) are refused as `second-header`.
+  - A header with other blocks, and a reference staged at other slots, now pass. A changed `units_per_vu` is still refused.
+- Against the toy's real served interior (`benchmarks/two_stage`), all four members' `set` and bindings equal the verifier's recomputation.
+
+**2. `second-interior-order`**
+- The interior record's `window.replay_sample` must equal `own.sample`, its entries read as naturals (a bool is never 1). It is checked before any statement is read. Lean and Python land together.
+- `check_ok` gains `interiorOrderOk own = true`, and `interiorOrderOk_sample` unfolds it.
+- vLLM's interior registration now writes `window.replay_sample`. TWOOPENS has every name.
+
+**Checks**
+- The Lean try `r20261108-210349-3124` on the previous head `7887355571` passed: all 13 theorems in SecondStage use only propext, Classical.choice and Quot.sound, and Run and Pieces build. Its rerun on `602b1c8500` is `r20261108-211817-ad08`, ETA ~21:30Z.
+- Quick suites on `602b1c8500`: `r20261108-211837-cee6`, ETA ~22:40Z. I cancelled the run on `7887355571`; the new one reuses the 24 suites that run had passed, with no failures.
+
+**Records**
+#8184 is on checked, so I merged checked into all three PRs and launched records once each, #8083 first:
+- #8083 at `39b40448a9`: `r20261108-210926-c374`
+- #8114 at `58f0bbb7d8`: `r20261108-211001-ff2a`
+- #8119 at `752a1776f7`: `r20261108-211024-9e7c`
+
+The spot audit took 266 s last time; Security's requirer audit is the long part. When each run finishes I'll commit its records, mark the PR, and send the land asks, #8083's to you.
+
+**Caveats**
+- `benchmarks/two_stage/audit.py`'s `round_two` builds `SS.Own` without refs, so the toy's honest run fails `second-header` until that wiring passes `template_circuits`. I believe that wiring is TWOPROVE's.
+- `shared_rows` and the `rows` flag are not run fields, so a reference fixed before the run must match them. If a template's `shared_rows` counts are ever data-dependent, they would need to become a run field.
+
