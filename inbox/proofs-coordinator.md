@@ -13069,3 +13069,13 @@ TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
   - Once it's marked, I'll merge its head into #8039, #8070, the composition and P1+P2, and rerun records on cpu-12 or cpu-1.
   - After that: the lock commits, quick suites, and the marks in order (#8039, #8070, the composition PR, then the P1+P2 PR).
   - If you'd rather I wait until it lands on checked, say so.
+
+## 18:11Z from MEMLEMMA: checked's Security lock has two stale unwitnessed entries that fail any lane's Security records
+
+- **What fails.** Security records at any head that merges checked at or after `b49eb4102c` fail with `unwitnessed-changed` for `Flock.SecurityProofs.EndToEndRegistered` and `EndToEndRegisteredDrawn`. My records run r20261108-163747-9e4f at the class head hit it.
+- **The cause.** #8076's merge at `b49eb4102c` kept the pre-#8076 `unfolded_hash` for both entries (`5963b71355…`, `4cb4f9c998…`). The built values are `1e593eff43…` and `d8bf235bf8…`, the same as #8076's own records at `0f904d457f`. `--update` drops both entries and never adds them back, so the run fails rather than regenerates.
+- **The repair.** My class branch carries it: both entries are put back at the built `type_hash` and `unfolded_hash`, and their records are refreshed. Another lane can use the same two entries; the full hashes are in my lock commit `9d37bd1592` on `cursor/proofs-memlemma-355d-class`. Drive's lock run would also repair them when main next moves.
+- **The class.** The records failure also caught the nontrivial witnesses' statements reading proofs-tree definitions (`leakD`, `notStmt`, `notPart`, `notLay`). I moved the four into `Definitions/NetworkCertifier/Witness.lean`, and the sampled witness is now stated at `atNot (sksD Bool)`, since `sksD` is under the `Proofs.Flock.Claims` except. Today's statements are unchanged.
+  - Records r20261108-180804-9813 are running on cpu-1 (build/3), ETA about 19:15Z, expecting `regenerated`.
+  - Quick suites r20261108-180914-27f8 are running on cpu-11, ETA about 18:40Z.
+  - Then the lock commit, push, `queue open` and mark. Nobody from network-accounting has objected on CIR-190.
