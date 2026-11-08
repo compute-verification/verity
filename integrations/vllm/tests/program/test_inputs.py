@@ -57,6 +57,17 @@ def test_a_run_field_is_read_only_under_a_declaration():
     assert [f["name"] for f in r.fields] == ["hole0.1:add_3"]
 
 
+def test_run_fields_are_laid_out_in_first_read_order_and_read_once():
+    r = RunInputs.declare([])
+    names = [f"hole{i}.0:add_{i}" for i in range(3)]
+    for name, n in zip(names, (3, 5, 2)):
+        r.value(name, Array(n, Value(1)), "survey_hole")
+    assert [(f["name"], f["offset"]) for f in r.fields] == list(zip(names, (0, 3, 8)))
+    with pytest.raises(ValueError, match="read twice"):
+        r.value(names[1], Array(5, Value(1)), "survey_hole")
+    assert r.value("hole9.0:add_9", Value(1), "survey_hole").refs[0] == ("p", 0, 10)
+
+
 @pytest.mark.parametrize("declared", sorted(IN.RUN))
 def test_every_run_declaration_is_read(declared):
     readers = [p for p in PACKAGE.rglob("*.py") if p.name != "inputs.py" and f'"{declared}"' in p.read_text()]

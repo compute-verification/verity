@@ -24,6 +24,7 @@ public import Proofs.Core.Game.Tape
 public import Proofs.Core.Game.InterleaveBridge
 public import Proofs.Core.Challenger
 public import Proofs.Core.ValueSalts
+public import Proofs.Core.MemCheck
 public import Proofs.Core.UnionBound
 public import Proofs.Core.Scalar.Vectors
 public import Proofs.Core.Prims.Vectors
