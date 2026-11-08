@@ -19,8 +19,14 @@ The pricing (ANDs; `window_cost`):
   witness.
 - each block of tokens gets its key once: BlockKey_v1 at 64 tokens of 18 bits (SHA-512 over its parent's key and its
   tokens, two compressions, and its print under the window's live coin).
-- each window: the 512-bit keys it carries (the cached blocks', NB at most, and its requests' blocks', at most the RK
-  addresses it touches) hashed in and out and printed under its coin (KeyPrint_v1).
+- each window: the pool chained in and out as `compile_slice_v5`'s pool window does it (`chain_cost`): the pool row's
+  digest under the input root and the output root (`Sha512RowSeg_v1` over its 2·NW + (NB − 1)(5·NW + 512) bits), each
+  block's key printed in and out (KeyPrint_v1), a PoolOpen and a PoolClose step a block, and the M run listing every key
+  the pool carries (NB − 1 at most) beside the ones the window touches, each M entry a PoolCopies step.
+
+What a window's ANDs are compared with is the caller's to state, with its source: ``--against NAME=ANDS`` reports the
+window's ANDs as a ratio of ANDS, and ``--node-share NAME=SHARE@ANDS`` scales a share of the node that a window of ANDS
+ANDs takes under a proving setting NAME to each window. Both are recorded in the report as given; neither has a default.
 """
 from __future__ import annotations
 
@@ -37,20 +43,15 @@ from pool_ram import RP
 
 from verity.core.protocols.certifier.head_check import ands
 from verity.ml.circuits.defs import bind
+from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.gates import block_key as BK
-from verity.ml.protocols.certifier import cache_step_v3 as V3
+from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v5 as V5
 
 MUL = 2187
 SHA_BLOCK = 58120
 SHA_BIT = SHA_BLOCK / 1024
 S = PR.GLM
 P_STEPS = 4964
-#: ODBRANCH's estimate for a memory-checked pool with a per-step unit budget, and CacheStep_v2's in CompileSlice_v3
-ODBRANCH = 1.0e12
-V2 = 9.2e14
-#: ODBRANCH's share of the node at 1.0e12 ANDs a window: plain GPU proving (low, high) and --zk (median)
-SHARE_PLAIN = (0.013, 0.046)
-SHARE_ZK = 0.10
 
 #: the stream's accesses a pool operation makes, at most (`cache_step_v3`'s calls, per lookup unit or block): a lookup
 #: RK, M and B; a take RK, M, B and its queue neighbours, RB; an alloc the queue's head, its next, K and RB, and an
@@ -64,11 +65,32 @@ ENTRY_WITNESS = 1 + 3 + 128 + 2 * 128 + S.TW
 
 
 def measured(NB: int = 5000) -> dict[str, int]:
-    """ANDs of CacheStep_v3's parts at the class's widths, and of a block's key with its print and of a carried key's
-    print."""
-    p = V3.part_ands((NB, S.RW, S.KW, S.REFW, S.TW))
+    """ANDs of CacheStep_v3's parts and the pool window's open, close and copy steps at the class's widths, and of a
+    block's key with its print and of a carried key's print."""
+    key = (NB, S.RW, S.KW, S.REFW, S.TW)
+    p = V3.part_ands(key)
+    st = dict(zip(V3.SLOT_STATICS, key))
     return {"slot": p["PoolSlot"], "entry": p["PoolEntry"], "end": p["PoolEnd"],
-            "block key": ands(bind(BK.BlockKey, B=64, TOK=18)), "key print": ands(bind(BK.KeyPrint))}
+            "block key": ands(bind(BK.BlockKey, B=64, TOK=18)), "key print": ands(bind(BK.KeyPrint)),
+            **{name: ands(bind(d, **st)) for name, d in (("open", V5.PoolOpen), ("close", V5.PoolClose),
+                                                          ("copies", V5.PoolCopies))}}
+
+
+def row_compressions(NB: int) -> int:
+    """SHA-512 compressions of the pool row's `Sha512RowSeg_v1` digest at NB blocks (`gates.rowleaf`'s cost): a segment's
+    ceil((ceil(m / 8) + 17) / 128), the outer hash's ceil((s + 1) / 2) for its s segments."""
+    NW = max((NB - 1).bit_length(), 1)
+    segments = RL.sha512_row_seg_segments(2 * NW + (NB - 1) * (5 * NW + 512))
+    return sum(-(-((m + 7) // 8 + 17) // 128) for m in segments) + (len(segments) + 2) // 2
+
+
+def chain_cost(m: dict[str, int], NB: int, touched_m: int) -> dict[str, float]:
+    """ANDs of chaining the pool through one window (`compile_slice_v5.PoolWindow`) beyond the touched list's entries: the
+    two row digests, the 2(NB − 1) key prints, a PoolOpen and a PoolClose step a block, and a PoolCopies step for each M
+    entry, the carried keys (NB − 1 at most) and the `touched_m` the window touches."""
+    n = NB - 1
+    return {"row digests in and out": 2 * row_compressions(NB) * SHA_BLOCK, "key prints in and out": 2 * n * m["key print"],
+            "open and close steps": n * (m["open"] + m["close"]), "M run copies": (n + touched_m) * m["copies"]}
 
 
 # --- GLM-5.3-like loads ---------------------------------------------------------------------------------------------------
@@ -172,22 +194,33 @@ def window_cost(load: dict[str, Any], m: dict[str, int], NB: int = 5000, lookups
     `pool_ram.Mirror.certify`), or "memo": CacheStep_v3's own stream with its head-of-line memo, U its busiest window's
     slots (`stream_window`), or for a load measured without it, the bound "memo" had before the memo was built (a walk
     whose (hit, evictable) equals the request's last one is reused, its stamps and dirty bit not counted). The touched
-    list, the calls and the keys are `measure`'s window's in every case."""
+    list, the calls and the keys are `measure`'s window's in every case; the touched list also lists every key the pool
+    carries in (NB − 1 at most), and the pool goes in and out as `chain_cost` prices it."""
     w = load["window"]
     ops = {k: w["ops"][k] for k in (*PR.SHAPE, "evict")}
     ops["lookup"] -= {"walked": 0, "certified": w["certificate saves"], "memo": w["repeated units"]}[lookups]
     u = sum(STREAM[k] * n for k, n in ops.items())
     if lookups == "memo" and "stream" in load:
         u = load["stream"]["slots"]
-    ne = 2 * NB + sum(w["touched"].get(k, 0) for k in ("M", "RB", "RK"))
+    ne = 2 * NB + sum(w["touched"].get(k, 0) for k in ("M", "RB", "RK")) + NB - 1
     ns_c, ne_c = V3.size_class(u), V3.size_class(ne)
     out = {"U": u, "NS (U's class)": ns_c, "NE": ne, "NE's class": ne_c,
            "stream": ns_c * (m["slot"] + SHA_BIT * SLOT_WITNESS),
            "touched list": ne_c * (m["entry"] + SHA_BIT * ENTRY_WITNESS) + m["end"],
            "bus, ReplayStep_v1's side": w["calls"] * (MUL + 128 + SHA_BIT * 2 * (S.KW + 1)),
-           "block keys": w["keys"] * m["block key"],
-           "carried 512-bit keys": (NB + w["touched"].get("RK", 0)) * (SHA_BIT * 2 * 512 + m["key print"])}
+           "block keys": w["keys"] * m["block key"], **chain_cost(m, NB, w["touched"].get("M", 0))}
     out["total"] = sum(v for k, v in out.items() if k not in ("U", "NS (U's class)", "NE", "NE's class"))
+    return out
+
+
+def _stated(items: list[str], share: bool) -> dict[str, Any]:
+    """``NAME=ANDS`` (or, with `share`, ``NAME=SHARE@ANDS``) arguments as {NAME: ANDS} ({NAME: [SHARE, ANDS]})."""
+    out: dict[str, Any] = {}
+    for item in items:
+        name, _, v = item.partition("=")
+        if not name or not v or (share and "@" not in v):
+            raise SystemExit(f"{item!r} is not NAME={'SHARE@ANDS' if share else 'ANDS'}")
+        out[name] = [float(x) for x in v.split("@")] if share else float(v)
     return out
 
 
@@ -196,11 +229,17 @@ def main() -> None:
     ap.add_argument("--json", type=Path)
     ap.add_argument("--quick", action="store_true", help="one small load (a smoke test)")
     ap.add_argument("--from", dest="src", type=Path, help="reprice a report's measured loads instead of replaying them")
+    ap.add_argument("--against", action="append", default=[], metavar="NAME=ANDS",
+                    help="report each window's ANDs as a ratio of ANDS, a budget the caller states with its source")
+    ap.add_argument("--node-share", action="append", default=[], metavar="NAME=SHARE@ANDS",
+                    help="the share of the node a window of ANDS ANDs takes under proving setting NAME, scaled to each window")
     a = ap.parse_args()
+    against, shares = _stated(a.against, False), _stated(a.node_share, True)
     m = measured()
     slot = m["slot"] + SHA_BIT * SLOT_WITNESS
     print("measured ANDs:", m, f"a stream slot with its witness hash: {slot:.0f}")
-    report: dict[str, Any] = {"measured": m, "slot": slot, "loads": {}}
+    report: dict[str, Any] = {"measured": m, "slot": slot, "row compressions": row_compressions(5000),
+                              "parameters": {"against": against, "node share": shares}, "loads": {}}
     if a.src:
         loads = {k: (v["load"], v["load"].get("NB", 5000)) for k, v in json.loads(a.src.read_text())["loads"].items()}
     else:
@@ -213,12 +252,12 @@ def main() -> None:
         report["loads"][kind] = {"load": load}
         for how in ("walked", "certified", "memo"):
             cost = window_cost(load, m if NB == 5000 else measured(NB), NB=NB, lookups=how)
-            x = cost["total"] / ODBRANCH
+            total = cost["total"]
             report["loads"][kind][how] = {
-                "window ANDs": cost, "vs ODBRANCH": x, "vs CacheStep_v2": x * ODBRANCH / V2,
-                "share of the node, plain GPU": [x * SHARE_PLAIN[0], x * SHARE_PLAIN[1]],
-                "share of the node, --zk": x * SHARE_ZK}
-            print(kind, how, {k: f"{v:.3g}" for k, v in cost.items()}, f"= {x:.3g} × ODBRANCH's 1.0e12")
+                "window ANDs": cost, "vs": {name: total / x for name, x in against.items()},
+                "node share": {name: s * total / x for name, (s, x) in shares.items()}}
+            print(kind, how, {k: f"{v:.3g}" for k, v in cost.items()},
+                  {name: f"{v:.3g}" for name, v in report["loads"][kind][how]["vs"].items()})
     if a.json:
         a.json.write_text(json.dumps(report, indent=1, default=str))
 
