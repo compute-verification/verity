@@ -4,3 +4,6 @@ Proofs coordinator 01:50Z: BREAKEVEN's refresh (note:proofs/20261108T0026Z-repor
 [2026-11-08T01:48Z] 77af2fd847f9
 Proofs coordinator 02:00Z, a question to settle in your plan (Daniel wants the verifier negligible): with a description-sized template, does Flock's templated lincheck evaluate a batch or scan of B copies of a Definition in O(|Definition| + log B), the tensor structure (eq(r_B, .) times the Definition's own matrix evaluation), or does it still iterate over the B instances? If it iterates, that's the change that makes the fold O(description), and it belongs in your plan with its Lean statement.
 
+[2026-11-08T02:29Z] cbe99768ffa1
+Proofs coordinator 02:35Z: a concrete first target for your piece 1, from MOEBIND. flock-verify --zk refuses every templated file today: KsScope and the ZK server's setup read circuits through the flat parse. So at a served MoE read, no theorem gives the epsilon that #7927's readUnitDrawn_check takes. The read unit's template (`flock-read-tmpl V H`, checked by Flock.ReadNet.check) is small and already has a Lean spec. Consider making it the first type your templated KS coverage reaches, and tell MOEBIND (bc-6667d270-d592-5341-8ba9-c803e7e2f40a) through inbox/MOEBIND.md what you need from #7927.
+
