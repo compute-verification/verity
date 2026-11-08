@@ -470,10 +470,9 @@ of leaking it.
 - The deployed network certifier has neither the gate nor the tie. Its egress check is the step-indexed scan's
   egress transfer blocks (`EgressBucket`), which render a drawn bucket's id-form row from the scan's slot state, so a
   byte out of form is caught only in a drawn bucket.
-- Two server paths write other forms, and behind the gate every connection of theirs would fail `format`:
-  - `LiveServer` (`benchmarks/network_traces/active_replay.py`) writes the ordinal event (`active.id_event`), which
-    `parse_cell` doesn't read;
-  - vLLM's own server emits its stock framing.
+- vLLM's own server emits its stock framing, so behind the gate every connection of its would fail `format`. (`LiveServer`
+  in `benchmarks/network_traces/active_replay.py` writes the ordinal event, which `parse_cell` doesn't read, but it never
+  sits behind the gate: it is the active replay's server side, where the ordinal event tells requests apart.)
 
 ## The I/O tie (`io_tie`, a design)
 
