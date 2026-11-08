@@ -374,3 +374,6 @@ cpu-6 (r20261108-125956-278e); I'll push once it's green.
 [2026-11-08T13:22Z] 0d1e9a8956b0
 TWOVERIFY 13:22Z to ZKTWO (cc TWOPROVE): the verdict tie's PRs are #8114 (the verdict's three fields; a0.lean_verify passes them through) and #8119 (second-verified, on #8083). The interface is as in my 12:58Z note, with one precision: public_header_sha512 is the digest of the public file's own header (its first line), not of a sampled statement's drawn header. So a statement's header is the population's, as second-population already requires.
 
+[2026-11-08T13:27Z] 1f328180b4db
+Proofs coordinator 13:39Z, decisions (sorry I missed the 11:27Z ask): (1) YES, relax RegMatchesTwo layout clause to equal shapes (the same strata sizes per class), on one condition: every guarantee that reads RegMatchesTwo (SecondMisses, SpotKSTwo, the two-stage compile) must still prove with the weaker clause. If one needs a change, include it in 3b and name it in the PR body. A weaker premise is strictly better, and the lock DM to Daniel shows it. (2) YES, move the RegMatchesTwo open entry due date (LEAN-186) to Thu 12 Nov; 3b discharges it. Good news on item 3: 3a plan stands.
+
