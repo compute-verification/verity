@@ -13,9 +13,9 @@ accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
 
 * an accepted fork passed round 2 (`stmtOk`), so its second stage accepted the replay sample, which is then not empty:
   the first stage accepted, and the sample of record is the slots `Slots.checked` keeps of the units it proved;
-* each population slot `ρ` it keeps is unit `ρ`, whose proof blocks are `blockOf ρ` on `[0, n)`, and every proof
-  block of an input slot is always checked (`cellsOk`), so the sample has at most `|proved| · n` proof blocks of
-  population slots and always checked ones besides;
+* each population slot `ρ` it keeps is unit `ρ`, whose cell of each template `t` is `blockOf ρ t` on `[0, n_t)`, and
+  every proof block of an input slot is always checked (`cellsOk`), so the sample has at most `|proved| · Σ_t n_t`
+  proof blocks of population slots (`perBlock`) and always checked ones besides;
 * a first stage with no closure map whose law Flock reads as a uniform `K`-subset (`firstK`) proves `K` units.
 -/
 
@@ -159,12 +159,15 @@ def nBlocks : ℕ :=
   | some lb => (slotPartition lb).blocks.length
   | none => 0
 
+/-- The proof blocks of a replay block: `n_t` in template `t`'s cell (`RegTwo.ns`), summed over the templates. -/
+def perBlock : ℕ := ∑ t ∈ range h.reg.ns.size, h.reg.ns.getD t 0
+
 /-- **The replay cap** at SPOT[Flock]'s code: where the first stage samples a uniform `K`-subset of the replay blocks
-(`firstK`), the `K · n` proof blocks of `K` replay blocks of `n` each and the proof blocks always checked, and never
-more than every proof block; every proof block otherwise. -/
+(`firstK`), the `K · Σ_t n_t` proof blocks of `K` replay blocks (`perBlock`) and the proof blocks always checked, and
+never more than every proof block; every proof block otherwise. -/
 def cap (_ : Msg) : ℕ :=
   match firstK h.reg.first with
-  | some K => min (nBlocks h) (K * h.reg.n + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card)
+  | some K => min (nBlocks h) (K * perBlock h + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card)
   | none => nBlocks h
 
 /-- **The replay cap holds** at SPOT[Flock]'s code (`Code.ReplayCap`): an accepted fork's second stage accepted the
@@ -178,6 +181,7 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     rw [hlb] at hlb'
     exact (Except.ok.inj hlb').symm
   rw [hlbeq, ← hPteq] at hcells
+  obtain ⟨hT, -, hcl⟩ := cellsOk_sound hcells
   obtain ⟨r', hr'⟩ : ∃ r', r' = forkOn (((base h).atOrder (order h)).stage2 x) r e := ⟨_, rfl⟩
   rw [← hr'] at hacc
   obtain ⟨as, has, hne⟩ := run_acc_coins H P ((base h).atOrder (order h)).V x ω r' 3 (by omega)
@@ -208,10 +212,10 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     · rename_i it draw ins spec sts w hit hd hset hdec
       exact ⟨draw, hd⟩
     · simp at hr
-  obtain ⟨q, hq⟩ : ∃ q, Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.n h.reg.k
+  obtain ⟨q, hq⟩ : ∃ q, Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks
       (src (coinSeq r' 1)) = .ok q := by
     unfold secondDraw at hd₂
-    cases hq : Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.n h.reg.k (src (coinSeq r' 1)) with
+    cases hq : Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks (src (coinSeq r' 1)) with
     | error e => simp [hq] at hd₂
     | ok q => exact ⟨q, rfl⟩
   have hne0 := (selectSecond_sample hq).1
@@ -250,34 +254,42 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     refine le_min hle ?_
     have hsize : proved.size = K := select_subset_size hK hS
     have hsub : sampleBlocks Pt d.part (rs h x r) ⊆
-        (proved.toList.toFinset.biUnion fun ρ => (range h.reg.n).image (h.reg.blockOf ρ)) ∪
+        (proved.toList.toFinset.biUnion fun ρ => (range h.reg.ns.size).biUnion fun t =>
+          (range (h.reg.ns.getD t 0)).image (h.reg.blockOf ρ t)) ∪
           (range (nBlocks h)).filter fun v => h.reg.always v = true := by
       intro v hv
       obtain ⟨hvN, ρ, hρ, hvρ⟩ := mem_filter.1 hv
       rw [hrs, Array.mem_toList_iff] at hρ
       obtain ⟨hρl, -⟩ := (mem_checked l proved ρ).1 hρ
       have hvc : v ∈ cell Pt d.part ρ (Pt.stratumOf v) := mem_filter.2 ⟨hvN, hvρ, rfl⟩
-      rcases cellsOk_sound hcells ρ l.blocks[ρ] (Array.getElem?_eq_getElem hρl) with
-        ⟨hu, -, t₀, -, -, hcell⟩ | ⟨-, halw⟩
-      · refine mem_union_left _ (mem_biUnion.2 ⟨ρ, ?_, ?_⟩)
+      rcases hcl ρ l.blocks[ρ] (Array.getElem?_eq_getElem hρl) with ⟨hu, hcell⟩ | ⟨-, halw⟩
+      · have ht : Pt.stratumOf v < Pt.strata.length := Claims.Sampling.stratumOf_lt (mem_range.1 hvN)
+        refine mem_union_left _ (mem_biUnion.2 ⟨ρ, ?_, mem_biUnion.2 ⟨Pt.stratumOf v, ?_, ?_⟩⟩)
         · simpa using mem_slots_checked hρ (Array.getElem?_eq_getElem hρl) hu
-        · rw [hcell] at hvc
-          split_ifs at hvc
-          · exact hvc
-          · simp at hvc
+        · rw [mem_range, hT]
+          exact ht
+        · rw [(hcell _ ht).2] at hvc
+          exact hvc
       · exact mem_union_right _ (mem_filter.2 ⟨by rw [hN]; exact hvN, halw _ v hvc⟩)
+    have hblock : ∀ ρ, ((range h.reg.ns.size).biUnion fun t =>
+        (range (h.reg.ns.getD t 0)).image (h.reg.blockOf ρ t)).card ≤ perBlock h := by
+      intro ρ
+      unfold perBlock
+      exact card_biUnion_le.trans (sum_le_sum fun t _ => card_image_le.trans (card_range _).le)
     calc (sampleBlocks Pt d.part (rs h x r)).card
-        ≤ (proved.toList.toFinset.biUnion fun ρ => (range h.reg.n).image (h.reg.blockOf ρ)).card +
+        ≤ (proved.toList.toFinset.biUnion fun ρ => (range h.reg.ns.size).biUnion fun t =>
+              (range (h.reg.ns.getD t 0)).image (h.reg.blockOf ρ t)).card +
             ((range (nBlocks h)).filter fun v => h.reg.always v = true).card :=
           (card_le_card hsub).trans (card_union_le _ _)
-      _ ≤ K * h.reg.n + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card := by
+      _ ≤ K * perBlock h + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card := by
           gcongr
-          calc (proved.toList.toFinset.biUnion fun ρ => (range h.reg.n).image (h.reg.blockOf ρ)).card
-              ≤ ∑ ρ ∈ proved.toList.toFinset, ((range h.reg.n).image (h.reg.blockOf ρ)).card := card_biUnion_le
-            _ ≤ ∑ _ρ ∈ proved.toList.toFinset, h.reg.n :=
-                sum_le_sum fun ρ _ => card_image_le.trans (card_range _).le
-            _ = proved.toList.toFinset.card * h.reg.n := by rw [sum_const, smul_eq_mul]
-            _ ≤ K * h.reg.n := by
+          calc (proved.toList.toFinset.biUnion fun ρ => (range h.reg.ns.size).biUnion fun t =>
+                (range (h.reg.ns.getD t 0)).image (h.reg.blockOf ρ t)).card
+              ≤ ∑ ρ ∈ proved.toList.toFinset, ((range h.reg.ns.size).biUnion fun t =>
+                  (range (h.reg.ns.getD t 0)).image (h.reg.blockOf ρ t)).card := card_biUnion_le
+            _ ≤ ∑ _ρ ∈ proved.toList.toFinset, perBlock h := sum_le_sum fun ρ _ => hblock ρ
+            _ = proved.toList.toFinset.card * perBlock h := by rw [sum_const, smul_eq_mul]
+            _ ≤ K * perBlock h := by
                 gcongr
                 calc proved.toList.toFinset.card ≤ proved.toList.length := List.toFinset_card_le _
                   _ = K := by rw [Array.length_toList, hsize]
