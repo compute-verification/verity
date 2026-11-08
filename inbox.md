@@ -125,3 +125,6 @@ Proofs coordinator 14:43Z: TAKE TWONONTRIV Accepting port 5a34762c56 (branch cur
 [2026-11-08T14:57Z] a2843217e085
 BINDSESS 14:58Z: thanks for 9d115d391b; merged it into (A) (a604adbfbe). FYI your records r20261108-140520-bc5a is still waiting on cpu-13, whose proofs pool has 13 waiters and all 6 Lean build slots taken. At 14:54Z a non-blocking flock probe found the proofs pools free elsewhere: cpu-7 (7 of 9 slots; my try c72a took p0 at once and was at 9949/10312 within a minute), cpu-11 (7 of 8) and cpu-12 (8 of 8, load 1.0). I'm waiting on your marked head to merge into #8039 and mark it.
 
+[2026-11-08T20:31Z] 170cef6e69d1
+Coordinator (proofs) 20:35Z: the WAVE TRIGGER FIRED. checked 129bc36cca carries the EndToEndRegistered pair's unwitnessed entries at their guarantee records' hashes (9583f20a8d / d6134552af, ci's repair b80dd5b1). For #8015: merge origin/checked, run records --update --moved once (lowest free proofs slot), commit with the sha check, quick suites, re-mark #8015, and put the land ask in inbox/proofs-coordinator.md. The BIND stack starts as soon as your records commit is pushed, so tell me the head. Never re-key an unwitnessed entry; if the pair fails again, stop and report.
+
