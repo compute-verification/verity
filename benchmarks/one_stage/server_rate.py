@@ -6,9 +6,10 @@
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
   sampled replay block at the full statement.
-* **Load**: a saturated server, K (ahead + 2) sessions outstanding until K warm + ``--sessions`` are submitted.
-* **Measured**, for each type and K: statements a second over the steady window, from the K warm-th session's records to
-  the last but K's; the device's busy share (`nvidia-smi` utilization.gpu every 200 ms, its mean over the window) and its
+* **Load**: ``--warm`` sessions a prover, all finished before any timed one is submitted (a prover and its verifier load
+  the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones with K (ahead + 2) outstanding.
+* **Measured**, for each type and K: statements a second over the steady window, from the K-th timed session's records to
+  the last but K's, each prover's sessions in it (``idle_provers``: those with none); the device's busy share (`nvidia-smi` utilization.gpu every 200 ms, its mean over the window) and its
   memory peak; host memory (each process's RSS every 0.5 s: each prover's peak, the provers' summed peak, the
   verifiers'); the provers' CPU seconds a statement and the node's load over the window; each window session's prover
   timings (``e2e_s`` from Register to the last proof, ``prove_total_s`` its device phases, ``front_s`` the difference).
@@ -29,6 +30,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/python"))
@@ -191,15 +193,26 @@ def one(a, dev: str, t: str, K: int) -> dict:
         room.release()
 
     waits, judged = [], []
+
+    def go(i: int) -> None:
+        room.acquire()
+        fn = lean if lean is not None and i >= total - a.lean_sessions else None
+        s = ps.submit(st, draw, f"{t}/k{K}/{i}", verdict=fn)
+        if fn is not None:
+            judged.append(s)
+        waits.append(threading.Thread(target=wait, args=(s, i), daemon=True))
+        waits[-1].start()
+
     try:
-        for i in range(total):
-            room.acquire()
-            fn = lean if lean is not None and i >= total - a.lean_sessions else None
-            s = ps.submit(st, draw, f"{t}/k{K}/{i}", verdict=fn)
-            if fn is not None:
-                judged.append(s)
-            waits.append(threading.Thread(target=wait, args=(s, i), daemon=True))
-            waits[-1].start()
+        # every prover and its verifier load the circuit and finish their warm sessions before any timed one is
+        # submitted, so the window never times a prover still loading
+        for i in range(K * a.warm):
+            go(i)
+        for w in waits:
+            w.join()
+        rec["ready_s"] = round(time.monotonic() - t_start, 1)
+        for i in range(K * a.warm, total):
+            go(i)
         for w in waits:
             w.join()
     finally:
@@ -211,12 +224,14 @@ def one(a, dev: str, t: str, K: int) -> dict:
     bad = [r for r in done if r["error"] or not r["s"].accepted]
     rec["accepted"] = len(done) - len(bad)
     rec["refused"] = [{"label": r["s"].label, "error": r["error"], "why": (r["s"].live or {}).get("why")} for r in bad][:8]
-    i0, i1 = K * a.warm - 1, len(done) - 1 - K
+    rec["warm_per_prover"] = dict(Counter(r["s"].prover for r in done if r["i"] < K * a.warm))
+    timed = [r for r in done if r["i"] >= K * a.warm]
+    i0, i1 = K - 1, len(timed) - 1 - K
     if i1 - i0 < 2:
-        i0, i1 = 0, len(done) - 1
-    w0, w1 = done[i0], done[i1]
+        i0, i1 = 0, len(timed) - 1
+    w0, w1 = timed[i0], timed[i1]
     span = w1["t"] - w0["t"]
-    win = [r for r in done[i0 + 1:i1 + 1] if r["s"].live]
+    win = [r for r in timed[i0 + 1:i1 + 1] if r["s"].live]
     med = lambda k: round(statistics.median(v), 4) if (v := [r["s"].live.get(k) for r in win  # noqa: E731
                                                              if isinstance(r["s"].live.get(k), (int, float))]) else None
     rec |= {"statements_per_s": round((i1 - i0) / span, 4) if span > 0 else None, "window_s": round(span, 2),
@@ -226,7 +241,8 @@ def one(a, dev: str, t: str, K: int) -> dict:
             "throttled": {k: throttled().get(k, 0) - cpu0.get(k, 0) for k in ("nr_throttled", "throttled_usec")},
             "median": {k: med(k) for k in ("e2e_s", "prove_total_s", "witness_s", "wait_s", "verdict_wait_s", "tp_s")},
             "prebuilt_used": sum(1 for r in win if r["s"].live.get("witness_prebuilt_s") is not None),
-            "per_prover": {p: sum(1 for r in win if r["s"].prover == p) for p in sorted({r["s"].prover for r in win})}}
+            "per_prover": dict(sorted(Counter(r["s"].prover for r in win).items()))}
+    rec["idle_provers"] = K - len(rec["per_prover"])
     if rec["median"]["e2e_s"] is not None and rec["median"]["prove_total_s"] is not None:
         rec["median"]["front_s"] = round(rec["median"]["e2e_s"] - rec["median"]["prove_total_s"], 4)
     if lean is not None:
