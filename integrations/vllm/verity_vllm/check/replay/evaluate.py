@@ -18,7 +18,7 @@ from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, 
 from verity_vllm.check.replay.delegate import DELEGATES, Place
 from verity_vllm.program.compact import is_file_prog
 
-TOPP_SPLITS_OPERAND = 5     # GumbelTopPTokenSelect's split count S: logits, top_p, seed, pos, temperature, S
+TOPP_SPLITS_OPERAND = 5     # a sampler select's 6th operand: the top-p select's split count S, the one select with six
 
 
 #: a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
@@ -252,7 +252,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + d["step"], SAMPLER_OP, pname, [0, 1]]})
-                elif oi == TOPP_SPLITS_OPERAND and fam.startswith("GumbelTopPTokenSelect"):
+                elif oi == TOPP_SPLITS_OPERAND and d["op_path"] == SAMPLER_OP:
                     raise _Unresolved(f"{fam} reads its split count S from Program input {pname!r}: S is the registered constant, "
                                       f"a Const32[S] of the Program (topp_geometry.registered_splits)")
                 elif pi.kv_prefix and a == pi.kv_prefix["input"]:
