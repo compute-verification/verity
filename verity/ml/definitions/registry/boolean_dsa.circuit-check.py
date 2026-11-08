@@ -7,7 +7,8 @@ from typing import Any, Callable
 #: GLM-5.3's DSA indexer logits on bits at its served shapes over every key count a 128k-context row takes, checked at these spots
 #: (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaMqaLogits_v4``).  Its description is the same at every N (one
 #: `DsaMqaLogitsQ_v1{32,128}` Call and a batch of `DsaMqaLogitsKey_v1{32,128}` over the keys); on bits k is N x 1,024 leaves, so
-#: past 4,096 keys it is over the input budget
+#: past 4,096 keys it is over the input budget.  From N = 2 it is over the partition's gate budget, and is partitioned by those
+#: two Calls (`circuit_check.checks.by_callees`)
 RANGES = {
     "DsaMqaLogits_v4{N=1..131072,H=32,D=128}": (
         # the ends: one key, and a 128k-context row
