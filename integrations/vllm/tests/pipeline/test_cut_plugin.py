@@ -1,15 +1,17 @@
-"""The cut at each window edge (`cut_plugin`) on a stand-in for vLLM d9105ea80's Scheduler that admits, decodes and
-preempts as it does (a step's tokens are in flight until its output is processed), driven by a sync loop and by the
-async engine core's two-deep batch queue."""
+"""The cut at each window edge (`cut_plugin`) through the engine core's seam (`engine.core_gate`), on stand-ins for vLLM
+d9105ea80's Scheduler, which admits, decodes and preempts as it does (a step's tokens are in flight until its output is
+processed), and its EngineCore, stepping one step at a time or two deep through its batch queue."""
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections import deque
 from types import SimpleNamespace as NS
 
 import pytest
 
+from verity_vllm.engine import core_gate as cg
 from verity_vllm.pipeline import cut_plugin as CP
 
 
@@ -40,19 +42,25 @@ class Req:
 class Sched:
     """Admits waiting requests in queue order up to ``cap`` running, prefilling each whole, then decodes one token a
     step; a scheduled token is in flight until `update` processes its step. `_preempt_request` is vLLM's: it frees the
-    request's blocks, resets its computed tokens and puts it at the waiting queue's front."""
+    request's blocks, resets its computed tokens and puts it at the waiting queue's front. ``requests`` is its request
+    table, in the order `add_request` received them."""
     block_size = 4
 
-    def __init__(self, cap: int = 3, policy: str = "fcfs", connector=None):
+    def __init__(self, cap: int = 3, policy: str = "fcfs", connector=None, dp: int = 1):
         self.scheduler_config, self.connector, self.cap = NS(policy=policy), connector, cap
-        self.waiting, self.skipped_waiting, self.running = Queue(), Queue(), []
+        self.vllm_config = NS(parallel_config=NS(data_parallel_size=dp))
+        self.waiting, self.skipped_waiting, self.running, self.requests = Queue(), Queue(), [], {}
         self.current_step, self.prev_step_scheduled_req_ids, self.reset_preempted_req_ids = 0, set(), set()
         self.held: dict[str, int] = {}
         self.kv_cache_manager = NS(get_block_ids=lambda rid: ([0] * self.held.get(rid, 0),))
         self.steps: list[dict] = []
 
     def add_request(self, r):
+        self.requests[r.request_id] = r
         self.waiting.add_request(r)
+
+    def has_requests(self) -> bool:
+        return bool(self.running or self.waiting)
 
     def _preempt_request(self, r, timestamp, drop_stale_output=False):
         assert r.status == "RUNNING" and r.num_in_flight_tokens == 0
@@ -62,7 +70,7 @@ class Sched:
         self.waiting.prepend_request(r)
         self.reset_preempted_req_ids.add(r.request_id)
 
-    def schedule(self, throttle_prefills: bool = False):
+    def schedule(self):
         self.current_step += 1
         step = {"prev": set(self.prev_step_scheduled_req_ids), "admitted": [], "scheduled": {}}
         for r in self.running:
@@ -93,52 +101,92 @@ class Sched:
             if r.num_output_tokens >= r.max_tokens:
                 self.running.remove(r)
                 self.held.pop(rid, None)
+                self.requests.pop(rid)
                 r.status = "FINISHED"
 
 
-def serve(sched, cut, reqs, *, arrive=None, async_scheduling=False, limit=200):
-    """Drive ``sched`` behind ``cut`` (its `Cut.before` and `Cut.after` around each ``schedule()``) until every request
-    finishes; ``arrive`` maps a step to the requests added before it (by default all before the first)."""
+class Core:
+    """vLLM's EngineCore as the seam drives it: `step` schedules, runs and processes one step, and
+    `step_with_batch_queue` keeps two in flight, as with async scheduling (its batch queue two deep)."""
+
+    def __init__(self, sched: Sched, async_scheduling: bool = False) -> None:
+        self.scheduler, self.batch_queue = sched, deque() if async_scheduling else None
+
+    def _process_input_queue(self) -> None:
+        pass
+
+    def has_work(self) -> bool:
+        return self.scheduler.has_requests()
+
+    def step(self):
+        if not self.scheduler.has_requests():
+            return {}, False
+        self.scheduler.update(self.scheduler.schedule())
+        return {}, True
+
+    def step_with_batch_queue(self):
+        s = self.scheduler
+        if s.has_requests():
+            self.batch_queue.appendleft(s.schedule())
+            if len(self.batch_queue) < 2:
+                return None, True
+        elif not self.batch_queue:
+            return None, False
+        s.update(self.batch_queue.pop())
+        return {}, True
+
+
+@pytest.fixture
+def engine():
+    """``engine(make)``: an EngineCore class of its own behind a seam of its own with the edge ``"cut"`` made by
+    ``make``; the seams' wraps come off afterwards."""
+    seams = []
+
+    def build(make, clock=lambda: 0.0):
+        cls = type("C", (Core,), {})
+        seam = cg.EngineCoreGate(proc=cls, core=cls, clock=clock)
+        seam.edge("cut", make)
+        seams.append(seam)
+        return cls
+    yield build
+    for seam in seams:
+        seam.uninstall()
+
+
+def serve(cls, sched, reqs, *, arrive=None, async_scheduling=False, limit=200):
+    """Step an engine core of class ``cls`` over ``sched`` until every request finishes; ``arrive`` maps a step call to
+    the requests added before it (by default all before the first)."""
+    core = cls(sched, async_scheduling)
+    step = core.step_with_batch_queue if async_scheduling else core.step
     arrive = arrive or {0: reqs}
-    queue, k = deque(), 0
-    while k < limit:
+    for k in range(limit):
         for r in arrive.get(k, ()):
-            cut.add(r)
             sched.add_request(r)
-        if not (sched.running or sched.waiting or queue) and k > max(arrive):
+        if not (sched.has_requests() or core.batch_queue) and k > max(arrive):
             break
-        held = cut.before(sched)
-        try:
-            out = sched.schedule()
-        finally:
-            cut.after(sched, held)
-        queue.append(out)
-        if not async_scheduling or len(queue) == 2:
-            sched.update(queue.popleft())
-        k += 1
-    while queue:
-        sched.update(queue.popleft())
+        step()
     return sched.steps
 
 
-def test_without_an_edge_the_scheduler_is_untouched() -> None:
+def test_without_an_edge_the_scheduler_is_untouched(engine) -> None:
     plain, cut = Sched(), Sched()
-    serve(plain, CP.Cut(every_steps=10_000), [Req(i) for i in range(5)])
-    steps = serve(cut, CP.Cut(every_steps=10_000), [Req(i) for i in range(5)])
+    serve(Core, plain, [Req(i) for i in range(5)])
+    steps = serve(engine(lambda core: CP.Cut(every_steps=10_000)), cut, [Req(i) for i in range(5)])
     assert [s["scheduled"] for s in steps] == [s["scheduled"] for s in plain.steps]
 
 
-def test_a_sync_edge_preempts_every_running_request_and_requeues_by_release_order() -> None:
+def test_a_sync_edge_preempts_every_running_request_and_requeues_by_release_order(engine) -> None:
     """Every 4 steps the running requests are preempted from the running list's tail, with their stale output dropped;
     the scheduler's step ids are cleared; the waiting queue holds them in the order they were added; and the edge's own
     step admits window w + 1's first requests from it, each recomputing its prompt and outputs. Released first, the
     continuations run ahead of the requests still waiting, which start once they finish."""
     sched, cut = Sched(), CP.Cut(every_steps=4)
     reqs = [Req(i) for i in (3, 1, 4, 0, 2)]
-    steps = serve(sched, cut, reqs)
+    steps = serve(engine(lambda core: cut), sched, reqs)
     e0 = cut.edges[0]
-    assert e0["step"] == 4 and e0["held_steps"] == 0 and not e0["over"]
+    assert e0["step"] == 4 and e0["drain_calls"] == 0 and e0["waits"] == 0 and not e0["over"]
     assert [c["id"] for c in e0["cut"]] == ["req-4", "req-1", "req-3"]
+    assert [c["seq"] for c in e0["cut"]] == [2, 1, 0]
     assert all(c["n"] == c["e"] == c["a_O"] == 4 and c["P"] == 6 and c["computed"] == 9 and c["blocks"] == 3
                for c in e0["cut"])
     assert e0["requeued"] == ["req-3", "req-1", "req-4", "req-0", "req-2"]
@@ -153,89 +201,66 @@ def test_a_sync_edge_preempts_every_running_request_and_requeues_by_release_orde
     assert len(steps) == 18 and all(r.status == "FINISHED" for r in reqs)
 
 
-def test_an_async_edge_holds_until_the_step_in_flight_is_processed() -> None:
-    """With a step in flight at the edge, the edge's first schedule() schedules nothing; the cut comes at the next one,
-    once that step's outputs are out, so no preempted request has tokens in flight."""
+def test_an_async_edge_is_cut_once_the_seam_has_drained_the_step_in_flight(engine) -> None:
+    """With a step in flight at the edge, the seam's next step only processes it; the cut comes at the one after, once
+    its outputs are out, so no preempted request has tokens in flight, and the step after the cut schedules the
+    continuations."""
     sched, cut = Sched(), CP.Cut(every_steps=4)
-    steps = serve(sched, cut, [Req(i) for i in range(4)], async_scheduling=True)
+    steps = serve(engine(lambda core: cut), sched, [Req(i) for i in range(4)], async_scheduling=True)
     e0 = cut.edges[0]
-    assert e0["held_steps"] == 1 and e0["step"] == 5
-    assert steps[4]["scheduled"] == {} and steps[4]["admitted"] == []
-    assert steps[5]["preempted"] == {"req-0", "req-1", "req-2"} and steps[5]["prev"] == set()
+    assert e0["drain_calls"] == 1 and e0["step"] == 4
+    assert steps[4]["preempted"] == {"req-0", "req-1", "req-2"} and steps[4]["prev"] == set()
+    assert steps[4]["admitted"] == ["req-0", "req-1", "req-2"]
 
 
-def test_the_edge_holds_each_open_request_at_its_released_count() -> None:
-    """A request whose emitted outputs the network certifier hasn't released holds the edge: no step is scheduled until
-    they are. Past hold_s the cut goes ahead and lists the request in ``over``."""
+def test_the_edge_holds_each_open_request_at_its_released_count(engine) -> None:
+    """A request whose emitted outputs the network certifier hasn't released holds the cut, polling until they are,
+    and nothing is scheduled meanwhile. Past hold_s the cut goes ahead and lists the request in ``over``."""
     t = [0.0]
     behind = {"req-1": 2}
+
+    def sleep(dt):
+        t[0] += 1.0
+        if t[0] >= 3:
+            behind.pop("req-1", None)
     released = lambda r: r.num_output_tokens - behind.get(r.request_id, 0)  # noqa: E731
-    sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=5, released=released, clock=lambda: t[0])
-    for r in (Req(0), Req(1)):
-        cut.add(r)
-        sched.add_request(r)
-    for _ in range(4):
-        out = sched.schedule()
-        sched.update(out)
-    for k in range(3):
-        t[0] = k
-        held = cut.before(sched)
-        sched.schedule()
-        cut.after(sched, held)
-        assert held is not None and not cut.edges
-    behind.clear()
-    t[0] = 3.5
-    assert cut.before(sched) is None
+    sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=5, released=released, clock=lambda: t[0], sleep=sleep)
+    steps = serve(engine(lambda core: cut), sched, [Req(0), Req(1)])
     e0 = cut.edges[0]
-    assert e0["held_steps"] == 3 and e0["held_s"] == 3.5 and not e0["over"]
+    assert e0["waits"] == 3 and e0["wait_s"] == 3.0 and not e0["over"] and e0["step"] == 4
+    assert [c["e"] for c in e0["cut"]] == [4, 4] and len(steps) == 9
 
     behind["req-0"] = 1
-    sched2, cut2 = Sched(), CP.Cut(every_steps=1, hold_s=5, released=released, clock=lambda: t[0])
-    r = Req(0)
-    cut2.add(r)
-    sched2.add_request(r)
-    sched2.update(sched2.schedule())
-    t[0] = 10.0
-    held = cut2.before(sched2)
-    assert held is not None
-    cut2.after(sched2, held)
-    t[0] = 15.0
-    assert cut2.before(sched2) is None
-    assert cut2.edges[0]["over"] == ["req-0"] and cut2.edges[0]["cut"][0]["e"] == 0
+    sched2, cut2 = Sched(), CP.Cut(every_steps=1, hold_s=5, released=released, clock=lambda: t[0], sleep=sleep)
+    serve(engine(lambda core: cut2), sched2, [Req(0, max_tokens=2)])
+    e0 = cut2.edges[0]
+    assert e0["waits"] == 5 and e0["over"] == ["req-0"] and e0["cut"][0]["e"] == 0
 
 
-def test_a_held_edge_holds_the_skipped_queue_too() -> None:
+def test_the_cut_records_the_skipped_queue_and_leaves_it(engine) -> None:
     sched, cut = Sched(), CP.Cut(every_steps=1)
     a, b = Req(0), Req(1)
-    for r in (a, b):
-        cut.add(r)
     sched.add_request(a)
+    sched.requests[b.request_id] = b
     sched.skipped_waiting.add_request(b)
-    out = sched.schedule()
-    held = cut.before(sched)
-    assert held is not None and not sched.skipped_waiting and not sched.running
-    cut.after(sched, held)
-    assert list(sched.skipped_waiting) == [b] and sched.running == [a]
-    sched.update(out)
-    assert cut.before(sched) is None and cut.edges[0]["skipped"] == ["req-1"]
+    core = engine(lambda core: cut)(sched)
+    core.step()
+    core.step()
+    assert cut.edges[0]["skipped"] == ["req-1"] and list(sched.skipped_waiting) == [b]
 
 
-def test_a_timed_edge_that_falls_while_idle_cuts_once() -> None:
+def test_a_timed_edge_that_falls_while_idle_cuts_once(engine) -> None:
     t = [0.0]
     sched, cut = Sched(), CP.Cut(every_s=10, clock=lambda: t[0])
-    r = Req(0, max_tokens=50)
-    cut.add(r)
-    sched.add_request(r)
+    sched.add_request(Req(0, max_tokens=50))
+    core = engine(lambda core: cut)(sched)
     for now in (0.0, 4.0, 35.0, 36.0, 39.0, 40.0):
         t[0] = now
-        held = cut.before(sched)
-        out = sched.schedule()
-        cut.after(sched, held)
-        sched.update(out)
+        core.step()
     assert [(e["due"], e["at"]) for e in cut.edges] == [(10.0, 35.0), (40.0, 40.0)]
 
 
-def test_reads_outputs_and_the_pool_export_are_recorded(tmp_path) -> None:
+def test_reads_outputs_and_the_pool_export_are_recorded(engine, tmp_path) -> None:
     """A request whose sampling reads its outputs is listed; the export runs after the cut, when no block is held."""
     seen = []
 
@@ -244,38 +269,36 @@ def test_reads_outputs_and_the_pool_export_are_recorded(tmp_path) -> None:
         return {"nb": 8, "root": f"r{k}"}
     log = tmp_path / "cut.jsonl"
     sched, cut = Sched(), CP.Cut(every_steps=3, export=export, log=log)
-    serve(sched, cut, [Req(0, frequency_penalty=0.5), Req(1)])
+    serve(engine(lambda core: cut), sched, [Req(0, frequency_penalty=0.5), Req(1)])
     assert seen and all(h == {} for h in seen)
     lines = [json.loads(x) for x in log.read_text().splitlines()]
     assert lines == cut.edges and lines[0]["reads_outputs"] == ["req-0"]
     assert [x["pool_row"]["root"] for x in lines] == [f"r{k}" for k in range(len(lines))]
 
 
-def test_install_wraps_every_scheduler_and_refuses_what_it_cannot_cut() -> None:
-    class S(Sched):
-        pass
-    made = []
+def test_make_refuses_what_it_cannot_cut_and_register_adds_the_edge_to_the_seam(engine, monkeypatch, tmp_path) -> None:
+    cfg = CP.cut_config({CP.CUT_ENV: json.dumps({"every_steps": 2, "hold_s": 1, "log": str(tmp_path)})})
+    for sched, why in ((Sched(policy="priority"), "needs the FCFS scheduler"), (Sched(connector=object()), "KV connector"),
+                       (Sched(dp=2), "one of 2 data-parallel engines")):
+        with pytest.raises(RuntimeError, match=why):
+            CP.make(cfg)(Core(sched))
+    cut = CP.make(cfg)(Core(Sched()))
+    assert (cut.every_steps, cut.hold_s, cut.file.name) == (2, 1.0, str(tmp_path / f"cut.{os.getpid()}.jsonl"))
 
-    def make(s):
-        made.append(CP.Cut(every_steps=2))
-        return made[-1]
-    hooks = CP.install(S, make)
+    cls = type("C", (Core,), {})
+    seam = cg.EngineCoreGate(proc=cls, core=cls)
+    monkeypatch.setattr(cg, "SEAM", seam)
+    monkeypatch.setattr(CP, "_REGISTERED", [])
+    monkeypatch.setenv(CP.CUT_ENV, json.dumps({"every_steps": 2, "log": str(tmp_path / "r")}))
     try:
-        s = S()
-        assert s._verity_cut is made[0]
-        r = Req(0)
-        s.add_request(r)
-        assert made[0].seq == {"req-0": 0}
-        for _ in range(3):
-            s.update(s.schedule())
-        assert made[0].edges and made[0].edges[0]["cut"][0]["id"] == "req-0"
-        with pytest.raises(RuntimeError, match="needs the FCFS scheduler"):
-            S(policy="priority")
-        with pytest.raises(RuntimeError, match="KV connector"):
-            S(connector=object())
+        CP.register()
+        CP.register()
+        sched = Sched()
+        serve(cls, sched, [Req(0)])
+        (log,) = (tmp_path / "r").glob("cut.*.jsonl")
+        assert [json.loads(x)["step"] for x in log.read_text().splitlines()] == [2, 4, 6, 8]
     finally:
-        hooks.uninstall()
-    assert not hasattr(S(), "_verity_cut")
+        seam.uninstall()
 
 
 @pytest.mark.parametrize("raw, why", [
@@ -349,22 +372,19 @@ def test_the_sent_feed_counts_each_streamed_response_s_output_ids_as_they_leave(
     assert CP.SentFeed(Streams()).fd is None
 
 
-def test_the_cut_polls_the_sent_counts_every_step_and_holds_at_them() -> None:
-    """The engine runs ahead of what the server has sent: the edge waits until each open request's sent count reaches
-    its emitted one, read by ``poll`` before each step."""
+def test_the_cut_polls_the_sent_counts_and_holds_at_them(engine) -> None:
+    """The engine runs ahead of what the server has sent: the cut waits until each open request's sent count, read by
+    ``poll`` on each wait, reaches its emitted one."""
     recs: list[dict] = []
-    sent = CP.Sent(lambda: [recs.pop(0)] if recs else [])
-    sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=60, released=sent, poll=sent.poll, clock=lambda: 0.0)
+    feed = deque([[{"key": "req-00000", "sent": 2}], [{"key": "req-00000", "sent": 4}]])
+    sent = CP.Sent(lambda: recs.pop() if recs else [])
+    sched = Sched()
+    cut = CP.Cut(every_steps=4, hold_s=60, released=sent, poll=sent.poll, sleep=lambda dt: recs.append(feed.popleft()))
     r = Req(0)
     r.request_id = "cmpl-req-00000-0-0123abcd"
-    cut.add(r)
+    core = engine(lambda core: cut)(sched)
     sched.add_request(r)
-    for _ in range(4):
-        sched.update(sched.schedule())
-    assert r.num_output_tokens == 4
-    recs += [{"key": "req-00000", "sent": 2}, {"key": "req-00000", "sent": 4}]
-    held = cut.before(sched)
-    assert held is not None and sent.sent == {"req-00000": 2}
-    cut.after(sched, held)
-    assert cut.before(sched) is None
-    assert cut.edges[0]["cut"][0]["e"] == 4 and cut.edges[0]["held_steps"] == 1
+    for _ in range(5):
+        core.step()
+    e0 = cut.edges[0]
+    assert e0["cut"][0]["n"] == e0["cut"][0]["e"] == 4 and e0["waits"] == 2 and sent.sent == {"req-00000": 4}
