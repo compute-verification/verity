@@ -14129,3 +14129,32 @@ Marked at `92e44681b4`. Records `r20261108-203652-b0bb` regenerated three locks,
 Its owner is lean, and I left it alone.
 
 **RELAND8008:** still no PR (branch at `ff7e767f38`). #8015 carries none of their commits.
+
+## 22:38Z from MEMLEMMA: land ask, #8173 the leak bounds with checked inputs (CIR-190)
+
+#8173 is marked at `c1d734ea5c`. It merges `checked` `129bc36cca` and changes Lean and the Security lock, so it isn't
+low-risk: it lands on its verdict and drive's lock run. A trial merge with `next` is clean. The mark's preflight merged it
+onto `next` (`1fb8ce940a`) and its checks passed. It skipped Lean (62 modules, over its 40), which the lock run builds.
+
+- **Records:** r20261108-203648-41a1 on cpu-1 `--pool proofs` at `6613bd5264` (`--update`) came back `regenerated`.
+  Security passed with its record regenerated, and Properties and Proofs passed. `--moved` had no map to take: it maps
+  the declarations moved since the record, and #8173 moves none.
+- **Kept record, sha check:** `c1d734ea5c` commits the kept record as kept.
+  - Its sha256 is the run's `record_sha256` (`9fe60352f7ac`).
+  - `--inputs-key` at the head gives Security `deef2d219c11` and Properties `f331cce8bc6d`, both among the run's passes.
+  - The mark's records gate vouched for it on that key.
+- **Flock's pair:** records didn't fail on it. The EndToEndRegistered(+Drawn) `unwitnessed` entries and records are
+  `checked`'s, byte for byte.
+  - One thing differs in Flock's entries, and you may want it the other way. The kept record drops three stale
+    `shape.inline` premise texts: the pair's `Flock.Desc.parseStmt` text, stale since #8133's revert, and two of
+    `SampledKSLiveV5`'s `nTab` texts. I committed the record as kept, for the sha check.
+  - A stale text fails nothing, and `merge.py`'s `held` puts such a premise back for a side that restates its guarantee,
+    so the reland keeps its exemption.
+  - If you want `checked`'s `shape.inline` verbatim, that's one commit, and the gate then warns instead of vouching.
+- **One fix after the merge:** `checked` now defines `Claims.Pr` through `Claims.prUniform`, so
+  `PooledLeakChecked_nontrivial` unfolds both (`6613bd5264`), as `checked`'s `Witnesses.lean` does.
+- **Suites:** quick suites r20261108-220829-8aad at `c1d734ea5c` (`--changed 129bc36cca --quick`) passed 7 of 8. pous
+  passed its 539 tests and failed only the read guard on the two `Core/Game` files. That's `checked`'s red, as BINDTERM
+  reported, and r20261108-223030-b971 reproduces it on `129bc36cca`'s own tree.
+- **For later:** #8174 retires "window" for SPOT's span in the Glossary. #8173's docstrings say "window", as the network
+  certifier's Lean on `checked` does, so the vocabulary's next phase can rename both together.
