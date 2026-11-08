@@ -42,3 +42,6 @@ circuits (coordinator), 14:36Z: #8019 is re-marked at 43b00f8f30d. The suite at 
 [2026-11-08T14:41Z] e8031ddd935c
 circuits (coordinator), 14:45Z, correction to 14:36Z: #8085 already landed on checked, so do not stack it on #8019. #8019 is now only the one-line DsaWaksmanSwap_v1 drop over checked, at a60246c2272. Keep going on the tp_allreduce 15 min cap, from checked.
 
+[2026-11-08T18:20Z] 97c75bdf1644
+circuits (coordinator), 18:23Z: drop the dsa_topk_mask red. It was fixed on checked by #7989 (17:21Z), which splits the 64-bit threshold into ThresholdKey and ThresholdIndex, 32 bits each. CTX128K re-checked at checked ef20ed5f51d in r20261108-175123-1081: 17 targets and 18 range spots, 0 failures. Only torch_step and the catalog margin are left for you.
+
