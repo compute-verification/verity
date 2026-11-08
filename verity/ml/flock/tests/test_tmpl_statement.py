@@ -20,8 +20,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
+from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
+from verity.ml.circuits.defs import bind
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_config.settings import of
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
+from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
@@ -170,6 +175,79 @@ def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_tem
     assert (tmp_path / "struct" / "circuit.txt").read_text() == tm.text
     with pytest.raises(ValueError, match="a structural unit is written as its template: name its layout"):
         CS.UnitStager(*args, structural=True)
+
+
+def _structural_is_flat(args: tuple, rows: dict, out: Path) -> CS.UnitStager:
+    """The structural stager's statement of ``args`` against the flat stager's at the same layout: its template ordered and
+    computing the flat lowering's bits on random inputs (`struct_lower.check`), META the flat one's but for the template and
+    what reads it, and the outputs a round stages on ``rows`` the flat ones. circuit-check's structural check
+    (``--structural``) holds a template to the flat proof block gate for gate."""
+    flat, tm = CS.UnitStager(*args, layout=MODE), CS.UnitStager(*args, layout=MODE, structural=True)
+    assert isinstance(tm.low, CS.TmplLowering) and T.ordered(tm.low.template)["ok"]
+    assert tm.meta["dummy"] == flat.meta["dummy"]
+    diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
+    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"}
+    a, b = flat.stage(rows, out / "flat", b"k" * 32), tm.stage(rows, out / "struct", b"k" * 32)
+    assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
+    assert S.check(args[0])["mismatched_bits"] == 0
+    return tm
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("toy_reads")
+def test_a_structural_stager_lays_a_table_read_out_as_the_flat_stager_does(tmp_path):
+    """`test_struct_lower`'s toy, whose unit reads a library table three times, as a structural statement (beside a row
+    spanning SHA-512 blocks, as a composed circuit needs one): the flat statement's by `_structural_is_flat`, with the read's
+    rows once in the template, in the table-reading primitive's one definition."""
+    from verity.ml.circuits.boolean import BIT
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.types import Array, Value
+
+    unit = bind(CompositeDefinition("TmplToyReads", 1, (), lambda _S: ((("x", Value(8)), ("y", Value(8)), ("w", Array(2048, BIT))),
+                                                                       Array(4, Value(8))),
+                                    lambda B, _S, x, y, w: B.call(TOY_READS, x, y), register=False))
+    args = (unit, "unit/struct-reads", [("xy", V2, 16, ["x", "y"]), ("w", V2, 2048, ["w"])], [(V2, (0,))])
+    rng = np.random.default_rng(5)
+    rows = {"xy": rng.integers(0, 1 << 16, (5, 1), dtype=np.uint16), "w": rng.integers(0, 1 << 16, (5, 128), dtype=np.uint16)}
+    t = _structural_is_flat(args, rows, tmp_path).low.template
+    refs = [sum(len(a) + len(b) for _c, a, b in d.rows) for d in t.defs]
+    read = max((e for e in range(len(t.defs)) if e != t.root), key=refs.__getitem__)
+    assert sum(c.count for d in t.defs for c in d.calls if c.e == read) == 3
+
+
+#: the served types struct_lower lays out at small statics: FlashInfer's FP8 linear (two rcp reads a group), SparseMla's
+#: combine (ex2 and rcp), the fused RMSNorm (rsq) and the multimem all-reduce (none); each has a row of at least 2,048 bits,
+#: since a statement needs a row whose SHA-512 compresses a block before its last
+def _served(name: str):
+    from verity.ml.definitions.registry import cuda_rmsnorm, deepgemm, hopper, sparse_mla_split, tp_allreduce
+
+    return {"FlashInferFp8Linear": lambda: bind(deepgemm.FlashInferFp8Linear, K=128, N=1),
+            "SparseMlaCombine": lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=2, DV=32, INV=hopper.Fa3InvSum),
+            "RMSNormFusedCudaVector8": lambda: bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=8),
+            "AllReduceMultimem": lambda: bind(tp_allreduce.AllReduceMultimem, WORLD=2, SIZE=64, TREES=((0, 1), (0, 1)),
+                                              FTZ=False)}[name]()
+
+
+SERVED = ("FlashInferFp8Linear", "SparseMlaCombine", "RMSNormFusedCudaVector8", "AllReduceMultimem")
+
+
+@pytest.mark.skipif(not of(__file__).VERITY_FLOCK_STRUCT_TYPES,
+                    reason="stages each served type flat and structural, the MUFU reads' 2^23- and 2^24-word tables inline: "
+                           "about ten minutes and 40 GB; set VERITY_FLOCK_STRUCT_TYPES=1")
+@pytest.mark.parametrize("name", SERVED)
+def test_a_served_type_reading_tables_is_staged_structurally_as_its_flat_statement(name, tmp_path):
+    """Each served type in `SERVED`, at small statics (`_served`): its structural statement is its flat one
+    (`_structural_is_flat`), a parameter a row of its u16 words, on finite bf16 rows and random ones."""
+    fn = _served(name)
+    params, ret = fn.signature()
+    in_rows = [(nm, V2, sum(t.leaf_widths()), [nm]) for nm, t in params]
+    assert all(b % 16 == 0 for _r, _s, b, _p in in_rows)
+    outs = [(V2, (j,)) for j in range(len(ret.fields) if hasattr(ret, "fields") else 1)]
+    rng = np.random.default_rng(11)
+    rows = {r: np.concatenate([rng.integers(0, 1 << 16, (2, b // 16), dtype=np.uint16),
+                               (rng.standard_normal((3, b // 16)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)])
+            for r, _s, b, _p in in_rows}
+    _structural_is_flat((fn, f"unit/struct-{name}", in_rows, outs), rows, tmp_path)
 
 
 #: the auditor's host runs the lowering on numpy and Flock's Python alone
