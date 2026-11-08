@@ -6,26 +6,28 @@
 # templated statement's verify runs its session and then refuses it (`ProvedScope.servedForm`). With --phases or --layout, flock-served (flock_served/Main.lean)
 # times verify's work on the statement before any session a step at a time, and on a flat one flock-read
 # (flock_read/Main.lean) its parse's phases. With --stmt (a templated statement), flock-tmpl stmt (flock_tmpl/Main.lean)
-# times the statement's parse instead, whole and a stage at a time, and sizes its template against the unrolled unit.
+# times the statement's parse instead, whole and a stage at a time, and sizes its template against the unrolled unit;
+# with --base REV as well, the same flock-tmpl built against REV's verifier first, on the same staged statement.
 # Run from a clone (the builds write the verifier's .lake):
 #   research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
 #     --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
-#     [--layout MODE [--structural] [--stmt]]
+#     [--layout MODE [--structural] [--stmt [--base REV]]]
 # N: the kind's first N saved units, as a11's --per-kind staged them (the session's population). $OUT gets build.json
 # (flock_served.py's), archive-put.{log,time}, verify.{log,time}, perf.txt and perf-samples.txt.gz, served.jsonl and
 # served.time, and on a flat statement with --phases phases.jsonl and read.time; with --stmt stmt.jsonl and stmt.time
-# in place of served's.
+# in place of served's, and with --base stmt-base.jsonl and stmt-base.time.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
-kind=${1:?usage: flock_served.sh KIND [N] [--phases] [--layout MODE [--structural] [--stmt]]}
+kind=${1:?usage: flock_served.sh KIND [N] [--phases] [--layout MODE [--structural] [--stmt [--base REV]]]}
 shift
-n= phases= layout= structural= stmtp=
+n= phases= layout= structural= stmtp= base=
 while [ $# -gt 0 ]; do
   case $1 in
     --phases) phases=1 ;;
     --layout) layout=$2; shift ;;
     --structural) structural=1 ;;
     --stmt) stmtp=1 ;;
+    --base) base=$2; shift ;;
     *) n=$1 ;;
   esac
   shift
@@ -40,12 +42,18 @@ command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 uv sync -q --all-packages --extra torch-cpu
 (cd "$L" && lake build flock-verify) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
 FV=$L/.lake/build/bin/flock-verify
-scratch() { # scratch NAME: NAME's Main.lean in a scratch Lake package against the checkout's verifier
-  mkdir -p "$S/$1"
-  cp "benchmarks/verifier_cost/${1//-/_}/Main.lean" "$L/lean-toolchain" "$S/$1/"
+scratch() { # scratch NAME [VERIFIER [DIR]]: NAME's Main.lean in a scratch package DIR (NAME) against VERIFIER (the checkout's)
+  local v=${2:-$L} d=$S/${3:-$1}
+  mkdir -p "$d"
+  cp "benchmarks/verifier_cost/${1//-/_}/Main.lean" "$v/lean-toolchain" "$d/"
   printf 'name = "%s"\ndefaultTargets = ["%s"]\n\n[[require]]\nname = "flock_verifier"\npath = "%s"\n\n[[lean_exe]]\nname = "%s"\nroot = "Main"\n' \
-    "${1//-/_}" "$1" "$L" "$1" > "$S/$1/lakefile.toml"
-  (cd "$S/$1" && lake build "$1") >> "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
+    "${1//-/_}" "$1" "$v" "$1" > "$d/lakefile.toml"
+  (cd "$d" && lake build "$1") >> "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
+}
+stmt() { # stmt BIN SUFFIX: BIN's flock-tmpl stmt on the staged statement into stmt SUFFIX.{out,time,jsonl}
+  /usr/bin/time -v -o "$O/stmt$2.time" "$1" stmt "$w/circuit.txt" > "$O/stmt$2.out" || true
+  grep '^PHASE ' "$O/stmt$2.out" | sed 's/^PHASE //' > "$O/stmt$2.jsonl" || true
+  cat "$O/stmt$2.jsonl"
 }
 w=$S/w
 /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_served.py "$values" "$kind" "$w" $n ${layout:+--layout "$layout"} \
@@ -73,10 +81,14 @@ if [ -n "$session" ]; then
   cat "$O/verify.log"
 fi
 if [ -n "$stmtp" ]; then
+  if [ -n "$base" ]; then
+    mkdir -p "$S/base"
+    git archive "$base" verity/core/service/flock | tar -x -C "$S/base"
+    scratch flock-tmpl "$S/base/verity/core/service/flock" flock-tmpl-base
+    stmt "$S/flock-tmpl-base/.lake/build/bin/flock-tmpl" -base
+  fi
   scratch flock-tmpl
-  /usr/bin/time -v -o "$O/stmt.time" "$S/flock-tmpl/.lake/build/bin/flock-tmpl" stmt "$w/circuit.txt" > "$O/stmt.out" || true
-  grep '^PHASE ' "$O/stmt.out" | sed 's/^PHASE //' > "$O/stmt.jsonl" || true
-  cat "$O/stmt.jsonl"
+  stmt "$S/flock-tmpl/.lake/build/bin/flock-tmpl" ""
 elif [ -n "$phases" ] || [ -n "$layout" ]; then
   scratch flock-served
   /usr/bin/time -v -o "$O/served.time" "$S/flock-served/.lake/build/bin/flock-served" "$w/circuit.txt" "$pub" "$stmt" \
