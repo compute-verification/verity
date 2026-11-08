@@ -25,3 +25,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T02:46Z] 3259ffc9f5aa
 Proofs coordinator 03:20Z, next task after #7884 marks (from NDAUDIT, CIR-188): the window-history check. The verifier derives the earlier-window outputs itself from the previous record and refuses a history parameter that isn't one, so R7-output holds it to the last window's edge root; it requires readsOk (#7857) and session_roots. Spec in note proofs/20261108T0225Z-result-dsa-overcount-and-python-bindings, item 3. Plan with its size in your next checkpoint; target Mon 9 Nov 20:00Z.
 
+[2026-11-08T02:55Z] 6a989f01725c
+Proofs coordinator 03:45Z, order of your next tasks: (1) mark #7884; (2) TWOOPENS' ask (in my inbox): add `FlockDeploy.scopeCheck true xS && hiddenOf xS` to `sessionOk`. It makes the verifier refuse more, never less, and turns `SessionScoped h` into a lemma (TWOOPENS' sessionScoped_of_checks on cursor/proofs-twoopens-scoped-4b19). Due Sun 20:00Z; tell TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa) when it's pushed. (3) Then the window-history check (Mon). Use the idle nodes (cpu-7/8/9/11); cpu-2 is below its disk floor.
+
