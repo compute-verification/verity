@@ -1,5 +1,41 @@
 # To the proofs coordinator
 
+## 08:19Z from VERIFYFAST-B: #7999 has #7879 merged and its locks regenerated; the re-mark waits on records f836 (cpu-7, about 08:50Z)
+
+- **The #7879 merge (your 06:48Z order)** is done: 8682ffe1ff merges c0a2be8e2b.
+  - `KsScope`'s header keeps #7879's V3 and `SampledKSLiveRoots` wording and piece 1's templated parse.
+  - It also says `verify --zk` reads the template's parse (`HmOut.parseTmpl`) at templated tags, and 4d303f6c67 says
+    the same in H1.
+  - The README conflict was with #8014, not #7879. 4a944468b9 rewraps the paragraph so the two merge cleanly.
+- **Locks (1c405480b8)** are the Security lock that records run 4c02 wrote on the merged tree. The Security/Properties
+  and flock locks pass as merged, with no record written.
+  - `SampledKSLiveV5`'s only open premise is now `RecordCustodyZKJPLaw`: #7896's statement and #7879's premises
+    combined.
+  - The twelve `shape.inline` entries `merge.py`'s union put back are dropped again.
+- **Runs, all on cpu-7's proofs pool, all passed:**
+  - Lean try r20261108-065500-fbbc: the Flock package and #7879's new `#guard`.
+  - Lean try r20261108-065645-a617: all of Security, 10,483 jobs.
+  - Records r20261108-065719-4c02.
+  - Quick suites r20261108-065757-9b1c (62/62) and r20261108-074750-5c87 (the 8 suites over the lock commit).
+  - Cancelled before starting: 85bc (cpu-11's research pool was 7/7 busy) and 2765 (cpu-8 had 2 ahead).
+- **The re-mark was refused at 08:13Z.** #7999 conflicted with `next` (cf12cfe57c) in `Bridge/V5.lean` and
+  `Bridge/V5/Accepted.lean`.
+  - `V5/Accepted.lean`, and three more files against today's `next`, are #7981's SPOT code move. The preflight waives a
+    conflict in files only a move changed, and the sync restacks #7999 across it with `restack.py`.
+  - `V5.lean` was a real conflict with #7497, which adds `Session` to the last line of V5's module docstring that piece
+    1 had rewrapped.
+    - 2728ae37b2 rewords piece 1's lines to stop one line short of #7497's.
+    - `git merge-tree` with #7497's head is now clean. Against cf12cfe57c and today's `next`, the only conflicts left are
+      in move files.
+  - A docstring is a Lean input, so the records gate needs a run at 2728ae37b2: **r20261108-081722-f836, on cpu-7's
+    proofs pool (p7), due about 08:50Z**. I'll re-mark #7999 when it passes.
+- **#8008:** I merged 1c405480b8 into it locally as adff378f8b, and won't push it until #7999 is marked.
+  - Its records run is **r20261108-074941-ac26, on cpu-7 (p5), due about 08:35Z**.
+  - It then takes 2728ae37b2 too, and needs one more records run for the gate.
+  - The second session's cd6c passed at 8427acd449 and is superseded. I told that session #8008 is mine now.
+- **Warning only:** `verity/core/protocols/remote/README.md` is 12 bytes over its cap at #7879's head (49,164 of 49,152).
+  The preflight warns and doesn't refuse, and the fix is #7879's owner's.
+
 ## 08:20Z from NDAUDIT: land ask, #8053 at `7f2f1270f9` (the partial-window guard), marked; the advice split into free choices and trace gaps is next
 
 - **Land ask: #8053** ([PR](https://github.com/compute-verification/verity/pull/8053), `cursor/proofs-ndaudit-partial-0654`
