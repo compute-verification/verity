@@ -3,7 +3,7 @@
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
-//!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256   (a long-lived verifier, `serve_queue`)
+//!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256 [--tree-from HOST:PORT]   (a long-lived verifier, `serve_queue`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
 //!   flock-circuit prove    --stream FILE|- [--gpu] [--warm W]   (a long-lived prover over a stream of statements, `prove_stream`)
@@ -19,8 +19,8 @@
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
-//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
-//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N` or `--queue`): each
+//! session's coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
 
 use std::{
     collections::BTreeMap,
@@ -879,12 +879,12 @@ struct Serving {
     law: Option<flock_live::unit_draw::Law>,
     tabs: Tables,
     /// `serve --tree-from`: the challenger every session's coin tree is sampled by
-    tree_from: Option<TreeFrom>,
+    tree_from: Option<Arc<TreeFrom>>,
 }
 
 /// The challenger's session (`serve --tree-from`), one connection the server's sessions share. It closes when the server is
-/// done with it: once its last session's record is written, `serve_loop` returns and drops the [`Serving`] its sessions were
-/// made from. A close the challenger doesn't confirm is the server's refusal.
+/// done with it: once its last session's record is written, `serve_loop` returns and drops the last [`Serving`] holding it
+/// (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
 struct TreeFrom(flock_live::tree_from::Shared);
 
 impl Drop for TreeFrom {
@@ -897,8 +897,9 @@ impl Drop for TreeFrom {
 
 /// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
 /// ([`flock_live::tree_from`]). Only sessions on the keyed coin tree (`--zk`, or plain ones under `FC_COINS=tree`)
-/// commit their coins to a tree, and the challenger's session closes after the server's last, so a bounded `--sessions N`.
-fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
+/// commit their coins to a tree, and the challenger's session closes after the server's last: a bounded `--sessions N`, or
+/// the end of a `--queue` (``queue``).
+fn tree_from_arg(tabs: &Tables, queue: bool) -> Option<Arc<TreeFrom>> {
     let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
     if address.is_empty() {
         if !secret_file.is_empty() {
@@ -910,8 +911,8 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
         refuse("--tree-from is serve's, for sessions on the keyed coin tree (--zk, or FC_COINS=tree): only theirs commit \
                 their coins to a tree".into());
     }
-    if arg("--sessions", "").parse::<usize>().is_err() {
-        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
+    if !queue && arg("--sessions", "").parse::<usize>().is_err() {
+        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N or --queue".into());
     }
     let secret = (!secret_file.is_empty()).then(|| {
         let s = std::fs::read_to_string(&secret_file).unwrap_or_else(|e| refuse(format!("--tree-secret-file: {e}")));
@@ -919,7 +920,7 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
             .unwrap_or_else(|| refuse("--tree-secret-file: the challenger session's secret, in hex".into()))
     });
     let c = flock_live::tree_from::Challenger::connect(&address, secret.as_deref()).unwrap_or_else(|e| refuse(format!("--tree-from: {e}")));
-    Some(TreeFrom(Arc::new(Mutex::new(c))))
+    Some(Arc::new(TreeFrom(Arc::new(Mutex::new(c)))))
 }
 
 fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
@@ -970,7 +971,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         Tables::one(st, inst)
     };
-    let tree_from = tree_from_arg(&tabs);
+    let tree_from = tree_from_arg(&tabs, false);
     Serving { given, law, tabs, tree_from }
 }
 
@@ -978,7 +979,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
     let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
     let s = match &sv.tree_from {
-        Some(TreeFrom(c)) => s.with_tree_from(c.clone()),
+        Some(t) => s.with_tree_from(t.0.clone()),
         None => s,
     };
     if let Some(draw) = &sv.given {
@@ -6818,10 +6819,11 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// under DIR rather than `--out`. A population's public file is checked
 /// as `serve` checks it (no rows, its public words, Linking) once for its consecutive sessions, each population size's
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
-/// label. No `--instances`, `--draw*`, `--links`, `--tree-from`, `--rec-run` or session tables.
+/// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
+/// closed when the queue ends. No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--tree-from", "--rec-run", "--tmpl-unit"]
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--tmpl-unit"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
@@ -6836,8 +6838,10 @@ fn serve_queue(c: Composite, path: &str) {
     } else {
         Box::new(std::io::BufReader::new(std::fs::File::open(path).unwrap_or_else(|e| refuse(format!("--queue {path}: {e}")))))
     });
-    // the circuit until its first statement holds it, its statements (one a population size), and its last public file
-    let state: Mutex<(Option<Composite>, Vec<Arc<Stmt>>, Option<(String, Arc<Instances>)>)> = Mutex::new((Some(c), Vec::new(), None));
+    // the circuit until its first statement holds it, its statements (one a population size), its last public file, and
+    // the challenger's session once the first line has opened it
+    type State = (Option<Composite>, Vec<Arc<Stmt>>, Option<(String, Arc<Instances>)>, Option<Option<Arc<TreeFrom>>>);
+    let state: Mutex<State> = Mutex::new((Some(c), Vec::new(), None, None));
     serve_loop(None, || {
         let mut line = String::new();
         while line.trim().is_empty() {
@@ -6852,7 +6856,7 @@ fn serve_queue(c: Composite, path: &str) {
         flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
         let tb = Instant::now();
         let mut g = state.lock().unwrap_or_else(PoisonError::into_inner);
-        let (c0, stmts, last) = &mut *g;
+        let (c0, stmts, last, tree_from) = &mut *g;
         if last.as_ref().is_none_or(|(f, _)| *f != instances) {
             let c = c0.as_ref().unwrap_or_else(|| &stmts[0].c);
             let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
@@ -6879,7 +6883,9 @@ fn serve_queue(c: Composite, path: &str) {
                 st
             }
         };
-        let sv = Serving { given: Some(draw), law: None, tabs: Tables::one(&st, &inst), tree_from: None };
+        let tabs = Tables::one(&st, &inst);
+        let tree_from = tree_from.get_or_insert_with(|| tree_from_arg(&tabs, true)).clone();
+        let sv = Serving { given: Some(draw), law: None, tabs, tree_from };
         let mut tag = json!({"label": j["label"]});
         if let Some(out) = j["out"].as_str() {
             tag["out"] = json!(out);
