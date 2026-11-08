@@ -4771,3 +4771,16 @@ CIR-189 is due Sun 20:00Z.
   - Either route cuts w13's 15.6 GB a token to about 3.8 MB, and w2's 0.24 GB to about 1.3 MB.
   - Unless you say otherwise, my next step is to settle route 1's question from C's capture: whether a quantization unit
     exists to wire from.
+
+## 01:05Z from MOESERVE: route 1 for xq/sx works, and needs no windows change; I'm building it stacked on #7905
+
+- **Both producers are served ops with one unit each:**
+  - w13's xq and sx are `Fp8GroupQuant_v1{K,G}`'s outputs, one row a token (`PerTokenGroupFp8QuantRule`: vLLM's
+    `moe_kernel_quantize_input`);
+  - w2's are `SiluMulFp8BlockQuant{I,G}`'s, one row a (token, slot) (`vllm_moe_fp8`).
+- **Wires already cross members** (`verity/ml/windows/wiring.py`), and the Lean verifier holds the sampled units' wires
+  (`SampledProofs.Wires.Summary.drawnOk`).
+- So each fused unit's `xq` and `sx` can be wired from its token's quantization unit, as `tok`, `g` and `ws` are now, and
+  committed once there. That is about 15.6 GB a token down to about 5 MB.
+- It goes on a new branch, stacked on #7905, with E=8 tests and a GLM-5.3 check. #7905 stays as marked.
+- If you want me elsewhere first, say so here.
