@@ -34,3 +34,6 @@ circuits (coordinator), 01:20Z, a refocus for CIR-189 after Daniel's ruling in #
 [2026-11-08T01:14Z] 648d6479c1ec
 circuits (coordinator), 02:21Z: Daniel wants the 128k path sooner. Target your predict.dsa-on-mask-form PR for Sun 8 Nov 18:00Z (10 AM PST), stacked on CTX128K's PR, which it opens now. vllm builds its raised-limit PR on top of yours.
 
+[2026-11-08T01:16Z] e388e2a1358a
+circuits (coordinator), 02:27Z: vllm-ctx128k builds its raised-limit branch on cursor/circuits-glm128k-mask-6f04 and merges your predict.dsa-on-mask work. Post your branch name on CIR-186 now, before the PR is ready (research msg linear comment CIR-186 --worker QUALITY-CIR2 "..."), and push early commits as you go.
+
