@@ -1,6 +1,7 @@
 """I2, the compiler: a served session's advice -> the Programs its committed rows must pass (v0, request-major).
 
-`compile_steps(registered, advice, ingress)` reads these three and nothing else of the run:
+`compile_steps(registered, advice, ingress)` reads these three and nothing else of the run, and of the advice and the bodies only
+the fields `reads.READS` declares, each with its account in the output accounting (the advice through `reads.gate`):
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), the public
   default seed a request without one is sampled under (`engine.served_seed`), and ℓ, the public cap on the advice's length in bits.
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
@@ -116,6 +117,7 @@ from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
+from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
 from .common import edge_config
 from .phi import Phi
@@ -128,15 +130,11 @@ EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 CAP_BITS = 1 << 23
 #: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
 SAMPLING_EPS = 1e-5
-#: the sampling parameters (`engine.step_trace.SAMPLING`) that leave a request's Program unchanged at these values
-_INERT = {"min_p": (None, 0, 0.0), "presence_penalty": (None, 0, 0.0), "frequency_penalty": (None, 0, 0.0),
-          "repetition_penalty": (None, 1, 1.0), "min_tokens": (None, 0), "logit_bias": (None, {}), "n": (None, 1),
-          "top_k": (None, 0, -1)}
-#: the parameters that only finish a request (its T, which the advice's rows carry), and the ones the policy reads
-_FINISH = ("max_tokens", "stop", "stop_token_ids", "ignore_eos")
-_READ = ("temperature", "top_p", "seed")
-#: a body's fields that compute nothing: the prompt (read apart) and how the response travels
-_TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_token_ids")
+#: a body's fields by their roles in `reads.READS`: the sampling parameters (`engine.step_trace.SAMPLING`) that leave a request's
+#: Program unchanged at these values, the ones a request's Program may read, and the ones that compute nothing
+_INERT = {f.name: f.inert for f in reads.body("inert")}
+_KNOWN = tuple(f.name for f in reads.body("inert", "finish", "policy"))
+_TRANSPORT = tuple(f.name for f in reads.body("prompt", "transport"))
 
 
 @dataclass(frozen=True)
@@ -280,7 +278,7 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
         raise Unexpressible(f"request {i}: temperature {t!r}, top_p {p!r} and seed {seed!r} aren't a number ≥ 0, a number in (0, 1] "
                             f"and an integer in [0, 2^64)")
     facts = [f"{k}={v!r}" for k, v in sorted(s.items()) if k in _INERT and v not in _INERT[k]]
-    facts += [f"{k} (a parameter this compiler doesn't know)" for k in sorted(s) if s[k] is not None and k not in (*_INERT, *_FINISH, *_READ)]
+    facts += [f"{k} (a parameter this compiler doesn't know)" for k in sorted(s) if s[k] is not None and k not in _KNOWN]
     if 0 < t < SAMPLING_EPS:
         facts.append(f"temperature {t!r} (vLLM samples it greedily, the Build's policy is greedy at 0 only)")
     if t > 0 and num_sms is None:
@@ -293,9 +291,10 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
              "splits": registered_splits(int(num_sms))}, int(default_seed if seed is None else seed))
 
 
-def advice_of(registered: Registered, advice: Any) -> WA.Advice:
-    """The advice as a Commit window's (`window_advice`; I1 v0's when it carries nothing): its canonical bytes within ℓ, or an
-    I1 or window `Advice` whose encoding is; anything else refused by name."""
+def advice_of(registered: Registered, advice: Any) -> Any:
+    """The advice as a Commit window's (`window_advice`; I1 v0's when it carries nothing), through the gate that refuses a field
+    `reads.READS` doesn't declare (`reads.gate`): its canonical bytes within ℓ, or an I1 or window `Advice` whose encoding is;
+    anything else refused by name."""
     if isinstance(advice, (I1.Advice, WA.Advice)):
         try:
             data = (WA if isinstance(advice, WA.Advice) else I1).encode(advice)
@@ -308,7 +307,7 @@ def advice_of(registered: Registered, advice: Any) -> WA.Advice:
     if 8 * len(data) > registered.cap_bits:
         raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
     try:
-        return WA.decode(data)
+        return reads.gate(WA.decode(data))
     except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
         raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
                             f"ill-formed advice: its decode failed ({type(e).__name__}: {e})") from None
