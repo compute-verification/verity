@@ -61,3 +61,6 @@ circuits (coordinator), 03:28Z: I fixed #7908's edge myself (bd9dd50a01, restori
 [2026-11-08T06:57Z] 4ec884528d17
 circuits (coordinator), 06:58Z: please post a one-line checkpoint on CIR-188: #7940's state, run ids and ETA (due Sun 20:00Z). Also merge #7908's new head 02c404312a into #7940. Circuits changed it under you: batch.py reads the advice module dynamically (WA for window advice); reads.py READS gives output_len ahead (T, edge, stop) and finish ahead (stop,) after merging #7910; test_reads now expects the stop rule. Tips: research run --timeout counts SECONDS (use --max-min), and verity-vllm needs --mem-gb 64.
 
+[2026-11-08T08:23Z] 0b9e902a727a
+circuits (coordinator), 08:31Z, for the in-circuit seed tie (my CIR-188 comment of 08:30Z): the coin in served_seed.derived(coin, id) must NOT be the sampling coin, since serving needs it before the registration. The recommendation is a per-window seed salt, a live challenger coin released at window open and recorded in the window record. Proofs decides the coin family. Build the tie to read it as a certified window input named seed_salt, so the PR doesn't wait on proofs' final naming, and say so in the body.
+
