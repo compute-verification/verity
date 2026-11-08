@@ -3,7 +3,9 @@ ZK server's record (`Firewall.Record.register`), its record `be64 n` first and i
 `core-firewall session --salt-key FILE` admits the registrations a statement's value commitments read, each once and
 oldest first (`admitReads`), before anything of its outer session reaches the auditor. A statement that reads one passed
 over, or whose roots no registration of the server's holds, or holds under another key, is its recursive session's stop
-and reaches nothing of the auditor. Each record is the one `verity_flock.firewall` writes for the same ops, byte for byte.
+and reaches nothing of the auditor. An interior session's registration is under a key the service drew for the session,
+which the record holds beside it with that key's tag under the server's key. Each record of commit sessions'
+registrations is the one `verity_flock.firewall` writes for the same ops, byte for byte.
 The statements are public files' headers only (`Flock.Firewall.Salts.treesOf` reads no more), so no session sets up
 (`test_firewall_session_loop`)."""
 
@@ -14,6 +16,7 @@ import json
 import os
 import shutil
 import socket
+import stat
 import struct
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -31,7 +34,8 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 SCHEMAS = ["hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]
 REG_LABEL = hashlib.sha512(b"verity/zk-server/registration/v1\0").digest()
 TAG_LABEL = hashlib.sha512(b"verity/zk-server/value-commitment/v1\0").digest()
-INTERIOR_LABEL = hashlib.sha512(b"verity/zk-server/interior-key/v1\0").digest()
+KEY_TAG_LABEL = hashlib.sha512(b"verity/zk-server/interior-key-tag/v1\0").digest()
+NOT_TAGGED = "its record tag is not the ZK server's for its number, session count and table refs"
 NOT_OPENED = "is none the current epoch opened: a session registers once, in the epoch that opened it"
 ONE_SESSION = ("the current epoch's session is not yet registered: an epoch opens one commit session (`register S` registers "
                "it, and the next commit opens the next epoch's)")
@@ -96,6 +100,13 @@ class Values:
     def close(self):
         self.p.stdin.close()
         assert self.p.wait() == 0
+
+
+def tag_of(k: bytes, s: bytes, j: int, dom: bytes, sc: str, root: bytes) -> bytes:
+    """Table `j`'s tag, of the commit session `s`, its domain id `dom`, schema `sc` and root `root`, under the key
+    `k`."""
+    return hashlib.sha512(k + TAG_LABEL + s + struct.pack(">I", j) + dom + struct.pack(">Q", LEAVES)
+                          + bytes([SCHEMAS.index(sc)]) + root).digest()
 
 
 def reference(k: bytes, n: int, m: int, s: bytes, got: list[tuple[bytes, bytes]], trees=TREES) -> bytes:
@@ -223,8 +234,7 @@ def test_the_loop_admits_each_registration_once_oldest_first(exe, tmp_path):
         ("r0002", [roots[1][0], roots[1][1]], key, [1], "registration 1 was skipped: one passed over is never admitted"),
         ("r0003", [roots[0][0], roots[0][1]], key, [0], None),
         ("r0004", [os.urandom(64), roots[0][1]], key, None, f"row a: {NO_HOLDER}"),
-        ("r0005", [roots[3][0], roots[3][1]], other, None,
-         "registration 3: its record tag is not the ZK server's for its number, session count and table refs"),
+        ("r0005", [roots[3][0], roots[3][1]], other, None, f"registration 3: {NOT_TAGGED}"),
         ("r0006", [roots[5][0], roots[5][1]], key, [5], "stream u stopped at its failure budget (2 of 1)"),
     ]
     for s, rs, k, reads, why in cases:
@@ -247,31 +257,65 @@ def test_the_loop_admits_each_registration_once_oldest_first(exe, tmp_path):
     assert fw.failures("u") == 2
 
 
-def test_an_interior_registration_is_under_its_sessions_key(exe, tmp_path):
+def _registered(state: Path) -> list[tuple[int, dict]]:
+    """The record's `register` events, each with its line's index."""
+    lines = (state / "record.jsonl").read_text().splitlines()
+    return [(i, e) for i, e in enumerate(map(json.loads, lines)) if e["event"] == "register"]
+
+
+def _put(state: Path, at: int, ev: dict) -> None:
+    """The record with its line `at` the event `ev`, as the ZK server writes it."""
+    lines = (state / "record.jsonl").read_text().splitlines()
+    lines[at] = json.dumps(ev, sort_keys=True)
+    (state / "record.jsonl").write_text("\n".join(lines) + "\n")
+
+
+def _flip(h: str) -> str:
+    """The hex `h` with its first digit changed."""
+    return ("1" if h[0] == "0" else "0") + h[1:]
+
+
+def test_an_interior_registration_is_under_its_sessions_own_key(exe, tmp_path):
     """An interior commit's registration is numbered and appended as any other, its record the reference's with its table
-    tags and record tag under the session's own key `SHA-512(k ‖ L ‖ s)`, none under `k`. The loop, which holds `k`,
-    derives that key from the record's session: a statement reading the registration is admitted, and under another key
-    it is refused, reaching nothing of the auditor."""
+    tags and record tag under a key the service drew for the session, not `k` and not another interior session's. The
+    record's `register` line holds that key and its tag, SHA-512 under `k` of the key and the record, and the service
+    answers neither. The loop, which holds `k`, checks the key's tag, then the record tag under the key: a statement
+    reading the registration is admitted, and one reading it under another salt key, with the line's key or its tag
+    changed, or with neither on the line, is refused, reaching nothing of the auditor. The record's state directory is
+    its user's alone."""
     state, key, other = tmp_path / "state", tmp_path / "salt.key", tmp_path / "other.key"
     fw = FW.Firewall(state)
-    for _ in range(2):
+    for _ in range(5):
         fw.finish(fw.open("t", ["L0"]))
     v = Values(exe, state, key)
+    assert stat.S_IMODE(state.stat().st_mode) == 0o700
     k = key.read_bytes()
     s, got = v.commit(word="interior")
-    tk = hashlib.sha512(k + INTERIOR_LABEL + s).digest()
-    assert all(tag != hashlib.sha512(k + TAG_LABEL + s + struct.pack(">I", j) + dom + struct.pack(">Q", LEAVES)
-                                     + bytes([SCHEMAS.index(sc)]) + root).digest()
+    m, rec = v.register(s)
+    at, ev = _registered(state)[-1]
+    tk, kt = bytes.fromhex(ev["key"]), bytes.fromhex(ev["key_tag"])
+    assert (m, rec, ev["record"]) == (1, reference(tk, 0, 1, s, got), rec.hex())
+    assert all(tag == tag_of(tk, s, j, dom, sc, root) != tag_of(k, s, j, dom, sc, root)
                for j, ((_, dom, sc), (root, tag)) in enumerate(zip(TREES, got)))
-    assert v.register(s) == (1, reference(tk, 0, 1, s, got))
+    assert kt == hashlib.sha512(k + KEY_TAG_LABEL + tk + rec).digest() and tk != k and tk not in rec and kt not in rec
     assert v.register(s) == f"the session {s.hex()} {NOT_OPENED}"
+    s2, got2 = v.commit(word="interior")
+    _, rec2 = v.register(s2)
+    tk2 = bytes.fromhex(_registered(state)[-1][1]["key"])
+    assert tk2 != tk and rec2 == reference(tk2, 1, 1, s2, got2)
     v.close()
     Values(exe, tmp_path / "other-state", other).close()
     roots = [r for r, _ in got]
-    why = "registration 0: its record tag is not the ZK server's for its number, session count and table refs"
-    for sid, kf, refused in (("r0000", other, f"recursive session r0000 stopped at L0: {why}"), ("r0001", key, None)):
+    bare = {name: x for name, x in ev.items() if name not in ("key", "key_tag")}
+    refused = f"registration 0: {NOT_TAGGED}"
+    cases = [("r0000", other, ev, refused), ("r0001", key, {**ev, "key": _flip(ev["key"])}, refused),
+             ("r0002", key, {**ev, "key_tag": _flip(ev["key_tag"])}, refused), ("r0003", key, bare, refused),
+             ("r0004", key, ev, None)]
+    for sid, kf, line, why in cases:
+        _put(state, at, line)
         got_why, sent = _session(exe, state, sid, public(tmp_path / f"{sid}.pub", roots), kf, tmp_path)
-        assert got_why == refused and sent == ([] if refused else [[REGISTER]]), (sid, got_why, sent)
+        want = None if why is None else f"recursive session {sid} stopped at L0: {why}"
+        assert got_why == want and sent == ([] if why else [[REGISTER]]), (sid, got_why, sent)
     events = [(e["event"], e.get("n")) for e in FW.Firewall(state).record() if e["event"] in ("admit", "skip")]
     assert events == [("admit", 0)]
 
