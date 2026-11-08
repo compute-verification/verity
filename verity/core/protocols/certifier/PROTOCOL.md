@@ -1544,10 +1544,12 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
     Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
-  - The length terms' slots in the slice. `CompileSlice_v4` charges them from ``cert``, which the verifier holds by
-    b‖c to the certified record's commitment; `compile_slice_zk`'s cert row under the certifier's salt stands in for
-    that record, and it still proves `CompileSlice_v1`, whose charge is short of each window's tail while the
-    registration sends lengths (`send_lengths`, on until a proof holds the length rule).
+  - The length terms' slots in the slice. `CompileSlice_v4` charges them from ``cert``, and only ``cert``'s b‖c to
+    the certified record's commitment holds its ``a_mt``: a lower max_tokens that still fits the output length passes
+    the circuit at a lower charge. `compile_slice_zk` proves `CompileSlice_v4` with the honest cert row under the
+    certifier's salt standing in for that record (its ``max-tokens`` unit is refused by that check alone); the tie to
+    the certifier's signed record is open, as is a proof of the length rule (`send_lengths` stays on until one holds
+    it).
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A

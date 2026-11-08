@@ -92,9 +92,7 @@ A spec-level reference for network accounting's timing channel:
   checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
   carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
   ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
-  (`protocol/compile-slice.md`), and
-  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
-  evaluator from `verity`;
+  (`protocol/compile-slice.md`). It takes the circuits and their evaluator from `verity`;
 - the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
@@ -109,7 +107,8 @@ A spec-level reference for network accounting's timing channel:
 - the compile slice charging the length terms (`compile_slice_v4`): `CompileSlice_v4`, `CompileSlice_v1` with
   `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
   ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
-  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`);
+  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain, ``--plain``);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`

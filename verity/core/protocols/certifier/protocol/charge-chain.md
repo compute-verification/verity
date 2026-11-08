@@ -212,8 +212,11 @@ them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, w
 hits and no order entries. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no
 length terms. `CompileSlice_v4` (`compile_slice_v4`, the served windows' slice) charges them with
 `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
-max_tokens ``a_mt`` and olen its certified output length, so every slot is the certified record's, held by ``cert``'s
-b‖c, and none is witness. A class whose windows send hits, order entries or length terms does the following:
+max_tokens ``a_mt`` and olen its certified output length, so every slot is the certified record's and none is witness.
+A lower ``a_mt`` that still fits the output length charges less and passes the circuit, so ``cert``'s b‖c alone holds
+it; `compile_slice_zk` checks that b‖c against a stand-in for the certified record (the honest ``cert`` row under one
+certifier salt), as it does the arrivals the replay loads. A class whose windows send hits, order entries or length
+terms does the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
   `replay-charge`'s.
