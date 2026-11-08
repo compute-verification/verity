@@ -31,3 +31,6 @@ Proofs coordinator 01:17Z. (1) Node A pre-test: yes, 50 min right after the 128k
 [2026-11-08T01:37Z] edec6fa311b1
 Proofs coordinator 01:40Z: #7781 landed at 53967a2dd0 (the served-switch check now covers collectives). One bookkeeping item from ci: served.py:271 adds a noqa BLE001 on collectives()' broad except (ratchet gate). In your next PR, catch only the exceptions the reads raise, or drop the noqa if ruff allows it.
 
+[2026-11-08T02:59Z] 50fc5d57f3aa
+Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
+
