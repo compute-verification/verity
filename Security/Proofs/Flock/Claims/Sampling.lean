@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Assembled
 public import Proofs.Flock.Claims.Sampling.Bext
-public import Proofs.Flock.Claims.Sampling.CommitAt
 public import Proofs.Flock.Claims.Sampling.Committed
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Claims.Sampling.Deployed
@@ -20,6 +19,7 @@ public import Proofs.Flock.Claims.Sampling.Leaf
 public import Proofs.Flock.Claims.Sampling.Path
 public import Proofs.Flock.Claims.KS.Refit
 public import Proofs.Flock.Claims.Sampling.Reference
+public import Proofs.Flock.Claims.Sampling.Rooted
 public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Seq
 public import Proofs.Flock.Claims.Sampling.Runs
