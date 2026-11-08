@@ -4326,6 +4326,10 @@
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
    "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"
+  },
+  "Flock.SecurityProofs.SampledAuditAnyDeployed": {
+   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
+   "nontrivial": "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial"
   }
  },
  "unwitnessed": {
@@ -15062,6 +15066,40 @@
     "reads": []
    },
    "type_hash": "7ad2072c80d93ab65409720e23bdfe8529cb5385d48f9ad37c593f2e7fec8fa8"
+  },
+  "Flock.SecurityProofs.SampledAuditAnyDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SampledAuditAnyDeployed : Flock.Guarantees.SampledAuditAnyDeployed"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.ZKMal.RefSession.UnCausal"],
+    "open": [
+     "Claims.ZKMal.RefSession.Complete",
+     "Claims.ZKServer.LeanRelease.TrustsStop",
+     "Verity.Assumptions.ZkServerOwnUser"
+    ],
+    "reads": []
+   },
+   "type_hash": "66ade9408e04a312d697296f1efc522fc77ef392ba98087b7b2c614912edad45"
+  },
+  "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial :",
+    "  Not",
+    "    (Claims.ZKServer.Loop.AuditAnyAt Claims.ZKServer.Loop.auditSv 0 1 Unit.unit Unit.unit Claims.ZKServer.Loop.auditSt",
+    "      Bool.false 0 1 Claims.ZKServer.Loop.tapeL₀ Claims.ZKServer.Loop.tapeSrcHi Claims.ZKServer.Loop.auditQ",
+    "      Claims.ZKServer.Loop.auditEC (fun x x_1 => 0) Unit.unit fun ρ x x_1 => Eq ρ.snd.snd.fst.snd.fst Bool.true)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "45178a37734bd58767bb4d2f33fb48fbe71eed68dacb31a93c1820a32e03d8c5"
   },
   "Flock.SecurityProofs.SampledKSLiveHonest": {
    "owner": "@proofs",
@@ -25810,12 +25848,14 @@
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposeMonitoringPeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Flock.SecurityProofs.SpotKSTwo": "frozen (obligation,no-function): ksTwo_spot at SPOT[Flock]'s two-stage code (SpotFlock.code), knowledge sound at SHA-512 with that code's facts, its coins' bytes and its sessions' runs proved, from two facts of a session layout (SpotFlock.Embeds, SpotFlock.FrameIs), open until a built two-stage layout and frame prove them; it reads SpotKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SessionLoopZKAnyDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound per outcome at the session loop's release at the deployed tables (Masked.dataE, at the loop's own link and Finish: ofLoopLink, LeanRelease.withFiles, Loop.realOf): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it is at any values whose unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts at the unswitched prover hold at the relation's statements (LeanRelease.TrustsStop), premises that aren't on the list.",
-   "Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest": "completeness: SessionLoopZKAnyDeployed's honest lemma (its witnesses entry): at the relation of one pair, the concrete statement and its trace, the honest values and the honest worker of the session loop's release on the tape's samples, the session's table witnesses are valid (RefSession.Complete), the values' unswitched round encoding is causal (RefSession.UnCausal) and the transport's trusts hold (LeanRelease.TrustsStop); a lemma about the honest instance, not a property of a function's acceptance.",
+   "Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest": "completeness: SessionLoopZKAnyDeployed's honest lemma, and SampledAuditAnyDeployed's (their witnesses entries): at the relation of one pair, the concrete statement and its trace, the honest values and the honest worker of the session loop's release on the tape's samples, the session's table witnesses are valid (RefSession.Complete), the values' unswitched round encoding is causal (RefSession.UnCausal) and the transport's trusts hold (LeanRelease.TrustsStop); a lemma about the honest instance, not a property of a function's acceptance.",
    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": "lemma: SessionLoopZKAnyDeployed's nontrivial lemma (its witnesses entry): at a session without tables, the release whose link carries the witness (Loop.leakL) and the concrete statement under the relation of every pair, Loop.ZkAnyAt fails at t = 2; a lemma about a toy instance, not a property of a function's acceptance.",
    "Pouw.SecurityProofs.EndToEndEps": "frozen (conjecture,no-function,hash): EndToEnd in ε form. It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1": "frozen (conjecture,no-function,hash): GapFromTTNCP_U_v1 in ε form. It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192": "frozen (conjecture,no-function,hash): GapFp4Sm120_8192 in ε form. It is a consequence of the named open conjecture TTOutFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is sampled from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
-   "Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,no-function,hash): GapSm120v1LoopCast8p72Rev1Cap1000_8192 in ε form. It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's."
+   "Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,no-function,hash): GapSm120v1LoopCast8p72Rev1Cap1000_8192 in ε form. It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
+   "Flock.SecurityProofs.SampledAuditAnyDeployed": "frozen (no-function,world-unlisted): SampledAuditAny's bound (Loop.AuditAnyAt) at sampled sessions of the deployed session loop (Masked.dataE, at the loop's own link and Finish: ofLoopLink, Loop.anySim, Loop.anyErr) and N hm96 leaves at the pinned key: as a simulation statement on the audit's view it has no acceptance of a function to take; it is at a stack that reads no key (ZkServerOwnUser), at sessions whose values' unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts hold at each session's worker (LeanRelease.TrustsStop), premises that aren't on the list. Its honest witness is SessionLoopZKAnyDeployed's: those premises are its own, at the same session.",
+   "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial": "lemma: SampledAuditAnyDeployed's nontrivial lemma (its witnesses entry): at the witnesses' value service with no hm96 leaf and no sampled session, the stack that hands a record of its own, record tag the key, is always admitted with a true commitment that no genuine or ideal record has and forges only at one key, so Loop.AuditAnyAt fails (1 <= 1/2); a lemma about a toy instance, not a property of a function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -49256,8 +49296,9 @@
    }
   },
   "Proofs.Flock.SessionLoop.Leak": {
-   "digest": "27be1f4aa9e87749a46625efbd716dcce3b83f4897ba2e968def29110016b097",
+   "digest": "841b149912da2e88b62c251001128c0e806be26b38fdfc9144e8e939b9173373",
    "definitions": {
+    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d",
     "Claims.ZKServer.Loop.leakL": "a7fdd5ffefdec54ad40305a1741d46f3d4e125ea34ccacdc21cd39c6ed78a9ce"
    }
   },
@@ -49278,6 +49319,23 @@
     "Claims.ZKServer.Loop.tapeSrcHi": "a1a69b2af64e05934e65f512c285595e28b05b624bf7b1431cf803384e6af953",
     "Flock.Firewall.Frame.tapeByte": "0796025a0ae06ee92f1df5d64940dbaba2bc4695f14a256f0fafbe8585af5cf0",
     "Flock.Firewall.Frame.tapeBytes": "efcc1bae80d792d8147d0a815930fdb3b64ec4fccc7fe8ab2869f48d3744fa83"
+   }
+  },
+  "Proofs.Flock.SessionLoop.SampledAudit": {
+   "digest": "58fdc21b4799bc157cfe0646331887b9fbcbcaabbcc0232d310a4a07420caa91",
+   "definitions": {
+    "Claims.ZKServer.Loop.AuditAnyAt": "b510e7447cb4c2fdecc6fb1c53f216dd48606ddd4ae39b5fd2fdf9d7ab0d8c02",
+    "Flock.Guarantees.SampledAuditAnyDeployed": "c63fd5426ef1b25246395dc12bb9d7ebaab93bc50320795f038648952c16702b"
+   }
+  },
+  "Proofs.Flock.SessionLoop.SampledAuditNontrivial": {
+   "digest": "3a09bada28f365b2b6ed31f4db18f3ace1643c42a6e7285e89389f6eb0462126",
+   "definitions": {
+    "Claims.ZKServer.Loop.auditCB": "2c1487f9c8c15471fc89d7e84300f242e30d6525aaa396b58c20be8e5d4fa3f9",
+    "Claims.ZKServer.Loop.auditEC": "14769b3ab80db773e46ba648ba400cac13a4b612b02681ad8542d52189688047",
+    "Claims.ZKServer.Loop.auditQ": "4ab946bde07d5465dca623f6c65404c6e4047f5ec685b60e284d85fc95ffbc14",
+    "Claims.ZKServer.Loop.auditSt": "63b4e97a21f349a9d7a7d22f1522627d93d900af4cb9a573114326f8f5525377",
+    "Claims.ZKServer.Loop.auditSv": "aa9c7627a32398b5f4115ba360753cedade95101f8684e3a7d301dedf121523b"
    }
   },
   "Proofs.Flock.SessionLoop.Statement": {
@@ -52739,6 +52797,33 @@
     "Claims.ZKServer.Relay.roundOf": "f1aeca53d0eb8fd31f1f67d4b9efc850624b6f7103ac9dfa651abdac5d31f9ef",
     "Claims.ZKServer.Relay.schedSteps": "b9d16d31b484bff0fbda05f121fe5ecf077b9bcb445d9855a034701e99e4f54c",
     "Claims.ZKServer.Relay.seenAfter": "962c339022d5ca367a7745b5769d32d64d7901bdb0c3865f0e178110cd3e9f92"
+   }
+  },
+  "Proofs.Flock.ZkAny.SampledSessions": {
+   "digest": "5664fe86df8099755eb33210d3ed0a2d35ab557ee9c6086b8559c7f0e13d7f4f",
+   "definitions": {
+    "FlockSoundness.ZK.Sessions": "ae259862cc39a15116d591145f29d149786b06734cede3f516975ee478b17b43",
+    "FlockSoundness.ZK.Sessions.Vs": "03364ee03de3ebd3724940218d884c773ee178c173f1e665650ec86cd2c5649f",
+    "FlockSoundness.ZK.Sessions.i": "8443e9af926ccf5c36d106db40a3eae52b097c0ff0505d0483763b6ba0b474da",
+    "FlockSoundness.ZK.Sessions.outc": "5e0cb618715aaeb97dc3892d6f2f90cdb3844d41dac985992c382d97dd9d519f",
+    "FlockSoundness.ZK.Sessions.rel": "5296ce5f92c9f35fb2fef392b8ba1053cbb3bbac493c4476237e821b6493b330",
+    "FlockSoundness.ZK.Sessions.sim": "c2939da7393811946053e30f12422d1ef8904d75afccda5bf0433505d1420f57",
+    "FlockSoundness.ZK.Sessions.w": "9371d1d1f148fcd21680c2e0d7217b3c27bb9b4b6c2a44ea289c642ce9f19653",
+    "FlockSoundness.ZK.Sessions.x": "5d5e95ebe1821c2d03e5644eff2a9b87c11ee718d8a573c286e6cb3bee42b109",
+    "FlockSoundness.ZK.Sessions.θ": "3476c7956bfeb312252b945db32754a49fb28e264f84f23f96a93f453cb7e6dc",
+    "FlockSoundness.ZK.recOf": "e6c9a60481066899b80d1d085ed83a3ed0d27205d82b5353bc9e689f3e21d452"
+   }
+  },
+  "Proofs.Flock.ZkAny.Stream": {
+   "digest": "d0f2f11970d032aaaa24ebcbe22170de79146eb87b1a173e82c2c9fd1cfd90c1",
+   "definitions": {
+    "FlockSoundness.ZK.Tup": "c601665c87545f886e51067641b4e69dd70ba2ffa019bb4c89cfdb295593d17a",
+    "FlockSoundness.ZK.Tup.errs": "c16029a4d09c83b99b4eb16eefc725612b2eecfef3eb2ce52d493093b139f658",
+    "FlockSoundness.ZK.Tup.fintype'": "bbc2018fe8bf87bce0a6e0687de9719fbe0a17d563cbfc34f0acc12a2b982db2",
+    "FlockSoundness.ZK.Tup.instFintype": "fa26af73eef371bac2dc6b8e283577d007cfd013b5a4d91c15855755a257dae5",
+    "FlockSoundness.ZK.Tup.outs": "1c4d8bde403c9fd0daf809b8a4e3471913798e6c9f25b654e69db89ce3539eb3",
+    "FlockSoundness.ZK.Tup.rels": "a43db8f4d5994c1dc6aeccbfacc4d260250765c5de91ca449cb250755ffa04a2",
+    "FlockSoundness.ZK.Tup.sims": "7c4b36fb402653cd4f45d71840b3af7fc05145148feff98f167526f29d0317db"
    }
   },
   "Proofs.Flock.ZkAny.Unswitched": {
