@@ -173,7 +173,7 @@ class _RMSNormFusedCudaVector8Twin(_RMSNormCudaVector8Twin):
                 cls._rand_bf16(rng, N, wk).astype(np.uint64)]
 
 
-class _RMSNormFusedCudaVector8V3Twin(_RMSNormFusedCudaVector8Twin):
+class _RMSNormFusedCudaVector8BatchedTwin(_RMSNormFusedCudaVector8Twin):
     twin_id = "rmsnorm.fused_cuda.vector8.v3"
     base_id = "RMSNormFusedCudaVector8_v3"
     covers = ("RMSNormFusedCudaVector8_v3{N,EPS,BLOCK}: RMSNormFusedCudaVector8_v1's words, its sum of squares as batches in "
@@ -185,8 +185,8 @@ def twin_families(twin_base, rand_bf16, random_kinds: tuple[str, ...]) -> dict:
     attrs = {"_rand_bf16": staticmethod(rand_bf16), "_random_kinds": random_kinds}
     pure = type("RMSNormCudaVector8Twin", (_RMSNormCudaVector8Twin, twin_base), attrs)
     fused = type("RMSNormFusedCudaVector8Twin", (_RMSNormFusedCudaVector8Twin, twin_base), attrs)
-    fused3 = type("RMSNormFusedCudaVector8V3Twin", (_RMSNormFusedCudaVector8V3Twin, twin_base), attrs)
-    return {pure.base_id: pure, fused.base_id: fused, fused3.base_id: fused3}
+    batched = type("RMSNormFusedCudaVector8BatchedTwin", (_RMSNormFusedCudaVector8BatchedTwin, twin_base), attrs)
+    return {pure.base_id: pure, fused.base_id: fused, batched.base_id: batched}
 
 
 TWIN_DEFINITIONS = {

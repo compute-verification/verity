@@ -52,7 +52,7 @@ def test_target_selectors_keep_batch_invariant_definitions_and_bind_default_laun
     assert fused_spec.base_id == "RMSNormFusedCudaVector8_v3" and fused_spec.bindings["BLOCK"] == fused
 
 
-@pytest.mark.parametrize("cls", [TW.RMSNormCudaVector8Twin, TW.RMSNormFusedCudaVector8Twin, TW.RMSNormFusedCudaVector8V3Twin])
+@pytest.mark.parametrize("cls", [TW.RMSNormCudaVector8Twin, TW.RMSNormFusedCudaVector8Twin, TW.RMSNormFusedCudaVector8BatchedTwin])
 @pytest.mark.parametrize("eps", [1e-5, 1e-6])
 def test_numpy_twins_match_word_definitions_on_random_and_special_words(cls, eps: float) -> None:
     rng = np.random.default_rng(0xCADA + (cls is not TW.RMSNormCudaVector8Twin))
