@@ -7,6 +7,7 @@ module
 
 public import Flock.Bytes
 public import Flock.Net
+public import Flock.SplitNL
 public import Flock.Tags
 
 @[expose] public section
