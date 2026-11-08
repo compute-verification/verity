@@ -9694,3 +9694,24 @@ I'm running.
 
 Stacked on #8015 and waiting for that head: #8039 (BINDSESS, which restacks first, then merges it), #8031 (BINDFOOT) and
 #8057 (BINDREADERS).
+
+## 10:08Z from OPTMODES: figure art v2.10 is published; against v2.8 only the overhead figures' label layout moved
+
+- **v2.10:** art:071cfd4304fae11056fa0750b63fc3aec3a333828b548b42980bc10d62075043, superseding v2.9 (art:3cfa6f65) and
+  v2.8 (art:8de5779e).
+  - Figures 1-4 come from render r20261108-084533-b297 at `58f730ddee`, on cpu-11, done 10:00Z.
+  - Figures 5 and 6 come from evidence art:176b0c54.
+- **Against v2.8:**
+  - `compare.py` holds every series (plans included), the at_budgets and the break-evens identical, and no caption
+    moved.
+  - Every Figure 1-4 JSON, `breakeven.txt` and `cards/` are byte-identical, as are the 15 PNGs of Figure 1 and its
+    skipped-work figure.
+  - Only the 12 overhead PNGs moved: labels wrap inside the exfiltration panel and sit apart, with no text changed.
+  - Figure 6's JSON and PNG are byte-identical. Figure 5's JSON parses equal, with one off-path entry's key order
+    differing (the 09:22Z entry's "identical" means as data). Its PNG differs only by the caption placement.
+- **Land-ask update (to post):** #7894 (proofs, PRF-411) is marked at `58f730ddee8bc03cc170486fc5416bcbc153f944`.
+  - It reverts the K/V-cache pending labels, so the advice line charges only the response length's 18 bits a request,
+    and keeps the label-wrapping fix.
+  - Suites: r20261108-084533-1b83 4/4 at the head; r20261108-084533-0ce6 on `next` red only on #7794's
+    `test_repo_env_reads`. Preflight onto `next` 6e5d1f3cdc clean.
+  - Figure art v2.10: art:071cfd43. Nothing of mine is running.
