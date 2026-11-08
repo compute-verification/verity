@@ -281,6 +281,7 @@
   "LayerPre_v2{C={fa22b0376a3a},L0=True,GEMM={4130e3ca726d},NORM={4d524c30089f}}": "02593db67c19007384788a2337f0a5433f2973d1f56bd6593ddaa1012d3c8e6b382bb3904125f074192e0fc5dd518a2ce5da02058786f471f351c03b19bcb038",
   "LinearRef_v1{K=32,N=16,DT='bf16',BIAS=True}": "356da2315f88ee71bdba64ad17d5f51ea193ea78f193337b2a716ca3d2dba624655c656ef7ea7c1572f31deb094e7ac7ba9bde9703e360e9b34696ee963d1110",
   "LinearRef_v1{K=32,N=16,DT='f32',BIAS=True}": "bddf2c895a932d50045d3f462ea207547a56944ea66c5e08df94ac34f222cb75d7faa1481ac68fd4f1a10a8934d8a546618464d1ed749474c8ef04ae61e79228",
+  "LogSoftmaxRef_v1{N=16,DT='f32'}": "c2b62b37143c3ccbc44aa5481e3684e471221f601c1963a3a529f4a09994979d3e23ffd4e325a6da9c89237631de9cc9b97f1513b63254b511765670d3c6560e",
   "MulRef_v1{N=16,DT='bf16'}": "1691579bb2df8aee19872f4dcc027def7822410adb8ff13e31be38921070793dae724ac715aee31b0f08de57e26b957fa342de7a2f4719383adfb5bb0b5f8425",
   "MulRef_v1{N=16,DT='f32'}": "232301db2c83d8d162b2b3bc6155ba58ef79470501dd5974d69d700e86b31377c82d6ac39237583ad16209a90d321cedd8f17ecfebe1c6b84aea55af19f24a3c",
   "NcpAbsMax_v1": "5a1ae5674938fa720ad71bbf89fd40a6e4cca2bb311902828d845fac9a94186e101e322e701b0dcf6dd8738d724a44577b756e556365aa12d63dd8bfed1b912b",
@@ -477,6 +478,7 @@
   "LayerPre_v2": "b1",
   "LiftedRequest_v2": "lifted",
   "LinearRef_v1": "ref_prims",
+  "LogSoftmaxRef_v1": "ref_prims",
   "MulRef_v1": "ref_prims",
   "NcpAbsMax_v1": "pouw_rows",
   "NcpDot16I7_v1": "pouw_rows",
@@ -533,9 +535,21 @@
     "and": 1542,
     "type": "7237a173c3537996123e9d64fec6477b2e3be824bf686bc5d531479c8516b69d39b8adaf578941224933549fcfa6e8d149d60292a3647838e8ef0986220adf14"
    },
+   "F32ExpRn_v1": {
+    "and": 6506,
+    "type": "31f6b0afd18e62f6c6f7626ba5407406f43e2279930aed7ddd129bae2e20f24669121582b7e6f1b6f827f7aa640f0914a195e7e1b6e3fb92581f966824dfc28e"
+   },
    "F32GtStrict_v1": {
     "and": 191,
     "type": "d6aa4eba3e002e9160c290d9557f4b744e3349584de716fafbd11c24f0dee2a285a362dc74a7ecd3ea4f5f61edf8a0d493443abb8af82d99eab43b99ca76a933"
+   },
+   "F32LogRn_v1": {
+    "and": 3546,
+    "type": "83f33d93db659c70166ef639e83da5e3f2e4a46e47ba419a173602ac78253f3c050d1d76650bc4b556a5687d3fbef18ea472b9940de3b187d1f0c1b66bd87e69"
+   },
+   "F32MaxRef_v1": {
+    "and": 175,
+    "type": "855965113497b947e08cf818d62d7fb711d28af884493b75573f04f74067f4ff8ac95cceb33d3b4507e29ac6ecc50032f0fe9c59db2e2d0cb770e4f167be4fbc"
    },
    "F32Sub_v1": {
     "and": 823,
@@ -651,6 +665,7 @@
   "LayerPre_v1",
   "LayerPre_v2",
   "LinearRef_v1",
+  "LogSoftmaxRef_v1",
   "MulRef_v1",
   "NcpAbsMax_v1",
   "NcpDot16I7_v1",
@@ -1823,6 +1838,10 @@
   [
    "definition",
    "LinearRef_v1{K=32,N=16,DT='f32',BIAS=True}"
+  ],
+  [
+   "definition",
+   "LogSoftmaxRef_v1{N=16,DT='f32'}"
   ],
   [
    "definition",

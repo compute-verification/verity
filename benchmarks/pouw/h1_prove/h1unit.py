@@ -77,8 +77,8 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.ml.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
@@ -120,11 +120,11 @@ FLAT, STRUCTURAL = "flat", "structural"
 
 def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
-    netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
-    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The statement check covers H1's templated
-    statement with its ``--registered`` reads (`ProvedScope.scopeOkT`), but the knowledge-soundness form reads a flat
-    circuit (`KsScope`, `HmOut.parse`), so the Lean verifier refuses it after every other check, and it stays opt-in."""
+    netlist in the file); ``structural``, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
+    `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another layout mode
+    (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier takes either with its
+    ``--registered`` reads: the statement check and the knowledge-soundness form read a templated statement's template
+    (`ProvedScope.scopeOkT`, `KsScope`), and the soundness proof is at the flat circuit it unrolls to."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT

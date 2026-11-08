@@ -2,11 +2,12 @@
 """Install the circuit prover (verity/ml/flock/cuda/prove_circuit.cuh) into a Flock b684b12 checkout.
 
 Run from the flock checkout after verity/ml/flock/cuda_chunk_patch.py, which installs prove_chunk.cuh and the live hook.
-flock_cuda_prove_circuit is flock_cuda_prove_chunk's body with three parts replaced (each anchor must occur once): the shape
-check (fc_bad_shape), the witness (fc_witness: device compressions and units, or the host's witness) and the lincheck fold
-(fc_fold: every slot range of every type). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the
-live coins) is the chunk prover's, so no second copy of it is kept in the repository. Its buffer lifetimes change so that
-rep 1 can prove from rep 0's level-0 commitment (rep_reuse, FcKept).
+flock_cuda_prove_circuit is flock_cuda_prove_chunk's body with four parts replaced (each anchor must occur once): the shape
+check (fc_bad_shape), the arena's size (fc_arena_of: verity/ml/flock/cuda/arena_bytes.h, which it installs beside it), the
+witness (fc_witness: device compressions and units, or the host's witness) and the lincheck fold (fc_fold: every slot range of
+every type). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the live coins) is the chunk
+prover's, so no second copy of it is kept in the repository. Its buffer lifetimes change so that rep 1 can prove from rep 0's
+level-0 commitment (rep_reuse, FcKept).
 
 M1 adds Ligerito level 0's hiding behind FlockCircuitParams::zk_on, as a handful of anchored insertions (each
 anchor must occur once): level 0's commitment (fc_commit_l0_zk; M0's commit is the other branch), lincheck's folded comb, the
@@ -44,11 +45,23 @@ assert "flock_cuda_prove_circuit" in body
 body = cut(body, "    const long long n_comp = C->mode == 1", "    const int n_blocks_log", "    const bool pure = true;\n")
 body = cut(body, "    if (pure ? ((C->host_z", "{ printf(\"FFI chunk: bad shape\\n\"); return 201; }",
            "    if (fc_bad_shape(P, N)) { printf(\"FFI circuit: bad shape\\n\"); return 201; }", keep_b=False)
+body = cut(body, "    // the chunk prover's arena peak", "    CK(device_arena.begin(arena_bytes));",
+           "    const size_t arena_bytes = fc_arena_of(P, N);\n")
 body = cut(body, "    if (pure && C->host_z) {", "    CKI(phase(0));",
            "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b));\n")
 body = cut(body, "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));", "        if (C->n_delta_a) chunk_delta_scatter",
            "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));\n        CK(cudaGetLastError());\n"
            "        CKI(fc_fold(P, N, d_eq_inner, alpha, k_log, d_comb));\n")
+# the compression CSC and Δ on the device once per circuit (FcUploads), not once per process: one prover proves many circuits
+body = cut(body, "        static std::once_flag chunk_matrix_once;\n", "        CK(chunk_matrix_error);\n",
+           "        static FcUploads chunk_matrix_up;\n        uint32_t* cm[6];\n        {\n"
+           "            const uint32_t* h[6] = {P->a_col_ptr, P->a_rows, P->b_col_ptr, P->b_rows, C->delta_a, C->delta_b};\n"
+           "            const size_t len[6] = {(size_t)KS + 1, (size_t)P->a_nnz, (size_t)KS + 1, (size_t)P->b_nnz,\n"
+           "                                   2 * (size_t)C->n_delta_a, 2 * (size_t)C->n_delta_b};\n"
+           "            CK(chunk_matrix_up.get(h, len, 6, cm));\n        }\n"
+           "        uint32_t *d_acp = cm[0], *d_ar = cm[1], *d_bcp = cm[2], *d_br = cm[3], *d_da = cm[4], *d_db = cm[5];\n"
+           "        (void)d_acp; (void)d_ar; (void)d_bcp; (void)d_br;\n", keep_b=False)
+assert "call_once" not in body.split("CK(zerocheck_setup_error);", 1)[1], "a per-process upload left in the circuit prover"
 # M1: level 0's commitment with its hiding, lincheck's folded comb, the ladder's zk argument, the zk section
 body = put(body, "    std::vector<MHash> l0_cap;\n    {\n        int k_code = (log_n - P->initial_k) + P->log_inv_rates[0];",
            "    std::vector<MHash> l0_cap;\n    F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;\n    if (N->zk_on) {\n"
@@ -98,6 +111,7 @@ text = (here / "cuda" / "prove_circuit.cuh").read_text() + "\nextern \"C\" {\n\n
 (g / "prove_circuit.cuh").write_text(text)
 # M1: the F256 ladder's hiding step (ligerito_zk.cuh) and its five call points in run_ligerito_f256
 (g / "ligerito_zk.cuh").write_text((here / "cuda" / "ligerito_zk.cuh").read_text())
+(g / "arena_bytes.h").write_text((here / "cuda" / "arena_bytes.h").read_text())
 lg = g / "ligerito_f256.cuh"
 t = lg.read_text()
 if '#include "ligerito_zk.cuh"' not in t:

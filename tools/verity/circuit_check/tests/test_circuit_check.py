@@ -613,6 +613,67 @@ def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(mo
             "correspondence reads an operand over the input budget lazily"} in e["correspondence"]["realizations"]
 
 
+def _wide_experts(E: int):
+    """`MoeExpertFp8Gemm_v1` over E experts at the sidecar's small statics, with an input budget its expert stack's E N K leaves
+    are over and 8 vectors of its other parameters fit in."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.ml.definitions.registry import fp8_moe_experts as X
+
+    return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
+            dataclasses.replace(OPTS, input_budget=8192, vectors=8))
+
+
+def test_an_expert_gemm_resolves_only_the_expert_a_vector_selects(monkeypatch):
+    """An expert GEMM's stack read lazily: each vector that selects an expert reads its N K weights and no other's, the walk's
+    parameter resolutions (`verity.ml.circuits.layout._arg_ref`) are the same over 4 experts as over 16, so a vector costs
+    what its expert's rows cost and not every expert's, and the reference equals it on the same words flattened.  On random
+    words and operands (the vectors here are edge vectors, whose experts' words are all equal), for each expert and for none, the
+    lazy evaluation's whole trace is the eager walk's."""
+    import random
+
+    from verity.ml.circuits import layout
+    from verity.ml.circuits.evaluation import evaluate, evaluate_region
+    from verity.ml.circuits.evaluation.reference import standalone_call
+
+    resolutions = {}
+    for E in (4, 16):
+        t, opts = _wide_experts(E)
+        params, _ = CK.signature_of(t)
+        calls = [0]
+        resolve_arg = layout._arg_ref
+
+        def counted(*a, _f=resolve_arg, _c=calls):
+            _c[0] += 1
+            return _f(*a)
+
+        monkeypatch.setattr(layout, "_arg_ref", counted)
+        F = CK.Findings()
+        rec, _arrays, ref = CK.correspondence(t, opts, F)
+        monkeypatch.setattr(layout, "_arg_ref", resolve_arg)
+        assert not F.failures and rec["probes"] == [{"e": E - 1}]
+        n = rec["vectors"] - 1
+        other = [params[j] for j in (0, 1, 2, 4)]
+        es = [VX.instance_args(other, VX.vectors(other, n, opts.seed), i)[2] for i in range(n)]
+        selecting = sum(0 <= v < E for v in es) + 1
+        assert 2 <= selecting < rec["vectors"] and rec["wide"][0]["reads"] == selecting * 80 * 128
+        resolutions[E] = calls[0]
+        if E == 4:
+            xs = VX.vectors(other, n, opts.seed)
+            for i in range(n):
+                xq, sx, e, ws = VX.instance_args(other, xs, i)
+                words = [VX.wide_words(params[3], i, rec["edge_vectors"], opts.seed, 3)(k) for k in range(params[3].leaves)]
+                assert ref[i] == tuple(evaluate(t, xq, sx, e, words, ws))
+            rng = random.Random(opts.seed)
+            xq, sx, words, ws = ([rng.getrandbits(w) for w in params[j].leaf_widths()] for j in (0, 1, 3, 4))
+            prog, call = standalone_call(t)
+            for e in range(E + 1):
+                bound = dict(zip(call.args, [*xq, *sx, e, *words, *ws]))
+                lazy = evaluate_region(prog.circuit, call, dict(bound))
+                assert lazy == evaluate_region(prog.circuit, list(call), dict(bound)), e
+    assert resolutions[4] == resolutions[16], resolutions
+
+
 def _wide_shard():
     """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
     random token lies in the shard."""
@@ -942,11 +1003,14 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 _GLM53_TREES = "(" + ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * 8) + ")"
 _SERVED_ALLREDUCE = ("GLM-5.3 TP8's all-reduce at a served row count, kept in the suite by its digest pin (`tp_allreduce.circuit-check.py`'s "
                      "`_glm53_served_roots`); its partition is checked at `_model_roots`' WORLD=8 bindings, and its cut at served size is pending")
+_SERVED_EXPERTS = ("GLM-5.3's MoE expert GEMM at served statics, kept in the suite by its digest pin (`fp8_moe_experts.circuit-check.py`); "
+                   "the word query and Q_call resolve every leaf of its expert stack, and its partition is checked at the sidecar's E=4 bindings")
 
 #: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
 #: is allowed: the suite's (two σ Definitions at their smallest bindings, `boolean_sigma.circuit-check.py`, whose split moves
-#: GLM-5.3's and DeepSeek-V4's word digests, and GLM-5.3 TP8's served all-reduces over the gate budget: 36 gates an element
-#: two-shot MNNVL, past 22 rows of 6,144; 16 multimem, past 50 rows; multimem at 86 rows and more over the leaf budget too), and
+#: GLM-5.3's and DeepSeek-V4's word digests; GLM-5.3 TP8's served all-reduces over the gate budget: 36 gates an element
+#: two-shot MNNVL, past 22 rows of 6,144; 16 multimem, past 50 rows; multimem at 86 rows and more over the leaf budget too; and
+#: GLM-5.3's served expert GEMMs over the leaf budget, an E = 256 stack of FP8 weights: 805M leaves for w13, 403M for w2), and
 #: any range spot or callee of one `_unchecked_walk` reaches.  Each passes no Call status to its callees
 #: (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes
 OVER_PARTITION_BUDGET = {
@@ -954,6 +1018,8 @@ OVER_PARTITION_BUDGET = {
     "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
     **{f"AllReduceMnnvl_v1{{WORLD=8,N={rows * 6144},SHOT=2}}": _SERVED_ALLREDUCE for rows in range(23, 43)},
     **{f"AllReduceMultimem_v1{{WORLD=8,SIZE={rows * 6144},TREES={_GLM53_TREES},FTZ=False}}": _SERVED_ALLREDUCE for rows in (85, 86, 256)},
+    **{f"MoeExpertFp8Gemm{w}_v1{{E=256,K={k},N={n},G=128,KB=128,SWAP={swap},DOT=HopperE4m3{dot}Dot32_v1}}": _SERVED_EXPERTS
+       for w, k, n in (("", 6144, 512), ("W", 256, 6144)) for swap in (False, True) for dot in ("MmaV2", "Qgmma")},
 }
 
 

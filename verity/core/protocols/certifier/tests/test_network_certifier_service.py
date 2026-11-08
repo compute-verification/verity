@@ -26,10 +26,10 @@ from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, VALUE, LinkWindows, encode,
                                                                       rows)
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage.proofs import Finding
 
 from test_network_certifier_audit import FRAMES, P as PARAMS, SYNC_SET, SYNCS, honest_ready, ingress_run
 import signers

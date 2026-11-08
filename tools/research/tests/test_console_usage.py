@@ -143,8 +143,8 @@ def test_a_node_whose_minutes_were_not_read_has_no_rows():
 
 
 def test_a_pools_leases_end_its_own_idle_before_each_shrink(tmp_path):
-    # red team Q: the circuits pool shrinks a GPU 30 s after it frees, the provers pool 120 s; one 120 for both cut 22.8 % of
-    # circuits' lease time on node 1 (2-3 Oct) and booked it to the pool, not leased
+    # the circuits pool shrinks a GPU 30 s after it frees, the provers pool 120 s; one 120 for both would cut about a fifth of
+    # circuits' lease time and book it to the pool, not leased
     circuits, provers = tmp_path / "gpu-lease-circuits", tmp_path / "gpu-lease"
     for d, g, shrink in ((circuits, 3, "08:01:40"), (provers, 5, "08:04:00")):
         d.mkdir()

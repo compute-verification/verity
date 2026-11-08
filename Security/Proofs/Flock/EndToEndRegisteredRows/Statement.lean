@@ -29,9 +29,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 `EndToEndRegisteredRows` is `EndToEndRegisteredDrawn`'s statement with the rows link added to its event: at the sampled
 proof blocks, an accepted session's committed input rows are the rows the registered roots open to, and its committed output
 rows are the program's outputs on them, which `EndToEndHiddenDrawn` and `EndToEndRegisteredDrawn` leave unstated. Its
-proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`),
-as `EndToEndRegisteredDrawn` is, and `EndToEndRegisteredRowsFlat` is the same statement at a flat circuit file,
-`D = Desc.single c`.
+proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`)
+that `Desc.parse` reads, a flat file, at `EndToEndRegisteredDrawnFlat`'s rows; `EndToEndRegisteredRowsFlat` is the same
+statement at `D = Desc.single c`.
 
 It is the Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
 bridge is open. That needs a probability bridge from a window's round and proof `(w, i)` to a Flock session,

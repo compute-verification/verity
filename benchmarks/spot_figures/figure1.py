@@ -75,8 +75,8 @@ from pathlib import Path
 
 import cards as spot_cards
 from verity.core.protocols.pous.wipe_monitoring import PERIODS
-from verity.core.protocols.sampled_proofs import plancheck
-from verity.core.protocols.sampled_proofs.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.core.protocols.spot import plancheck
+from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
 
 HERE = Path(__file__).resolve().parent
@@ -334,8 +334,8 @@ class Scope:
         return f"{self.who} {self.period}"
 
 
-#: the post's headline scope, whose figures carry the bare file names, and its stretch scope, plotted beside it
-PRIMARY, SECONDARY = "datacenter year", "world year"
+#: the post's headline scope, whose figures carry the bare file names, and its secondary scope, plotted beside it
+PRIMARY, SECONDARY = "world year", "datacenter year"
 
 
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
@@ -601,7 +601,8 @@ def infiltration_ratio(infiltration: dict, exfiltration: list[dict], scope: str,
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis can't plot and its caption names."""
+    """Each panel's lines at 0 in `scope`, which a log axis has no place for: drawn along its floor and named in its
+    caption."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}
 
@@ -662,7 +663,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
         out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
-            out[panel] += f" At 0, so not plotted: {'; '.join(labels)}."
+            out[panel] += f" At 0, drawn along the axis's floor: {'; '.join(labels)}."
     return out
 
 
