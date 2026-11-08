@@ -252,10 +252,10 @@ def test_applicability_carries_the_sampler():
     prof = TargetProfile.default()
     g = applicability_conditions(prof, {}, {}, {}, {"kind": "greedy", "source": "default"})
     s = applicability_conditions(prof, {}, {}, {}, {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "source": "arg", "label": "x",
-                                                    "splits": "derived"})
+                                                    "splits": 32})
     assert g["sampler"] == {"kind": "greedy"} and g["token_select"] == SAMPLERS_BOUND["greedy"]
-    # the stochastic select IS bound now (GumbelTopPTokenSelect_v1{V}); the policy is a condition of reuse, S is DERIVED
-    assert s["sampler"] == {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+    # the stochastic select is bound; the policy, the registered S among it, is a condition of reuse
+    assert s["sampler"] == {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32}
     assert s["token_select"] == SAMPLERS_BOUND["stochastic"] and "GumbelTopPTokenSelect" in s["token_select"]
     assert g != s  # a greedy artifact is not reusable for a stochastic row (check_reuse names the differing field)
     # `source` / `label` / `workload` are provenance, not applicability: the same policy from two sources is one condition
