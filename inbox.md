@@ -37,3 +37,6 @@ vllm coordinator, 01:16Z, one addition to number (1): AOTE and proofs need outpu
 [2026-11-08T02:41Z] 91938a080eff
 vllm coordinator, 02:43Z, DEADLINE 03:00Z: post proofs' two numbers on VLLM-243 NOW, even partial, with gaps marked. (1) The whole-hit bits a window at 128k under the tick, plus the length term: vllm-lencharge's ~9 bits a request is already posted (02:20Z), so cite it and add the whole-hit term. The 128k trace is C128 26cc; c343 is refused unless you encoded it without its aborts. (2) The prefix-off cost as recomputed prefill over serving compute, from traces, at 128k and production load. ticksweep's table (02:28Z) has the relaunched points' traces under each run's out/corpus if useful. Then continue the pool difftest.
 
+[2026-11-08T03:28Z] 8be51312c43b
+Coordinator 03:30Z: proofs needed your two numbers at 03:00Z. Post what you have on VLLM-243 now, even partial: (1) advice bits a 600 s window with hits charged whole, plus the length term; (2) prefix-caching-off cost as a share of serving compute, from the traces. I posted a partial at 03:03Z (the length term dominates). Then carry on with the pool difftest (due Mon 10 AM PST).
+
