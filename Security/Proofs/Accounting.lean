@@ -11,6 +11,7 @@ public import Proofs.Accounting.HeadlineDc
 public import Proofs.Accounting.HeadlineDc.Meets
 public import Proofs.Accounting.Gates.Rows
 public import Proofs.Accounting.Gates.Bitwise
+public import Proofs.Accounting.Gates.ToCircuit
 public import Proofs.Accounting.Bandwidth
 public import Proofs.Accounting.ChainWork
 public import Proofs.Accounting.Prob
