@@ -5,12 +5,13 @@ builds it, row for row: the leaf part (`Frame.leafHash`, `FrameV3Leaf_v1{B, SCHE
 a traced Definition whose ANDs are `HmNets.and`s in Python's order, and the read's body (`frameWith`), which takes its
 calls as parameters (those three and `BL.constant`'s, for its constant bits) and makes them in Python's order. A message carrying a hidden `uint` is laid out once for each of its lengths
 and selected bit by bit under flags that nest (`Frame.hashUint`); its SHA-512 is the chain of `HmNets.compress` from the
-IV over its padded words (`Frame.sha512W`). A byte is 8 forms least significant first, and a word 64 forms least
-significant first with its bytes big-endian.
+IV (`Frame.ivW`) over its words, padded by `padTail` (`shaW`). A byte is 8 forms least significant first, and a word 64
+forms least significant first with its bytes big-endian.
 -/
 module
 
 public import Flock.HmNets
+public import Flock.ReadNet.Sha
 
 @[expose] public section
 
@@ -48,16 +49,8 @@ def uintBytes (bits : List Lin) (n : Nat) : List Byte :=
   let p := bits.take (8 * n) ++ List.replicate (8 * n - min bits.length (8 * n)) Lin.zero
   (List.range n).map fun b => (p.drop (8 * (n - 1 - b))).take 8
 
-/-- `sha512.pad_tail`: SHA-512's padding after a message of `len` bytes: `0x80`, zeros, the 128-bit bit count. -/
-def padTail (len : Nat) : List UInt8 :=
-  0x80 :: (List.replicate ((128 - (len + 17) % 128) % 128) 0 ++ beBytes 16 (8 * len))
-
 /-- SHA-512's initial chaining value as constant words. -/
 def ivW : List Word := Flock.Sha512.iv.toList.map fun v => constW v.toBitVec
-
-/-- `frame_v3._sha512`: the chain of compressions from the IV over the 16-word blocks of `ws`. -/
-def sha512W (ws : List Word) : M (List Word) :=
-  (List.range ((ws.length + 15) / 16)).foldlM (fun st i => compress st ((ws.drop (16 * i)).take 16)) ivW
 
 /-! ## Messages over a hidden `uint` -/
 
@@ -120,7 +113,7 @@ def hashUint (tag : List UInt8) (head : List (List Byte)) (x : List Lin) (n : Na
   let layouts := (List.range n).map fun L => message tag (head ++ tail (uintBytes x (L + 1)))
   let fl ← flags x n
   let ws ← select fl layouts
-  sha512W ws
+  shaW ((ws.length + 15) / 16) ivW ws
 
 /-! ## The parts -/
 
@@ -182,7 +175,7 @@ open Frame
 
 /-- The read's levels `k, k + 1, …` from the digest `cur`, one a sibling, each a call of `node B`: level `k` swaps by
 `pos`'s bit `k` and hashes the node at level `k` and index `pos >> (k + 1)`, zero-extended to `B` bytes, the padding's
-and the level's constant bits from `constBits const` in that order. -/
+and the level's constant bits from `Frame.constBits const` in that order. -/
 def climbWith (const : Bool → M Lin)
     (node : Nat → List Word → Byte → List Lin → Lin → List Word → List Word → M (List Word))
     (domain : List Word) (pos : List Lin) : Nat → List (List Word) → Consts → List Word → M (List Word)
@@ -190,8 +183,8 @@ def climbWith (const : Bool → M Lin)
   | k, s :: ss, c, cur => do
     let hi := pos.drop (k + 1)
     let n := indexBytes hi.length
-    let pad ← constBits const c 0 (8 * n - hi.length)
-    let lv ← constBits const pad.1 k 8
+    let pad ← Frame.constBits const c 0 (8 * n - hi.length)
+    let lv ← Frame.constBits const pad.1 k 8
     let cur ← node n domain lv.2 (hi ++ pad.2) (pos.getD k Lin.zero) cur s
     climbWith const node domain pos (k + 1) ss lv.1 cur
 
@@ -203,7 +196,7 @@ def frameWith (const : Bool → M Lin) (leaf : Nat → List Word → List Word �
     (eq : List Word → List Word → M Lin) (D : Nat) (root domain value : List Word) (pos : List Lin)
     (path : List (List Word)) : M Lin := do
   let n := indexBytes D
-  let pad ← constBits const (none, none) 0 (8 * n - D)
+  let pad ← Frame.constBits const (none, none) 0 (8 * n - D)
   let cur ← leaf n domain value (pos ++ pad.2)
   let cur ← climbWith const node domain pos 0 path pad.1 cur
   eq cur root
