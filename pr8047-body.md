@@ -44,10 +44,14 @@ Every row of record in `manifests/records.json` that serves the fused norm now b
 | GLM-5.3 b1 greedy | heavy | workload and request Programs on all 8 ranks; step unchanged | re-pinned (r20261108-085056-40e5), AOT equal on 8 ranks (r20261108-091211-a664), re-switched |
 | Qwen3-0.6B RTX PRO 6000 TP1 | fast | step, workload and request | re-pinned (r20261108-091426-d7df) |
 | Qwen3-14B RTX PRO 6000 TP2 | fast | step, workload and request on both ranks | re-pinned (r20261108-091446-fb0a) |
-| DeepSeek-V4-Pro b1 | heavy | 8 ranks moved | re-pin running |
-| GLM-5.3 b8 greedy | heavy | | re-pin running |
-| GLM-5.3 b8 stochastic | heavy | | re-pin running |
-| GLM-5.3 b32 | heavy | | re-pin running |
+| GLM-5.3 b8 greedy | heavy | workload and request Programs on all 8 ranks; step unchanged | re-pinned (r20261108-091700-e7ec), AOT equal on 8 ranks (r20261108-102856-e686), re-switched |
+| GLM-5.3 b8 stochastic | heavy | workload and request Programs on all 8 ranks; step unchanged | re-pinned (r20261108-085126-32da), AOT equal on 8 ranks (r20261108-102911-f1e6), re-switched |
+| GLM-5.3 b32 | heavy | workload and request Programs on all 8 ranks; step unchanged | re-pinned (r20261108-084359-82b9), AOT equal on 8 ranks (r20261108-140520-c0db), re-switched; circuits' diff OK on 272 of 272 descriptors, fused-norm call sites equal (r20261108-141757-7d6a) |
+| DeepSeek-V4-Pro b1 | heavy | nothing | reproduces all 24 pins at this head (r20261108-093538-74b6, neutral); circuits' diff OK on 24 of 24 descriptors (r20261108-142603-8739); left as on main |
+
+**circuits' diff.** circuits' `compare.py` (art:b3613276…) compares each re-pinned row's Program descriptors with its pinned Build. It reads `RMSNormFusedCudaVector8_v1` as `_v3`, masks digests, and requires every other Definition body and every fused-norm call site to be equal. circuits ran it on the GLM-5.3 b1 and b8 rows and the Qwen rows: all match apart from the norm id. I ran it on GLM-5.3 b32 and DeepSeek-V4-Pro b1 (results in the table): no differences.
+
+DeepSeek-V4-Pro's Programs reproduce at this head, so its row is untouched. Its derive counts the unfused `RMSNormCudaVector8_v1`, which this PR doesn't rebind.
 
 Both Qwen rows reproduce their old pins at this branch's base, `8c7321cd7c` (r20261108-092937-6239 and r20261108-092957-6f20 pass). So the rebind alone moves them.
 
@@ -55,9 +59,11 @@ Both Qwen rows reproduce their old pins at this branch's base, `8c7321cd7c` (r20
 - its step Program builds `066d1950…` against the pinned `806aac0c…`;
 - its request derive refuses with `numerics_unregistered`.
 
-This PR is marked only once every heavy row above is re-pinned and re-switched.
+Every heavy row that moves is re-pinned and re-switched, and DeepSeek-V4-Pro reproduces its pins.
 
 ## circuit-check
+
+The circuit-check run of record is r20261108-100423-cf70.
 
 `boolean_sigma.circuit-check.py`, with `--update-pins`:
 
@@ -89,6 +95,10 @@ ok  definition RMSNormFusedCudaVector8_v3{N=7168,EPS=1e-06,BLOCK=256}   failures
 circuit-check: 19 target(s), 0 failure(s), 7 unchecked (warnings, which never fail) on 7 Definition(s)
 ```
 
+## Follow-up, not blocking
+
+v3's Boolean version, the σ lift `RMSNormFusedCudaVector8_v4`, has about 1.96× the AND gates of v1's hand-made Boolean v2 (circuits' review). A hand-made Boolean v3, or a tighter σ lowering of its batched sum, would close that gap.
+
 ## Tests
 
 The affected suites ran in quick mode, at `4c3044172d`:
@@ -110,5 +120,5 @@ verity-vllm passed 13,219 and failed 2 tests, both now fixed:
 
 At the head before the re-pins, `e5c19917f0`: verity-vllm passed 13,221 (486 skipped), and verity/ml/definitions passed 453.
 
-After the re-pins, locally: the records tests (`test_circuit_db`, `test_neutrality`, `test_done_source`, `test_predict`) pass.
+After the re-pins (at `4dd73b23b3`, with GLM-5.3 b32), locally: the records tests (`test_circuit_db`, `test_neutrality`, `test_done_source`, `test_predict`) pass.
 
