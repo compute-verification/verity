@@ -16,11 +16,12 @@ program's whatever the opener: at most the largest number of gates one of the pa
 
 * `needs`: the gates unit `u`'s proof block needs opened, each once, none off the partition;
 * `rootsAt`: the roots gate `g`'s opening is under;
-* `reveal`: one opening per gate `needs` lists, at that gate, under its roots;
+* `openAt`: the opening at gate `g`, under its roots, holding the opener's;
+* `reveal`: the opening at each gate `needs` lists;
 * `reveals`: the largest number of gates one of the partition's proof blocks needs opened;
 * `frameAt`: the opener that reads a code's reveal, its first opening at the gate under the roots;
-* `mem_needs`, `mem_reveal`, `rootsAt_eq`: what `reveal` holds, at a unit in the partition and the two-stage design:
-  an opening at each gate `Prog.Needs` names, under `rootsAt`, and nothing else.
+* `mem_needs`, `mem_reveal`, `openAt_mem`, `rootsAt_eq`: what `reveal` holds, at a unit in the partition and the
+  two-stage design: the opening at each gate `Prog.Needs` names, under `rootsAt`, and nothing else.
 -/
 
 @[expose] public section
@@ -54,11 +55,14 @@ def rootsAt (s : AuditStatement) (u : ℕ) (v : Seen) (g : ℕ) : List Msg :=
 
 variable (op : AuditStatement → ℕ → Seen → Claims.Flock.Wit → ℕ → List Msg → Opening Bool)
 
-/-- **What a session's witness `wF` reveals for unit `u`**: for each gate its proof block needs opened, an opening at
-that gate under its roots (`rootsAt`), holding the opener's value and data. -/
+/-- **The opening at gate `g`** for unit `u` of a session's witness `wF`: under `g`'s roots (`rootsAt`), at `g`, holding
+the opener's value and data there. -/
+def openAt (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) (g : ℕ) : List Msg × Opening Bool :=
+  (rootsAt part two ir s u v g, { op s u v wF g (rootsAt part two ir s u v g) with pos := g })
+
+/-- **What a session's witness `wF` reveals for unit `u`**: the opening at each gate its proof block needs opened. -/
 def reveal (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) : List (List Msg × Opening Bool) :=
-  (needs part s u).map fun g =>
-    (rootsAt part two ir s u v g, { op s u v wF g (rootsAt part two ir s u v g) with pos := g })
+  (needs part s u).map (openAt part two ir op s u v wF)
 
 /-- **The reveal count** at the run's statement `x`: the largest number of gates one of the partition's proof blocks
 needs opened, at the statement `x` parses to; `0` where it doesn't parse or the partition doesn't evaluate. -/
@@ -115,12 +119,15 @@ theorem length_le (parse : Msg → Option AuditStatement) {x : Msg} {s : AuditSt
   exact length_needs_le part parse hx u
 
 theorem mem_reveal {s : AuditStatement} {u : ℕ} {v : Seen} {wF : Claims.Flock.Wit} {q : List Msg × Opening Bool} :
-    q ∈ reveal part two ir op s u v wF ↔
-      ∃ g ∈ needs part s u,
-        q = (rootsAt part two ir s u v g, { op s u v wF g (rootsAt part two ir s u v g) with pos := g }) := by
+    q ∈ reveal part two ir op s u v wF ↔ ∃ g ∈ needs part s u, openAt part two ir op s u v wF g = q := by
   unfold reveal
-  rw [List.mem_map]
-  exact exists_congr fun _ => and_congr_right fun _ => eq_comm
+  exact List.mem_map
+
+/-- **The reveal holds the opening at each gate the proof block needs** (`Prog.Needs`). -/
+theorem openAt_mem {s : AuditStatement} {u g : ℕ} {v : Seen} {wF : Claims.Flock.Wit} {P : Partition} {b : List ℕ}
+    (hP : part s = some P) (hb : P.blocks[u]? = some b) (hg : s.prog.Needs b g) :
+    openAt part two ir op s u v wF g ∈ reveal part two ir op s u v wF :=
+  (mem_reveal part two ir op).2 ⟨g, (mem_needs part hP hb).2 hg, rfl⟩
 
 theorem rootsAt_eq {s : AuditStatement} {u ρ g : ℕ} {v : Seen} {P : Partition} {d : Design.Two} {rb : List ℕ}
     (hP : part s = some P) (hd : two s = some d) (hρ : replayOf P d.part u = some ρ)
