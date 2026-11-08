@@ -276,6 +276,16 @@
    "digest": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d",
    "why": "The domain of `tc_dot_total`: an FP32 accumulator and k BF16 words."
   },
+  "Verity.Circuit.BitFaninPos": {
+   "owner": "@lean",
+   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
+   "why": "A hypothesis on the circuit the statement covers, one whose computed gates read a gate of positive width; the deployed check's acceptance gives the partition clauses without it (#7829, `constInputs_bitFaninPos`)."
+  },
+  "Verity.Circuit.Boolean": {
+   "owner": "@lean",
+   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
+   "why": "A hypothesis on the circuit the statement covers, a Boolean declaration or the formalism's circuit; the deployed check's acceptance gives the partition clauses without it (#7829, `constInputs_isCK`)."
+  },
   "Verity.Circuit.InputsAgree": {
    "owner": "@proofs",
    "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492",
@@ -3186,18 +3196,6 @@
   "Verity.Assumptions.ZkServerOwnUser": {
    "owner": "@proofs",
    "digest": "b1e9ef38e446427d01ef45ed0a790884ffdcc813bad242696f7b9405d81ce7d4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Circuit.BitFaninPos": {
-   "owner": "@lean",
-   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Circuit.Boolean": {
-   "owner": "@lean",
-   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -16244,8 +16242,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Nci.Formalism.ServingFits", "Nci.Formalism.SessionBlocks"],
-    "open": ["Verity.Circuit.Boolean"],
+    "domain": ["Nci.Formalism.ServingFits", "Nci.Formalism.SessionBlocks", "Verity.Circuit.Boolean"],
+    "open": [],
     "reads": []
    },
    "type_hash": "bfae53c68d0f93781f091c9e81afeeecb98e024d9594055698b9c2db9aecc35d",
@@ -16257,8 +16255,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Nci.Formalism.ServingFits", "Nci.Formalism.SessionBlocks"],
-    "open": ["Verity.Circuit.Boolean"],
+    "domain": ["Nci.Formalism.ServingFits", "Nci.Formalism.SessionBlocks", "Verity.Circuit.Boolean"],
+    "open": [],
     "reads": []
    },
    "type_hash": "e495189c93343b179f33a6e3dc20b0e59b31ff2ba0ea94c144900aebaa47672d",
@@ -16296,8 +16294,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Nci.Formalism.TrainingBlocks", "Nci.Formalism.TrainingFits"],
-    "open": ["Verity.Circuit.Boolean"],
+    "domain": ["Nci.Formalism.TrainingBlocks", "Nci.Formalism.TrainingFits", "Verity.Circuit.Boolean"],
+    "open": [],
     "reads": []
    },
    "type_hash": "13cfd833481570bc9c77447603c713773b929bbf159c95ed608e485233e21cf7",
@@ -16692,8 +16690,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Nci.CompliesRate", "Verity.Circuit.Boolean"],
+    "domain": ["Verity.Circuit.Boolean"],
+    "open": ["Nci.CompliesRate"],
     "reads": []
    },
    "type_hash": "1c4d19f2c93a8949b210c1be5ed2a296fc2e16024ca456a1a0c8af31b0f4aa5b",
@@ -23888,8 +23886,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Circuit.BitFaninPos"],
+    "domain": ["Verity.Circuit.BitFaninPos"],
+    "open": [],
     "reads": []
    },
    "type_hash": "3fdeddcbfdaca70362c16288d44c0f48e4ab2d17cc9ce64d04253cba55c7b4ab",
