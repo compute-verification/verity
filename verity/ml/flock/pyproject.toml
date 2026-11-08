@@ -29,12 +29,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_arena_layout.py",
     "tests/test_challenger_audit.py",
     "tests/test_circuit.py",
     "tests/test_class_statement.py",
     "tests/test_class_statement_redteam_1178.py",
     "tests/test_flock_rows.py",
     "tests/test_flock_rows_vectors.py",
+    "tests/test_hm96_leaves.py",
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
     "tests/test_ir_sampling.py",
@@ -61,9 +63,11 @@ untraced = [
     "tests/test_pouw_rows.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
+    "tests/test_ring_switch.py",
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
+    "tests/test_witness_host.py", "tests/test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
 # tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.
