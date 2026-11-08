@@ -1078,11 +1078,11 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool, hm9
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
         lap("rowin", &mut tl, &mut parts);
         let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
-        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        let mut hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         lap("rows", &mut tl, &mut parts);
         let mut host = if hm96 { Vec::new() } else { flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm) };
         host.extend(mask_slots());
-        let hm96_rows: Vec<F128> = if hm96 { hm.into_iter().flatten().collect() } else { Vec::new() };
+        let hm96_rows: Vec<F128> = if hm96 { std::mem::take(&mut hm).into_iter().flatten().collect() } else { Vec::new() };
         lap("hm96", &mut tl, &mut parts);
         let with_hm96 = |mut h: HostSlots, rows: Vec<F128>| {
             h.hm96_rows = rows;
@@ -4894,11 +4894,11 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             return json!({"case": name, "pass": false, "why": format!("column {q} is in the mask slot")});
         };
         let row = q & ((1usize << r.slot_log) - 1);
-        let a = &mut c.nets[i].1.a;
-        if a.len() <= row {
-            a.resize(row + 1, Vec::new());
-        }
-        a[row].push(row);
+        use flock_live::ir_block::{RowRead, RowWrite};
+        let net = &mut c.nets[i].1;
+        let mut cols: Vec<usize> = net.a.cols_or_empty(row).collect();
+        cols.push(row);
+        net.a = net.a.with_row(row, &cols);
         let entry = Stmt::new(c, st.n, st.identity.clone()).err();
         let (q32, pin) = (q as u32, st.pin as u32);
         let with = |extra: &[(u32, u32)]| {

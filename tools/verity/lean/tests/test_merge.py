@@ -639,7 +639,7 @@ def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_pr
     added premise a different reason: each keeps theirs', named; with ours' reasons as theirs', the guarantee merges to
     theirs' map, naming none."""
     sides = json.loads((FIXTURES / "inline-scheduled-requirement.json").read_text())
-    g = "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"
+    g = "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement"
     assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"] and g in sides["base"]["guarantees"]
     base, ours, theirs = (sides[n]["shape"]["inline"][g] for n in ("base", "ours", "theirs"))
     added, dropped = [p for p in theirs if p not in base], [p for p in base if p not in theirs]
@@ -784,7 +784,7 @@ def test_an_inline_premise_one_side_dropped_stays_where_the_other_restated_its_g
 
 
 def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_still_prints_stays():
-    """`TileUnpredictableOfNCPU`'s premise as #7347 renamed its binder `γ₀` to `g₀`, which changed the printed text and no
+    """`TileUnpredictableOfNCPU`'s premise as a rename of its binder `γ₀` to `g₀` left it, which changed the printed text and no
     record.  Theirs renames it, restating the guarantee (another hash of the `Guarantees` definition its signature names),
     while ours has the old text as the base had it: the merge has the new text alone, not the old one beside it (`next`
     held 19 such old texts over its `INLINE` cap).  A base that lists both texts, merged with a side whose `--update` dropped
