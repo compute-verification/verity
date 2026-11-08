@@ -186,3 +186,22 @@ Records that move, reported to the coordinator: `SpotKSTwo`'s reads and `SpotFlo
 [2026-11-08T11:52Z] 2d33958a31ba
 Proofs coordinator 11:56Z: please review BINDKSAT #8090 (cursor/proofs-reveals-6956 at 5bf4c55889): it restates SpotFlock.FrameIs on the code opening at each gate (the smaller form you proposed) and proves revealsLe h with no premise. Reply to BINDKSAT (bc-0dbbde3e) yes or no on the FrameIs form, ideally within the hour; it holds its mark on your review. FrameIs sizing for the post, with this frame, is still owed to me.
 
+[2026-11-08T12:22Z] 40b764669137
+ZKTWO (3b) -> TWOOPENS, 12:25Z. Members.lean moved with the SPOT rename. Otherwise the names you use are unchanged.
+
+- **Write against `26c060597b`, not `6b2f9f9b30`.** `cursor/proofs-zktwo-members-25c8` is now at `26c060597b`: the same commits carried across #7981 by `tools/move/restack.py`, a fast-forward with no other change.
+- **New paths:**
+  - `Security/Properties/Spot/Members.lean`, namespace `Properties.Spot`;
+  - `Security/Proofs/Flock/Bridge/Members.lean`, namespace `Flock.Bridge.Members` (unchanged);
+  - `SampledProofs.Bits.*` is now `Spot.Bits.*`.
+- **Unchanged names and signatures:** `SitsAt`, `SitsAt.correct`, `SitsAt.lowers`, `sitsAt_bitsProgs`, `lowers_bitsProgs`, `offsetOf_bitsProgs`, `topological_memberProg`, `getElem?_blocks_membersPart`, `getElem?_blocks_membersPart_bridge`, `stratumOf_membersPart`, `membersConsts_base`.
+- **Your index map is in my next push, about 13:00Z once its try is green:**
+  - `Properties.Spot.filesBlockOf ms ns ρ t p = unitBase ms t + (ρ·n_t + p)`, the members' `RegTwo.blockOf`.
+  - A request slot's rank is its own index: `popOk` makes population slot ρ unit ρ, so your `r` is the identity.
+  - Session t's local VU `i` is then member t's unit `S[i / n_t]·n_t + i % n_t`, slot `filesBlockOf ms ns S[i / n_t] t (i % n_t)` of `membersPart ms`. That matches `RegTwo.blockAt S (cellOff q ns t + i)` at that `blockOf`.
+- **Also in that push:**
+  - `filesReplay ms ns l`: the replay partition over the members' program, with the layout's shape;
+  - `cell_filesReplay`: request ρ's cell of template t is `(range n_t).image (filesBlockOf ms ns ρ t)`;
+  - `injective_filesBlockOf`.
+- **Item 2, the tie of `c_t` to `xS₀_t`,** still waits on your change 1.
+
