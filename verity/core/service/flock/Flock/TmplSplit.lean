@@ -184,17 +184,52 @@ def Tab.refs (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat
     let st := vs.foldl (Tab.refStep D pt summed A B as gL pos k cx w) (o, 0, Array.replicate 64 0)
     Tab.flush summed st.1 cx st.2.1 w st.2.2
 
-/-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`. -/
+/-- Add a run's sums `acc` for a row of chunk `cx` and column chunk `cy` at each copy `k < nk`, weight `ws[k]`:
+`ws[k] · acc[t]` at slot `as[k] + t`, each nonzero sum. -/
+def Tab.flushK (as : Array Nat) (nk : Nat) (o : Tab) (cx cy : Nat) (ws acc : Array F128) : Tab :=
+  { o with P := (List.range 64).foldl (fun m t =>
+      let x := acc.getD t 0
+      if x.isZero then m
+      else (List.range nk).foldl (fun m k => bump m (cx, cy, as.getD k 0 + t) (ws.getD k 0 * x)) m) o.P }
+
+/-- One reference of `Tab.refsK`: an own column's factor summed at its slot past the copies' low parts, a new run once
+its column chunk changes, any other reference through `Tab.ref` at each copy. -/
+def Tab.refStepK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (nk cx : Nat)
+    (ws : Array F128) (st : Tab × Nat × Array F128) (v : Nat) : Tab × Nat × Array F128 :=
+  if v < D.cols then
+    let P := pos v
+    let u := B * (P % A)
+    if P / A == st.2.1 then (st.1, st.2.1, st.2.2.modify (u % 64) (· + gL.at (u / 64)))
+    else (Tab.flushK as nk st.1 cx st.2.1 ws st.2.2, P / A, (Array.replicate 64 0).modify (u % 64) (· + gL.at (u / 64)))
+  else ((List.range nk).foldl (fun o k => Tab.ref D pt false A B as gL pos o k cx (ws.getD k 0) v) st.1, st.2.1, st.2.2)
+
+/-- An explicit row's references `vs` at every copy `k < nk` at once, weight `ws[k]`, while each copy's low part is
+below `B` and `B` divides 64: an own column's slot is then its copy's low part plus a slot common to the copies, and its
+factor is common, so a run's sums are formed once (`Tab.refStepK`) and added at each copy (`Tab.flushK`). -/
+def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (o : Tab)
+    (nk cx : Nat) (ws : Array F128) (vs : Array Nat) : Tab :=
+  let st := vs.foldl (Tab.refStepK D pt A B as gL pos nk cx ws) (o, 0, Array.replicate 64 0)
+  Tab.flushK as nk st.1 cx st.2.1 ws st.2.2
+
+/-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`; all copies at
+once (`Tab.refsK`) while explicit with every copy's low part below `B` and `B` dividing 64. -/
 def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat) (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) :
     Tab :=
-  rows.foldl (fun o (x, ra, rb) =>
-    let P := pos x
-    let o := (List.range nk).foldl (fun o k =>
-      let ex := rowLow k P
-      let o := Tab.refs D pt summed A B as gL pos o k (P / A) (alpha * ex) ra
-      Tab.refs D pt summed A B as gL pos o k (P / A) ex rb) o
-    { o with work := o.work + nk * (ra.size + rb.size) }) o
+  if !summed && 64 % B == 0 && (List.range nk).all (fun k => as.getD k 0 < B) then
+    rows.foldl (fun o (x, ra, rb) =>
+      let P := pos x
+      let o := Tab.refsK D pt A B as gL pos o nk (P / A) ((Array.range nk).map fun k => alpha * rowLow k P) ra
+      let o := Tab.refsK D pt A B as gL pos o nk (P / A) ((Array.range nk).map fun k => rowLow k P) rb
+      { o with work := o.work + nk * (ra.size + rb.size) }) o
+  else
+    rows.foldl (fun o (x, ra, rb) =>
+      let P := pos x
+      let o := (List.range nk).foldl (fun o k =>
+        let ex := rowLow k P
+        let o := Tab.refs D pt summed A B as gL pos o k (P / A) (alpha * ex) ra
+        Tab.refs D pt summed A B as gL pos o k (P / A) ex rb) o
+      { o with work := o.work + nk * (ra.size + rb.size) }) o
 
 /-- A run of lanes from an explicit class into a summed one: the child's summed entries spread over the 64 slots by `W`
 (`W[s]`: `Σ E(a) · eq(r, ⌊a/64⌋)` over the lanes' low parts `a ≡ s`), the constant's by `EL` (`Σ E(a)`); `n` lanes. -/
