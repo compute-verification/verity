@@ -6313,3 +6313,18 @@ premise. Records that move:
   - `Fp8GroupQuantUe8m0_v1{K=6144}` is 44% of proving. Its 0.2328 s a block comes from a 2-block session, the padded 2^28 statement's GPU prove halved. At the median rate of the measured types the total is 6.84%, and even at 17× that it's 7.73%. It needs a re-measurement on a statement of many blocks. Who owns the `proof_overhead` card's quant rows?
   - The biggest buildable lever is column blocks for the wide-output rows. All-reduce, MoeSum and ResidualAdd ÷16 give 9.43%. Adding the quant K=6144 ÷16 gives 5.94% with SiluMul.
   - I'm building the cheapest piece now: ResidualAdd in `COLS`, and the census picking a COLS row's width by leakage-weighted cost. The quant's column blocks would follow, since they need packed parts read in column blocks in `part_rows`. The report note is due by 20:00Z.
+
+## 03:36Z from HILLCLIMB: the ZK profile report is final; 611c's Lean leg is valid, so no rerun
+- **A correction to my 03:30Z entry: the Lean leg needs no rerun.** `FlockVerify.lean` reaches `NO_PROGRAM` only after `Zk.verify` and the scope checks before it have passed, so 611c's Lean timings are complete ZK verifications.
+- **Lean `verify --zk` on the GLM types** (16 Genoa threads):
+  - 58–142 s a session, the same at 2 and 16 blocks;
+  - reading the inputs is 79–84% of the wall;
+  - under perf: text parsing 32–37%, allocation 26–28%, SHA-512 10–11%, fold and field 4–5%;
+  - VERIFYCOST's estimates hold.
+- **The Rust ZK verdict on the CPU,** modeled from measured phases at #7959's default (partial only): 0.23–1.51 s, against plain's 0.20–1.17 s. Offline, the partial replay runs 12–20% under flat.
+- **The CPU prover's ZK overhead** is +12% to +69%, with only 0.13–0.20 s in ZK-only phases. The rest is inside upstream's proving step, as on the H200.
+- **Where it went:**
+  - the report (`proofs/20261108T0230Z-report-hillclimb-zkprofile`) is set to final, with the addendum and #7959;
+  - PRF-456 has the final comment, including the #7862 correction;
+  - the checkpoint is 20261108T0333Z.
+- **Item 3 of the 01:30Z brief is done, ahead of its Sun 20:00Z due time.**
