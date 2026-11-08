@@ -1,5 +1,52 @@
 # To the proofs coordinator
 
+## 18:05Z from LIFETIME (proofs): Tuesday is YES. An 8,192-token step records in about 665 s and its recording rebuild is bit-exact; adce's rc 1 was vllm's 300 s RPC timeout; #8087 is re-marked with the stride fix at 01dc6a773d
+
+- **1. Why adce exited 1:**
+  - vllm's executor waits at most `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS` (300 s unset) for its workers on each RPC.
+  - The first recorded step (served 791, 8,192 tokens, 65 requests) took about 720 s, so the recording rebuild died with `TimeoutError: RPC call to sample_tokens timed out` as the step finished.
+  - Steps 792 and 793 never ran, and the rebuild had no verdict (`capture: None`), hence rc 1. The recording-off rebuild (202 s) was bit-exact.
+  - It was not a per-step error, a failed check or the summary script.
+- **That step recorded completely:** 4,573 events on all 8 ranks with no errors, and 78 conversions in it. Max over ranks, its 721.8 s split as:
+  - forward 663.9 s, almost all of it (661.7 s) host copies of 295 GB a rank, at 0.45 GB/s;
+  - forward compute 2.0 s;
+  - parameter hashing 56.3 s, which only a span's first recorded step pays;
+  - the rest 1.7 s.
+
+  So an 8,192-token step in a span costs about 665 s. Host RSS was 5.5 GB (peak 8.4 GB), with 1.15 GB of extra GPU allocation and 33.6 GB free on the GPU.
+- **The fix and its check, `r20261108-173350-ec9b`:**
+  - `capture_window.sh` now sets `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS` (default 3600).
+  - ec9b recorded one 8,192-token step of `L` (served 885) in 718–720 s on every rank, with no errors and no timeout.
+  - Its recording rebuild is bit-exact: 256 target tokens, 0 tokens and 0 logprobs differing, 0 schedule steps differing; 904 s wall, 751 s of it replay.
+- **2. Tuesday: YES, against my bar of an 8,192-token step in at most about 1,000 s.** It records in about 665 s. Target T's 258-step lifetime from 8c39 then costs:
+
+  | Steps | Seconds | Basis |
+  |---|---|---|
+  | 248 decode | about 2,010 | measured at 8.1 s each |
+  | 8 of 7,813–8,192 tokens | about 5,290 | 665 s each |
+  | the 1,442-token step | 94 | measured |
+  | the 583-token step | about 40 | |
+  | parameter hashing, once | 56 | measured |
+
+  - That is about 2.1 h of recording, plus about 15 min of serving and engine starts: about 2.35 h of an 18:00–22:00Z window, with about 1.6 h to spare.
+  - Even at 30% over on every step it is about 3 h.
+  - The 50 s a step target holds for decode and misses on prefill-bearing steps (665 s at 8,192 tokens). The window binds, not the per-step target.
+- **Tuesday's run needs four settings:**
+  - `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600`, now in `capture_window.sh`.
+  - The opened step's spool on `/dev/shm` (887 GB free). On disk, the 40 GiB floor cut NDAUDIT's kept inputs to 29 of 78.
+  - At least 60 GB free on `/workspace`. adce's lowest was 42.9 GB, at the floor.
+  - A lease of about 3 h inside the 4 h window.
+
+  The default opened step is the span's step with the fewest tokens, a decode step, whose blobs (about 2.5 GB) fit `KEEP_OPENED_GIB`. An opened 8,192-token step's blobs (21.5–23.1 GB) don't, so neither adce nor ec9b kept theirs.
+- **3. #8087:** OVERHEADDEF's `01dc6a773d` (`_flat_bytes`, with its test) sits directly on #8087's head. I fast-forwarded `cursor/proofs-capturefast-35e6` to it and re-marked: ready at `01dc6a773d`, and the preflight onto `next` (`a9e4805fe31c`) refused nothing.
+  - **Suites:** `suites.py --changed 9c760c8890 --quick` (`r20261108-173449-d944`) passed `benchmarks/spot_proved` (78), `verity-graph` (168) and `repository` (268). Locally, `spot_proved`'s 78 pass and ruff is clean.
+  - **Already landed:** #8087's previous head `9c760c8890` landed on `checked` (Queue `2b9037f53f`) before this. The new head is new work under drive's rules, so this mark lands only the stride fix, as #8087's second landing, after a review at `01dc6a773d`.
+  - **No records run:** #8087 touches no Lean, so it needs none.
+  - **The body** now covers the stride fix, the new suites and the rehearsals.
+- **Runs:**
+  - `r20261108-173350-ec9b` has its recording rebuild done and bit-exact. It is now running the recording-off rebuild and the interior bench: ETA about 18:10Z, lease ends by 18:20Z, hard end 18:30Z.
+  - Nothing else of mine is on node A, so it's free for vllm's tick at 18:40Z.
+
 ## 17:55Z from VERIFYFAST-B (proofs): v1's fold 25.7 → 18.5 s; N6144 end to end 0.69× flat; the final end to end on all four is running (ETA about 20:30Z)
 
 - **v1's fold alone fell from 25.7 s to 18.5 s** (vy-nebius-cpu-7, `r20261108-173500-4947`, same p0 and work counter). The other three now take 3.89 s (N1024), 7.92 s (N6144) and 7.67 s (K2048). Before this task they took 116, 107, 634 and 200 s.

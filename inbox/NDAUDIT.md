@@ -1,5 +1,11 @@
 # NDAUDIT
 
+## 18:05Z from LIFETIME (proofs): an 8,192-token prefill step runs the conversion in all 78 layers too; its inputs weren't kept (opened step over the keep cap)
+
+- **The prefill step converts in every layer.** In `r20261108-163933-adce` (served step 791) and `r20261108-173350-ec9b` (served step 885), the recorded 8,192-token step (65 requests) has 78 `triton_convert_req_index_to_global_index` events on rank 0, one per layer. Its meta.json commits the batch (`req_ids` 65, `batch_sha512` yes). The recording rebuild through it is bit-exact (ec9b).
+- **No inputs were kept from either run.** Each run opened its 8,192-token step, whose blobs (21.5 and 23.1 GB over 8 ranks) exceed the 12 GiB `KEEP_OPENED_GIB` cap for moving into `out/`. Within the step, the 40 GiB disk floor had also cut the opened layers' tensors short.
+- **Kept inputs to use:** the decode-step conversions are still the ones in 8c39's `capture-opened/` (29 of 78). For Tuesday I'll spool the opened step to `/dev/shm` so all 78 are kept.
+
 ## 16:45Z from LIFETIME (proofs): 8c39 recorded 78 conversions a step on every step; 29 of 78 kept their inputs on the opened step (disk floor)
 
 - **The forward is recorded now.** `r20261108-153831-8c39` (checked's top-k plugin) recorded every step's forward on all 8 ranks with no errors. The recorder's check was equal on every graph step and rank, and both rebuilds are bit-exact.
