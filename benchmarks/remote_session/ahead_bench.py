@@ -1,5 +1,5 @@
 """Serving's step rate under the audit, with the driver's reference (`prover.CpuBackend`) as the prover's backend: the
-verifier's process (`verifier.py`) on a loopback port and the prover in this one, each session a kv:1 session whose
+verifier (`verifier_process.py`) on a loopback port and the prover in this one, each session a kv:1 session whose
 serving is a modelled engine (`Engine`: step s takes STEP_MS, BUSY of it spinning in Python as an engine's scheduler
 holds the GIL and the rest asleep as it waits on the GPU, and writes a page when s + 1 is a multiple of EVERY). Each
 regime STEP_MS:EVERY:BUSY[:KS] runs its engine alone (unaudited), then one session for each of its KS (slash-separated,
@@ -38,7 +38,9 @@ from verity.core.protocols.remote_bandwidth import receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
-import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+
+VERIFIER = HERE.parents[1] / "benchmarks" / "remote_session" / "verifier_process.py"
 
 
 def engine_step(ms: float, busy: float) -> None:
@@ -188,7 +190,7 @@ def main() -> int:
             configs.append((g, None, 1) if k == "lock" else (g, int(k), int(h) if h else int(k) + 1))
     port = free_port()
     vout = a.out / "verifier"
-    v = subprocess.Popen([sys.executable, str(HERE / "verifier.py"), "--port", str(port), "--out", str(vout),
+    v = subprocess.Popen([sys.executable, str(VERIFIER), "--port", str(port), "--out", str(vout),
                           "--windows", str(a.windows), "--window-ms", str(a.window_ms), "--samples", str(a.samples),
                           "--jitter-ms", str(a.jitter_ms), "--sessions", str(len(configs)), "--pings", "50",
                           "--check-workers", str(a.check_workers)],

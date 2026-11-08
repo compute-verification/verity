@@ -102,7 +102,7 @@ Tensor Memory (the same reference, chapter 14).
     charged inside the side budget by `AuditRelay`, at `m·b` bits beyond `c` for `m` relayed labels with
     `m·(h − log₂ N) ≥ c + μ`; at the full PCIe cap that is more labels than `N`, so a device a peer can reach gets no
     figure. A device that is neither isolated nor in a co-audited set gets none either.
-- **`trusted-host`** (assumption): "The auditor's device runs its stated code, timing included, on a host the prover
+- **`trusted-host`** (assumption): "The auditor's device runs its stated code, timing included, on a host the developer
   doesn't control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier
   state." The audit cites it only for the verifier's state (§5). It covers no machine the developer controls: not the GPU's
   node, and not the device id the node reads (§2).
@@ -113,7 +113,7 @@ No guarantee assumes trusted prover hardware.
 
 - **The verifier** is the auditor's side, run on its memory challenger: the auditor's hardware, on a machine the
   developer doesn't control, never a process on the GPU's node (`audit.Verifier`, `Window`, `ChallengerState`). It holds
-  the secret `source`, samples each run's nonce, derives its key, sends `σ`, runs the clock, samples the samples, checks the
+  the secret `source`, generates each run's nonce, derives its key, sends `σ`, runs the clock, picks the samples, checks the
   openings and keeps the store's state (§5).
 - **The prover** is everything on the GPU's node: the GPU, and the code that reads its id and drives the tagger
   (`audit.read_device`, and `benchmarks/bandwidth`'s `gpu.challenger_device` and `gpu.Prover`), carrying `σ`, the root,

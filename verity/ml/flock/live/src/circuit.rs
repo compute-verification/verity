@@ -36,7 +36,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{
-        OnceLock,
+        Arc, Mutex, OnceLock, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -72,8 +72,9 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
-/// A templated statement (the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
-/// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
+/// A templated statement (the Lean `Tags.circuitTmpl`): its template section right after META (`TEMPLATE n`, then the
+/// template's `n` lines) and META `layout` in place of the unit's rows, which the prover reads from `flock-tmpl-unit`'s
+/// file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
 pub const TMPL_TAGS: Tags =
@@ -701,8 +702,8 @@ impl Composite {
         Self::parse_with(text, tables, None)
     }
 
-    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its META
-    /// `template` and `layout`, at their positions (an `ORDER` line).
+    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its template
+    /// section and META `layout`, at their positions (an `ORDER` line).
     pub fn parse_with(text: &str, tables: Option<&str>, tmpl_unit: Option<&str>) -> Result<Self, String> {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
@@ -761,8 +762,16 @@ impl Composite {
             }
             instance = Some(inst);
         } else if tmpl {
-            if !meta["template"].is_array() || !meta["layout"].is_string() {
-                return Err("META: a templated statement's template (its lines) and layout (its mode)".into());
+            if !meta["layout"].is_string() {
+                return Err("META: a templated statement's layout (its mode)".into());
+            }
+            let h: Vec<&str> = lines.next().unwrap_or("").split_whitespace().collect();
+            let n: usize = match h.as_slice() {
+                ["TEMPLATE", n] if n.bytes().all(|c| c.is_ascii_digit()) => n.parse().map_err(|_| "TEMPLATE line count")?,
+                _ => return Err("a templated statement's template section (TEMPLATE n, then its n lines) is not right after META".into()),
+            };
+            for _ in 0..n {
+                lines.next().ok_or("the template section is truncated")?;
             }
             let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?)?;
             if unit.order.is_none() {
@@ -2674,6 +2683,49 @@ fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
 
+/// Whether a session's side reuses the drawn statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
+/// builds its own.
+pub fn stmt_cache_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_STMT_CACHE").as_deref() != Ok("0"))
+}
+
+/// One side's drawn statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all public
+/// (no value, coin or drawn unit), so a statement built again from the same three is the same statement. The key binds all
+/// three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the drawn count and the
+/// canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
+pub struct StmtCache(Mutex<BTreeMap<([u8; 64], usize, String), Arc<Stmt>>>);
+
+impl Default for StmtCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StmtCache {
+    pub const fn new() -> Self {
+        Self(Mutex::new(BTreeMap::new()))
+    }
+
+    /// `Stmt::new(base.c, n, identity)`, built at the first call with this key and the same statement after it.
+    pub fn drawn(&self, base: &Stmt, n: usize, identity: Value) -> Result<Arc<Stmt>, String> {
+        let key = (base.digest, n, sorted(&identity).to_string());
+        if let Some(s) = self.0.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+            return Ok(s.clone());
+        }
+        let s = Arc::new(Stmt::new(base.c.clone(), n, identity)?);
+        Ok(self.0.lock().unwrap_or_else(PoisonError::into_inner).entry(key).or_insert(s).clone())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 impl Stmt {
     pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
         let k_log = c.k_log;
@@ -3765,6 +3817,82 @@ mod tests {
         }
         assert_eq!(seen.len(), st.circuit.types.len());
         assert!(c.ranges.iter().any(|r| r.kind == Kind::Mask) && c.nets.iter().any(|n| n.1.a.iter().filter(|x| !x.is_empty()).count() > 1));
+    }
+
+    /// Everything a session reads of a statement, as bytes: its digests and shape, its regions, its ranges and tables, each
+    /// slot type's circuit folded at fixed random points, and its R1CS.
+    fn stmt_bytes(st: &Stmt) -> Vec<u8> {
+        use flock_core::lincheck::LincheckCircuit;
+        let mut out = format!("{:?} {:?} {} {} {} {} {} {}|", st.digest, st.flock_digest, st.n, st.blocks_real, st.nbl, st.m,
+                              st.m_pts, st.pin).into_bytes();
+        for r in &st.regions {
+            out.extend(format!("{:?} {:?} {} {}|", r.region, r.free, r.mask, r.fixed).bytes());
+        }
+        let b = &st.circuit;
+        out.extend(format!("{} {} {:?} {:?} {:?}|", b.k_log, b.pin, b.ranges, b.da, b.db).bytes());
+        for t in &b.tables {
+            out.extend(format!("{:?}|", t.as_ref().map(|t| (t.table, t.lo, t.nh, t.k, t.prod0, t.lo_top))).bytes());
+        }
+        let mut s = 7u64;
+        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+        for (log, circ) in &b.types {
+            let alpha = rnd();
+            let eq: Vec<F128> = (0..1usize << log).map(|_| rnd()).collect();
+            out.extend(format!("{log} {} {:?}|", circ.n_cols(), circ.fold_alpha_batched(alpha, &eq)).bytes());
+        }
+        let r = &st.r1cs;
+        out.extend(format!("{} {} {} {} {:?} {:?} {:?} {:?} {:?}", r.m, r.k_log, r.k_skip, r.useful_bits, r.a_0, r.b_0, r.c_0,
+                           r.layout, r.const_pin).bytes());
+        out
+    }
+
+    fn test_circuits() -> Vec<(&'static str, Composite)> {
+        [("typed", typed_statement()), ("flat tail", flat_tail_statement()), ("pinned", pinned_statement(&|_| {}))]
+            .into_iter().map(|(name, text)| (name, Composite::parse(&text, None).unwrap_or_else(|e| panic!("{name}: {e}")))).collect()
+    }
+
+    /// A cached drawn statement is the one `Stmt::new` builds afresh from the same circuit, count and identity, byte for byte,
+    /// for each test circuit at counts on both sides of a block-count step and under two identities; a second call with the
+    /// same key returns that statement, and an identity's key is its canonical form.
+    #[test]
+    fn cached_statements_are_fresh_builds() {
+        for (name, c) in test_circuits() {
+            let base = Stmt::new(c.clone(), 2, json!({})).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let cache = StmtCache::new();
+            for n in [1, 2, 3, 8, 9] {
+                for id in [json!({}), json!({"zk": true, "reps": 2, "leaf": "hm96-sha512/v1"})] {
+                    let cached = cache.drawn(&base, n, id.clone()).unwrap_or_else(|e| panic!("{name} n={n}: {e}"));
+                    let fresh = Stmt::new(base.c.clone(), n, id.clone()).unwrap();
+                    assert!(stmt_bytes(&cached) == stmt_bytes(&fresh), "{name} n={n} {id}: the cached statement is not the fresh one");
+                    assert!(Arc::ptr_eq(&cached, &cache.drawn(&base, n, id).unwrap()), "{name} n={n}: rebuilt under the same key");
+                }
+            }
+            assert_eq!(cache.len(), 10, "{name}");
+            let a = cache.drawn(&base, 2, json!({"a": 1, "b": [1, 2]})).unwrap();
+            let b = cache.drawn(&base, 2, serde_json::from_str(r#"{"b": [1, 2], "a": 1}"#).unwrap()).unwrap();
+            assert!(Arc::ptr_eq(&a, &b), "{name}: one identity under two key orders");
+        }
+    }
+
+    /// A key that differs in its circuit, its count or its identity rebuilds: a statement of its own, which is the fresh build
+    /// for that key, never the cached statement of another.
+    #[test]
+    fn cache_key_mismatch_rebuilds() {
+        let cs = test_circuits();
+        let bases: Vec<Stmt> = cs.iter().map(|(_, c)| Stmt::new(c.clone(), 2, json!({})).unwrap()).collect();
+        let cache = StmtCache::new();
+        let first = cache.drawn(&bases[0], 2, json!({})).unwrap();
+        let others = [(&bases[1], 2, json!({}), "another circuit"), (&bases[2], 2, json!({}), "a third circuit"),
+                      (&bases[0], 3, json!({}), "another count"), (&bases[0], 9, json!({}), "a count past a block-count step"),
+                      (&bases[0], 2, json!({"zk": true}), "another identity")];
+        for (k, (base, n, id, what)) in others.into_iter().enumerate() {
+            let got = cache.drawn(base, n, id.clone()).unwrap();
+            assert!(!Arc::ptr_eq(&first, &got), "{what}: the cached statement of another key");
+            assert!(got.digest != first.digest, "{what}: the same statement digest");
+            assert!(stmt_bytes(&got) == stmt_bytes(&Stmt::new(base.c.clone(), n, id).unwrap()), "{what}: not the fresh build");
+            assert_eq!(cache.len(), k + 2, "{what}: not built");
+        }
+        assert!(Arc::ptr_eq(&first, &cache.drawn(&bases[0], 2, json!({})).unwrap()), "the first key's statement was dropped");
     }
 
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.

@@ -575,7 +575,7 @@ class Side:
         for w in range(win.L):
             (ur, uc), n = self.unit_of[w], win.nk[w][0]
             if ur != 32:
-                raise RuntimeError(f"${ZDEAD_ENV}: the window's live flags are 32-row blocks, linear {w}'s units {ur} rows")
+                raise RuntimeError(f"${ZDEAD_ENV}: the execution phase's live flags are 32-row blocks, linear {w}'s units {ur} rows")
             pad = E.dequantize(torch.zeros((1, n), dtype=torch.int32, device=win.dev),
                                torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
             pad = pad.reshape(n // uc, 1, uc).expand(n // uc, ur, uc).cpu().numpy().astype("<i2")

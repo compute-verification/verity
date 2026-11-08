@@ -11,7 +11,7 @@ row rule. It never reads credit, cap or `W_ref`, so it moves between protocols a
 (`TileCheck.ComputesWords.transfer`). Rev1 (`pearlCProtocolDevRev1`, `pearlCTilesDevRev1`) and its caps per row
 (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`) change only credit, cap and `W_ref`, so the H100's words
 theorem holds at them as it is: `tileCheck8_computesWords_h100Rev1` at the protocol and tiles `TTOutTilePearlCH100Rev1`
-reads, and `tileCheck8_computesWords_h100Rev1RowCapAt` at those of the `-h3` sampled γ.
+reads, and `tileCheck8_computesWords_h100Rev1RowCapAt` at those of the `-h3` sampled g.
 -/
 
 @[expose] public section
@@ -24,7 +24,7 @@ variable {Q R S : Type}
 smaller domain. -/
 theorem TileCheck.ComputesWords.transfer {TC : TileCheck Q R S} {P P' : Protocol Q R S} {TR TR' : TileRules Q R S}
     {D D' : Layout → Prop} (h : TC.ComputesWords P TR D) (hD : ∀ L, D' L → D L) (hticket : P'.ticket = P.ticket)
-    (huseful : P'.useful = P.useful) (hweight : P'.weightOK = P.weightOK) (htiling : TR'.tiling = TR.tiling)
+    (huseful : P'.useful = P.useful) (hweight : P'.fixedOK = P.fixedOK) (htiling : TR'.tiling = TR.tiling)
     (hrow : TR'.rowOK = TR.rowOK) : TC.ComputesWords P' TR' D' := by
   obtain ⟨_, _, _, _, _, _, _⟩ := P
   obtain ⟨_, _, _, _, _, _, _⟩ := P'
