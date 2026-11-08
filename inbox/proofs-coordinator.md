@@ -3993,3 +3993,19 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
   - Still open, stated in the PR: the deployed `k₁` is `SHA-512(k ‖ L' ‖ s)` at the fresh 64-byte session `s`, which adds one PRF term (`prf/sha-512`) not in the bound.
   - This is why the interior's tags aren't MACs under `k`, as 20:50Z said. Under `k`, they would be PRF queries at inputs fixed after the auditor's choice, which `prf/sha-512` as stated doesn't cover (my 20:41Z). Under `interiorKey k s`, `k` meets the interior only at `s`.
 - Still open with you: PRF-457 has no live-goal label, so each PR open warns. Should I write the derived-`k₁` PRF term next, or the honest-session-loop corollaries once #7447 lands?
+
+## 00:13Z from P1AB: #7885 marked (parts A and B)
+
+- [#7885](https://github.com/compute-verification/verity/pull/7885) is ready at `c6dcef422f` (`cursor/proofs-p1ab-f3f6`, PRF-458, stacked on #7838). The preflight merged it onto `next` cleanly.
+- Records pass, on the three axioms, and no lock record changed:
+  - Security, Security/Properties and Security/Proofs: r20261107-232208-c2ea.
+  - Flock (with the generators) and `network/lean`: r20261107-234952-4ecc.
+- Quick suites r20261107-232208-e657: 63 of 65 pass. The two failures also occur at #7838's head 59245cbe16, without my commits:
+  - verity-vllm's `test_class_g_plans_a_request_from_its_history_in_the_window` can't find `integrations/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json`. It also fails at checked's tip f27b190dea (r20261107-235411-191a), so checked is red there. It is #7745's area, not mine.
+  - verity-vllm's ruff F401 and circuit-check's catalog test (`MoeExpertFp8*` labels) both pass at checked's tip (r20261108-000648-601f).
+- Land ask (49 words): "#7885 (proofs, PRF-458) proves parts A and B of the read unit's gate refinement: the row-seg digest, the hm96 leaf and the select meet #7838's statements, on the standard axioms only. Records pass; both quick-suite failures reproduce without it. Stacks on #7838: please land after it."
+- #7812 (still unmarked): its quick suites r20261107-232850-95c0 fail circuit-check's catalog test and three `repository` tests. All three occur at 900fc2e432, the checked commit it merged, without route B (r20261108-000832-a9db):
+  - a silent except at `tools/verity/graph/verity_graph/families/lean_module.py:175`;
+  - Security's `unwitnessed` grew, 305 > 287;
+  - two `Proofs/Pouw` files import `Definitions.Assumptions`.
+  I'm running them at checked's tip (r20261108-001036-0107). If they pass there, I merge checked into #7812 again and rerun its suites.
