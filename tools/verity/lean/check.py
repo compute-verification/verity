@@ -245,6 +245,11 @@ POLICY = "lean-audit.json"
 FORMAT = 1
 #: the facts document `facts_of` keeps beside a package's reports, gzipped with no timestamp: equal facts are equal bytes
 FACTS = "facts.json.gz"
+#: the stage-A document that `--facts-from` judges from (`facts_document`), beside a package's reports; the augmented,
+#: position-free facts and the source and dependency findings, gzipped with no timestamp, with its own schema so an old
+#: document is never read against new logic
+FACTS_DOC = "facts-doc.json.gz"
+FACTS_SCHEMA = "lean-facts/v1"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
 #: compiler trust: `native_decide` declares an axiom `<decl>._native.native_decide.ax_<i>` (older toolchains used these two)
 NATIVE = {"Lean.ofReduceBool", "Lean.trustCompiler"}
@@ -311,6 +316,17 @@ class Failure(str):
 def code_of(failure: str) -> str | None:
     """``failure``'s code, or None for a bare string (which settles nothing)."""
     return getattr(failure, "code", None)
+
+
+def failures_json(fails: list[str]) -> list[list]:
+    """``fails`` as ``[code, entry, text]`` triples, so a stage-A finding keeps its `Failure` code and entry across the
+    document that `--facts-from` reads them back from (`restore_failures`)."""
+    return [[code_of(f), getattr(f, "entry", None), str(f)] for f in fails]
+
+
+def restore_failures(triples: list[list]) -> list[Failure]:
+    """The `Failure`s of `failures_json`'s triples, their codes and entries as they were when stage A found them."""
+    return [Failure(c, e, t) for c, e, t in triples]
 
 
 def sibling(name: str):
@@ -1251,6 +1267,46 @@ def stored_facts(path: Path) -> dict:
     """The facts document at ``path``: a `FACTS` that `facts_of` kept, or the plain `facts.json` of an older audit."""
     data = path.read_bytes()
     return json.loads(gzip.decompress(data) if path.suffix == ".gz" else data)
+
+
+#: the facts fields `facts_document` drops: the absolute `.olean` paths and the source positions, which a path move or a
+#: blank line above a proof changes but no lock check reads, so two builds of the same declarations give one document
+POSITIONAL = ("oleans", "spans")
+
+
+def facts_document(facts: dict, files: dict[str, str], findings: dict, toolchain: str) -> dict:
+    """The stage-A document `--facts-from` judges from: the augmented ``facts`` (as `audit` has them after `facts_of`,
+    `proved` and `source_modules`) with every path-like and positional field removed (`POSITIONAL`, each `graph` module's
+    `olean`, each pin's `at`), the module listing ``files`` ({module: relative path}), the source and dependency
+    ``findings`` a full audit computed (`scans`, `dropped`, `anonymous_instances`, `dependency_scans`, the dependency
+    digests, the provers' failures, the compile-time listings), and the ``toolchain``.  The lock checks read none of what
+    is dropped, so an old document is never read against new logic only across a `FACTS_SCHEMA` bump."""
+    f = {k: v for k, v in facts.items() if k not in POSITIONAL}
+    f["graph"] = {m: {k: v for k, v in g.items() if k != "olean"} for m, g in (facts.get("graph") or {}).items()}
+    f["pins"] = {n: {k: v for k, v in p.items() if k != "at"} for n, p in (facts.get("pins") or {}).items()}
+    return {"schema": FACTS_SCHEMA, "toolchain": toolchain, "files": dict(sorted(files.items())), "facts": f,
+            "findings": findings}
+
+
+def write_facts_document(path: Path, doc: dict) -> None:
+    """Write ``doc`` (`facts_document`) to ``path``, gzipped with no timestamp and canonical keys: equal documents are
+    equal bytes, so the graph's cutoff skips stage B when a proof edit leaves the facts unchanged."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(gzip.compress(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode(), compresslevel=1, mtime=0))
+
+
+def read_facts_document(path: Path) -> dict:
+    """The facts document `--facts-from` reads for one package: ``path`` when it is a file, else ``path``'s `FACTS_DOC`.
+    Raises RuntimeError when the file is missing or its schema is not `FACTS_SCHEMA` (the fix: rebuild its facts)."""
+    p = path if path.is_file() else path / FACTS_DOC
+    if not p.is_file():
+        raise RuntimeError(f"no facts document at {p}; build it with `check.py --facts-only` first")
+    data = p.read_bytes()
+    doc = json.loads(gzip.decompress(data) if p.suffix == ".gz" else data)
+    if doc.get("schema") != FACTS_SCHEMA:
+        raise RuntimeError(f"the facts document {p} is {doc.get('schema')!r}, not {FACTS_SCHEMA}; rebuild its facts "
+                           f"(`check.py --facts-only`)")
+    return doc
 
 
 def renamed(name: str, moved: dict[str, str]) -> str:
@@ -4948,11 +5004,58 @@ def template(pkg: Path) -> dict:
     return {"roots": libs or [pkg.name], "guarantees": {}}
 
 
+def _open(pkg: Path, out: Path) -> tuple[dict, dict | None, Path | None]:
+    """(rep, policy, work) for an audit of ``pkg`` into ``out``: the lock loaded and the work directory `audit-<tag>`
+    made and cleared of a stale lock and review, shared by `audit` and `audit_from_facts`.  Returns (rep with a
+    `policy.missing` or `policy.invalid` failure, None, None) when the lock is missing or unreadable."""
+    rep = {"package": str(pkg), "seconds": {}, "failures": []}
+    if not (pkg / POLICY).exists():
+        rep["failures"].append(Failure("policy.missing", None, f"policy: {pkg} has no {POLICY}. Start from this one, list the "
+                                       f"theorems your documents cite (\"name\": {{\"owner\": \"@lane\"}} under "
+                                       f"\"guarantees\"), and run `check.py --update {pkg}`:\n{json.dumps(template(pkg))}"))
+        return rep, None, None
+    try:
+        policy = load(pkg)
+    except ValueError as e:
+        rep["failures"].append(Failure("policy.invalid", None, f"policy: {pkg}/{POLICY}: {e}"))
+        return rep, None, None
+    tag = re.sub(r"[^A-Za-z0-9]+", "_", str(pkg.resolve().relative_to(ROOT)) if pkg.resolve().is_relative_to(ROOT) else pkg.name)
+    work = out / f"audit-{tag}"
+    if work.resolve().is_relative_to(pkg.resolve()):
+        raise ValueError(f"the audit's output {work} is inside the package {pkg}")
+    work.mkdir(parents=True, exist_ok=True)
+    for stale in (POLICY, "review.txt"):
+        (work / stale).unlink(missing_ok=True)
+    return rep, policy, work
+
+
+def anonymous_failures(found: list[dict]) -> list[Failure]:
+    """One `instance.anonymous` failure per anonymous instance in ``found`` (`anonymous_instances`), the message `audit`
+    and the stage-A findings share so `--facts-from` reconstructs the same failure."""
+    return [Failure("instance.anonymous", i["file"], f"instance: {i['file']}:{i['at'][0]} declares an instance without a "
+                    f"name, which Lean names {i['name']} from its type (and, when nothing in the type is the project's own, "
+                    f"its project's root): a move or a split renames it, and with it every record whose definitions use it. "
+                    f"Write `instance {i['id']}` there (`check.py --name-instances` writes each one)") for i in found]
+
+
+def renamed_current(policy: dict, moved: dict[str, str] | None) -> dict:
+    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}), the lock the audit judges against
+    (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
+    if not moved:
+        return policy
+    renames: dict[str, dict] = {}
+    for n, r in sorted(policy.get("guarantees", {}).items()):
+        if r or renamed(n, moved) not in renames:
+            renames[renamed(n, moved)] = r
+    return policy | {"guarantees": renames} | renamed_witnesses(policy, moved)
+
+
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
-          bookkeeping: str | None = None, seals: "Seals | None" = None, store: bool | None = None) -> dict:
+          bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
+          store: bool | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -4979,25 +5082,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
     on `bookkeeping_ticket`) and judges the policy's checks again on that lock: the package fails on what fails there and
     on every failure those checks don't make (the build, the replay, the scans, the tests), else its report names the lock
-    (`regenerated`) and its repairs (`bookkeeping`, `bookkeeping_warnings`)."""
-    rep = {"package": str(pkg), "seconds": {}, "failures": []}
-    if not (pkg / POLICY).exists():
-        rep["failures"].append(Failure("policy.missing", None, f"policy: {pkg} has no {POLICY}. Start from this one, list the "
-                                       f"theorems your documents cite (\"name\": {{\"owner\": \"@lane\"}} under "
-                                       f"\"guarantees\"), and run `check.py --update {pkg}`:\n{json.dumps(template(pkg))}"))
+    (`regenerated`) and its repairs (`bookkeeping`, `bookkeeping_warnings`).  ``facts_out`` writes the stage-A facts
+    document there (`facts_document`, `write_facts_document`): the facts and the source and dependency findings a later
+    `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record (`--facts-only` drives
+    this with the replay and the tests off)."""
+    rep, policy, work = _open(pkg, out)
+    if policy is None:
         return reported(rep)
-    try:
-        policy = load(pkg)
-    except ValueError as e:
-        rep["failures"].append(Failure("policy.invalid", None, f"policy: {pkg}/{POLICY}: {e}"))
-        return reported(rep)
-    tag = re.sub(r"[^A-Za-z0-9]+", "_", str(pkg.resolve().relative_to(ROOT)) if pkg.resolve().is_relative_to(ROOT) else pkg.name)
-    work = out / f"audit-{tag}"
-    if work.resolve().is_relative_to(pkg.resolve()):
-        raise ValueError(f"the audit's output {work} is inside the package {pkg}")
-    work.mkdir(parents=True, exist_ok=True)
-    for stale in (POLICY, "review.txt"):
-        (work / stale).unlink(missing_ok=True)
+    tag = work.name.removeprefix("audit-")
     rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
     t, _peak.bytes = time.monotonic(), 0
     pipe = None
@@ -5085,13 +5177,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     early = "proved_in" in policy and not lifts
     upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
         if early and "upstream" in policy else None
-    current = policy
-    if moved:
-        renames = {}
-        for n, r in sorted(policy.get("guarantees", {}).items()):
-            if r or renamed(n, moved) not in renames:
-                renames[renamed(n, moved)] = r
-        current = policy | {"guarantees": renames} | renamed_witnesses(policy, moved)
+    current = renamed_current(policy, moved)
     s, waited = time.monotonic(), []
 
     def built_prover(q: Path):
@@ -5145,11 +5231,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         roles = tree_roles(pkg, lock)
         return spec_reads(lock, facts, reads_home(pkg, lock), roles) + tree_failures(lock, facts, roles) + shape(lock, facts)
     on_lock = fails + judged(current)
-    fails = cross + fails + dropped(pkg, files, facts) + on_lock[len(fails):]
+    drp = dropped(pkg, files, facts)
+    fails = cross + fails + drp + on_lock[len(fails):]
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
+    (dep_missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
         scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy, sealed)
-    fails = scans(pkg, files, policy) + missed + fails
+    scn = scans(pkg, files, policy)
+    fails = scn + dep_missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
     if name and anonymous:
@@ -5159,14 +5247,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                              f"{', '.join(sorted({i['file'] for i in anonymous}))}, so this audit is of sources it has since "
                              f"rewritten: build and audit again to see that no record changed"))
         anonymous = []
-    fails += [Failure("instance.anonymous", i["file"], f"instance: {i['file']}:{i['at'][0]} declares an instance without a "
-                      f"name, which Lean names {i['name']} from its type (and, when nothing in the type is the project's own, "
-                      f"its project's root): a move or a split renames it, and with it every record whose definitions use it. "
-                      f"Write `instance {i['id']}` there (`check.py --name-instances` writes each one)") for i in anonymous]
+    anon_fails = anonymous_failures(anonymous)
+    fails += anon_fails
+    up_missed: list[str] = []
     if "upstream" in policy:
-        (rep["upstream"], missed), rep["seconds"]["upstream"] = \
+        (rep["upstream"], up_missed), rep["seconds"]["upstream"] = \
             upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
-        fails += [Failure("upstream", None, f) for f in missed]
+        fails += [Failure("upstream", None, f) for f in up_missed]
     deps, rep["seconds"]["dependencies"] = \
         digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"], sealed)
     if update:
@@ -5215,6 +5302,26 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    if facts_out is not None:
+        findings = {"cross": failures_json(cross), "scans": failures_json(scn), "dropped": failures_json(drp),
+                    "dependency_scans": {"missed": failures_json(dep_missed), "read": rep["dependency_sources"]},
+                    "anonymous": failures_json(anon_fails), "dependencies": deps, "heartbeats": rep["heartbeats"],
+                    "listings": {"failures": failures_json(listings(pkg, files, policy, facts)[0]),
+                                 "compile_time": listed, "notes": lnotes}}
+        if "upstream" in policy:
+            findings["upstream"] = {"pinned": rep.get("upstream", {}), "missed": up_missed}
+        write_facts_document(Path(facts_out), facts_document(facts, files, findings, rep["toolchain"]))
+    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log)
+
+
+def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: dict[str, str], fails: list[str],
+            rep: dict, update: bool, moved: dict[str, str] | None, bookkeeping: str | None,
+            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print) -> dict:
+    """The records tail `audit` and `audit_from_facts` share, once the lock failures ``fails`` and the record ``new`` are
+    judged: the bookkeeping repair (`--bookkeeping warn`), the record `--update`/`--regenerate` writes and its review, the
+    notes, and the report (`report.json`).  ``judged`` runs the lock's spec/trees/shape checks (the caller's), ``on_lock``
+    the caller's lock failures (bookkeeping keeps the rest), ``lnotes`` the compile-time listings' review notes, ``t`` the
+    audit's start for `seconds.total`.  A pure function of what it is given: `--facts-from` writes the same record."""
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
@@ -5274,6 +5381,74 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep["seconds"]["total"] = round(time.monotonic() - t, 1)
     (work / "report.json").write_text(json.dumps(reported(rep), indent=1, ensure_ascii=False) + "\n")
     return rep
+
+
+def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = False, owner: str | None = None,
+                     repo: Path = ROOT, moved: dict[str, str] | None = None, bookkeeping: str | None = None,
+                     log=print) -> dict:
+    """Judge ``pkg`` from a stage-A facts document (`--facts-from`), with no build and no `Facts.lean`.  It reads the
+    document (`read_facts_document` from ``facts_from``, a file or the reports directory that holds the package's
+    `audit-<tag>/FACTS_DOC`) and runs the lock checks over its facts (`judge`, `spec_reads`, `tree_failures`, `shape`,
+    `inline_failures`, `run_paths`), then folds in the source and dependency findings the document carries (`scans`,
+    `dropped`, `anonymous_instances`, `dependency_scans`, the dependency digests, the provers' failures and the
+    compile-time listings) exactly as `audit` folds them, and finishes through the shared `_finish`.  So it returns the
+    report `audit` returns of the matching build with the kernel replay, the tests and `leanchecker --fresh` off: the
+    same `failures`, and under ``update`` the same record."""
+    rep, policy, work = _open(pkg, out)
+    if policy is None:
+        return reported(rep)
+    t = time.monotonic()
+    try:
+        doc = read_facts_document(facts_from if facts_from.is_file() else facts_from / work.name)
+    except RuntimeError as e:
+        rep["failures"].append(Failure("facts", None, f"facts: {e}"))
+        return reported(rep)
+    rep["toolchain"] = doc["toolchain"]
+    current = renamed_current(policy, moved)
+    facts, files, find = doc["facts"], doc["files"], doc["findings"]
+    fails, new = judge(current, facts, files, update, owner)
+    if "deployed" in new:
+        rep["trust_gap"] = trust_gaps(new)
+    _, debt, rep["inline"] = inline_failures(current, facts)
+    rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
+
+    def judged(lock: dict) -> list[str]:
+        roles = tree_roles(pkg, lock)
+        return spec_reads(lock, facts, reads_home(pkg, lock), roles) + tree_failures(lock, facts, roles) + shape(lock, facts)
+    on_lock = fails + judged(current)
+    fails = restore_failures(find.get("cross", [])) + fails + restore_failures(find.get("dropped", [])) + on_lock[len(fails):]
+    rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
+    scanned = find.get("dependency_scans", {})
+    rep["dependency_sources"] = scanned.get("read", 0)
+    fails = restore_failures(find.get("scans", [])) + restore_failures(scanned.get("missed", [])) + fails
+    rep["heartbeats"] = find.get("heartbeats", [])
+    fails += restore_failures(find.get("anonymous", []))
+    if "upstream" in policy:
+        up = find.get("upstream") or {"pinned": {}, "missed": []}
+        rep["upstream"] = up.get("pinned", {})
+        fails += [Failure("upstream", None, f) for f in up.get("missed", [])]
+    deps = find.get("dependencies", {})
+    if update:
+        new["dependencies"] = deps
+    elif "dependencies" not in policy:
+        fails.append(Failure("dependencies.unrecorded", None, "dependencies: no record of the dependencies' .olean files; run "
+                             "`check.py --update` and commit it"))
+    else:
+        for d in sorted(set(policy["dependencies"]) | set(deps)):
+            if policy["dependencies"].get(d) != deps.get(d):
+                fails.append(Failure("dependencies.changed", d, f"dependencies: the .olean files of the modules the package "
+                                     f"imports from {d} differ from the record. After a change to the package's imports, or "
+                                     f"at a bump, run `check.py --update` (and review it at a bump); otherwise it is a "
+                                     f"different cache or toolchain, a build that is not reproducible, or tampering"))
+    fails += run_paths(pkg, policy, repo)
+    listed = find.get("listings", {})
+    # the stored listings failures are the update-independent set (the facts document is `--facts-only`, never --update);
+    # under --update a listing whose file changed is a note, not a failure, as a full update audit's listings has it
+    fails += [f for f in restore_failures(listed.get("failures", [])) if not (update and f.code == "compile-time.digest")]
+    if update and listed.get("compile_time"):
+        new["compile_time"] = listed["compile_time"]
+    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock,
+                   listed.get("notes", []), t, log)
 
 
 def reported(rep: dict) -> dict:
@@ -5450,6 +5625,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--facts", choices=("all", "named", "none"), default="all", help="the facts documents kept beside the "
                     "reports: every audited package's and its provers' (all, which status_export.py --facts reads), the named "
                     "packages' own (named, which trusted_size.py --run reads of a records run), or none")
+    ap.add_argument("--facts-from", type=Path, metavar="DIR", help="judge each named package from its stage-A facts document "
+                    "(`audit-<tag>/facts-doc.json.gz` under DIR, or a single document file) instead of building: the lock "
+                    "checks and the stored source and dependency findings, no build, no kernel replay, no tests "
+                    "(`audit_from_facts`).  Its verdict and, with --update, its record are a full audit's")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
@@ -5458,6 +5637,10 @@ def main(argv: list[str]) -> int:
         ap.error("--regenerate writes no lock: not with --update, --name-instances or --lift")
     if a.bookkeeping and not a.regenerate:
         ap.error("--bookkeeping warn goes with --regenerate: drive's lock run, whose regenerated locks drive commits")
+    if a.facts_from is not None and (a.all or a.build or a.lift or a.name_instances or a.fresh or a.closure
+                                     or a.replay_cache or a.artifacts or a.dev_cache):
+        ap.error("--facts-from judges from a stored facts document: name packages, and not with --all, --build, --lift, "
+                 "--name-instances, --fresh, --closure, --replay-cache, --artifacts or --dev-cache (the build's flags)")
     due = (datetime.date.today() + datetime.timedelta(days=BOOKKEEPING_DAYS)).isoformat() if a.bookkeeping else None
     moved = None
     if a.moved:
@@ -5483,13 +5666,13 @@ def main(argv: list[str]) -> int:
         ap.error(f"{shipped} is a tree `research run --on` shipped, which every run of its commit shares: rerun with "
                  "`research run ... --cwd clone`, or take the records `--update` writes under --out (audit-<pkg>/lean-audit.json)")
     named = set(pkgs)
-    for p in pkgs:                                      # grows: a package proving another's guarantees is audited beside it
-        try:
+    for p in (pkgs if a.facts_from is None else []):    # grows: a package proving another's guarantees is audited beside
+        try:                                            # it, but --facts-from already holds the provers' facts (`proved`)
             more = provers(p, load(p)) if (p / POLICY).is_file() else []
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
-    if why := memory_refusal(pkgs, memory_gib()):
+    if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
     try:
@@ -5539,19 +5722,24 @@ def main(argv: list[str]) -> int:
                 print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
 
     def one(pkg: Path) -> None:
-        for d in needs[pkg]:
-            built[d].wait()
+        if a.facts_from is None:
+            for d in needs[pkg]:
+                built[d].wait()
         try:
             mine = pkg in named
-            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
-                        built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
-                        moved=moved if mine else None,
-                        ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
-                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
-                        closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                        bookkeeping=due, seals=run_seals)
+            if a.facts_from is not None:
+                rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
+                                       moved if mine else None, due, log=print)
+            else:
+                rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
+                            built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
+                            moved=moved if mine else None,
+                            ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
+                            name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
+                            closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
+                            bookkeeping=due, seals=run_seals)
         finally:
-            if not built[pkg].is_set():
+            if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
         with lock:
             if tamper := [Failure("tamper", p, f"tamper: {p} changed while {pkg} was built and audited")
