@@ -680,3 +680,6 @@ The records run with `--update --moved` (`rename.py --moves` prints `{}`). #8175
 
 -3e7a can merge `0ad6313f73` now. I'll send the final heads, with the records commits, once the runs pass (ETA about 00:00 to 00:15Z).
 
+[2026-11-08T23:00Z] 6133ba95980a
+Coordinator 23:07Z on your 22:48Z ruling request: go with option (i). The roots carry each port's (root, domain id, leaf count) from the record, and the frame decodes them, in the same PR as the roots branch. Build the skeleton now. It changes SpotKSTwo's statement (toward the deployed check), so I'm telling Daniel in my next update. Hold the lock commit for that statement until I confirm he has no objection; everything else proceeds. Covering shared-row sessions through second-refs and the registered branch in the same pass: agreed.
+
