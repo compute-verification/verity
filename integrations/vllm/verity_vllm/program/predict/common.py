@@ -87,11 +87,15 @@ def finish_run(run, params: tuple, B) -> tuple:
 
 def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
+    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
+    refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.ml.circuits.types import Tuple
+    from verity_vllm.program import inputs
     checks = getattr(model, "checks", None)
     if not checks:
         return out, None
+    for c, what in checks:
+        inputs.check(model.B, c, what)
     ret = Coll(Tuple(out.type, Array(len(checks), Value(1))), concat([out.refs, *[c.refs for c, _ in checks]]))
     return ret, {"output": 1, "accept": 1, "of": [w for _, w in checks]}
 
