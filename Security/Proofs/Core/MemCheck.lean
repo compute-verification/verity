@@ -165,9 +165,6 @@ theorem prCoin_element_eq_le {m : ℕ} (c c' : Fin m → F) (h : c ≠ c') :
         gcongr
         exact (natDegree_sub_le _ _).trans (max_le (natDegree_chunkPoly_le c) (natDegree_chunkPoly_le c'))
 
-/-- GF(2^128) as a finite type, for the witnesses' coins: Mathlib's Galois field of order `2^128` is finite. -/
-noncomputable local instance gf128Fintype : Fintype (GaloisField 2 128) := Fintype.ofFinite _
-
 theorem card_gf128 : Fintype.card (GaloisField 2 128) = 2 ^ 128 := by
   rw [Fintype.card_eq_nat_card, GaloisField.card 2 128 (by norm_num)]
 
@@ -177,8 +174,6 @@ namespace Verity.SecurityProofs
 
 open Verity.MemCheck Game
 open scoped ENNReal
-
-attribute [local instance] gf128Fintype
 
 theorem FingerprintCollision : Guarantees.FingerprintCollision := by
   intro F _ _ m A B

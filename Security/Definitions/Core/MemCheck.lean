@@ -4,6 +4,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.BigOperators.Group.Multiset.Defs
 public import Mathlib.Algebra.Field.Defs
 public import Mathlib.Data.Fintype.Card
+public import Mathlib.FieldTheory.Finite.GaloisField
 
 /-!
 # Offline memory checking's fingerprint
@@ -15,7 +16,7 @@ at coins it draws after both multisets are committed. A record is packed into `m
 a coin `γ` is `∑ i, γ^i · c i` (`element`), and a multiset of packed records has the fingerprint
 `∏ c, (α + element γ c)` at coins `α` and `γ` (`fingerprint`). The same `element`, at a coin of its own, prints a key
 packed into `m` chunks as one field element. Packing is the caller's: an injective one keeps different multisets of
-records different.
+records different. The deployed field is GF(2^128), Mathlib's `GaloisField 2 128`, finite by `gf128Fintype`.
 
 What a collision of each costs is `Verity.Guarantees.FingerprintCollision` and `Verity.Guarantees.PrintCollision`.
 -/
@@ -32,5 +33,9 @@ def element {F : Type} [Field F] {m : ℕ} (γ : F) (c : Fin m → F) : F :=
 `∏ c ∈ A, (α + element γ c)`. -/
 def fingerprint {F : Type} [Field F] {m : ℕ} (α γ : F) (A : Multiset (Fin m → F)) : F :=
   (A.map fun c => α + element γ c).prod
+
+/-- GF(2^128), the field of the deployed memory check's coins, as a finite type: Mathlib's Galois field of order
+`2^128` is finite. -/
+noncomputable instance gf128Fintype : Fintype (GaloisField 2 128) := Fintype.ofFinite _
 
 end Verity.MemCheck
