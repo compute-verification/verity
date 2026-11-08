@@ -47,7 +47,8 @@
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
                      nor is one over ``partition_max_gates`` gates not cut member by member (`uncut`); such a Call is
                      partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
-                     Call's, failing by its name), and is otherwise a warning, ``partition/unchecked``
+                     Call's, failing by its name), and is otherwise a warning, ``partition/unchecked``, whose record names
+                     why its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget)
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -1167,15 +1168,34 @@ def _decided_call(fn: Any) -> bool:
         return False
 
 
-def callees_are_calls(fn: Any, opts: Options = DEFAULTS, seen: dict[str, bool] | None = None) -> bool:
-    """Whether every Definition composite ``fn``'s body calls is a Call (`targets.is_call`; one it can't decide without the
-    catalog is not), and every callee's of each composite callee `uncut` itself: so `by_callees` partitions a Call of ``fn``."""
+def callee_gap(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | None] | None = None) -> str | None:
+    """Why `by_callees` can't partition a Call of ``fn``, or None when it can: ``fn`` is a primitive, which has no callees; or a
+    callee is no Call (`targets.is_call`; one it can't decide without the catalog is not); or a callee is `uncut` itself and is
+    a primitive (over the leaf budget: nothing partitions it), or a composite with such a gap of its own."""
     seen = {} if seen is None else seen
     if fn.id not in seen:
-        seen[fn.id] = False
-        seen[fn.id] = all(_decided_call(c) and (uncut(c, opts) is None or not isinstance(c, PrimitiveDefinition)
-                                                and callees_are_calls(c, opts, seen)) for c in _callees(fn))
+        seen[fn.id] = f"{fn.id} reaches itself"
+        seen[fn.id] = _gap(fn, opts, seen)
     return seen[fn.id]
+
+
+def _gap(fn: Any, opts: Options, seen: dict[str, str | None]) -> str | None:
+    if isinstance(fn, PrimitiveDefinition) or not hasattr(fn, "body"):
+        return f"{fn.id} is a primitive, with no callees to partition it"
+    for c in _callees(fn):
+        if not _decided_call(c):
+            return f"{c.id} is no Call"
+        if (why := uncut(c, opts)) is not None:
+            if isinstance(c, PrimitiveDefinition):
+                return f"{c.id} is a primitive and {why}"
+            if (inner := callee_gap(c, opts, seen)) is not None:
+                return f"{c.id}: {inner}"
+    return None
+
+
+def callees_are_calls(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | None] | None = None) -> bool:
+    """Whether `by_callees` partitions a Call of ``fn``: `callee_gap` finds no gap."""
+    return callee_gap(fn, opts, seen) is None
 
 
 def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dict | None:
@@ -1185,13 +1205,12 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     violations fail by the callee's name, so every gate of ``fn`` sits in a Call whose partition is checked; and, where ``fn``'s
     body nodes read only its parameters (`cut.separable`), the values two of its members compute (`cross_call.members_check`:
     each a failure under `Q_word` v1, counted under v2).  Values two callees compute in a body that isn't separable are not
-    compared, as between two Calls of a Program.  None, so the partition stays unchecked, where some callee, or a callee's
-    callee through an `uncut` one, is not a Call (`callees_are_calls`).  ``memo`` keeps each callee's record and findings across
-    targets."""
+    compared, as between two Calls of a Program.  None, so the partition stays unchecked, where `callee_gap` finds a gap (its
+    record names it).  ``memo`` keeps each callee's record and findings across targets."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.cut import separable
 
-    if not callees_are_calls(fn, opts, memo.setdefault("callees_are_calls", {})):
+    if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
     done = memo.setdefault("by_callees", {})
     word = memo.setdefault("word", {})
@@ -1327,6 +1346,8 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
+    if as_call and why is not None and entry["partition"].get("checked") is False:
+        entry["partition"]["callee_gap"] = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
     if getattr(getattr(t, "defn", t), "gated", False) or t.id in pins.get("digests", {}):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
@@ -1684,7 +1705,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "VECTOR_CLASSES", "block_range", "by_callees", "callees_are_calls",
-           "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "dead_gates",
+__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
+           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "dead_gates",
            "floored", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
            "target_equivalence", "template_lowering", "uncut", "unit_block", "vector_class", "whole_lowering"]
