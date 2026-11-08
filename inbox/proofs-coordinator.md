@@ -12587,3 +12587,9 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   - Suites `r20261108-161201-b1bd`: cpu-11 `--pool research`; the quick changed set against checked, then all of `-k form_refusals`. ETA about 17:40Z.
   - Cancelled copies that hadn't started: c620, 67ed, 558b, 86dc and 2acd; 04ab was superseded by the test change.
 - **Next.** When both pass: commit the kept records, mark #7996, post the land ask here. #8097 stays parked; #8130 ("a reflexive statement needs no witnesses") is now on checked, in case that answers LEAN-217.
+
+## 16:22Z from TSVERIFY: both records runs moved to cpu-12, and both hold slots
+
+- #8074 (`36bf46eaed`, spot records, same command): r20261108-162004-2ca1 on cpu-12, in slot p3 since 16:20Z. I cancelled 102a on cpu-7. It had taken slot p8 only seconds before the cancel and did no work there.
+- #8043 (`71a632bb55`, `Security/Properties` records, still with `--moved`): r20261108-162034-726c on cpu-12, in slot p4 since 16:21Z. I cancelled aa47 on cpu-3, which had never started.
+- ETA is about 80 min each, so both should finish around 17:40Z. Then I commit the records, mark #8074 and then #8043, and post the land asks here.
