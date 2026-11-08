@@ -45,7 +45,7 @@ body = cut(body, "    const long long n_comp = C->mode == 1", "    const int n_b
 body = cut(body, "    if (pure ? ((C->host_z", "{ printf(\"FFI chunk: bad shape\\n\"); return 201; }",
            "    if (fc_bad_shape(P, N)) { printf(\"FFI circuit: bad shape\\n\"); return 201; }", keep_b=False)
 body = cut(body, "    if (pure && C->host_z) {", "    CKI(phase(0));",
-           "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b, d_zlin));\n")
+           "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b));\n")
 body = cut(body, "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));", "        if (C->n_delta_a) chunk_delta_scatter",
            "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));\n        CK(cudaGetLastError());\n"
            "        CKI(fc_fold(P, N, d_eq_inner, alpha, k_log, d_comb));\n")
@@ -75,6 +75,8 @@ body = put(body, "    CK(device_arena.begin(arena_bytes));\n",
            "    if (!take) fc_kept_drop();\n"
            "    const bool keep = !take && N->rep_reuse == 1;\n"
            "    if (!take) CK(device_arena.begin(arena_bytes));\n")
+body = put(body, "    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n",
+           "    fc_zlin_transpose(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n")
 body = put(body, "    if (N->zk_on) {\n        CKI(fc_commit_l0_zk(",
            "    if (take) {\n"
            "        d_cw0 = g_fc_kept.d_cw0; d_tree0 = g_fc_kept.d_tree0; l0_bl = g_fc_kept.l0_bl; l0_ni = g_fc_kept.l0_ni;\n"
