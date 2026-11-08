@@ -142,9 +142,9 @@ def test_only_a_later_block_takes_the_running_state(first: bool) -> None:
 
 def test_only_the_first_visited_block_is_partial() -> None:
     with pytest.raises(ValueError, match="only the first visited block is partial"):
-        bind(M.SparseMlaHeadBlock, DR=16, DV=16, NVIS=5, FIRST=False, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
+        _ = bind(M.SparseMlaHeadBlock, DR=16, DV=16, NVIS=5, FIRST=False, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
     with pytest.raises(ValueError, match="multiples of 16"):
-        bind(M.SparseMlaHeadBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
+        _ = bind(M.SparseMlaHeadBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
 
 
 AGREEMENT = [bind(BM.SparseMlaHeadBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16, SCALE=0.0625, DOT=BM.SPARSE_MLA_GLM53["DOT"]),
