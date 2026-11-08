@@ -19,7 +19,6 @@ public import Proofs.Flock.Claims.Sampling.Leaf
 public import Proofs.Flock.Claims.Sampling.Path
 public import Proofs.Flock.Claims.KS.Refit
 public import Proofs.Flock.Claims.Sampling.Reference
-public import Proofs.Flock.Claims.Sampling.Rooted
 public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Seq
 public import Proofs.Flock.Claims.Sampling.Runs

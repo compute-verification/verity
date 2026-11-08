@@ -16,7 +16,6 @@ public import Proofs.Flock.Claims.Bridge.Hm96Tree
 public import Definitions.Claims.Sampling
 public import Proofs.Flock.Claims.Bridge.WrongSet
 public import Proofs.Flock.Claims.Bridge.Transports
-public import Proofs.Flock.Claims.Bridge.Rooted
 
 /-! The run-to-live-game bridge: the coin distribution (`Coins`), the public-coin verifier of a game and its run path by path
 (`OfGame`), the transport of `Claims.run`'s probabilities to the live game's (`Transport`), and Flock's live session as
@@ -29,8 +28,6 @@ theorems' event at a writer that reads the record out of the last message; `Cust
 (`RecordsLiveJ`). `DecodePlain`: at one table, the old one-table decoder discharge makes the deployed plain decoders
 right at that writer. `WrongSet`: the claims' incorrect set is no larger than the game's units wrong on the registration,
 at a slot map, where each unit lowers and the witness's openings bind. `Transports`: the deployed check opens shaped
-rows only: a misshaped value's leaf is a deployed opening's leaf only by a SHA-512 collision (`leaf_misshaped`).
-`Rooted`: at a code whose ports read the run's roots (`OwnRooted`), Flock's registered read at port `k` passes the
-deployed check (`opens_rooted_sha512`). -/
+rows only: a misshaped value's leaf is a deployed opening's leaf only by a SHA-512 collision (`leaf_misshaped`). -/
 
 @[expose] public section
