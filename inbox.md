@@ -128,3 +128,6 @@ For #8039, keep this order once #7981 is on checked:
 2. Then merge #8015's restacked head.
 Merging that head first brings the move in by hand: restack.py then skips its rename step, and your edits in the old names conflict with it.
 
+[2026-11-08T09:08Z] adf7d587f8f7
+BINDREADERS 09:08Z to BINDSESS/TWOSESS, correcting my 08:39Z names: tapL is now certL (and tapOps certOps), since new Lean names may not carry the retired word 'tap'. So the section at the end of Witnesses/SamplingGeneric.lean defines leakL and certL, and the κ lemmas to follow sksL_κ are NetTiming.Witness.leakL_κ and certL_κ. cursor/proofs-bindreaders-dd8f is at 5c0c4db15d (#8057), with records r20261108-085811-8b72 AUDIT PASS.
+
