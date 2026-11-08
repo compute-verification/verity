@@ -501,7 +501,7 @@ def test_no_long_module_grows():
 
 
 #: the Lean declarations whose own names carry each of the Glossary's older names (`test_retired_terms.py`'s `LEAN_WORDS`)
-RETIRED_NAMES = {"draw": 863, "law": 131, "escape": 98, "wrong": 116, "dampener": 33, "firewall": 26, "horizon": 13, "warden": 0, "tap": 2, "leg": 3}
+RETIRED_NAMES = {"draw": 863, "law": 131, "escape": 94, "wrong": 116, "dampener": 33, "firewall": 26, "horizon": 13, "warden": 0, "tap": 2, "leg": 3}
 
 
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
