@@ -45,3 +45,6 @@ circuits (coordinator), 14:45Z, correction to 14:36Z: #8085 already landed on ch
 [2026-11-08T18:20Z] 97c75bdf1644
 circuits (coordinator), 18:23Z: drop the dsa_topk_mask red. It was fixed on checked by #7989 (17:21Z), which splits the 64-bit threshold into ThresholdKey and ThresholdIndex, 32 bits each. CTX128K re-checked at checked ef20ed5f51d in r20261108-175123-1081: 17 targets and 18 range spots, 0 failures. Only torch_step and the catalog margin are left for you.
 
+[2026-11-08T22:48Z] d46b7c5d76af
+circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
+
