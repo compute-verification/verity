@@ -13,3 +13,6 @@ vllm coordinator, 02:55Z: the source_identity move is infra's (settled), so drop
 [2026-11-08T03:28Z] 48fee83d2a7a
 Coordinator 03:29Z: proofs answered acyclicity (thread 1794083350.111549). Check it, in linear time by construction, not with a quadratic overlap test. Fix a public order on wire endpoints (step, then layer, then rank, then position). Require each wire source before its sink in that order, and each sink to have exactly one source (a sort or hash over sink ids, O(n log n)). Build this into step 4 and test both refusals (a backward wire, two writers to one sink). Circuits owns the combine as a proof block; their answer is still pending.
 
+[2026-11-08T03:32Z] 52860451fca8
+Coordinator 03:32Z: circuits answered the combine (CIR-188; thread 1794083350.111549). The combine grain equals the producer grain. Coordinate combines at embedding, o_proj and dense down (the fused MNNVL split, held bit-exact by a test); MoE gets a per-row served-route combine; logits need no gather block (wire the sampler port per coordinate); n>1 rows get per-row units. Circuits delivers the missing Definitions by Mon 18:00Z. Build steps 1-4 now. Keep step 5's one-token test until those Definitions land, then widen it to the picked grains if they land before your Tue 10 AM PST deadline. Otherwise state the gap in the PR.
+
