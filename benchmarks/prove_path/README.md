@@ -122,10 +122,14 @@ conditional escape and its leak relation as hypotheses, which `SampledKSLive` an
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
-`advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
-- c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+`advice_bits`, `c`, `other_inputs`, `bound`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and
+`exfiltration_bound`):
+- c is `c`. It is `advice.bits` (the registration's `window.advice.bits`: the I1 advice's length, which
+  `prove_path.py advice` prints as `bits`) only while the window's leak count (`records_audit.leak_count`) is within the
+  charge, so the advice is the only free input outside the registration. Otherwise `c` is null and `bound` is `vacuous`,
+  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its units' inputs,
+  and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
+  states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/spot/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -144,9 +148,9 @@ guarantee above.
 
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
-  (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.StrictBirthday` and `Claims.ExpectedCR`
-  (`Security/Definitions/Core/Interaction.lean`).
-- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
+  (`Security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
+  `Claims.ExpectedCR` (`Security/Definitions/Core/Interaction.lean`).
+- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file as the first two).
 - Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
   (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`) and `Zk.RecordCustodyZKLaw` and its forms
   (`Security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`

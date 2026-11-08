@@ -78,6 +78,10 @@ public import Proofs.Flock.ZkAny.RelayFreshStart
 public import Proofs.Flock.ZkAny.RelayWorker
 public import Proofs.Flock.ZkAny.RelayAuditor
 public import Proofs.Flock.ZkAny.Finish
+public import Proofs.Flock.ZkAny.SampledAudit
+public import Proofs.Flock.ZkAny.Stream
+public import Proofs.Flock.ZkAny.RecordHiding
+public import Proofs.Flock.ZkAny.SampledSessions
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -155,6 +159,8 @@ Rust's checks the worker's, so `CrossPasses` by definition at the release withou
 relay's auditor as `V*`, which answers as `V*` does at the `Hello`, the `Commit` and each frame round; and so, from the
 session's first request, at the release without Rust's checks and the model's run of the deferred server at the
 deployed worker against the relay's auditor, `EnvPre` at the relay's requests, and the relay's model frames the
-model's messages, encoded. -/
+model's messages, encoded; a sampled audit's view, the registration's record with the sampled sessions' releases;
+sessions in sequence per outcome; the registration's ideal record hiding its values at hm96 commitments; and the view
+at sampled sessions of one protocol that meets `ZKOut`. -/
 
 @[expose] public section

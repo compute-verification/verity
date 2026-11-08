@@ -11,7 +11,8 @@ exclude each other.
   session that finds it taken records `wait`, then waits for it) and, on one read of the record, records its slot and
   its admission (`seat`). With `--salt-key FILE` the admission is also its statement's registrations' (rule 5): every
   hm96 tree of its public file must be a table of a registration on the record whose record tag is the server's under
-  the key in `FILE` (`Flock.Firewall.Salts.readsOf`), and the registrations it reads are admitted, oldest first, those
+  the key in `FILE`, or, for an interior session's, under the session's own key on the record, which the key in `FILE`
+  vouches for there (`Flock.Firewall.Salts.readsOf`), and the registrations it reads are admitted, oldest first, those
   it passes over skipped (`admitReads`). A refused session reaches nothing of the auditor.
 * Its proofs and `Finish` are held. At `Finish`, `Decision.after` decides at the wall clock's time: the prover's run
   is the loop's own refusal of the session if it made one (`State.finish`), and the send check is whether the loop holds
@@ -24,7 +25,8 @@ exclude each other.
 
 `core-firewall values --state DIR --salt-key FILE` is the ZK server's value service (`Flock.Firewall.Values`) on the same
 state directory: each registration takes the next number on the record and is appended there whole, under
-`record.lock`, in the step that numbers it (`register`).
+`record.lock`, in the step that numbers it (`register`), an interior session's with the session's own key. That key is
+witness, so before it serves, the service makes the state directory its own OS user's alone.
 -/
 module
 
@@ -154,11 +156,17 @@ def main (args : List String) : IO UInt32 := do
     | some kf => return (← readsOf kf S.I.publicFile).map fun f => hold dir s part (some f)
 
 /-- `core-firewall values --state DIR --salt-key FILE [--listen PORT]`: the ZK server's value service
-(`Flock.Firewall.Values.serve`), each registration numbered on the record in `DIR` and appended there (`register`). -/
+(`Flock.Firewall.Values.serve`), each registration numbered on the record in `DIR` and appended there (`register`).
+Before it serves it makes `DIR` its user's alone to read, write and enter, and it serves nothing where it can't. -/
 def values (args : List String) : IO UInt32 := do
   let usage := "usage: core-firewall values --state DIR --salt-key FILE [--listen PORT]"
   let some dir := Flock.Witness.argOf args "--state" | IO.eprintln usage; return 2
   IO.FS.createDirAll dir
+  try IO.setAccessRights dir { user := { read := true, write := true, execution := true } }
+  catch e =>
+    IO.eprintln (s!"--state {dir}: {e}: the record holds interior sessions' keys, so the state directory is the ZK " ++
+      "server's user's alone")
+    return 2
   Flock.Firewall.Values.serve usage args <| some fun rec => do
     try
       return .ok (← withRecord dir fun r => r.op fun evs => let ((_, b), evs) := register evs rec; (b, evs))

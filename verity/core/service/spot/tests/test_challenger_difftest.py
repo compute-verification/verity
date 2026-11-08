@@ -32,15 +32,17 @@ picking the window), a session whose pin is off the verifier's copy of main, no 
 and releases, and the records of sessions on them, one tree each; then a tree's or a round's line with a key dropped or
 added, a malformed key, nonce, root, spec, after or coins, a root or key sampled twice, a tree's line no reader reads, a
 round of no tree sampled earlier, of a stream the tree lacks, out of order, opened twice or past the tree's rounds or
-block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited,
-a ``root_B`` not its table's length (`LINK_ROOT_LEN`), its link's roots split at other points with the hashed message
-kept among them, a round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form, its link
-unopened, a tree two sessions use, or one none does. A sample's release log's order (`SAMPLE_LINK_FIRST`:
-`sample_link_first`, `Spot.Challenger.sampleLinkFirst`) is a sample's coins as `READ`'s with every tree round
-after the sample and each tree's link first (`_release_log`), then a link opened before the sample's last coin, a round
-of another stream opened first, each malformed request. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold
-tree lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece
-answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
+block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited, a
+``root_B`` not its table's length (`LINK_ROOT_LEN`), its link's roots split at other points with the hashed message kept
+among them, a round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form,
+its link unopened, a tree two sessions use, or one none does; and a tree that opens a round its record doesn't record (a
+stream's next round, the link's stream again, a round or a stream the record leaves out). A sample's release log's order
+(`SAMPLE_LINK_FIRST`: `sample_link_first`, `Spot.Challenger.sampleLinkFirst`) is a sample's coins as `READ`'s
+with every tree round after the sample and each tree's link first (`_release_log`), then a link opened before the
+sample's last coin, a round of another stream opened first, each malformed request. The release logs of `RELEASED`,
+`READ` and `DRAW_COINS` hold tree lines among their roots and releases too, and `RELEASED` a root or a release
+relabelled a tree's. Each piece answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared
+too.
 """
 
 from __future__ import annotations
@@ -2216,7 +2218,9 @@ def coin_trees_case(rng: random.Random, name: str) -> Any:
 SESSION_TREES_NAMES = ["honest", "no-tree", "coin-tree", "other-tree", "link-root-f", "link-root-b", "link-tables",
                        "link-root-len", "points", "link-form", "round-coins", "round-n", "round-msg", "round-extra",
                        "round-swap", "stream-unknown", "stream-form", "streams-form", "unlinked", "shared", "unused",
-                       "record-type", "log-malformed", "request"]
+                       "record-type", "log-malformed", "opened-extra", "opened-link", "opened-unrecorded", "request"]
+#: each a session whose tree opens a round its record doesn't record, every other check passing (`EXTRA_OPENING`)
+EXTRA_OPENINGS = ["opened-extra", "opened-link", "opened-unrecorded"]
 
 
 def _resplit(rng: random.Random, record: dict) -> dict:
@@ -2346,6 +2350,12 @@ def _record_mutated(rng: random.Random, t: TreeSession, others: list[TreeSession
             r = rng.choice([_body(r, streams=DROP), {**r, "streams": None}, {**r, "streams": {}}])
         case "record-type":
             r = rng.choice([None, [], 5, "x", {}])
+        case "opened-unrecorded":
+            s = rng.choice([s for s in r["streams"] if s["rounds"]])
+            if rng.random() < 0.5:
+                s["rounds"].pop()
+            else:
+                r["streams"].remove(s)
     return r
 
 
@@ -2369,6 +2379,17 @@ def session_trees_case(rng: random.Random, name: str) -> Any:
         case "log-malformed":
             i = next(i for i, line in enumerate(log) if line == t.lines[0])
             log = log[:i + 1] + [_edit(t.lines[0], key=rng.randbytes(CT.KEY_BYTES).hex())] + log[i + 1:]
+        case "opened-extra" | "opened-link":
+            room = [(i, s) for i, (_, o) in enumerate(named)
+                    for s in ([CT.SESSION] if name == "opened-link" else o.spec["streams"][1:])
+                    if o.opened[s] < 1 << o.spec["rounds_log"]]
+            if not room:
+                return session_trees_case(rng, name)
+            i, s = rng.choice(room)
+            t = named[i][1]
+            after = max(log.index(line) for line in t.lines) + 1
+            t.open(s, rng.randint(0, t.spec["block"]), rng.randbytes(64))
+            log.insert(rng.randint(after, len(log)), t.lines[-1])
         case "link-root-len":
             _root_len_mutated(rng, t, records[k])
         case "honest" | "request" | "link-tables":
@@ -2483,6 +2504,18 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")
+
+
+@pytest.mark.parametrize("name", EXTRA_OPENINGS)
+def test_a_tree_opening_a_round_its_record_doesnt_is_refused_for_it(pieces, name):
+    """A session whose coin tree opens a round past what its record records, a stream's next round, the link's
+    ``session`` stream again or a round the record leaves out, passes every other check and is refused for that
+    (`EXTRA_OPENING`), Lean and Python alike; the honest sessions beside it pass."""
+    for seed in range(8):
+        kind, text = D.replay(SESSION_TREES, session_trees_case(random.Random(f"extra/{name}/{seed}"), name), pieces)
+        assert kind == "output" and json.loads(text)["reason"].endswith(Ch.EXTRA_OPENING), (name, seed, kind, text)
+        kind, text = D.replay(SESSION_TREES, session_trees_case(random.Random(f"extra/{name}/{seed}"), "honest"), pieces)
+        assert kind == "output" and json.loads(text) == {"reason": None}, (name, seed, kind, text)
 
 
 def test_a_resplit_link_is_refused_by_its_lengths_alone(pieces):

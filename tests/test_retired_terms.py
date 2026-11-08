@@ -209,8 +209,6 @@ ALLOWED: dict[str, str] = {
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
-    "the coin server keeps each round's bytes": "a row of Flock's Soundness README beside one a queued PR on next "
-                                                "rewrites; renamed after it lands",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
@@ -230,8 +228,6 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
-    "(the bytes say draw)": "`verity/ml/commitments/domains.py`'s comment over the POUW_*_SAMPLING tags, which names their "
-                            "bytes (`verity/pouw/pearl-c-draw/v1` and the rest)",
 }
 
 PENDING: dict[str, str] = {
@@ -454,7 +450,7 @@ def test_no_retired_word_in_a_new_lean_name():
 
 #: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
 #: (`_held`). A sampled proof block, and its proof, keep their words and aren't counted where "block" follows.
-SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 62, "SampledProofs": 15, "sampled-proofs": 507}
+SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 1134, "SampledProofs": 2530, "sampled-proofs": 507}
 _GAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 SPOT_SPELLINGS = {"sampled proof(s)": re.compile(rf"\bsampled{_GAP}proofs?\b(?!{_GAP}blocks?\b)", re.I),
                   "sampled_proofs": re.compile("sampled_proofs", re.I), "SampledProofs": re.compile("[Ss]ampledProofs"),

@@ -27,8 +27,9 @@ from verity.core.protocols.certifier.warden import (END, REFUSED, Shim, Warden, 
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
+#: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
-                      ingress_buckets=30, egress_cells=128)
+                      ingress_buckets=30, egress_cells=128, egress="bytes")
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
@@ -466,6 +467,36 @@ def test_the_fake_endpoint_reads_the_watermark_stream_to_its_end_and_answers_not
              "--windows", "1"]
     assert [ws.parser().parse_args(serve + extra).watermark for extra in ([], ["--watermark"])] == [False, True]
     assert ws.parser().parse_args(["rehearse", "--fake", "--out", "o", "--watermark"]).watermark
+
+
+def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_form(tmp_path):
+    """`serve` is the deployed network certifier, so its egress form is the egress record's id form unless `--egress`
+    names another; `rehearse` names its traffic's, id with `--ids` and bytes for its text, and passes it to its
+    `serve`, whose deployment's digest binds it. A text response through the id form fails its connection at its first
+    cell (format), and the check names it."""
+    serve = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00",
+             "--windows", "1"]
+    rehearse = ["rehearse", "--fake", "--out", "o"]
+    forms = [ws._params(ws.parser().parse_args(argv)).egress for argv in
+             (serve, serve + ["--egress", "bytes"], rehearse, rehearse + ["--ids"], rehearse + ["--egress", "id"])]
+    assert forms == ["id", "bytes", "bytes", "id", "id"]
+    for argv, form in ((rehearse, "bytes"), (rehearse + ["--ids"], "id")):
+        flags = ws._flags(ws.parser().parse_args(argv))
+        assert flags[flags.index("--egress") + 1] == form
+        assert ws._params(ws.parser().parse_args(serve + flags)) == ws._params(ws.parser().parse_args(argv))
+    with pytest.raises(SystemExit):
+        ws.parser().parse_args(serve + ["--egress", "text"])
+
+    out = tmp_path / "run"
+    out.mkdir()
+    gated = dataclasses.replace(PARAMS, egress="id")
+    requests = [ws.http_request({"prompt": "x"}, "h:1")]
+    warden = _run(out, tmp_path / "key", requests, [_response([" a"])], params=gated)
+    assert [(c["failed"], c["failed_at"]) for c in warden.log] == [("format", 0)]
+    deployment = json.loads((out / "deployment.json").read_text())
+    assert deployment["params"]["egress"] == "id" and deployment["digest"] == gated.digest.hex() != PARAMS.digest.hex()
+    problems = ws.check(out)["problems"]
+    assert any("connection 1 failed closed (format) at egress cell 0" in p for p in problems), problems
 
 
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():

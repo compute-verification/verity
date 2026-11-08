@@ -223,17 +223,6 @@ theorem v5Files_of_checks {tags : Tags} {cf pf : ByteArray} {tables : List (Stri
     cases hpub'
     exact hall n
 
-open FlockSoundness.Discharge.ZkHidden in
-/-- **`verify --zk` accepts at `own`, files and transcript**: the live audit's transcript (`LiveAcceptsZKP`), the files'
-rows, names and roots (`Flock.PortRoots.check`), and their form (`Flock.KsScope.check`), the last two refusals of
-`verify --zk`'s verdict. -/
-def LiveAcceptsKSP {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs) (own : Option ByteArray)
-    (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
-  LiveAcceptsZKP I own o ∧
-    Flock.PortRoots.check (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
-    ∃ count draw,
-      Flock.KsScope.check (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.publicFile I.tables count draw = .ok ()
-
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden

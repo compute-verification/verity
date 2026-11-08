@@ -1,4 +1,4 @@
-"""`spec_alert`: the DM Daniel gets when a push lands a change to what a guarantee says, and nothing for a move or a reprint."""
+"""`spec_alert`: the DM the spec's reader gets when a push lands a change to what a guarantee says, and nothing for a move or a reprint."""
 from __future__ import annotations
 
 import json
@@ -106,8 +106,8 @@ def test_a_lock_that_drops_its_readers_sends_nothing(tmp_path):
 
 
 def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or_is_first_recorded():
-    """LEAN-60: a premise outside `meaning` has only its own record's digest, so #4641's strengthened
-    `RecDeploy.PlainLeavesAdmitted` reached no DM. A changed digest is shown (tallied as rehashed when no Lean input
+    """A premise outside `meaning` has only its own record's digest, so a strengthened premise (such as
+    `RecDeploy.PlainLeavesAdmitted`) would reach no DM. A changed digest is shown (tallied as rehashed when no Lean input
     changed), and so is one first recorded; one a `reads` record holds shows as its definition, an unchanged one shows
     nothing, and a new one shows as a named assumption listed."""
     def doc(assumed: dict, defs: dict | None = None) -> dict:
@@ -197,7 +197,7 @@ def test_a_conjecture_added_or_marked_falsified_is_shown_with_its_reason():
 
 
 def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
-    """`verifier.allow` (LEAN-33) lists the `@[extern]` and `@[implemented_by]` constants the verifier may reach, which no
+    """`verifier.allow` lists the `@[extern]` and `@[implemented_by]` constants the verifier may reach, which no
     proof sees: an entry added is shown; one dropped, or the list unchanged, is not."""
     base = _doc({"P.t": _g("P.t : A", H1)}) | {"verifier": {"entries": ["P.verify"], "allow": ["Nat.add"]}}
     more = base | {"verifier": {"entries": ["P.verify"], "allow": ["ByteArray.push", "Nat.add"]}}
@@ -239,8 +239,8 @@ def _source(repo: Path, rel: str, text: str = "def x := 1\n") -> None:
 
 
 def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallied_and_not_listed(tmp_path):
-    """The audit regrouping its reads records (#1544) changed 116 definitions' hashes with no Lean source behind them, and
-    the DM would have listed every one; a Lean input changed in the push, or one outside the audit's own directory, lists
+    """The audit regrouping its reads records can change a hundred definitions' hashes with no Lean source behind them, and
+    the DM would list every one; a Lean input changed in the push, or one outside the audit's own directory, lists
     them as before."""
     repo = _repo(tmp_path)
     old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1, "P.E": H2}), "base")
@@ -262,8 +262,8 @@ def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallie
 
 
 def test_a_newly_pinned_dependency_bundle_is_a_lean_input_and_a_rekeyed_or_dropped_one_is_not(tmp_path):
-    """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins (top, 06:06Z): pinning
-    another one with no manifest change would otherwise show only as `rehashed`. #1544 re-keys two bundles and drops a pin."""
+    """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins: pinning another one with
+    no manifest change would otherwise show only as `rehashed`. Re-keying a bundle or dropping a pin is no Lean input."""
     repo = _repo(tmp_path)
     pins = lambda **deps: {"deps": {k: {"package": "pkg", "sha256": s} for k, s in deps.items()}}
     _commit(repo, spec.DEPS_PINS, pins(k1=H1, k2=H2), "pins")

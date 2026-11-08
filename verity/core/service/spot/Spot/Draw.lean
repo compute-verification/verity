@@ -258,14 +258,15 @@ def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray :
 
 /-- The Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
 `coins.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
-the sampling design is not exactly a one-stage law's keys (`coins._law_problem`), a subset exceeds the population, or a stratified
-or work sampling design isn't well formed over it (`strataProblem`). -/
+the sampling design is not exactly a one-stage law's keys (`coins._law_problem`), a subset samples no unit or exceeds the
+population, or a stratified or work sampling design isn't well formed over it (`strataProblem`). -/
 def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := do
   let kind := match getD law "law" with | .str s => s | _ => ""
   match kind with
     | "subset" =>
       if keys? law != some (sortStrings #["law", "k"]) then throw "a subset law is exactly {law, k}"
       let some k := nat? (getD law "k") | throw "a subset law's k is a natural number"
+      if k < 1 then throw "a subset law draws at least one unit"
       if population < k then throw s!"a subset draw of {k} exceeds the population of {population}"
       pure (Flock.Draw.Law.subset k)
     | "bernoulli" =>

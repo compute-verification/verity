@@ -40,6 +40,7 @@ public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
 public import Definitions.Spot
 public import Definitions.Claims
+public import Definitions.Claims.Encodings
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin

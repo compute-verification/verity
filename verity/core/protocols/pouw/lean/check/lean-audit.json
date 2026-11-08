@@ -1,5 +1,4 @@
 {
- "format": 1,
  "roots": ["PouwCheck", "PouwCheck.DifftestMain"],
  "exempt": {
   "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck",
@@ -112,7 +111,6 @@
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
- "guarantees": {},
  "dependencies": {
   "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
  }

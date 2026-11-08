@@ -7,7 +7,6 @@ import all Init.Data.Ord.String
 /-!
 # The design the sample runs is well formed (`Properties.Spot.DesignWellFormed`)
 
-* `parseDesign_k`: a sampling design `parseDesign` writes names a `k` of at least one, where it names one.
 * `derive_bounds`, `deriveWork_wf`, `workTable_floor`: the expansions' refusals: `1 ≤ k ≤ N`, a floor of at least one
   per stratum, and some work.
 * `strataOf_pos`, `partition_covered`: every stratum of an evaluated query has a unit: `TemplateQuery.evaluate` refuses
@@ -26,25 +25,6 @@ open Claims.Sampling
 
 theorem nat_toJson (m : ℕ) : nat? (Lean.toJson m) = some m := by
   simp [nat?, int?, Lean.toJson, Lean.JsonNumber.fromNat]
-
-theorem getD_k (v : Json) (m : ℕ) : getD (Json.mkObj [("law", v), ("k", Lean.toJson m)]) "k" = Lean.toJson m := (rfl)
-
-theorem getD_p (v : Json) : getD (Json.mkObj [("law", "bernoulli"), ("p", v)]) "k" = Json.null := (rfl)
-
-/-- **A sampling design `parseDesign` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
-`K ≥ 1`, and a Bernoulli law none. -/
-theorem parseDesign_k (t : String) (named : Json) (h : Select.parseDesign t = .ok named) (k : ℕ)
-    (hk : nat? (getD named "k") = some k) : 1 ≤ k := by
-  unfold Select.parseDesign at h
-  repeat' split at h
-  all_goals first
-    | exact absurd h (throw_ne _ _)
-    | exact absurd h (throw_bind_ne _ _ _)
-    | (simp only [pure, Except.pure, Except.ok.injEq] at h
-       subst h
-       first
-         | (rw [getD_p] at hk; simp [nat?, int?] at hk)
-         | (rw [getD_k, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all))
 
 /-- **`Flock.Draw.derive`'s bounds**: `1 ≤ k ≤ N`. -/
 theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
@@ -399,22 +379,16 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
 
 /-- **The population's first stage is well formed over its strata**: the sampling design the sample samples, over strata of sizes
 `ns` summing to `n`, each of at least one unit. -/
-theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
+theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (S : Array (String × Array (ℕ × ℕ)))
-    (hS : Partition.strata d query = .ok S) (hne : rule ≠ .all) (hnamed : rule.lawOver n = .ok named)
+    (hS : Partition.strata d query = .ok S)
     (hd : Draw.deriveLaw d query named table = .ok derived) (hp : Draw.flockLaw (lawObj named derived) n = .ok parsed)
     (hsum : strataSize S = n) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m) :
     (oneStageOf (derived.getD parsed)).WellFormed (S.toList.map fun p => rsSize p.2) := by
   have hsum' : (S.toList.map fun p => rsSize p.2).sum = n := hsum
   rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
-  · have hnamed' : ∃ t, Select.parseDesign t = .ok named := by
-      cases rule with
-      | all => exact absurd rfl hne
-      | law t => exact ⟨t, hnamed⟩
-      | twoStage _ t _ => exact ⟨t, hnamed⟩
-    obtain ⟨t, ht⟩ := hnamed'
-    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, hnat⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
-    · exact ⟨parseDesign_k t named ht k hnat, by rw [hsum']; exact hk⟩
+  · rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, -, hk0⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    · exact ⟨hk0, by rw [hsum']; exact hk⟩
     · exact ⟨hb, hab⟩
     · exact absurd hk hk1
     · exact absurd hk hk2
@@ -451,7 +425,7 @@ theorem designWellFormed : DesignWellFormed := by
   set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) with hS
   have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
     strataOf_perm _ _ (partition_evaluate_tiles d query rs he)
-  obtain ⟨n, named, derived, hn, hnamed, hd, hDc⟩ := slotDesign_ok rule d query table D hD
+  obtain ⟨n, named, derived, hn, -, hd, hDc⟩ := slotDesign_ok rule d query table D hD
   have hnU : n = (popUnits S).length := by
     rw [units_eq d query rs he] at hn
     rw [hperm.length_eq, List.length_range']
@@ -464,10 +438,9 @@ theorem designWellFormed : DesignWellFormed := by
     exact strataOf_pos _ (partition_covered d query rs he) p hp
   suffices h : ∀ first : OneStage, first.WellFormed (S.toList.map fun p => rsSize p.2) →
       (⟨[first, .all]⟩ : Design).WellFormed (slotPartition { classes := #[pop, inputClass d] }) by
-    rcases hDc with ⟨-, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
+    rcases hDc with ⟨-, rfl⟩ | ⟨-, parsed, hp, rfl⟩
     · exact h .all trivial
-    · exact h _ (first_wf rule d query table n named derived parsed S (strata_eq d query rs he) hne hnamed hd hp
-        hsum hpos)
+    · exact h _ (first_wf d query table n named derived parsed S (strata_eq d query rs he) hd hp hsum hpos)
   intro first hf
   refine ⟨rfl, fun p hp => ?_⟩
   simp only [slotPartition, List.map_cons, List.map_nil, List.zip_cons_cons, List.zip_nil_left, List.mem_cons,

@@ -104,6 +104,7 @@ public import Proofs.Flock.Soundness.TmplNetOK
 public import Proofs.Flock.Soundness.TmplUnitAt
 public import Proofs.Flock.Soundness.TmplLayout
 public import Proofs.Flock.Soundness.ParseStmt
+public import Proofs.Flock.Soundness.TmplSpec
 public import Proofs.Flock.Soundness.ExecTyped
 public import Proofs.Flock.Soundness.ExecTemplate
 public import Proofs.Flock.Soundness.ExecTemplatePlace
