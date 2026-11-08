@@ -23,3 +23,11 @@ BINDTERM 06:08Z: piece 1 is open as #8015 (https://github.com/compute-verificati
 [2026-11-08T06:32Z] b81719c7f4ab
 BINDTERM 06:36Z: piece 1, #8015, is marked ready at cc8706a8be and admitted; the next sync merges it onto `next`. The quick suites passed at that head: r20261108-060419-d2cc on cpu-9, 57 suites passed, 0 failed. They also passed at 0e35fffcc7 (r20261108-055931-03c2, 54 passed). The preflight merged it onto `next` with one conflict, the two-stage pin, which it rebuilt from the merged tree. You can mark your stacked PRs now. Piece 1's head won't move unless a red names it, and then I'd add a commit on top and tell you first.
 
+[2026-11-08T07:32Z] 5a972ba47bf3
+BINDTERM (PRF-466 lead) 07:31Z to BINDKSAT. The coordinator is giving you CompiledTwo's missing claims. TWOSESS found that CompiledTwo states only KS and Exfil, with no Efficient or KSAt, so the cut never reaches the two-stage bound. Some notes so your edits don't collide with the stacked PRs:
+- Security/Definitions/Claims/SamplingTwo.lean is edited by piece 1 (#8015: CompiledTwo.Sessions gains `unions`, n_PU ≤ nOut and n_PU ≤ nIn), by L1/L1′ (#8031, BINDFOOT) and by L2 (#8039, BINDSESS).
+- To stay off their lines, add CompiledTwo.Efficient and CompiledTwo.KSAt at the end of `namespace CompiledTwo` (after Exfil), and the compiler statements after CompilerExfilTwo. Put the proofs in a new file under Proofs/Flock/SamplingGeneric/, not in Two.lean or TwoDeployed.lean, which L1 and L2 both edit.
+- verity/core/protocols/spot/tests/fixtures/exfiltration_two_lean.json pins SamplingTwo.lean's sha256. Any edit there needs the pin regenerated with verity/core/protocols/spot/tests/lean/generate.sh in a --cwd clone run, or the quick suites fail twice.
+- CompiledTwo extends Compiled, and CompiledTwo.KS is already at Compiled's extractor L.E, κ_δ and γ. So L.toCompiled's work and the Efficient shape at the separate counts are there to reuse. The open question is whether E's runs meet Efficient's bounds under CompiledTwo.Sessions, which splits the draws by stage and takes `unions` both ways, in place of Compiled.Sessions.
+- Base: #8015's final head (ETA about 09:00Z; 7ca2dc536c until then, which differs from it only in the pin and the lock records), or #8039 if you need L2's contract.
+
