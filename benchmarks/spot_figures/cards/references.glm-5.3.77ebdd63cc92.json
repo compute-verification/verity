@@ -1,0 +1,39 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "references",
+ "model": "GLM-5.3",
+ "status": "measured",
+ "provisional": true,
+ "source": "Exfiltration lines (the scheduler's advice caps): the advice term of the network leak bound as registered caps on v1, the scheduler's advice encoding, each the smallest cap a 600 s machine-window that admits every honest window measured on GLM-5.3 at TP8, without the certified tick. With the certified tick, with certified arrivals (their run with the real network certifier is pending) and the hits derived by the registered pool model, the advice is 0 bits in every window, at every scope, and has no line: v1 then sends no prefix-cache hit, each being the replay's from the registered KV pool, so every coded symbol has one value. The verifier recomputes those hits in Python, which the advice claim trusts; Lean doesn't check that step. Re-encoded over the measured traces, the tick's 90 bits over three 600 s windows and its 300 over twenty-three 60 s windows both fall to 0, and every trace round-trips (runs r20261107-204341-1fd1, r20261107-204925-11cd and r20261107-211843-d3b6). Without certified arrivals the server picks each request's admission step and its order within the step: up to 8,721 bits a 600 s window at capacity under the tick (run r20261108-000518-c194). The response length is priced at 0 by a stop rule no circuit checks yet. The bound counts the advices the registered codec admits: at most 2^c strings are charged c bits or fewer (Kraft; the premise hAs of EncardAccSeqsSampledLe, Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean), and the codec and its cap are registered before the first window, with advice over the cap refused (certifier PROTOCOL.md, A7; the compile slice proves each window's charge at most c_w). An adversarial prover picks any advice up to c_w, so each line is c_w times the scope's machine-windows, not the honest mean; an honest window above its cap is refused (completeness, not soundness). The compiler doesn't read v1 yet: each cap is what it will charge once it does. Machine-windows: figure1.scopes on the GLM-5.3 workload card, 4.724e+10 a world week and 1.26e+07 a datacenter week (12,500 machines), 8,236 requests a machine-window at the census's rate. The measured windows hold at most 4,346 requests, fewer than that: a window with more fits the cap if its advice doesn't grow with its requests, and above capacity, where a standing queue leaves little timing choice, it fell. Superseded: art:e2d8a4de324ec7991c10d77174fc2a1ad824f16d73d5d12adfc28270bb90e44d's caps of 0.1, 6, 40 bits and 8 kbit a request, from vLLM's scheduler serving Llama 3 models on the RTX PRO 6000 (the 6-bit one with the KV pool in the circuit, designed, not built; the 8-kbit one the raw schedule, which v1's exact replan makes unneeded).",
+ "runs": [
+  "r20261107-122301-1f31",
+  "r20261107-115356-82d6",
+  "r20261107-163938-3ff9",
+  "r20261107-204341-1fd1",
+  "r20261107-204925-11cd",
+  "r20261107-211843-d3b6",
+  "r20261107-235451-1a69",
+  "r20261108-000518-c194"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "lines": [
+   {
+    "panel": "exfiltration",
+    "label": "Advice cap 5,582 bits/window (v1, measured on GLM-5.3 TP8)",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 263700000000000.0,
+     "world month": 1130000000000000.0,
+     "world year": 1.375e+16,
+     "datacenter week": 70330000000.0,
+     "datacenter month": 301400000000.0,
+     "datacenter year": 3667000000000.0
+    },
+    "source": "A registered cap of c_w = 5,582 bits a 600 s machine-window on v1, the largest of the 21 honest windows (at capacity, async, its first window: 5,582 bits over 3,309 requests), so every honest window fits; the line is c_w times the scope's 600 s machine-windows, the most any accepted advice is charged. Measured on GLM-5.3 at TP8 on one 8xH200 node (FlashInfer FP8, prefix caching on, the corpus recorder) over six served sessions, half load, at capacity and above it, each sync and async, and the tick set's arrival trace at capacity, three 600 s windows each, the last its drain; each window is charged v1's held-out bits, each trace's book fit on the other traces of its set. The windows run 0.108 to 2.742 bits a request and hold 310 to 4,346 requests; above capacity a standing queue leaves little timing choice, so the bits fall. Every trace round-trips, and vLLM's replanner rebuilds all 41,502 steps of 7 traces exactly from v1; the 23 kernel launch choices are functions of rows and config (class G), so kernel statics add no bits."
+   }
+  ],
+  "caption": "The advice line (dashed) is a registered cap of 5,582 bits a 600 s machine window on v1, the scheduler's advice encoding, without the certified tick, times the scope's machine windows: the most any accepted advice is charged, and the smallest cap that admits each of the 21 honest windows measured serving GLM-5.3 at TP8, from half load to above capacity. With the certified tick, with certified arrivals (their run with the real network certifier is pending) and the hits derived by the registered pool model, the advice is 0 bits in every window, at every scope, and has no line: v1 then sends no prefix-cache hit, each being the replay's from the registered KV pool, so every coded symbol has one value. The verifier recomputes those hits in Python, which the advice claim trusts; Lean doesn't check that step. Re-encoded over the measured traces, the tick's 90 bits over three 600 s windows and its 300 over twenty-three 60 s windows both fall to 0, and every trace round-trips (runs r20261107-204341-1fd1, r20261107-204925-11cd and r20261107-211843-d3b6). Without certified arrivals the server picks each request's admission step and its order within the step: up to 8,721 bits a 600 s window at capacity under the tick (run r20261108-000518-c194). The response length is priced at 0 by a stop rule no circuit checks yet. The rule is in review in vLLM's codec, and the compiler doesn't read v1 yet, so each is what it will charge once it does. v1 replans every traced step exactly, and the 23 kernel launch choices are functions of rows and config, so kernel statics add no bits."
+ },
+ "art": "art:77ebdd63cc929b7cb8a7f47daa12df1afceb57c7689fc9494eb00dcb19153daf"
+}

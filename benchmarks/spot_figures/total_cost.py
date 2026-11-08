@@ -190,9 +190,9 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     ticks = {"part": "certified-tick rule", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
-                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8 it leaves "
-                       "0 bits of advice in every window, with v1 sending no prefix-cache hit (each is the replay's, "
-                       "from the registered KV pool)"}
+                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with "
+                       "certified arrivals, it leaves 0 bits of advice in every window, with v1 sending no prefix-cache "
+                       "hit (each is the replay's, derived by the registered pool model)"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
     edge = {"part": "step record, token commits and replay-block edge snapshot",
