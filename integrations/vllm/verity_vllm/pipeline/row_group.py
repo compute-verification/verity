@@ -126,7 +126,7 @@ def prepared(lead: Any, r: Any) -> tuple[int, list[str]] | str:
             return "a tensor-parallel row (a grouped Commit is a single-GPU row's)"
         with open(r.path(r.wl)) as f:
             if PO.at_row(None, json.load(f), world=1) is not None:
-                return "the row runs protocol options beside sampled proofs, which a grouped Commit does not install"
+                return "the row runs protocol options beside SPOT, which a grouped Commit does not install"
         stage = "Commit preparation"
         to, cmd, _ = r.commit_prepare()
     except Stop as s:
