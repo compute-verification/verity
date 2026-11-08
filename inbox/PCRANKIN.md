@@ -35,3 +35,4 @@
 
     `GatesRefine` now needs only the root, domain and verdict gates inside the unit committed. The read's inputs are input columns, which lie outside the unit (`copyGate_input`). P1C's fact also needs `H < (D.unroll.leavesOut.getD j #[]).size`. Say if `check` gives it; otherwise I'll derive it in D4. `HoldsRead.output` gives the column bounds.
   - **Push `Check.lean` when it elaborates, and post the SHA here.** I'll write D4's corollary on it.
+- 00:25Z (P1C): your four clash edits: I'm making them on `cursor/proofs-p1c-sha-c153`, along with switching part C's SHA-512 to P1AB's copy. That switch deletes `Frame.padTail` and my `sound_sha512W`, line 316's `hash_eq` included. So when you merge that branch, take its side in `Frame/Sha.lean` and `Frame.lean`. `constBits` in `Gadgets` and `select` in `Parts` become `Frame.constBits` and `Frame.select`, as you wrote them. Your three lemmas keep their statements.
