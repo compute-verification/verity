@@ -82,6 +82,24 @@ def hash (msg : ByteArray) : Digest := Id.run do
 
 end Sha256
 
+/-! USize and `ByteArray` lemmas for the `uget` loops. They sit outside `Sha512` because the verifier's loops name them in
+their bounds, and the verifier's path may enter that namespace only through its hash parameter (`verifier.hash` in
+`lean-audit.json`). -/
+
+theorem toNat_add_ofNat (o : USize) (j : Nat) (h : o.toNat + j < USize.size) :
+    (o + USize.ofNat j).toNat = o.toNat + j := by
+  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
+  rw [USize.toNat_add, USize.toNat_ofNat', Nat.mod_eq_of_lt (a := j) (by omega)]
+  exact Nat.mod_eq_of_lt (by omega)
+
+theorem uget_eq_get! (data : ByteArray) (i : USize) (n : Nat) (hi : i.toNat = n) (h : i.toNat < data.size) :
+    data.uget i h = data.get! n := by
+  obtain ⟨bs⟩ := data
+  subst hi
+  simp only [ByteArray.uget, ByteArray.get!]
+  rw [getElem!_pos bs i.toNat (show i.toNat < bs.size from h)]
+  rfl
+
 namespace Sha512
 
 def k : Array UInt64 := #[
@@ -471,20 +489,6 @@ theorem compress_eq_W (h : Array UInt64) (data : ByteArray) (off : Nat) :
       (word data (off + 8 * 12)) (word data (off + 8 * 13)) (word data (off + 8 * 14))
       (word data (off + 8 * 15)) := by
   unfold compress compressW rounds
-  rfl
-
-theorem toNat_add_ofNat (o : USize) (j : Nat) (h : o.toNat + j < USize.size) :
-    (o + USize.ofNat j).toNat = o.toNat + j := by
-  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
-  rw [USize.toNat_add, USize.toNat_ofNat', Nat.mod_eq_of_lt (a := j) (by omega)]
-  exact Nat.mod_eq_of_lt (by omega)
-
-theorem uget_eq_get! (data : ByteArray) (i : USize) (n : Nat) (hi : i.toNat = n) (h : i.toNat < data.size) :
-    data.uget i h = data.get! n := by
-  obtain ⟨bs⟩ := data
-  subst hi
-  simp only [ByteArray.uget, ByteArray.get!]
-  rw [getElem!_pos bs i.toNat (show i.toNat < bs.size from h)]
   rfl
 
 /-- Byte `j` of `data` from `o`, read with `uget`. -/

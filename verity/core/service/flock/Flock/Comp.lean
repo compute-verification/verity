@@ -48,18 +48,18 @@ it, so it stays directly below `rd32`. -/
 @[inline] def rd32U (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
     Nat :=
   ((data.uget o (by omega)).toUInt32 |||
-    ((data.uget (o + USize.ofNat 1) (by rw [Sha512.toNat_add_ofNat o 1 (by omega)]; omega)).toUInt32 <<< 8) |||
-    ((data.uget (o + USize.ofNat 2) (by rw [Sha512.toNat_add_ofNat o 2 (by omega)]; omega)).toUInt32 <<< 16) |||
-    ((data.uget (o + USize.ofNat 3) (by rw [Sha512.toNat_add_ofNat o 3 (by omega)]; omega)).toUInt32 <<< 24)).toNat
+    ((data.uget (o + USize.ofNat 1) (by rw [toNat_add_ofNat o 1 (by omega)]; omega)).toUInt32 <<< 8) |||
+    ((data.uget (o + USize.ofNat 2) (by rw [toNat_add_ofNat o 2 (by omega)]; omega)).toUInt32 <<< 16) |||
+    ((data.uget (o + USize.ofNat 3) (by rw [toNat_add_ofNat o 3 (by omega)]; omega)).toUInt32 <<< 24)).toNat
 
 theorem rd32U_eq (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
     rd32U data o h hs = rd32 data o.toNat := by
   rw [← rd32Fast_eq]
   unfold rd32U rd32Fast
-  rw [Sha512.uget_eq_get! data o o.toNat rfl,
-    Sha512.uget_eq_get! data _ (o.toNat + 1) (Sha512.toNat_add_ofNat o 1 (by omega)),
-    Sha512.uget_eq_get! data _ (o.toNat + 2) (Sha512.toNat_add_ofNat o 2 (by omega)),
-    Sha512.uget_eq_get! data _ (o.toNat + 3) (Sha512.toNat_add_ofNat o 3 (by omega))]
+  rw [uget_eq_get! data o o.toNat rfl,
+    uget_eq_get! data _ (o.toNat + 1) (toNat_add_ofNat o 1 (by omega)),
+    uget_eq_get! data _ (o.toNat + 2) (toNat_add_ofNat o 2 (by omega)),
+    uget_eq_get! data _ (o.toNat + 3) (toNat_add_ofNat o 3 (by omega))]
 
 theorem toNat_toUSize (s : Nat) (h : s < USize.size) : s.toUSize.toNat = s := by
   have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
@@ -70,8 +70,8 @@ theorem toNat_toUSize (s : Nat) (h : s < USize.size) : s.toUSize.toNat = s := by
     (k : Nat) → (o : USize) → o.toNat + 4 * k ≤ data.size → o.toNat + 4 * k < USize.size → β → β
   | 0, _, _, _, acc => acc
   | k + 1, o, h, hs, acc =>
-    rowFoldU data f k (o + USize.ofNat 4) (by rw [Sha512.toNat_add_ofNat o 4 (by omega)]; omega)
-      (by rw [Sha512.toNat_add_ofNat o 4 (by omega)]; omega) (f acc (rd32U data o (by omega) (by omega)))
+    rowFoldU data f k (o + USize.ofNat 4) (by rw [toNat_add_ofNat o 4 (by omega)]; omega)
+      (by rw [toNat_add_ofNat o 4 (by omega)]; omega) (f acc (rd32U data o (by omega) (by omega)))
 
 theorem rowFoldU_eq {β : Type} (data : ByteArray) (s : Nat) (f : β → Nat → β) :
     ∀ (k t : Nat) (o : USize), o.toNat = s + 4 * t → (h : o.toNat + 4 * k ≤ data.size) →
@@ -80,7 +80,7 @@ theorem rowFoldU_eq {β : Type} (data : ByteArray) (s : Nat) (f : β → Nat →
   | 0, _, _, _, _, _, _ => rfl
   | k + 1, t, o, ho, h, hs, acc => by
     rw [rowFoldU, List.range'_succ, List.foldl_cons, rd32U_eq, ho,
-      rowFoldU_eq data s f k (t + 1) _ (by rw [Sha512.toNat_add_ofNat o 4 (by omega), ho]; omega)]
+      rowFoldU_eq data s f k (t + 1) _ (by rw [toNat_add_ofNat o 4 (by omega), ho]; omega)]
 
 /-- `f` over the `k` numbers from `i`, without building the list. -/
 @[specialize] def foldFrom {β : Type} (f : β → Nat → β) : Nat → Nat → β → β

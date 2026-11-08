@@ -56,8 +56,8 @@ theorem allFrom_eq (f : Nat → Bool) : ∀ k i, allFrom f k i = (List.range' i 
   | 0, _, _, _ => true
   | k + 1, o, h, hs =>
     p (rd32U data o (by omega) (by omega)) &&
-      rowAllU data p k (o + USize.ofNat 4) (by rw [Sha512.toNat_add_ofNat o 4 (by omega)]; omega)
-        (by rw [Sha512.toNat_add_ofNat o 4 (by omega)]; omega)
+      rowAllU data p k (o + USize.ofNat 4) (by rw [toNat_add_ofNat o 4 (by omega)]; omega)
+        (by rw [toNat_add_ofNat o 4 (by omega)]; omega)
 
 theorem rowAllU_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ (k t : Nat) (o : USize), o.toNat = s + 4 * t →
     (h : o.toNat + 4 * k ≤ m.data.size) → (hs : o.toNat + 4 * k < USize.size) →
@@ -65,7 +65,7 @@ theorem rowAllU_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ (k t : Nat) (
   | 0, _, _, _, _, _ => rfl
   | k + 1, t, o, ho, h, hs => by
     rw [rowAllU, rowAllGo, rd32U_eq, ho,
-      rowAllU_eq m s p k (t + 1) _ (by rw [Sha512.toNat_add_ofNat o 4 (by omega), ho]; omega)]
+      rowAllU_eq m s p k (t + 1) _ (by rw [toNat_add_ofNat o 4 (by omega), ho]; omega)]
 
 /-- `rowAllGo m s p k 0`, with `rowAllU` where the row lies in `m.data` and its offsets fit a `USize`. -/
 @[inline] def rowAll (m : Sparse) (s : Nat) (p : Nat → Bool) (k : Nat) : Bool :=
