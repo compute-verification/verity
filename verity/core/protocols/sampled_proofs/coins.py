@@ -368,7 +368,7 @@ def draw_seed_salt(coins: ChallengerCoins, window: str) -> bytes:
     """A window's seed salt, drawn at the window's open, before it serves: the first coin of the challenger's
     `SEED_SALT_FAMILY` (`coins`, over that family of the window's session), opened after the window's open root `window`
     (lowercase hex, from the challenger's signed open) and read whole (`OwnRandomness`), with no derivation. The open
-    root is the only root a window has before it serves, so the salt is fixed before any request is served, and no
+    root is the only root a window has before it serves, so the salt is fixed before the window serves, and no
     sample reads its family: a sample's coins stay their own family's, released after the registration's commitment.
     Raises `CoinError` for coins of another family, a window root in another form, or a family with a coin open already
     (a window's salt is drawn once, and nothing redraws it)."""
