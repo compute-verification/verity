@@ -36,6 +36,8 @@ them, and `Q` returns one of them exactly when `P` returns it. Then:
   is unit `ρ`, with room in each member for its units), request `ρ`'s cell of member `t` is `filesBlockOf ms ns ρ t`
   on `[0, n_t)`, injectively (`injective_filesBlockOf`), and an input slot's cells are empty
   (`Claims.Sampling.cell_eq_union`).
+* `replayOf_filesReplay`, `replayOf_filesReplay_unit`: there, proof block `v` replays in request `ρ` exactly when it is
+  one of `ρ`'s units, `filesBlockOf ms ns ρ t p` (`Claims.Sampling.replayOf_eq_some_iff_union`).
 -/
 
 @[expose] public section
@@ -639,6 +641,24 @@ theorem cell_filesReplay_input (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u
     (hbu : b.unit = none) : cell (membersPart ms) (filesReplay ms ns l) ρ t = ∅ := by
   rw [cell_filesReplay_eq ms hnd hne hfit (Array.getElem?_eq_some_iff.1 hb).1]
   simp [slotFiles, hb, hbu]
+
+/-- **Proof block `v` replays in request `ρ`** exactly when it is one of slot `ρ`'s proof blocks. -/
+theorem replayOf_filesReplay (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {v ρ : ℕ} (hv : v < (membersPart ms).blocks.length) (hρ : ρ < l.blocks.size) :
+    replayOf (membersPart ms) (filesReplay ms ns l) v = some ρ ↔ v ∈ slotFiles ms ns l ρ :=
+  replayOf_eq_some_iff_union (I := slotFiles ms ns l) hnd hne (fun _ h => getElem?_blocks_filesReplay ms ns l h)
+    (fun _ _ _ _ h12 _ hw => not_mem_slotFiles ms hfit h12 hw) hv (by rw [length_blocks_filesReplay]; exact hρ)
+
+/-- **Proof block `v` replays in request `ρ`'s unit slot** exactly when it is unit `p < n_t` of some member `t`:
+`v = filesBlockOf ms ns ρ t p`. -/
+theorem replayOf_filesReplay_unit (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {v ρ : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b)
+    (hbu : b.unit = some ρ) (hv : v < (membersPart ms).blocks.length) :
+    replayOf (membersPart ms) (filesReplay ms ns l) v = some ρ ↔
+      ∃ t, t < ms.length ∧ ∃ p, p < ns.getD t 0 ∧ filesBlockOf ms ns ρ t p = v := by
+  rw [replayOf_filesReplay ms hnd hne hfit hv (Array.getElem?_eq_some_iff.1 hb).1,
+    show slotFiles ms ns l ρ = filesUnits ms ns ρ by simp [slotFiles, hb, hbu]]
+  exact mem_filesUnits ms
 
 end files
 
