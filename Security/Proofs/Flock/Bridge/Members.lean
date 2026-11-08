@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Claims.SamplingTwo
-public import Properties.SampledProofs.Members
-public import Proofs.Properties.SampledProofs.Bits
+public import Properties.Spot.Members
+public import Proofs.Properties.Spot.Bits
 public import Proofs.Flock.Bridge.BitsKeyProg
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Claims.Bridge.WrongSet
@@ -11,7 +11,7 @@ import Proofs.Flock.SamplingBoundary
 /-!
 # Members side by side lower each member's units as its own program does
 
-`Properties.SampledProofs.bitsProgs ms` puts an audit's members' programs side by side. A program `P` sits in a program
+`Properties.Spot.bitsProgs ms` puts an audit's members' programs side by side. A program `P` sits in a program
 `Q` from `b` (`SitsAt Q b P`) when `Q`'s gates from `b` are `P`'s reading `b` later, no other gate of `Q` reads one of
 them, and `Q` returns one of them exactly when `P` returns it. Then:
 
@@ -34,7 +34,7 @@ them, and `Q` returns one of them exactly when `P` returns it. Then:
 
 namespace Flock.Bridge.Members
 
-open Claims.Sampling Properties.SampledProofs FlockSoundness.Discharge.ZkLink
+open Claims.Sampling Properties.Spot FlockSoundness.Discharge.ZkLink
 
 /-! ## A gate shifted -/
 
@@ -337,16 +337,16 @@ theorem topological_memberProg (c : _root_.Flock.Circuit) {hU : Built c.unit} (h
 
 end keyProg
 
-theorem offsetOf_bitsProgs (ms : SampledProofs.Bits.Members) (m : ℕ) :
-    offsetOf (ms.map fun ci => memberProg ci.1 ci.2.size) m = SampledProofs.Bits.base ms m := by
-  simp only [offsetOf, SampledProofs.Bits.base, ← List.map_take, List.map_map]
+theorem offsetOf_bitsProgs (ms : Spot.Bits.Members) (m : ℕ) :
+    offsetOf (ms.map fun ci => memberProg ci.1 ci.2.size) m = Spot.Bits.base ms m := by
+  simp only [offsetOf, Spot.Bits.base, ← List.map_take, List.map_map]
   congr 1
-  exact List.map_congr_left fun ci _ => Properties.SampledProofs.SecurityProofs.bitsProg_length _ _
+  exact List.map_congr_left fun ci _ => Properties.Spot.SecurityProofs.bitsProg_length _ _
 
 /-- **Member `m`'s program sits in `bitsProgs ms` from `Bits.base ms m`.** -/
-theorem sitsAt_bitsProgs (ms : SampledProofs.Bits.Members)
+theorem sitsAt_bitsProgs (ms : Spot.Bits.Members)
     (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological) (m : ℕ) (hm : m < ms.length) :
-    SitsAt (bitsProgs ms) (SampledProofs.Bits.base ms m) (memberProg ms[m].1 ms[m].2.size) := by
+    SitsAt (bitsProgs ms) (Spot.Bits.base ms m) (memberProg ms[m].1 ms[m].2.size) := by
   have h := sitsAt_sideBySide (ms.map fun ci => memberProg ci.1 ci.2.size)
     (fun p hp => by obtain ⟨ci, hci, rfl⟩ := List.mem_map.1 hp; exact htop ci hci) m (by simpa using hm)
   rw [offsetOf_bitsProgs, List.getElem_map] at h
@@ -356,15 +356,15 @@ theorem sitsAt_bitsProgs (ms : SampledProofs.Bits.Members)
 lowering is member `m`'s program, `Bits.base ms m` later, are correct on every committed values that carry `C`'s
 evaluation at the wires `φ` maps their positions to, `Bits.base ms m` earlier, as Bridge's `lowers` has them in the
 member's own program. -/
-theorem lowers_bitsProgs (ms : SampledProofs.Bits.Members)
+theorem lowers_bitsProgs (ms : Spot.Bits.Members)
     (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological) (m : ℕ) (hm : m < ms.length)
     {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
     (hC : progOf C κ = memberProg ms[m].1 ms[m].2.size) {k : ℕ} (P : FlockSoundness.Audit.Partition C k)
     (u : Fin k) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g) (Xv : Fin C.N → Bool)
     (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) →
       C.eval Xv a = b) :
-    WrongSet.Lowers (bitsProgs ms) ((unitGates P u).map (SampledProofs.Bits.base ms m + ·))
-      (fun j => φ (j - SampledProofs.Bits.base ms m)) Xv := by
+    WrongSet.Lowers (bitsProgs ms) ((unitGates P u).map (Spot.Bits.base ms m + ·))
+      (fun j => φ (j - Spot.Bits.base ms m)) Xv := by
   have hL := Flock.Bridge.lowers (κ := κ) P u φ hφ Xv hκ
   rw [hC] at hL
   exact (sitsAt_bitsProgs ms htop m hm).lowers (htop _ (List.getElem_mem hm))
@@ -379,14 +379,14 @@ theorem getElem?_flatMap_range {α : Type _} (f : ℕ → List α) {N m u : ℕ}
     List.getElem?_append_right (by rw [List.length_flatMap]; omega), List.length_flatMap, Nat.add_sub_cancel_left,
     List.range_succ_eq_map, List.map_cons, List.flatMap_cons, Nat.add_zero, List.getElem?_append_left hu]
 
-variable (ms : SampledProofs.Bits.Members)
+variable (ms : Spot.Bits.Members)
 
 theorem length_memberBlocks {m : ℕ} (hm : m < ms.length) : (memberBlocks ms m).length = ms[m].2.size := by
   simp [memberBlocks, List.getElem?_eq_getElem hm]
 
 theorem getElem?_memberBlocks {m u : ℕ} (hm : m < ms.length) (hu : u < ms[m].2.size) :
-    (memberBlocks ms m)[u]? = some ((SampledProofs.Bits.blockOf (SampledProofs.Bits.keyProg ms[m].1 ms[m].2.size)
-      (SampledProofs.Bits.consts ms[m].1 ms[m].2.size) u).map (SampledProofs.Bits.base ms m + ·)) := by
+    (memberBlocks ms m)[u]? = some ((Spot.Bits.blockOf (Spot.Bits.keyProg ms[m].1 ms[m].2.size)
+      (Spot.Bits.consts ms[m].1 ms[m].2.size) u).map (Spot.Bits.base ms m + ·)) := by
   simp [memberBlocks, List.getElem?_eq_getElem hm, hu]
 
 theorem unitBase_eq {m : ℕ} (hm : m ≤ ms.length) :
@@ -408,8 +408,8 @@ theorem blocks_membersPart : (membersPart ms).blocks = (List.range ms.length).fl
 `Bits.base ms m` later. -/
 theorem getElem?_blocks_membersPart {m u : ℕ} (hm : m < ms.length) (hu : u < ms[m].2.size) :
     (membersPart ms).blocks[unitBase ms m + u]? =
-      some ((SampledProofs.Bits.blockOf (SampledProofs.Bits.keyProg ms[m].1 ms[m].2.size)
-        (SampledProofs.Bits.consts ms[m].1 ms[m].2.size) u).map (SampledProofs.Bits.base ms m + ·)) := by
+      some ((Spot.Bits.blockOf (Spot.Bits.keyProg ms[m].1 ms[m].2.size)
+        (Spot.Bits.consts ms[m].1 ms[m].2.size) u).map (Spot.Bits.base ms m + ·)) := by
   rw [blocks_membersPart, unitBase_eq ms hm.le,
     getElem?_flatMap_range _ hm (by rw [length_memberBlocks ms hm]; exact hu), getElem?_memberBlocks ms hm hu]
 
@@ -438,12 +438,12 @@ theorem stratumOf_membersPart {m u : ℕ} (hm : m < ms.length) (hu : u < ms[m].2
   exact stratumIdx_sum_take_add _ m u (by simpa using hm) (by simpa using hu)
 
 theorem base_succ {m : ℕ} (hm : m < ms.length) :
-    SampledProofs.Bits.base ms (m + 1) =
-      SampledProofs.Bits.base ms m + (memberProg ms[m].1 ms[m].2.size).gates.length := by
+    Spot.Bits.base ms (m + 1) =
+      Spot.Bits.base ms m + (memberProg ms[m].1 ms[m].2.size).gates.length := by
   rw [← offsetOf_bitsProgs, ← offsetOf_bitsProgs]
   simp [offsetOf, List.take_add_one, List.getElem?_eq_getElem hm]
 
-theorem base_mono {m m' : ℕ} (h : m ≤ m') : SampledProofs.Bits.base ms m ≤ SampledProofs.Bits.base ms m' := by
+theorem base_mono {m m' : ℕ} (h : m ≤ m') : Spot.Bits.base ms m ≤ Spot.Bits.base ms m' := by
   rw [← offsetOf_bitsProgs, ← offsetOf_bitsProgs]
   unfold offsetOf
   rw [← List.take_append_drop m ((ms.map fun ci => memberProg ci.1 ci.2.size).take m'), List.take_take,
@@ -454,9 +454,9 @@ theorem base_mono {m m' : ℕ} (h : m ≤ m') : SampledProofs.Bits.base ms m ≤
 `p`. -/
 theorem membersConsts_base {m p : ℕ} (hm : m < ms.length)
     (hp : p < (memberProg ms[m].1 ms[m].2.size).gates.length) :
-    membersConsts ms (SampledProofs.Bits.base ms m + p) = SampledProofs.Bits.consts ms[m].1 ms[m].2.size p := by
-  have hf : (List.range ms.length).find? (fun m' => decide (SampledProofs.Bits.base ms m + p <
-      SampledProofs.Bits.base ms (m' + 1))) = some m := by
+    membersConsts ms (Spot.Bits.base ms m + p) = Spot.Bits.consts ms[m].1 ms[m].2.size p := by
+  have hf : (List.range ms.length).find? (fun m' => decide (Spot.Bits.base ms m + p <
+      Spot.Bits.base ms (m' + 1))) = some m := by
     refine List.find?_eq_some_iff_getElem.2 ⟨by simp [base_succ ms hm, hp], m, by simpa using hm, by simp,
       fun j hj => ?_⟩
     have := base_mono ms (show j + 1 ≤ m by omega)
@@ -474,7 +474,7 @@ theorem getElem?_blocks_membersPart_bridge {m : ℕ} (hm : m < ms.length) {hU : 
     (hu : ms[m].1.unit.unitLog ≤ 32) (u : Fin ms[m].2.size) :
     (membersPart ms).blocks[unitBase ms m + u]? =
       some ((blockOf ((Placed.keyProg ms[m].1 hU ms[m].2.size).partition (Layout.outsOf ms[m].1 hU ms[m].2.size))
-        (constsOf ms[m].1 hU ms[m].2.size) u).map (SampledProofs.Bits.base ms m + ·)) := by
+        (constsOf ms[m].1 hU ms[m].2.size) u).map (Spot.Bits.base ms m + ·)) := by
   rw [getElem?_blocks_membersPart ms hm u.isLt, blockOf_bitsKeyProg hu u]
 
 end keyProg

@@ -3,8 +3,8 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Soundness.ExecDraw
-public import Properties.SampledProofs.Second
-import all SampledProofs.Draw
+public import Properties.Spot.Second
+import all Spot.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import Mathlib.Data.List.GetD
@@ -29,11 +29,11 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 
-open private SampledProofs.Draw.stratum? SampledProofs.Draw.natRanges from SampledProofs.Draw
+open private Spot.Draw.stratum? Spot.Draw.natRanges from Spot.Draw
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 open Claims.Sampling Finset
@@ -72,17 +72,17 @@ theorem ranges_pair {a b : ℕ} {rs : Array (Int × Int)} (h : Draw.ranges? (Jso
   by_cases hab : a < b <;> simp [hab, int_toJson] at h
   exact h.symm
 
-private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : SampledProofs.Draw.natRanges #[(a, b)] = some rs) :
+private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Spot.Draw.natRanges #[(a, b)] = some rs) :
     rs = #[(a.toNat, b.toNat)] := by
-  unfold SampledProofs.Draw.natRanges at h
+  unfold Spot.Draw.natRanges at h
   by_cases ha : 0 ≤ a <;> simp [ha, Array.mapM_eq_mapM_toList] at h
   exact h.symm
 
 /-- A cell object of `secondLaw` that parses is `[o + i·n, o + (i+1)·n)` sampling `k`. -/
 private theorem stratum_cell {o n k i r t : ℕ} {ws : Flock.Draw.WorkStratum}
-    (h : SampledProofs.Draw.stratum? true (Select.cellObj o n k i r t) = some ws) :
+    (h : Spot.Draw.stratum? true (Select.cellObj o n k i r t) = some ws) :
     (ws.units, ws.k) = (#[(o + i * n, o + (i + 1) * n)], k) := by
-  unfold SampledProofs.Draw.stratum? at h
+  unfold Spot.Draw.stratum? at h
   simp only [getD_cellObj_template, getD_cellObj_units, getD_cellObj_k, getD_cellObj_work, getD_cellObj_floor,
     nat_toJson, ↓reduceIte] at h
   split at h
@@ -350,7 +350,7 @@ theorem choose_div_le_escCell (n k w : ℕ) : ((n - w).choose k : ℝ) / (n.choo
   · rw [Nat.choose_eq_zero_of_lt h, Nat.cast_zero, div_zero]; positivity
 
 /-- **The second stage misses `X` no more often than the cells' escapes**
-(`Properties.SampledProofs.SecondMisses`). -/
+(`Properties.Spot.SecondMisses`). -/
 theorem secondMisses : SecondMisses := by
   intro sample ns ks L X
   have hev : ∀ src : Fin L → Fin 256, ((Select.selectSecond sample ns ks (bytesOf src)).isOk = true ∧
@@ -400,4 +400,4 @@ theorem secondMisses : SecondMisses := by
     rw [Nat.succ_mul] at hle ⊢
     omega
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs
