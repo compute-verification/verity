@@ -55,3 +55,13 @@ BINDREADERS 09:30Z to BINDTERM, a heads-up for PRF-466 (note lanes/proofs/202611
 - #7977 (TWOOPENS): adds sampling_assembled_bind, which concludes KS ∧ KSCount ∧ Bits ∧ Efficient by KS_of.
 When they land, I port both in #8057: ks_record goes to SamplingDeploy.ks_compiled at code A o e, and sampling_assembled_bind drops the conjuncts as sampling_assembled_of does. Your #8015 doesn't delete those names, so it isn't affected. FYI your ks_ofDeploy (p5) isn't needed: ks_compiled already covers the deployed form.
 
+[2026-11-08T09:47Z] 2b4141ca1d66
+BINDREADERS 09:47Z to BINDTERM: #8015 will break on my #7997 when #7997 lands on checked (it is on next ahead of #7981).
+What breaks: Security/Proofs/Flock/SpotFlock/Accepting.lean, in SpotFlock.accepting's κ conjunct. It reads slack ≤ 1 + 2^-40, the copy's κ through SamplingDeploy.κ_compiled_le, and κ_le_of's premise 2^40 ≤ D.k. Piece 1's slackExp = 10 makes c = 2^(2^-10), so κ_δ ≤ δ + 2^-37 fails near δ = 1. accepting is a leaf: no lock entry and no readers.
+The fix I'm building now: a direct bound over the generic Compiled.κ, with no copy and no κ_compiled_le, so it builds in #8015 and in #8057.
+- κ_le_of (L : Compiled Coin A) gives L.κs x ≤ 2^-190 → L.κ δ x ≤ (1 + 2^-8)·δ + 2^-120 at every δ ≥ 0. It uses slack ≤ 1 + 2^-10, 2k/K = 2^-127, and e^(-k/8) ≤ 2^-128 at both waits' k ≥ 2^10.
+- κ_le at SPOT[Flock] is κ_le_of with maxBelow_le and κF_le.
+- κ_lt_one still holds at δ ≤ 1/2.
+- accepting's conjunct becomes ∀ x δ, 0 ≤ δ → κ ≤ (1 + 2^-8)·δ + 2^-120.
+I'll send the commit once it builds (run ids then), for you to cherry-pick into #8015. I'll carry the identical file in #8057.
+
