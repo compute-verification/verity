@@ -27,6 +27,7 @@ public import Flock.SplitNL
 public import Flock.Norm
 public import Flock.LinkUnits
 public import Flock.FV3
+public import Flock.TmplSection
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -606,13 +607,6 @@ def pinnedCount (mj : Json) : Nat :=
 
 /-- Why `ProvedScope.check` and `Stmt.setupTables` refuse a statement with pinned outputs (`pinnedCount`). -/
 def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet"
-
-/-- The lines of a templated statement's (`Tags.isTmpl`) template section, right after META, which `parse` passes over:
-its header `TEMPLATE n` and the template's `n` lines (`HmOut.tmplOf` reads them). Any other statement's file has none,
-its sections starting right after META. -/
-def tmplLines (tags : Tags) (lines : Array String) : Nat :=
-  let h := tokens (lines.getD 2 "")
-  if tags.isTmpl && h.size == 2 && h[0]! == "TEMPLATE" then (h[1]!.toNat?.map (· + 1)).getD 0 else 0
 
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
@@ -1783,25 +1777,6 @@ def metaOf (bytes : ByteArray) : V Json := do
   match JsonParse.parse (line.drop 5).toString with
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
-
-/-- A templated file's template: the lines of its template section, right after META (the file's third line `TEMPLATE n`,
-then the template's `n` lines, which `HmRow.parse` passes over: `HmRow.tmplLines`), read off the file's bytes up to the
-section's end alone, as `metaOf` reads META. -/
-def tmplOf (bytes : ByteArray) : V (Array String) := do
-  let bad := "circuit: no template section (TEMPLATE n, then the template's n lines) after META"
-  let some n1 := findByte bytes 10 | throw bad
-  let some n2 := findByte bytes 10 (n1 + 1) | throw bad
-  let some n3 := findByte bytes 10 (n2 + 1) | throw bad
-  let some head := String.fromUTF8? (bytes.extract (n2 + 1) n3) | throw "circuit: not UTF-8"
-  let h := tokens head
-  let some k := (if h.size == 2 && h[0]! == "TEMPLATE" then h[1]!.toNat? else none) | throw bad
-  if k == 0 then return #[]
-  let mut e := n3
-  for _ in [0:k] do
-    let some e' := findByte bytes 10 (e + 1) | throw "circuit: the template section is truncated"
-    e := e'
-  let some text := String.fromUTF8? (bytes.extract (n3 + 1) e) | throw "circuit: not UTF-8"
-  return (text.splitOn "\n").toArray
 
 /-- **A recursion unit's name** (`RecOpen.params`, `RecOpen.stackedParams`, `RecResiduals.params`, `RecSparse.params`,
 `RecOpening.params`): `parseTmpl` refuses a template whose unit carries one, since the recursion's claims read such a
