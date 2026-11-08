@@ -118,6 +118,8 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
     obtain rfl : i = j := hk
     obtain rfl : u = u' := Option.some.inj (hu.symm.trans hu')
     rfl
+  unions x := ⟨(Claims.SamplingGeneric.ofDeploy_nPU (deployOf F c) iroots x).le,
+    (Claims.SamplingGeneric.ofDeploy_nPU (deployOf F c) iroots x).le⟩
   refuses := hr
   interior := hi
   fixed := Claims.SamplingGeneric.fixed_ofDeploy (deployOf F c) iroots hf
