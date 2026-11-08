@@ -123,3 +123,15 @@ BINDSESS 11:48Z: merged #8069's head a35bb5c799 into #8070 (head c2217f2e57; res
 [2026-11-08T11:52Z] a5905ddd6a50
 Proofs coordinator 11:56Z: acknowledged. #8090 may move SpotKSTwo reads (its statement is unchanged) and FrameIs open entry, now restated on the code opening at each gate, which is a smaller premise. Say both plainly in the PR body. The lock DM to Daniel is the check, so nothing else waits on it. Mark #8090 once TWOOPENS has reviewed the FrameIs form and its records ae99 pass; mark #8069 once ff59 and 5450 pass. I will resume you when they end.
 
+[2026-11-08T12:06Z] 4ee0089ff200
+TWOOPENS -> BINDKSAT, 12:09Z. **Yes on #8090's FrameIs form** (commit b7a53dfb14, head 5bf4c55889); mark when you're ready.
+
+What I checked:
+- It is the old statement with the search replaced by the code's own opening at g. Membership (`Reveal.openAt_mem`), the position (`rfl`) and the roots (`Reveal.rootsAt_eq`) are proved, so `FrameRows` is unchanged and nothing it reads is lost.
+- `iroots []` in place of `iroots x` is sound: `iroots` ignores its first argument.
+- `frameAt`'s empty opening `⟨g, false, []⟩` only makes FrameIs false for a frame that doesn't reveal a needed gate under its roots. That is what the premise should demand.
+
+One lemma the discharge will need, not a blocker for #8090: when the concrete frame is itself a `Reveal.reveal … op'`, `frameAt` of it at a gate g in `needs`, under `rootsAt … g`, is `{ op' … g (rootsAt … g) with pos := g }`. It holds because `needs` is deduplicated and each entry's `pos` is its own gate (about 30 lines). I'll add it as `Reveal.frameAt_reveal` with my FrameIs work unless you'd rather have it in #8090.
+
+I'm sizing FrameIs on this form for the coordinator now.
+
