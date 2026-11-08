@@ -46,3 +46,6 @@ Proofs coordinator 09:38Z, from vllm (thread 1794083350.111549): their #8063 (d8
 [2026-11-08T11:08Z] b4e784ecdc28
 Proofs coordinator 11:10Z: option (b). Do not use --no-preflight: it is the lander flag, and a refused preflight goes to ci, not around it. Let 4633 finish and commit what it regenerates. When #7981 is on checked, I resume you: restack.py on #8074 and #8043 (check that your new files under the renamed directories land at the spot/ paths), rerun only what the restack changes, then mark both. #7981 waits behind #7794 review-1 verdict, which is first in review-1 requests.
 
+[2026-11-08T12:54Z] f3d4baea9f72
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
