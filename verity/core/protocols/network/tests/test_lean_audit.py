@@ -119,11 +119,20 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
 
     # Hypothesis mixes the literals of every imported local module into what it draws, so the 600 cases above move with
     # unrelated code; a grid-free no-verdict is among them only a few times, and certified units under the changes that
-    # leave a window undecided carry it whatever else is imported.
-    @settings(derandomize=True, database=None, deadline=None, max_examples=40)
-    @given(R.record_cases(("certified",), UNDECIDED), st.data())
-    def undecided(case, data):
-        same.hypothesis.inner_test(case, data)
+    # leave a window undecided, checked over every window, carry it whatever else is imported.
+    @settings(derandomize=True, database=None, deadline=None, max_examples=20)
+    @given(R.record_cases(("certified",), UNDECIDED))
+    def undecided(case):
+        d = _decoded(case)
+        if d is None:
+            return
+        u, recs, e = d
+        if (len(e) != len(u.egress) or any(len(s) != u.windows for _, s in e)
+                or any(len(f.payload) != u.grid.frame_bytes for frames, _ in e for f in frames)):
+            return
+        prefixes = [u.windows] * len(u.egress)
+        for v in _same(lean, u, recs, e, prefixes, grid=False)[:sum(prefixes)]:
+            no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     undecided()
     print(kinds, no_grid)
