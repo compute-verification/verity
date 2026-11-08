@@ -797,3 +797,4 @@ class WorkloadProgram:
                 **({"edge": {**self.edge.static(), "ports": {"in": list(self.ports), "out": [p for p, _, _, _ in edge_ports(self.edge.static()["out"])]}}}
                    if self.edge is not None else {}),
                 "address_map": self.address_map(), "chronology": self.chronology()}
+
