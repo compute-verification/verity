@@ -53,8 +53,9 @@ OFF_SCALE = 1e3
 COINCIDENT = 0.02
 #: how far up its axis, in the axis's height, a reference line at 0 is drawn
 FLOOR = 0.012
-#: the least gap, in the axis's height, between two labels on one side
-LABEL_GAP = 0.045
+#: where a reference line's label may go, the axis's side it is aligned to and above or below its line; it takes the
+#: first that leaves the axis least, then overlaps the fewest labels already placed, then crosses the fewest other lines
+SPOTS = (("left", "bottom"), ("right", "bottom"), ("left", "top"), ("right", "top"))
 #: how far below its axis, in the axis's height, a caption starts; the appendix's budget legend starts there beside it
 CAPTION_DROP = 0.17
 PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltration"),
@@ -117,15 +118,34 @@ def _zeros(references: list[dict], scope: str) -> list[tuple[str, str]]:
             if ("value" in r or scope in r["by_scope"]) and (r["value"] if "value" in r else r["by_scope"][scope]) <= 0]
 
 
-def _floor(ax, zeros: list[tuple[str, str]], styles: dict, fontsize: int) -> None:
+def _fit(t) -> None:
+    """Wrap `t`, a label placed inside its axis, onto as few balanced lines as keep it inside the axis's width; the
+    axes must be positioned before it is measured."""
+    ax, text = t.axes, t.get_text()
+    renderer = ax.figure.canvas.get_renderer()
+    left, right = ax.get_window_extent(renderer).intervalx
+    for lines in range(1, 6):
+        width = -(-len(text) // lines)
+        while len(textwrap.wrap(text, width)) > lines:
+            width += 1
+        t.set_text(textwrap.fill(text, width))
+        box = t.get_window_extent(renderer)
+        if (box.x1 <= right) if t.get_horizontalalignment() == "left" else (box.x0 >= left):
+            return
+
+
+def _floor(ax, zeros: list[tuple[str, str]], styles: dict, fontsize: int) -> list:
     """Draw each line at 0, which a log axis has no place for, along the axis's floor, its label saying it is at 0; the
-    panel leaves the decade above the floor clear of its curves for them."""
+    panel leaves the decade above the floor clear of its curves for them.  Returns the labels."""
+    labels = []
     for i, (label, style) in enumerate(zeros):
         y = FLOOR * (1 + 3 * i)
         ax.plot([0, 1], [y, y], transform=ax.transAxes, color="#909090", ls=styles[style], lw=1.3, zorder=1)
-        ax.text(.01, y + FLOOR / 2, f"{label}: 0, on the axis's floor", transform=ax.transAxes, ha="left",
-                va="bottom", fontsize=fontsize, color="#555555", zorder=5,
-                bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        labels.append(ax.text(.01, y + FLOOR / 2, f"{label}: 0, on the axis's floor", transform=ax.transAxes,
+                              ha="left", va="bottom", fontsize=fontsize, color="#555555", zorder=5,
+                              bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5}))
+        _fit(labels[-1])
+    return labels
 
 
 def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list[dict], references: list[dict],
@@ -168,17 +188,29 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
     ax.yaxis.set_major_formatter(FuncFormatter(fmt))
     ax.yaxis.set_minor_locator(NullLocator())
     ax.grid(which="major", color="#E2E2E2", lw=.45)
-    last = {"left": -1.0, "right": -1.0}
-    for amount, label, style in refs:
+    renderer = fig.canvas.get_renderer()
+    frame = ax.get_window_extent(renderer)
+    placed = [t.get_window_extent(renderer) for t in _floor(ax, zeros, REFERENCE_STYLE, 15)]
+
+    def spot(amount: float, label: str, side: str, va: str):
+        t = ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va=va, fontsize=15,
+                    color="#555555", zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5},
+                    transform=offset_copy(ax.transData, fig=fig, y=3 if va == "bottom" else -3, units="points"))
+        _fit(t)
+        return t, t.get_window_extent(renderer)
+
+    heights = [ax.transData.transform((lo_x, amount))[1] for amount, _, _ in refs]
+    for i, (amount, label, style) in enumerate(refs):
         ax.axhline(amount, color="#909090", ls=REFERENCE_STYLE[style], lw=1.3, zorder=1)
-        at = log10(amount / lo) / log10(hi / lo)
-        gap = {k: at - v for k, v in last.items()}
-        side = "left" if gap["left"] >= LABEL_GAP else max(gap, key=gap.get)
-        last[side] = at
-        ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va="bottom", fontsize=15,
-                color="#555555", transform=offset_copy(ax.transData, fig=fig, y=3, units="points"), zorder=5,
-                bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
-    _floor(ax, zeros, REFERENCE_STYLE, 15)
+        others = heights[:i] + heights[i + 1:]
+        tries = [spot(amount, label, *where) for where in SPOTS]
+        best = min(tries, key=lambda tb: (not (frame.y0 <= tb[1].y0 and tb[1].y1 <= frame.y1),
+                                          sum(tb[1].overlaps(b) for b in placed),
+                                          sum(tb[1].y0 < y < tb[1].y1 for y in others)))
+        for t, _ in tries:
+            if t is not best[0]:
+                t.remove()
+        placed.append(best[1])
     if above:
         ax.text(lo_x * 1.5, hi, "Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in above),
                 ha="left", va="top", fontsize=14, color="#555555", wrap=True,

@@ -840,7 +840,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     import textwrap
 
     from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
-    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _floor, _lines, _power, _zeros
+    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _fit, _floor, _lines, _power, _zeros
 
     p, tax = out["panels"][panel], out["taxes"]
     series = [s for s in p["series"] if s["scope"] == scope]
@@ -885,9 +885,9 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         k = k + 1 if i and amount < refs[i - 1][0] * CROWDED else 0
         below = k == 0 and i + 1 < len(refs) and refs[i + 1][0] < amount * CROWDED
         ax.axhline(amount, color="#909090", ls=styles[style], lw=1.3, zorder=1)
-        ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
-                ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
-                zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        _fit(ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
+                     ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
+                     zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5}))
     _floor(ax, zeros, styles, 14)
     for s in series:
         color, ls, lw = STYLE[s["config"]]

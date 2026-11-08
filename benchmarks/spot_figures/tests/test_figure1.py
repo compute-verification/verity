@@ -7,7 +7,7 @@ from math import log, log1p
 import cards
 import figure1 as f
 import pytest
-from render import _lines, _zeros, appendix_stem, render, render_appendix, stem
+from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -102,6 +102,25 @@ def test_a_line_at_zero_is_drawn_on_the_floor_and_captioned_and_coincident_lines
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(
         " At 0, drawn along the axis's floor: zero.")
     assert _zeros(refs, "world year") == [("zero", "dashed")] and _zeros(refs, "world week") == [("zero", "dashed")]
+
+
+def test_a_label_wider_than_its_axis_wraps_onto_balanced_lines_inside_it():
+    """From either side, a label is wrapped onto as few lines as keep it inside its axis, none of them a stray word;
+    one that fits stays on one line."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(5, 3))
+    frame = ax.get_window_extent(fig.canvas.get_renderer())
+    long = "Advice once the length rule is checked in-circuit and K/V reads are proved, prefix caching off (pending)"
+    for x, ha in ((.01, "left"), (.99, "right")):
+        t = ax.text(x, .5, long, ha=ha, transform=ax.transAxes, fontsize=15)
+        _fit(t)
+        box, lines = t.get_window_extent(fig.canvas.get_renderer()), t.get_text().split("\n")
+        assert len(lines) > 1 and " ".join(lines) == long and frame.x0 <= box.x0 and box.x1 <= frame.x1
+        assert min(map(len, lines)) > len(long) / (2 * len(lines))
+    short = ax.text(.01, .2, "a short label", transform=ax.transAxes, fontsize=15)
+    _fit(short)
+    assert short.get_text() == "a short label"
+    plt.close(fig)
 
 
 def test_a_capped_caption_says_what_it_rests_on():

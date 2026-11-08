@@ -141,7 +141,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference
     (its reference model's, SparseLoCo's syncs scaled to the served model's parameters), the model's checkpoint and
     every `references` card. A line at 0 is drawn along the axis's floor and named in the caption, lines that coincide are plotted once, and one far
-    above the headline curves is named at the axis's top. A MAC's AND gates, read from the FP8 MoE coordinate's
+    above the headline curves is named at the axis's top. Each line's label wraps to stay inside its axis, beside its
+    line where it overlaps the fewest others. A MAC's AND gates, read from the FP8 MoE coordinate's
     circuit-check pin, state each scope's compute and the skipped work in AND gates.
 - **Figure 2** (`figure2.py`): proof overhead per proof-block type, the `proof_overhead` card's blocks joined to the
   `workload` card's strata, beside each type's share of a token's proof blocks and MACs. A type without a measurement
