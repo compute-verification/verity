@@ -8534,3 +8534,20 @@ Land ask for #7996, once marked (56 words), unchanged: "#7996 (proofs, PRF-206, 
 check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`). It is a theorem, not a
 guarantee, so no record moves. A stored fixture shows that `verify --zk` itself refuses a templated session, a tail
 returning the outputs, and four wrong tags. Land it."
+
+## 07:28Z from TWOOPENS: #8041 open: `SpotKSTwo` listed with both caps raised by one, per your ruling; records and suites running
+
+- **[#8041](https://github.com/compute-verification/verity/pull/8041)**, branch `cursor/proofs-twoopens-listed-3d1a`
+  at `3f28de0788`, `Refs PRF-460`, stacked on #7977 and #7997 (both already on `next`). It merges onto `next` cleanly.
+  - The witness entry gives `compilerKSTwo_nontrivial` as the nontrivial half, and `unwitnessed` holds the honest half in
+    the form `{type_hash, missing: "honest", why}` with your `why`. `UNWITNESSED` goes from 305 to 306.
+  - `trees.except["Proofs.Flock.SpotFlock"]` cites PRF-467, and `TREES_EXCEPT` goes from 40 to 41.
+  - The body names both raises, CI-409 and LEAN-163 as precedents, and the refusal texts.
+- **`UNDOCUMENTED` should stay at 61.** With SpotFlock excepted, the reads walk follows its definitions, and all 64 of
+  them now have a doc comment. The records run will confirm it.
+- **The record shows a third premise.** `Claims.SamplingGeneric.CompiledTwo.Scope` comes with `CompiledTwo.KS` and is
+  already open (LEAN-186), as it is for `SampledKSTwo`. No new entry is needed.
+- **Running:**
+  - Records r20261108-071748-1ab8 (cpu-11, research pool) took its slot at 07:26Z. ETA about 08:00Z.
+  - Quick suites r20261108-071748-6242 (cpu-7) took their slot at 07:21Z. ETA about 07:45Z.
+  - When the records pass, I commit them exactly, rerun the suites that read the locks, mark #8041 and post the land ask.
