@@ -29,9 +29,10 @@ one before it through a few strided views (`butterfly`).
 
 Registered functions:
   DsaTopKMask{N,TOPK}           (scores: N f32) -> N bits: bit j is j in topk_set(scores, TOPK)
-  DsaTopKThreshold{N}x{TOPK}    (scores: N f32) -> 64 bits: the TOPK-th largest ext_j = topk_key(s_j) * 2^32 + (2^32 - 1 - j);
-                                DsaTopKMask's body, with DsaTopKAtLeast per key
-  DsaTopKAtLeast                (s: f32, j: i32, theta: 64 bits) -> bit: ext(s, j) >= theta
+  DsaTopKThresholdKey{N}x{TOPK}, DsaTopKThresholdIndex{N}x{TOPK}
+                                (scores: N f32) -> i32: the TOPK-th largest ext_j = topk_key(s_j) * 2^32 + (2^32 - 1 - j) as
+                                its key and its index j, one 32-bit word each; DsaTopKMask's body, with DsaTopKAtLeast per key
+  DsaTopKAtLeast                (s: f32, j: i32, key: i32, at: i32) -> bit: ext(s, j) >= ext_of(key, at), the threshold's ext
   DsaButterflySettings{N,K}     (mask: N bits) -> butterfly_switches(N, K) bits: the concentrator's settings for the mask's
                                 members, ranks taken mod 2^kb (`butterfly_settings`; `butterfly_apply` is the network)
   DsaButterflyRows{N,K,W,E}     (sw: butterfly_switches(N, K) bits, rows: N x W x E bits) -> K x W x E bits: the concentrator at
@@ -64,7 +65,7 @@ _CONF = ("model-untested: dsa_topk's tie rule (`topk_set`), which dsa_topk's mod
          "set, and with its order once the row is sorted")
 #: the tags' rank field: 15 bits, so K <= 2^15
 RANK_BITS = 15
-_THRESHOLDS: dict[tuple[int, int], PrimitiveDefinition] = {}
+_THRESHOLDS: dict[tuple[int, int], tuple[PrimitiveDefinition, PrimitiveDefinition]] = {}
 _SLOTS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 
@@ -245,22 +246,36 @@ def DsaTopKKey(s: int) -> int:
     return topk_key(s)
 
 
-@primitive("DsaTopKAtLeast", 1, [("s", F32), ("j", I32), ("theta", Value(64))], BIT, conformance="exact-model-tested")
-def DsaTopKAtLeast(s: int, j: int, theta: int) -> int:
-    return int(ext(s, j) >= theta)
+@primitive("DsaTopKAtLeast", 1, [("s", F32), ("j", I32), ("key", I32), ("at", I32)], BIT, conformance="exact-model-tested")
+def DsaTopKAtLeast(s: int, j: int, key: int, at: int) -> int:
+    return int(ext(s, j) >= ext_of(key, at))
 
 
-def threshold(N: int, TOPK: int) -> PrimitiveDefinition:
-    """`DsaTopKThreshold{N}x{TOPK}_v1`: the TOPK-th largest ext over a row of N f32 scores."""
+def ext_of(key: int, j: int) -> int:
+    """The ext of index ``j`` at key ``key`` (`ext` of a score whose `topk_key` is ``key``)."""
+    return (key & M32) << 32 | (M32 - (j & M32))
+
+
+@functools.lru_cache(maxsize=8)
+def _theta(scores: tuple, TOPK: int) -> int:
+    return heapq.nlargest(TOPK, (ext(x, j) for j, x in enumerate(scores)))[-1]
+
+
+def threshold(N: int, TOPK: int) -> tuple[PrimitiveDefinition, PrimitiveDefinition]:
+    """`DsaTopKThresholdKey{N}x{TOPK}_v1` and `DsaTopKThresholdIndex{N}x{TOPK}_v1`: the TOPK-th largest ext over a row of N f32
+    scores as its key and its index, one 32-bit word each (a proof unit's output is one gate of at most 32 bits)."""
     check_statics(N, TOPK)
     p = _THRESHOLDS.get((N, TOPK))
     if p is None:
-        def ev(*s: int, _K=TOPK) -> int:
-            return heapq.nlargest(_K, (ext(x, j) for j, x in enumerate(s)))[-1]
+        def key(*s: int, _K=TOPK) -> int:
+            return _theta(tuple(x & M32 for x in s), _K) >> 32
 
-        p = PrimitiveDefinition(f"DsaTopKThreshold{N}x{TOPK}", 1, (("scores", Array(N, F32)),), Value(64), ev,
-                                doc=threshold.__doc__ or "", conformance=_CONF)
-        _THRESHOLDS[(N, TOPK)] = p
+        def at(*s: int, _K=TOPK) -> int:
+            return M32 - (_theta(tuple(x & M32 for x in s), _K) & M32)
+
+        p = _THRESHOLDS[(N, TOPK)] = tuple(
+            PrimitiveDefinition(f"DsaTopKThreshold{part}{N}x{TOPK}", 1, (("scores", Array(N, F32)),), I32, ev,
+                                doc=threshold.__doc__ or "", conformance=_CONF) for part, ev in (("Key", key), ("Index", at)))
     return p
 
 
@@ -269,9 +284,9 @@ def threshold(N: int, TOPK: int) -> PrimitiveDefinition:
 def DsaTopKMask(B, S, scores):
     """The top-TOPK set of a row of N keys as a mask: bit j is 1 when j is in `topk_set`(scores, TOPK), else 0.  `DsaTopKMask_v2`
     is it on bits, an exact radix select with no advice."""
-    theta = B.call(threshold(S.N, S.TOPK), scores)
+    key, at = (B.call(p, scores) for p in threshold(S.N, S.TOPK))
     idx = Coll(Array(S.N, I32), concat([B.call(const(32, j)).refs for j in range(S.N)]))
-    return B.batch(DsaTopKAtLeast, scores, idx, theta, axes=(0, 0, None))
+    return B.batch(DsaTopKAtLeast, scores, idx, key, at, axes=(0, 0, None, None))
 
 
 @functools.lru_cache(maxsize=8)
