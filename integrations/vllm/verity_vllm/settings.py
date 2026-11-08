@@ -139,6 +139,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
+    S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
+      "ascending index order, which DsaTopKLongRow checks (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
     S("VERITY_FA2_COMPACT", not_off, True, VALUE, "the attention tap writes its classes compacted"),
     S("VERITY_FA2_TAP_CAP_MB", int_or_zero, None, VALUE, "the attention tap's residency cap in MiB, 0 (or empty) unbounded; unset, the "
       "source's own", empty=True),

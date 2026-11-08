@@ -62,8 +62,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   honest prover's code, `OuterSessionsZK` follows from V*'s staging (`OuterZK.recursiveZK_of_sessionZK`,
   `Proofs.Flock.Recursive.OuterSessionZK`).
 
-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
-module: `Proofs.Flock.Recursive` does.
+Flock's definitions and the recursion's model are still in the proofs package, so `Definitions.lean` does not import
+this module: `Proofs.Flock.Recursive` does.
 -/
 
 @[expose] public section
