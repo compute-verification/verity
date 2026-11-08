@@ -20566,10 +20566,10 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": ["Pouw.Assumptions.TT", "Pouw.Pinned.GapFromTT"]
+    "reads": ["Pouw.Assumptions.TT", "Pouw.GameStatements.GapFromTT"]
    },
    "type_hash": "d3d32512ab23c8d09a6e13da0a45199f75fbc0f660bc7383f21083fd8be27984",
-   "unfolded_hash": "ee70a65fc6d19673aafe0e009db593fe563448d47d30c39ad63d09df90dee8ec"
+   "unfolded_hash": "433a116b36bda9484f712db6838b3110c43e5dc1359adc3e9153da87075c343a"
   },
   "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1": {
    "owner": "@compute-research",
@@ -35435,6 +35435,12 @@
     "Pouw.Assumptions.TT": "30130e885fa2c28d4c4bb02ffdbee629a08c2a4c8a2d80fdaa6890a832f8ed1f"
    }
   },
+  "Definitions.Pouw.Assumptions.GameStatements": {
+   "digest": "f2bd1901a7b0e65b13308c1cd2b040d934ee644a0093f7a9b63196134de4ca93",
+   "definitions": {
+    "Pouw.GameStatements.GapFromTT": "68d835fd7f3d3393212f48ff5145c75daf9636ed02f50284153c56f78322205b"
+   }
+  },
   "Definitions.Pouw.Assumptions.LeadCommit": {
    "digest": "b322a32f307a1f777e62bb0edcf060e9339418d09459df3e2d95c3a9e4da5aec",
    "definitions": {
@@ -35573,12 +35579,6 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801",
     "Pouw.PearlC.Assumptions.TTOutTileW1": "b0144b16d96b324c76ffe37c04479593580a477e5eb83f0ac9cc8a35455767cb",
     "Pouw.PearlC.Assumptions.TTOutW1": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
-   }
-  },
-  "Definitions.Pouw.Assumptions.Pinned": {
-   "digest": "c506bdb54b8fd5fa661e7397ce74f477509aa878ab9c832475b1cd4439030231",
-   "definitions": {
-    "Pouw.Pinned.GapFromTT": "5e85786f0c57c8bb06fe333ab91236f60cd90f358fc8c3b45c98d437cb7d6c75"
    }
   },
   "Definitions.Pouw.Assumptions.RelativeSecurity": {
@@ -36143,10 +36143,10 @@
    }
   },
   "Definitions.Pouw.Guarantees.Game": {
-   "digest": "c10ad8764d42599228eb4202bbbf3b1dee35a81bc83c8a87ac8b3ddc4de41456",
+   "digest": "5d0419f6e77725653a6c8720ad503edd97042f719508ffcb69776ceacf3cb6a3",
    "definitions": {
     "Pouw.Guarantees.EndToEnd": "1c59741be77376e29e4f5509802d7a36d4ab51ffec87cc45d5046883a4405c44",
-    "Pouw.Guarantees.GapFromTT": "a2f4039046d792b3a7a3d9b17bc5bb708faaf5ce915fb08bb50734952e5d17d4"
+    "Pouw.Guarantees.GapFromTT": "827e1f8c5a24bdaa6e24f74db4dd7136a257b62db6579dffba77dacf318dcce6"
    }
   },
   "Definitions.Pouw.Guarantees.KeyedLeaf": {
