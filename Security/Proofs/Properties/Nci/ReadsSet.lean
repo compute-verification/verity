@@ -21,6 +21,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
+import Proofs.Core.QSort
 import Proofs.Properties.Nci.Lemmas
 import Proofs.Properties.Nci.OperandsResolve
 import Proofs.Properties.Accounting.Remote.Sort
