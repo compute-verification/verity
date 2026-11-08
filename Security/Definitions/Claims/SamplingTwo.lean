@@ -235,7 +235,9 @@ read at a replay block.
 * `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
   relation at the session's statement reveals openings such that any values and interior values agreeing with those
   that pass (under the statement's roots, and under the interior roots the run showed for `u`'s replay block `ρ`)
-  make proof block `u` correct on `ρ`'s values (`Prog.refIn` at `ρ`). -/
+  make proof block `u` correct on `ρ`'s values (`Prog.refIn` at `ρ`).
+* `keys`: `Sessions`', the sample's slots hold at most `n_sess` keys, so the extractor runs `A`'s extractor at most
+  `n_sess` times per run (`CompilerEfficientTwo` reads it). -/
 structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
   replayDraws : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
     ∀ T ⊆ Finset.range d.part.blocks.length,
@@ -247,6 +249,7 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  keys : ∀ x r, ((Finset.range (L.checked x r).length).image (L.skey x (L.checked x r))).card ≤ L.nSess x
   shared : ∀ x (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
     (L.checked x r)[i]? = some u → (L.checked x r)[j]? = some u' →
     L.skey x (L.checked x r) i = L.skey x (L.checked x r) j →

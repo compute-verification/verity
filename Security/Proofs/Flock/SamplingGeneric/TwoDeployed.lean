@@ -90,6 +90,8 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
   replayDraws := hrd
   secondDraws := hsd
   slots _ _ := List.length_take_le _ _
+  keys x _ := Finset.card_image_le.trans ((Finset.card_range _).trans_le
+    ((List.length_take_le _ _).trans_eq (Claims.SamplingGeneric.ofDeploy_nSess (deployOf F c) iroots x).symm))
   shared _ _ _ _ _ i j u u' _ hu hu' hk := by
     obtain rfl : i = j := hk
     obtain rfl : u = u' := Option.some.inj (hu.symm.trans hu')
