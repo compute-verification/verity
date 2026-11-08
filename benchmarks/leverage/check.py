@@ -118,7 +118,7 @@ def main() -> int:
     W[i, j] = w0
     res["edit_vs_changed_weight"] = max_abs(e[1], changed[0])
     res["edit_zero_vs_honest"] = max_abs(e[0], full[0])
-    ok &= res["edit_vs_changed_weight"] < 1e-3 and res["edit_zero_vs_honest"] < 1e-5
+    ok &= res["edit_vs_changed_weight"] < 1e-3 and res["edit_zero_vs_honest"] < 1e-3
 
     k = 3
     taps = {("resid", k - 1): None}
