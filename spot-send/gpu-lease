@@ -1,0 +1,5 @@
+#!/bin/sh
+# vy-spot-glm53 has no gpu-lease host and research run holds the pod's GPUs for the job: run the command after "--" as is.
+while [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ $# -gt 0 ] && shift
+exec "$@"

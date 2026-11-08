@@ -1,0 +1,72 @@
+diff --git a/benchmarks/network_e2e/traces/corpus.py b/benchmarks/network_e2e/traces/corpus.py
+index 7b2a2a7f4b..68ac4b7e6c 100644
+--- a/benchmarks/network_e2e/traces/corpus.py
++++ b/benchmarks/network_e2e/traces/corpus.py
+@@ -399,6 +399,9 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
+                             rec["chunks"].append([now, len(toks)])
+                             rec["output_ids"].extend(toks)
+                             rec.setdefault("first_token_s", now)
++                        lps = (ch.get("logprobs") or {}).get("token_logprobs")
++                        if lps:
++                            rec.setdefault("logprobs", []).extend(lps)
+                         if ch.get("finish_reason"):
+                             rec["finish_reason"] = ch["finish_reason"]
+                             rec["stop_reason"] = ch.get("stop_reason")
+diff --git a/benchmarks/replay_ladder/ladder.py b/benchmarks/replay_ladder/ladder.py
+index a0075bd638..f5c70a458c 100644
+--- a/benchmarks/replay_ladder/ladder.py
++++ b/benchmarks/replay_ladder/ladder.py
+@@ -144,16 +144,18 @@ def native_tokens(tok: Any) -> tuple[int, int]:
+     return int(start), int(blank[0])
+ 
+ 
+-def own_sampling(real: Any) -> Any:
++def own_sampling(real: Any, logprobs: bool = False) -> Any:
+     """`corpus.request_body` for a plan whose requests carry their own sampling (`prod_plan`): the request's sampling, its
+-    seed by the public seed rule when it is sampled, and no ignore_eos; serve_tax's body for any other plan's request."""
++    seed by the public seed rule when it is sampled, and no ignore_eos; serve_tax's body for any other plan's request. With
++    ``logprobs``, each sampled token's logprob is asked for too (``logprobs: 0``, which client.jsonl keeps)."""
+     C = S.corpus()
+ 
+     def body(served: str, r: dict, rid: str, sampling: str) -> dict:
+         if "sampling" not in r:
+             return real(served, r, rid, sampling)
+         b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
+-             "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
++             "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid,
++             **({"logprobs": 0} if logprobs else {})}
+         if r.get("seeded"):
+             b["seed"] = C.request_seed(rid)
+         return b
+@@ -192,7 +194,7 @@ def serve(a: argparse.Namespace) -> int:
+     if a.plan:
+         C = S.corpus()
+         if not getattr(C.request_body, "own_sampling", False):
+-            C.request_body = own_sampling(C.request_body)
++            C.request_body = own_sampling(C.request_body, a.serve_logprobs)
+         (out / "plan.jsonl").write_bytes(Path(a.plan).read_bytes())
+         own_plan = ["--plan", str(out / "plan.jsonl")]
+         plan_len = sum(1 for _ in open(out / "plan.jsonl"))
+@@ -458,6 +460,8 @@ def main(argv: list[str] | None = None) -> int:
+     s.add_argument("--plan", help="a plan to serve instead of serve_tax's (prod_plan.py build): each request with its own "
+                                   "sampling, stopping at its end of text or its cap")
+     s.add_argument("--max-model-len", type=int, help="the servers' context limit, over serve_tax's 4,096")
++    s.add_argument("--serve-logprobs", action="store_true", help="with --plan: each request asks for its sampled tokens' "
++                   "logprobs, which client.jsonl keeps (`logprobs`)")
+     r = sub.add_parser("replay")
+     r.add_argument("--model", required=True, choices=sorted(LADDER))
+     r.add_argument("--out", required=True)
+diff --git a/benchmarks/replay_ladder/run.sh b/benchmarks/replay_ladder/run.sh
+index 0eea0dd544..e16393af28 100755
+--- a/benchmarks/replay_ladder/run.sh
++++ b/benchmarks/replay_ladder/run.sh
+@@ -70,7 +70,8 @@ for m in "$@"; do
+     else
+       echo "== $m $arm serve $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
+       if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
+-          ${BURST:+--burst "$BURST"} ${PLAN:+--plan "$PLAN"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} > "$d/serve.log" 2>&1; then
++          ${BURST:+--burst "$BURST"} ${PLAN:+--plan "$PLAN"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} \
++          ${SERVE_LOGPROBS:+--serve-logprobs} > "$d/serve.log" 2>&1; then
+         tail -n 40 "$d/serve.log"; rc=1; rm -rf "$cache"; continue
+       fi
+       grep '^\[ladder\]' "$d/serve.log"
