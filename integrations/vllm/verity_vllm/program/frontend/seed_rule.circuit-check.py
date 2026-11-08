@@ -21,8 +21,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
 def _by_calls_roots() -> list[Any]:
     """`ServedSeed_v1`, `SeedCheck_v1` and `SeedCheck_v2` at the same two sizes, checked by their calls: `SeedBlocks_v1`, a
-    `Sha512Compress_v1` Call (a few hundred thousand gates) a block, then `SeedSelect_v1` (and `SeedEqual_v1`); `SeedCheck_v2`'s
-    are 64 constants, a `BitAtx64_v1` batch over them and a `SeedCheck_v1` Call."""
+    `Sha512Compress_v1` Call (a few hundred thousand gates) for each block but the last, then `SeedSelect_v1`, which compresses the
+    last itself (and `SeedEqual_v1`); `SeedCheck_v2`'s are 64 constants, a `BitAtx64_v1` batch over them and a `SeedCheck_v1` Call."""
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.frontend import seed_rule as SR
 
