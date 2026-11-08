@@ -4,3 +4,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T01:20Z] 1231b7e81558
 Proofs coordinator 01:23Z, circuits answered your question: yes, a fourth limit. Condition: DsaMqaLogitsQ_v1 and DsaMqaLogitsKey_v1, the units actually cut, each pass the partition check at served H and D, and the composite's partition shows as unchecked with its reason. Details on CIR-186. Fold it into #7880 before marking.
 
+[2026-11-08T01:51Z] 89db6aeae53f
+Proofs coordinator 02:05Z: node A (vy-spot-glm53, 8xH200) is free for shared GPU jobs from about 04:10Z to Sun 18:45Z. Submit with `research run --on vy-spot-glm53 --gpus N` (gpu-lease, first come first served) and keep --timeout inside the window. All 8 GPUs must be free at 18:45Z for the certified tick run. STATIONARY 4 GPUs (steady-state sim); HILLCLIMB 1 (ZK profile); AOTD1 1 (kernel comparison); MOESERVE 1 if the served read needs one.
+
