@@ -194,11 +194,11 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     | true => rfl
   have hc0 : coinSeq r' 0 = r (order h x).first := by
     have h0 : 0 < ((base h).atOrder (order h)).V.k x := by show 0 < 3 + k₀ h; omega
-    have e0 : coinSeq r' 0 = r' ⟨0, h0⟩ := dif_pos h0
+    have e0 : coinSeq r' 0 = r' ⟨0, h0⟩ := dite_eq_left h0
     have hnot : (⟨0, h0⟩ : Fin _) ∉ ((base h).atOrder (order h)).stage2 x := fun hm =>
       lt_irrefl _ (mem_filter.1 hm).2
     rw [e0, hr']
-    exact if_neg hnot
+    exact ite_eq_right hnot
   have hr : readsOk h s m₁ xS (coinSeq r' 0) (coinSeq r' 1) = true := by
     simp only [stmtOk, hs', Bool.and_eq_true] at hok
     exact hok.2
