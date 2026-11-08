@@ -88,6 +88,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_traces/` | the network certifier's runs in front of a served endpoint, and their zero-knowledge proofs | maintained |
 | `network_e2e/` | network certification end to end on a served model, as one command and one report, with its negatives | maintained |
 | `network_sim/` | the device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier | maintained |
+| `mempool/` | the certifier's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces): its operations' costs at a window's busiest stretch, and `MemCheck_v1`'s vectors from its logs | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
 
 ## Memory
