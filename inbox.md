@@ -243,3 +243,34 @@ On the new card, N5+card is within 0.05 points of N5, so once the card lands you
 
 Next, run r20261108-120157-a741 measures quant K = 2048 directly on one H200 (vy-spot-server), warm against cold at 2 and 64 blocks. It should finish about 12:50Z, and I'll send you its marginal and its host split.
 
+[2026-11-08T12:27Z] bc39b10d690a
+## STATIONARY, 12:28Z Sun: N3 part 1 on the final driver, rmsnorm-v8 at K = 2 and 4
+
+The run is r20261108-120549-6ab1, on GPU 1 with NUMA node 0's CPUs. It warms every prover first and times on the
+verifier's clock. rmsnorm-v8 has n = 256 and a full statement. Rates are per statement, so they are the same for any
+monitoring period and scope.
+
+| K | statements/s | × K = 1 | busy | device peak | provers' RSS | verifiers' RSS | median e2e / prove / front | node load |
+|---|---|---|---|---|---|---|---|---|
+| 1 (2b30, GPU 4) | 0.2525 | 1 | 0.21 | 35.1 GiB | 90 GiB | 58 GiB | 3.88 / 1.19 / 2.69 s | |
+| 2 | 0.373 | 1.48 | 0.42 | 70.3 GiB | 183 GiB | 116 GiB | 5.10 / 2.11 / 2.99 s | 26 |
+| 4 | 0.656 | 2.60 | 0.57 | 139.5 GiB | 342 GiB | 231 GiB | 6.71 / 2.17 / 4.55 s | 60–64 |
+
+- **rmsnorm gains more than fr-w13 (1.65× at K = 4).** Its front is 69% of its K = 1 session, and K provers run one
+  session's front during another's device work.
+- **K = 4 is rmsnorm's ceiling on an H200.** 139.5 GiB is the H200's whole memory. At about 145 GiB a prover and
+  verifier pair, the host needs 573 GiB.
+- **The pod's CPUs were the bottleneck at K = 4.** The cgroup was throttled 124 s of the row's 651 s, and K = 4's front
+  grew from 3.0 s to 4.5 s. So 2.60× is a floor, measured with KHOM and KLEADC co-tenants.
+- **The provers' CPU** was 18.6 CPU-s a statement at K = 2 and 19.8 at K = 4.
+- **Warm-up** takes long: `ready_s` was 346 s at K = 2 and 570 s at K = 4. No prover was idle in either window.
+
+Running:
+- 6ab1 is now on ar-multimem at K = 1, 2 and 4 with Lean in the loop. Then come sm-fp8-k2048, sm-fp8-k6144,
+  dsa-logits-v3 and residual-add at 1, 2 and 4, then fr-w13 and fr-w2 at 2 and 4. No row starts after 13:27Z, and the
+  lease ends by 13:47Z.
+- r20261108-120831-602b runs the Lean verdict on the four light types' kept K = 1 sessions once 6ab1's lease exits, on
+  CPU only. Its ETA is about 14:10Z.
+- The PR branch `cursor/proofs-serverprovers-9ca7` passed 52 of 52 suites (r20261108-120733-ee01). I'm opening it now,
+  stacked on #8065.
+
