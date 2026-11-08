@@ -5,6 +5,8 @@ public import Proofs.Flock.SpotFlock.Rows
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Claims.Scope.Matches
+import Proofs.Flock.Claims.Scope.Sizes
 
 /-!
 # A session row's commit string is the table row its registered read opens
@@ -22,7 +24,7 @@ file pins it) after `opens_of_stmtOk` (the registered reads open the public file
 
 `reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from two premises on the registration.
 `SessionScoped`: the verifier's check puts each session statement in Flock's scope with hidden outputs, so `rows_open`
-applies. `FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's
+applies; it holds where the check applies Flock's scope check and the hidden-outputs tag (`sessionScoped_of_checks`). `FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's
 block, and the frame's reveal holds an opening of the witness's bit there that passes wherever the registered read of
 the row holding it passes. So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds`, `SessionScoped` and
 `FrameRows`.
@@ -39,6 +41,27 @@ statement check (`Readable.Read.check`, the first half of its scope refusal) and
 def ScopedHidden (xS : Msg) : Prop :=
   ∀ ins spec sts, FlockDeploy.setupOf true xS = some (ins, spec, sts) →
     ins.read.check = .ok () ∧ ins.read.tags.hiddenOutputs = true
+
+/-- **The hidden-outputs tag of a session statement's reading**, `false` where it has none. -/
+def hiddenOf (xS : Msg) : Bool :=
+  match FlockDeploy.readOf true xS with
+  | some r => r.tags.hiddenOutputs
+  | none => false
+
+/-- **A session statement Flock's scope check passes, with hidden outputs, is `ScopedHidden`**: the scope refusal
+(`Parsed.scope`) begins with the statement check, at the reading the setup's tables parse from (`parsed_setupOf`). -/
+theorem scopedHidden_of_checks {xS : Msg} (hs : FlockDeploy.scopeCheck true xS = true) (hh : hiddenOf xS = true) :
+    ScopedHidden xS := by
+  intro ins spec sts hset
+  obtain ⟨hins, -⟩ := FlockDeploy.setupOf_some hset
+  have hread : FlockDeploy.readOf true xS = some ins.read := by simp [FlockDeploy.readOf, hins]
+  refine ⟨?_, by simpa [hiddenOf, hread] using hh⟩
+  unfold FlockDeploy.scopeCheck _root_.Flock.Readable.scopeCheckOf at hs
+  split at hs
+  · rename_i p hp
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hp
+    exact ((_root_.Flock.Readable.scope_ok_iff _).1 ((_root_.Flock.Readable.isOk_iff _).1 hs)).1
+  · cases hs
 
 /-- **The relation at the setup's reading**: where a session statement sets up and the claims' check accepts a witness,
 the reading with the setup's own tables parses, and the witness satisfies the deployed relation there. -/
@@ -138,6 +161,12 @@ theorem rows_open {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {s : AuditSta
 /-- **The verifier's check puts each session statement in Flock's scope with hidden outputs** (`ScopedHidden`). -/
 def SessionScoped : Prop :=
   ∀ x m₁ xS c₀ c₁, stmtOk h x m₁ xS c₀ c₁ = true → ScopedHidden xS
+
+/-- **`SessionScoped` from the check's own refusals**: where the check applies Flock's scope check and the
+hidden-outputs tag to each session statement it passes. -/
+theorem sessionScoped_of_checks (hc : ∀ x m₁ xS c₀ c₁, stmtOk h x m₁ xS c₀ c₁ = true →
+    FlockDeploy.scopeCheck true xS = true ∧ hiddenOf xS = true) : SessionScoped h :=
+  fun x m₁ xS c₀ c₁ hok => scopedHidden_of_checks (hc x m₁ xS c₀ c₁ hok).1 (hc x m₁ xS c₀ c₁ hok).2
 
 /-- **The frame reveals each value a checked unit needs at its session row**: at the statements `Reveals` reads and the
 session's setup, with registered ports `own`, for each gate `g` the unit's correctness reads, the layout's wire for `g`
