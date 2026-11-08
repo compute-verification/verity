@@ -102,6 +102,11 @@ VERIFY_FAST_MEASURED = ("FlashInferFp8Linear_v1{K=2048,", "Fp8GroupQuantUe8m0_v1
 #: the types whose templated session check measured costlier than the flat verifier, which keep the flat
 VERIFY_FLAT_CHEAPER = ("RMSNorm", "DsaRMSNorm", "RmsNormMnnvl")
 VERIFY_COLUMNS = {"today": (VERIFY, VERIFY_FIXED), "fast": (VERIFY_FAST, min(VERIFY_FAST.values()))}
+#: the templated (structural) session check over the flat one, both before the flat verifier's proved twins, by family:
+#: Lean verify's CPU-seconds under --zk with the Program on FlashInfer K2048 (1,382 against 1,751) and RMSNorm v3
+#: N=6144 (454.9 against 713.5); any other type the smaller ratio (assumed)
+TMPL_MEASURED = ((("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1"), 1382.0 / 1751.0),
+                 (("RMSNorm", "DsaRMSNorm", "ResidualAdd", "RmsNormMnnvl"), 454.9 / 713.5))
 
 #: the long-running proof server on one H200, one prover, the statement cache warm: (fixed GPU-seconds a statement,
 #: GPU-seconds a block, the device's busy share, blocks a full statement) by block prefix, a two-point fit at full and a
@@ -136,6 +141,27 @@ def gpu_factor(busy: float, prover: float = 1.0, k: int = 1, front: bool = False
     return chain if k == 1 else max(device, chain / (k * OVERLAP_EFFICIENCY))
 
 
+def templated_seconds(x, how: str) -> float:
+    """The templated session check's core-seconds a statement of `x`'s type: `measured`, today's column times its
+    family's measured ratio (TMPL_MEASURED); `goal`, quant K6144's estimate over today's for every type but the
+    RMSNorm family, which keeps the flat."""
+    today = verifier_seconds(x)[0]
+    if how == "goal":
+        return math.inf if x["block"].startswith(VERIFY_FLAT_CHEAPER) else VERIFY_TEMPLATED * today
+    ratio = next((r for types, r in TMPL_MEASURED if x["block"].startswith(types)),
+                 min(r for _, r in TMPL_MEASURED))
+    return ratio * today
+
+
+def verify_per_and(strata, column="fast") -> float:
+    """The Lean verifier's core-seconds an AND: the median over the types `column` measures of a full statement's
+    seconds over its ANDs."""
+    table, floor = VERIFY_COLUMNS[column]
+    rates = [verifier_seconds(x, table, floor)[0] / (x["ands"] * x["statement_blocks"]) for x in strata
+             if x.get("ands") and verifier_seconds(x, table, floor)[1] == "measured"]
+    return statistics.median(rates)
+
+
 def server_price(x) -> tuple[float, float, float, int] | None:
     e = expert(x) if x.get("kind") == "fused" else None
     if e:
@@ -150,7 +176,8 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant_floor=True, ho
     `prover` times faster on device shares, four provers an H200 on full statements (`k4`, none on HOST_BOUND types),
     the next session's front beside this one's device work (`front`), the dense types' host witness `host` times
     lower, Flock without --zk, and the Lean verifier's core-seconds a statement from `column` times `verify` (the
-    templated estimate where it is cheaper, `tmpl`; the assumed types at `verify_other` when given)."""
+    templated check where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at
+    `verify_other` when given)."""
     table, floor = VERIFY_COLUMNS[column]
     out = []
     for x in strata:
@@ -179,8 +206,8 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant_floor=True, ho
             fixed, marginal = fixed * p, marginal * p
         if verify:
             v, how = verifier_seconds(x, table, floor)
-            if tmpl and not x["block"].startswith(VERIFY_FLAT_CHEAPER):
-                v = min(v, VERIFY_TEMPLATED * verifier_seconds(x)[0])
+            if tmpl:
+                v = min(v, templated_seconds(x, "goal" if tmpl is True else tmpl))
             if how == "assumed" and verify_other is not None:
                 v = verify_other
             fixed += verify * v / CORE_PER_GPU

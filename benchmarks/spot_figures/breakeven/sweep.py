@@ -46,6 +46,11 @@ PREFIX_OFF = 0.1386
 HITS_WINDOW_BITS = 5181.0
 #: compiling one sampled request's Programs on 8 ranks, core-hours, by 135 s a Program a rank over a 256-step span
 COMPILE_CORE_H = (3.1, 3.8)
+#: the memory-checked KV pool (CacheStep_v3 on MemCheck_v1 and BlockKey_v1): a window's ANDs at its public budget of
+#: access slots, which the busiest window sets, with every lookup walking and with the head-of-line memo
+POOL_WINDOW_ANDS = {"walked": 55259987182.0, "memo": 40859057390.0}
+#: GPU-seconds an AND under --zk on the H200: 1.0e12 ANDs take a tenth of a machine's window
+ZK_GPU_S_PER_AND = 0.10 * MACHINE_GPUS * WINDOW / 1.0e12
 TAX_ONE_STAGE = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("every_block",))["every_block"]["tax"]
 
 
@@ -82,7 +87,7 @@ class Case:
     front: bool = False
     quant_floor: bool = True
     column: str = "fast"
-    tmpl: bool = False
+    tmpl: bool | str = False
     fused_busy: float | None = None
     advice_window_bits: float = 0.0
     prefix_off: bool = False
@@ -182,10 +187,24 @@ def run_case(job):
            "beta": {w: solve(L, t - advice, scope, case.scale) if t > advice else None for w, t in WEIGHTS.items()}}
     b4 = out["beta"]["FP4"]
     if case.compile_core_h and b4 is not None:
-        sampled = bound(L, b4, scope, case.scale, full=True)[1]["plan"]["replay_sample"]
+        pt = bound(L, b4, scope, case.scale, full=True)[1]
+        sampled = pt["plan"]["replay_sample"]
         out["compile"] = {"sampled": sampled, "share": {str(h): sampled * h * 3600 / reprice.CORE_PER_GPU
                                                         / s.gpu_seconds for h in (*COMPILE_CORE_H, 14.0)}}
+        out["pool"] = pool(L, case, pt["registration_sample"])
     return out
+
+
+def pool(L, case, windows_sampled: float) -> dict:
+    """The memory-checked pool's share of compute: its ANDs at ZK_GPU_S_PER_AND plus the Lean verifier at the line's
+    median measured core-seconds an AND, over a machine's window; proved every window, or only on the share of windows
+    the plan samples."""
+    v = reprice.verify_per_and(L[1]["partition"].value["strata"], case.column)
+    every = {k: a * (ZK_GPU_S_PER_AND + v / reprice.CORE_PER_GPU) / (MACHINE_GPUS * WINDOW)
+             for k, a in POOL_WINDOW_ANDS.items()}
+    prove = {k: a * ZK_GPU_S_PER_AND / (MACHINE_GPUS * WINDOW) for k, a in POOL_WINDOW_ANDS.items()}
+    return {"verify_core_s_per_and": v, "windows_sampled": windows_sampled, "prove": prove, "every": every,
+            "sampled": {k: e * windows_sampled for k, e in every.items()}}
 
 
 def replay_gpu_s(edge_s: float, lifetime: float) -> float:
@@ -353,17 +372,20 @@ def served_line() -> dict[str, Case]:
     steps["N5"] = steps["N4"] | dict(prover=4.0)
     out = {n: Case(**kw) for n, kw in steps.items()}
     extras = {"host": dict(host=3.5), "hash4": dict(marginal=hash4), "plain": dict(plain=True),
-              "tmpl": dict(tmpl=True), "vfloor": dict(verify_other=reprice.VERIFY_COLUMNS["fast"][1]),
+              "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"),
+              "vfloor": dict(verify_other=reprice.VERIFY_COLUMNS["fast"][1]),
               "fusedfront": dict(fused_busy=0.55), "card": dict(quant_floor=False),
-              "host+tmpl": dict(host=3.5, tmpl=True), "host+hash4+tmpl": dict(host=3.5, marginal=hash4, tmpl=True),
+              "host+hash4": dict(host=3.5, marginal=hash4),
+              "host+tmplgoal": dict(host=3.5, tmpl="goal"),
+              "host+hash4+tmplgoal": dict(host=3.5, marginal=hash4, tmpl="goal"),
               "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True),
-              "host+tmpl+prefixoff": dict(host=3.5, tmpl=True, prefix_off=True)}
+              "host+tmplgoal+prefixoff": dict(host=3.5, tmpl="goal", prefix_off=True)}
     for e, kw in extras.items():
         out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
     for s in ("N2", "N3"):
         out[f"{s}+hits"] = Case(**(steps[s] | dict(advice_window_bits=HITS_WINDOW_BITS)))
         out[f"{s}+prefixoff"] = Case(**(steps[s] | dict(prefix_off=True)))
-    out["N2+tmpl"] = Case(**(steps["N2"] | dict(tmpl=True)))
+    out["N2+tmplgoal"] = Case(**(steps["N2"] | dict(tmpl="goal")))
     return out
 
 
