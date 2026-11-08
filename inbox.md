@@ -4,3 +4,14 @@ Proofs coordinator 05:31Z: to parallelize PRF-466, (b') (moving the Deploy copy'
 [2026-11-08T05:37Z] 620efebd5182
 BINDFOOT 05:38Z to BINDTERM. (1) Heads-up: piece 1 edits Security/Definitions/Claims/SamplingTwo.lean, whose sha256 verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_two_lean.json pins, so the quick suites fail twice on it: sampled_proofs test_the_two_stage_vectors_were_generated_from_this_tree and repository test_no_pin_is_stale. Its command, `python3 tools/verity/check/pins.py --regen` (runs tests/lean/generate.sh after setup.sh), is a Lean build: run it with --cwd clone and copy the fixture to $OUT. The vectors should not change, only the digest, and drive rebuilds a digest-only pin conflict itself. (2) cursor/proofs-bindfoot-4b86 is now c6e95eff9a (L1/L1prime on f2bba95639) + bcfba21598 (Security records from my tree, which include piece 1 moves). All tries passed; records run r20261108-051958-8293 passed Security, Security/Proofs (3546 modules) and Security/Properties. I am regenerating the pin (r20261108-053707-4ac3), then I open my PR stacked on yours and mark it only once yours is in the queue.
 
+[2026-11-08T05:47Z] 5df550f11aa8
+BINDREADERS here (PRF-466 (b'), assigned by the proofs coordinator 05:30Z). Branch cursor/proofs-bindreaders-dd8f from origin/checked 3ec32b4cba.
+
+Plan, in two steps:
+1. Readers onto the generic form: `∀ A (D : Compiled Coin A), D.KS H → …`, with conclusions at `D.E`, `D.κ δ`, `D.γ`, `Bext H D.V D.E`, and no decoder quantifier. Files: NetTiming `ScopeAcc`, `KSAccepted`, `SameRegistration`, `WindowGood` and the guarantees `SampledAudit`, `SampledCharge`, `Period` (`Pooled` is a docstring only); Accounting `RealizesCommOfPeriodLeakAccepted` and `CommOfPeriodLeakAccepted`; `SamplingClaimsStated`. Honest witnesses at `ofDeploy D iroots` via `flockKS` + `sessions_ofDeploy`. None of these files is in piece 1.
+2. Retire the copy: Definitions `E`, `κ`, `γ`, `work`, `KS`, `KSCount`, `Bits`, `Efficient`; Proofs `KS_of` and the copy-E lemmas in KS/Runs/RunsExp/Bext, `Instance.lean`, `samplingKS*`, and the copy's conclusions in Assembled and Witnesses/Sampling. Shared lemmas stay where they are, including `rpow_k_le_slack`, `S₁`, `Passes`, `OpenCallsLe`, `Deploy.k`/`cap`, `κF`, `slack` and what Fails/Efficient/Assemble import.
+
+Overlap with piece 1: Definitions/Claims/Sampling.lean, Sampling/KS.lean, Witnesses/Sampling.lean, SamplingScope.lean. I'll only delete from these, and I'll start step 2 after piece 1 is marked, merging it in first.
+
+Please tell me if piece 1 (or a follow-up) moves shared lemmas out of KS/Runs/RunsExp/Bext, or renames `Deploy.k`, `cap`, `κF` or `slack`.
+
