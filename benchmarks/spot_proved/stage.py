@@ -738,7 +738,7 @@ def fused_add_rms_norm_instances(cap: Capture):
             a = e["in"]
             T, N = a["input"]["shape"]
             eps = float(a["epsilon"]).hex()
-            block = f'RMSNormFusedCudaVector8_v1{{N={N},EPS={{"f64":"{eps}"}},BLOCK={launch_block(T, N, fused=True)}}}'
+            block = f'RMSNormFusedCudaVector8_v3{{N={N},EPS={{"f64":"{eps}"}},BLOCK={launch_block(T, N, fused=True)}}}'
             for t in cap.rows(r, T):
                 yield (f"RMSNormFusedCudaVector8_N{N}", block, (r, e["seq"], t),
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["input"])[t], cap.tensor(r, e["in"]["residual"])[t],

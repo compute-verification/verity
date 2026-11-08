@@ -25,7 +25,7 @@ stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`
 `TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
+      python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
