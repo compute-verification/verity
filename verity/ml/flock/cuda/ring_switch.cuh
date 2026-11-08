@@ -122,11 +122,8 @@ __device__ __forceinline__ uint32_t ring_transpose32(uint32_t x, int lane) {
         const int s = 16 >> i;
         const uint32_t m = i == 0 ? 0x0000FFFFu : i == 1 ? 0x00FF00FFu : i == 2 ? 0x0F0F0F0Fu : i == 3 ? 0x33333333u : 0x55555555u;
         const bool hi = lane & s;
-        // the low lane takes the partner's m-bits into ~m, the high lane its ~m-bits into m: both s places away, so a
-        // rotation of the whole word puts them there (m's top bit is at most 31 - s and ~m's lowest at s)
-        const uint32_t y = __shfl_xor_sync(0xffffffffu, x, s);
-        const uint32_t keep = hi ? ~m : m;
-        x = (x & keep) | (__funnelshift_l(y, y, hi ? 32 - s : s) & ~keep);
+        const uint32_t got = __shfl_xor_sync(0xffffffffu, hi ? (x & m) << s : (x >> s) & m, s);
+        x = (x & (hi ? ~m : m)) | got;
     }
     return x;
 }
