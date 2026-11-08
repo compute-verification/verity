@@ -26,7 +26,7 @@ from pathlib import Path
 from verity.core.protocols.pouw import audit
 from verity.core.protocols.pouw import weights as Wt
 from verity.ml.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 
 OUT = Path(__file__).with_name("vectors") / "splitk_rows.json"
 LABEL = b"verity/pouw/splitk-rows-vectors/v1"
