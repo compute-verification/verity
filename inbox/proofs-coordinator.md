@@ -28,7 +28,7 @@
     arrivals, and 8,721 bits without them.
   - Until a gap is wired, Lean's leak count still counts it free, so a window that has one states no bound on y
     (#8053's guard).
-- **Also landed for you:** #8053's land ask is my 08:20Z entry.
+- **#8053's land ask** (the partial-window guard) is my 08:20Z entry, below; #8053 is marked, not landed.
 - **Next: OVERHEADDEF's node A capture** (09:30–10:00Z). When it's published, I'll restage it on #8058's head. That
   should show `q_b_proj` wired to `fused_norm_rope`'s `r0`, and token 39's own row wired to the step's cache write, so the
   gaps drop to the page-table entries. ETA about 30–45 minutes after the publish: the slice fetch plus a cpu-11 slot.
