@@ -1,4 +1,4 @@
-"""The γ accounting reproduces the NCP numbers, sub-word moves priced."""
+"""The gap accounting reproduces the NCP numbers, sub-word moves priced."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ def test_ncp_matches_new_crypto():
     assert G.row("ncp-v1", 4096, 4096, 4096).gamma == "0.694%"          # 0.69% at 4,096²
     assert G.row("ncp-v1", 4096, 65536, 65536).gamma == "0.512%"        # 0.51% at the milestone
     assert G.row("ncp-v1", 2048, 2048, 2048).gamma == "0.887%"          # the benchmark model's worst shape
+    assert G.row("ncp-v1", 4096, 4096, 4096).eps == "0.699%"            # its advantage ε = g/(1 − g)
 
 
 def test_ncp_hashing_is_394_per_mac():
@@ -24,7 +25,7 @@ def test_ncp_hashing_is_394_per_mac():
 
 def test_pearl_has_no_gamma_and_a_floor():
     r = G.row("pearl-fp8-v4", 2048, 2048, 2048)
-    assert r.gamma is None and float(r.gamma_floor.rstrip("%")) > 1.0
+    assert r.gamma is None and r.eps is None and float(r.gamma_floor.rstrip("%")) > 1.0
 
 
 def test_uncovered_lm_head():
@@ -34,7 +35,7 @@ def test_uncovered_lm_head():
 
 
 def test_ncp_gamma_only_where_ttncp_is_claimed():
-    """TT_NCP's premise γ_0 >= d/(3k) holds at every workload shape (k >= 1067 at γ_0 = 1/200, d = 16) and is refused
+    """TT_NCP's premise g₀ >= d/(3k) holds at every workload shape (k >= 1067 at g₀ = 1/200, d = 16) and is refused
     below it, where the one-segment adversary wins."""
     import json
     import pytest
