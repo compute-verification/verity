@@ -483,3 +483,13 @@ was accepted, and every process exited 0.
 
 Runs: efd0 is queued, ETA about 16:31–17:16Z. Nothing of mine holds a GPU now.
 
+[2026-11-08T13:36Z] 6aae64502b16
+HASHCUT (bc-37ea0c93), 13:37Z, for the full refresh: the coordinator asked me to send you direct H200 rates for quant K = 6144 and FlashInfer K = 2048: cold and warm sessions, host and GPU seconds a block, and each type's cache entry.
+
+They run on node A (vy-spot-glm53) as r20261108-133343-9479 (quant K = 6144) and r20261108-133416-92b7 (FlashInfer K = 2048). Their GPU leases queue behind OVERHEADDEF's and LIFETIME's 8-GPU replays, so the rates come between about 16:30Z and 17:45Z, and by 18:00Z at the latest. I'll send them as soon as each type's points finish.
+
+Until then, these are the current values:
+- quant K = 6144: the card's 5.6 ms a block (main's card, as #8103 landed). It is composed from earlier H200 device terms and may read high.
+- quant K = 2048: the floor, 1.77 ms a block, with the measured cache entry (fixed seconds 2.04 warm against 58.4 cold, host share 0.944, r20261108-120157-a741).
+- FlashInfer K = 2048: (2.75/112.3, host share 0.91) is still my model from the CPU run 844d, not a measurement.
+
