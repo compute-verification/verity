@@ -1032,9 +1032,8 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         if !w.mask_host {
             return Vec::new();
         }
-        use rayon::prelude::*;
         let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).expect("a mask slot");
-        (0..st.blocks()).into_par_iter().map(|b| {
+        (0..st.blocks()).map(|b| {
             let m = (w.mask)(b);
             ((b << (st.c.k_log - 7)) + (r.start() >> 7), m.clone(), m.clone(), m)
         }).collect()
@@ -1057,9 +1056,8 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         lap("rows", &mut tl, &mut parts);
         let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
-        lap("hm96", &mut tl, &mut parts);
         host.extend(mask_slots());
-        lap("mask", &mut tl, &mut parts);
+        lap("hm96", &mut tl, &mut parts);
         let unit_inputs = || (0..st.blocks() * ur.count).into_par_iter().map(|x| (w.inputs)(x / ur.count, x % ur.count));
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             let inputs: Vec<F128> = unit_inputs().flatten_iter().collect();

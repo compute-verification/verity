@@ -510,14 +510,9 @@ impl HostSlots {
         }
         // SAFETY: an F128 is two u64 words (lo, hi)
         let rw: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
-        let t = Instant::now();
         if let Some(mut b) = HostBuf::mapped(rw.len()) {
-            b.par_chunks_mut(1 << 16).zip(rw.par_chunks(1 << 16)).for_each(|(d, s)| d.copy_from_slice(s));
+            b.copy_from_slice(rw);
             self.pinned_rows = Some(b);
-        }
-        if crate::circuit::unit_profile() {
-            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "pin_rows", "rows_bytes": 8 * rw.len(), "pinned": self.pinned_rows.is_some(),
-                "wall_s": t.elapsed().as_secs_f64()}));
         }
     }
 
