@@ -17,10 +17,11 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   A replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
 * `pieces`: a token select's span as the units Flock proves it by, each token's `TokenSelectChunk_v2` units over its
   chunks of logits and its `TokenSelectCombine_v2`, since a served vocabulary's whole select is past one Flock block.
-* `interior`: the replay sample's spans, template t's each padded to its n_t with copies of its last unit, committed
-  template-major as one window (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member a
-  template, each input port a table of its own Q·n_t rows and unit off_t + k reading row k, so each row a session proves
-  is a registered read of the interior record. It is registered after ``previous``, the boundary registration's digest,
+* `interior`: the replay sample's spans, template t's each padded to its n_t with copies of its last instance's units
+  (`Span.group`: a token's chunks), so an inlined replay block's padded instances stay whole, committed template-major
+  as one window (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member a template, each input
+  port a table of its own Q·n_t rows and unit off_t + k reading row k, so each row a session proves is a registered read
+  of the interior record. It is registered after ``previous``, the boundary registration's digest,
   under the window ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and the
   replay sample, so every port's domain binds which replay block each cell of units is; the challenger derives the same
   ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
@@ -194,24 +195,30 @@ def _words(v: Any, dtype: str, width: int, fam: str, what: str) -> np.ndarray:
 class Span:
     """One request span's units of one template: its member (``n`` units), the units' rows and outputs as
     `ml.windows.rows.commit` takes them, `serving_rows.read`'s index entries, which say which row each unit is, and the
-    digest of the Program it was replayed from."""
+    digest of the Program it was replayed from. ``group``: its units an instance of the replay block's check template (a
+    token's chunks, `pieces`)."""
     rid: str
     member: CS.Member
     data: dict[str, dict[str, np.ndarray]]
     entries: list[list[Any]]
     program: str
     seconds: dict[str, float] = field(default_factory=dict)
+    group: int = 1
 
     @property
     def n(self) -> int:
         return self.member.n
 
     def padded(self, n_rho: int) -> dict[str, dict[str, np.ndarray]]:
-        """Its data at ``n_rho`` units, the last unit repeated after its own."""
-        if not 1 <= self.n <= n_rho:
+        """Its data at ``n_rho`` units, its last instance's ``group`` units repeated after its own, so each padded
+        instance of the replay block is a whole copy of its last."""
+        g = self.group
+        if not 1 <= self.n <= n_rho or self.n % g or n_rho % g:
             raise ValueError(f"request {self.rid}'s span holds {self.n} units of {self.member.template}, not 1 to its size "
-                             f"class's {n_rho}")
-        return {kind: {p: np.concatenate([a, np.repeat(a[-1:], n_rho - self.n, axis=0)]) for p, a in self.data[kind].items()}
+                             f"class's {n_rho}" + (f" in whole instances of {g} units" if g > 1 else ""))
+        reps = (n_rho - self.n) // g
+        return {kind: {p: np.concatenate([a, np.tile(a[-g:], (reps,) + (1,) * (a.ndim - 1))])
+                       for p, a in self.data[kind].items()}
                 for kind in ("rows", "outs")}
 
 
@@ -280,7 +287,8 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
     logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
     (`serving_rows.unit_member`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
-    be ``s``'s tokens, or nothing is committed.
+    be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
+    tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs
     c = min(CHUNK, V) if c is None else int(c)
@@ -302,7 +310,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
         data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, outs, strict=True)}}
         scale = units // n
-        got.append(Span(s.rid, m, data, [[e[0] * scale, e[1] * scale, *e[2:]] for e in s.entries], s.program))
+        got.append(Span(s.rid, m, data, [[e[0] * scale, e[1] * scale, *e[2:]] for e in s.entries], s.program, group=scale))
     return got[0], got[1]
 
 
@@ -364,7 +372,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              salt_key: bytes | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
-    `interior_window` takes it), committed template-major and registered after ``previous`` (the boundary registration's
+    `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after ``previous`` (the boundary registration's
     digest ``boundary`` by default) under the window ``{kind, run, row, interior: true}``: ``row`` the served workload's
     row, ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS; ``salt_key``: tests only, the salts
     derived from it (`ml.windows.rows.commit`)."""
