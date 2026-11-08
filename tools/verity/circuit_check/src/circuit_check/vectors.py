@@ -8,7 +8,8 @@ ones, all ones but the sign).
 
 Vector ``j < E`` sets every leaf to the ``j``-th edge of its width (all-NaN, all-inf, ...), so a specials rule is hit on every
 operand at once; the random vectors then sample each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
-floats only: arithmetic in the range serving sees) or a uniform word.
+floats only: arithmetic in the range serving sees) or a uniform word.  ``E`` is as many edges as fit, or fewer when the caller
+keeps room for random vectors (`circuit_check.checks.Options.random_floor`).
 
 A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is in no vector: every vector reads the program's
 own table as one `verity.ml.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
