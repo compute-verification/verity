@@ -6820,9 +6820,7 @@
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses",
-     "Verity.Circuit.BitFaninPos",
-     "Verity.Circuit.Boolean"
+     "NciCheck.Properties.Parses"
     ],
     "reads": []
    },
@@ -6843,9 +6841,7 @@
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses",
-     "Verity.Circuit.BitFaninPos",
-     "Verity.Circuit.Boolean"
+     "NciCheck.Properties.Parses"
     ],
     "reads": []
    },
@@ -13152,12 +13148,14 @@
    }
   },
   "Definitions.Core.Expand": {
-   "digest": "d714740ce56bd93b1c39dfbeaa927911172dc70f3ca1c133a2bfe1c31f7e9447",
+   "digest": "9f8c2087e80ffc22d67ebea81406bf03dd47dbadb1d32ab50e43320d3e01ba74",
    "definitions": {
-    "Verity.Circuit.BitFaninPos": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
     "Verity.Circuit.bit": "0005897ad245b158c4efc8b88eca1e06581f02f604c652b1504b528496421965",
+    "Verity.Circuit.constInputs": "394a8f9ae3ae0d45fdf6fbd7339dfdbff2a2bdd148999980eb5942d578165c95",
     "Verity.Circuit.expand": "0e91d1e0585e8f779a41ea56aeac90df96574a1d40e6db721ea96a41aaa2a233",
+    "Verity.Circuit.isConst": "3a00357b25e3c73d254a54a742e64153461538fda946f62b1f7a2331c21dda9b",
     "Verity.Circuit.unbit": "6c40f0bbb034dbe4ed813cbf4a464ac332329f5fc06d851ef075a2f4840b9784",
+    "Verity.RegisteredCircuit.constInputs": "7b7ab04126119c2bee47a277ff1902b973e24fcf32495e6f123770e085ab88bb",
     "Verity.RegisteredCircuit.expand": "c30d59f91d94c9a26bd81862562a200a20012cfae9ab38718d864f32515cb124",
     "Verity.ofBits": "c6c125c5334c5958506129c2975c7a413a89fce593ee3e7023263ef6d82c4520"
    }
@@ -21684,7 +21682,7 @@
    }
   },
   "Properties.Remote": {
-   "digest": "22c1a4c3d5298120bba76cb89c95cea16804a0fc342e6dcfa13f877e93ba7b7d",
+   "digest": "a9531189fe7c27da6b4ab1c62e2d6252355a01112f4e21a9dbdf8a9661890cf9",
    "definitions": {
     "Properties.Remote.AcceptComplies": "8418fbde305dfd71e33cd3077d6b347d5d3ee11b551019de4780ce12b16d056e",
     "Properties.Remote.AcceptInferenceOnly": "fb2c35fa3ad927f7a1736524b0ff284924bfd554590feb57e3e1bf59a44f589c",
@@ -21692,7 +21690,7 @@
     "Properties.Remote.CompliesHeld": "ae826b7cfd3c1a62d9948a7f73f5af371415ec0a3217fb2f31f13293c3de3b9b",
     "Properties.Remote.InferenceOnlyHeld": "d820bd9f91e9982932f5e9dd345524123c36c92e092a43684e09c485e4db9a44",
     "Properties.Remote.PolicyHeld": "6c6e9433cd79cf9727ae13a8e8aec08a1d82911fd7f799f560fa771e0fa376aa",
-    "Properties.Remote.PolicyMet": "11c2e32470cacd93f1d2aeac97f3ff62700f08ab169dbc8e37feb9f846e5919a",
+    "Properties.Remote.PolicyMet": "a2459a03f27bf629ab357360e5e2643f4f6948942f3ef08360c65b104b2bb8a1",
     "Properties.Remote.StageHeld": "f9bf284b97852fd1b9f916f0468dbda4cee6e5ec9fcbdb6c65d6591550b81880",
     "Properties.Remote.VerifierOwn": "b8047d52e6c51899acde32a61fd3db1ea1cc80fff100c26bf680a0a3afa34729"
    }

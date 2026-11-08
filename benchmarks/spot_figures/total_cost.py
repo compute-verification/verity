@@ -448,7 +448,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
                 f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed;")
 
-    head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
+    head = (f"{f1.ROLES} {f1.TRUST} "
+            "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
