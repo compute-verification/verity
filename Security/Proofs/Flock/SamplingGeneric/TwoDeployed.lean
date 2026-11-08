@@ -131,7 +131,7 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
 /-- **The two-stage compiler at the deployed record**: `CompiledTwo.KS` from Flock's KS at `F` and its deployed
 decoder's list bound, the commitment's binding and the two-stage contract (`compilerKSTwo`, `flockArgKS`). -/
 theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
-    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode)     (hB : (commit c).Binds H)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H)
     (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs) (hcap : c.ReplayCap H two rs cap)
     (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
