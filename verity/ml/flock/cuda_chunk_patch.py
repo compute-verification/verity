@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Install the chunk-statement prover (verity/ml/flock/cuda/prove_chunk.cuh) into a Flock b684b12 checkout.
 
+The NTT's shared-memory chunks (ntt_f128.cuh) run on ntt_tile.cuh's kernel, up to 8 layers a pass.
+
 Run from the flock checkout after `git apply` of flock-link-b684b12.patch and flock-gpu-link-b684b12.patch and after
 copying verity/ml/flock/live to crates/flock-live. It applies the CUDA half of cuda_live_patch.py (the live hook in
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
 copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, moves zerocheck round 1's GF(2^8) products from its
-shared-memory log tables onto clmad on sm_90 (zerocheck_round1_cpustyle.cuh), runs the NTT's shared-memory chunks on
-ntt_tile.cuh (ntt_f128.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3).
+shared-memory log tables onto clmad on sm_90 (zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and
+CUDA (default /usr/local/cuda-13.3).
 """
 import os
 import pathlib
@@ -23,7 +25,7 @@ except AssertionError as e:
     print("cuda_live_patch.py: CUDA half applied, harness half skipped")
 
 assert "live_cb" in pathlib.Path("cuda-ghash/challenger.hpp").read_text(), "live hook missing"
-for f in ("prove_chunk.cuh", "pure_sha256.cuh", "ntt_tile.cuh"):
+for f in ("prove_chunk.cuh", "pure_sha256.cuh"):
     shutil.copy(here / "cuda" / f, f"cuda-ghash/{f}")
 pf = pathlib.Path("cuda-ghash/prove_ffi.cu")
 s = pf.read_text()
@@ -112,6 +114,7 @@ if "reduce_zerocheck_gf8_wide" not in s:
 
 # The NTT's shared-memory chunks run ntt_tile.cuh's kernel (FC_NTT_REGS=0: the tile kernel), up to 8 layers a pass
 # (FC_NTT_KMAX lowers it); the register kernels' chunks (4, 2 and 1 layers) and ntt_can_fuse_source are unchanged.
+shutil.copy(here / "cuda" / "ntt_tile.cuh", "cuda-ghash/ntt_tile.cuh")
 nt = pathlib.Path("cuda-ghash/ntt_f128.cuh")
 s = nt.read_text()
 if '#include "ntt_tile.cuh"' not in s:
