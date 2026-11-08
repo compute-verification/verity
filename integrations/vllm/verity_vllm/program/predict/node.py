@@ -10,7 +10,7 @@ Builder, one rank at a time in rank order, each up to its next collective. Colle
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
 would be a cycle: a rank's collective k reads the other ranks' partials from the middle of their own forwards.
 
-Its parameters are the prompt (and a stochastic request's seed and splits) once, then each rank's schedule words where its
+Its parameters are the prompt (and a stochastic request's seed) once, then each rank's schedule words where its
 decoder reads them (`rank<r>.schedule`), then each rank's weights, one parameter per field of its weights record
 (`rank<r>.weights[i]`, as a workload Program's `shared.weights[i]` are), bound at registration and marked θ. It returns every
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
@@ -197,8 +197,6 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
-        if phi.sampling["splits"] == "derived":
-            params.append(("splits", Array(events, I32)))
     words = [sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0 for net in nets]
     sched_at = {}
     for r, w in enumerate(words):
@@ -231,8 +229,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
         s = phi.sampling
-        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
-                             S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
+        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
+                             top_p_bits=f32_bits(s.get("top_p", 1.0)))
     batch = launch_batch(phis[0], LP, T) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
     peers = [_Joined(lockstep, r, Coll(params[sched_at[r]][1], Affine("p", sched_at[r], 0, words[r])) if r in sched_at else None)
