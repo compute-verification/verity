@@ -428,7 +428,7 @@ abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
 
 /-- **The auditor's devices' readings** of a prover's period (the network certifier's counts), at the oracle and the
-coins. They are the devices' and depend on what the prover's programs exchange (`ImportWithinCertifier`). -/
+coins. They are the devices' and depend on what the prover's programs exchange (`CertifierSeesImports`). -/
 abbrev Readings (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) : Type 1 :=
   Prover G P k → P.Orc → (Fin k → P.Draw × P.Chk) → Obs
 
@@ -436,6 +436,15 @@ abbrev Readings (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) : Type 1 :=
 def Prover.Passes {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} (A : Prover G P k) (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
   verdict o x (A.transcript o x) (dev A o x)
+
+/-- **The verdict with the network certifier's count**: the service's verdict, and the certifier's signed counts of the
+bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them from the devices' readings,
+within `K` together; a period past it is refused. With the certifier counting every exchanged bit
+(`Assumptions.CertifierSeesImports`), a period it accepts exchanged at most `K` bits. The card instance caps each
+direction (`Counted`). -/
+def CountedWithin {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ) (K : ℝ) :
+    Verdict P k Obs :=
+  fun o x tr ob => verdict o x tr ob ∧ cin ob + cout ob ≤ K
 
 /-- **The headline's error over a monitoring period of `k` rounds**, round `w` at its registered instance's honest
 cost `H w` (its matmul, hashing and other parts at the dual prices) and public bests `pubmm w` and

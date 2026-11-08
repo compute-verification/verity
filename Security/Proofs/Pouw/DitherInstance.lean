@@ -77,9 +77,6 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
   have svc' : ProofSystemSound G P nsb Reg
       (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev κS := fun A =>
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
-  have imp : ImportWithinCertifier G P nsb
-      (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev (Ein + Eout) :=
-    fun A o x hv => (sees A o x).trans (add_le_add hv.1.2.1 hv.1.2.2)
   -- A selected answer runs within the period: it starts after its block's work and arrives before the end.
   have hans : AnswersFit G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt)
       dev sel Pd := by
@@ -92,10 +89,13 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
       linarith [h4.2.1, h4.2.2]
     show G.use (A.answer b) (A.answerIn o x b) r ≤ G.rate r * Pd.T
     exact h1.2.trans (mul_le_mul_of_nonneg_left hwa (g2.1 r).le)
-  refine ⟨h G P nsb Reg Obs _ dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b))
-    (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha
-    hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
-    imp hans ext, ?_, hans⟩
+  have hfree := h G P nsb Reg Obs (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt)
+    dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b)) (fun b => pubCost e μ pb.sha (comps b)) ηw δ
+    (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha cin cout hdual hinst' hH hη hδ hδ1
+    (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc' sees hans ext
+  -- The card's verdict caps each count, so it accepts only periods whose counts are within `E_in + E_out` together.
+  refine ⟨Pouw.SecurityProofs.Dither.freedSound_of_imp (fun A o x hv => ⟨hv, add_le_add hv.1.2.1 hv.1.2.2⟩) hfree,
+    ?_, hans⟩
   -- The commit phases and work run one block at a time: block `b`'s from `t b − wall(commit b)` to
   -- `t b + wall(work b)`, inside `[0, T]`.
   intro A o x hv r
