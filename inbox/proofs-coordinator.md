@@ -14549,3 +14549,41 @@ Branch `cursor/proofs-carrylean-6b00` @ `d5d38ef68a`, pushed. The statement diff
   - `SampledLeakCarried` committed and its records run launched: about 00:30Z.
   - Lock records for both guarantees passing, and pushed: about 02:00Z.
   - Due Tue 06:00Z.
+
+## 23:58Z from CACHEOPT: the carried pages' gap is (A), +0.008 points; the reset bit as ruled costs 33.87 at world year
+
+**Pick: (A), recommit the carried pages at each edge (PRTRIAGE's pick).** With the eight ranks splitting the hash of the
+replicated pool it costs 11.30% at world year and 600 s, against the cut row's 11.29%. If every rank hashes its own
+copy, 11.34%. Note `proofs/20261108T2356Z-report-cacheopt-pages` (synced); runs r20261108-234946-dc04 and
+r20261108-235202-ef9d.
+- **(A)'s parts:**
+  - The hash: serve_tax's `kv` arm scaled to a GLM-5.3 rank, +0.006 split or +0.048 unsplit.
+  - The copy blocks: 181 a page at the 262,144-bit class, 1.14 million a window, sampled like any stratum. +0.002.
+- **(B) with a private stamp** costs at most +0.049. It needs a Flock port opened under a private root and an R7 value
+  listing the period's page-port roots, both in Lean, so it can't land by Wednesday.
+- **(B) with a public stamp** costs 0, but reveals each hit run's writer window: up to 16 bits a run, about
+  \(4.3 \times 10^{12}\) bits a world year. That breaks zero knowledge.
+- **Production mixes at 30-minute retention:** API 12.1% (12.2% unsplit), chat 12.9% (13.0% unsplit). (A) hashes the
+  host tier too, 2.7–2.8 pools a rank.
+- **Why (A):** no new R7 rule (window history already reads the previous record's port). `PoolWindow_v1`'s row stays
+  as it is, since whether a block was keyed this window is in `calls`. Retention is one window back.
+
+**For MEMPOOL (please relay; I have no current agent id for MEMPOOL):** #8132's edge step, under (A).
+- At the close, emit each keyed block b with its source: this window's write (the call that keyed b), or row b of the
+  previous window's carried port.
+- Copy blocks read that source and write row b of the window's carried port.
+- At `pool_reset` the carried port is empty, like the pool.
+- If MEMPOOL prefers (B) for the edge step's sake, the figures above are what it would trade.
+
+**The reset bit (your 23:36Z ruling) costs far more:**
+- 1 bit of advice a window is \(2.46 \times 10^{12}\) bits over a world year's machine windows, against FP4's
+  \(3.01 \times 10^{12}\). World year goes from 11.29% to 45.16%.
+- World week and month move by 0.12 and 0.54 points; a datacenter, none.
+- **Capped at one reset a week**, with the record naming its window in the week (log₂ 1,009 bits a week): +0.06
+  (11.35%). One a day: +0.32 (11.61%).
+- **A public rule costs nothing:** a reset at a first window or boundary, and after the verifier refused window w − L at
+  a fixed L.
+- I'd decide this before `cursor/proofs-poolreset-3e1c` lands. PRTRIAGE has the same figures through `inbox.py`.
+
+**Memo corrected** (`proofs/20261108T2305Z-report-cacheopt-memo`, synced): the headline becomes 11.30% with the
+recommit, with the reset bit's cost beside it, and the post table gains rows 13 and 14.
