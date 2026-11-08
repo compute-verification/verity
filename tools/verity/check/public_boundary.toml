@@ -65,6 +65,10 @@ shared = [
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
     "Security/Properties/Spot/Second.lean",
+    # an audit's members side by side as the claims' program (`bitsProgs`, `membersPart`, `filesReplay`) and the lemmas on
+    # Bits' program, which the bridge (`Bridge.Members`) and SPOT[Flock]'s code import: entries of their own
+    "Security/Properties/Spot/Members.lean",
+    "Security/Proofs/Properties/Spot/Bits.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
