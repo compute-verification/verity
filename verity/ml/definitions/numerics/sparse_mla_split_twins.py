@@ -2,8 +2,8 @@
 `undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`), `SparseMlaCombineLse_v1`
 (`combine_lse_rows`),
 `SparseMlaSplitPart_v1` (`part_rows`, one split's partial and lse), `SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1
-is `SparseMlaHead_v1`), a head's `SparseMlaHeadBlock_v1` chain (`chain_rows`, each block's state) and its end `AttnHeadEnd_v1`
-(`head_end_rows`).  The blocks are `derived_rows.attn_block` over
+is `SparseMlaHead_v1`), a head's `SparseMlaHeadBlock_v1` chain (`chain_rows`, each block's state) and its end
+`SparseMlaHeadEnd_v1` (`head_end_rows`).  The blocks are `derived_rows.attn_block` over
 q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s steps, which `SparseMlaBlock_v1` restates), the step
 `tc_dot16_hopper` and the inverse `fa3_inv_sum`; the captures' fast path, checked word for word against the Definitions in
 `tests/program/test_sparse_mla_split.py`.  A row whose dot reads a non-finite operand is flagged and never claimed exact
@@ -160,7 +160,7 @@ def chain_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: 
 
 
 def head_end_rows(l, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
-    """`AttnHeadEnd_v1{D, INV}`: l (R, 4), o (R, D) f32 words -> (R, D) bf16 words, `bf16(o * inv((l0 + l2) + (l1 + l3)))`."""
+    """`SparseMlaHeadEnd_v1{DV, INV}`: l (R, 4), o (R, DV) f32 words -> (R, DV) bf16 words, `bf16(o * inv((l0 + l2) + (l1 + l3)))`."""
     l, o = np.asarray(l, dtype=U32), np.asarray(o, dtype=U32)
     tot = DR.add_ftz(DR.add_ftz(l[:, 0], l[:, 2]), DR.add_ftz(l[:, 1], l[:, 3]))
     return DR.f2fp_bf16(DR.mul_ftz(o, inv(tot)[:, None]))

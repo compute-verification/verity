@@ -5,6 +5,7 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaBlock_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   DOT: `gemm.HopperBF16WgmmaDot16_v2` (FA3's wgmma k16 step)
     SparseMlaHead_v2{T,DR,DV,BN,DOT,INV,SCALE}         INV: `boolean_attention.Fa3InvSum_v2`
     SparseMlaHeadBlock_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}
+    SparseMlaHeadEnd_v2{DV,INV}
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
 
 The callees are `boolean_attention`'s: `DotBf16_v3{K = DR + DV, DOT}` and `DOT`, `F2fpBf16_v2`, the FTZ f32 operations,
@@ -66,6 +67,15 @@ SparseMlaHeadBlockV2 = flat("SparseMlaHeadBlock", 2, ["DR", "DV", "NVIS", "FIRST
                             lambda S: M._head_block_type(S, BF16, F32), _head_block, M.SparseMlaHeadBlock, lifted=_LIFTED)
 
 
+def _head_end(B, S, l, o):
+    """`SparseMlaHeadEnd_v1`'s body on bits, epilogue `INV`."""
+    return M.head_end(bit_steps(B), S.INV, l, o)
+
+
+SparseMlaHeadEndV2 = flat("SparseMlaHeadEnd", 2, ["DV", "INV"], lambda S: M._head_end_type(S, BF16, F32), _head_end,
+                          M.SparseMlaHeadEnd, lifted=_LIFTED)
+
+
 def _mla(B, S, q_nope, q_rope, kv):
     """`SparseMla_v1`'s body on bits over `SparseMlaHead_v2`."""
     hd = bind(SparseMlaHeadV2, T=S.T, DR=S.DR, DV=S.DV, BN=S.BN, DOT=S.DOT, INV=S.INV, SCALE=S.SCALE)
@@ -75,4 +85,4 @@ def _mla(B, S, q_nope, q_rope, kv):
 SparseMlaV2 = flat("SparseMla", 2, ["T", "NH", "DR", "DV", "BN", "DOT", "INV", "SCALE"], lambda S: M._mla_type(S, BF16), _mla,
                    M.SparseMla, lifted=_LIFTED)
 
-BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaV2]
+BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaHeadEndV2, SparseMlaV2]

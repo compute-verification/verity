@@ -1370,6 +1370,8 @@
 "SparseMlaCombine_v2",
 "SparseMlaHeadBlock_v1",
 "SparseMlaHeadBlock_v2",
+"SparseMlaHeadEnd_v1",
+"SparseMlaHeadEnd_v2",
 "SparseMlaHeadSplit_v1",
 "SparseMlaHeadSplit_v2",
 "SparseMlaHead_v1",

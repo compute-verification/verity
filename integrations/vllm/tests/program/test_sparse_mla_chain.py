@@ -1,8 +1,8 @@
-"""`sparse_mla.SparseMlaHeadBlock_v1`, the cut serving stages a `SparseMla_v1` row as (`sparse_mla.head_chain`): per head its key
-blocks in FA3's order, each a unit carrying the online softmax's state to the next, and `dead_free.AttnHeadEnd_v1`, are the
-whole Call word for word, at small statics and at GLM-5.3's served ones; each unit fits the Flock block where the whole doesn't;
-the twin (`sparse_mla_split_twins.chain_rows`, `head_end_rows`) is each unit's word; the Boolean version agrees with its word
-view."""
+"""`sparse_mla.SparseMlaHeadBlock_v1` and `SparseMlaHeadEnd_v1`, the cut serving stages a `SparseMla_v1` row as
+(`sparse_mla.head_chain`): per head its key blocks in FA3's order, each a unit carrying the online softmax's state to the next,
+and its end are the whole Call word for word, at small statics and at GLM-5.3's served ones; each unit fits the Flock block where
+the whole doesn't; the end is `dead_free.AttnHeadEnd_v1`'s function; the twin (`sparse_mla_split_twins.chain_rows`,
+`head_end_rows`) is each unit's word; the Boolean versions agree with their word views."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -36,8 +36,16 @@ def _chain(T, DR, DV, BN, scale, qn, qr, kv) -> tuple[np.ndarray, list[tuple]]:
         state = [states[-1][0], states[-1][1], states[-1][2]] if j else []
         out = evaluate(unit, qn.tolist(), qr.tolist(), kv[lo:hi].reshape(-1).tolist(), *state)
         states.append((out[0], list(out[1:5]), list(out[5:])))
-    end = evaluate(bind(DF.AttnHeadEndV1, D=DV, INV=FA3["INV"]), states[-1][1], states[-1][2])
+    end = evaluate(bind(M.SparseMlaHeadEnd, DV=DV, INV=FA3["INV"]), states[-1][1], states[-1][2])
     return np.asarray(end, dtype=U32), states
+
+
+def test_the_end_is_the_dense_heads_end() -> None:
+    """`SparseMlaHeadEnd_v1{DV, INV}` is `AttnHeadEnd_v1{D = DV, INV}` word for word, on `_inputs`' words with specials."""
+    end = bind(M.SparseMlaHeadEnd, DV=16, INV=FA3["INV"])
+    l, o = _inputs(end, 400, 7)
+    want = _flat(E.evaluate_batch(bind(DF.AttnHeadEndV1, D=16, INV=FA3["INV"]), l, o))
+    assert all(np.array_equal(g, w) for g, w in zip(_flat(E.evaluate_batch(end, l, o)), want, strict=True))
 
 
 def test_a_heads_blocks_are_visited_last_to_first() -> None:
@@ -101,7 +109,7 @@ def test_the_twin_is_each_unit(T: int) -> None:
 def test_head_chain_cuts_a_binding_at_its_statics() -> None:
     """The units of a row of T keys: per head the first visited block (NVIS = T mod BN, or BN), the rest full, and the end."""
     blk = "DR=64,DV=512,NVIS={},FIRST={},BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.0625"
-    end = "AttnHeadEnd_v1{D=512,INV=Fa3InvSum_v1}"
+    end = "SparseMlaHeadEnd_v1{DV=512,INV=Fa3InvSum_v1}"
     got = [(u.id, n) for u, n in M.head_chain(bind(M.SparseMla, T=130, **GLM))]
     assert got == [(f"SparseMlaHeadBlock_v1{{{blk.format(2, True)}}}", 8), (f"SparseMlaHeadBlock_v1{{{blk.format(64, False)}}}", 16),
                    (end, 8)]
@@ -139,18 +147,18 @@ def test_only_the_first_visited_block_is_partial() -> None:
         bind(M.SparseMlaHeadBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
 
 
-BOOL = {"DOT": BM.SPARSE_MLA_GLM53["DOT"]}
-AGREEMENT = [bind(BM.SparseMlaHeadBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16, SCALE=0.0625, **BOOL),
-             bind(BM.SparseMlaHeadBlockV2, DR=16, DV=16, NVIS=16, FIRST=False, BN=16, SCALE=0.0625, **BOOL)]
+AGREEMENT = [bind(BM.SparseMlaHeadBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16, SCALE=0.0625, DOT=BM.SPARSE_MLA_GLM53["DOT"]),
+             bind(BM.SparseMlaHeadBlockV2, DR=16, DV=16, NVIS=16, FIRST=False, BN=16, SCALE=0.0625, DOT=BM.SPARSE_MLA_GLM53["DOT"]),
+             bind(BM.SparseMlaHeadEndV2, DV=16, INV=BM.SPARSE_MLA_GLM53["INV"])]
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
-    """Each traces a few hundred thousand ANDs (minutes): what the word-level tests can't see is the Boolean unit's agreement
-    on special words (zeros, infinities, NaNs, subnormals) through its padding, a block and the carried state."""
+    """Each block traces a few hundred thousand ANDs (minutes): what the word-level tests can't see is the Boolean units'
+    agreement on special words (zeros, infinities, NaNs, subnormals) through a block's padding, its carried state and the end."""
     word = TR.word_of(target)
-    lifted = {k: (TR.word_of(x) if k == "DOT" else x) for k, x in target.bindings.items()}
+    lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
     assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, lifted)
     assert SW.boolean_version(word).id == target.id
     inputs = _inputs(word, 96, sum(map(ord, target.id)))

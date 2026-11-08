@@ -154,4 +154,4 @@ def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     b = CK.block_range(bind(M.SparseMla, T=65, **M.SPARSE_MLA_GLM53), F)
     assert not F.failures and b["whole"]["k_log"] == 30 and b["k_log"] == 27
     assert [(u["unit"].partition("{")[0], u["count"]) for u in b["cut"]] == [
-        ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("AttnHeadEnd_v1", 8)]
+        ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadEnd_v1", 8)]
