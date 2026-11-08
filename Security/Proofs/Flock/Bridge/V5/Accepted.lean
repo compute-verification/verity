@@ -238,9 +238,10 @@ theorem v5Files_of_checksStmt {tags : Tags} {cf pf : ByteArray} {tables : List (
   rw [Flock.ProvedScope.circuitOf_hidden hh, hcs] at hck hks
   rw [he, FlockSoundness.Discharge.Hidden.parseIn_commit hty hC] at hpi
   rw [he, FlockSoundness.Discharge.Hidden.loadPublicIn_commit hty hC] at hpub
+  have hcs' := v5Files_of_checks hpi hpub hn hck hks
   obtain ⟨nets, hu⟩ := hC.unrolled_eq hty
   rw [he, hu]
-  exact v5Files_of_checks hpi hpub hn hck hks
+  exact hcs'
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
