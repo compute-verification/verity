@@ -29,10 +29,11 @@ from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
+from verity_vllm.protocols.remote_bandwidth import commit_map as CM
 from verity.ml.definitions.replay import replayer
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
-LAYOUT = MM.KvPool(block_size=4)
+LAYOUT = CM.KvPool(block_size=4)
 REGISTRATION = bytes(range(64))
 ARRIVE = {"r0": 0, "r1": 1}
 #: pages in order of first need: r0's first (step 0), r0's second and r1's first (step 1), r1's second (2), r0's third (5)
@@ -124,7 +125,7 @@ def test_rows_are_the_programs_kv(reqs):
 
 
 def test_the_record(reqs):
-    head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    head, steps = CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     assert (head.blocks, head.registration) == (2 * 6 * 2, REGISTRATION)
     page = {p: sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2)) for p in range(6)}
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [
@@ -148,7 +149,7 @@ def test_the_record(reqs):
 
 
 def test_a_complete_block_is_held_while_its_rows_are_live(reqs):
-    head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    head, steps = CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     # step t's reads see the blocks resident going into t; its record (frees, then writes) takes effect after them
     by, held = {s.step: s for s in steps}, set()
     for t in range(max(ARRIVE[r] + rs.steps for r, rs in reqs.items())):
@@ -175,8 +176,8 @@ def test_a_block_a_gather_may_select_is_freed_after_the_last_step_that_may_selec
     req = from_census(picked)
     assert first and first <= req.upper[5] and not first & req.uses[5] and first <= req.uses[4]
     assert {req.last[x] for x in first} == {5} and MM.rows(r0, picked) == reqs["r0"]
-    record = MM.record({**reqs, "r0": MM.rows(r0, picked)}, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
-    assert record == MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    record = CM.record({**reqs, "r0": MM.rows(r0, picked)}, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    assert record == CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     page1 = {_slot(layer, 1, plane) for layer in range(2) for plane in range(2)}
     assert [s.step for s in record[1] if page1 & set(s.freed)] == [5]
 
@@ -184,7 +185,7 @@ def test_a_block_a_gather_may_select_is_freed_after_the_last_step_that_may_selec
 def test_the_pages_are_the_ones_the_engine_wrote(reqs):
     observed = {"r0": [7, 3, 9], "r1": [2, 5]}
     assert MM.tables(reqs, ARRIVE, _slots(reqs, observed), 4) == observed
-    head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, MM.KvPool(block_size=4, pages=10), observed)
+    head, steps = CM.record(reqs, ARRIVE, _payload, REGISTRATION, CM.KvPool(block_size=4, pages=10), observed)
     assert [w.slot for w in steps[0].written] == sorted(layer * 20 + 7 * 2 + plane for layer in range(2) for plane in range(2))
     with pytest.raises(ValueError, match="wrote 2 KV rows at step 1, where its Program writes 4 from position 0"):
         MM.tables(reqs, ARRIVE, lambda r, s: _slots(reqs, observed)(r, s)[2:] if (r, s) == ("r1", 1) else _slots(reqs, observed)(r, s), 4)
@@ -210,7 +211,7 @@ def test_a_packed_page_holds_k_and_v_in_one_plane(reqs):
     kv = {r: MM.packed(rs) for r, rs in reqs.items()}
     assert (len(kv["r0"].layers[0]), kv["r0"].row_bytes) == (1, 2048)
     assert kv["r0"].layers[1][0][4] == MM.Row(reqs["r0"].layers[1][0][4].group + reqs["r0"].layers[1][1][4].group, 1, 5)
-    head, steps = MM.record(kv, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    head, steps = CM.record(kv, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     # a block is two slots of K and V: r0's second page reaches its first half at step 1 and completes it at 2 (positions 4,
     # 5), its second at 3 and 4; r1's position 4 and r0's 8 each reach a half they leave dirty, at steps 2 and 5
     assert head.blocks == 24 and [(s.step, len(s.freed), len(s.written)) for s in steps] == [
@@ -220,27 +221,27 @@ def test_a_packed_page_holds_k_and_v_in_one_plane(reqs):
 
 
 def test_the_engine_holds_the_maps_blocks(reqs):
-    head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    head, steps = CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     block = _engine(reqs, TABLES)
-    assert MM.engine_agrees(reqs, LAYOUT, TABLES, steps, block) == {"compared": 12, "equal": 12}
+    assert CM.engine_agrees(reqs, LAYOUT, TABLES, steps, block) == {"compared": 12, "equal": 12}
     bad = lambda layer, page, c: bytes(4096) if (layer, page, c) == (1, 2, 1) else block(layer, page, c)
-    assert MM.engine_agrees(reqs, LAYOUT, TABLES, steps, bad) == {"compared": 12, "equal": 11}
+    assert CM.engine_agrees(reqs, LAYOUT, TABLES, steps, bad) == {"compared": 12, "equal": 11}
 
 
 def test_a_block_no_step_reads_while_resident_is_in_no_record():
     page = {p: sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2)) for p in range(3)}
-    layout = MM.KvPool(block_size=4, pages=6)
+    layout = CM.KvPool(block_size=4, pages=6)
     # the prefill (positions 0-4) completes page 1 and reaches page 2, whose last row (7) the last step, 3, writes: page 2 is
     # never resident while read, so no record writes it, and its filler is freed where the prefill first reaches it
-    _, steps = MM.record({"r": decode(5, 8)}, {"r": 0}, _payload, REGISTRATION, layout, {"r": [1, 2]})
+    _, steps = CM.record({"r": decode(5, 8)}, {"r": 0}, _payload, REGISTRATION, layout, {"r": [1, 2]})
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [(0, page[2], page[1]), (3, page[1], [])]
     # a prefill-only request's blocks are all in no record: the write reaching their filler frees it
-    _, steps = MM.record({"r": decode(8, 8)}, {"r": 0}, _payload, REGISTRATION, layout, {"r": [1, 2]})
+    _, steps = CM.record({"r": decode(8, 8)}, {"r": 0}, _payload, REGISTRATION, layout, {"r": [1, 2]})
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [(0, sorted(page[1] + page[2]), [])]
 
 
 def test_a_page_reused_after_its_request_frees_its_filler_once(reqs):
-    head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [3, 5]})
+    head, steps = CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [3, 5]})
     rp = Replay(head)
     for s in steps:
         rp.apply(s)
@@ -257,9 +258,9 @@ def _page(p: int) -> list[int]:
     return sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2))
 
 
-def _deferred(*encodes, lifetime: int = 60) -> MM.Deferral:
+def _deferred(*encodes, lifetime: int = 60) -> CM.Deferral:
     """A deferral of ``encodes``, ``(made, landed, first, count)`` on the engine's steps, as the session numbers them."""
-    return MM.Deferral(tuple((m + FIRST, None if r is None else r + FIRST, f, c) for m, r, f, c in encodes), FIRST, lifetime)
+    return CM.Deferral(tuple((m + FIRST, None if r is None else r + FIRST, f, c) for m, r, f, c in encodes), FIRST, lifetime)
 
 
 def _lines(steps):
@@ -278,20 +279,20 @@ def test_a_deferred_block_is_written_where_its_encode_lands():
     # completing the block (pages 1 and 3); r1's first page, read last at step 2, where its encode lands, is written there
     # and freed a line later (memory accounting's withdrawn block, until memory-map/v1 records one), and so is r0's second
     d = _deferred((0, 1, 24, 4), (1, 2, 28, 4), (4, 5, 32, 4))
-    head, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, d)
+    head, steps = CM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, d)
     at = lambda p, j: list(zip(_page(p), range(j, j + 4)))  # noqa: E731
     assert _lines(steps) == [(0, _page(1), []), (1, sorted(_page(2) + _page(3)), at(1, 24)), (2, _page(4), at(3, 28)),
                              (3, _page(3), []), (5, sorted(_page(1) + _page(5)), at(2, 32)), (6, _page(2), [])]
     assert _replayed(head, steps).extent == 36
     # landing at once is the map without a deferral
     now = _deferred((0, 0, 24, 4), (1, 1, 28, 4), (4, 4, 32, 4))
-    assert MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, now) == MM.record(SESSION, ARRIVE, _payload, REGISTRATION,
+    assert CM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, now) == CM.record(SESSION, ARRIVE, _payload, REGISTRATION,
                                                                                                 LAYOUT, TABLES)
     # an encode still out is no write, and its block no free
-    _, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred((0, 1, 24, 4), (1, 2, 28, 4), (4, None, 32, 4)))
+    _, steps = CM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred((0, 1, 24, 4), (1, 2, 28, 4), (4, None, 32, 4)))
     assert _lines(steps)[-2:] == [(3, _page(3), []), (5, sorted(_page(1) + _page(5)), [])]
     # and the circuit's appends after the session's last are never made
-    _, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred((0, 1, 24, 4), (1, 2, 28, 4)))
+    _, steps = CM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred((0, 1, 24, 4), (1, 2, 28, 4)))
     assert [w for s in steps for w in s.written if w.index >= 32] == []
 
 
@@ -299,7 +300,7 @@ def test_two_appends_landing_in_one_line_that_write_one_slot_are_written_a_line_
     # a's page 1, completed at step 0 and read last at 1, lands at 2 with b's, which reuses the page from step 2: the line
     # writes a's, and b's waits a line, whose write releases a's in place of its free
     reqs, arrive, tables = {"a": decode(4, 5), "b": decode(4, 6)}, {"a": 0, "b": 2}, {"a": [1, 2], "b": [1, 3]}
-    head, steps = MM.record(reqs, arrive, _payload, REGISTRATION, MM.KvPool(block_size=4, pages=6), tables,
+    head, steps = CM.record(reqs, arrive, _payload, REGISTRATION, CM.KvPool(block_size=4, pages=6), tables,
                             _deferred((0, 2, 24, 4), (2, 2, 28, 4)))
     assert _lines(steps) == [(0, _page(1), []), (1, _page(2), []), (2, [], list(zip(_page(1), range(24, 28)))),
                              (3, _page(3), list(zip(_page(1), range(28, 32)))), (4, _page(1), [])]
@@ -310,7 +311,7 @@ def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_where_its_e
     # the session re-keys 4 blocks in the append it makes at step 3: step 2's line frees the oldest live, r0's first page,
     # and step 3's, where the encode lands, writes them again at the fresh indices; step 4's append numbers on from there
     d = _deferred((0, 1, 24, 4), (1, 2, 28, 4), (3, 3, 32, 4), (4, 5, 36, 4), lifetime=2)
-    head, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, d)
+    head, steps = CM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, d)
     at = lambda p, j: list(zip(_page(p), range(j, j + 4)))  # noqa: E731
     assert _lines(steps) == [(0, _page(1), []), (1, sorted(_page(2) + _page(3)), at(1, 24)),
                              (2, sorted(_page(1) + _page(4)), at(3, 28)), (3, _page(3), at(1, 32)),
@@ -321,7 +322,7 @@ def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_where_its_e
 
 def test_a_deferral_that_is_not_the_circuits_is_refused():
     def record(*encodes, lifetime=60):
-        return MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred(*encodes, lifetime=lifetime))
+        return CM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred(*encodes, lifetime=lifetime))
     with pytest.raises(ValueError, match="lifetime cap 1 is refused"):
         record((0, 1, 24, 4), lifetime=1)
     with pytest.raises(ValueError, match="at step 0 is of 3 blocks, and the circuit completed 4"):
@@ -338,15 +339,15 @@ def test_a_deferral_that_is_not_the_circuits_is_refused():
 
 def test_refusals(reqs):
     with pytest.raises(ValueError, match="while a request's rows in it are read to step"):
-        MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [2, 4]})
+        CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [2, 4]})
     with pytest.raises(ValueError, match="don't hold its 9 positions"):
-        MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2], "r1": [3, 4]})
+        CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2], "r1": [3, 4]})
     with pytest.raises(ValueError, match="payload gave"):
-        MM.record(reqs, ARRIVE, lambda r, x: bytes(1000), REGISTRATION, LAYOUT, TABLES)
+        CM.record(reqs, ARRIVE, lambda r, x: bytes(1000), REGISTRATION, LAYOUT, TABLES)
     with pytest.raises(ValueError, match="not whole 4096-byte blocks"):
-        MM.record(reqs, ARRIVE, _payload, REGISTRATION, MM.KvPool(block_size=2), TABLES)
+        CM.record(reqs, ARRIVE, _payload, REGISTRATION, CM.KvPool(block_size=2), TABLES)
     with pytest.raises(ValueError, match="KV differs"):
-        MM.record({"r0": reqs["r0"], "t": MM.rows(build_program(_phi(TINY), "request", LP=4, T=1).program)}, {"r0": 0, "t": 0},
+        CM.record({"r0": reqs["r0"], "t": MM.rows(build_program(_phi(TINY), "request", LP=4, T=1).program)}, {"r0": 0, "t": 0},
                   _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 3], "t": [4, 5]})
 
 
@@ -384,7 +385,7 @@ PREFIX = {"input": 1, "C": 4, "row_leaves": 512, "layers": [f"model.layers.{i}.s
 #: r0 (cold: an 8-row prefill, then 1 decode step) from step 0; r1 (warm: positions 0-3 cached from r0's first page, rows 4-7 at
 #: its first step, then 4 decode steps) from step 1
 WARM_ARRIVE, WARM_TABLES, PRODUCERS = {"r0": 0, "r1": 1}, {"r0": [1, 2, 3], "r1": [1, 4, 5]}, {"r1": ["r0"]}
-WARM_LAYOUT = MM.KvPool(block_size=4, pages=6)
+WARM_LAYOUT = CM.KvPool(block_size=4, pages=6)
 
 
 @pytest.fixture(scope="module")
@@ -433,7 +434,7 @@ def test_a_warm_requests_cached_pages_are_the_ones_its_producer_wrote(session):
 
 
 def test_a_page_two_requests_share_is_written_and_counted_once(session):
-    head, steps = MM.record(session, WARM_ARRIVE, _payload, REGISTRATION, WARM_LAYOUT, WARM_TABLES, None, PRODUCERS)
+    head, steps = CM.record(session, WARM_ARRIVE, _payload, REGISTRATION, WARM_LAYOUT, WARM_TABLES, None, PRODUCERS)
     page = {p: sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2)) for p in range(6)}
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [
         (0, [], sorted(page[1] + page[2])),     # r0's prefill fills its first two pages
@@ -446,18 +447,18 @@ def test_a_page_two_requests_share_is_written_and_counted_once(session):
         codec.digest(b"".join(_payload("r0", x) for x in session["r0"].layers[1][1][0:4]))]
     assert sum(len(s.written) for s in steps) == 3 * 2 * 2 and _replayed(head, steps).extent == 24 + 12
     # r0 alone frees page 1 at its own last step: the warm read moves that free and nothing else of r0's
-    alone = MM.record({"r0": session["r0"]}, {"r0": 0}, _payload, REGISTRATION, WARM_LAYOUT, {"r0": [1, 2, 3]})[1]
+    alone = CM.record({"r0": session["r0"]}, {"r0": 0}, _payload, REGISTRATION, WARM_LAYOUT, {"r0": [1, 2, 3]})[1]
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in alone] == [
         (0, [], sorted(page[1] + page[2])), (1, sorted(page[1] + page[2] + page[3]), [])]
-    assert MM.engine_agrees(session, WARM_LAYOUT, WARM_TABLES, steps, _engine(session, WARM_TABLES)) == {"compared": 12, "equal": 12}
+    assert CM.engine_agrees(session, WARM_LAYOUT, WARM_TABLES, steps, _engine(session, WARM_TABLES)) == {"compared": 12, "equal": 12}
 
 
 def test_a_shared_page_is_refused_where_its_sharing_is_not_the_circuits(session):
     def record(reqs, arrive, tables, producers=PRODUCERS, layout=WARM_LAYOUT):
-        return MM.record(reqs, arrive, _payload, REGISTRATION, layout, tables, None, producers)
+        return CM.record(reqs, arrive, _payload, REGISTRATION, layout, tables, None, producers)
     # another request writing r0's page 1 while r1 still reads it
     with pytest.raises(ValueError, match="is written at step 3 while a request's rows in it are read to step 5"):
-        record(session | {"r2": decode(4, 5)}, WARM_ARRIVE | {"r2": 3}, WARM_TABLES | {"r2": [1, 6]}, layout=MM.KvPool(block_size=4, pages=7))
+        record(session | {"r2": decode(4, 5)}, WARM_ARRIVE | {"r2": 3}, WARM_TABLES | {"r2": [1, 6]}, layout=CM.KvPool(block_size=4, pages=7))
     # r1 reading page 1 at the step r0 completes it, before its record writes it
     with pytest.raises(ValueError, match="request r1 reads cached slot 2 from step 0, a block its producer r0 completes at step 0"):
         record(session, {"r0": 0, "r1": 0}, WARM_TABLES)
@@ -471,7 +472,7 @@ def test_a_shared_page_is_refused_where_its_sharing_is_not_the_circuits(session)
 def test_a_cold_session_is_as_before(reqs):
     observed = {"r0": [7, 3, 9], "r1": [2, 5]}
     assert MM.tables(reqs, ARRIVE, _slots(reqs, observed), 4, {}) == observed
-    assert MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, None, {}) == MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    assert CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, None, {}) == CM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     with pytest.raises(ValueError, match="request r1's Program reads 0 cached rows, and 1 producing requests are named"):
         MM.tables(reqs, ARRIVE, _slots(reqs, observed), 4, {"r1": ["r0"]})
 
@@ -549,8 +550,8 @@ def _latent_payload(r: str, row: MM.Row) -> bytes:
 
 
 def test_a_latent_page_of_64_slots_is_18_blocks_its_rows_straddle():
-    rs, tables, layout = {"r": latent(70, 80)}, {"r": [1, 2]}, MM.KvPool(block_size=64, pages=4)
-    head, steps = MM.record(rs, {"r": 0}, _latent_payload, REGISTRATION, layout, tables)
+    rs, tables, layout = {"r": latent(70, 80)}, {"r": [1, 2]}, CM.KvPool(block_size=64, pages=4)
+    head, steps = CM.record(rs, {"r": 0}, _latent_payload, REGISTRATION, layout, tables)
 
     def at(page, *cs):
         return sorted(layer * 4 * 18 + page * 18 + c for layer in range(2) for c in cs)
@@ -564,4 +565,4 @@ def test_a_latent_page_of_64_slots_is_18_blocks_its_rows_straddle():
     assert next(w.digest for w in steps[1].written if w.slot == at(2, 1)[0]) == want
     got_head, got = parse(dumps(head, steps).splitlines())
     assert _replayed(got_head, got).extent == head.blocks + 2 * (18 + 4)
-    assert MM.engine_agrees(rs, layout, tables, steps, _engine(rs, tables, bs=64, payload=_latent_payload)) == {"compared": 44, "equal": 44}
+    assert CM.engine_agrees(rs, layout, tables, steps, _engine(rs, tables, bs=64, payload=_latent_payload)) == {"compared": 44, "equal": 44}

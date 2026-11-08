@@ -166,7 +166,7 @@ def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
     tg, other = templates(params)
     program, query = CS.population_program([(tg, 2 * n), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
-    law = D.parse_law(RULE)
+    law = D.parse_design(RULE)
 
     def ports(words: int) -> dict:
         return {"rows": (("row", words),), "outs": (("o0", words),), "schemas": (("row", V2), ("o0", V2))}

@@ -10,9 +10,9 @@ How it works
    stay in place (no functionalisation), lifted parameters/buffers/constants are placeholders.
 2. Parameters and buffers become ONE prescribed `weights` record input (one field per *distinct tensor*: tied
    parameters are one field referenced from every placeholder that shares the tensor — boundary 3). Lifted
-   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value the served run decides and no
-   circuit computes (the top-k order of a DSA row past TOPK) is a field of a `run` input a rule declares (`Rule.run_inputs`),
-   checked in gates: each check's bit is an output after the source's (`Ctx.check`), which the verifier requires to be 1.
+   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value no circuit computes (a training
+   survey's hole, `rules.training_survey`) is a field of a `run` input a rule declares (`Rule.run_inputs`). A rule's check in
+   gates is a bit output after the source's (`Ctx.check`), which the verifier requires to be 1.
 3. Every graph node is translated by exactly one applicable rule (`rules/`): views are reference rearrangements;
    ops/in-place ops/state patterns emit calls of REGISTERED definitions bound to the mode's kind vocabulary
    (profile mode: the profile's kernels; reference mode: exact CPU-f32 kinds). Rules decide structurally
@@ -335,8 +335,7 @@ class Ctx:
 
     # -- emitting ----------------------------------------------------------------------------------------
     def kind(self, role: str, node=None, **statics):
-        """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered`
-        if the vocabulary has no kind for it."""
+        """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered` if the vocabulary has no kind for it."""
         fn = self.vocab.kind(role, **statics)
         if fn is None:
             refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
@@ -492,7 +491,7 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None, theta: Sequence[str] = (),
-                  registered_values: bool = False, session: list | None = None, dead_free: bool = False, correspondence: bool = True) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None, dead_free: bool | str = False, correspondence: bool = True) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
@@ -500,7 +499,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`:
     the inputs that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds
     (`relabel.rank_report` reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the
-    units no output reads, each Definition with dead gates swapped for its version without them), and the correspondence's Calls with it.
+    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps), and the
+    correspondence's Calls with it.
     `correspondence=False`: no runtime correspondence (for a graph no serving runtime executes, a training step's); the Program is unchanged."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
@@ -540,7 +540,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool, dead_free: bool = False, correspondence: bool = True, theta: tuple[str, ...] = ()) -> DeriveReport:
+                   check_registry: bool, dead_free: bool | str = False, correspondence: bool = True, theta: tuple[str, ...] = ()) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -759,8 +759,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
 
 
 def _flat_definition(name: str, body, src_static: dict, mode: str) -> SpecializedDefinition:
-    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified
-    family match."""
+    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified family match."""
     params, ret = tuple(body.params), body.ret_type
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (params, ret), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
