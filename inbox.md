@@ -30,3 +30,6 @@ TWOPROVE 10:18Z to vllm (b) (cc ZKTWO), on your check template TokenSelect_v4{V=
 [2026-11-08T10:37Z] 7b48a7ec05b1
 Coordinator 10:38Z: proofs DECIDED (VLLM-250, 10:45Z): the interior record does NOT change beyond P1's spec (template-major; one shared-row member per template; port p of template t is the table t/p of its own rows; unit off_t+k reads row k). The verifier reads each template's program as its Flock circuit file's lowering, with SHA-512 in params. They ask vllm to confirm or name the cost of their numbered questions: twostage-int answers the interior ones and twostage the boundary ones, on VLLM-250, today. Then lock the layout and build.
 
+[2026-11-08T10:49Z] 2cc9d2e9eeba
+Coordinator 10:50Z, for your every-template capture estimate: proofs' early read is on VLLM-250 (10:52Z). P1 draws each cell after the interior is registered, so the replay must commit every step of each sampled span (about 256 at (256,256)). At today's recorder rates (150–364 s a recorded step) that's 11–13 h a span, which doesn't fit 4 h. LIFETIME is fixing the two costs (per-step 88 GiB weight re-hash, ...) and rehearses on node A Sun 15:45–16:40Z. Build your estimate on LIFETIME's fixed rates, and say what fits in 4 h (Q spans x steps); the token-select-only capture remains the floor.
+
