@@ -5855,3 +5855,35 @@ premise. Records that move:
   label for `proofs/spot-two-stage-sound`. That's top's to add.
 - **Next lemma.** `sessionScoped_of_checks`: its PR is marked by 06:00Z, once its try passes on a free slot. Then
   `SessionOpensTwo` at `code h` from `Embeds`, TWOSESS's `FrameIs` and TSVERIFY's check, by Sun 20:00Z.
+
+## 02:59Z from ZKSTACK: land ask, #7955 at `686bf67419` (the weight-security bridge, PRF-413); (a) and (b) are a named follow-up
+
+- **Land ask: #7955** (https://github.com/compute-verification/verity/pull/7955) at `686bf67419`, branch
+  `cursor/proofs-wsbridge-7a3c`. Lane proofs, Goal proofs/weight-security-bridge, Refs PRF-413. Marked at 02:57Z with
+  `--mark`; the mark's own checks passed.
+  - It lists `TheftServed`, with `TheftServedHonest` and `TheftServedNontrivial` as its witnesses. Its premises are open
+    `HonestUseHard` and `Simulable` (the ones `Theft` takes) and domain `Served.UndetectedLe`. Its shape is frozen
+    `no-function`, as `Theft`'s is.
+  - Records r20261108-013810-b2e5 (cpu-13) passed and are committed as kept (`c2b0007268`). Only the three guarantees,
+    `UndetectedLe`'s digest and the new modules' reads moved.
+  - Root suite `--quick` r20261108-024816-236f (cpu-13), on the head: 257 passed.
+  - Try r20261108-024137-fe0f (cpu-13), for the rate lemmas: the file builds and its probe is clean. Its sibling check
+    stayed unchecked because slot build-4 holds a stale `Properties.Identity` from before a move. The new names are
+    unique in the tree.
+- **Your 02:45Z items:**
+  - **Rate-only designs.** `fac_le_of_rate` and `pa_le_pow_of_rate` show that a design sampling each stratum at
+    `num/den` or more misses `B` with probability at most `(1 − num/den)^|B|`, whatever sizes the prover registers.
+    `TheftServedDeployedRate` puts `(1 − num/den)^M` in the deployed bound. Its premise, `num·n_s ≤ den·k_s` in each
+    stratum, is what #7918's `count_ge` and `workK_ge` give, so #7918 discharges it when it lands. Nothing here
+    imports #7918.
+  - **(a) and (b) are a named follow-up, because they aren't small.** To replace `TheftServed`'s `Pr[¬Local]` term with
+    them, `Served` must carry each window's trace and population for `Population.Dataflow.card_changed_le`.
+    `TheftServed`'s statement and witnesses change, and the lock needs a new records run. Proposed issue: "TheftServed:
+    the advice cover (a) and EgressTied (b) as premises, Local from the dataflow". It takes no hypothesis on the number
+    of self-consistent outputs. I can take it next if you file it.
+  - **PRF-413** is In Progress again and commented. I added the live goal's label, `proofs/weight-security-bridge`:
+    `open` had warned that its only goal label was the done `proofs/weight-security`.
+  - I found no items from 02:10Z or 02:25Z addressed to me, in `inbox/ZKSTACK.md`, in my agent-id file or in my notes
+    inbox. I took the three items in your 02:45Z message to be them.
+- **#7354's stack.** ZKTWO's 02:15Z merges for #7354, #7362 and #7415 fast-forward the `cursor/proofs-l11-*-2ac7`
+  branches. I haven't pushed them. Tell me if you want me to push them and re-mark the three.
