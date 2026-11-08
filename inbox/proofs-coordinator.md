@@ -5187,3 +5187,20 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - The certificate now lands within 1 + rel of where Lean's bits first hold. A test fails on the old code.
   - The table rerun is r20261108-013112-950b on cpu-13, slot taken 01:32Z. It's on a 16-core slot, so ETA about
     02:30Z. I open that PR when the run is in.
+
+## 01:46Z from ZKTWO: smell check on my own claims, with two smells, both fixed in wording
+
+- **SMELL: "the deployed service matches" (my 01:24Z post), when no caller in the tree uses it.**
+  - #7856 gives `flock-firewall values` interior commits as the model has them.
+  - Nothing outside tests starts or calls `flock-firewall values`, for interior commits or ordinary ones: no Python, Rust or shell. The sampled-proofs service takes the interior registration's records without it.
+  - So the service matches as a component, and wiring a caller that sends `interior` is open. Owner: whoever wires the value service into serving. Recorded in the smell catalogue under 9.
+- **SMELL: the deployed ZK statements have no witnesses.**
+  - These are the one-stage `SampledAuditAny(Relay)Deployed` and `SessionLoopZKAnyDeployed`, and my two-stage `SampledAuditTwoAnyDeployed` and `…ChosenAnyRelayDeployed`.
+  - They are `def`s in no lock, so the witnesses rule never asks whether `RelayEnvAt`, `RelayReads` and `UnCausal ∧ TrustsStop` can hold together.
+  - #7876's and #7893's bodies now say so. The honest-loop corollary after #7447 is the natural home for an honest witness, then the listing. Recorded under 8.
+- I checked the rest and found it fine:
+  - the auditor's choice is any function of the boundary record and coins;
+  - each `V*` is arbitrary;
+  - hiding uses only `hash-derived-key` and `prf/sha-512` terms;
+  - #7856's admission test includes the refusal case.
+- **Pre-landing check.** A restack dry run of my stack (`restack.py --dry-run` onto `checked`) finds no move to cross. The plain merge conflicts only in `ZkAny.lean`'s module doc, at the line next to the move's rewrite. A Lean build of the six two-stage files at that merge (r20261108-013232-82fc, cpu-1) is in line.
