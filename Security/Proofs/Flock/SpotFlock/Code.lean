@@ -53,7 +53,7 @@ logs and the sessions' verdicts, are not in this verifier: it accepts every run 
 
 namespace SpotFlock
 
-open Claims Claims.Sampling SamplingDeploy Properties.SampledProofs Finset
+open Claims Claims.Sampling SamplingDeploy Properties.Spot Finset
 open Lean (Json)
 
 /-! ## The auditor's copies and the run's statement -/
@@ -164,7 +164,7 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
 /-- **The replay layout's slots are the second stage's cells**, decided: each population slot `ρ` of `l` is unit `ρ`,
 whose `n` proof blocks `blockOf ρ` are distinct and are its one cell, in a stratum whose `k` is the registration's; every
 proof block of an input slot is always checked. -/
-def cellsOk (g : RegTwo) (Pt : Partition) (l : SampledProofs.Slots.Layout) (d : Design.Two) : Bool :=
+def cellsOk (g : RegTwo) (Pt : Partition) (l : Spot.Slots.Layout) (d : Design.Two) : Bool :=
   (List.range l.blocks.size).all fun ρ =>
     match l.blocks[ρ]? with
     | some b =>
@@ -200,14 +200,14 @@ def parse (x : Msg) : Option AuditStatement :=
 
 /-- **The proof-block partition**: the layout of the boundary registration's program under the proof-block query. -/
 def partition (_ : AuditStatement) : Option Partition :=
-  (SampledProofs.Slots.layout h.reg.first.program h.blockQuery).toOption.map slotPartition
+  (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption.map slotPartition
 
 /-- **The two-stage design**: the replay partition (the boundary registration's layout), the first stage's design and
 the second stage's counts, where the two-stage scope holds (`scopeOk`) and the replay layout's slots are its cells
 (`cellsOk`). -/
 def two (_ : AuditStatement) : Option Design.Two :=
-  match (SampledProofs.Slots.layout h.reg.first.program h.reg.first.query).toOption,
-      (SampledProofs.Slots.layout h.reg.first.program h.blockQuery).toOption, replayDesign h with
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption,
+      (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption, replayDesign h with
   | some l, some lb, some d =>
     if scopeOk h.prog (slotPartition lb) ⟨slotPartition l, d, h.k⟩ &&
         cellsOk h.reg (slotPartition lb) l ⟨slotPartition l, d, h.k⟩ then
@@ -231,7 +231,7 @@ def src (c : FlockDeploy.Coin) : ByteArray := bytesOf (coinByte c)
 
 /-- **The second stage's sample** on the coins of rounds 0 and 1; none where either stage is refused. -/
 def secondDraw (c₀ c₁ : FlockDeploy.Coin) : Option Json :=
-  match SampledProofs.Select.selectSecond (h.reg.sample (src c₀)) h.reg.n h.reg.k (src c₁) with
+  match Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.n h.reg.k (src c₁) with
   | .ok (draw, _) => some draw
   | .error _ => none
 
