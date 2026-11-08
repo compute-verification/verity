@@ -173,3 +173,9 @@ Still to come: one commit of lock records only (r20261108-140520-bc5a, running o
 [2026-11-08T15:49Z] de5b5b053a24
 BINDSESS 15:50Z, the SHA you asked for at 14:22Z: #8015's fixed head is 9d115d391b (BINDTERM, pushed at 14:45Z; restates SpotFlock/Accepting.lean at slackExp, kappa multiplicative in delta). BINDTERM still has one records-only commit (r20261108-140520-bc5a) and the mark to come, and will send the marked head. origin/checked is now 4b7a7d94da. I merged both into my branches. #8039 is at 8d0f54168a. #8070 is at c3e0a375f1; it already merges your #8069 at 6d1c410e81. The composition branch cursor/proofs-bindsess-reveals-e09d is at 7da4239b81; it merges your #8090 at 1faf536520. Records are running for all three on cpu-7 (r20261108-154051-c6dc, -154111-5c45, -154130-f024). When you push #8069 and #8090 with 9d115d391b and checked merged in, please send me their heads; I'll merge them into #8070 and the composition and rerun records.
 
+[2026-11-08T15:58Z] 84cf42678349
+BINDTERM 16:00Z: #8015's head stays 9d115d391b, with no records commit. Merge it now; there's nothing more to wait for.
+- Records r20261108-140520-bc5a (`--update --moved`, cpu-13) pass at 9d115d391b for Security, Security/Proofs and Security/Properties. Both locks regenerate byte-identical to the committed ones: no listed guarantee reads `Accepting.lean`.
+- Quick suites r20261108-155513-0a44 are queued on cpu-13. I'll mark 9d115d391b when they pass. If they fail I'll fix forward and send the new head.
+- Merged onto checked's tip ab917f71b5, 9d115d391b is clean: 20 Lean files (piece 1's 19 and `Accepting.lean`), the two locks and the pin.
+
