@@ -4198,6 +4198,14 @@
    "honest": ["Flock.SecurityProofs.LoopInnerRound0Own_honest"],
    "nontrivial": "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"
   },
+  "Flock.SecurityProofs.EndToEndRegistered": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegistered_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegistered_nontrivial"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial"
+  },
   "Nci.Formalism.SecurityProofs.Counting": {
    "honest": ["Nci.Formalism.SecurityProofs.Counting_honest"],
    "nontrivial": "Nci.Formalism.SecurityProofs.Counting_nontrivial",
@@ -4838,14 +4846,6 @@
   "Flock.SecurityProofs.EndToEndHiddenFlat": {
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b",
    "unfolded_hash": "565e0170b7dbf520cbbf1216f95676f27e48fc5b7f72a79f08463626d4c0d735"
-  },
-  "Flock.SecurityProofs.EndToEndRegistered": {
-   "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "1e593eff43246c5698e43b3175bd99ffb0e0e02f6e9f540f6100e1f91ddf722f"
-  },
-  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
-   "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "d8bf235bf890f463e2f35a70345767a65df02e0e798cbfec6139fcc96193b53f"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
@@ -14129,6 +14129,12 @@
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
    "unfolded_hash": "c1d4b654355fddc3479e32fe4229f9580be57811cdce4a02101b9a58a03fc6a9"
   },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn_honest": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.EndToEndRegisteredFlat": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredFlat : Flock.Guarantees.EndToEndRegisteredFlat"],
@@ -14182,6 +14188,12 @@
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered_honest": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered_nontrivial": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.IntegrityBlock": {
    "owner": "@proofs",
