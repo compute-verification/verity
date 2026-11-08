@@ -10,20 +10,24 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The interior** (`toy.interior`): S replayed from the boundary's ingress rows, committed template-major and wired as the
   replay block's edges, each link member's boundary port under the boundary's salts at S, its registration chained after the
   boundary's; its window names the boundary registration and S, which the verifier holds it to (`source_of`).
-* **The second stage**: `a5.audit` of the interior on its own Lean sample (its law ``subset:K``, ``--k``, every unit by
+* **The second stage** (`second_stage`, over any interior window of word-row members, its two records and the verifier's
+  reads): `a5.audit` of the interior on its own Lean sample (its law ``subset:K``, ``--k``, every unit by
   default) on a development challenger's coins opened after the interior registration: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
   ``--firewall`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
   port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
-  wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them).
+  wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them). Each
+  session's statement as round 2 takes it (`statements`) is held to round 2's check (`second_stage.check`) where the tree
+  has it.
 * **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off, so b_in's row and b_out's output
   are not the boundary's at S[0], every circuit and wire holding: Lean's registered reads refuse both link members ("does not
   open"), the fold and flips accepted.
 
 Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record accepted or refusing
 only the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
-alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files
-too), the first stage (``first/``), a5's records (``audit/``) and ``summary.json``.
+alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else. ``--out`` holds both
+windows (``boundary/``, ``interior/``, their private files too), the first stage (``first/``), a5's records (``audit/``),
+the sessions' statements (``statements.json``) and ``summary.json``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--altered]
@@ -47,13 +51,14 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R, ve
 ALTERED = "does not open"
 
 
-def composer(defn, port: str, words: int):
-    """``a5.audit``'s composer of a template's circuit: Flock's `UnitStager` over its one input row ``port`` and its ``o0``,
-    bound to the window's partition and program."""
+def composer(defn, member: T.CS.Member, name: str):
+    """``a5.audit``'s composer of a word-row member's template circuit: Flock's `UnitStager` over each input row (its
+    Definition's input of that name) and each output row, bound to the window's partition and program."""
     def compose(circuit: Path, partition: str, program: str) -> dict:
         from verity_flock.class_statement import UnitStager
 
-        st = UnitStager(defn, f"unit/two-stage-toy/{defn.id}", [(port, T.V2, words * T.WORD, [port])], [(T.V2, (0,))],
+        st = UnitStager(defn, f"unit/{name}/{defn.id}", [(p, member.schema(p), w * T.WORD, [p]) for p, w in member.rows],
+                        [(member.schema(p), (i,)) for i, (p, _w) in enumerate(member.outs)],
                         circuit=circuit, bind={"partition": partition, "program": program})
         return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
     return compose
@@ -137,6 +142,31 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
     return SS.check(True, SS.Own(tuple(sample), SS.parts(len(sample), strata), irec, brec, tuple(drawn)), stmts).to_json()
 
 
+def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window_dir: Path, source, brec: dict, irec: dict,
+                 sample: list[int], reads: dict[str, dict], out: Path, provenance: dict) -> tuple[dict, bool, dict, dict]:
+    """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
+    the boundary registration ``brec`` and its replay sample: `a5.audit` on its own Lean sample, each member's session
+    verified against ``reads`` (by member key, the verifier's own ``--registered`` files), the audit record, and each
+    session's statement held to round 2. -> (a5's summary, its acceptance, the audit record, what the run reports)."""
+    import a5
+    import records_audit as RA
+
+    a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
+    a.tie = {"log": [brec]}
+    port = a.port or RA.free_ports(a5.RANK_PORTS)
+    s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads)
+    rec_file = out / "audit" / "audit.json"
+    record = json.loads(rec_file.read_text()) if rec_file.exists() else {}
+    got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",
+                                           "circuits", "timing")},
+           "accepted": ok, "record": {"failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok"))}}
+    if s.get("draw") is not None:
+        stmts = statements(out / "audit", window)
+        (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
+        got["round_two"] = round_two(sample, window, irec, brec, s["draw"], stmts)
+    return s, ok, record, got
+
+
 def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding) -> bool:
     """Honest: every check before the sample passed, every Lean verdict accepted, the sessions' registered reads the
     verifier's own, every negative refused, and the record accepted or refusing only the reads of the interior's own
@@ -171,9 +201,6 @@ def main(argv=None) -> int:
     ap.add_argument("--port", type=int, default=0, help="the sessions' first port (0: a free block)")
     ap.add_argument("--session-timeout", type=float, default=3600)
     a = ap.parse_args(argv)
-    import a5
-    import records_audit as RA
-
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
     bc = T.boundary(T.ingress(a.n), a.q)
@@ -194,25 +221,15 @@ def main(argv=None) -> int:
     it = T.interior(bc, bd, sample, {"law": "subset", "k": k}, replayed=replayed)
     irec = T.write(it.committed, out / "interior", {"interior": True, "boundary": bd, "replay_sample": sample}, previous=bd,
                    registered=it.registered)
-    sets = {m.template: (composer(t, *rows[0]), t) for m, t, (rows, _outs) in zip(it.window.members, T.TEMPLATES, T.LAYOUT)}
-    a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
-    a.tie = {"log": [brec]}
-    port = a.port or RA.free_ports(a5.RANK_PORTS)
-    s, ok = a5.audit(a, sets, out / "audit", it.window, out / "interior", source_of(it.window, bd, sample), port,
-                     {"toy": "two-stage interior", "altered": a.altered}, registered=T.reads(brec, irec, it.window, sample))
+    sets = {m.template: (composer(t, m, "two-stage-toy"), t) for m, t in zip(it.window.members, T.TEMPLATES)}
+    s, ok, record, got = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec, irec,
+                                      sample, T.reads(brec, irec, it.window, sample), out,
+                                      {"toy": "two-stage interior", "altered": a.altered})
     summary.update(interior={"population": it.window.population, "law": it.window.law, "run": it.window.run,
                              "members": [{"key": m.key, "n": m.n, "base": m.base, "links": T.LINKS.get(t)}
                                          for t, m in enumerate(it.window.members)]},
-                   sample=sample, audit={x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts",
-                                                                "negatives", "circuits", "timing")},
-                   accepted=ok)
-    record = json.loads((out / "audit" / "audit.json").read_text()) if (out / "audit" / "audit.json").exists() else {}
-    summary["record"] = {"failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok")),
-                         "own_reads_only": own_reads_only(record, it.window)}
-    if s.get("draw") is not None:
-        stmts = statements(out / "audit", it.window)
-        (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
-        summary["round_two"] = round_two(sample, it.window, irec, brec, s["draw"], stmts)
+                   sample=sample, **got)
+    summary["record"]["own_reads_only"] = own_reads_only(record, it.window)
     summary["as_expected"] = expected(a, s, ok, record, it.window)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     print("TWO " + json.dumps({x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")}, default=str))
