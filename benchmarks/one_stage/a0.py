@@ -32,8 +32,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.core.protocols.spot import challenger as Ch, coins as CC
+from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 
@@ -51,9 +51,15 @@ def sha512_file(path: Path) -> str:
     return hashlib.sha512(path.read_bytes()).hexdigest()
 
 
+def environ(env: dict | None) -> dict:
+    """This process's environment with ``env`` over it, a None value removing its variable (flock-circuit takes the host's
+    witness when FC_HOST_WITNESS is set at all)."""
+    return {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+
+
 def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 3600) -> subprocess.CompletedProcess:
     t = time.time()
-    p = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **(env or {})}, timeout=timeout)
+    p = subprocess.run(cmd, capture_output=True, text=True, env=environ(env), timeout=timeout)
     log.write_text(f"$ {' '.join(cmd)}\n# rc {p.returncode} in {time.time() - t:.1f} s\n--- stdout\n{p.stdout}\n--- stderr\n{p.stderr}")
     return p
 
@@ -187,6 +193,13 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
+def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
+    """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
+    keyed coin tree)."""
+    senv = {**os.environ, **(env or {})}
+    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -203,9 +216,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     tables = d / "tables"
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
-    senv = {**os.environ, **(env or {})}
     ch = None
-    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+    if own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -214,7 +226,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
                               *(ch[1] if ch else [])],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
         for _ in range(1800):
@@ -255,6 +267,19 @@ def firewall_env(st: dict) -> dict:
     `lean_verify` verifies under, and the statement's partition and program."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
     return {"FC_FIREWALL_STATEMENT": st.get("statement", STATEMENT_ID), "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
+#: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
+#: its witness built where the prover builds it (`zk_cost.py`'s `dev` arm, which Figure 1 prices)
+DIRECT = {"FC_FIREWALL": "0", "FC_HOST_WITNESS": None}
+
+
+def prover_env(firewall: str | None, st: dict) -> dict:
+    """A `--zk` session's prover environment: behind the ZK server's send check when ``firewall`` names Lean's
+    `flock-firewall` (the core protocols' path), else `DIRECT`."""
+    if firewall:
+        return {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": firewall, **firewall_env(st)}
+    return dict(DIRECT)
 
 
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
@@ -418,9 +443,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
-                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit and "
-                         "verity/flock-circuit+plain-leaves, and refuses a superseded one (verity/flock-circuit@967b8d06, "
-                         "for files staged at M0 68ae79f2 or later) once every check has passed")
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit, "
+                         "verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl, and refuses a superseded one "
+                         "(verity/flock-circuit@967b8d06, for files staged at M0 68ae79f2 or later) once every check has "
+                         "passed")
     ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
                     help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()
@@ -433,7 +459,7 @@ def main() -> int:
     n = s.n
     template = s.subcircuit.definition()
     law_text = f"subset:{a.k}"
-    law = D.parse_law(law_text)
+    law = D.parse_design(law_text)
     summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
@@ -502,7 +528,7 @@ def main() -> int:
     v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_law(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, program, query, D.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -546,7 +572,7 @@ def main() -> int:
     if a.bind:
         hold_bound(tst, tprog, query)
     theader = public_header(tst["dir"], tn)
-    tlaw = D.parse_law("subset:2")
+    tlaw = D.parse_design("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
     trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},

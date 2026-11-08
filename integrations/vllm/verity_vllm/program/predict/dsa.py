@@ -10,9 +10,11 @@ A request after a history of C positions (`build.build_program`'s C: a prefix-ca
 reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
 which open its layers' logs (`_Model.open_with`) before its first call.
 The compiled execution is the target's compilation "breakable": vLLM serves `glm_moe_dsa` without torch.compile
-(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs, so every selection a launch
-reads is at the step's padded tokens (`targets.graph_tokens`) but the indexer's and the sparse MLA's, graph breaks that read the real
-batch (`_sparse_indexer_and_attn`), and the logits', computed outside the graphs.
+(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs: a uniform decode step's FULL
+graph, another step's PIECEWISE graphs (`targets.graph_launch`).  Both pad alike, so every selection a launch reads is at the step's
+padded tokens (`targets.graph_tokens`), and no all-reduce route, cuBLAS route or MoE tile reads the mode (d9105ea80's communicators
+choose by bytes alone), but the indexer's and the sparse MLA's: graph breaks on the real batch under PIECEWISE graphs, captured at the
+padded batch under a FULL graph, its padding rows without keys (`_Launch.keys`); and the logits', computed outside the graphs.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -24,11 +26,9 @@ the decode kernels; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNV
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
-select: `common.select_token`).  A row of more than INDEX_TOPK keys reads its top-k order as the `vllm_dsa` rule does: the
-Waksman settings that route it are a field of the Program's `run` input (`run_field`, read by `_Model.run`), DsaWaksmanOrder routes
-the row indices through them, DsaTopKLongRow's bit that the order is the logits' top-TOPK set in ascending index order (the one
-order the logits fix, which `VERITY_DSA_TOPK=canonical` serves) is one of the Program's checks
-(`_Model.checks`), and both kinds of layer read the TOPK rows DsaWaksmanRows routes at those settings.  A fact outside it raises
+select: `common.select_token`).  A row of more than INDEX_TOPK keys selects its top-k as the `vllm_dsa` rule does, in the circuit:
+DsaTopKMask marks the logits' top-TOPK set, DsaButterflySettings sets the concentrator for it, and both kinds of layer read the TOPK
+rows DsaButterflyRows routes at those settings, in ascending index order (the row `VERITY_DSA_TOPK=canonical` serves).  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -40,9 +40,9 @@ from typing import Mapping, Sequence
 
 from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
-from verity.ml.circuits.types import Array, Type, Value
+from verity.ml.circuits.types import Type, Value
 
-from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, each, graph_capture_sizes, kind,
+from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, graph_capture_sizes, kind,
                      select_token, served_class)
 from .phi import Phi
 
@@ -52,7 +52,9 @@ def _refuse(fact: str):
 
 
 def run_field(layer: int, pos: int) -> str:
-    """The `run` field of layer `layer`'s top-k settings for the row at position `pos` (`vllm_dsa`'s `<layer>/topk_switches[t=P]`)."""
+    """The `run` field `<layer>/topk_switches[t=P]` of layer `layer`'s Waksman settings for the row at position `pos`, as the
+    Commit's run values (`commit.committer.run_values`) and the replay (`check.replay`) name it.  No Program declares a `run` input:
+    a row past INDEX_TOPK computes its selection (`_Model.attention`)."""
     return f"model.layers.{layer}.self_attn.attn/topk_switches[t={pos}]"
 
 
@@ -60,8 +62,8 @@ _RUN_FIELD = re.compile(r"model\.layers\.(\d+)\.self_attn\.attn/topk_switches\[t
 
 
 def run_bits(layout: dict, orders: Mapping[tuple[int, int], Sequence[int]], topk: int, pos0: int = 0) -> list[int]:
-    """The leaves of a Program's `run` input (one bit each, in its record's field order) from what the served run did: `layout` is
-    the Program's `BuildResult.run`, and `orders[(layer, pos)]` the `topk` (INDEX_TOPK) key indices that layer `layer`'s indexer
+    """The leaves of a `run` input (one bit each, in its record's field order) from what the served run did: `layout` is its
+    `RunInputs.layout`, and `orders[(layer, pos)]` the `topk` (INDEX_TOPK) key indices that layer `layer`'s indexer
     wrote for the row at position `pos`, in the order it wrote them (its `topk_indices_buffer` row), each index one of the row's
     own keys, the wrapper's rows pos0..pos (a request's pos0 is 0). Each field is the Waksman settings that route those keys to
     that order (`dsa_topk.waksman_settings`)."""
@@ -117,7 +119,10 @@ class Net:
         if phi.execution == "compiled" and self.tp.compilation != "breakable":
             facts.append(f"a compiled execution by {self.tp.compilation!r} (vLLM serves glm_moe_dsa's eager kernels from breakable CUDA "
                          f"graphs, the target's compilation 'breakable')")
-        self.capture_sizes = graph_capture_sizes(phi)
+        self.capture_sizes, self.max_num_seqs = graph_capture_sizes(phi), (phi.engine or {}).get("max_num_seqs")
+        if self.capture_sizes and type(self.max_num_seqs) is not int:
+            facts.append(f"breakable CUDA graphs at engine arg max_num_seqs {self.max_num_seqs!r}, not a stated count (a uniform decode "
+                         f"step replays a FULL graph up to it)")
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
@@ -150,7 +155,7 @@ class Net:
         self.long_rows = None if env is None or all(env.get(k) == v for k, v in DSA_TOPK_ENV.items()) else (
             f"a row past INDEX_TOPK ({int(C['INDEX_TOPK'])}) keys under an engine whose environment sets "
             f"{', '.join(f'{k}={env.get(k)!r}' for k in DSA_TOPK_ENV)}, not {DSA_TOPK_ENV} (the kernels' own order past INDEX_TOPK, "
-            f"which DsaTopKLongRow refuses; serve it under the DSA top-k plugin's canonical row)")
+            f"not the ascending row DsaButterflyRows reads; serve it under the DSA top-k plugin's canonical row)")
         ff = FF.facts_for(hf)
         self.model_class, self.NL = served_class(ff["vllm_class"]), int(C["NL"])
         self.nodes_per_row_layer = 26 + int(C["NH"]) + 4 * int(C["TOPK"])
@@ -177,8 +182,8 @@ class Net:
     def leaves(self) -> list[tuple[str, Type]]:
         return [(name, t) for name, t, _ in self._leaves]
 
-    def reads_run(self, keys: int) -> bool:
-        """Whether a row of up to `keys` keys reads its top-k order from the `run` input: a row past INDEX_TOPK."""
+    def past_topk(self, keys: int) -> bool:
+        """Whether a row of up to `keys` keys selects its top-k from its logits: a row past INDEX_TOPK."""
         return int(keys) > int(self.C["INDEX_TOPK"])
 
     def peer_shapes(self, r: int) -> list[tuple[int, int]]:
@@ -189,8 +194,8 @@ class Net:
     def edge_groups(self, keys: int) -> tuple[str, ...]:
         """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
         carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
-        top-k selection keeps every key and reads no logit: `reads_run`)."""
-        return ("prefix", *(("prefix_ik", "prefix_iks") if self.reads_run(keys) else ()))
+        top-k selection keeps every key and reads no logit: `past_topk`)."""
+        return ("prefix", *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
 
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
@@ -207,16 +212,16 @@ class Net:
 class _Model:
     """The forward over one call's rows, emitted into `B`, each layer's latent and index-K histories carried across calls as
     `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`).
-    `run` is the Program's `run` input (`registration.RunInputs`) where the decoder reads one, `checks` the bits the Program
-    returns after its samples, and `topk` the last indexer layer's settings by position, which an IndexShare layer reads."""
+    `topk` is the last indexer layer's selection by position, which an IndexShare layer reads."""
 
     reads_launch = True
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
-        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch(capture_sizes=net.capture_sizes)
+        self.net, self.C, self.B, self.peers = net, net.C, B, peers
+        self.launch = _Launch(capture_sizes=net.capture_sizes, max_num_seqs=net.max_num_seqs or 0)
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
         self.logs: dict[int, dict[str, PartLog]] = {}
-        self.run, self.checks, self.topk = None, [], {}
+        self.topk: dict = {}
         self._kinds: dict[tuple, object] = {}
         C = self.C
         self.H, self.EPS, self.G = int(C["H"]), float(C["EPS"]), int(C["FP8_BLOCK"])
@@ -229,9 +234,6 @@ class _Model:
 
     def call(self, fn, *refs: Refs) -> Coll:
         return self.B.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs)))
-
-    def each(self, fn, *args) -> list[Coll]:
-        return each(self.B, fn, *args)
 
     def open_with(self, prefix: list[Coll], C: int) -> None:
         """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
@@ -263,9 +265,9 @@ class _Model:
         C, net, M = self.C, self.net, len(toks)
         V = int(C["V"])
         emb = self.k("embedding_shard", VS=V, H=self.H, START=net.rank * V)
-        res = self.all_reduce([o.refs for o in self.each(emb, [t.refs for t in toks], self.w["embed"].refs)])
+        res = self.all_reduce([self.call(emb, t.refs, self.w["embed"].refs).refs for t in toks])
         norm = self.k("rmsnorm", N=self.H, EPS=self.EPS, TARGET=net.tp, M=self.launch.tokens(M))
-        x = [o.refs for o in self.each(norm, res, self.w[(0, "ln1")].refs)]
+        x = [self.call(norm, r, self.w[(0, "ln1")].refs).refs for r in res]
         for L in range(net.NL):
             x, res = self.reduce_norm(self.attention(L, x, pos0), res, self.w[(L, "ln2")])
             nxt = self.w[(L + 1, "ln1")] if L + 1 < net.NL else self.w["norm"]
@@ -311,10 +313,10 @@ class _Model:
                 _refuse(f"a fused all-reduce + norm of {M} x {N} under {s} (no capture covers it: tp_allreduce.covered)")
             fn = self.k("all_reduce_rmsnorm_mnnvl", WORLD=W, N=N, SHOT=AR.mnnvl_shot(M, N, W), CLUSTER=AR.mnnvl_grid(M, N)[1], EPS=self.EPS,
                         FMA=bool(c.statics["FMA"]))
-            outs = self.each(fn, self.peers.rows(parts), list(res), w.refs)
+            outs = [self.call(fn, p, r, w.refs) for p, r in zip(self.peers.rows(parts), res)]
         else:
             fn = self.k("rmsnorm_fused", N=N, EPS=self.EPS, TARGET=self.net.tp, M=M)
-            outs = self.each(fn, self.all_reduce(parts), list(res), w.refs)
+            outs = [self.call(fn, x, r, w.refs) for x, r in zip(self.all_reduce(parts), res)]
         return [o[0].refs for o in outs], [o[1].refs for o in outs]
 
     # -- GEMMs
@@ -325,7 +327,7 @@ class _Model:
         N, K = _arr_shape(w.type)
         small = (self.launch.tokens(len(xs)) if rows is None else int(rows)) < 32
         fn = self.k("flashinfer_fp8_linear" if small else "deepgemm_fp8_linear", K=K, N=N)
-        outs = self.each(fn, list(xs), w.refs, ws.refs)
+        outs = [self.call(fn, x, w.refs, ws.refs) for x in xs]
         return [(o if small else o[2]).refs for o in outs]
 
     def cublas(self, xs: list[Refs], w: Coll, f32: bool = False, sampled: bool = False) -> list[Refs]:
@@ -341,7 +343,7 @@ class _Model:
         split = route[0] == "splitk"
         role = ("cublas_splitk_gemm_f32out" if split else "cublas_gemm_f32out") if f32 else ("cublas_splitk_gemm" if split else "gemm_dot")
         fn = self.k(role, K=K, N=N, DOT=self.net.dot, **route[1])
-        return [o.refs for o in self.each(fn, list(xs), w.refs)]
+        return [self.call(fn, x, w.refs).refs for x in xs]
 
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
@@ -354,18 +356,18 @@ class _Model:
             fn = self.k("ll_bf16_dotprod", N=N, K=K, FMA=DEFAULT_LL_BF16_FMA, **st)
         else:
             fn = self.k("ll_bf16_splitk", N=N, K=K, DOT=self.net.dot, **st)
-        return [o.refs for o in self.each(fn, list(xs), w.refs)]
+        return [self.call(fn, x, w.refs).refs for x in xs]
 
     def absorb(self, xs: list[Refs], w: Coll, B: int, K: int, N: int) -> list[Refs]:
         """MLA's latent absorption `bmm(x^T, W)^T` per row (`MlaAbsorbTransposePatternRule`): each row's B heads against W^T, the
         [B][K][N] weight read as [B][N][K] (the frontend's permute view: one strided part per head)."""
         fn = self.k("batched_gemm", B=B, K=K, N=N, DOT=self.net.dot)
         wt = concat([strided_view(w, b * K * N, K, 1, N, N * K) for b in range(B)])
-        return [o.refs for o in self.each(fn, list(xs), wt)]
+        return [self.call(fn, x, wt).refs for x in xs]
 
     def silu(self, rows: list[Refs]) -> list[Refs]:
         fn = self.k("silu_mul", I=rows[0].count // 2)
-        return [o.refs for o in self.each(fn, list(rows))]
+        return [self.call(fn, r).refs for r in rows]
 
     # -- the layer
 
@@ -373,7 +375,6 @@ class _Model:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY
-        from verity.ml.definitions.registry.dsa_topk import waksman_switches
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -384,24 +385,21 @@ class _Model:
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
         logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
-        if keys[-1] > TOPK and self.run is None:
-            _refuse(f"a row of {keys[-1]} keys > TOPK {TOPK} without a `run` input to read its top-k order from")
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
         wkp = self.cublas(x, w("wk_w")) if indexer else None
         qn, kn, kr = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS), self.k("dsa_rmsnorm", N=KVL, EPS=self.EPS), self.k("dsa_kv_rope", D=R)
-        qc = [o.refs for o in self.each(qn, [q.slice(0, QL) for q in qkv], w("q_a_ln").refs)]
-        kvc = [o.refs for o in self.each(kn, [q.slice(QL, QL + KVL) for q in qkv], w("kv_a_ln").refs)]
-        kpe = [o.refs for o in self.each(kr, [q.slice(QL + KVL, QL + KVL + R) for q in qkv], cs)]
+        qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
+        kvc = [self.call(kn, q.slice(QL, QL + KVL), w("kv_a_ln").refs).refs for q in qkv]
+        kpe = [self.call(kr, q.slice(QL + KVL, QL + KVL + R), c).refs for q, c in zip(qkv, cs)]
         if indexer:
             fn = self.k("dsa_indexer_k_row", D=ID, ROPE=R, EPS=float(C["INDEX_K_EPS"]))
-            slots = self.each(fn, [k.slice(0, ID) for k in wkp], w("k_norm_w").refs, w("k_norm_b").refs, cs)
+            slots = [self.call(fn, k.slice(0, ID), w("k_norm_w").refs, w("k_norm_b").refs, c) for k, c in zip(wkp, cs)]
         qb = self.fp8_linear(qc, w("q_b_w"), w("q_b_ws"))
         ql = self.absorb([concat([q.slice(h * D, h * D + NOPE) for h in range(NH)]) for q in qb], w("w_uk_t"), NH, NOPE, KVL)
         iqb = self.fp8_linear(qc, w("wq_b_w"), w("wq_b_ws")) if indexer else None
         qr = self.k("dsa_q_rope", D=R)
-        pe = self.each(qr, [q.slice(h * D + NOPE, (h + 1) * D) for q in qb for h in range(NH)], [c for c in cs for _ in range(NH)])
-        qpe = [concat([o.refs for o in pe[i * NH:(i + 1) * NH]]) for i in range(M)]
+        qpe = [concat([self.call(qr, q.slice(h * D + NOPE, (h + 1) * D), c).refs for h in range(NH)]) for q, c in zip(qb, cs)]
         context = len(logs["latent"])
         for i in range(M):
             logs["latent"].append(concat([kvc[i], kpe[i]]))
@@ -409,7 +407,7 @@ class _Model:
         mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:
             fn = self.k("dsa_indexer_q", H=IH, D=ID, ROPE=R)
-            iq = self.each(fn, list(iqb), cs, [k.slice(ID, ID + IH) for k in wkp])
+            iq = [self.call(fn, q, c, k.slice(ID, ID + IH)) for q, c, k in zip(iqb, cs, wkp)]
             for s in slots:
                 logs["ik"].append(s[0].refs)
                 logs["iks"].append(s[1].refs)
@@ -423,32 +421,20 @@ class _Model:
                     continue
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)))
-                order = self.call(self.k("dsa_waksman_order", N=n, TOPK=TOPK), sw.refs)
-                self.checks.append((self.call(self.k("dsa_topk_long_row", N=n, TOPK=TOPK), logits.refs, order.refs),
-                                    f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "
-                                    f"settings route is the top-{TOPK} set of {n} logits in ascending index order (DsaTopKLongRow_v1)"))
-                self.topk[pos0 + i] = sw
+                mask = self.call(self.k("dsa_topk_mask", N=n, TOPK=TOPK), logits.refs)
+                self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=n, TOPK=TOPK), mask.refs)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
-        kvs, fns = [], []
+        att = []
         for i, n in enumerate(keys):
             kv = logs["latent"].cut(n)
             if n > TOPK:
-                kv = self.call(self.k("dsa_waksman_rows", N=n, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
-            kvs.append(kv)
-            fns.append(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
-                              DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])))
-        att, i = [], 0
-        while i < M:
-            j = i + 1
-            while j < M and fns[j] is fns[i]:
-                j += 1
-            att += [o.refs for o in self.each(fns[i], ql[i:j], qpe[i:j], kvs[i:j])]
-            i = j
+                kv = self.call(self.k("dsa_butterfly_rows", N=n, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
+            att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
+                                        DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
 
     def _dense_prefill(self, L: int, qb: list[Refs], qpe: list[Refs], kvc: list[Refs], kpe: list[Refs], context: int, pos0: int,
@@ -522,7 +508,7 @@ class _Model:
 
         def heads(fn, q: list[Refs], T: int, logs) -> list:
             (pairs, ends) = logs
-            return self.each(fn, list(q), [klog.cut(ends[T]) for klog, _ in pairs], [vlog.cut(T) for _, vlog in pairs])
+            return [self.call(fn, q[h], klog.cut(ends[T]), vlog.cut(T)) for h, (klog, vlog) in enumerate(pairs)]
 
         kvb = self.fp8_linear(kvc, w("kv_b_w"), w("kv_b_ws"), rows=sum(rows))
         sfx, ns = head_logs(kvb, kpe), splits()
@@ -546,16 +532,15 @@ class _Model:
             zero = self.call(self.k("const", W=16, BITS=0)).refs
             ninf = self.call(self.k("const", W=32, BITS=NEG_INF)).refs
             empty = (concat([zero] * (NH * D)), concat([ninf] * NH))
-        args: list[list[Refs]] = [[], [], [], []]
+        merge, out = self.k("merge_attn_states", NH=NH, D=D), []
         for i in range(M):
             split = {} if ns == 1 else {"PER": fa3_split.split_per(M, i, BM, BN, ns)}
             fn = self.k("attention_head_lse", T=i + 1, D=D, MASKED_FROM=TG.fa3_masked_from(tp, i + 1, NH, NH, D, max_q, i), **st, **split)
             s = heads(fn, qs[i], i + 1, sfx)
             p = heads(cfn, qs[i], context, pre) if context else None
             po, pl = (concat([o[0].refs for o in p]), concat([o[1].refs for o in p])) if p else empty
-            for a, r in zip(args, (po, pl, concat([o[0].refs for o in s]), concat([o[1].refs for o in s]))):
-                a.append(r)
-        return [o.refs for o in self.each(self.k("merge_attn_states", NH=NH, D=D), *args)]
+            out.append(self.call(merge, po, pl, concat([o[0].refs for o in s]), concat([o[1].refs for o in s])).refs)
+        return out
 
     def mlp(self, L: int, x: list[Refs]) -> list[Refs]:
         w = lambda f: self.w[(L, f)]  # noqa: E731
@@ -577,8 +562,8 @@ class _Model:
         if kernel is None:
             _refuse(f"the grouped top-k launch at E={E}, top {TOPK} (registry.moe.router_kernel pins no kernel)")
         rt = self.k("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel)
-        top = self.each(rt, list(logits), w("gate_bias").refs)
-        xq = self.each(self.k("fp8_group_quant_ue8m0", K=H, G=G), list(x))
+        top = [self.call(rt, lg, w("gate_bias").refs) for lg in logits]
+        xq = [self.call(self.k("fp8_group_quant_ue8m0", K=H, G=G), r) for r in x]
         cfg = fused_moe_config(E, I, self.net.device, "fp8_w8a8", (G, G), self.launch.tokens(M))
         if cfg is None:
             _refuse(f"no tuned fused-MoE config for E={E}, N={I} on {self.net.device!r} (engine.profiles.devices.FUSED_MOE_CONFIGS)")
@@ -590,12 +575,11 @@ class _Model:
         up, down = self.k("moe_expert_gemm_dot", K=H, N=2 * I, **st), self.k("moe_expert_gemm_w_dot", K=I, N=H, **st)
         pairs = range(M * TOPK)
         ids = [top[p // TOPK][1].refs.slice(p % TOPK, p % TOPK + 1) for p in pairs]
-        u = [o.refs for o in self.each(up, [xq[p // TOPK][0].refs for p in pairs], [xq[p // TOPK][1].refs for p in pairs], ids,
-                                       w("w13").refs, w("w13_ws").refs)]
-        aq = self.each(self.k("fp8_group_quant_ue8m0", K=I, G=G), self.silu(u))
-        d = [o.refs for o in self.each(down, [a[0].refs for a in aq], [a[1].refs for a in aq], ids,
-                                       [top[p // TOPK][0].refs.slice(p % TOPK, p % TOPK + 1) for p in pairs], w("w2").refs, w("w2_ws").refs)]
+        u = [self.call(up, xq[p // TOPK][0].refs, xq[p // TOPK][1].refs, ids[p], w("w13").refs, w("w13_ws").refs).refs for p in pairs]
+        aq = [self.call(self.k("fp8_group_quant_ue8m0", K=I, G=G), a) for a in self.silu(u)]
+        d = [self.call(down, aq[p][0].refs, aq[p][1].refs, ids[p], top[p // TOPK][0].refs.slice(p % TOPK, p % TOPK + 1), w("w2").refs,
+                       w("w2_ws").refs).refs for p in pairs]
         msum = self.k("moe_sum", TOPK=TOPK, H=H)
-        routed = [o.refs for o in self.each(msum, [concat(d[t * TOPK:(t + 1) * TOPK]) for t in range(M)])]
+        routed = [self.call(msum, concat(d[t * TOPK:(t + 1) * TOPK])).refs for t in range(M)]
         add = self.k("residual_add", N=H)
-        return [o.refs for o in self.each(add, list(shared), routed)]
+        return [self.call(add, s, r).refs for s, r in zip(shared, routed)]

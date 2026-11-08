@@ -726,17 +726,17 @@
    "record": "art:686315c20aaa5e1c7479f34c0308a74c0b5974bfc59ba694f30cdcd086b7ffe2",
    "tier": "fast",
    "pinned_from": {
-    "record": "art:686315c20aaa5e1c7479f34c0308a74c0b5974bfc59ba694f30cdcd086b7ffe2",
-    "build": "art:e66f34aae0a5a245973757cadf79c25c51c041b3cdb3bfdbbfd91d09797b2494",
-    "tree": "cursor/rails-db-21f3@aa5b38c323f89f5b156529619349a396eec7b931"
+    "build": "/workspace/research/runs/r20261108-103407-e804/out/n/llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
+    "run": "r20261108-103407-e804",
+    "tree": "8fdc4bdc23f5c392f1964cfbe974becdd48321e3"
    },
-   "manifest_digest": "05a993b9ce177d73b3bdbd89833e96dcfd0cfdfebce01ce12b15c8fb8325a154",
+   "manifest_digest": "2aa3cb85601ca112180de6b8bf999c1c14c33cd92a3d829a36f6b92e9a7d9064",
    "programs": {
     "0": {
-     "step": "806aac0cd8b088d695e0139f715f65c7c2de94eed3d3787ba7e3dee72c6fb16b1bf9a18eec8f237f647088407a6b67ecb95031a751f3c5d116ad275112033b6e",
-     "workload": "6c81939f7d5d916f0445df4afdcec3c88613bee41fcf882199c8c7c53a2d49b48f8be163471aa55d6ae3f06556e4d5d1819c84f5e894b3da8cb50f93f6815f0f",
+     "step": "066d195019143484d9e09275dc847939e3c435ed2674dd1f3a6ec05abd9a869530cc7a7f9e6e6087fde47291cac9e1bacc193c13afae781a89f6c89310760ce0",
+     "workload": "9975ce87eab5442248b6e97d77b8f6ef6f170ce8ba94519b436cc2606189ea9158f13265f2a3575b6cd1f79e29894f82d70d690e8580bda40a4bafdb771e90dc",
      "requests": {
-      "request": "785988f3ebd47ddf06be9627006353b612fa2ca5f1df7e3ad002982073dcfbf290fec1b1d95c4f074d937f442d70ffcf27c3aa8e88a9489c6675f7f9b0b06062"
+      "request": "a63ebdcf02d43f878d92a538a2bcf8a24907e68190152e78567dd57380df6c6b818c90b61911c4a17a1f56983ebdd5edc0dd26585d1b786da7f64f5bddbcdd00"
      }
     }
    }

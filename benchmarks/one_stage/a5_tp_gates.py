@@ -59,7 +59,7 @@ rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``-
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
+        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -85,8 +85,8 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -212,7 +212,7 @@ def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Bin
     units = len(sites(requests)) * tokens
     program, query = CS.population_program([(tg, units), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
-    law = D.parse_law(RULE)
+    law = D.parse_design(RULE)
     ports = tuple(f"part{j}" for j in RANKS)
     gates = tuple(CS.Member(tid, rows=tuple((p, hidden) for p in ports), outs=(("o0", hidden),), n=tokens, base=u * tokens,
                             tables=tuple((p, tokens) for p in ports), name=f"{tid}/q{q}c{k}",
@@ -428,7 +428,8 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--challenger", choices=["local"], required=True, help="draw both ranks on one local challenger session's coins")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--altered", action="store_true",

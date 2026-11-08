@@ -30,7 +30,7 @@ public import Proofs.Flock.Soundness.OpeningPhase
 public import Proofs.Flock.Soundness.ListSize
 public import Proofs.Flock.Soundness.LincheckPhase
 public import Proofs.Flock.Soundness.ZerocheckPhase
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.LigeritoCoins
 public import Proofs.Flock.Soundness.LigeritoQueries
 public import Proofs.Flock.Soundness.JohnsonMCA
@@ -104,6 +104,7 @@ public import Proofs.Flock.Soundness.TmplNetOK
 public import Proofs.Flock.Soundness.TmplUnitAt
 public import Proofs.Flock.Soundness.TmplLayout
 public import Proofs.Flock.Soundness.ParseStmt
+public import Proofs.Flock.Soundness.TmplSpec
 public import Proofs.Flock.Soundness.ExecTyped
 public import Proofs.Flock.Soundness.ExecTemplate
 public import Proofs.Flock.Soundness.ExecTemplatePlace
@@ -121,8 +122,6 @@ public import Proofs.Flock.Soundness.Audit.Law
 public import Proofs.Flock.Soundness.Audit.Pooled
 public import Proofs.Flock.Soundness.Audit.Circuit
 public import Proofs.Flock.Soundness.Audit.OneStage
-public import Proofs.Flock.Soundness.Audit.TwoStage
-public import Proofs.Flock.Soundness.Audit.Examples
 public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Audit.FlockCompiled
@@ -147,6 +146,7 @@ public import Proofs.Flock.Soundness.Audit.FlockLinked
 public import Proofs.Flock.Soundness.Audit.FlockPublic
 public import Proofs.Flock.Soundness.Audit.Harm
 public import Proofs.Flock.Soundness.Audit.Influence
+public import Proofs.Flock.Soundness.Audit.Delivered
 public import Proofs.Flock.Soundness.Audit.InfluenceWitness
 public import Proofs.Flock.Soundness.Audit.Partitioning
 public import Proofs.Flock.Soundness.Audit.HarmBound

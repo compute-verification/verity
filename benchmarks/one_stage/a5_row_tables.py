@@ -5,7 +5,7 @@ over two engine steps, under the stratified sampling design), its run ``<ROOT>/r
 serving records before each step's coin, `row_tables.step_roots`) and audited by `a5.audit` as rank 0 of a one-rank
 step on the auditor's challenger's coins, a local session on ``ROOT``: the window's `service.Stream` (its ``row-table``
 Value a tree over roots of row-seg leaves), `tables.check_row_tables` against those step roots before the sample, M0's
-`--zk` session of each sampled chunk behind the ZK server, the Lean verifier, the stream's outcome and the
+`--zk` session of each sampled chunk (behind the ZK server under ``--firewall``), the Lean verifier, the stream's outcome and the
 negatives. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time context),
 so this window stands in for one. Each chunk's public file is a shared-row file, which Lean's verifier covers
 only with its own registered reads: a5 gives each sampled chunk's verify the reads of its one table (`a5`'s module
@@ -15,7 +15,7 @@ serving wrote (``window/``, its private files too) and a5's records
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --main FILE --out DIR
+        [--firewall flock-firewall] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX, row_tables as RTB  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -49,7 +49,7 @@ def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:
     -> (the verifier's window, the step roots serving recorded)."""
     w, s, ms = TR.window()
     w = replace(w, run=f"{ROOT}/rank0")
-    if D.parse_law(RULE) != w.law:
+    if D.parse_design(RULE) != w.law:
         raise SystemExit(f"the fixture's law is {w.law}, not {RULE}")
     SRW._operand = s.operand  # the fixture's served operands, as `test_row_tables.committed` reads them
     got = SRW._read_s8(ms, s.rows, s, None, TR.ARRIVALS)
@@ -65,7 +65,8 @@ def main() -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)

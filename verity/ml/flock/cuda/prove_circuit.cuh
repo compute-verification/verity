@@ -1,7 +1,8 @@
 // verity flock-circuit: Flock-CUDA for verity/flock-circuit (verity/ml/flock/live/src/circuit.rs). Included after
 // prove_chunk.cuh at the end of cuda-ghash/prove_ffi.cu by verity/ml/flock/cuda_circuit_patch.py, which also derives
 // flock_cuda_prove_circuit from flock_cuda_prove_chunk's body: the same commit, zerocheck, lincheck, ring switch and
-// Ligerito, with this file's witness (fc_witness) and lincheck fold (fc_fold) in place of the chunk statement's.
+// Ligerito, with this file's witness (fc_witness), lincheck fold (fc_fold) and arena size (fc_arena_of, arena_bytes.h) in place
+// of the chunk statement's.
 //
 // A block holds ranges of slots of a few types (compressions, units, the mask slot), each type's circuit a CSC of
 // 2^type_log columns. The witness is built on the device: the compressions from their host-given inputs (natively, fc_sha_tape
@@ -14,9 +15,10 @@
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
-// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the witness's scratch (at most 2 GiB
-// at a time), its inputs, and the first proof's cached type matrices
-#define FC_KEEP_MARGIN ((size_t)4 << 30)
+// the witness's scratch outside the arena (sha512 tapes, compression and unit rows) goes in batches of at most this many bytes:
+// it is held beside the arena while the next session's witness builds
+#define FC_WITNESS_BATCH (512LL << 20)
+#include "arena_bytes.h"
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -66,9 +68,9 @@ typedef struct {
     const uint64_t* zk_pads; const uint64_t* zk_extra;
     // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
     int u_host;
-    // rep 1 from rep 0's witness and level-0 commitment (both reps bind one level-0 root): 1 keeps them for the next call with
-    // the same reuse_tag, which leaves the device arena open between the two calls; 2 takes them, or proves in full when
-    // nothing was kept (rep 0 had no room)
+    // rep 1 from rep 0's level-0 commitment (both reps bind one level-0 root): 1 keeps it for the next call with the same
+    // reuse_tag, which leaves the device arena open between the two calls; 2 takes it and builds the witness again, or proves
+    // in full when nothing was kept
     int rep_reuse;
     unsigned long long reuse_tag;
     // the compression slots' native witness (the SHA-512 build): per row of the sha512x3 circuit, its a and b sources (two u32:
@@ -211,14 +213,12 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
     }
 }
 
-// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b; rep 1 transposes z for the lincheck again) and level-0
-// codeword, tree and cap, and under M1 level 0's pads and extra lanes (the session's, which rep 1's lane phase reads), live in
-// the device arena, which stays open until rep 1 releases them.
+// What rep 0 keeps for rep 1 (rep_reuse): its level-0 codeword, tree and cap, and under M1 level 0's pads and extra lanes (the
+// session's, which rep 1's lane phase reads), live in the device arena, which stays open until rep 1 releases them.
 struct FcKept {
     bool live = false;
     unsigned long long tag = 0;
     int m = 0, k_log = 0;
-    F128 *df = nullptr, *d_a = nullptr, *d_b = nullptr;
     F128* d_cw0 = nullptr;
     uint8_t* d_tree0 = nullptr;
     long long l0_bl = 0;
@@ -227,34 +227,38 @@ struct FcKept {
     F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;
 };
 static FcKept g_fc_kept;
-// the most this prover has asked of device_arena, which only grows (a larger request by another prover makes the keep check
-// below conservative, never optimistic)
-static size_t g_fc_arena = 0;
+
+// A circuit's index arrays on the device, uploaded once per circuit and kept for the process, so one prover proves statements
+// of many circuits. Keyed by the host arrays' addresses, which the host builds once per circuit and never frees
+// (gpu_circuit.rs `types`, gpu.rs `statics_for`).
+struct FcUploads {
+    std::mutex mu;
+    std::vector<std::pair<std::vector<const void*>, std::vector<uint32_t*>>> held;
+    // the device copies of the `n` arrays `h[i]` of `len[i]` words each
+    cudaError_t get(const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d) {
+        const std::vector<const void*> key(h, h + n);
+        std::lock_guard<std::mutex> lock(mu);
+        for (const auto& e : held)
+            if (e.first == key) { std::copy(e.second.begin(), e.second.end(), d); return cudaSuccess; }
+        std::vector<uint32_t*> got(n, nullptr);
+        for (size_t i = 0; i < n; i++) {
+            cudaError_t err = cudaMalloc(&got[i], (len[i] ? len[i] : 1) * sizeof(uint32_t));
+            if (err == cudaSuccess && len[i]) err = cudaMemcpy(got[i], h[i], len[i] * sizeof(uint32_t), cudaMemcpyHostToDevice);
+            if (err != cudaSuccess) { for (uint32_t* p : got) if (p) cudaFree(p); return err; }
+        }
+        held.emplace_back(key, got);
+        std::copy(got.begin(), got.end(), d);
+        return cudaSuccess;
+    }
+};
 
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
-    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0,
-                    (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
+    for (void* p : {(void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0, (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
         if (p) ffi_free(p);
     device_arena.finish();
     g_fc_kept = FcKept{};
-}
-
-// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 0: z, a and b held past the zerocheck and
-// Ligerito's copy of z fit in the arena's own peak, the zerocheck's buffers, which are freed by then; 3 counts them on top)
-static size_t fc_keep_extra(size_t w) {
-    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 0L; }();
-    return (size_t)k * w;
-}
-
-// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free (FC_KEEP_MARGIN)
-static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
-    size_t free_b = 0, total_b = 0;
-    if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess) { cudaGetLastError(); return false; }
-    const size_t want = arena + extra;
-    const size_t after = want <= g_fc_arena ? free_b : (free_b + g_fc_arena >= want ? free_b + g_fc_arena - want : 0);
-    return after >= margin;
 }
 
 // rep 1 opens rep 0's level-0 tree: with hm96 leaves its salts are level 0's (tree 0), and rep 1's own trees count from 1
@@ -387,6 +391,71 @@ __global__ void fc_sha_rows(const uint64_t* __restrict__ tape, long long n, long
     ao[0] = make_uint4(A[0], A[1], A[2], A[3]); ao[1] = make_uint4(A[4], A[5], A[6], A[7]);
     bo[0] = make_uint4(B[0], B[1], B[2], B[3]); bo[1] = make_uint4(B[4], B[5], B[6], B[7]);
 }
+
+// The plan's rows as runs, per 32-row word and operand: a run is consecutive rows of one word reading consecutive bits of one tape
+// word, or rows of constant 1, as {tape word or ~0u, first row | (rows - 1) << 5 | first bit << 10}; constant-0 rows are in none.
+// Word r's a runs are runs[off[2r], off[2r + 1]), its b runs end at off[2r + 2]; words from `useful` rows on, up to `words`,
+// have none.
+static void fc_sha_runs(const uint32_t* plan, int useful, int words, std::vector<uint32_t>& off, std::vector<uint2>& runs) {
+    off.assign(1, 0);
+    runs.clear();
+    for (int r = 0; r < words; r++)
+        for (int h = 0; h < 2; h++) {
+            uint32_t prev = 0;
+            for (int i = 0; i < 32; i++) {
+                const long long row = 32LL * r + i;
+                const uint32_t src = row < useful ? plan[2 * row + h] : 0;
+                const bool joins = src == 1 ? prev == 1 : src >= 2 && prev >= 2 && src == prev + 1 && ((src - 2) & 63) != 0;
+                if (joins) runs.back().y += 1u << 5;
+                else if (src == 1) runs.push_back(make_uint2(~0u, (uint32_t)i));
+                else if (src >= 2) runs.push_back(make_uint2((src - 2) >> 6, (uint32_t)i | ((src - 2) & 63) << 10));
+                prev = src;
+            }
+            off.push_back((uint32_t)runs.size());
+        }
+}
+
+// fc_sha_rows's words from the plan's runs (fc_sha_runs): a shift and a mask a run instead of a tape read a row
+__global__ void fc_sha_rows_runs(const uint64_t* __restrict__ tape, long long n, long long s0, const uint32_t* __restrict__ off,
+                                 const uint2* __restrict__ runs, int per_block, int pos0, int slot_log, int k_log,
+                                 uint32_t* __restrict__ z_out, uint32_t* __restrict__ a_out, uint32_t* __restrict__ b_out) {
+    const long long s = (long long)blockIdx.y * blockDim.x + threadIdx.x;
+    if (s >= n) return;
+    const int g = blockIdx.x;
+    uint32_t W[2][8];
+#pragma unroll
+    for (int h = 0; h < 2; h++) {
+        uint32_t w0 = ~0u;
+        uint64_t c = 0;
+#pragma unroll
+        for (int j = 0; j < 8; j++) {
+            const int r = 8 * g + j;
+            uint32_t x = 0;
+            for (uint32_t k = off[2 * r + h], e = off[2 * r + h + 1]; k < e; k++) {
+                const uint2 u = runs[k];
+                uint64_t v = ~0ull;
+                if (u.x != ~0u) {
+                    if (u.x != w0) { c = tape[(long long)u.x * n + s]; w0 = u.x; }
+                    v = c;
+                }
+                const uint32_t len = ((u.y >> 5) & 31) + 1;
+                x |= ((uint32_t)(v >> (u.y >> 10)) & (len == 32 ? ~0u : (1u << len) - 1)) << (u.y & 31);
+            }
+            W[h][j] = x;
+        }
+    }
+    const uint32_t* A = W[0];
+    const uint32_t* B = W[1];
+    const long long gs = s0 + s, blk = gs / per_block, kk = gs % per_block;
+    const long long at = (blk << (k_log - 5)) + ((long long)(pos0 + kk) << (slot_log - 5)) + 8 * g;
+    uint4* zo = reinterpret_cast<uint4*>(z_out + at);
+    uint4* ao = reinterpret_cast<uint4*>(a_out + at);
+    uint4* bo = reinterpret_cast<uint4*>(b_out + at);
+    zo[0] = make_uint4(A[0] & B[0], A[1] & B[1], A[2] & B[2], A[3] & B[3]);
+    zo[1] = make_uint4(A[4] & B[4], A[5] & B[5], A[6] & B[6], A[7] & B[7]);
+    ao[0] = make_uint4(A[0], A[1], A[2], A[3]); ao[1] = make_uint4(A[4], A[5], A[6], A[7]);
+    bo[0] = make_uint4(B[0], B[1], B[2], B[3]); bo[1] = make_uint4(B[4], B[5], B[6], B[7]);
+}
 #endif
 
 // Page-locked, mapped host memory (null when the runtime refuses), held for the process: the device reads host slots from it
@@ -437,10 +506,29 @@ extern "C" int flock_cuda_copy(void* dst, const void* src, size_t bytes) {
     return 0;
 }
 
+// zeroes a DevBuf (gpu_circuit.rs) before the pool takes it back, on a stream of its own and waited for, as flock_cuda_copy
+extern "C" int flock_cuda_dev_zero(void* p, size_t bytes) {
+    cudaStream_t s;
+    if (cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking) != cudaSuccess) { cudaGetLastError(); return 1; }
+    cudaError_t e = cudaMemsetAsync(p, 0, bytes, s);
+    if (e == cudaSuccess) e = cudaStreamSynchronize(s);
+    cudaStreamDestroy(s);
+    if (e != cudaSuccess) { cudaGetLastError(); return 1; }
+    return 0;
+}
+
 static bool fc_on_device(const void* p) {
     cudaPointerAttributes a;
     if (!p || cudaPointerGetAttributes(&a, p) != cudaSuccess) { cudaGetLastError(); return false; }
     return a.type == cudaMemoryTypeDevice;
+}
+
+// the witness's device scratch is zeroed before it's freed, so no value outlives its prove call in device memory (cudaFree
+// waits for the memset)
+static cudaError_t fc_wipe_free(void* p, size_t bytes) {
+    const cudaError_t e = cudaMemsetAsync(p, 0, bytes);
+    cudaFree(p);
+    return e;
 }
 
 // the host slots from mapped host memory: slot i's F128 words at at[i], from zab + off[i] u64 (ab: its a then b words, z = a & b;
@@ -464,6 +552,19 @@ __global__ void fc_host_slots(const uint64_t* __restrict__ zab, const long long*
     }
 }
 
+// z = a & b over the host slots' words (slot i's at at[i]) once their a, b words are in place
+__global__ void fc_host_slots_and(const long long* __restrict__ at, const int* __restrict__ words, long long n, uint4* __restrict__ z,
+                                  const uint4* __restrict__ a, const uint4* __restrict__ b) {
+    for (long long i = blockIdx.x; i < n; i += gridDim.x) {
+        const int w = words[i];
+        const long long o = at[i];
+        for (int k = threadIdx.x; k < w; k += blockDim.x) {
+            const uint4 x = a[o + k], y = b[o + k];
+            z[o + k] = make_uint4(x.x & y.x, x.y & y.y, x.z & y.z, x.w & y.w);
+        }
+    }
+}
+
 static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
     const int k_log = P->k_log;
     if (k_log < 20 || k_log > 27 || N->n_types < 1 || N->n_types > FC_MAX_TYPES || N->n_ranges < 1 || N->n_ranges > FC_MAX_RANGES) return 1;
@@ -472,6 +573,14 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
         if (t < 0 || t >= N->n_types || ((long long)(N->r_pos0[j] + N->r_count[j]) << N->type_log[t]) > (1LL << k_log)) return 1;
     }
     return 0;
+}
+
+static size_t fc_arena_of(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
+    long long fold_words = 0;
+    for (int t = 0; t < N->n_types; t++) fold_words += 1LL << N->type_log[t];
+    const FcArenaShape s = {P->m, P->k_log, N->c.sub_log, P->initial_k, P->recursive_steps, P->log_inv_rates, P->recursive_ks,
+                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
+    return fc_arena_bytes(&s);
 }
 
 // chunk_zlin_transpose's former kernel, one byte a thread per store (the same bytes): FC_ZLIN_BYTEWISE=1 times it in the same job
@@ -503,7 +612,7 @@ static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, ui
 }
 
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,
-                      F128* d_b, uint8_t* d_zlin) {
+                      F128* d_b) {
     const FlockChunkParams* C = &N->c;
     if (C->host_z) {
         CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
@@ -514,19 +623,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
         CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
         {
-            static std::once_flag h_once;
-            static cudaError_t h_err = cudaSuccess;
-            static uint32_t *h_ao = nullptr, *h_ac = nullptr, *h_bo = nullptr, *h_bc = nullptr, *h_lo = nullptr, *h_ord = nullptr;
-            std::call_once(h_once, [&] {
-                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                    if (h_err == cudaSuccess) h_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                    if (h_err == cudaSuccess && n) h_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-                };
-                up(&h_ao, N->h_a_off, N->h_useful + 1); up(&h_bo, N->h_b_off, N->h_useful + 1);
-                up(&h_ac, N->h_a_col, N->h_a_off[N->h_useful]); up(&h_bc, N->h_b_col, N->h_b_off[N->h_useful]);
-                up(&h_lo, N->h_level_off, N->h_levels + 1); up(&h_ord, N->h_order, N->h_level_off[N->h_levels]);
-            });
-            CK(h_err);
+            static FcUploads h_up;
+            uint32_t* hd[6];
+            {
+                const uint32_t* h[6] = {N->h_a_off, N->h_b_off, N->h_a_col, N->h_b_col, N->h_level_off, N->h_order};
+                const size_t len[6] = {(size_t)N->h_useful + 1, (size_t)N->h_useful + 1, N->h_a_off[N->h_useful],
+                                       N->h_b_off[N->h_useful], (size_t)N->h_levels + 1, N->h_level_off[N->h_levels]};
+                CK(h_up.get(h, len, 6, hd));
+            }
+            uint32_t *h_ao = hd[0], *h_bo = hd[1], *h_ac = hd[2], *h_bc = hd[3], *h_lo = hd[4], *h_ord = hd[5];
             const int hr = N->h_range;
             const int hl = N->type_log[N->r_type[hr]];
             const long long hper = N->r_count[hr];
@@ -534,49 +639,37 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const long long hg = (n_h + 31) / 32;
             static cudaStream_t hs_stream = nullptr;
             static cudaEvent_t hs_zeroed = nullptr, hs_done = nullptr;
-            static int n_sm = 0;
+            static int n_sm = 0, hs_max_pitch = 0;
             if (N->n_host0 && !hs_stream) {
                 CK(cudaStreamCreateWithFlags(&hs_stream, cudaStreamNonBlocking));
                 CK(cudaEventCreateWithFlags(&hs_zeroed, cudaEventDisableTiming));
                 CK(cudaEventCreateWithFlags(&hs_done, cudaEventDisableTiming));
                 CK(cudaDeviceGetAttribute(&n_sm, cudaDevAttrMultiProcessorCount, 0));
-            }
-            // FC_HS_DMA=1: mapped a, b host slots go to a device staging buffer by the copy engine on hs_stream, issued before the
-            // compression rows' copy, and fc_host_slots reads the staged words: the same words, with no SM waiting on PCIe reads
-            // beside the compressions. The buffer is kept for the process, since a cudaFree would sync the device.
-            static const bool hs_dma = [] { const char* e = std::getenv("FC_HS_DMA"); return e && e[0] == '1'; }();
-            static uint64_t* hs_stage = nullptr;
-            static size_t hs_stage_cap = 0;
-            const uint64_t* zab_staged = nullptr;
-            if (hs_dma && N->n_host0 && N->host0_ab && !fc_on_device(N->host0_zab)) {
-                size_t u64s = 0;
-                for (long long i = 0; i < N->n_host0; i++) u64s += 4 * (size_t)N->host0_words[i];
-                if (hs_stage_cap < u64s) {
-                    if (hs_stage) cudaFree(hs_stage);
-                    hs_stage = nullptr; hs_stage_cap = 0;
-                    if (cudaMalloc(&hs_stage, u64s * 8) == cudaSuccess) hs_stage_cap = u64s;
-                    else { cudaGetLastError(); hs_stage = nullptr; }
-                }
-                if (hs_stage && cudaMemcpyAsync(hs_stage, N->host0_zab, u64s * 8, cudaMemcpyHostToDevice, hs_stream) == cudaSuccess)
-                    zab_staged = hs_stage;
-                else cudaGetLastError();
+                CK(cudaDeviceGetAttribute(&hs_max_pitch, cudaDevAttrMaxPitch, 0));
             }
             // the input rows, and the host slots below, may be the device's copies already (copied while the witness was built)
             const bool hin_dev = fc_on_device(N->h_inputs);
-            uint64_t* d_hin = (uint64_t*)N->h_inputs; uint32_t* d_hs = nullptr;
+            uint64_t* d_hin = (uint64_t*)N->h_inputs; uint32_t* d_hs = nullptr; size_t hs_bytes = 0;
             if (!hin_dev) {
                 CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
                 CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
             }
-            // the host slots from mapped host memory, on a stream of their own beside the compressions (other words of z, a, b),
-            // once the memsets are done; pageable host slots take three copies each after the compressions
-            const uint64_t* zab_dev = zab_staged;
-            if (!zab_dev && N->n_host0) {
+            // The host slots, on a stream of their own beside the compressions (other words of z, a, b), once the memsets are done.
+            // Mapped ones go to their words by the copy engine (host_copies, issued once the compressions are queued): no SM waits
+            // on PCIe reads, which slow the compression kernels beside them several times over, and the compression rows' copy
+            // doesn't wait behind them. FC_HS_MAPPED=1 has fc_host_slots read them from mapped memory instead, for a same-job
+            // control. Device ones fc_host_slots reads in place; pageable ones take three copies each after the compressions.
+            static const bool hs_mapped = [] { const char* e = std::getenv("FC_HS_MAPPED"); return e && e[0] == '1'; }();
+            const uint64_t* zab_dev = nullptr;
+            bool hs_copy = false;
+            if (N->n_host0) {
                 if (fc_on_device(N->host0_zab)) {
                     zab_dev = N->host0_zab;
                 } else if (cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
                     cudaGetLastError();
                     zab_dev = nullptr;
+                } else {
+                    hs_copy = !hs_mapped;
                 }
             }
             if (N->n_host0 && N->host0_ab && !zab_dev) {
@@ -595,52 +688,133 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 CK(cudaMemcpy(d_hw, N->host0_words, n * sizeof(int), cudaMemcpyHostToDevice));
                 CK(cudaEventRecord(hs_zeroed, 0));
                 CK(cudaStreamWaitEvent(hs_stream, hs_zeroed, 0));
+                if (hs_copy) return 0;
                 fc_host_slots<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(zab_dev, d_hat, d_hoff, d_hw, n, N->host0_ab,
                     (uint4*)df, (uint4*)d_a, (uint4*)d_b);
                 CK(cudaGetLastError());
                 CK(cudaEventRecord(hs_done, hs_stream));
                 return 0;
             };
+            // A copy a group of slots of one width, each of its z, a, b words' (a, b in the a, b layout, then fc_host_slots_and
+            // forms z): a run of slots at one stride on the device, or runs like it each at one stride from the last (a slot
+            // range's slots in each block), as a 3D copy, a 2D copy or a copy a slot, as the strides and pitches allow.
+            auto host_copies = [&]() -> int {
+                if (!hs_copy) return 0;
+                const long long n = N->n_host0, per = N->host0_ab ? 4 : 6;
+                const long long* at = N->host0_at;
+                const int* words = N->host0_words;
+                F128* dst[3] = {df, d_a, d_b};
+                const uint64_t* src = N->host0_zab;
+                // the end of the run from slot a, its stride in *st (its width for a run of one)
+                auto run_end = [&](long long a, long long* st) {
+                    long long b = a + 1;
+                    *st = words[a];
+                    if (b < n && words[b] == words[a] && at[b] - at[a] >= words[a]) {
+                        *st = at[b] - at[a];
+                        while (b < n && words[b] == words[a] && at[b] - at[b - 1] == *st) b++;
+                    }
+                    return b;
+                };
+                for (long long i0 = 0; i0 < n;) {
+                    const long long w = words[i0];
+                    long long stride;
+                    const long long i1 = run_end(i0, &stride), len = i1 - i0;
+                    long long depth = 1, outer = 0;
+                    if (len > 1 && i1 < n && words[i1] == w && (at[i1] - at[i0]) % stride == 0 && at[i1] - at[i0] >= len * stride) {
+                        outer = at[i1] - at[i0];
+                        for (long long j = i1, st; j < n && words[j] == w && at[j] - at[j - len] == outer && run_end(j, &st) - j == len &&
+                                                   st == stride;
+                             j += len)
+                            depth++;
+                    }
+                    const bool pitched = stride * 16 <= hs_max_pitch && per * w * 8 <= hs_max_pitch;
+                    for (int k = N->host0_ab ? 1 : 0; k < 3; k++) {
+                        const uint64_t* s = src + 2 * w * (k - (N->host0_ab ? 1 : 0));
+                        if (pitched && depth > 1) {
+                            cudaMemcpy3DParms p = {};
+                            p.srcPtr = make_cudaPitchedPtr((void*)s, (size_t)(per * w * 8), (size_t)w * 16, (size_t)len);
+                            p.dstPtr = make_cudaPitchedPtr((void*)(dst[k] + at[i0]), (size_t)stride * 16, (size_t)w * 16, (size_t)(outer / stride));
+                            p.extent = make_cudaExtent((size_t)w * 16, (size_t)len, (size_t)depth);
+                            p.kind = cudaMemcpyHostToDevice;
+                            CK(cudaMemcpy3DAsync(&p, hs_stream));
+                        } else if (pitched && len > 1) {
+                            CK(cudaMemcpy2DAsync(dst[k] + at[i0], (size_t)stride * 16, s, (size_t)(per * w * 8), (size_t)w * 16,
+                                                 (size_t)len, cudaMemcpyHostToDevice, hs_stream));
+                        } else {
+                            for (long long i = i0; i < i0 + len * depth; i++)
+                                CK(cudaMemcpyAsync(dst[k] + at[i], s + per * w * (i - i0), (size_t)w * 16, cudaMemcpyHostToDevice, hs_stream));
+                        }
+                    }
+                    src += per * w * len * depth;
+                    i0 += len * depth;
+                }
+                if (N->host0_ab) {
+                    fc_host_slots_and<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(d_hat, d_hw, n, (uint4*)df, (const uint4*)d_a,
+                        (const uint4*)d_b);
+                    CK(cudaGetLastError());
+                }
+                CK(cudaEventRecord(hs_done, hs_stream));
+                return 0;
+            };
             if (N->h_plan) {
 #ifdef FLOCK_HB
+                const int nrg = (N->h_useful + 255) / 256;
                 static const uint32_t* plan_of = nullptr;
-                static uint32_t* d_plan = nullptr;
+                static uint32_t *d_plan = nullptr, *d_run_off = nullptr;
+                static uint2* d_runs = nullptr;
                 if (plan_of != N->h_plan) {
-                    if (d_plan) cudaFree(d_plan);
+                    plan_of = nullptr;
+                    for (void* p : {(void*)d_plan, (void*)d_run_off, (void*)d_runs}) if (p) cudaFree(p);
+                    d_plan = d_run_off = nullptr; d_runs = nullptr;
+                    std::vector<uint32_t> off;
+                    std::vector<uint2> runs;
+                    fc_sha_runs(N->h_plan, N->h_useful, 8 * nrg, off, runs);
                     CK(cudaMalloc(&d_plan, (size_t)N->h_useful * 8));
                     CK(cudaMemcpy(d_plan, N->h_plan, (size_t)N->h_useful * 8, cudaMemcpyHostToDevice));
+                    CK(cudaMalloc(&d_run_off, off.size() * sizeof(uint32_t)));
+                    CK(cudaMemcpy(d_run_off, off.data(), off.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
+                    CK(cudaMalloc(&d_runs, std::max<size_t>(runs.size(), 1) * sizeof(uint2)));
+                    if (!runs.empty()) CK(cudaMemcpy(d_runs, runs.data(), runs.size() * sizeof(uint2), cudaMemcpyHostToDevice));
                     plan_of = N->h_plan;
                 }
                 if (hl < 8) { printf("FFI circuit: the native compression witness needs slots of at least 2^8 rows\n"); return 210; }
                 // a thread per compression where the tape has sha512x3's layout (FC_SHA_TAPE1=1: a thread per slot)
                 static const bool tape1 = [] { const char* e = std::getenv("FC_SHA_TAPE1"); return e && e[0] == '1'; }();
                 const bool tape3 = !tape1 && 2 * N->h_in_words >= 3 * 24 && N->h_tape_words == 2 * N->h_in_words + 3 * FC_SHA_COMP_WORDS + 24;
-                // FC_SHA_ROWS_NOCACHE=1: every row's tape bits read straight from the tape
+                // the rows from the plan's runs; FC_SHA_ROWS_BITS=1: from its rows one bit at a time (FC_SHA_ROWS_NOCACHE=1: every
+                // row's tape bits read straight from the tape)
+                static const bool rows_bits = [] { const char* e = std::getenv("FC_SHA_ROWS_BITS"); return e && e[0] == '1'; }();
                 static const int rows_cache = [] { const char* e = std::getenv("FC_SHA_ROWS_NOCACHE"); return !(e && e[0] == '1'); }();
                 const long long per = (long long)N->h_tape_words * 8;
-                const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(n_h, FC_WITNESS_BATCH / per));
                 uint64_t* d_tape;
                 CK(cudaMalloc(&d_tape, (size_t)(batch * per)));
-                const int nrg = (N->h_useful + 255) / 256;
                 if (const int e = host_slots()) return e;
                 for (long long s0 = 0; s0 < n_h; s0 += batch) {
                     const long long nb = std::min(batch, n_h - s0);
                     if (tape3) fc_sha_tape3<<<(unsigned)((3 * nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
                     else fc_sha_tape<<<(unsigned)((nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
-                    fc_sha_rows<<<dim3((unsigned)nrg, (unsigned)((nb + 255) / 256)), 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper,
-                        N->r_pos0[hr], hl, k_log, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, rows_cache);
+                    const dim3 grid((unsigned)nrg, (unsigned)((nb + 255) / 256));
+                    if (rows_bits)
+                        fc_sha_rows<<<grid, 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper, N->r_pos0[hr], hl, k_log, (uint32_t*)df,
+                            (uint32_t*)d_a, (uint32_t*)d_b, rows_cache);
+                    else
+                        fc_sha_rows_runs<<<grid, 256>>>(d_tape, nb, s0, d_run_off, d_runs, (int)hper, N->r_pos0[hr], hl, k_log, (uint32_t*)df,
+                            (uint32_t*)d_a, (uint32_t*)d_b);
                     CK(cudaGetLastError());
                 }
+                if (const int e = host_copies()) return e;
                 CK(cudaStreamSynchronize(0));
-                cudaFree(d_tape);
+                CK(fc_wipe_free(d_tape, (size_t)(batch * per)));
                 d_hs = nullptr;
 #else
                 printf("FFI circuit: the native compression witness needs the SHA-512 build\n"); return 208;
 #endif
             } else {
                 const long long per = 3LL * N->h_useful * 4;
-                const long long batch = std::max(1LL, std::min(hg, (2LL << 30) / per));
-                CK(cudaMalloc(&d_hs, (size_t)(batch * per)));
+                const long long batch = std::max(1LL, std::min(hg, FC_WITNESS_BATCH / per));
+                hs_bytes = (size_t)(batch * per);
+                CK(cudaMalloc(&d_hs, hs_bytes));
                 if (const int e = host_slots()) return e;
                 for (long long g0 = 0; g0 < hg; g0 += batch) {
                     const long long ng = std::min(batch, hg - g0);
@@ -650,10 +824,11 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                         (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->h_levels, 0, nullptr, nullptr, 0, nullptr, nullptr, g0);
                     CK(cudaGetLastError());
                 }
+                if (const int e = host_copies()) return e;
             }
             CK(cudaStreamSynchronize(0));
-            if (d_hs) cudaFree(d_hs);
-            if (!hin_dev) cudaFree(d_hin);
+            if (d_hs) CK(fc_wipe_free(d_hs, hs_bytes));
+            if (!hin_dev) CK(fc_wipe_free(d_hin, (size_t)n_h * N->h_in_words * 16));
             if (zab_dev) {
                 CK(cudaEventSynchronize(hs_done));
                 cudaFree(d_hat); cudaFree(d_hoff); cudaFree(d_hw);
@@ -671,34 +846,30 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         }
         auto t1 = std::chrono::steady_clock::now();
         if (!N->u_host) {
-            static std::once_flag net_once;
-            static cudaError_t net_err = cudaSuccess;
-            static uint32_t *d_ao = nullptr, *d_ac = nullptr, *d_bo = nullptr, *d_bc = nullptr, *d_lo = nullptr, *d_ord = nullptr;
-            std::call_once(net_once, [&] {
-                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                    if (net_err == cudaSuccess) net_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                    if (net_err == cudaSuccess && n) net_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-                };
-                const size_t na = N->u_a_off[N->u_useful], nb = N->u_b_off[N->u_useful];
-                up(&d_ao, N->u_a_off, N->u_useful + 1); up(&d_bo, N->u_b_off, N->u_useful + 1);
-                up(&d_ac, N->u_a_col, na); up(&d_bc, N->u_b_col, nb);
-                up(&d_lo, N->u_level_off, N->u_levels + 1); up(&d_ord, N->u_order, N->u_level_off[N->u_levels]);
-            });
-            CK(net_err);
+            static FcUploads net_up;
+            uint32_t* ud[6];
+            {
+                const uint32_t* h[6] = {N->u_a_off, N->u_b_off, N->u_a_col, N->u_b_col, N->u_level_off, N->u_order};
+                const size_t len[6] = {(size_t)N->u_useful + 1, (size_t)N->u_useful + 1, N->u_a_off[N->u_useful],
+                                       N->u_b_off[N->u_useful], (size_t)N->u_levels + 1, N->u_level_off[N->u_levels]};
+                CK(net_up.get(h, len, 6, ud));
+            }
+            uint32_t *d_ao = ud[0], *d_bo = ud[1], *d_ac = ud[2], *d_bc = ud[3], *d_lo = ud[4], *d_ord = ud[5];
             const int ur = N->u_range;
             const int ul = N->type_log[N->r_type[ur]];
             const long long per_block = N->r_count[ur];
             const long long n_units = (1LL << (m - k_log)) * per_block;
             const long long groups = (n_units + 31) / 32;
-            uint64_t* d_in; uint32_t* d_scratch;
+            uint64_t* d_in; uint32_t* d_scratch; size_t scratch_bytes;
             CK(cudaMalloc(&d_in, (size_t)n_units * N->u_in_words * 16));
             CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
-            // groups in batches that keep the scratch under ~2 GB
+            // groups in batches that keep the scratch under FC_WITNESS_BATCH
             const long long per = 3LL * N->u_useful * 4;
             const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
             if (N->u_n_late == 0) {
-                const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
-                CK(cudaMalloc(&d_scratch, (size_t)(batch * per)));
+                const long long batch = std::max(1LL, std::min(groups, FC_WITNESS_BATCH / per));
+                scratch_bytes = (size_t)(batch * per);
+                CK(cudaMalloc(&d_scratch, scratch_bytes));
                 for (long long g0 = 0; g0 < groups; g0 += batch) {
                     const long long ng = std::min(batch, groups - g0);
                     CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
@@ -710,7 +881,8 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             } else {
                 // both passes over every group at once: the scratch holds the first pass's rows for the second
                 uint32_t *d_lr, *d_cr, *d_late, *d_cut;
-                CK(cudaMalloc(&d_scratch, (size_t)(groups * per))); CK(cudaMemsetAsync(d_scratch, 0, (size_t)(groups * per)));
+                scratch_bytes = (size_t)(groups * per);
+                CK(cudaMalloc(&d_scratch, scratch_bytes)); CK(cudaMemsetAsync(d_scratch, 0, scratch_bytes));
                 CK(cudaMalloc(&d_lr, N->u_n_late * 4)); CK(cudaMalloc(&d_cr, N->u_n_cut * 4));
                 CK(cudaMalloc(&d_late, (size_t)groups * N->u_n_late * 4)); CK(cudaMalloc(&d_cut, (size_t)groups * N->u_n_cut * 4));
                 CK(cudaMemcpy(d_lr, N->u_late_rows, N->u_n_late * 4, cudaMemcpyHostToDevice));
@@ -739,10 +911,11 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                     CK(cudaMemcpyAsync(d_b + host_at[i], p + 4 * w, w * 16, cudaMemcpyHostToDevice));
                     p += 6 * w;
                 }
-                cudaFree(d_lr); cudaFree(d_cr); cudaFree(d_late); cudaFree(d_cut);
+                cudaFree(d_lr); cudaFree(d_cr);
+                CK(fc_wipe_free(d_late, (size_t)groups * N->u_n_late * 4)); CK(fc_wipe_free(d_cut, (size_t)groups * N->u_n_cut * 4));
             }
             CK(cudaStreamSynchronize(0));
-            cudaFree(d_scratch); cudaFree(d_in);
+            CK(fc_wipe_free(d_scratch, scratch_bytes)); CK(fc_wipe_free(d_in, (size_t)n_units * N->u_in_words * 16));
         }
         auto t2 = std::chrono::steady_clock::now();
         if (N->witness_s) {
@@ -750,30 +923,26 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             N->witness_s[1] = std::chrono::duration<double>(t2 - t1).count();
         }
     }
-    const long long n_stripes = (1LL << (m - k_log)) / 8;
-    fc_zlin_transpose(df, k_log, n_stripes, d_zlin);
-    CK(cudaGetLastError());
     CK(cudaStreamSynchronize(0));
     return 0;
 }
 
 static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, const F128* d_eq, F128 alpha, int k_log, F128* d_comb) {
-    static std::once_flag once;
-    static cudaError_t err = cudaSuccess;
-    static uint32_t* d_csc[FC_MAX_TYPES][4];
-    std::call_once(once, [&] {
-        auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-            if (err == cudaSuccess) err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-            if (err == cudaSuccess && n) err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-        };
+    static FcUploads up;
+    uint32_t* d_csc[FC_MAX_TYPES][4];
+    {
+        const uint32_t* h[FC_MAX_TYPES * 4];
+        size_t len[FC_MAX_TYPES * 4];
         for (int t = 0; t < N->n_types; t++) {
             const size_t cols = (size_t)1 << N->type_log[t];
             const bool comp = N->t_a_col_ptr[t] == nullptr;
-            up(&d_csc[t][0], comp ? P->a_col_ptr : N->t_a_col_ptr[t], cols + 1); up(&d_csc[t][1], comp ? P->a_rows : N->t_a_rows[t], comp ? P->a_nnz : N->t_a_nnz[t]);
-            up(&d_csc[t][2], comp ? P->b_col_ptr : N->t_b_col_ptr[t], cols + 1); up(&d_csc[t][3], comp ? P->b_rows : N->t_b_rows[t], comp ? P->b_nnz : N->t_b_nnz[t]);
+            h[4 * t] = comp ? P->a_col_ptr : N->t_a_col_ptr[t]; len[4 * t] = cols + 1;
+            h[4 * t + 1] = comp ? P->a_rows : N->t_a_rows[t]; len[4 * t + 1] = (size_t)(comp ? P->a_nnz : N->t_a_nnz[t]);
+            h[4 * t + 2] = comp ? P->b_col_ptr : N->t_b_col_ptr[t]; len[4 * t + 2] = cols + 1;
+            h[4 * t + 3] = comp ? P->b_rows : N->t_b_rows[t]; len[4 * t + 3] = (size_t)(comp ? P->b_nnz : N->t_b_nnz[t]);
         }
-    });
-    CK(err);
+        CK(up.get(h, len, 4 * (size_t)N->n_types, &d_csc[0][0]));
+    }
     int min_log = 64;
     for (int t = 0; t < N->n_types; t++) min_log = std::min(min_log, N->type_log[t]);
     std::vector<F128> head((size_t)1 << std::min(min_log, 10));
@@ -820,18 +989,19 @@ __global__ void fc_zk_lane_input(F128* __restrict__ cw, const F128* __restrict__
     cw[i] = v;
 }
 
-// Leaves of w + 4 lanes: the witness's w lanes, then the 4 extra ones.
-__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ cw_w, const F128* __restrict__ cw_x, int w, long long n) {
+// Leaves of `stride` lanes: `width` lanes' codewords (src, position-major) as lanes [off, off + width) of each leaf.
+__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ src, int width, int off, int stride, long long n) {
     long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
-    if (i >= n * (w + 4)) return;
-    const long long pos = i / (w + 4);
-    const int lane = (int)(i - pos * (w + 4));
-    out[i] = lane < w ? cw_w[pos * w + lane] : cw_x[pos * 4 + lane - w];
+    if (i >= n * width) return;
+    const long long pos = i / width;
+    out[pos * stride + off + (i - pos * width)] = src[i];
 }
 
 // commit_zk on the device. The padding's upper half is not zero, so the transform runs every layer (M0's commit skips layer 0
-// by reading the message replicated); the witness's lanes and the extra ones go as two batches (the NTT's lane tiles are powers
-// of two), then are interleaved. The pads and extra lanes stay on the device for the lane phase (the caller frees them).
+// by reading the message replicated); the witness's lanes go in four groups and the extra ones in a batch of their own (the
+// NTT's lane tiles are powers of two), each interleaved into the leaves as it's done, so only a quarter of the witness's lane
+// codewords is ever held beside the leaves. The pads and extra lanes stay on the device for the lane phase (the caller frees
+// them).
 static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitParams* N, int log_n, const F128* df, F128** d_pads,
                            F128** d_extra, F128** d_cw0, uint8_t** d_tree0, long long* l0_bl, int* l0_ni, std::vector<MHash>& l0_cap) {
     const int k = P->initial_k, w = 1 << k, t_pad = N->zk_t_pad;
@@ -845,18 +1015,21 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     const TwiddleTable* tt;
     F128* d_tw;
     CK(get_cached_twiddles(k_code, tt, d_tw));
-    F128 *cw_w, *cw_x;
-    CK(ffi_malloc(&cw_w, (size_t)n * w * sizeof(F128)));
-    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
-    fc_zk_lane_input<<<(unsigned)((n * w + 255) / 256), 256>>>(cw_w, df, w, 1, k, n, l, *d_pads, t_pad);
-    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
-    CK(cudaGetLastError());
-    launch_ntt(cw_w, d_tw, *tt, 0, k_code, w);
-    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
-    CK(cudaGetLastError());
     CK(ffi_malloc(d_cw0, (size_t)n * (w + 4) * sizeof(F128)));
     CK(ffi_malloc(d_tree0, (size_t)(2 * n - 1) * FLOCK_HB));
-    fc_zk_interleave<<<(unsigned)((n * (w + 4) + 255) / 256), 256>>>(*d_cw0, cw_w, cw_x, w, n);
+    const int g_log = k < 2 ? k : 2, wg = w >> g_log;
+    F128 *cw_w, *cw_x;
+    CK(ffi_malloc(&cw_w, (size_t)n * wg * sizeof(F128)));
+    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
+    for (int g = 0; g < w; g += wg) {
+        fc_zk_lane_input<<<(unsigned)((n * wg + 255) / 256), 256>>>(cw_w, df + g, w, 1, k - g_log, n, l, *d_pads + (size_t)g * t_pad, t_pad);
+        launch_ntt(cw_w, d_tw, *tt, 0, k_code, wg);
+        fc_zk_interleave<<<(unsigned)((n * wg + 255) / 256), 256>>>(*d_cw0, cw_w, wg, g, w + 4, n);
+        CK(cudaGetLastError());
+    }
+    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
+    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
+    fc_zk_interleave<<<(unsigned)((n * 4 + 255) / 256), 256>>>(*d_cw0, cw_x, 4, w, w + 4, n);
     CK(cudaGetLastError());
     launch_merkle((const uint8_t*)*d_cw0, *d_tree0, n, (w + 4) * 16);
     CK(cudaStreamSynchronize(0));

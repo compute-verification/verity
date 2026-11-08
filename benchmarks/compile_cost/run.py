@@ -44,8 +44,8 @@ WINDOWS = {
 }
 #: each window's request Program digests at rank 0, in request order
 PINS: dict[str, list[str]] = {
-    "long-w0": ["6f3d61ee31fe3332f02207f19d05ade5babd6703f7ff6db7431d226e666162f202e5f3c41b8a16e6e756d4cb1fc521cb5928ede58bb84abdd5776b1daacc7ad4",
-                "1f2ef14149da500fd5e70bc69b53ac84cde1d665474df9608cb8070a5784b749a01e68aa731741e1d166c92f3fc7409bbcaabfc39f214c6efe413d1f06407fab"],
+    "long-w0": ["c902ed97e90611101e2d02ba8dc98de33b3a5e6a32830e9b9dba7c4c11c701115231747028c7b97f08c646b27d3c142cd012b4dc2421ef13c06249c8b7bb14c8",
+                "00622f03f3cedf3ee1e8a2a908ca3e7184b320d6102aa97825d22e78161b8e29196e1ea73186f7c1bb5aa7ad997850c52e0f17767dbcda4855ea7952fbf1619c"],
 }
 
 
@@ -179,7 +179,7 @@ def instrument(m: Meter) -> None:
     from verity_vllm.program.predict import batch, build, score, steps
 
     for owner, attrs in ((steps, ("plan_steps", "request_program", "dead_units")),
-                         (build, ("decoder", "drive", "finish_run", "with_checks", "dead_free_form", "Program")),
+                         (build, ("decoder", "drive", "with_checks", "dead_free_form", "Program")),
                          (score, ("request_component",)),
                          (batch, ("check_compiled", "separable", "workload_labels", "_solo"))):
         for a in attrs:
@@ -206,11 +206,7 @@ def main() -> int:
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
-    ap.add_argument("--flat", action="store_true", help="predict's calls a row (`common.BATCHED` off)")
     a = ap.parse_args()
-    if a.flat:
-        from verity_vllm.program.predict import common
-        common.BATCHED = False
     if a.engine:
         ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
     if (a.window is None) == (a.requests is None):
@@ -242,7 +238,7 @@ def main() -> int:
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     digests = [u.digest for u in compiled.requests]
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
-    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE), "flat": a.flat,
+    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
            "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}

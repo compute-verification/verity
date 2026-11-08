@@ -1,6 +1,7 @@
 """Figure 1 in its total-cost form: the configurations and their serve-tax card, the registrations' spans, the write form
 against every admissible set of a small design, the break-even's search, and one scope end to end with a measured tax
 dropped in."""
+from fractions import Fraction
 from itertools import product
 from math import comb
 
@@ -8,7 +9,7 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.core.protocols.sampled_proofs.optimize import Cell
+from verity.core.protocols.spot.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():
@@ -109,6 +110,21 @@ def test_every_line_prices_its_blocks_one_way():
         t.priced(c | {"partition": f1.InputCard(stray, "", "measured", "one unstaged block")}, po)
 
 
+def test_a_block_measured_at_another_size_of_its_definition_scales_with_its_k_log():
+    """A residual add of 384 columns, which the card measures only at 6144, 2^4 times smaller as the strata size both:
+    the card's seconds a block over 2^4 and its cap times 2^4, its statement's fixed seconds unchanged."""
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    b = next(b for b in po["value"]["blocks"] if b["block"] == "ResidualAdd_v1{N=6144}")
+    strata = c["partition"].value["strata"]
+    k = next((x["k_log"] for x in strata if x["block"] == b["block"]), b["k_log"])
+    narrow = {"block": "ResidualAdd_v1{N=384}", "per_token": 16, "macs": 0, "out_bits": 6144, "k_log": k - 4}
+    part = f1.InputCard(c["partition"].value | {"strata": [*strata, narrow]}, "", "measured", "a column block more")
+    p = t.priced(c | {"partition": part}, po)
+    got = next(x for x in p["partition"].value["strata"] if x["block"] == narrow["block"])
+    assert (got["priced"], got["seconds_per_block"]) == ("measured", b["seconds_per_block"] / 16)
+    assert (got["fixed_seconds"], got["statement_blocks"]) == (b["fixed_seconds"], b["statement_blocks"] * 16)
+
+
 def test_the_kept_priced_taxes_are_the_generators():
     """While a configuration's tax is priced, the kept card's is what `priced_card` prices from the kept cards."""
     kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))
@@ -131,6 +147,35 @@ def test_a_card_without_every_configuration_is_refused():
         cards.check(t.priced_card("GLM-5.3") | {"value": {"baseline": "x", "configurations": [
             {"config": "tokens", "status": "priced", "tax": .1, "low": .2, "high": .3, "lower_bound": False,
              "parts": []}]}})
+
+
+def test_each_statement_pays_its_verify_at_the_cards_ratio():
+    """A statement's verify is its type's measured core-seconds, its family's line (through two members, or through the
+    fixed seconds and one), else the measured median, at the card's core-seconds a GPU-second, added to the
+    statement's fixed seconds and nothing else; a family member that isn't measured is refused."""
+    vc = cards.load("verifier_cost", "GLM-5.3")
+    v = vc["value"]
+    by = {x["block"]: x["core_seconds"] for x in v["types"]}
+    assert t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=2048,N=1}") == (by["FlashInferFp8Linear_v1{K=2048,"],
+                                                                         "measured")
+    k4096, how = t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=4096,N=1}")
+    assert how == "family" and k4096 == pytest.approx(v["fixed_seconds"] + 2 * (by["FlashInferFp8Linear_v1{K=2048,"]
+                                                                                 - v["fixed_seconds"]))
+    lo, hi = by["SparseMlaCombine_v1{NSPLIT=2,"], by["SparseMlaCombine_v1{NSPLIT=12,"]
+    assert t.verifier_seconds(v, "SparseMlaCombine_v1{NSPLIT=5,DV=512}")[0] == pytest.approx(lo + 3 * (hi - lo) / 10)
+    assert t.verifier_seconds(v, "MoeExpertFp8BlockGemm_v4{K=6144}") == (by["MoeExpertFp8GemmW_v1{"], "family")
+    assert t.verifier_seconds(v, "Unseen_v1{K=3}")[1] == "assumed"
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    p = t.priced(c, po)
+    q = t.verified(p, vc)
+    for x, y in zip(p["partition"].value["strata"], q["partition"].value["strata"]):
+        assert y["fixed_seconds"] == pytest.approx(x["fixed_seconds"] + y["verify_core_seconds"]
+                                                   / v["core_seconds_per_gpu_second"])
+        assert y["seconds_per_block"] == x["seconds_per_block"] and y["price_macs"] == x["price_macs"]
+    assert q["verifier_cost"].value == pytest.approx(5.40 / (2 * 0.015 + 8 * 0.0045))
+    bad = v | {"families": [{"types": ["X"], "size": None, "members": ["Unmeasured_v1{"]}]}
+    with pytest.raises(ValueError, match="none of the measured"):
+        cards.check(vc | {"value": bad})
 
 
 def most_written(cells, k, q, replay_blocks, delta, footprint):
@@ -173,6 +218,28 @@ def test_the_write_form_is_at_most_every_replay_block_at_its_footprint():
     assert t.write_form(cells, {"merged": 16, "k": {0: 1}, "q": 1e-12}, 1000, .01, 500) == 1000 * 500
 
 
+def test_a_two_stage_point_is_what_lean_certifies(monkeypatch):
+    """A two-stage point's count is the bits Lean certifies for its design (`plancheck.two` of its strata, its replay
+    blocks and the planner's θ, in the patterns' form or the capped sets'), rounded up to a float, with the planner's
+    bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the sampled-proofs
+    suite runs it."""
+    cells = (Cell(3, 16), Cell(1, 64, stratum=64))
+    g = t.Grain(4, cells, 1.0, 100.0)
+    row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
+    seen = []
+    monkeypatch.setattr(t.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
+    count, checked = t.lean_two(g, row, .01, 80.0, "patterns")
+    assert (count, checked) == (t.plancheck.upper(Fraction(10**6, 7)), {"lean": True, "planner": 50.0, "theta": 3.0})
+    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, True, 2.0)]
+    seen.clear()
+    assert t.lean_two(g, row, .01, 80.0, "sets") == (count, checked)
+    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, False, 2.0)]
+    assert seen[0]["form"] == "capped"
+    monkeypatch.setattr(t.plancheck, "check", lambda ds: [(None, Fraction(0))])
+    with pytest.raises(t.plancheck.LeanError, match="refuses the planner's two-stage point"):
+        t.lean_two(g, row, .01, 80.0, "patterns")
+
+
 def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
     """Two of a hundred narrow blocks sampled pay their statement's whole fixed cost, so a computed type at 2 of a
     sampled replay block's 3 marginal seconds is 52 of its 53."""
@@ -186,7 +253,8 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
 
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
-    """One scope at four shares, with (A)'s tax measured."""
+    """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s,
+    `test_a_two_stage_point_is_what_lean_certifies` the two-stage lines', and the sampled-proofs suite runs both)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 
@@ -198,7 +266,7 @@ def measured(tmp_path_factory) -> dict:
 
     mp.setattr(t.spot_cards, "load", with_measured)
     mp.setattr(t, "BETAS", (1e-3, 1e-1, 1.0))
-    out = t.run("GLM-5.3", ("datacenter week",), workers=4)
+    out = t.run("GLM-5.3", ("datacenter week",), workers=4, lean=False)
     mp.undo()
     return out
 
@@ -207,9 +275,9 @@ def measured(tmp_path_factory) -> dict:
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
     above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
-    requests under a cap past them, and the patterns' form below the sets'; both infiltration lines plotted, and (C)'s
-    falling with β; skipped work only for (C); the
-    captions name what each rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    requests under a cap past them, and the patterns' form below the sets' wherever it doesn't reach the served bits;
+    both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
+    rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
@@ -238,13 +306,15 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     for name in ("tokens", "per_expert"):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
-        assert lines[name]["y"][at] < lines[f"{name}_sets"]["y"][at]
+        patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]
+        assert patterns <= sets and (patterns < sets or lines[name]["binds"][at] == "served"), name
         for n in (name, f"{name}_pod", f"{name}_datacenter"):
             assert all(k >= 1 and k >= q for q, k in zip(lines[n]["registration_sample"], lines[n]["registration_cap"]))
             assert all(0 <= p <= s <= 1 for s, p in zip(lines[n]["shared"], lines[n]["padding"]))
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name
     assert "sessions padded to a public cap" in caps["exfiltration"]
+    assert all(f"{f1.ROLES} {f1.TRUST}" in c for c in caps.values())
     served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
     assert served_at and "tokens" not in served_at
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1

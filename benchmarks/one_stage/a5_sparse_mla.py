@@ -5,7 +5,7 @@ window (one ``SparseMlaSplit_v1{T=40,NS=3,NH=2,DR=16,DV=32,BN=16}`` row in its s
 partial and lse by the twin, `ml.windows.rows.commit`) and audited by `a5.audit` as rank 0 of a one-rank step on a local
 challenger's coins under ``stratified:1``, one unit of each template: the wiring check on the public bodies before the sample
 (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; the 16-key part's MUFU reads in lookup
-slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each sampled proof block behind the ZK server, the Lean verifier, the stream's
+slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each sampled proof block (behind the ZK server under ``--firewall``), the Lean verifier, the stream's
 outcome and the negatives (`a5.wiring_negatives` among them). It stands in for step 16's 78 rows (at T = 272, per head, four
 64-key parts, one 16-key part and a five-split combine), whose units it does not prove. The run exits 0 only when the outcome
 is accepted and every negative refused. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's
@@ -13,7 +13,7 @@ records (``rank0/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --main FILE --out DIR
+        [--firewall flock-firewall] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 
@@ -44,7 +44,7 @@ OF = {"fixture": "integrations/vllm/tests/pipeline/test_serving_rows_splits.py",
 def commit(out: Path) -> CS.Binding:
     """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
     s = TS.Served()
-    w = replace(TS.window(s, law=D.parse_law(RULE)), run=f"{ROOT}/rank0")
+    w = replace(TS.window(s, law=D.parse_design(RULE)), run=f"{ROOT}/rank0")
     got = TS.read(s, w.members)
     c = CS.commit(w, [g for g, _e in got])
     CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
@@ -57,7 +57,8 @@ def main() -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)

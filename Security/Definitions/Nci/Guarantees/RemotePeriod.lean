@@ -16,7 +16,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
   `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`, at window `t`'s
   play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
-  premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
+  premises; that bridge is not stated. `ComposeMonitoringPeriod.CircuitCreditPeriod` credits live words over a period's
   accepted prefix, not time, so it does not give `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
@@ -35,8 +35,8 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `DampenerRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
-  `verity/core/protocols/sampled_proofs/service.py`, its verifier `SampledProofs.Fleet`), and
-  `Properties.SampledProofs` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
+  `verity/core/protocols/spot/service.py`, its verifier `Spot.Fleet`), and
+  `Properties.Spot` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
 * **The inference-only policy** (in place of `CompliesRate` and `ThreadedThrottled`'s premises): each declared run `i`

@@ -29,17 +29,17 @@ which adds SAK to H1.
 * `liveSize`, `creditedSize`: the credited size `S`, the size of each live block of credited words over the windows
   before the first refusal: `creditLive` with each block's size in place of its words. It is public, read off the
   registration, the live tiles and the verdict.
-* `rightSize`: the size of the blocks the run computed with their late cones, `DrawnLayer.Good`: the blocks whose
+* `rightSize`: the size of the blocks the run computed with their late cones, `SampledLayer.Good`: the blocks whose
   values are right. E1(c) (`accounting-ts-unit-fixed`) says a good block's words are its own right values: its unit
   and every unit that writes it a value after its coin are computed, none skipped and guessed. "Right" is the
-  accounting model's `DrawnLayer.Good`: nothing yet ties it to the committed values `Credit.window` checks.
+  accounting model's `SampledLayer.Good`: nothing yet ties it to the committed values `Credit.window` checks.
 * `sizePerWord`, `epsSkip`, `creditFloor`: the most size a credited word carries, `σ = max_t size_t / words_t` over the
   blocks of credited words. Then `ε_skip = σ·ε(j)·N_live/S`, and the right values must cover `(1 − ε_skip)₊·S` AND
   gates. When every block of credited words carries the same size per word, `S = σ·N_live` and `ε_skip = ε(j)`.
 * `RightValues`: except with H1's probability, an accepted period's right blocks have total size at least
   `(1 − ε_skip)₊·S`.
 
-*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileDrawIsCoin` (the sample),
+*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileSampleIsCoin` (the sample),
 `TileServiceSound` (the proof system's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
 `δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
@@ -96,7 +96,7 @@ noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared 
 
 open Classical in
 /-- **The right blocks' size**: the size of every block of credited words that `right` names in each window. At
-`DrawnLayer.Good` it is the size whose values the period certifies right: a good block is live in a credited window
+`SampledLayer.Good` it is the size whose values the period certifies right: a good block is live in a credited window
 (`periodMode` skips every other block whole). -/
 noncomputable def rightSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (right : Fin n → Fin Np → Prop) : ℝ :=
@@ -128,11 +128,11 @@ function of the period's coins. Add the registered declaration `D`, the lowering
 except with probability `δ_s + n·(δ_bind + δ_ks)` (δ_coin plus δ_crypto), an accepted period's right blocks have total
 credit size at least `(1 − ε_skip)₊·S` AND gates. Here `S` is the credited size of the windows before the first
 refusal (`creditedSize`) and `ε_skip = σ·ε(j)·N_live/S` (`epsSkip`, at H1's `ε(j)` and live words). A block is right
-(`DrawnLayer.Good` under `periodMode`) when the run computed it and every block that writes it a value after its coin.
+(`SampledLayer.Good` under `periodMode`) when the run computed it and every block that writes it a value after its coin.
 E1(c) (`accounting-ts-unit-fixed`) reads that as its words being its own right values.
 
 It is a statement about values, not a compute claim: right values aren't work. It needs no
-algorithmic premise, only H1's. `TileDrawIsCoin`, `TileServiceSound`, `RegisteredBeforeDraw` and `SaltIsLiveCoin` are
+algorithmic premise, only H1's. `TileSampleIsCoin`, `TileServiceSound`, `RegisteredBeforeDraw` and `SaltIsLiveCoin` are
 about the sample, the service and the salt. `SharedNoiseLucks` is the one computational premise: the fold receipts'
 detection, which is to be proved or designed away by the no-fold receipt. -/
 def RightValues : Prop :=
@@ -159,7 +159,7 @@ def RightValues : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     prob (fun x => Pl.accepts x ∧

@@ -26,9 +26,10 @@ public import Definitions.Pouw.Assumptions.Dimension.RouteU
 public import Definitions.Pouw.Assumptions.Dither
 public import Definitions.Pouw.Assumptions.DitherInstance
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
-public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.GameStatements
 public import Definitions.Pouw.Assumptions.LeadCommit
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
 public import Definitions.Pouw.Assumptions.NCP.Chain
@@ -47,15 +48,12 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOut
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
-public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-public import Definitions.Pouw.Assumptions.Pinned
 public import Definitions.Pouw.Assumptions.RelativeSecurity
 public import Definitions.Pouw.Assumptions.ServedWork
 public import Definitions.Pouw.Assumptions.ShaRealize

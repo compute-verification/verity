@@ -1,10 +1,13 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
-class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
+class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
+token select over a row's whole-vocabulary logits (`select_token`), a wrapper's forwards over a decoder (`drive`), and a compile's
+collector (`cyclic_gc_off`)."""
 
 from __future__ import annotations
 
+import functools
+import gc
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -57,71 +60,19 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def stacked(rows: list[Refs]) -> Refs:
-    """The rows' references end to end, one row after another: one `Affine` or `Strided` run where the rows are equal runs of one
-    node at a constant stride (each row of a batch's output, or one field of it), else their concatenation."""
-    from verity.ml.circuits.refs import Affine, Strided
-    r0 = rows[0]
-    if len(rows) > 1 and isinstance(r0, Affine) and all(isinstance(r, Affine) and (r.space, r.idx, r.count) == (r0.space, r0.idx, r0.count)
-                                                         for r in rows):
-        s = rows[1].base - r0.base
-        if s > 0 and all(r.base == r0.base + i * s for i, r in enumerate(rows)):
-            return Affine(r0.space, r0.idx, r0.base, len(rows) * r0.count) if s == r0.count else \
-                Strided(r0.space, r0.idx, r0.base, r0.count, s, 1, len(rows) * r0.count)
-    return concat(rows)
-
-
-#: False: `each` writes a call a row (the flat form), for a measurement against it
-BATCHED = True
-
-
-def each(B, fn, *args) -> list[Coll]:
-    """`fn` over a launch's rows, a member a row: each argument a list of the rows' `Refs` (mapped) or one `Refs` every row reads
-    -> each row's output.  One row is a call, more one batch node (`Builder.batch`) over them."""
-    params = _ptypes(fn)
-    n = next(len(a) for a in args if isinstance(a, list))
-    if n == 1 or not BATCHED:
-        return [B.call(fn, *(Coll(t, a[m] if isinstance(a, list) else a) for t, a in zip(params, args))) for m in range(n)]
-    colls = [Coll(Array(n, t), stacked(a)) if isinstance(a, list) else Coll(t, a) for t, a in zip(params, args)]
-    out = B.batch(fn, *colls, axes=tuple(0 if isinstance(a, list) else None for a in args))
-    return [out[m] for m in range(n)]
-
-
-def reads_run(net, keys: int) -> bool:
-    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
-    return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
-
-
-def wrapper_keys(wrapper: str, M: int, LP: int | None, T: int | None) -> int:
-    """The most keys a row of the wrapper reads: a step's M rows attend among themselves, a request's last decode its LP + T."""
-    return int(M) if wrapper == "step" else int(LP) + int(T)
-
-
-def run_input(net, params: list, keys: int):
-    """`derive`'s `run` parameter (`registration.RunInputs`), declared at the end of `params`, where `net`'s rows of up to `keys`
-    keys read a value the served run decides (`reads_run`), else None."""
-    if not reads_run(net, keys):
-        return None
-    from verity_vllm.program.frontend.registration import RunInputs
-    return RunInputs.declare(params)
-
-
-def finish_run(run, params: tuple, B) -> tuple:
-    """The parameters once `run`'s record holds every field the forward read (`RunInputs.finish`), the Builder's too."""
-    if run is None:
-        return params
-    run.finish(final := list(params))
-    B.params = tuple(final)
-    return B.params
-
-
-def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
+def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
+    verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
+    Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
+    refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.ml.circuits.types import Tuple
-    checks = getattr(model, "checks", None)
+    from verity_vllm.program import inputs
+    from verity_vllm.program.frontend import stop_rule as SR
+    checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
         return out, None
+    for c, what in checks:
+        inputs.check(model.B, c, what)
     ret = Coll(Tuple(out.type, Array(len(checks), Value(1))), concat([out.refs, *[c.refs for c, _ in checks]]))
     return ret, {"output": 1, "accept": 1, "of": [w for _, w in checks]}
 
@@ -229,12 +180,10 @@ def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, po
 
 class _Peers:
     """A tensor-parallel rank's view of the other ranks' partials (`vllm_meta.WithPeers`): world - 1 peer Inputs per collective, in
-    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read.  `schedule` is the rank's schedule
-    Input (`CollectiveBus.schedule_key`, the MoE align's key per pair), read in call order; `k` counts the words read."""
+    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read."""
 
-    def __init__(self, inputs: list[Coll], world: int, rank: int, schedule: Coll | None = None) -> None:
+    def __init__(self, inputs: list[Coll], world: int, rank: int) -> None:
         self.inputs, self.world, self.rank, self.n = list(inputs), world, rank, 0
-        self.schedule, self.k = schedule, 0
 
     def take(self, own: list) -> list[list]:
         """One collective's rows per rank, in rank order: this rank's `own` rows (refs) and each of the next world - 1 peer Inputs'."""
@@ -253,27 +202,31 @@ class _Peers:
         """The operand of one collective over all rows: every rank's rows, rank-major (`collectives.AllReduceRule`'s parts)."""
         return concat([concat(r) for r in self.take(own)])
 
-    def key(self, n: int):
-        """The next n words of the schedule."""
-        out = self.schedule.refs.slice(self.k, self.k + n)
-        self.k += n
-        return out
-
 
 class _Launch:
     """The batch a request's calls run in (`pipeline.launch_context.request_launch_batch`, parsed as `targets.parse_launch_context`
     parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
     the request step being written; without a batch a call is its own launch.  `capture_sizes`: the breakable CUDA graphs'
-    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens."""
+    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens; `max_num_seqs` the engine's, up to which a uniform
+    decode step replays a FULL graph (`targets.graph_launch`)."""
 
-    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = ()) -> None:
+    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = (), max_num_seqs: int = 0) -> None:
         from verity_vllm.program.frontend import targets as TG
         self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
-        self.capture_sizes = tuple(capture_sizes)
+        self.capture_sizes, self.max_num_seqs = tuple(capture_sizes), int(max_num_seqs)
 
     def with_batch(self, batch: list) -> _Launch:
         """This launch's graphs over the request's batch."""
-        return _Launch(batch, self.capture_sizes)
+        return _Launch(batch, self.capture_sizes, self.max_num_seqs)
+
+    def graph(self, own: int) -> tuple[str, int]:
+        """The CUDA-graph mode (FULL, PIECEWISE or NONE) of the step `own` rows run in, and the tokens its forward runs at
+        (`targets.launch_graph`)."""
+        from verity_vllm.program.frontend import targets as TG
+        try:
+            return TG.launch_graph(own, self.step, self.ctx, self.capture_sizes, self.max_num_seqs)
+        except ValueError as e:
+            raise Unexpressible(f"request step {self.step}: {e}") from None
 
     def tokens(self, own: int, sampled: bool = False) -> int:
         """The rows of the launch `own` rows run in (`targets.launch_tokens`); after the logits selection (`sampled`), its sequences."""
@@ -284,8 +237,10 @@ class _Launch:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
     def keys(self, own: list[int], without: list[tuple[int, int]] = ()) -> list[int]:
-        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch; `without`: sequences
-        (rows, start) of the step whose rows another kernel runs (`prefills`' dense-MHA prefills), left out."""
+        """Every query row's key count in the attention launch (`targets.launch_keys`), `own`'s without a batch; `without`: sequences
+        (rows, start) of the step whose rows another kernel runs (`prefills`' dense-MHA prefills), left out.  A FULL graph (a uniform
+        decode, so no prefills) captures the attention at the padded batch, its padding rows without keys (their requests' seq_lens
+        are 0, so the indexer's top-k leaves them -1); PIECEWISE graphs and an uncaptured step run it on the real batch."""
         from collections import Counter
         from verity_vllm.program.frontend import targets as TG
         seqs = TG.launch_sequences(self.step, self.ctx)
@@ -299,7 +254,8 @@ class _Launch:
                 keys += [p + i + 1 for i in range(n)]
         if Counter(own) - Counter(keys):
             raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
-        return keys
+        mode, padded = self.graph(len(own))
+        return keys + [0] * (padded - len(keys)) if mode == "FULL" else keys
 
     def prefills(self, own: tuple[int, int], threshold: int) -> list[tuple[int, int]]:
         """The step's prefills, (rows, start) each, as vLLM's MLA metadata builder counts them: every sequence from the first of
@@ -391,3 +347,18 @@ def launch_seqlen_q(ctx: dict, own_rows: int, step: int, tp, accepted: bool) -> 
         return own_rows
     except TG.LaunchContextInvalid as e:
         raise Unexpressible(f"vocabulary cannot express: request step {step}: {e}") from None
+
+
+def cyclic_gc_off(f):
+    """`f` with the cyclic collector off while it runs: a compile frees its intermediates by reference counting, and the collector's
+    passes over the bodies it builds cost a quarter of the compile."""
+    @functools.wraps(f)
+    def run(*args, **kwargs):
+        on = gc.isenabled()
+        gc.disable()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            if on:
+                gc.enable()
+    return run

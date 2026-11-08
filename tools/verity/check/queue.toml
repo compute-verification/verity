@@ -1,7 +1,8 @@
-# The merge queue's admission rules (`research queue`, tools/research/src/research/queue.py). No change waits on a per-head grant:
-# a PR is admitted once marked ready at its head; drive lands it after a land verdict and a passing check.
+# The merge queue's admission rules (`research queue`, tools/research/src/research/queue.py). A PR is admitted once marked
+# ready at its head; drive lands it on a land verdict, or on its mark alone through the low-risk lane, and the full check runs
+# after the landing (drive.toml's `land`, `land_into` and `lowrisk_lane`).
 # Its owner is the handle whose `owns` in .agents/skills/using-slack/registry.json covers it.
 
 hold_label = "hold"
-# ready marks written before this don't count, on any VM's queue (`--marked-after` overrides it): drive's cutoff
+# ready marks written before this don't count, on drive's tick and on any VM's queue (`--marked-after` overrides it there)
 marked_after = "2026-10-12T06:00:00Z"
