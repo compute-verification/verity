@@ -9,7 +9,8 @@
 //! the prover's `z_partial`. Upstream (`flat`) builds the 2^k_log quirky eq table, folds `comb` over it and binds it round by
 //! round. No challenge depends on `comb`, so `partial` replays the same rounds and computes `comb_partial` once, after them,
 //! from [`BlockCircuit`]'s structure (`comb_partial_structured`). Over GF(2^128) the two are equal, so the transcript, the
-//! claims and the accept/reject are the same; `both` computes the two and rejects when they differ.
+//! claims and the accept/reject are the same; `both` computes the two and rejects when they differ. The ZK verifier's lincheck
+//! replay (`zk_veil::replay`) takes the same mode and computes its comb the same way ([`structured_at`], [`comb_structured`]).
 use std::{
     env::var,
     sync::{OnceLock, atomic::Ordering},
@@ -40,11 +41,12 @@ use serde_json::{Value, json};
 use crate::circuit::BlockCircuit;
 
 /// How the lincheck's `comb_partial` is computed (`FC_LINCHECK`, default `partial`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Lincheck {
     /// upstream's: the 2^k_log eq table, the fold, a bind per round
     Flat,
     /// from the block's structure, after the rounds (flat where the structure is not one it covers)
+    #[default]
     Partial,
     /// both, rejecting when they differ
     Both,
@@ -337,6 +339,17 @@ fn bind_top(v: &mut Vec<F128>, r: F128) {
 fn inner_product(a: &[F128], b: &[F128]) -> F128 {
     assert_eq!(a.len(), b.len());
     a.iter().zip(b).fold(F128::ZERO, |acc, (x, y)| acc + *x * *y)
+}
+
+/// Whether [`comb_structured`] gives `c`'s lincheck comb at the quirky eq table `(ws, xr)`; where it doesn't, the flat fold runs.
+pub fn structured_at(c: &BlockCircuit, ws: &[F128], xr: &[F128], k_skip: usize) -> bool {
+    structured_covers(c, k_skip) && !first_slot_vanishes(c, ws, xr, k_skip)
+}
+
+/// `comb_partial_structured` on the fold's pool: the lincheck's last vector from `c`'s structure after the rounds (`rr`, the
+/// inner point's rest).
+pub fn comb_structured(c: &BlockCircuit, alpha: F128, beta: F128, ws: &[F128], xr: &[F128], rr: &[F128]) -> Vec<F128> {
+    on_fold_pool(c.n_cols(), || comb_partial_structured(c, alpha, beta, ws, xr, rr, &mut Vec::new()))
 }
 
 /// Whether `comb_partial_structured` covers `c`: every slot type at least 2^k_skip columns and within the block, the ranges

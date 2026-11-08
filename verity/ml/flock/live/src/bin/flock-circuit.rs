@@ -554,7 +554,7 @@ impl StatementVerifier for CircuitVerifier {
     fn verify(&self, t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let tb = self.tabs.list.iter().find(|x| x.name == t).ok_or(format!("no table {t} in the statement"))?;
         if is_zk(&tb.st) {
-            return Self::verify_zk(tb, rep, proof, ch, link);
+            return Self::verify_zk(tb, rep, proof, self.lincheck, ch, link);
         }
         let t0 = Instant::now();
         let mut ph = sverify::Phases::default();
@@ -609,12 +609,13 @@ impl CircuitVerifier {
 
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
     /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
-    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], lincheck: sverify::Lincheck, ch: &mut ReplayChallenger, link: &LinkCtx<'_>)
+                 -> Result<Vec<u8>, String> {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
-        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
+        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, lincheck, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
@@ -622,10 +623,12 @@ impl CircuitVerifier {
 /// Everything M1's verifier checks before the inner proof, on any challenger (the session's replay, or a simulator's coin
 /// tape): the replayed zerocheck and lincheck, upstream's opening with the masked claims' ring-switch checks and level 0's lane
 /// phase turned into constraints, level 0's rows checked against rep `rep`'s pair of extra lanes. Returns the constraints the
-/// inner proof must prove, and level 0's record.
+/// inner proof must prove, and level 0's record. `lincheck`: how the replay computes the lincheck's comb (the same verdict in
+/// every mode).
 #[allow(clippy::too_many_arguments)]
 fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, ch: &mut Ch)
+                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
+                                                                 ch: &mut Ch)
     -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
     let pcs = pcs_of(st, LigeritoProfile::Fast100);
     if commitment.params != pcs {
@@ -633,7 +636,7 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     }
     let lay = zk_layout(st);
     bind_statement(ch, &st.r1cs, commitment);
-    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, ch)?;
+    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, lincheck, ch)?;
     let extra = st.extra_claims(points, inst);
     let rs = &proof.pcs_open.ring_switches;
     if rs.len() != 2 + extra.len() {
@@ -670,10 +673,11 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 /// M1's verifier on any challenger: [`zk_constraints`], then the inner proof.
 #[allow(clippy::too_many_arguments)]
 fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, ch: &mut Ch) -> Result<(), String> {
+                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
+                                                                  ch: &mut Ch) -> Result<(), String> {
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
+        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, lincheck, ch)?;
         zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
@@ -1916,7 +1920,8 @@ impl Firewall {
         }
         let (zc0, lc0) = zkv::from_exposed(&vals, &lay);
         let rp = catch_unwind(AssertUnwindSafe(|| {
-            zkv::replay(&st.r1cs, &st.c0_identity, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), &mut zkv::Tape::new(&r.coins))
+            zkv::replay(&st.r1cs, &st.c0_identity, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), sverify::Lincheck::default(),
+                        &mut zkv::Tape::new(&r.coins))
         })).map_err(|e| refused(format!("the replay of the passed values: {}", panic_msg(e))))?.map_err(refused)?;
         vals[lay.fc()] = rp.cons.iter().find(|c| c.0 == "zerocheck c_eval").ok_or_else(|| refused("no c_eval row"))?.1.c;
         let relations: Vec<&'static str> = rp.cons.iter().map(|c| c.0).collect();
@@ -2105,7 +2110,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger + Send>(st: &Stmt, zk: 
     let tz = Instant::now();
     let (mut zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let own_comb = (!proof.lincheck.comb_partial.is_empty()).then_some(proof.lincheck.comb_partial.as_slice());
-    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &zc, &lc, &st.circuit, &zk.lay, &zk.root, own_comb, &mut zkv::Tape::new(&coins))
+    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &zc, &lc, &st.circuit, &zk.lay, &zk.root, own_comb, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
     let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
@@ -2341,7 +2346,7 @@ fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128
     let proof = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: flock_core::pcs::BatchOpeningProofLigerito {
         ring_switches, batching_nonces: dpr.pcs_open.batching_nonces.clone(), ligerito: lg } };
     let mut tape = zkv::Tape::new(coins);
-    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, &mut tape)?;
+    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, sverify::Lincheck::default(), &mut tape)?;
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
     let inner = zkv::simulate_inner(&lay, rng, index, cons, salts, &mut tape)?;
@@ -2415,7 +2420,7 @@ fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &
     for (rep, p) in proofs.iter().enumerate() {
         let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).map_err(|e| format!("decode: {e}"))?;
         let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "pads root")?;
-        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], &mut zkv::Tape::new(&coins[rep]))?;
+        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]))?;
         reps.push((rec, pr.pcs_open.ligerito));
     }
     let n = mul(wmat(reps[1].0.rho), inv(wmat(reps[0].0.rho)));
@@ -2522,10 +2527,11 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
                 if run == 0 {
                     let (coins, points) = tape.as_ref().unwrap();
-                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut zkv::Tape::new(&coins[rep]));
+                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]));
                     assert!(ok.is_ok(), "a {kind} proof is rejected on its own coin tape: {ok:?}");
                     let root: [u8; 64] = inner.root.clone().try_into().unwrap();
-                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&coins[rep])).unwrap_or_else(|e| refuse(e));
+                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]))
+                        .unwrap_or_else(|e| refuse(e));
                     q0[rep] = rec.queries0[..4].to_vec();
                 }
                 let mut row = fields(kind, run, rep, &pr, &inner);
@@ -2545,7 +2551,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         for rep in 0..2 {
             let (c, pr, inner) = simulate_full(st, inst, &coins[rep], &points, &dummy[rep], &mut rng, rep, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
             // the simulated proof must be accepted by the verifier on the same coins
-            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, &mut zkv::Tape::new(&coins[rep]));
+            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]));
             assert!(ok.is_ok(), "the verifier rejects a simulated proof: {ok:?}");
             accepted += 1;
             let mut row = fields("sim", run, rep, &pr, &inner);
@@ -3003,7 +3009,7 @@ fn rewind(tabs: &Tables, v: impl Transport + 'static, hello: &str, points: &[Vec
         let (st, inst) = (&*tb.st, &*tb.inst);
         let (c, pr, inner) = simulate_full(st, inst, &coins[s].concat(), points, &dummy[s], rng, rep, streams.len() as u64 * index + s as u64)?;
         let mut rec = flock_live::RecordingChallenger::new(&domain_of(&st.c, count, &tb.name, rep), coins[s].clone());
-        verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut rec).map_err(|e| format!("{stream}'s simulation is rejected on the extracted coins: {e}"))?;
+        verify_zk_with(st, inst, &c, &pr, &inner, points, rep, sverify::Lincheck::default(), &mut rec).map_err(|e| format!("{stream}'s simulation is rejected on the extracted coins: {e}"))?;
         if let Some(e) = rec.mismatch.or_else(|| (rec.rounds.len() != coins[s].len()).then(|| format!("{} rounds, extracted {}", rec.rounds.len(), coins[s].len()))) {
             return Err(format!("{stream}'s simulation does not follow the extracted schedule: {e}"));
         }
@@ -3228,7 +3234,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 row["table"] = json!(j);
                 // the level-0 positions of the sampled rows, from the verifier's record on the view's coins
                 if let (Some((points, flat)), Ok(root)) = (&ext, <[u8; 64]>::try_from(inner.root.clone())) {
-                    if let Ok((_, rec)) = zk_constraints(&tb.st, &tb.inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&flat[s])) {
+                    if let Ok((_, rec)) = zk_constraints(&tb.st, &tb.inst, &c, &pr, &root, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&flat[s])) {
                         row["lig_rows0_q"] = json!(rec.queries0[..4]);
                     }
                     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
@@ -5085,9 +5091,8 @@ fn with_tail(text: &str) -> (String, String) {
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
 /// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under
-/// `--zk` the lincheck is the zk replay's (`zk_veil::replay` folds its own comb; `FC_LINCHECK` is not read), so there is one
-/// mode: the proofs are re-encoded with their `InnerProof`, and each alteration must be refused by the inner proof's batched
-/// constraint.
+/// `--zk` the modes are the zk replay's (`zk_veil::replay`), the proofs are re-encoded with their `InnerProof`, and each
+/// alteration must be refused by the inner proof's batched constraint.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -5123,9 +5128,8 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         }
         r
     };
-    let modes: &[sverify::Lincheck] =
-        if zk { &[sverify::Lincheck::Partial] } else { &[sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both] };
-    let name = |m: sverify::Lincheck| if zk { "zk replay".to_string() } else { format!("{m:?}") };
+    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let name = |m: sverify::Lincheck| if zk { format!("zk {m:?}") } else { format!("{m:?}") };
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
@@ -5146,7 +5150,7 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
     let expect = if zk {
-        "the zk replay: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
+        "the zk replay flat, partial and both: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
     } else {
         "flat, partial and both: the same verdict on honest and altered lincheck proofs"
     };
