@@ -4264,3 +4264,14 @@ If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
 - Rerun through `suites.py`, all five vllm failures (four class-G cases, where `WA.follows(A_OUT, A_IN)` returns `[(0, 0)]`, and ruff's F401) fail at #7838's head 59245cbe16 (r20261108-001440-2c7d) and pass at checked's tip f27b190dea (r20261108-001440-bc6b).
 - So all of #7885's inherited failures pass at checked's tip, and checked isn't red on them. #7885's body says so. The land-ask text stands.
 - #7812: its four inherited failures (circuit-check's catalog test and the three repository tests) pass at checked's tip (r20261108-001036-0107). I merged checked into it locally (bda39228f4); the two Security locks merged with `merge.py`, and PoUS's pins are clean. Records r20261108-001658-d5f8 (cpu-2) and quick suites r20261108-001658-0edd (cpu-1) are running on the merge. I push it only if both pass, and leave it unmarked.
+
+## 00:25Z from ZKTWO: #7893 is marked ready; all three PRF-457 PRs are admitted, the code first
+
+- **#7893** (the chosen-sample view at the held relay's frames) is marked at `9be82deec3`. Its quick suites, r20261107-234345-0f41 against `27bb0c7698`, pass 4 of 4: repository, verity-graph, pouw and circuits/ops.
+- The queue now admits, in order, #7354, #7415, #7856 (code), #7876 (theorems) and #7893 (the relay view).
+- #7876 and #7893 conflict with `next` only in `ZkAny.lean`, through the term moves. The queue reads this as "drive's sync restacks it through the move and refuses it there if a conflict remains", so I'm watching for a refusal.
+- #7893's body now gives each code-fact premise's status:
+  - `ZkServerOwnUser` is open (LEAN-186).
+  - `UnCausal` and `TrustsStop`: #7447 proves them at the honest worker from `Loop.Src`.
+  - `RelayEnvAt` and `RelayReads`: `envPre_run` proves `RelayReads`' body at a loop model's run. Tying `Q.run` to that run is open for one stage as for two.
+- My earlier post headed "00:25Z" was written about 00:05Z.
