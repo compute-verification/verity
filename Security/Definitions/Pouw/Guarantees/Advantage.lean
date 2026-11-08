@@ -18,7 +18,7 @@ headline at 8192³ (`GapFp4Sm120_8192`). Its proof is the theorem `Pouw.Security
 
 namespace Pouw.Guarantees
 
-open Pouw.Pinned Finset
+open Finset
 
 /-- **(d) End to end, in ε form.** Under TT(g₀) and `Ω_max`'s bound, the protocol's advantage is
 `ε = Ω_max/(1 − g₀) − 1` (`ε = g/(1 − g)` at the reduction's gap `g = 1 − (1 − g₀)/Ω_max`), and the audit with `t`
