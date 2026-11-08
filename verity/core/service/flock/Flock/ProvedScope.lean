@@ -58,8 +58,8 @@ def portReadsBFast (net : Net) : Bool :=
   allFrom (fun i => rowAllGo net.a (net.a.start.getD (n + i) 0) ok (net.a.len.getD (n + i) 0) 0 &&
     rowAllGo net.b (net.b.start.getD (n + i) 0) ok (net.b.len.getD (n + i) 0) 0) (net.constPos - n) 0
 
-/-- Compiled code runs `portReadsBFast`; the kernel and every proof see `portReadsB`. `@[csimp]` rewrites only code compiled
-after it, so it stays above `scopeOk`. -/
+/-- Compiled code runs `portReadsBFast`; the kernel and every proof see `portReadsB`. `@[csimp]` rewrites only code
+compiled after it, so it stays above `scopeOk`. -/
 @[csimp] theorem portReadsB_eq_fast : @portReadsB = @portReadsBFast := by
   funext net
   unfold portReadsB portReadsBFast
