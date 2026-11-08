@@ -1,6 +1,7 @@
 """`tree_allreduce`: the serving node's tree parsed as its probe prints it, the gathered words summed in that tree's f32 order and
-rounded once to bf16 (against numpy's IEEE f32 adds, and refused by an order that differs), FlashInfer's route and other dtypes
-left to vLLM, and the plugin's site registering it."""
+rounded once to bf16 (against numpy's IEEE f32 adds, and refused by an order that differs), FlashInfer's route under ``mnnvl``
+and other dtypes left to vLLM, FlashInfer's calls under another backend summed as ``mnnvl`` sums them, the custom all-reduce
+given the serving node's cap on a node without symmetric memory, and the plugin's site registering it."""
 from __future__ import annotations
 
 import importlib
@@ -19,6 +20,8 @@ TA = importlib.import_module("tree_allreduce")
 
 NODE_A = "(((((((0,2),3),1),5),6),4),7)"
 NCCL_SYMM = {"on": False}
+FI_WS = "vllm.distributed.device_communicators.flashinfer_all_reduce"
+MiB = 1 << 20
 
 
 @pytest.fixture(autouse=True)
@@ -28,6 +31,15 @@ def _pynccl_allocator(monkeypatch):
     mod = types.ModuleType("vllm.distributed.device_communicators.pynccl_allocator")
     mod.is_symmetric_memory_enabled = lambda: NCCL_SYMM["on"]
     monkeypatch.setitem(sys.modules, "vllm.distributed.device_communicators.pynccl_allocator", mod)
+
+
+@pytest.fixture(autouse=True)
+def _fi_workspace(monkeypatch):
+    """vLLM's FlashInfer all-reduce module with the serving node's ``mnnvl`` workspace; a test sets ``_fi_ar_workspace``."""
+    mod = types.ModuleType(FI_WS)
+    mod._fi_ar_workspace = SimpleNamespace(backend="mnnvl")
+    monkeypatch.setitem(sys.modules, FI_WS, mod)
+    return mod
 
 
 def _bf16(words: np.ndarray) -> np.ndarray:
@@ -97,13 +109,14 @@ def test_another_order_gives_other_bits_so_the_check_can_fail():
 
 class _Comm:
     """`CudaCommunicator` over 8 ranks whose inputs are ``inputs``: FlashInfer's route takes calls up to ``fi_max`` words, the custom
-    all-reduce those of exactly ``ca_eq`` words, and pynccl's all-gather lays the ranks' words out rank-major (``gathers`` counts
-    its calls)."""
+    all-reduce those of exactly ``ca_eq`` words, torch's symmetric memory is on as on the serving node, and pynccl's all-gather
+    lays the ranks' words out rank-major (``gathers`` counts its calls)."""
 
     def __init__(self, inputs: list[torch.Tensor], fi_max: int, world: int = 8, ca_eq: int = -1) -> None:
         self.world_size, self.inputs, self.gathers = world, inputs, 0
         self.fi_ar_comm = SimpleNamespace(disabled=False, should_use_fi_ar=lambda x: x.numel() <= fi_max)
-        self.ca_comm = SimpleNamespace(disabled=False, should_custom_ar=lambda x: x.numel() == ca_eq)
+        self.ca_comm = SimpleNamespace(disabled=False, max_size=8 * MiB, should_custom_ar=lambda x: x.numel() == ca_eq)
+        self.symm_mem_comm = SimpleNamespace(disabled=False)
         self.pynccl_comm = SimpleNamespace(disabled=False, all_gather=self._gather)
         self.qr_comm = self.fi_pcie_ipc_ar_comm = self.aiter_ar_comm = None
         self.at = 0
@@ -157,6 +170,78 @@ def test_a_route_the_tree_was_not_measured_with_is_refused():
     NCCL_SYMM["on"] = True
     with pytest.raises(RuntimeError, match="NCCL's symmetric memory on"):
         ar(_Comm(inputs, fi_max=0), inputs[0])
+
+
+def _from_zero(words: np.ndarray) -> np.ndarray:
+    """``mnnvl``'s sum: f32 adds onto +0 in rank order, then RNE to bf16."""
+    acc = np.zeros(words.shape[1], dtype=np.float32)
+    for r in range(words.shape[0]):
+        acc = (acc + _bf16(words[r])).astype(np.float32)
+    return _rne(acc)
+
+
+def test_reduce_from_zero_adds_the_ranks_in_order_onto_plus_zero_and_differs_from_a_rank_order_tree_only_in_a_zeros_sign():
+    rng = np.random.default_rng(13)
+    exp = rng.integers(0x01, 0xFE, size=(8, 512), dtype=np.uint16)
+    words = (rng.integers(0, 2, size=(8, 512), dtype=np.uint16) << 15) | (exp << 7) | rng.integers(0, 128, size=(8, 512), dtype=np.uint16)
+    words[:, :32] = rng.integers(0, 0x80, size=(8, 32), dtype=np.uint16)
+    words[:, 40] = 0x8000
+    out, f32 = torch.empty(512, dtype=torch.bfloat16), torch.full((1, 600), float("nan"))
+    assert TA.reduce_from_zero(_torch_words(words).reshape(-1), 8, out, f32) is out
+    got = _words(out)
+    assert np.array_equal(got, _from_zero(words)) and got[40] == 0x0000
+    ranks = _words(TA.reduce_gathered(_torch_words(words).reshape(-1), 8, TA.parse_tree("(((((((0,1),2),3),4),5),6),7)")))
+    assert ranks[40] == 0x8000
+    assert np.array_equal(np.delete(got, 40), np.delete(ranks, 40))
+
+
+def test_flashinfers_calls_are_summed_as_mnnvl_sums_them_when_its_workspace_has_another_backend(_fi_workspace, capsys):
+    rng = np.random.default_rng(17)
+    words = rng.integers(0x3000, 0x4800, size=(8, 2, 6), dtype=np.uint16)
+    inputs = [_torch_words(w) for w in words]
+    ar = TA.wrap(lambda self, x: x, TA.parse_tree(NODE_A))
+    assert ar(_Comm(inputs, fi_max=12), inputs[5]) is inputs[5]
+    _fi_workspace._fi_ar_workspace = SimpleNamespace(backend="trtllm")
+    comm = _Comm(inputs, fi_max=12)
+    out = ar(comm, inputs[5])
+    assert out.shape == (2, 6) and comm.gathers == 1
+    assert np.array_equal(_words(out).reshape(-1), _from_zero(words.reshape(8, -1)))
+    comm.at = 0
+    ar(comm, inputs[5])
+    assert capsys.readouterr().err.count("workspace is trtllm on this node") == 1
+    _fi_workspace._fi_ar_workspace = None
+    with pytest.raises(RuntimeError, match="no all-reduce workspace"):
+        ar(_Comm(inputs, fi_max=12), inputs[5])
+
+
+def test_without_symmetric_memory_the_custom_all_reduce_gets_the_serving_nodes_cap(monkeypatch, capsys):
+    sizes = types.ModuleType("vllm.distributed.device_communicators.all_reduce_utils")
+    sizes.CUSTOM_ALL_REDUCE_MAX_SIZES = {"9.0": {2: 64 * MiB, 4: 32 * MiB, 6: MiB // 2, 8: MiB // 4}}
+    platforms = types.ModuleType("vllm.platforms")
+    platforms.current_platform = SimpleNamespace(get_device_capability=lambda: SimpleNamespace(as_version_str=lambda: "9.0"))
+    monkeypatch.setitem(sys.modules, sizes.__name__, sizes)
+    monkeypatch.setitem(sys.modules, platforms.__name__, platforms)
+    inputs = [torch.ones(2, 6, dtype=torch.bfloat16)] * 8
+
+    def comm(symm=None, **ca):
+        c = _Comm(inputs, fi_max=12)
+        c.symm_mem_comm = symm
+        c.ca_comm.__dict__.update(ca)
+        return c
+    for c, cap in ((comm(), MiB // 4), (comm(SimpleNamespace(disabled=True)), MiB // 4),
+                   (comm(SimpleNamespace(disabled=False)), None), (comm(disabled=True), None), (comm(max_size=MiB // 4), None)):
+        assert TA.served_custom_cap(c) == cap and c.ca_comm.max_size == (cap or c.ca_comm.max_size)
+    c = comm()
+    c.world_size = 3
+    assert TA.served_custom_cap(c) is None and c.ca_comm.max_size == 8 * MiB
+    c = comm()
+    c.ca_comm = None
+    assert TA.served_custom_cap(c) is None
+    c = comm()
+    ar = TA.wrap(lambda self, x: x, TA.parse_tree(NODE_A))
+    ar(c, inputs[0])
+    ar(c, inputs[0])
+    assert c.ca_comm.max_size == MiB // 4 and capsys.readouterr().err.count("capped at 262144 bytes") == 1
 
 
 def test_site_registers_the_plugin_with_its_tree(tmp_path, monkeypatch):

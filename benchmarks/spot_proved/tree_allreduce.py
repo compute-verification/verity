@@ -5,8 +5,12 @@ On the served H200 node, `CudaCommunicator.all_reduce` hands a bf16 all-reduce F
 symmetric memory (``multimem.ld_reduce ... acc::f32``, to 64 MiB) and past that to NCCL's NVLS; the node's capture found both reduce
 every element in one tree of f32 adds, then round to bf16 (`AllReduceMultimem_v1` at the node's TREES, FTZ off). This plugin keeps
 FlashInfer's route, the custom all-reduce and the fused all-reduce + RMSNorm as they are (their order is in software, the same on every node),
-and replaces the other two with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. It
-changes what the replay node computes, never the served record: a replay under it says so.
+and replaces the other two with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. On a
+replay node without NVLink multicast, two more routes differ from the serving node's, and the plugin restores both:
+- vLLM leaves the custom all-reduce its full size, so it gets the serving node's size cap back (`served_custom_cap`).
+- FlashInfer's workspace falls back from ``mnnvl`` to ``trtllm``, which vLLM calls with bf16 accumulation. So each call
+  FlashInfer takes is summed as ``mnnvl`` sums it (`reduce_from_zero`).
+It changes what the replay node computes, never the served record: a replay under it says so.
 
     python tree_allreduce.py site DIR --tree '(((((((0,2),3),1),5),6),4),7)' --source WHERE
         # DIR on PYTHONPATH registers the plugin (vLLM general plugin ``verity_tree_allreduce``) with that tree
@@ -68,6 +72,19 @@ def reduce_gathered(gathered: Any, world: int, t: Tree, out: Any = None, f32: An
     return r.to(torch.bfloat16) if out is None else out.copy_(r)
 
 
+def reduce_from_zero(gathered: Any, world: int, out: Any = None, f32: Any = None) -> Any:
+    """A rank-major all-gather reduced as FlashInfer's ``mnnvl`` all-reduce does at up to 16 ranks (`reduceOneshotDeterministic`,
+    and the two-shot `reduceLamportRanksChunked` in one chunk): an f32 accumulator from +0, each rank's bf16 value added in rank
+    order, rounded once. Starting from +0 rather than rank 0's value matters only for the sign of an all-(-0) sum."""
+    import torch
+    rows = gathered.view(world, -1)
+    n = rows.shape[1]
+    acc = (torch.empty(n, dtype=torch.float32, device=gathered.device) if f32 is None else f32[0, :n]).zero_()
+    for r in range(world):
+        acc.add_(rows[r])
+    return acc.to(torch.bfloat16) if out is None else out.copy_(acc)
+
+
 def config(d: Path | None = None) -> dict | None:
     p = (d or Path(__file__).resolve().parent) / CONFIG
     return json.loads(p.read_text()) if p.is_file() else None
@@ -93,15 +110,85 @@ CHUNK = 1 << 22  # words a rank gathers at once: elementwise, so only the worksp
 UNMEASURED = ("qr_comm", "fi_pcie_ipc_ar_comm", "aiter_ar_comm")
 
 
+def served_custom_cap(comm: Any) -> int | None:
+    """Give the custom all-reduce the size cap it had on the serving node, which had torch's symmetric memory: vLLM then caps
+    it at `CUSTOM_ALL_REDUCE_MAX_SIZES` (256 KB on H200 at TP8, under FlashInfer's 0.5 MiB). On a replay node without multicast
+    vLLM disables symmetric memory and leaves the custom all-reduce its full size (8 MiB), so it would take calls the serving
+    node summed in the tree. Returns the cap set, or None when the cap already matches."""
+    ca, sm = comm.ca_comm, getattr(comm, "symm_mem_comm", None)
+    if ca is None or ca.disabled or (sm is not None and not sm.disabled):
+        return None
+    from vllm.distributed.device_communicators.all_reduce_utils import CUSTOM_ALL_REDUCE_MAX_SIZES
+    from vllm.platforms import current_platform
+    cap = current_platform.get_device_capability()
+    m = CUSTOM_ALL_REDUCE_MAX_SIZES.get(cap.as_version_str() if cap is not None else "", {}).get(comm.world_size)
+    if m is None or ca.max_size <= m:
+        return None
+    ca.max_size = m
+    return m
+
+
+SERVED_FI_BACKEND = "mnnvl"
+
+
+def fi_backend() -> str | None:
+    """The backend of vLLM's FlashInfer all-reduce workspace in this process, once a call has created it."""
+    fam = sys.modules.get("vllm.distributed.device_communicators.flashinfer_all_reduce")
+    ws = getattr(fam, "_fi_ar_workspace", None)
+    return None if ws is None else ws.backend
+
+
+def gather_reduce(comm: Any, input_: Any, t: Tree, reduce: Any) -> Any:
+    """``input_`` all-gathered across ``comm``'s ranks in CHUNK-word pieces and each piece reduced by ``reduce(gathered, world,
+    out, f32)``, in the communicator's one workspace."""
+    import torch
+    nc, w = comm.pynccl_comm, comm.world_size
+    flat = input_.contiguous().view(-1)
+    if getattr(comm, "_tree_ws", None) is None:
+        # vLLM's profiling forward is eager and precedes every graph capture, so this is allocated outside the graphs' pools
+        comm._tree_ws = (torch.empty(w * CHUNK, dtype=flat.dtype, device=flat.device),
+                         torch.empty(buffers(t), CHUNK, dtype=torch.float32, device=flat.device))
+    gws, f32 = comm._tree_ws
+    out = torch.empty_like(flat)
+    for i in range(0, flat.numel(), CHUNK):
+        x = flat[i:i + CHUNK]
+        g = gws[:w * x.numel()]
+        if nc is not None and not nc.disabled:
+            nc.all_gather(g, x)
+        else:
+            torch.distributed.all_gather_into_tensor(g, x, group=comm.device_group)
+        reduce(g, w, out[i:i + x.numel()], f32)
+    return out.view(input_.shape)
+
+
 def wrap(orig: Any, t: Tree) -> Any:
-    """`CudaCommunicator.all_reduce` with the calls vLLM hands torch's symmetric memory or NCCL summed in ``t``. FlashInfer's and
-    the custom all-reduce's calls (an order in software, the same on every node) and other dtypes go to vLLM; a route the tree
-    wasn't measured with (NCCL's symmetric memory, quick reduce, FlashInfer's PCIe IPC, aiter) is refused."""
+    """`CudaCommunicator.all_reduce` with the calls vLLM hands torch's symmetric memory or NCCL summed in ``t``. The custom
+    all-reduce's calls (an order in software, the same on every node) and other dtypes go to vLLM, and so do FlashInfer's while
+    its workspace is the serving node's ``mnnvl``; under another backend they are summed as ``mnnvl`` sums them. A route the
+    tree wasn't measured with (NCCL's symmetric memory, quick reduce, FlashInfer's PCIe IPC, aiter) is refused."""
     def all_reduce(self, input_):
         import torch
+        if not getattr(self, "_tree_cap_set", False):
+            self._tree_cap_set = True
+            m = served_custom_cap(self)
+            if m is not None:
+                print(f"[tree-allreduce] no symmetric memory on this node: the custom all-reduce is capped at {m} bytes, as on the "
+                      "serving node", file=sys.stderr, flush=True)
+        if input_.dtype != torch.bfloat16:
+            return orig(self, input_)
         fi, ca = self.fi_ar_comm, self.ca_comm
-        if input_.dtype != torch.bfloat16 or (fi is not None and not fi.disabled and fi.should_use_fi_ar(input_)) \
-                or (ca is not None and not ca.disabled and ca.should_custom_ar(input_)):
+        if fi is not None and not fi.disabled and fi.should_use_fi_ar(input_):
+            b = fi_backend()
+            if b == SERVED_FI_BACKEND:
+                return orig(self, input_)
+            if b is None:
+                raise RuntimeError("tree-allreduce: FlashInfer took a call with no all-reduce workspace to read its backend from")
+            if not getattr(self, "_tree_fi_said", False):
+                self._tree_fi_said = True
+                print(f"[tree-allreduce] FlashInfer's all-reduce workspace is {b} on this node: its calls are summed as the "
+                      f"serving node's {SERVED_FI_BACKEND} sums them", file=sys.stderr, flush=True)
+            return gather_reduce(self, input_, t, lambda g, w, out, f32: reduce_from_zero(g, w, out, f32))
+        if ca is not None and not ca.disabled and ca.should_custom_ar(input_):
             return orig(self, input_)
         from vllm.distributed.device_communicators.pynccl_allocator import is_symmetric_memory_enabled
         on = [k for k in UNMEASURED if getattr(self, k, None) is not None and not getattr(getattr(self, k), "disabled", False)]
@@ -111,23 +198,7 @@ def wrap(orig: Any, t: Tree) -> Any:
             raise RuntimeError(f"tree-allreduce: {', '.join(on)} on, a route the tree wasn't measured with")
         if sorted(leaves(t)) != list(range(self.world_size)):
             raise RuntimeError(f"tree-allreduce: tree {t} is not over the group's {self.world_size} ranks")
-        nc, w = self.pynccl_comm, self.world_size
-        flat = input_.contiguous().view(-1)
-        if getattr(self, "_tree_ws", None) is None:
-            # vLLM's profiling forward is eager and precedes every graph capture, so this is allocated outside the graphs' pools
-            self._tree_ws = (torch.empty(w * CHUNK, dtype=flat.dtype, device=flat.device),
-                             torch.empty(buffers(t), CHUNK, dtype=torch.float32, device=flat.device))
-        gws, f32 = self._tree_ws
-        out = torch.empty_like(flat)
-        for i in range(0, flat.numel(), CHUNK):
-            x = flat[i:i + CHUNK]
-            g = gws[:w * x.numel()]
-            if nc is not None and not nc.disabled:
-                nc.all_gather(g, x)
-            else:
-                torch.distributed.all_gather_into_tensor(g, x, group=self.device_group)
-            reduce_gathered(g, w, t, out[i:i + x.numel()], f32)
-        return out.view(input_.shape)
+        return gather_reduce(self, input_, t, lambda g, w, out, f32: reduce_gathered(g, w, t, out, f32))
     all_reduce.__wrapped__ = orig
     return all_reduce
 
