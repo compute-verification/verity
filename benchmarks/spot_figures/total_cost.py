@@ -550,8 +550,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
               f"one token charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
-              "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
-              "states it for two-stage only)"
+              "where, at most the served bits (an influence set is a set of served outputs)"
               + (", each design checked by Lean" if out.get("lean") else "")
               + f": {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
