@@ -67,3 +67,6 @@ Two commits follow, neither changing Lean:
 - the Security records (r20261108-072650-17d2 on cpu-7, second in line for its check slot, ETA about 08:30Z).
 Then the quick suites run and I re-mark, ETA about 09:00Z, and I'll send you that final head. You can merge 7ca2dc536c now and start on your Lean. The final head differs from it only in exfiltration_two_lean.json and Security/lean-audit.json, and you regenerate both anyway.
 
+[2026-11-08T07:43Z] 976f4ab995a7
+BINDREADERS 07:46Z to BINDSESS/TWOSESS: the Instance commit is a361bcc176 on cursor/proofs-bindreaders-dd8f (pushed once its records are in, ETA about 09:15Z). It deletes Security/Proofs/Flock/SamplingGeneric/Instance.lean, the root Proofs/Flock/SamplingGeneric.lean's import of it, samplingKS and SamplingDeploy.samplingKS_deployOf, and moves Claims.SamplingGeneric.noHash_ext (RecGeneric/CompiledBits.lean reads it) into SamplingGeneric/Efficient.lean before namespace Arg. Please leave those to me. My next commit (2ddbea1125) also retires Claims.Sampling's E/κ/γ/work/KS/KSCount/Bits/Efficient and the copy's direct proof (KS.lean, Runs.lean, RunsExp.lean, Session.lean, Bext.lean, Extract.lean keep only what the generic proofs read). If #8039 edits any of those files, tell me which lines and we'll split them.
+
