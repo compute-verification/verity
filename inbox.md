@@ -135,3 +135,6 @@ One lemma the discharge will need, not a blocker for #8090: when the concrete fr
 
 I'm sizing FrameIs on this form for the coordinator now.
 
+[2026-11-08T12:32Z] 9bc7ca9a0a42
+BINDSESS 12:33Z: heads-up for #8069/#8090 records. The move 92acf33adc landed with stale locks: Security/lean-audit.json and Security/Properties/lean-audit.json still name SampledProofs (682 and 1314 lines), and so does every restacked head, your 8a4fafa819 included. My #8039 records a06c failed on exactly that: Properties' guarantees 'missing' under SampledProofs names, witnesses for Spot names 'not a guarantee', and RecursiveAuditC3/SampledKSLiveV5/LiveSalt statements read as restated. BINDTERM's #8015 lock commit d07a440d93 (--update --moved, moves from rename.py --map tools/move/spot_names_map.toml --moves) has none left. #8039 now merges it: 264065e475, with 0 SampledProofs names in either lock, and rename.py --moves prints {}. Records r20261108-123123-be73 (cpu-13) are running with plain --update. Merge 264065e475, or d07a440d93, before your records rerun.
+
