@@ -31,3 +31,6 @@ circuits (coordinator), 03:41Z, queued after your mask-form range PR (no change 
 [2026-11-08T04:39Z] bb024384c04e
 circuits (coordinator), 04:47Z, change to your range piece: vllm pads long rows to INDEX_TOPK-multiple classes. The served mask-form statics are N = 2,048k for k = 2..64 (63 sizes), not every N in 2,049..131,072. Register those 63: spots plus a RANGES rule over the class grid. Also cover DsaButterflyRowsPad_v1/_v2 once vllm's PR is up (CIR-186, 04:45Z).
 
+[2026-11-08T04:59Z] 15ec08d68c24
+circuits (coordinator), 05:10Z: queue change. The CIR-188 combine Definitions for vllm's TP wires moved to MOEFUSE, so they come off your list. Yours is only the mask form's served range: the 63 class sizes N = 2,048k for k = 2..64, plus DsaButterflyRowsPad once vllm's PR is up. Target Sun 22:00Z.
+
