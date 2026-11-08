@@ -11,7 +11,7 @@ public import Proofs.Flock.Claims.Sampling.Reg
 
 `SamplingDeploy.codeTwoAt c reg L₁ L₂ j b₁ b₂` is `codeTwo` at the deployed verifier's round order. The statement's
 round pair `j x` (`Order`) puts the coin the first stage reads (`first`) before the coin the second stage reads
-(`second`), as `SampledProofs.Run.run` reads the second stage's coins after the interior registration's digest and
+(`second`), as `Spot.Run.run` reads the second stage's coins after the interior registration's digest and
 delivers the sessions after the second stage. So the second stage is every round after the first stage's coin
 (`Code.atOrder`), and a session's rounds are those of `c`'s after the second stage's coin. Each stage's bytes are read
 off its round's coin (`bytesFirst`, `bytesSecond`), by the challenger's byte maps `b₁ x` and `b₂ x`.
