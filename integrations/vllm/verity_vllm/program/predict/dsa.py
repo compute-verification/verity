@@ -10,9 +10,11 @@ A request after a history of C positions (`build.build_program`'s C: a prefix-ca
 reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
 which open its layers' logs (`_Model.open_with`) before its first call.
 The compiled execution is the target's compilation "breakable": vLLM serves `glm_moe_dsa` without torch.compile
-(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs, so every selection a launch
-reads is at the step's padded tokens (`targets.graph_tokens`) but the indexer's and the sparse MLA's, graph breaks that read the real
-batch (`_sparse_indexer_and_attn`), and the logits', computed outside the graphs.
+(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs: a uniform decode step's FULL
+graph, another step's PIECEWISE graphs (`targets.graph_launch`).  Both pad alike, so every selection a launch reads is at the step's
+padded tokens (`targets.graph_tokens`), and no all-reduce route, cuBLAS route or MoE tile reads the mode (d9105ea80's communicators
+choose by bytes alone), but the indexer's and the sparse MLA's: graph breaks on the real batch under PIECEWISE graphs, captured at the
+padded batch under a FULL graph, its padding rows without keys (`_Launch.keys`); and the logits', computed outside the graphs.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -120,7 +122,10 @@ class Net:
         if phi.execution == "compiled" and self.tp.compilation != "breakable":
             facts.append(f"a compiled execution by {self.tp.compilation!r} (vLLM serves glm_moe_dsa's eager kernels from breakable CUDA "
                          f"graphs, the target's compilation 'breakable')")
-        self.capture_sizes = graph_capture_sizes(phi)
+        self.capture_sizes, self.max_num_seqs = graph_capture_sizes(phi), (phi.engine or {}).get("max_num_seqs")
+        if self.capture_sizes and type(self.max_num_seqs) is not int:
+            facts.append(f"breakable CUDA graphs at engine arg max_num_seqs {self.max_num_seqs!r}, not a stated count (a uniform decode "
+                         f"step replays a FULL graph up to it)")
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
@@ -215,7 +220,8 @@ class _Model:
     reads_launch = True
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
-        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch(capture_sizes=net.capture_sizes)
+        self.net, self.C, self.B, self.peers = net, net.C, B, peers
+        self.launch = _Launch(capture_sizes=net.capture_sizes, max_num_seqs=net.max_num_seqs or 0)
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
         self.logs: dict[int, dict[str, PartLog]] = {}
         self.topk: dict = {}

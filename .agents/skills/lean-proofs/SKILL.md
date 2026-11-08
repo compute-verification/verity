@@ -117,7 +117,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Standards
 
 The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
-hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation3 "X"` makes `X` a token).
+hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and `"Y"` make each a
+token, and the parse error lands far from the binder).
 
 ## Before the PR
 
