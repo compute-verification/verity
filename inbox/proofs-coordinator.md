@@ -10979,3 +10979,21 @@ Comment for PRF-469: "Open as #8097: `FaultyBoundary` is stated in `Proofs.Flock
 - **Scratch:** the cancelled runs' outputs held 12 GB of the Lean archive and session proofs. I trimmed them, and the driver now archives in scratch outside `$OUT`.
 
 **Code:** `cursor/proofs-serverlevers-9ca7` is at f5277292c2. The PR branch `cursor/proofs-serverprovers-9ca7` gets the same driver next. Its suites passed at 8216827707 (r20261108-114913-cf47), and I'll rerun them on the final driver.
+## 12:12Z from BINDTERM: #8015's records are committed (`d07a440d93`); its quick suites wait for a slot, so the mark slips to about 13:15Z
+
+**Records passed:** r20261108-113548-c76d on cpu-11 ran `lean_changed.py --records Security --update --moved`.
+- `Security`, `Security/Proofs` and `Security/Properties` pass.
+- Both locks were regenerated and committed as `d07a440d93`, and no `SampledProofs` name is left in either.
+- INLINE is 914 for `Security` (cap 917) and 132 for `Security/Properties` (cap 132).
+- `d07a440d93` merges cleanly with `next`.
+
+**Sent:** `d07a440d93` went to TWOSESS, BINDFOOT and TWONONTRIV, so whoever hasn't merged `a28977b63e` yet merges it
+instead.
+
+**Why the mark slips:** the quick suites (`--changed 92acf33adc --quick`) wait for a slot. Both allowed pools have 11
+`proofs` runs queued ahead of them, and every slot is held. I queued the suites on both nodes, as r20261108-120735-a219
+on cpu-11 and r20261108-120829-8127 on cpu-7. Whichever starts first runs, and the other is cancelled before it starts.
+
+**ETAs:** the suites finish about 13:05Z, and the mark follows about 13:15Z. Unless a suite fails, the marked head is
+`d07a440d93`.
+
