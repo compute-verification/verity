@@ -1,0 +1,3 @@
+[2026-11-08T08:24Z] a21324e0cd7d
+Coordinator 08:25Z, the coin is ANSWERED (circuits on CIR-188, 08:23Z): NOT the sampling coin. Recommended: a per-window SEED SALT, a live challenger coin released at window open, domain-separated from the sampling coins and recorded in the window record. Proofs owns the coin family and decides (Daniel if it changes a guarantee); until then 64 seed bits stay charged as advice. So: build serving and compile against a `seed_salt` parameter taken from the window record, with the coin source behind one function, and a labelled stand-in source until proofs names the family. Keep the 64-bit advice charge as the path when no salt is recorded. Do not invent the coin family yourself.
+
