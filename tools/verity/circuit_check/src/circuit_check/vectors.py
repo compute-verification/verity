@@ -14,7 +14,7 @@ A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is i
 own table as one `verity.ml.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
 first and last of each region (`probe_entries`), never all of them; the record says how many words the vectors read.
 
-An operand over the input budget (a weight, `circuit_check.targets.LAZY_OPERANDS`) is drawn as `vectors` draws a parameter, its
+An operand over the input budget (a weight, `circuit_check.targets.LAZY_OPERANDS`) is sampled as `vectors` samples a parameter, its
 j-th edge in every leaf for an edge vector and seeded random words for the rest, but one vector at a time (`wide_words`), and
 read word by word as the gates ask for it, never held as ``n`` vectors.
 """
@@ -99,14 +99,14 @@ def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
     return out
 
 
-#: the leaves `wide_words` draws at once
+#: the leaves `wide_words` samples at once
 WIDE_CHUNK = 1 << 22
 
 
 def wide_words(pt: Type, i: int, edge_vectors: int, seed: int, param: int) -> Callable[[int], int]:
     """Vector ``i`` of parameter ``param``, of type ``pt`` and one width, as a function of the leaf index: the ``i``-th edge of its
     width in every leaf when ``i < edge_vectors``, else seeded random words (`_random`, seeded by ``seed``, ``param`` and ``i``),
-    drawn into one array of the parameter's leaves."""
+    sampled into one array of the parameter's leaves."""
     w = pt.homogeneous_width()
     if w is None or w > 64:
         raise ValueError(f"{pt!r} is not of one width of at most 64 bits")

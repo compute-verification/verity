@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `vs`'s `final_c` is fixed by its round-1c values
 
-The firewall's finish sends the inner proof's round 0 only where the request's `final_c` is the one its passed values
+The ZK server's finish sends the inner proof's round 0 only where the request's `final_c` is the one its passed values
 fix: the rep's `zerocheck c_eval` constraint, `Σ_i λ_i(z)·r1c_i + final_c` with each value under its own pad, holds on
 the pads (`Flock.Firewall.Finish.consWhy`). This file states that identity on the switched session's values, a premise
 over `vs` beside `Loop.TakesVals` and `Loop.RowsOK`:
@@ -62,7 +62,7 @@ namespace Loop
 /-- **`vs`'s `final_c` is the c_eval of its round-1c values**: at every nonce, opened coins and tape at which none of
 table `j`'s zerocheck outer coins is `1`, each rep's value at `final_c`'s pad index is `Σ_i λ_i(z)·r1c_i`, the Lagrange
 weights at the rep's zerocheck point `z` (the opened coins', `zcE`) against its values at the 64 round-1c indices, as the
-firewall's finish computes it (`Flock.dot`, `Flock.lagrange`). -/
+ZK server's finish computes it (`Flock.dot`, `Flock.lagrange`). -/
 def FinalCFixed (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)),
     (∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1) → ∀ (r : Fin 2),

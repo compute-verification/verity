@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The first recursive session's inner side (rec_inner.py, verity_flock.rec_live): RoPE d64 staged as M0's statement, proved
-# on the CPU by the unmodified prover (non-zk, under INNER_COINS) against the rec proxy, whose coin server (the challenger) sees
+# on the CPU by the unmodified prover (non-zk, under INNER_COINS) against the rec proxy, whose live-coin part (the challenger) sees
 # only salted tops, message commitments and the schedule (the statement's public shape's) and answers Register with the
-# verifier's full draw (stage/draw.json, rec_live.full_draw: every unit); every coin of the session is the challenger's coin
-# tree, drawn at Hello and opened round by round (rec_live --coin-tree, from TREE_FROM). Then the recorded session replayed by
+# verifier's full sample (stage/draw.json, rec_live.full_draw: every unit); every coin of the session is the challenger's coin
+# tree, sampled at Hello and opened round by round (rec_live --coin-tree, from TREE_FROM). Then the recorded session replayed by
 # upstream's verifier (flock-circuit replay), V*'s hashing over it (verity_flock.rec_vstar), and two forgeries (a changed
 # challenge, a changed query coin) that both must reject. Lean's plain verify takes a coin tree of the session's own streams
 # (--coins tree), not one with the inner phase's sparse and stacked streams added, so the session is not verified on its own
@@ -14,8 +14,8 @@
 # program.json), claims.json: each rep's extra claims and circuit fold from Lean's
 # InnerClaims.lean, which V*'s algebra reads), replay.txt, vstar.json, forged-*, summary.json, tree-source.txt.
 # env: N=64 (instances: RoPE heads, one VU each; 64 at G=2 is m=27)  CPUS=32  FLOCK_WORK (as 76-read-gadget.sh)
-#      TREE_FROM= (the challenger's device, HOST:PORT, each session's coin tree drawn and opened there, rec_live --tree-from;
-#      TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws it, rec_live --tree-test-os, a test's coins)
+#      TREE_FROM= (the challenger's device, HOST:PORT, each session's coin tree sampled and opened there, rec_live --tree-from;
+#      TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples it, rec_live --tree-test-os, a test's coins)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then

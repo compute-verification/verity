@@ -48,7 +48,7 @@ def TargetFor (acc : Exchange → Prop) (k : Verity.Registration.Composite) (a :
 
 end Vocab
 
-/-- **Soundness at every composite's verifier of record, from its subprotocols' bounds at their components.** On any
+/-- **Soundness at every composite's verifier, from its subprotocols' bounds at their components.** On any
 device, for any names `V` the subprotocols define and any composite `k`, if each of `k`'s subprotocols meets its bound
 at its compiled component at `k` in the causal game, then at all parameters, committed files and commitments and for
 every strategy, the probability that `k`'s compiled verifier accepts files that passed the commit phase's check while

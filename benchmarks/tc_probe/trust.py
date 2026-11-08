@@ -88,7 +88,7 @@ def registry_level(status: str | None) -> Level:
 
 
 #: Elements with 0 mismatches on the anchor SKU for PINNED.  One default ``tc_probe --sweep`` is ~2.5e7 elements, so 1e7 demands a
-#: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent draws a per-element
+#: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent samples a per-element
 #: defect of rate 5e-7 is accepted with probability e^-5 < 1%.
 N_MIN = 10_000_000
 #: Honest proof blocks the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.

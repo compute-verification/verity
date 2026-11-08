@@ -14,7 +14,7 @@ public import Proofs.Core.Circuit
   constant, so `Partition.ofConstInputs` and `RegisteredCircuit.constInputs_unregistered_eq` (and their expansion
   forms) carry a partition of it with its constants registered back to it, unchanged;
 * `Circuit.card_filter_unbit`: the expansion's gates whose gate satisfies `p` are the bits of the gates satisfying `p`;
-* `FlockSoundness.Audit.Circuit.toCircuit_boolean`: C-Flock's circuits are Boolean in the draft's sense when no gate is
+* `FlockSoundness.Audit.Circuit.toCircuit_boolean`: Flock's circuits are Boolean in the draft's sense when no gate is
   an empty row, the one operation that reads nothing.
 -/
 
@@ -326,7 +326,7 @@ end Verity.SecurityProofs
 
 namespace FlockSoundness.Audit.Circuit
 
-/-- C-Flock's circuits are Boolean in the draft's sense when no gate is an empty row. -/
+/-- Flock's circuits are Boolean in the draft's sense when no gate is an empty row. -/
 theorem toCircuit_boolean (B : Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.toCircuit.Boolean where
   one_bit _ := rfl
   fanin_pos g hg := by

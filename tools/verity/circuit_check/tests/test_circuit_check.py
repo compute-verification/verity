@@ -549,7 +549,7 @@ def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_
 
 def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
     """Vector i of a lazily read operand is the i-th edge of its width in every leaf, then random words of that width, the same
-    on every draw and different per vector and per parameter."""
+    on every sample and different per vector and per parameter."""
     from verity.ml.circuits.types import Array, Value
 
     pt = Array(64, Array(80, Value(8)))
@@ -856,7 +856,7 @@ def test_a_declared_interval_the_reference_leaves_is_named():
 
 
 def test_a_transfer_the_reference_leaves_is_named():
-    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
     intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.ports import Ports, as_reading

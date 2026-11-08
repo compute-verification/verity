@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.KS.PlainPartsK
 /-!
 # The clashes' run-level half, at `VK keep`
 
-`PlainClash0K` and `PlainClashLaterK` restate the clash files' draw half at `wrPDK keep`; this is their run-level half,
+`PlainClash0K` and `PlainClashLaterK` restate the clash files' sample half at `wrPDK keep`; this is their run-level half,
 which reads `P`'s run at the verifier: an accepted run of `VK keep` has its reps' raw columns (`rawCols_plainK`,
 `rawLevelCols_plainK`, at `verifyWithMK keep`), so a self-clash at the concrete simulator's outcome is a raw clash of
 the run (`plainClashQ₀K`, `plainClashQLK`), and the live self-clash's clash holds at every statement
