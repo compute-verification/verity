@@ -2,17 +2,20 @@ module
 
 public import Definitions.Flock.Ligerito
 public import Definitions.Flock.Game.Interleave
+public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # One rep, and one table's session
 
 A table's session (`Flock.Record`, `Flock.Statement`): the prover commits the level-0 table (`Commit`, whose
-`root_B` is the table's Merkle cap, `Flock.Merkle`), the verifier draws the two link points, and the prover
+`root_B` is the table's Merkle cap, `Flock.Merkle`), the verifier samples the two link points, and the prover
 then runs the table's two reps, each on its own stream of live coins, in any interleaving it
 likes (S15). The verifier accepts the table only if both reps accept (S18: both on the one
 committed root).
 
-The link points are drawn once, before either rep (R5), and give the region claims both reps
+The link points are sampled once, before either rep (R5), and give the region claims both reps
 open (`Flock.Statement`). `y` is pinned to zero for these statements (S10) and carries no information.
 -/
 

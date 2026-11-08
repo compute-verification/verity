@@ -1,11 +1,26 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
-public import Proofs.Flock.Soundness.ExecSetup
-public import Flock.ProvedScope
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.ParseStmt
 
 /-!
 # What the verifier accepts: `Accepts` and its statement check
@@ -32,22 +47,22 @@ check is `ProvedScope.checkP` (`ScopeP`, `VerifiesP`): it refuses hidden outputs
 
 `Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
 registered.isSome` argument for argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s,
-after `withCoins`, then `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
+with `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
 circuit, public file and tables are the bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`.
 The public-inputs flag is `false`: with `--public-inputs` the check refuses every session, and without it `buildSession`
 passes `setupTables` no public input words, the setup `Accepts` models. The registered flag `reg` is whether the verifier
 holds `--registered F`: `Scope` and `ScopeZ` are the check without it, `ScopeR` and `ScopeZR` the check with it, which
 `VerifiesR` and `VerifiesZKR` pair with the registered check `AcceptsR` and `AcceptsZKR` model. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
-requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a drawn
-session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a draw. So a session
+requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a sampled
+session's sample, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a sample. So a session
 `verifyCmd` accepts satisfies `Verifies` without `--registered` and `VerifiesR` with it (under `--zk`, `VerifiesZK` and
 `VerifiesZKR`). `verifyCmd` refuses more, which only shrinks the
-event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
-without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` a stratified draw), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
+event: a sample by a sampling design no soundness claim samples by (`ProvedScope.drawLaw`: a bernoulli or work sample, or a subset sample
+without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` a stratified sample), a session without a sample (every claim's record hypothesis reads the record's sample), registered reads (`checkRegistered`:
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only at hidden outputs and `hm96-sha512/v1` leaves, where `VerifiesR` and `VerifiesZKR` model the
 registered check), a coin-tree
-key an earlier session of the run used, and a session file it cannot read. Each drawn session of a run is set up at its own draw,
+key an earlier session of the run used, and a session file it cannot read. Each sampled session of a run is set up at its own sample,
 and the draw-less setup, one statement, once.
 -/
 

@@ -25,7 +25,7 @@ inputs' table entries times its copies.
 module
 
 public import Flock.TmplFold
-public import Std.Data.HashMap
+public import Std.Data.HashMap.Basic
 
 @[expose] public section
 

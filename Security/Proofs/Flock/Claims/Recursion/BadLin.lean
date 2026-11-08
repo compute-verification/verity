@@ -2,22 +2,54 @@ module
 
 public import Proofs.Flock.Claims.Recursion.PlurLin
 public import Proofs.Flock.Claims.Recursion.BoundForks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
-# A bad draw, linearly
+# A bad sample, linearly
 
-`Pr_bad_le` bounds a draw that `P_I`'s runs don't show by `√(k_I·k(x)·Pr[Be])`, the root from `Pr_plur_fork`. Here the
-same draw is bounded linearly (`Pr_bad_le_lin`). At each inner round `j` it misses `P_I` at most as often as a link at
+`Pr_bad_le` bounds a sample that `P_I`'s runs don't show by `√(k_I·k(x)·Pr[Be])`, the root from `Pr_plur_fork`. Here the
+same sample is bounded linearly (`Pr_bad_le_lin`). At each inner round `j` it misses `P_I` at most as often as a link at
 the fork at `j` succeeds, plus `1/(M+1)` (`Pr_plur_fork_lin`), and where a link succeeds, two extractions forked at `j`
 open round `j` differently, so their calls collide wherever the inner rounds' forks bind (`ForksBind`, `linkOut_coll`):
 at the deployed records directly (`RecDeploy.forksBind_C`), and wherever the played rounds' openings are recorded
 (`forksBind_of_opening`).
 
-The deviation finder `Fdev` (`Definitions.Claims.RecursionLin`) draws the round `j` uniformly, then a tape, a prefix, a
-draw and the loop's `M` draws. Where `E_O` gives witnesses at the first draw, it outputs the collision between it and
-the loop's first draw where `E_O` gives witnesses, and nothing otherwise (`linkOut`); its declared cost is one draw's
-calls, then the loop's where it runs (`linkCost`), at most twice one draw's in expectation (`Ex_Fdev_cost_le`). So `Pr[Bad] ≤ k_I·Pr[Fdev] + k_I/(M+1)`, and under `ExpectedCR` at `Fdev`,
-`Pr[Bad] ≤ k_I·(2·E[c]/2^256 + 1/(M+1))` at one draw's calls `c` (`Pr_bad_le_ecr`).
+The deviation finder `Fdev` (`Definitions.Claims.RecursionLin`) samples the round `j` uniformly, then a tape, a prefix, a
+sample and the loop's `M` samples. Where `E_O` gives witnesses at the first sample, it outputs the collision between it and
+the loop's first sample where `E_O` gives witnesses, and nothing otherwise (`linkOut`); its declared cost is one sample's
+calls, then the loop's where it runs (`linkCost`), at most twice one sample's in expectation (`Ex_Fdev_cost_le`). So `Pr[Bad] ≤ k_I·Pr[Fdev] + k_I/(M+1)`, and under `ExpectedCR` at `Fdev`,
+`Pr[Bad] ≤ k_I·(2·E[c]/2^256 + 1/(M+1))` at one sample's calls `c` (`Pr_bad_le_ecr`).
 -/
 
 @[expose] public section
@@ -35,8 +67,8 @@ theorem forksBind_of_opening {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
     (hT : CallsTrue H D I DO) : ForksBind H D I DO :=
   fun decO x _ P _ t h => forkColl_of_opening hV hO hT decO x P t h
 
-/-- **A link that succeeds names a collision**: the first draw and the loop's first where `E_O` gives witnesses open
-round `j` differently, at two draws forked at `j` (`fork_fork`), so their calls collide (`ForksBind`). -/
+/-- **A link that succeeds names a collision**: the first sample and the loop's first where `E_O` gives witnesses open
+round `j` differently, at two samples forked at `j` (`fork_fork`), so their calls collide (`ForksBind`). -/
 theorem linkOut_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} (P : Prover Ω) {M : ℕ}
     (j : Fin (I.V.k (xI D x))) (ω : Ω) (r : Fin (D.V.k x) → Coin) (u : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
@@ -63,7 +95,7 @@ theorem linkOut_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO 
   simp only [linkOut, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
-/-- **A bad draw, linearly**: at most `k_I` times the link finder's success, plus `k_I/(M+1)`. -/
+/-- **A bad sample, linearly**: at most `k_I` times the link finder's success, plus `k_I/(M+1)`. -/
 theorem Pr_bad_le_lin {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) (hk : 0 < I.V.k (xI D x)) :
@@ -112,8 +144,8 @@ theorem Pr_bad_le_lin {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
         rw [Finset.sum_add_distrib, ← hF, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
           mul_one_div]
 
-/-- **The link finder costs at most two draws in expectation**: at each round, tape and prefix, `Ex_linkCost_le`;
-the draws forked at `j` from a uniform prefix are uniform (`Ex_fork`). -/
+/-- **The link finder costs at most two samples in expectation**: at each round, tape and prefix, `Ex_linkCost_le`;
+the samples forked at `j` from a uniform prefix are uniform (`Ex_fork`). -/
 theorem Ex_Fdev_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (M : ℕ)
     (hk : 0 < I.V.k (xI D x)) :
@@ -166,7 +198,7 @@ theorem Ex_Fdev_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
         have : Nonempty (Fin (I.V.k (xI D x))) := ⟨⟨0, hk⟩⟩
         exact Ex_const _
 
-/-- **A bad draw under `ExpectedCR` at the link finder**: at most `k_I·(2·E[c]/2^256 + 1/(M+1))`, at one draw's calls
+/-- **A bad sample under `ExpectedCR` at the link finder**: at most `k_I·(2·E[c]/2^256 + 1/(M+1))`, at one sample's calls
 `c`. Linear in the collision term, where `Pr_bad_le` is `√(k_I·k(x)·Pr[Be])`. -/
 theorem Pr_bad_le_ecr {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]

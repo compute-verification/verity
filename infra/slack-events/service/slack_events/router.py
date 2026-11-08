@@ -5,7 +5,7 @@ import os
 
 
 def route_unaddressed(post: dict, thread: list[dict], registry: dict) -> list[str] | None:
-    """The handles a person's unaddressed post should ring, or None for no-model mode, where the consumer rings @top and
+    """The handles a person's unaddressed post should ring, or None for no-model mode, where the consumer rings the admin and
     says so in the thread.  None unless ROUTER_MODEL_ENABLED=1.
 
     The planned call (not built; nothing here calls a model):
@@ -17,8 +17,8 @@ def route_unaddressed(post: dict, thread: list[dict], registry: dict) -> list[st
     - Input: the post, its thread, and each handle's remit, owned paths and `examples` from `registry`.  Output: JSON with 1
       to 3 handles and a one-line reason (or `answer`, for the chat agent).
     - The consumer validates every name against the registry's handles and never accepts `top` from the model; no valid
-      name, an error or a timeout sends the post to @top with a line saying why.
-    - It turns on only after the replay of Daniel's addressed posts, names stripped, scores 8 in 10 or better."""
+      name, an error or a timeout sends the post to the admin with a line saying why.
+    - It turns on only after a replay of people's addressed posts, names stripped, scores 8 in 10 or better."""
     if os.environ.get("ROUTER_MODEL_ENABLED") != "1":
         return None
     raise NotImplementedError("ROUTER_MODEL_ENABLED=1, but the model step is not built: unset it")

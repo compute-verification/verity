@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Core.Game.Lock
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Game.Basic
+import Proofs.Core.Game.Interleave
 public import Definitions.Core.Game.Batch
 
 /-!

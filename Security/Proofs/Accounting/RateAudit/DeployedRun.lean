@@ -1,7 +1,44 @@
 module
 
+public import Definitions.Accounting.Guarantees.RateAuditDeployed
 public import Proofs.Accounting.RateAudit.Deployed
 public import Proofs.Accounting.Remote
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Bandwidth.Chip
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`
@@ -9,7 +46,7 @@ public import Proofs.Accounting.Remote
 `Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
-  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's draw (`DeployedSession.pr_draws_horizon_le`).
+  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedSession.pr_draws_horizon_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
   (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_draw_le`) covers.
 
@@ -73,7 +110,7 @@ theorem roErr_toReal (n P G N h q lam : ℕ) :
   simp only [ENNReal.toReal_natCast, ENNReal.toReal_pow, ENNReal.toReal_ofNat]
   ring
 
-/-- **Sampled** for the deployed session's run, at the monitoring period's draw. -/
+/-- **Sampled** for the deployed session's run, at the monitoring period's sample. -/
 theorem ofDeployed_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (dbar : ℝ) (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdbar : dbar ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = n * P * N * b) :
@@ -153,7 +190,7 @@ theorem ofDeployedWindow_paid (A : DeployedSession n P N b h ρ S L q r s d G) (
   simp only [Run.paid]
   simp [Run.ofDeployedWindow]
 
-/-- **Sampled** for window `w`'s run, at the window's draw. -/
+/-- **Sampled** for window `w`'s run, at the window's sample. -/
 theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (dw : ℝ) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdw : dw ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = P * N * b) :

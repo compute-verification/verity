@@ -5,7 +5,7 @@ cost at the store's size.
 
 - **fixture**: `serve.fixture()` regenerated and held to `FIXTURE_SHA512`; then for each of its two chained passes, on
   the device: each block's π (`Pass.partials`), σ read in chunks of 1, 3, 5 and 33 blocks, y, and the root (each pass's
-  seed from the one before's root); with `--lib`, the toy's store decoded layer by layer through the staging decode
+  seed from the one before's root); with `--lib`, the toy's store decoded layer by layer through the store's load
   (`stage.decode_layer`) with the pass attached, the units no layer reads then read alone, and the root.
 - **random**: `--random` units of random C* on the device against the CPU reference (`p2.Sketcher`): σ of a seeded
   sample of units from their blocks' π, every y from the device's σ, and the root (`receipts.tree`) under random salts.
@@ -84,7 +84,7 @@ def fixture(args, dev: torch.device) -> dict:
         rec["root"] = root.hex() == p["root"]
         if lay is not None:
             D = K.Pass(seed, units, dev)
-            st = S.Store(lay, rows, 0, args.lib)
+            st = S.EncodedRows(lay, rows, 0, args.lib)
             st.sketch = D
             for layer, _, size, _ in doc["staging"]:
                 S.decode_layer(st, layer, torch.empty(size, dtype=torch.uint8, device=dev))
@@ -164,7 +164,7 @@ def bench(dev: torch.device) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--lib", type=Path, help="build.sh's libp2v1 directory: the toy through the staging decode too")
+    ap.add_argument("--lib", type=Path, help="build.sh's libp2v1 directory: the toy through the store's load too")
     ap.add_argument("--random", type=int, default=0, help="units of random C* against the CPU reference")
     ap.add_argument("--sample", type=int, default=2000, help="units whose σ the reference recomputes from C*")
     ap.add_argument("--bench", action="store_true")

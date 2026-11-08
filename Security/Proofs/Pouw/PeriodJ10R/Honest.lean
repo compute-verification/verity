@@ -1,8 +1,43 @@
 module
 
-public import Proofs.Pouw.PeriodJ10R
 public import Proofs.Accounting.ComposePeriod.Honest
-public import Proofs.Accounting.TS.Keyed
+public import Properties.Pouw.PeriodJ10R
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.TS.Keyed
+import Proofs.Pouw.PeriodJ10R
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # An honest J10-R period meets `H1J10RCheckedCreditPeriod`'s premises
@@ -10,24 +45,24 @@ public import Proofs.Accounting.TS.Keyed
 The positive twin of `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, as `Proofs.Pouw.Period.Honest` is of
 `H1CheckedCreditPeriod`, conditional on `Credit.window`'s verdict on the windows' inputs. Over any sampling block's tile
 stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`, `1 ≤ k s_T`), take a period of `n ≥ 1` windows whose registration is a
-function of the window's round coin (`regOf`) and the rest of whose inputs a function of its round and draw coins
+function of the window's round coin (`regOf`) and the rest of whose inputs a function of its round and sampling coins
 (`evOf`). Given three facts of those inputs, the witness meets every premise of the statement (`j10r_meets`):
 
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`), so `SaltIsLiveCoin` holds with no round trip
   through `hex?`;
-* the units `Credit.descriptorDrawn` draws are the tile coordinate's at the draw coin (`hdraw`), `TileDrawIsCoin`'s
+* the units `Credit.descriptorDrawn` samples are the tile coordinate's at the sampling coin (`hdraw`), `TileDrawIsCoin`'s
   body on every window.
 
 They are facts of the code on honest windows, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
-C-Flock's proofs). The compiled verifier evidences them: PouwCheck's `test_difftest` has `pouw-check-difftest`'s
+Flock's proofs). The compiled verifier evidences them: PouwCheck's `test_difftest` has `pouw-check-difftest`'s
 `window` entry (`Credit.window`) credit honest J10-R windows (`window_instance`'s `j10r`) as the Python verifier does,
-and its `window-drawn` entry draw the Python verifier's units on generated coins.
+and its `window-drawn` entry sample the Python verifier's units on generated coins.
 
 * The circuit (`circuit N`): `N = N_p` committed words of no operands, one a unit, one live round, so every tile's late
   cone is its own word and its share `1/N` (`shareCone_eq`): `ρ = 1` meets `ρ·N_p·share ≤ 1` with equality.
 * The scheme is the ComposePeriod twin's (operand luck pinned, `r_B = ½`, guess `½`).
-* The registration reads the round coin and not the draw coin, so it is fixed before the draw
+* The registration reads the round coin and not the sampling coin, so it is fixed before the sample
   (`registeredBeforeDraw`, by `coinAt_spliceAt`).
 * Every tile is live and paid with its words right, the openings are in `Unit` and the unit's relation is `True`, so
   binding holds at `δ_bind = 0` and the service's soundness at `δ_ks = 0`; the three lucks hold of the honest games
@@ -147,7 +182,7 @@ theorem scope (N : ℕ) {δs : ℝ} (hδs : 0 < δs) : Scope Honest.scheme (circ
 def stages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
-/-- A window's coins: its round's coin, the draw's permutation of the `N` tiles and the rest of the draw `B`. -/
+/-- A window's coins: its round's coin, the sample's permutation of the `N` tiles and the rest of the sample `B`. -/
 abbrev WCoin (N : ℕ) (B : Type) : Type := Paths Bool (circuit N).rounds × (Equiv.Perm (Fin N) × B)
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
@@ -160,11 +195,11 @@ section Windows
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB)
 
 /-- A window's coins over the tile stratum: its round's coin, the stratum's permutation and the rest of the block's
-draw (none). -/
+sample (none). -/
 abbrev Ω1 : Type := Coin Bool Unit (circuit (tileCount σ sT)).rounds σ sT
 
 /-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
-its inputs are `evOf` of its round coin and its draw coin. -/
+its inputs are `evOf` of its round coin and its sampling coin. -/
 def windows (regOf : Bool → PreDraw) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
     (n : ℕ) : CreditWindows (Ω1 σ sT) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
@@ -184,7 +219,7 @@ def tile {Np : ℕ} : Noise → List (List ℕ) → Fin Np → (ℕ → Unit) �
 /-- The honest run's anatomy: the `N` words fixed. -/
 noncomputable def anatomy (N : ℕ) : Anatomy Unit Unit Unit Unit := { Honest.anatomy with fixed := N }
 
-/-- The play: the period's ideal game at `liveCone`, drawing `Kd` tiles a window, accepted on every path. -/
+/-- The play: the period's ideal game at `liveCone`, sampling `Kd` tiles a window, accepted on every path. -/
 noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit Unit Unit where
   game := periodGame (tileStage (circuit N) N) (liveCone Honest.scheme (circuit N) N) 1 1 Kd (period (WCoin N B) N n)
   accepts := fun _ => True
@@ -192,7 +227,7 @@ noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit 
 
 /-! ## The windows' facts -/
 
-/-- **The registration is fixed before the draw coin**: it reads only the round coin, which the splice at window `w`
+/-- **The registration is fixed before the sampling coin**: it reads only the round coin, which the splice at window `w`
 after its one round keeps. -/
 theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → PreDraw)
     (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (n : ℕ) :
@@ -232,7 +267,7 @@ theorem every_perLiveTile {Ω : Type} {N : ℕ} {P : Kind → ReceiptGame Bool 1
   period_every (Ω := Ω) (N := N) (P := fun live W => PerLiveTile Honest.scheme (circuit N) live W P)
     ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩ n
 
-/-- **The honest period passes every prefix of its game**, at any weights, costs and draw size. -/
+/-- **The honest period passes every prefix of its game**, at any weights, costs and sample size. -/
 theorem acceptsUpTo_period {B : Type} {N : ℕ} (wt : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ) (Kd : ℕ) :
     ∀ (n j : ℕ) (x : Paths (WCoin N B) n),
       RoundGame.acceptsUpTo (periodGame (tileStage (circuit N) N) wt a b Kd (period (WCoin N B) N n)) j x
@@ -290,7 +325,7 @@ theorem creditLive_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n
 /-- **An honest J10-R period meets every premise of `H1J10RCheckedCreditPeriod`**, in its order, at `N_p = |stratum σ
 s_T|` one-word units, one round, `ρ = 1`, the twin's lucks, any `δ_s > 0`, `δ_bind = δ_ks = 0` and `N_p` fixed and
 folded words a window, given that `Credit.window` credits every window (`hacc`), that the registered salt is the
-round coin's bytes (`hsalt`) and that `Credit.descriptorDrawn`'s units are the tile coordinate's at the draw coin
+round coin's bytes (`hsalt`) and that `Credit.descriptorDrawn`'s units are the tile coordinate's at the sampling coin
 (`hdraw`); the accepted prefix is then the whole period and its live words are `N_p·n`. -/
 theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)

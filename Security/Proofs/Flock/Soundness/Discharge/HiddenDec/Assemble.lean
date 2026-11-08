@@ -1,18 +1,37 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# The decoder is right at the hidden-output headline's draws
+# The decoder is right at the hidden-output headline's samples
 
 `decodesOn_execH`: DecodeZL's `decodesOn_exec` at the hidden tables, from plays-coin's `decodesOnOfRuns`. At an
 outcome flock-verify accepts under hidden outputs:
 
 * `accepts_repsH`: DecodeZL's `accepts_reps` under hidden outputs. The one table's statement `st` is setupHidden's at
-  the record's draw, and the per-rep facts come from the acceptance lemmas without `hh` (`accepts_verdict_leafAny`,
+  the record's sample, and the per-rep facts come from the acceptance lemmas without `hh` (`accepts_verdict_leafAny`,
   `accepts_rep_roundsAny`, `setupTables_okAny`, `setupTables_pointsAny`, `Discharge/HiddenExec`), the verdict at the
   model's leaf of the tags' leaf scheme (`leafOfId`: `leaf512` under `hm96-sha512/v1`, `leafPlain` under plain SHA-512
   leaves).
@@ -35,7 +54,7 @@ open FlockSoundness.Discharge.HiddenExec
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **flock-verify's acceptance of a one-table session under hidden outputs, rep by rep**: DecodeZL's `accepts_reps`
-with setupHidden's statement `st` at the record's draw, the verdict at the model's leaf of the tags' leaf scheme. -/
+with setupHidden's statement `st` at the record's sample, the verdict at the model's leaf of the tags' leaf scheme. -/
 theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
     (hrr : I.tags.retainRounds = true)
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
@@ -98,12 +117,12 @@ theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutp
   · exact ⟨e₁, f₁, T₁, hf₁, hq₁, hpl₁, hl₁, hr₁⟩
   · omega
 
-/-- The hidden tables put the link claims at `PT_LOCAL`, at a draw that sets up and at a refused one. -/
+/-- The hidden tables put the link claims at `PT_LOCAL`, at a sample that sets up and at a refused one. -/
 theorem tableAtH_ptLocal {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtH dj x₀ S).T.ptLocal = PT_LOCAL := by
   rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e] <;> rfl
 
-/-- **The decoder is right at the hidden-output headline's draws**, from the session alone (`DecodesOnExecH` with no
+/-- **The decoder is right at the hidden-output headline's samples**, from the session alone (`DecodesOnExecH` with no
 hypothesis on the circuit: `tableAtH_of_acceptsU`). -/
 theorem decodesOn_execHU {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -169,7 +188,7 @@ theorem decodesOn_execHU {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPt
   exact hv
 
 set_option linter.unusedVariables false in
-/-- **The decoder is right at the hidden-output headline's draws**, wherever the outputs are returned
+/-- **The decoder is right at the hidden-output headline's samples**, wherever the outputs are returned
 (`DecodesOnExecH` without `c.outNet = c.unitNet`). -/
 theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}

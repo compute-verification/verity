@@ -1,6 +1,45 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
+public import Proofs.Flock.Claims.Complete.Zk.Level0Model
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Session
+import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The honest masked Ligerito meets the masked model's final identity: the walk
@@ -75,6 +114,8 @@ theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c
       (Ext p st' → Xb b → pcur st = c → t = tm → J (tw st) → J' b (tw st')) :=
   ⟨(h.1 st t l b st' t' l' hl e).2.2.2, h.2 st t l b st' t' l' hl e⟩
 
+-- one proof of a few hundred lines running `ligeritoPZk` against the masked model's `FinalZ`, `rw` and `omega` on the
+-- round indices at each step
 set_option maxHeartbeats 4000000 in
 /-- **The honest masked Ligerito meets the masked model's final identity**: at a `--zk` schedule, as rep `rep < 2`, on
 a table `tb` and weights `b` of `2^n` entries whose level-0 commitment has `tb`'s padded rows (`encodeRowsZk`), with a

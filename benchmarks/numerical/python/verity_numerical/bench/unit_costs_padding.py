@@ -15,7 +15,7 @@ each unit type weighted by its sample mean (:func:`menu_dp`); ``natural`` one bu
 attention per NB stratum, every other binding its own).
 
 **Tails.** The sampler (token-select, gumbel) and every unit type over :data:`TAIL_FACTOR` x the body's 99th-percentile
-draw (the Z under which 99% of sampled proof blocks fall) are the tail, at B = 1 and never in a menu: each sampler binding its own
+sample (the Z under which 99% of sampled proof blocks fall) are the tail, at B = 1 and never in a menu: each sampler binding its own
 bucket, the other large units one bucket at their largest Z (``eval_per_stratum``: one bucket per distinct Z instead), its
 cost shown separately (``tail``). token-select is priced at its argmax tree (``unit_costs.retree``, applied here to an
 inventory without it), which supersedes the generic scan count; ``eval_step_model`` prices the tail again with it at
@@ -27,7 +27,7 @@ holds X ~ Hypergeometric(N, n, K), its pmf summed exactly (:func:`hyper`). Per w
 - ``zpad``: Σ_b Z_b E[X_b] / E[actual], the padding from rounding each unit's nonzeros up to its bucket;
 - ``pad_mean``: Σ_b B Z_b E[ceil(X_b / B)] / E[actual], with sessions rounded up; ``round_extra`` = pad_mean − zpad;
 - ``public``: Σ_b B Z_b ceil(q_b / B) / E[actual], each shape's session count fixed at its bucket's 1 − 2⁻⁴⁰ quantile q_b,
-  a public number independent of the drawn mix (enough slots with probability ≥ 1 − m 2⁻⁴⁰ over m shapes);
+  a public number independent of the sampled mix (enough slots with probability ≥ 1 − m 2⁻⁴⁰ over m shapes);
   ``hide_extra`` = public − pad_mean, what hiding the mix costs;
 - ``pad_q``: an upper bound on the 1 − 2⁻⁴⁰ quantile of padded / actual: every bucket at its upper and every unit type at
   its lower quantile with 2⁻⁴⁰ split evenly over them (a union bound).
@@ -146,7 +146,7 @@ def mean_sessions(N: int, n: int, K: int, B: int) -> float:
 # --- menus -----------------------------------------------------------------------------------------------------------------
 
 def tail_split(units: Sequence[Unit], factor: float = TAIL_FACTOR) -> tuple[list[Unit], list[Unit], float]:
-    """(body, tail, threshold): the samplers, and every unit over ``factor`` x the 99th-percentile Z of the others' draws."""
+    """(body, tail, threshold): the samplers, and every unit over ``factor`` x the 99th-percentile Z of the others' samples."""
     rest = sorted((u for u in units if u.template not in SAMPLERS), key=lambda u: u.z)
     total, acc, z99 = sum(u.n for u in rest), 0, 0.0
     for u in rest:

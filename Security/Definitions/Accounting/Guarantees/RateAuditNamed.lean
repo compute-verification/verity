@@ -18,7 +18,7 @@ oracle value is that word's receipt. Two of the run's queries with one oracle va
 * `RateConservationNamedRO`: at a count `k`, `C(N, k)/2^λ` in place of `C(q, k)/2^λ`.
 * `RatePaidNamedRO`: at every count at once, `2^N/2^λ` in place of `RatePaidRO`'s `2^q/2^λ`.
 * `RateChainSampledNamedRO`: the route `Sampled` (`RateChainSampledRO`) with that error at each pass.
-* `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled draw
+* `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled sample
   (`RateSessionDraw`): over the horizon and in every window at once.
 
 The prover is one undifferentiated resource: these conserve the words read, rebuilt or held, whichever devices or
@@ -54,7 +54,7 @@ chip's state, the run's trace and the `k` named words (`C(N, k)/2^λ`).
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateConservationNamedRO : Prop :=
-  ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
@@ -78,7 +78,7 @@ each count `k ≤ N`, and `∑ₖ C(N, k) = 2^N`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaidNamedRO : Prop :=
-  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
@@ -112,7 +112,7 @@ def RateChainSampledNamedRO : Prop :=
         (P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
 
 /-- **The route `Sampled` for a session, with named words, with side sources that ignore the oracle.** For every
-session of `n` chained windows on one store, each closed by its pooled draw of `d` openings (`Rate.Session`, as in
+session of `n` chained windows on one store, each closed by its pooled sample of `d` openings (`Rate.Session`, as in
 `RateSessionDraw`), with every pass's side sources ignoring the oracle, and every split into tiers: the probability
 that every window's openings land on correct receipts while either the session's reads of every tier and rebuilt
 words (`Chain.spent`), plus each pass's on-chip state, free link bits and `λ`, fall short of `K + 1` words,

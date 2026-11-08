@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.EndToEndRegistered.Statement
 
 /-!
-# Proof of C-Flock's end-to-end guarantee with registered reads
+# Proof of Flock's end-to-end guarantee with registered reads
 
 `Flock.SecurityProofs.EndToEndRegistered : Flock.Guarantees.EndToEndRegistered` is `zk_session_soundHJR_custody_reg`
 with its first conjunct's first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s
@@ -20,7 +20,7 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- **C-Flock's one-stage audit, end to end, with registered reads.** -/
+/-- **Flock's one-stage audit, end to end, with registered reads.** -/
 theorem EndToEndRegistered : Flock.Guarantees.EndToEndRegistered := by
   intro n Reg I ht own D hD hU pub hpub hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
@@ -29,7 +29,7 @@ theorem EndToEndRegistered : Flock.Guarantees.EndToEndRegistered := by
   rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 
-/-- **C-Flock's one-stage audit, end to end, with registered reads, at the drawn units.** -/
+/-- **Flock's one-stage audit, end to end, with registered reads, at the sampled proof blocks.** -/
 theorem EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn := by
   intro n Reg I ht own D hD hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
     hρ hr t' ht' τ qF qS L P vb σ hCR hA2
@@ -47,11 +47,5 @@ theorem EndToEndRegisteredFlat : Flock.Guarantees.EndToEndRegisteredFlat := by
 theorem EndToEndRegisteredDrawnFlat : Flock.Guarantees.EndToEndRegisteredDrawnFlat := by
   intro n Reg I ht own c hc
   exact EndToEndRegisteredDrawn n Reg I ht own (.single c) (Flock.Desc.parse_single hc)
-
-/-- `EndToEndRegisteredPerTest` gives its flat form, at `Desc.single c`. -/
-theorem EndToEndRegisteredPerTestFlat_of (h : Flock.Guarantees.EndToEndRegisteredPerTest) :
-    Flock.Guarantees.EndToEndRegisteredPerTestFlat := by
-  intro n Reg I ht own c hc
-  exact h n Reg I ht own (.single c) (Flock.Desc.parse_single hc)
 
 end Flock.SecurityProofs

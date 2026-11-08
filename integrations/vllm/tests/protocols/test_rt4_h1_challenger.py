@@ -10,7 +10,7 @@ challenger's signed close, sealed under its ledger.
   lane's windows between its signed period-open and period-close: one with no close, an incomplete one, an accepted
   window outside it and a window of it abandoned after its coins are refused.
 * the window's sampling coin opens once, after a root over the manifest, the last receipts and every round's root
-  and coin; an early draw, a sample from another family and a challenge phase closed with no sample are refused.
+  and coin; an early sample, a sample from another family and a challenge phase closed with no sample are refused.
 * round s's root commits the A and z tables of its calls and round s - 1's receipts.
 * a window whose coins were held in the serving process is no challenge phase's and credits nothing; pouw-serve
   takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
@@ -53,7 +53,7 @@ PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
 #: two H1 windows' challenge phases, reserved on the gate before it opens them
 SA, SB = CH.session_id(0xa), CH.session_id(0xb)
-#: a window's draw challenge phase (`_Session.open` with ``withhold``)
+#: a window's sample challenge phase (`_Session.open` with ``withhold``)
 DRAW_NAME = CH.session_id(0xd)
 #: the gate's v2 head (31 entries: v1 opens, one-step v2 opens, then periods infra-smoke-20261020a to d,
 #: c's and d's windows two-step) and seven of its challenge phases' trees as the gate's ``fetch`` gave them; registered
@@ -79,7 +79,7 @@ class _Session:
     ``{root}`` its ledger then opens it for (`CH.WINDOW` until then). A `reserved` challenge phase (its name a gate
     challenge phase id, `CH.session_id`) is reserved in `audited`'s ledger before its open, as the gate's two-step open
     does. A `withhold` challenge phase is withheld (`remote.open_session`) and reached at `T.DRAW_AT`: the window's
-    draw's, which `open` with ``withhold`` makes (`draw`, `DRAW_NAME` in this one's `tree`, its leaves ten past this
+    sample's, which `open` with ``withhold`` makes (`draw`, `DRAW_NAME` in this one's `tree`, its leaves ten past this
     one's)."""
 
     def __init__(self, tmp_path, monkeypatch, name: str, leaf: int, seed: int, challenger=None, close=None,
@@ -122,7 +122,7 @@ class _Session:
         return {"session": session, "seq": 0, "root": root, "commitment": self.commitment}
 
     def remote(self, **kw) -> dict:
-        """`test_pouw_h1._remote`'s settings, the window reserving this challenge phase and its draw's (`DRAW_NAME`)
+        """`test_pouw_h1._remote`'s settings, the window reserving this challenge phase and its sample's (`DRAW_NAME`)
         and opening them through `open`."""
         return T._remote(session={"session": self.name}, draw_session={"session": DRAW_NAME}, gate=self.open, **kw)
 
@@ -144,7 +144,7 @@ class _Session:
         """The auditor's signed ledger (`CH.Ledger`, one head, ``<name>.jsonl`` in `tree`) under `KEY`, reserving this
         challenge phase at the leaf two before its record's when it is `reserved`, opening it for `window` at the leaf
         before its record's and ending it over its ``out/`` at the key's last leaf once it has ended (closed when its
-        client closed it); its draw's (`draw`) reserved, opened (withheld unless not `withheld`, on its draw root or
+        client closed it); its sample's (`draw`) reserved, opened (withheld unless not `withheld`, on its sample root or
         `draw_root`) and ended between them the same way, ended at the key's last leaf but one."""
         if name == "windows" and self._ledger is not None:
             return self._ledger
@@ -165,7 +165,7 @@ class _Session:
         return ledger.path
 
     def trusted(self, commits, **ledger) -> str | None:
-        """`trusted_rounds_reason` of `commits` against this challenge phase and its draw's, as `audited` opens and ends
+        """`trusted_rounds_reason` of `commits` against this challenge phase and its sample's, as `audited` opens and ends
         them (`ledger` its arguments, a ledger of their own)."""
         path = self.audited(**({"name": "variant", **ledger} if ledger else {}))
         return PHC.trusted_rounds_reason(commits, self.directory, [path], self.window, KEY,
@@ -198,8 +198,8 @@ def _coins(commitment):
 def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
     """A window served in challenge phase `name` (a gate challenge phase id), which `gate` reserved and then opened on the
     window's open root once round 0 was admitted (its answer's commitment, ``status SESSION``'s, once the challenge
-    phase's record is signed) and ended over its ``out/``, then its draw's challenge phase (`draw_name`), which `gate`
-    reserved and opened withheld on the window's draw root (the `_Session.draw`), ended after it: its commitment and its
+    phase's record is signed) and ended over its ``out/``, then its sample's challenge phase (`draw_name`), which `gate`
+    reserved and opened withheld on the window's sample root (the `_Session.draw`), ended after it: its commitment and its
     challenge phase."""
     made, draw = {}, draw_name(name)
     gate.reserve(name, Wd.live_families(3))
@@ -230,7 +230,7 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
 
 
 def draw_name(name: str) -> str:
-    """The gate session id of window session `name`'s draw session."""
+    """The gate session id of window session `name`'s sample session."""
     return CH.session_id(0xd00 + int(name.rsplit("-", 1)[1], 16))
 
 
@@ -240,7 +240,7 @@ def _gate():
 
 def _regate(g, name: str, root: str, out, draw=None, end: bool = True, closed: bool = True, opened=None, **ended):
     """`g` (a gate) reserving window session `name` and opening it on `root` (its open's fields replaced by `opened`),
-    then with `draw` (the window's draw session, `_Session.draw`) reserving that and opening it withheld on its draw
+    then with `draw` (the window's sample session, `_Session.draw`) reserving that and opening it withheld on its sample
     root, at the leaves `_window` gave them, and ending each, the window's over `out` (unless not `end`; `closed` and
     its fields replaced by `ended`)."""
     g.reserve(name, Wd.live_families(3))
@@ -258,7 +258,7 @@ def _regate(g, name: str, root: str, out, draw=None, end: bool = True, closed: b
 
 
 def _fetch(*sessions):
-    """The gate's ``fetch`` of each of `sessions` and its draw session."""
+    """The gate's ``fetch`` of each of `sessions` and its sample session."""
     return {k: v for s in sessions for k, v in ((s.name, s.tree), *(((s.draw.name, s.draw.tree),) if s.draw else ()))}.get
 
 
@@ -375,7 +375,7 @@ def test_a_session_whose_tree_the_hosts_pins_log_doesnt_record_is_refused(tmp_pa
     assert PHC.session_reason(first, two.ledger(), fetch) is None
     assert PHC.session_reason(first, two.ledger(CH.PINS), fetch) == (
         f"session {SA} is not trusted: the host's pins log has 1 lines, fewer than the 2 the open of session {SA} "
-        "sealed: take infra's newest published pins log")
+        "sealed: take the auditor host's operator's newest published pins log")
     assert PHC.session_reason(first, two.ledger([second, second]), fetch) == (
         f"session {SA} is not trusted: the host's pins log is not the one the open of session {SA} sealed: its first 2 "
         "lines were edited or rewritten")
@@ -475,7 +475,7 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
     lane's isn't one); it credits only when the ledger closes it complete and every window of it was accepted. Refused: a
     period the ledger doesn't have or doesn't close, one closed with no window, an incomplete window (one that ended
     short of its coins, or never ended), an accepted window that isn't the period's, and a window of it abandoned after
-    its coins. Each window's draw session is one of its period's sessions, listed after it, and counts as accepted only
+    its coins. Each window's sample session is one of its period's sessions, listed after it, and counts as accepted only
     beside its window."""
     families = Wd.live_families(3)
     sk, si, sn, so = (CH.session_id(n) for n in (0xe1, 0xe2, 0xe3, 0xe4))
@@ -753,7 +753,7 @@ def test_a_windows_own_session_holds_no_draw_coin_and_its_draw_session_is_the_le
 
 
 def _draw_of(host, root: bytes) -> LC.LiveOpening:
-    """The draw coin `host`'s draw session (`_Session.open` with ``withhold``) opens after `root`, its full opening once
+    """The sampling coin `host`'s sample session (`_Session.open` with ``withhold``) opens after `root`, its full opening once
     the session has closed."""
     host.open(DRAW_NAME, root.hex(), withhold=True)
     with host.draw.client as client:

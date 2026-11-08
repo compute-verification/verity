@@ -224,7 +224,7 @@ def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[st
     return {rid: {k: v for k, v in f.items() if k in keep} for rid, f in facts.items()}
 
 
-#: the activity a PADDED record's binding map (`padded-binding-map/1`, padding_steps) stamps on every entry:
+#: the activity a PADDED record's binding map (`padded-binding-map/1`, from the retired padded Commit) stamps on every entry:
 #: `bot-by-enablement` = the REQUIRED padding of a not-executed row (its value is tau(e) = bot by rule, NOT_EXECUTED_SCOPE verbatim), `active` =
 #: an executed row's committed value, `registered-input` = a named input.  An UNPADDED record's entries carry no `activity` (= active).
 ACTIVITY_PADDING = "bot-by-enablement"

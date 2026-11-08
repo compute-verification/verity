@@ -1,11 +1,43 @@
 module
 
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-public import Proofs.Flock.Claims.Witnesses.BindingMeets
 public import Proofs.Flock.Claims.ZK.Compose
+public import Proofs.Flock.Claims.ZK.Split
 public import Proofs.Flock.Claims.ZKOut
-public import Proofs.Flock.Claims.Sampling.Assembled
 public import Proofs.Flock.Masked
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # Refutation witnesses: the generic sampled compiler's zero knowledge
@@ -28,11 +60,11 @@ The lock's `meets` witnesses: the deployed records are masked (`Claims.Flock.mas
 so it is zero knowledge at error `0` with every witness in its relation (`echoArg_zk`); `echoL`, `talkL`'s one-session
 masked compiled verifier over it, meets the zero-knowledge contract, and the toy witness is in its sampling relation.
 
-At C-Flock, `zkA_zk`: C-Flock's deployed masked session as a proof system with a public outcome (`zkA`) is zero
+At Flock, `zkA_zk`: Flock's deployed masked session as a proof system with a public outcome (`zkA`) is zero
 knowledge, by `MaskedZK` through `ZKmalR`'s two-sided bound (`zkOut_of_zkmalR`). `zkFlock_meets` puts it under a masked
 compiled verifier of one session (`zkL`) that meets the zero-knowledge contract, but only vacuously in its `witness`
 field: `zkL`'s commitment opens nothing, so its sampling relation is empty. A nonempty one would need the contract's
-`witness` there, a member of C-Flock's relation (`Flock.Readable.relation`) at each statement the run admits, so a
+`witness` there, a member of Flock's relation (`Flock.Readable.relation`) at each statement the run admits, so a
 statement the deployed parser accepts and a witness its tables hold of, and the tree constructs none.
 -/
 
@@ -258,7 +290,7 @@ theorem echo_meets (H : Msg → Msg) :
 
 end Echo
 
-/-! ## C-Flock's masked session meets the zero-knowledge contract -/
+/-! ## Flock's masked session meets the zero-knowledge contract -/
 
 /-- A simulator, as one given a trivial outcome. -/
 def oneOut (S : Simulator) : SimOut Unit where
@@ -278,7 +310,7 @@ theorem zkOut_of_zkmalR {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
   exact and_iff_right rfl
 
 open Claims.ZKMal.Masked FlockSoundness.Discharge in
-/-- **C-Flock's deployed masked session** (`Flock.Guarantees.MaskedZK`'s record), at one coin per rep round and
+/-- **Flock's deployed masked session** (`Flock.Guarantees.MaskedZK`'s record), at one coin per rep round and
 `t = 1`. -/
 noncomputable def zkFlock :=
   Claims.ZKMal.zkDeployed _root_.Flock.Readable.relation (fun _ _ => 1)
@@ -299,7 +331,7 @@ theorem zkFlock_zk : ZKmalR FlockDeploy.sha512 (fun x => zkFlock.V.k x + 1) zkFl
     (Claims.Flock.R zkFlock.parse) zkFlock.S (zkEps 1) (zkγ 1) :=
   (_root_.Flock.SecurityProofs.MaskedZK (fun _ _ => 1) 1 Nat.one_pos).2
 
-/-- **C-Flock's deployed masked session as a proof system with a public outcome**: `Arg.ofFlock` at its record, its
+/-- **Flock's deployed masked session as a proof system with a public outcome**: `Arg.ofFlock` at its record, its
 sessions' rounds `V.k + 1` (`Hello` first), its outcome trivial, and its simulator and error `MaskedZK`'s. -/
 noncomputable def zkA : ZkArg FlockDeploy.Coin where
   toArg := Arg.ofFlock zkFlock.toDeploy
@@ -318,9 +350,9 @@ theorem zkA_zk : zkA.ZK FlockDeploy.sha512 := zkOut_of_zkmalR zkFlock_zk
 /-- The router of one session from the first round, at the run's statement. -/
 def oneStep (x : Msg) (hist : List (Msg × Msg)) : Step := .session 0 x hist
 
-/-- **A masked compiled verifier of one session over C-Flock's**: the toy statement, one session of C-Flock's masked
+/-- **A masked compiled verifier of one session over Flock's**: the toy statement, one session of Flock's masked
 record at the run's statement from the first round, its rounds the session's, and the reference prover the composed
-one. Its commitment opens nothing (`rejCm`), so no witness is honest there: the tree states no member of C-Flock's
+one. Its commitment opens nothing (`rejCm`), so no witness is honest there: the tree states no member of Flock's
 relation, so the session's witness has none to be. -/
 noncomputable def zkL : ZkCompiled FlockDeploy.Coin zkA where
   V := ⟨fun x => zkFlock.V.k x + 1, fun _ _ _ => .ret .rej⟩
@@ -366,7 +398,7 @@ theorem zkL_sessions (H : Msg → Msg) : zkL.ZkSessions H where
   witness x w h _ _ _ _ := absurd h (rhon_rejCm H x w)
   honest _ _ _ _ _ _ _ := rfl
 
-/-- **`CompilerZK`'s antecedents hold together** at C-Flock's deployed masked session: as a proof system with a public
+/-- **`CompilerZK`'s antecedents hold together** at Flock's deployed masked session: as a proof system with a public
 outcome it is zero knowledge (`MaskedZK`), and the one-session masked compiled verifier over it meets the
 zero-knowledge contract, its `witness` field vacuously (`rhon_rejCm`); `echo_meets` is the antecedents at a nonempty
 relation. -/

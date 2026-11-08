@@ -5,16 +5,17 @@
 #     -- bash verity/ml/flock/pod/93-zk-tree-from.sh
 # The challengers are challenger.sh's (benchmarks/live_challenger/serve.py on the Lean verifier's coins, a test LMS key and
 # a session secret outside $OUT). The statement is 91-plain-hidden.sh's (tests/plain_hidden.py: RoPE d64 at 32 instances,
-# hidden outputs, the verifier's own program and partition), each session drawing all 32 (--draw subset:32, as every
-# soundness claim is about a drawn session):
+# hidden outputs, the verifier's own program and partition), each session sampling all 32 (--draw subset:32, as every
+# soundness claim is about a sampled session):
 #   wrong-secret  serve --tree-from with another secret: the challenger refuses its hello and serve never serves
 #   tree-from     serve/prove --zk, the session's coin tree sampled and opened by the challenger (--tree-from with its
 #                 secret, --sessions 1); the challenger exits 0 once serve closes its session
-#   own-tree      serve/prove --zk without --tree-from: a coin tree drawn by the server, which no challenger released
+#   own-tree      serve/prove --zk without --tree-from: a coin tree sampled by the server, which no challenger released
 #   plain-tree    serve/prove without --zk on the keyed coin tree (FC_COINS=tree), sampled and opened by a second
 #                 challenger
-# and the audit of each session's record against its challenger's release log (`challenger.sessions_tree_reason`, and
-# the Lean's `challenger_session_trees`, which `sampled-proofs-one-stage-zk` runs): the tree-from and plain-tree sessions'
+# and the audit of each session's record against its challenger's release log (challenger.sh's `challenger_audit` and
+# `challenger_cases`: `challenger.sessions_tree_reason`, and the Lean's `challenger_session_trees`, which
+# `sampled-proofs-one-stage-zk` runs): the tree-from and plain-tree sessions'
 # pass; the own-tree session's, both --zk sessions at once, and the tree-from record with one round's coin or one link
 # point changed are refused, the Lean's reason the Python's. Lean's flock-verify accepts every session (the verdict reads
 # no challenger). Kept in $OUT: challenger/ and challenger-plain/ (record, key, releases.jsonl, hellos.jsonl,
@@ -31,7 +32,6 @@ challenger_build
 setup
 CHALLENGER_PY=$PY
 challenger_built || exit 1
-DIFFTEST=$CHALLENGER_SP/.lake/build/bin/sampled-proofs-difftest
 S=$OUT/sessions CH=$OUT/challenger CHP=$OUT/challenger-plain
 mkdir -p "$S"
 
@@ -45,7 +45,7 @@ challenger_start "$CH" || exit 1
 log "challenger listening on $CHALLENGER"
 "$PY" -c 'import secrets; print(secrets.token_hex(32))' > "$W/wrong"
 
-served() {   # served NAME zk|plain SERVE_ARGS...: one loopback session drawing all 32 instances under $S/NAME, its prove's exit
+served() {   # served NAME zk|plain SERVE_ARGS...: one loopback session sampling all 32 instances under $S/NAME, its prove's exit
   local name=$1 mode=$2 srv port coins=${FC_COINS:-}; shift 2
   local -a zk=(--zk)
   [ "$mode" = plain ] && zk=() coins=tree
@@ -73,35 +73,7 @@ log "plain challenger exit $CHP_RC: $(tail -1 "$CHP/challenger.err")"
 
 one() { ls -d "$S/$1"/*/ 2>/dev/null | head -1; }
 challenger_audit "$CHP" "$(one plain-tree)" | tee -a "$OUT/job.log"
-"$PY" - "$CH" "$(one tree-from)" "$(one own-tree)" "$DIFFTEST" "$OUT/audit.json" <<'EOF'
-import copy, json, subprocess, sys
-from pathlib import Path
-from verity.core.protocols.sampled_proofs import challenger as C, remote as R
-
-ch, tree, own, difftest, out = sys.argv[1:]
-log = R.log_lines(Path(ch) / R.RELEASES)
-rec = {n: json.loads((Path(d) / "session.json").read_text()) for n, d in (("tree-from", tree), ("own-tree", own))}
-coin, point = copy.deepcopy(rec["tree-from"]), copy.deepcopy(rec["tree-from"])
-s = next(s for s in coin["streams"] if s["rounds"])
-c = s["rounds"][0]["coins"][0]
-s["rounds"][0]["coins"][0] = c[:-1] + "0123456789abcdef"[("0123456789abcdef".index(c[-1]) + 1) % 16]
-p = point["link"]["points"][0][0]
-point["link"]["points"][0][0] = p[:-1] + "0123456789abcdef"[("0123456789abcdef".index(p[-1]) + 1) % 16]
-cases = {"tree-from": [("tree-from", rec["tree-from"])], "own-tree": [("own-tree", rec["own-tree"])],
-         "both": [("tree-from", rec["tree-from"]), ("own-tree", rec["own-tree"])],
-         "coin-changed": [("tree-from", coin)], "point-changed": [("tree-from", point)]}
-lean = subprocess.run([difftest], input="".join(json.dumps({"fn": "challenger_session_trees", "input": {
-    "log": log, "records": [{"name": n, "record": r} for n, r in rs]}}) + "\n" for rs in cases.values()),
-    capture_output=True, text=True, check=True).stdout.splitlines()
-trees = C.coin_trees_of(log)
-audit = {"trees": len(trees), "opened": {root: len(t.opened) for root, t in trees.items()},
-         "hellos_refused": len(R.hello_lines(Path(ch) / R.HELLOS) or []), "cases": {}}
-for (name, rs), answer in zip(cases.items(), lean):
-    py = C.sessions_tree_reason(trees, rs)
-    audit["cases"][name] = {"python": py, "lean": json.loads(answer).get("output", {}).get("reason", answer)}
-json.dump(audit, open(out, "w"), indent=1)
-print(json.dumps(audit))
-EOF
+challenger_cases "$CH" "$(one tree-from)" "$(one own-tree)" "$OUT/audit.json"
 [ -s "$OUT/audit.json" ] || log "audit FAILED"
 
 verify() {   # verify SESSION zk|plain: Lean flock-verify's verdict, accepted and why

@@ -40,6 +40,8 @@ every branch is clean or up to date, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -67,6 +69,9 @@ LOCK = "lean-audit.json"
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
+#: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
+#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
+WORKTREES_LOCK = "research-worktrees.lock"
 
 
 class ScriptFailed(Exception):
@@ -78,6 +83,46 @@ def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tupl
     if p.returncode not in ok:
         raise RuntimeError(f"git {' '.join(args)}: {p.stderr.decode(errors='replace').strip()}")
     return p
+
+
+@contextlib.contextmanager
+def worktrees_locked(cwd: str | None):
+    """Hold the clone's worktree lock alone. `git worktree add` writes a placeholder HEAD before the real one, and a fetch in
+    the same clone reads every worktree's HEAD: one that read the placeholder fails (`bad object worktrees/restack-…/HEAD`)."""
+    with open(os.path.join(cwd or ".", out("rev-parse", "--git-common-dir", cwd=cwd), WORKTREES_LOCK), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def add_worktree(wt: str, commit: str, cwd: str | None) -> None:
+    """Check ``commit`` out at ``wt`` as a scratch worktree: registered under the clone's worktree lock with no checkout, so
+    its HEAD is the real one before the lock goes, and filled after."""
+    with worktrees_locked(cwd):
+        git("worktree", "add", "--no-checkout", "--detach", "--quiet", wt, commit, cwd=cwd)
+    git("reset", "--hard", "--quiet", cwd=wt)
+
+
+def drop_worktree(wt: str, cwd: str | None) -> None:
+    """Delete scratch worktree ``wt``, then have the clone forget it under its worktree lock. Its result is already read, so
+    nothing here fails a restack: a file the script's tools left read-only goes too."""
+
+    def writable(func, path, _exc):
+        # Only the worktree's own directories change mode: a file in it may be a symlink or a hard link to one outside,
+        # and deleting it needs only its directory's permission.
+        os.chmod(os.path.dirname(path) or ".", 0o755)
+        if os.path.isdir(path) and not os.path.islink(path):
+            os.chmod(path, 0o755)
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            try:
+                func(path)
+            except OSError as e:
+                print(f"restack.py: left {path} in the scratch worktree: {e}", file=sys.stderr)
+
+    if os.path.lexists(wt):
+        shutil.rmtree(wt, **({"onexc": writable} if sys.version_info >= (3, 12) else {"onerror": writable}))
+    with worktrees_locked(cwd):
+        git("worktree", "prune", cwd=cwd, ok=tuple(range(256)))
 
 
 def out(*args: str, cwd: str | None = None) -> str:
@@ -171,9 +216,9 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
-    with tempfile.TemporaryDirectory(prefix="restack-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="restack-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
-        git("worktree", "add", "--detach", "--quiet", wt, merged, cwd=cwd)
+        add_worktree(wt, merged, cwd)
         try:
             if restored:
                 # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
@@ -192,8 +237,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                     git("rm", "-q", "-f", "--ignore-unmatch", "--", path, cwd=wt)
             return out("write-tree", cwd=wt), restored, output
         finally:
-            git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
-            git("worktree", "prune", cwd=cwd)
+            drop_worktree(wt, cwd)
 
 
 def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, list[str], bool]:
@@ -201,9 +245,9 @@ def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, l
     it changed nothing, the tail of its output, whether every pin is fresh after). A tree without the list has no pins to run."""
     if git("cat-file", "-e", f"{result}:{PINS}", cwd=cwd, ok=(0, 128)).returncode:
         return None, [], True
-    with tempfile.TemporaryDirectory(prefix="restack-pins-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="restack-pins-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))
-        git("worktree", "add", "--detach", "--quiet", wt, result, cwd=cwd)
+        add_worktree(wt, result, cwd)
         try:
             p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
@@ -211,8 +255,7 @@ def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, l
             tree = out("write-tree", cwd=wt)
             return (None if tree == tree_of(result, cwd) else tree), output, p.returncode == 0
         finally:
-            git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
-            git("worktree", "prune", cwd=cwd)
+            drop_worktree(wt, cwd)
 
 
 def with_pins(r: dict, result: str, python: str, cwd: str | None, pins: bool) -> dict:

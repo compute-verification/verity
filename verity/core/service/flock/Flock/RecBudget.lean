@@ -13,7 +13,10 @@ proved at. The caps sit far above every deployed V\* session: a level's table ho
 registers its row ports (at most `RecResiduals.MAX_REGIONS = 64`) with `v` and `out`; and the deepest registered tree is
 `rec-acc`'s, the chain of every opening of both reps and R's, fewer than `2^12` rows. A plain list holds each `fast100`
 level's RecOpen and RecCap and the algebra's parts, at most `16` at every `m ≤ 35` of at most three regions; candidate 3's
-adds RecSparse, R's levels and R's opening, `15` at `m ≤ 27`. `verity_flock.rec_budget` is the stagers' mirror.
+adds RecSparse, R's levels and R's opening, `15` at `m ≤ 27`. And it refuses one at which the list records more than
+`MAX_RECORDED` hm96 calls (`recorded`): the calls the V\* parts' witnesses record (two an hm96 slot, the salt's and the
+row's, at each registered row a part's layout reads), counted off each statement's description (`recordedAt`), a bound
+the recursion's call bound `w` is proved at. `verity_flock.rec_budget` is the stagers' mirror.
 
 The inner statement's setup hashes every row of its public file (two SHA-512 inputs a row, then the row tree), one per
 instance and input port, or a shared-row file's per table row, and a shared-row file's tables are as long as its header
@@ -74,13 +77,43 @@ def count (n : Nat) : V Unit :=
       s!"the recursion's soundness bound covers at most {MAX_STATEMENTS} V* parts")
   else pure ()
 
-/-- **V\*'s list at the verifier's inner shape holds at most `MAX_STATEMENTS` statements.** Under no inner shape nothing
-is refused, and a shape at which `RecVStar.statements` itself refuses is left to the checks that run it. -/
+/-- The most hm96 calls V\*'s list records at the verifier's inner shape (`recordedCalls`): `2^32`. -/
+def MAX_RECORDED : Nat := 4294967296
+
+/-- **The hm96 calls V\*'s statement `st` records at most**, at the inner shape `i`, two at each port and instance it
+reads: at each row a message-round port of it reads (`RecVStar.ownPorts`); at an algebra part, at `v` and `out`, then
+`acc0` and `acc1`, at each of its two instances; at a level of `n` instances, at each one's `out`, and at the table's
+(`.recOpen`) at its `coef` and `dirs`; at a RecCap of `N` nodes, at each one's `top` and `out`; and at each `rec-acc` row
+a level's units read (`RecVStar.accReads`), at the unit's `acc` and its `acc_out`. -/
+def recordedAt (i : RecVStar.Inner) (st : VStar.Stmt) : Nat :=
+  2 * ((RecVStar.ownPorts st).map (·.2.2.size)).sum +
+    (match st with
+      | .inner .. => 16
+      | .recOpen _ _ _ n => 6 * n
+      | .recOpenStacked _ _ _ n => 2 * n
+      | .cap _ N => 4 * N
+      | _ => 0) +
+    4 * ((((RecVStar.accReads i st).toOption.bind id).map Array.size).getD 0)
+
+/-- The hm96 calls V\*'s list `ss` records at most at the inner shape `i`: each statement's (`recordedAt`). -/
+def recordedCalls (i : RecVStar.Inner) (ss : Array VStar.Stmt) : Nat := (ss.toList.map (recordedAt i)).sum
+
+/-- **V\*'s list records at most `MAX_RECORDED` hm96 calls**, `n` of them. -/
+def recorded (n : Nat) : V Unit :=
+  if MAX_RECORDED < n then
+    throw s!"refused: V*'s list at the verifier's inner shape records {n} hm96 calls, more than {MAX_RECORDED}: {tail}"
+  else pure ()
+
+/-- **V\*'s list at the verifier's inner shape holds at most `MAX_STATEMENTS` statements and records at most
+`MAX_RECORDED` hm96 calls.** Under no inner shape nothing is refused, and a shape at which `RecVStar.statements` itself
+refuses is left to the checks that run it. -/
 def statements (inner : Option RecVStar.Inner) : V Unit :=
   match inner with
   | none => pure ()
   | some i => match RecVStar.statements i with
-    | .ok ss => count ss.size
+    | .ok ss => do
+      count ss.size
+      recorded (recordedCalls i ss)
     | .error _ => pure ()
 
 /-- **The inner statement's public file holds at most `MAX_INNER_ROWS` rows a port**, at the statement `st` its files

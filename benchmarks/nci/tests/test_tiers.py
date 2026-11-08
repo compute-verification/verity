@@ -34,7 +34,7 @@ def test_the_gpus_read_the_accel_models_card_table():
     sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
     mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
     assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
-    h1 = (ROOT / "verity/core/protocols/pouw/circuit/h1device.py").read_text()
+    h1 = (ROOT / "verity/ml/protocols/pouw/circuit/h1device.py").read_text()
     sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
     assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
     assert T.DEFAULTS["clock_share"] == 0.0
@@ -110,7 +110,7 @@ def test_without_dark_compute_the_declared_side_is_the_chain_bound():
 
 
 def test_the_adversary_relays_partial_sums_only_when_it_pays():
-    """With width-1 blocks the partial-sum law never reaches the thread bound, and relaying the whole residual into the
+    """With width-1 blocks the partial-sum rule never reaches the thread bound, and relaying the whole residual into the
     declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
     partial sums that pay, and the residual still trains at full efficiency."""
     p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0, "kappa_chain": 0.0695}
@@ -242,7 +242,7 @@ def test_the_amplifier_multiplies_every_term():
 
 
 def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
-    """Until the halt a developer can skip all registered work, once per identity (1 hour is 1.1e-4)."""
+    """Until the halt a developer can skip the whole registered circuit, once per identity (1 hour is 1.1e-4)."""
     p = T.DEFAULTS | {"host_share": 0.0}
     no_lag = T.evaluate(p | {"lag_s": 0.0}, T.TIERS["T1"])
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])

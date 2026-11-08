@@ -9,9 +9,12 @@ only), which path a refused `build` slot takes, and how a run finds and repairs 
 stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
+import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,6 +23,15 @@ HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("lean_changed", HERE.parent / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
+
+STORED = LC.stored
+
+
+@pytest.fixture(autouse=True)
+def no_store(monkeypatch):
+    """No test asks this machine's store (`stored`, through `research`) unless it says so."""
+    monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
+
 
 OLD = json.dumps({"guarantees": {"G": {"owner": "@lean"}}}) + "\n"
 NEW = json.dumps({"guarantees": {"G": {"owner": "@lean", "type_hash": "new"}}}) + "\n"
@@ -47,7 +59,8 @@ def fast(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "label", lambda _: None)
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
     monkeypatch.setattr(LC, "reused", lambda *a, **k: {})
-    monkeypatch.setattr(LC, "passed", lambda *a, **k: None)
+    monkeypatch.setattr(LC, "passed", lambda *a, **k: [])
+    monkeypatch.setattr(LC, "git", lambda *a: None)
 
     def sync(_closure, _files, t):
         (t / "pkg" / "lean-audit.json").write_text(OLD)
@@ -65,6 +78,24 @@ def fast(tmp_path, monkeypatch):
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     return root, tree, calls
+
+
+def test_a_slot_tree_linked_to_a_removed_directory_is_made_again(fast, tmp_path, monkeypatch):
+    """A slot's tree that links to a directory removed since (a node's cache moved to a larger volume, then cleaned) is made
+    again at the link's target, where `mkdir` on the link itself raised FileExistsError and failed every run on that slot."""
+    target = tmp_path / "volume" / "lean-records_build-1"
+    link = tmp_path / "cache" / LC.RECORDS / "build-1"
+    link.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(LC, "records_tree", lambda: link)
+
+    def sync(_closure, _files, t):
+        (t / "pkg").mkdir(parents=True, exist_ok=True)
+        (t / "pkg" / "lean-audit.json").write_text(OLD)
+        return 0
+
+    monkeypatch.setattr(LC, "sync", sync)
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out") == 0
+    assert link.is_symlink() and target.is_dir(), "the link stays and its target is made"
 
 
 def test_a_recorded_update_keeps_the_regenerated_record_in_the_run_outputs(fast, tmp_path, monkeypatch):
@@ -218,6 +249,17 @@ def record(h: str, proved_in: list[str] | None = None) -> str:
 
 #: each package's record as the fake check.py's build has it, which `--update` writes
 BUILT = {S: record("new", ["proofs"]), P: record("new")}
+#: the record check.py writes for `s/proofs` when it fails there on a record difference
+PROOFS = json.dumps({"assumptions": {}}) + "\n"
+
+
+#: the stand-in packages of `pair`: `s`, whose `proved_in` names `s/proofs`, which requires `s` and `s/props` by path
+PAIR = {"s/lakefile.toml": 'name = "s"\n', "s/lean-audit.json": record("old", ["proofs"]), "s/S.lean": "",
+        "s/proofs/lakefile.toml": 'name = "proofs"\n', "s/proofs/lean-audit.json": "{}\n",
+        "s/proofs/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."},
+                                                                {"type": "path", "dir": "../props"}]}),
+        "s/props/lakefile.toml": 'name = "props"\n', "s/props/lean-audit.json": record("old"), "s/props/P.lean": "",
+        "s/props/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."}]})}
 
 
 @pytest.fixture()
@@ -225,15 +267,12 @@ def pair(tmp_path, monkeypatch):
     """`audit_records` on two stand-in packages each of whose records read the other's build, as `Security`'s and
     `Security/Properties`' do (`s` names `s/proofs` under `proved_in`, which requires `s` and `s/props` by path), with the
     real `sync`, requirers and pass cache, and a fake check.py over a fixed build: a package's records pass when its lock is
-    `BUILT`'s, fail on a record difference (`regenerated` in the report) otherwise, and `--update` writes `BUILT`'s; a
-    package in the returned set fails for another reason. Each call is (package, `--update`, both locks as it saw them)."""
+    `BUILT`'s, fail on a record difference otherwise (`regenerated` in the report names `BUILT`'s, which check.py wrote
+    there), and `--update` writes `BUILT`'s; a package in the returned set fails for another reason (with `writes` in it,
+    `--update` writes its record all the same, as check.py does), and with `proofs` in it `s/proofs`, audited beside `s`,
+    fails on a record difference. Each call is (package, `--update`, both locks as it saw them)."""
     root = tmp_path / "root"
-    files = {"s/lakefile.toml": 'name = "s"\n', "s/lean-audit.json": record("old", ["proofs"]), "s/S.lean": "",
-             "s/proofs/lakefile.toml": 'name = "proofs"\n', "s/proofs/lean-audit.json": "{}\n",
-             "s/proofs/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."},
-                                                                     {"type": "path", "dir": "../props"}]}),
-             "s/props/lakefile.toml": 'name = "props"\n', "s/props/lean-audit.json": record("old"), "s/props/P.lean": "",
-             "s/props/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."}]})}
+    files = dict(PAIR)
     for f, text in files.items():
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(text)
@@ -257,15 +296,25 @@ def pair(tmp_path, monkeypatch):
         fails, regen = [], None
         if p in other:
             fails = ["fresh.rejected: fresh: the kernel rejected a declaration"]
+            if update and "writes" in other:
+                (at / LC.LOCK).write_text(BUILT[p])
         elif update:
             (at / LC.LOCK).write_text(BUILT[p])
         elif (at / LC.LOCK).read_text() != BUILT[p]:
-            fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], str(out / "audit-x" / LC.LOCK)
-        reps = [{"package": str(at.resolve()), "failures": fails, **({"regenerated": regen} if regen else {})},
-                *([{"package": str((at / "proofs").resolve()), "failures": []}] if p == S else [])]
+            fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], out / "audit-x" / LC.LOCK
+            regen.parent.mkdir(parents=True, exist_ok=True)
+            regen.write_text(BUILT[p])
+        reps = [{"package": str(at.resolve()), "failures": fails, **({"regenerated": str(regen)} if regen else {})}]
+        if p == S and "proofs" in other:
+            (side := out / "audit-proofs" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
+            side.write_text(PROOFS)
+            reps.append({"package": str((at / "proofs").resolve()), "regenerated": str(side),
+                         "failures": ["assumptions.unread: proofs: an assumption no guarantee reads"]})
+        elif p == S:
+            reps.append({"package": str((at / "proofs").resolve()), "failures": []})
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": reps}) + "\n")
-        return type("P", (), {"returncode": 1 if fails else 0})()
+        (out / "audit.json").write_text(json.dumps({"passed": not any(r["failures"] for r in reps), "packages": reps}) + "\n")
+        return type("P", (), {"returncode": 1 if any(r["failures"] for r in reps) else 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     return root, calls, other
@@ -276,15 +325,20 @@ def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_an
         pair, tmp_path, monkeypatch, hold):
     """A change to what both `Security`'s and `Security/Properties`' guarantees read moves both locks: one `--records
     Security --update` run regenerates and keeps both, each audited on the records regenerated before it, and keeps each
-    pass under the regenerated locks, so a commit of both records needs no run of either package."""
+    pass under the regenerated locks, so a commit of both records needs no run of either package. Each package's
+    `inputs_key` is the commit's, though the `--dev-cache` path's check.py rewrites the locks in the checkout."""
     root, calls, _ = pair
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-pair")
+    files = LC.LA.COMMON.tracked_files(root)
+    before = {p: LC.inputs_key(p, files) for p in (S, P)}
     said = []
     assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append) == 0
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert {p: doc["records"][p]["inputs_key"] for p in (S, P)} == before
     assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False), (P, True)], "the requirer is updated after it fails"
     assert calls[1][2] == {S: BUILT[S], P: record("old")}, "the requirer is audited on PKG's regenerated record"
     out = run_dir / "lean-audit"
@@ -296,12 +350,19 @@ def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_an
     assert json.loads((run_dir / "result.json").read_text())["validation"]["status"] == "passed"
     for p, k in kept.items():
         (root / p / LC.LOCK).write_bytes(k.read_bytes())
+    assert {LC.inputs_key(p, files): p for p in (S, P)}.items() <= doc["passes"].items()
     calls.clear()
     for p in (S, P):
         said.clear()
         assert LC.audit_records(p, tmp_path / "deps", log=said.append) == 0
         assert sum("reused, nothing built" in s for s in said) == 2, f"--records {p} at the commit of both records"
     assert calls == []
+
+
+def outcome_line(said: list[str]) -> dict:
+    """The run's last line, `OUTCOME_LINE` and JSON."""
+    assert said[-1].startswith(LC.OUTCOME_LINE), said[-1]
+    return json.loads(said[-1][len(LC.OUTCOME_LINE):])
 
 
 def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_updated(pair, tmp_path):
@@ -314,13 +375,273 @@ def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_
     assert not (out / "record" / P).exists() and (out / "record" / S / LC.LOCK).read_text() == BUILT[S]
     assert any(f"{P} requires {S}" in s and "not only on record differences" in s for s in said)
     assert (root / P / LC.LOCK).read_text() == record("old")
-    other.clear()
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][S]["outcome"], got["records"][P]["outcome"]) == (LC.FAILED, LC.REGENERATED,
+                                                                                            LC.FAILED)
     calls.clear()
     said.clear()
     (root / S / LC.LOCK).write_text(record("old", ["proofs"]))
-    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out2", log=said.append) == 1
+    out = tmp_path / "out2"
+    assert LC.audit_records(S, tmp_path / "deps", out=out, log=said.append) == 1
     assert [(p, up) for p, up, _ in calls] == [(S, False), (P, False)], "without --update no package is updated"
-    assert any(f"if that is meant, run --records {S} --update" in s for s in said)
+    assert (out / "record" / S / LC.LOCK).read_text() == BUILT[S], "the record check.py wrote for S's differences is kept"
+    assert (root / S / LC.LOCK).read_text() == record("old", ["proofs"]), "and never written into the checkout"
+    assert outcome_line(said)["outcome"] == LC.FAILED, "the requirer's other failure is the run's"
+
+
+def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated_with_each_record_kept(pair, tmp_path,
+                                                                                                       monkeypatch):
+    """A run that found only record differences, here without `--update`, so that check.py fails each package and names
+    the record that settles it, exits 0 with `outcome: regenerated`, each record
+    kept under `record/`, the requirer audited on the record kept before it, and `validation.status` passed, which the
+    records gate reads as it does for an `--update` run's kept records; a commit of both records then needs no run."""
+    root, calls, _ = pair
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-regen")
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, False), (P, False)], "nothing is audited again with --update"
+    assert calls[1][2][S] == BUILT[S], "the requirer is audited on the record kept for PKG"
+    out = run_dir / "lean-audit"
+    kept = {S: out / "record" / S / LC.LOCK, P: out / "record" / P / LC.LOCK}
+    assert {p: k.read_text() for p, k in kept.items()} == BUILT and (out / "record" / LC.LOCK).read_text() == BUILT[S]
+    assert {p: (root / p / LC.LOCK).read_text() for p in (S, P)} == {S: record("old", ["proofs"]), P: record("old")}
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert (doc["outcome"], doc["validation"]["status"]) == (LC.REGENERATED, "passed")
+    files = LC.LA.COMMON.tracked_files(root)
+    for p, k in kept.items():
+        assert doc["records"][p] == {"outcome": LC.REGENERATED, "inputs_key": LC.inputs_key(p, files),
+                                     "record": f"lean-audit/record/{p}/{LC.LOCK}",
+                                     "record_sha256": hashlib.sha256(k.read_bytes()).hexdigest()}
+    assert doc["records"]["s/proofs"] == {"outcome": LC.PASS, "inputs_key": LC.inputs_key("s/proofs", files)}, \
+        "a package audited beside one has its own outcome"
+    assert outcome_line(said) == {"outcome": LC.REGENERATED, "package": S, "records": doc["records"],
+                                  "passes": doc["passes"]}
+    for p, k in kept.items():
+        (root / p / LC.LOCK).write_bytes(k.read_bytes())
+    assert {LC.inputs_key(p, files): p for p in (S, P)}.items() <= doc["passes"].items(), \
+        "a commit of the kept records has, for each package, a key the run passed it on"
+    calls.clear()
+    said.clear()
+    assert LC.audit_records(S, tmp_path / "deps", log=said.append) == 0 and calls == []
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert (doc["outcome"], doc["workload_fingerprint"]["path"]) == (LC.PASS, "reused")
+    assert {p: (r["outcome"], "reused" in r) for p, r in doc["records"].items()} == {S: (LC.PASS, True), P: (LC.PASS, True)}
+
+
+def test_a_requirer_that_differs_beside_another_package_is_regenerated_too(pair, tmp_path):
+    """`settles` re-audits a requirer with `--update` only when it alone failed; when a package audited beside it (its
+    `proved_in` one) differs too, both records check.py wrote are kept, and the run still ends `regenerated`."""
+    root, calls, other = pair
+    other.add("proofs")
+    said = []
+    out = tmp_path / "out"
+    assert LC.audit_records(P, tmp_path / "deps", update=True, out=out, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(P, True), (S, False)], "no --update on a requirer that didn't fail alone"
+    assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (P, S, "s/proofs")} == {**BUILT, "s/proofs": PROOFS}
+    got = outcome_line(said)
+    assert got["outcome"] == LC.REGENERATED
+    assert {q: r["outcome"] for q, r in got["records"].items()} == {P: LC.REGENERATED, S: LC.REGENERATED,
+                                                                    "s/proofs": LC.REGENERATED}
+
+
+def test_a_package_failing_for_another_reason_keeps_no_record_though_update_wrote_one(pair, tmp_path):
+    """check.py `--update` writes the build's record even when the package fails for another reason (here the kernel
+    rejects a declaration). The run keeps that record nowhere: `record/` holds only `regenerated` packages', the records
+    gate's to commit, and no checkout is written; its requirer, which differs only in its record, is still kept."""
+    root, calls, other = pair
+    other |= {S, "writes"}
+    said = []
+    out = tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=out, log=said.append) == 1
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False), (P, True)]
+    assert not (out / "record" / S / LC.LOCK).exists() and not (out / "record" / LC.LOCK).exists()
+    assert (out / "record" / P / LC.LOCK).read_text() == BUILT[P]
+    assert (root / S / LC.LOCK).read_text() == record("old", ["proofs"]), "the failed record is not written back"
+    assert not any(f"commit it over {S}/{LC.LOCK}" in s for s in said) and any(f"{S}: its records fail" in s for s in said)
+    got = outcome_line(said)["records"]
+    assert (got[S], got[P]["outcome"]) == ({"outcome": LC.FAILED, "inputs_key": got[S]["inputs_key"]}, LC.REGENERATED)
+
+
+def unwitnessed(h: str) -> str:
+    """`s/props`' lock whose guarantee G, which reads `S.DrawIsCoin`, has an `unwitnessed` entry: its statement's hash."""
+    return json.dumps({"guarantees": {"G": {"type_hash": h}}, "unwitnessed": {"G": h}}) + "\n"
+
+
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
+                                                                                            hold):
+    """#7831 renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
+    `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
+    record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
+    with `--update --moved` from the first, and both records are regenerated; with the requirer's first audit left without
+    them, as before, it failed there, never reached `regenerates`, and the PR could not pass its records."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    (root / P / LC.LOCK).write_text(unwitnessed("old"))
+    moves = tmp_path / "MOVES.json"
+    moves.write_text(json.dumps({"S.DrawIsCoin": "S.SampleIsCoin"}))
+    fake, mine = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        if argv[1:2] != [str(LC.AUDIT_PY)] or os.path.relpath(argv[-1], kw["cwd"]) != P:
+            return fake(argv, **kw)
+        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        moved = json.loads(Path(argv[argv.index("--moved") + 1]).read_text()) if "--moved" in argv else None
+        mine.append((update, moved))
+        if moved is not None and not update:
+            return type("P", (), {"returncode": 2})()                      # check.py: --moved goes with --update
+        entry = json.loads((at / LC.LOCK).read_text())["unwitnessed"]["G"]
+        same = entry == "new" or (entry == "old" and (moved or {}).get("S.DrawIsCoin") == "S.SampleIsCoin")
+        fails = [] if same else ["witnesses.unwitnessed-changed: G changed since `unwitnessed` listed it"]
+        if update and same:
+            (at / LC.LOCK).write_text(unwitnessed("new"))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": [
+            {"package": str(at.resolve()), "failures": fails}]}) + "\n")
+        return type("P", (), {"returncode": 1 if fails else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, moved=moves, out=out, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True)] and mine == [(True, {"S.DrawIsCoin": "S.SampleIsCoin"})], \
+        "the requirer's one audit takes --update --moved"
+    assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
+    assert any(f"{P} requires {S}: check.py --update --moved on it from its first audit" in s for s in said)
+
+    calls.clear()
+    mine.clear()
+    said.clear()
+    for q, text in ((S, record("old", ["proofs"])), (P, unwitnessed("old"))):
+        (root / q / LC.LOCK).write_text(text)
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out2", log=said.append) == 1
+    assert mine == [(False, None)], "without --moved the requirer fails on its first audit and is not updated"
+    assert outcome_line(said)["records"][P]["outcome"] == LC.FAILED
+
+
+def test_a_package_beside_two_that_fails_otherwise_in_one_ends_failed_and_its_record_goes(pair, tmp_path):
+    """A package audited beside two others takes the worse outcome. A report that fails without naming the record that
+    settles it (`regenerated`) is `failed` though an earlier report's record was kept, and that record is removed."""
+    root, _, _ = pair
+    out = tmp_path / "out"
+    kept = out / "record" / "s/proofs" / LC.LOCK
+    kept.parent.mkdir(parents=True)
+    kept.write_text(PROOFS)
+    for d, rep in [(out, {"failures": ["assumptions.unread: x"], "regenerated": "r"}),
+                   (out / "requirer-s_props", {"failures": ["fresh.rejected: x"]})]:
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "audit.json").write_text(json.dumps({"packages": [{"package": str(root / "s/proofs"), **rep}]}))
+    said = []
+    got = LC.verdicts({S: LC.REGENERATED}, {f"s/proofs/{LC.LOCK}": PROOFS.encode()}, out, root,
+                      LC.LA.COMMON.tracked_files(root), log=said.append)
+    assert got["s/proofs"]["outcome"] == LC.FAILED and "record" not in got["s/proofs"] and not kept.exists()
+    assert any("s/proofs: its records fail beside another package" in s for s in said)
+
+
+def test_a_run_that_runs_nothing_is_refused_with_a_result(pair, tmp_path, monkeypatch):
+    _, calls, _ = pair
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-refused")
+    said = []
+    assert LC.audit_records("nothing-matches", tmp_path / "deps", log=said.append) == 2 and calls == []
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert (doc["outcome"], doc["validation"]["status"], doc["records"]) == (LC.REFUSED, "failed", {})
+    assert outcome_line(said) == {"outcome": LC.REFUSED, "package": "nothing-matches", "records": {}, "passes": {}}
+
+
+def test_a_lock_that_cant_be_read_names_no_prover_and_says_so(capsys):
+    """`provers` reads a lock that isn't JSON, or isn't an object, as naming no `proved_in` (the audit then fails its policy),
+    as `lean_audit.provers` does, and says so on stderr."""
+    for bad in (b"not json", b"[1]"):
+        assert LC.provers("s", {"s/lean-audit.json": bad}.get) == []
+        assert "s/lean-audit.json can't be read" in capsys.readouterr().err
+    assert LC.provers("s", {"s/lean-audit.json": b'{"proved_in": ["../p", 1]}'}.get) == ["p"]
+    assert LC.provers("s", {}.get) == [] and capsys.readouterr().err == ""
+
+
+def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_path, monkeypatch, capsys):
+    """`--inputs-key PKG --head SHA` (`keys_at`) reads the commit's objects alone, so in a clone with no worktree checked out
+    it gives the key a records run of that commit computes in its checkout (`inputs_key`), over the package's closure (the
+    packages its `proved_in` names, and those they require by path) and the checker's files."""
+    root = tmp_path / "root"
+    for f, text in {**PAIR, "tools/verity/lean/check.py": "x\n", "tools/verity/lean/tests/t.py": "", "README.md": ""}.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-C", str(root)]
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "c"], check=True)
+    sha = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(root), str(clone)], check=True)
+    monkeypatch.setattr(LC, "ROOT", root)
+    files = LC.LA.COMMON.tracked_files(root)
+    want = {p: LC.inputs_key(p, files) for p in (S, P, "s/proofs")}
+    assert len(set(want.values())) == 3
+    assert LC.keys_at([S, "props", "s/proofs"], sha, clone) == want
+    assert LC.main(["--inputs-key", S, "props", "--head", sha, "--repo", str(clone)]) == 0
+    assert json.loads(capsys.readouterr().out) == {S: want[S], P: want[P]}
+    (root / P / "P.lean").write_text("theorem t : True := trivial\n")
+    assert LC.inputs_key(S, files) != want[S], "a package `s/proofs` requires is in the closure of `s`"
+    assert LC.keys_at([S], sha, clone) == {S: want[S]}, "the commit's key reads the commit, not the checkout"
+    assert LC.main(["--inputs-key", "s/p", "--head", sha, "--repo", str(clone)]) == 2, "`s/p` names two packages"
+    assert LC.main(["--inputs-key", S, "--head", "0" * 40, "--repo", str(clone)]) == 2
+
+
+def test_the_store_lookup_takes_a_passed_result_on_the_same_inputs_and_fails_closed(tmp_path, monkeypatch):
+    """`stored` asks `research data select` for a `lean-fast/v1` result whose `passes` holds the key for the package and
+    takes a passed one; with no `research`, a failed or unreadable answer, or none for this package, it finds nothing, and
+    says why when it couldn't ask."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    answer, argv, code = tmp_path / "answer.json", tmp_path / "argv", tmp_path / "code"
+    (bin_ / "research").write_text(f'#!/bin/sh\necho "$@" > {argv}\ncat {answer}\necho no index >&2\nexit "$(cat {code})"\n')
+    (bin_ / "research").chmod(0o755)
+    code.write_text("0")
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+
+    def row(status="passed", pkg=S, run="r1"):
+        return {"id": "art:x", "manifest": {"meta": {"run_id": run, "commit": "c" * 40, "validation": {"status": status},
+                                                     "passes": {"k1": pkg}}}}
+
+    said: list[str] = []
+    answer.write_text(json.dumps([row("failed", run="r0"), row()]))
+    assert STORED(S, "k1", said.append) == {"run": "r1", "commit": "c" * 40}
+    assert argv.read_text().split() == ["data", "select", "--kind", LC.FAST_KIND, "--where", f"passes.k1={S}", "--json"]
+    answer.write_text(json.dumps([row(pkg=P)]))
+    assert STORED(S, "k1", said.append) is None and said == [], "none for this package is an answer, not a failure"
+    answer.write_text("not json")
+    assert STORED(S, "k1", said.append) is None and "couldn't be asked" in said.pop() and said == []
+    answer.write_text(json.dumps([row()]))
+    code.write_text("3")
+    assert STORED(S, "k1", said.append) is None and "exit 3: no index" in said.pop() and said == []
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    assert STORED(S, "k1", said.append) is None and "no `research` on PATH" in said.pop() and said == []
+
+
+def test_a_pass_the_store_holds_on_the_same_inputs_is_reused_and_says_where_it_came_from(pair, tmp_path, monkeypatch):
+    """A records run elsewhere passed both packages on these inputs (`stored`, standing in for the store): nothing is built,
+    the run passes on the `reused` path, and each record names the run and commit it reuses."""
+    root, calls, _ = pair
+    src, asked = {"run": "r-other", "commit": "c" * 40}, []
+    monkeypatch.setattr(LC, "stored", lambda p, k, log: asked.append((p, k)) or src)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-reuse")
+    assert LC.audit_records(S, tmp_path / "deps", log=[].append) == 0 and calls == []
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert (doc["outcome"], doc["workload_fingerprint"]["path"], doc["passes"]) == (LC.PASS, "reused", {})
+    assert {p: r["reused_from"] for p, r in doc["records"].items()} == {S: src, P: src}
+    files = LC.LA.COMMON.tracked_files(root)
+    assert asked == [(S, LC.inputs_key(S, files)), (P, LC.inputs_key(P, files))]
 
 
 def module(lib: Path, name: str, olean: bytes = b"olean\x02rest", trace: str | None = None, hashed: str = "aa") -> Path:
@@ -530,13 +851,53 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's exit status"
     assert calls["build"] == [("Sec/Proofs", tree, ["+Proofs.Flock.X:deps"], False, None),
-                              ("Sec/Proofs", tree, None, False, ["env", "lean", "Flock/X.lean"])]
+                              ("Sec/Proofs", tree, None, False, ["env", "lean", ".lake/axiom-probe/Flock/X.lean"])]
     assert calls["link"] == [("Sec/Proofs", True)], "the owning package's dependencies, a copy as --records takes"
     assert calls["run"] == [], "no check.py, audit or --update"
     assert not (tree / LC.DIRTY).exists() and any("lean exit 1" in s for s in said)
     assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", str(tree)]) == 1
     with pytest.raises(SystemExit):
         LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
+
+
+def test_try_gives_lean_the_packages_lean_options_as_its_build_does(trying, tmp_path):
+    """`lake env lean` passes no `[leanOptions]`: without them a try under `autoImplicit = false` takes an unknown name for
+    an auto-bound variable and passes what the package's build refuses. They're read from the slot tree's package."""
+    tree, calls = trying
+    (tree / "Sec" / "Proofs").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text(
+        'name = "p"\nsrcDir = ".."\n\n[leanOptions]\nautoImplicit = false\nbackward.proofsInPublic = true\n')
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
+    opts = ["-Dweak.autoImplicit=false", "-Dweak.backward.proofsInPublic=true"]
+    assert calls["build"][1][4] == ["env", "lean", *opts, ".lake/axiom-probe/Flock/X.lean"]
+    assert any(f"then lake env lean {' '.join(opts)} on .lake/axiom-probe/Flock/X.lean" in s for s in said), said
+
+
+def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_the_standard_axioms(trying, tmp_path,
+                                                                                                     monkeypatch):
+    """Lean's exit 0 isn't proved: the last line names the theorem resting on `sorry`, and an error on an appended
+    `#print axioms` line leaves the file's status 0."""
+    tree, calls = trying
+    x = LC.ROOT / "Sec" / "Proofs" / "Flock" / "X.lean"
+    x.write_text("namespace F\ntheorem holey : 1 = 2 := sorry\ntheorem clean : True := trivial\nend F\n")
+    seen = []
+
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
+        if cmd is None:
+            return 0, ""
+        seen.append((t / pkg / cmd[2]).read_text())
+        return 1, (".lake/axiom-probe/Flock/X.lean:8:14: error: Unknown constant `F.clean`\n"
+                   "'F.holey' depends on axioms: [sorryAx]\n")
+
+    monkeypatch.setattr(LC, "build", build)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
+    assert seen[0].endswith("end F\n\n#print axioms F.holey\n#print axioms F.clean\n")
+    assert not (tree / "Sec" / "Proofs" / ".lake" / "axiom-probe" / "Flock" / "X.lean").exists()
+    assert "lean exit 0" in said[-2] and said[-1] == (
+        "lean-try: Sec/Proofs/Flock/X.lean: axiom probe: 1 of the 1 it read use axioms beyond propext, Classical.choice "
+        "and Quot.sound: F.holey (sorryAx); no answer for 1 (an error on its `#print axioms` line above): F.clean")
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
@@ -560,6 +921,38 @@ def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds
     assert other.exists() and not any("clash" in s for s in said), "any other error forgets nothing"
 
 
+def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_siblings(trying, tmp_path, monkeypatch):
+    tree, calls = trying
+    (tree / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
+    (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
+    olean = tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB / "Proofs" / "Y.olean"
+    olean.parent.mkdir(parents=True)
+    olean.write_bytes(b"olean")
+    os.utime(olean, (2_000_000_000.0,) * 2)
+    ran = []
+
+    def run(argv, cwd):
+        ran.append(argv)
+        return 1, "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n", 2.0, 700
+
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 1
+    lean = calls["build"][1][4]
+    assert lean[:3] == ["env", "lean", "-R"] and lean[3].startswith(".lake/axiom-probe/siblings-") and lean[4] == "-o"
+    assert lean[5].endswith("/Proofs/Flock/X.olean") and lean[6] == f"{lean[3]}/Proofs/Flock/X.lean", \
+        "the probed copy, at its module's path under -R"
+    assert ran[0][1:4] == ["env", "lean", "--setup"]
+    assert any("siblings: Proofs.Flock.X and Proofs.Y both declare 'f'" in s for s in said), said
+    assert not list((tree / "Sec" / "Proofs" / LC.SIBLINGS.COPIES).iterdir()), "the scratch build is removed"
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 1, \
+        "no check without --siblings"
+    with pytest.raises(SystemExit):
+        LC.main(["--records", "Sec", "--siblings"])
+
+
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):
     _, calls = trying
     calls["deps_rc"] = 3
@@ -575,12 +968,13 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
-def test_try_refuses_without_a_build_slot_naming_the_nodes_that_have_them(trying, tmp_path, monkeypatch):
+def test_try_refuses_without_a_build_slot_naming_how_to_list_the_pools(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
-    assert calls["build"] == [] and any("vy-nebius-cpu-1" in s and "nothing ran" in s for s in said)
+    assert calls["build"] == [] and any("lean_slot.py --status" in s and "nothing ran" in s for s in said)
+    assert not any(re.search(r"\b(vy-nebius|cpu-\d)", s) for s in said), "a refusal names no node"
 
 
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):
@@ -669,6 +1063,26 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Sec", "Sec/src/A/B.lean") == "A.B"
     (root / "Plain").mkdir()
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
+
+
+def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_records_run_reads():
+    """The merge queue's records gate (`research.queue.records_read`) lets a records run at another commit vouch for a head
+    whose checker differs only in files no records run reads; a list narrower than this one's would vouch across a change
+    that decides the run.  It counts every file of the checker Lean's records key does (`tool_inputs`), new ones included,
+    and `merge.py`, which a run loads to merge a lock across a merge of `main` (`merged`), and nothing else."""
+    from research.queue import RECORDS_SHARED, records_read
+
+    tool = LC.LA.LEAN_TOOL
+    files = sorted(tool + p.name for p in HERE.parent.iterdir() if p.is_file())
+    files += [tool + "tests/test_new.py", tool + "tests/fixtures/control/New.lean", tool + "NOTES.md", tool + "new.py",
+              "tools/verity/check/common.py", LC.LA.CONTRACT]
+    assert {tool.rstrip("/"), "tools/verity/check/common.py", LC.LA.CONTRACT} <= set(RECORDS_SHARED)
+    want, got = {*LC.tool_inputs(files), tool + "merge.py"}, {f for f in files if records_read(f)}
+    assert got == want, (
+        f"research's records gate (`records_read` in tools/research/src/research/queue.py) counts {sorted(got - want)} that "
+        f"Lean's records key doesn't, and misses {sorted(want - got)}: a file of {tool} a records run never reads goes in both "
+        "`lean_audit.NOT_READ` and `research.queue.RECORDS_TOOL_UNREAD`, and one it reads in neither (`merge.py` is in "
+        "`NOT_READ` alone)")
 
 
 def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):

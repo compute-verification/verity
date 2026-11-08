@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 @[expose] public section
 
@@ -14,7 +18,7 @@ public file, which holds for a file without shared rows (`pop.tables = none`; `B
 population, `Layout.SharedRows`). `HmRow.sharedRows` refuses a
 header's `shared_rows` unless the statement's tag has shared-row files, so under any tag without them every population
 `HmRow.loadPublic` accepts has no tables (`loadPublic_tables`; `@eb90718f` by `rfl`, `circuitEb90718f_sharedRows`).
-`verity/flock-circuit@967b8d06`, the tag the circuit prover's sessions on OS coins verify under, has them, so the
+`verity/flock-circuit@967b8d06`, a tag the circuit prover's sessions verify under, has them, so the
 headline takes `pub.tables = none` as a condition on the loaded file (`hpt`), which the circuit prover's per-instance
 public files meet.
 -/
@@ -35,6 +39,7 @@ theorem sharedRows_none {tags : Tags} {c : Circuit} {header : Lean.Json} {r : Op
     simp only [pure, Except.pure, Except.ok.injEq] at h
     exact h.symm
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A population loaded under a tag without shared-row files has no tables**: `HmRow.loadPublic` reads the header's
 `shared_rows` through `sharedRows`, which refuses them under such a tag, and builds tables only from them. -/

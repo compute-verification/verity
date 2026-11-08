@@ -21,19 +21,7 @@ ALLOWED = {
 }
 #: (file, declaration) still calling `Lean.Json.parse`, each with the switch that deletes its entry. An entry whose file
 #: is in the tree names a declaration that still calls it; one whose file isn't yet arrives with that file.
-PENDING = {
-    ("verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean", "treesHeld"):
-        "Tue 3 Nov: its record read moves to the total parser with the session link's root_b refusal",
-    ("Security/Proofs/Properties/Verity/Sampled.lean", "recordsOf"):
-        "Tue 3 Nov: reads the session records as treesHeld does, and switches with it",
-    ("Security/Proofs/Properties/Verity/SampledLog.lean", "recordOn"):
-        "Tue 3 Nov: reads a session's record as treesHeld does, and switches with it",
-    ("Security/Proofs/Properties/Verity/Sampled/Trees.lean", "records_held"):
-        "Tue 3 Nov: states treesHeld's record read through the parser treesHeld calls, and switches with it",
-    ("verity/core/service/sampled_proofs/SampledProofs/FilePart.lean", "unitIndices"):
-        "the population check's read of the public file's header, which moves to the total parser once that check is on "
-        "main",
-}
+PENDING: dict[tuple[str, str], str] = {}
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
 COMMENT = re.compile(r"/-.*?-/|--[^\n]*", re.S)

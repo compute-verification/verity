@@ -1,37 +1,59 @@
 module
 
-public import Proofs.Flock.Recursive.KSStatement
-public import Proofs.Flock.Recursive.KSV
-public import Proofs.Flock.Claims.Recursion.NonVacuous
-public import Proofs.Flock.Claims.KS.PlainRConflict
-public import Proofs.Flock.Claims.KS.PlainAccPrR
-public import Proofs.Flock.Claims.KS.PlainRCapPrefix
-public import Proofs.Flock.Claims.Recursion.LastCallsR
-public import Proofs.Flock.Claims.Recursion.KSLin2LayR
-public import Proofs.Flock.Claims.Recursion.RestLowR
-public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 public import Proofs.Flock.Claims.KS.PlainSimR
-public import Proofs.Flock.Claims.Recursion.SlotsPorted
-public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-public import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
-public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
 public import Proofs.Flock.Claims.Recursion.InnerAtCoins
 public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
+public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
 public import Proofs.Flock.Claims.Recursion.OutTopRows
-public import Proofs.Flock.Claims.Recursion.ResPiecesD
-public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
 public import Proofs.Flock.Claims.Recursion.SideCapPos
+public import Proofs.Flock.Claims.Recursion.SlotsPorted
 public import Proofs.Flock.Claims.Recursion.VerdictRowEFree
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Recursive.KSV
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.KSDec
+import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 
 /-!
 # `RecursiveKSAt` from its open premises
 
 `recursiveKSAt_of` is `ksLin2_deployedR_layRP` at the deployed join (`FlockDeploy.joinR`), at the layout of record
 `DeployedR.layR rest`. At the plain record at the deployed reader, conflicts are tied to collisions
-(`plainR_conflictTied`) and the table bound at the abort law is `plainR_tableBoundAbortLin_R`, from `PlainRdInR` alone
+(`plainR_conflictTied`) and the table bound at the abort distribution is `plainR_tableBoundAbortLin_R`, from `PlainRdInR` alone
 (`hIn`; the cap prefix is `capPrefixR`, proved with no hypotheses). Its last-message binding is `rColsBind_sha512` and
-`rCallsBind_sha512`, and it needs no `StepsLogFree` (the finders search the inner verifier's calls at each draw's
+`rCallsBind_sha512`, and it needs no `StepsLogFree` (the finders search the inner verifier's calls at each sample's
 coins). The extra calls `layR` records are true at the outer relation (`moreSlotsTrue_deployed`). It takes `DecompBP`
 at what each part's circuit accepts at its own witness `ws[s]` (`hD`, `PartAcceptsP`). `recursiveKSAt_of_decomp` takes
 `DecompB` at `PartAccepts` instead, as `RecKSDecompL` at `layR`, which pins (`decompBP_of_decompB`).
