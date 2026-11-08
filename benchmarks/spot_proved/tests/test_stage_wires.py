@@ -280,13 +280,14 @@ def gather(tmp_path, monkeypatch):
     entry of the slots the call outputs and the tap reads (``page``, which its inputs don't give), the tap's valid counts
     (``used``), and the request the call takes a token as, whose page table it then reads (``owner``). It commits the batch
     (``req_ids`` in batch order, by default ``a``, ``b``, ``c``) under the rank root unless ``batch`` is False, and
-    ``tamper`` rewrites ``meta.json``'s fields after the commit."""
+    ``tamper`` rewrites ``meta.json``'s fields after the commit. ``pad`` appends that many padding tokens to the call and the
+    tap, which vLLM's conversion takes as request 0 with no top-k."""
     stage = _stage(monkeypatch)
     monkeypatch.setattr(stage, "KV_BLOCK", 4)
     made = iter(range(100))
 
     def make(write=True, positions=True, corrupt=False, scheduled=None, convert=False, blocks=None, picked=None, moved=None,
-             page=None, used=None, owner=None, req_ids=("a", "b", "c"), batch=True, tamper=None):
+             page=None, used=None, owner=None, req_ids=("a", "b", "c"), batch=True, tamper=None, pad=0):
         d = tmp_path / f"s{next(made)}"
         blocks, picked = {**BLOCKS, **(blocks or {})}, {**PICKED, **(picked or {})}
         owner = [{**dict(enumerate(q for q, _ in TOKENS)), **(owner or {})}[t] for t in range(len(TOKENS))]
@@ -299,7 +300,7 @@ def gather(tmp_path, monkeypatch):
         for t, s in enumerate(slots.tolist()):
             if s >= 0:
                 cache[s] = np.concatenate([kv_c[t], k_pe[t]])
-        table = np.full((len(TOKENS), TOPK), -1, np.int32)
+        table = np.full((len(TOKENS) + pad, TOPK), -1, np.int32)
         for t, ps in picked.items():
             table[t, :len(ps)] = [(blocks[owner[t]] + [0] * 3)[p // 4] * 4 + p % 4 for p in ps]
         served = table.copy()
@@ -318,14 +319,14 @@ def gather(tmp_path, monkeypatch):
         if write:
             ins = {"slot_mapping": b.ref(slots), **({"positions": b.ref(np.array([p for _, p in TOKENS]))} if positions else {})}
             events.append(_ev(1, "fused_norm_rope", ins, {"kv_c_out": b.ref(kv_c), "k_pe_out": b.ref(k_pe.reshape(-1, 1, 2))}))
-        counts = np.array([len(picked[t]) for t in range(len(TOKENS))], np.int32)
+        counts = np.array([len(picked[t]) for t in range(len(TOKENS))] + [0] * pad, np.int32)
         if convert:
             reqs = list(blocks)
-            req = np.array([reqs.index(q) for q in owner], np.int32)
+            req = np.array([reqs.index(q) for q in owner] + [0] * pad, np.int32)
             bt = np.zeros((len(reqs), 3), np.int32)
             for k, q in enumerate(reqs):
                 bt[k, :len(blocks[q])] = blocks[q]
-            topk = np.full((len(TOKENS), TOPK), -1, np.int32)
+            topk = np.full((len(TOKENS) + pad, TOPK), -1, np.int32)
             for t, ps in picked.items():
                 topk[t, :len(ps)] = ps
             events.append(_ev(2, stage.CONVERT, {"req_id": b.ref(req), "block_table": b.ref(bt), "token_indices": b.ref(topk),
@@ -454,6 +455,17 @@ def test_a_token_the_conversion_puts_in_another_request_than_the_committed_batch
     stage, make = gather
     with pytest.raises(stage.Unwired, match=message):
         make(convert=True, **change)((0, slice(0, 8)), (1, slice(0, 6)))
+
+
+def test_padding_past_the_committed_batch_is_wired_from_nothing_and_a_gathered_token_there_is_unwired(gather) -> None:
+    """A padded call wires as the unpadded one does; scheduled counts that leave a gathered token past the batch can't hand
+    it a request."""
+    stage, make = gather
+    parts = (0, slice(4, 8)), (1, slice(2, 6)), (2, slice(0, 2))
+    assert [(s["kind"], s.get("bits"), s.get("rows")) for s in make(convert=True, pad=2)(*parts)] == [
+        (s["kind"], s.get("bits"), s.get("rows")) for s in make(convert=True)(*parts)]
+    with pytest.raises(stage.Unwired, match=r"token 3 is past the committed batch's 3 tokens, so it has no request"):
+        make(convert=True, scheduled={"a": 1, "b": 1, "c": 1})(*parts)
 
 
 def test_a_batch_changed_after_its_commit_is_refused_and_an_uncommitted_one_keeps_the_slot_path(gather) -> None:

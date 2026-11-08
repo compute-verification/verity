@@ -1205,9 +1205,10 @@ class Wires:
         of the step's tokens, an index into the committed batch's request ids (`Capture.req_ids`) laid out by their scheduled
         counts in that order, as vLLM lays out ``req_id_per_token``; and the top-k positions each token's row keeps, in order
         (`convert_rows`). None where no such call is recorded with its inputs kept, or the rank root doesn't commit the batch.
-        Refuses a call whose ``req_id`` isn't a prefix of that layout (the attention call's tokens lead the step), whose
-        outputs aren't `convert_rows` of its inputs, or whose counts aren't the tap's ``seqused_k``, and a batch whose
-        request ids aren't its scheduled requests, each once."""
+        Refuses a call that takes one of the batch's tokens as another request than that layout does (the attention call's
+        tokens lead the step; any past the batch's are padding, which `by_position` wires no row of), whose outputs aren't
+        `convert_rows` of its inputs, or whose counts aren't the tap's ``seqused_k``, and a batch whose request ids aren't its
+        scheduled requests, each once."""
         rec, table, used = self.capture, tap["in"]["block_table"], tap["in"]["seqused_k"]
         ev = next((self.by_seq[r][s] for s, o in reversed(self.made.get((r, table.get("sha512")), []))
                    if s < tap["seq"] and o == "r0" and self.by_seq[r][s]["op"] == CONVERT), None)
@@ -1229,10 +1230,9 @@ class Wires:
             raise Unwired(f"rank {r}: the committed batch's request ids aren't its scheduled requests, each once")
         layout = np.repeat(np.arange(len(ids)), [int(sched[x]) for x in ids])
         req = rec.tensor(r, a["req_id"]).reshape(-1).astype(np.int64)
-        if len(req) > len(layout) or not np.array_equal(req, layout[:len(req)]):
-            t = next((t for t in range(min(len(req), len(layout))) if req[t] != layout[t]), len(layout))
-            want = f"request {int(layout[t])} ({ids[int(layout[t])]})" if t < len(layout) else "past the batch's tokens"
-            raise Unwired(f"{where} takes token {t} as request {int(req[t])}, but the committed batch puts it at {want}")
+        if (t := next((t for t in range(min(len(req), len(layout))) if req[t] != layout[t]), None)) is not None:
+            raise Unwired(f"{where} takes token {t} as request {int(req[t])}, but the committed batch puts it at request "
+                          f"{int(layout[t])} ({ids[int(layout[t])]})")
         kept, slots, counts = convert_rows(rec.tensor(r, a["token_indices"]), req, rec.tensor(r, a["block_table"]), block, stride)
         if not (np.array_equal(slots, rec.tensor(r, table)) and np.array_equal(counts, rec.tensor(r, used).reshape(-1))):
             raise Unwired(f"{where} output slots or counts that its inputs don't give (convert_rows)")
@@ -1241,13 +1241,13 @@ class Wires:
     def by_position(self, r: int, adv: dict, ref: dict, parts: list, tap: dict, conv: tuple, write: tuple) -> list[dict]:
         """`gathered` where the step records its `CONVERT` call, its cache write's positions and its committed batch. Each row a
         token reads is the position its top-k row keeps there, of its own request (`conversion`'s layout of the batch), which
-        is how the Program reads it. That position is wired to
-        the step's write of it (its bytes checked), or, below the request's first position this step, to the carried cache
-        (``history``, naming each token's request and positions). No page-table entry is read. The served slot of each row is
-        held to that wiring: the write's slot for a position this step wrote, else no slot this step wrote. Refuses a valid
-        count other than min(the token's keys, the top-k), a row at most the top-k's keys long that doesn't read its keys in
-        order (the Program's public map), a longer one that isn't a selection of its keys (which `DsaWaksmanRows_v1`'s
-        settings, charged once per token, choose), and a position the step computes whose write isn't recorded."""
+        is how the Program reads it. That position is wired to the step's write of it (its bytes checked), or, below the
+        request's first position this step, to the carried cache (``history``, naming each token's request and positions). No
+        page-table entry is read. The served slot of each row is held to that wiring: the write's slot for a position this
+        step wrote, else no slot this step wrote. Refuses a token past the batch's (padding), a valid count other than min(the
+        token's keys, the top-k), a row at most the top-k's keys long that doesn't read its keys in order (the Program's
+        public map), a longer one that isn't a selection of its keys (which `DsaWaksmanRows_v1`'s settings, charged once per
+        token, choose), and a position the step computes whose write isn't recorded."""
         from verity.ml.definitions.registry.dsa_topk import waksman_switches
         rec, (req, rows) = self.capture, conv
         wev, slots, keys, made = write
@@ -1269,6 +1269,8 @@ class Wires:
             (i0, i1), (lo, hi) = p if len(p) == 2 else (p[0], [0, adv["shape"][1]])
             for i in range(i0, i1):
                 t = kept[i]
+                if t >= len(req):
+                    raise Unwired(f"{where}: token {t} is past the committed batch's {len(req)} tokens, so it has no request")
                 n, q, ps = int(keys[t]), int(req[t]), rows[t]
                 if int(used[t]) != min(n, topk):
                     raise Unwired(f"{where}: token {t} at position {n - 1} has {int(used[t])} valid keys, not min({n}, {topk})")
