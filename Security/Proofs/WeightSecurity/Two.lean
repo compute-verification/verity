@@ -184,7 +184,7 @@ theorem twoRec_incorrect_le [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin 
   classical
   have hb' : b.2.accepted H ∧ (b.2.marks H δ).Nonempty := not_not.1 hb
   show (if b.2.accepted H ∧ (b.2.marks H δ).Nonempty then sInf (b.2.marks H δ) else Fintype.card O) ≤ K - 1
-  rw [if_pos hb']
+  rw [ite_eq_left hb']
   obtain ⟨e, w, s, Pt, d, ι, -, hs, hPt, hd, hM, hn⟩ := Nat.sInf_mem hb'.2
   obtain ⟨s', Pt', d', hs', hPt', hd', hin⟩ := href b.2.1 b.2.2.1 b.2.2.2 hb'.1
   rw [hs] at hs'
@@ -206,7 +206,7 @@ theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (�
   | 0, _, _, M, _, hM => by
       classical
       show Verity.Game.value (fun l => M ≤ Served.lead l) (Verity.Game.ret []) = 0
-      rw [Verity.Game.value_ret, if_neg]
+      rw [Verity.Game.value_ret, ite_eq_right]
       simp only [Served.lead]
       omega
   | T + 1, i, s, M, hc, hM => by
@@ -219,15 +219,15 @@ theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (�
         (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => M ≤ Served.lead l) (fun _ => True) 0 (G i) s
         (atEnds_of_forall (fun b s' => ?_) (G i) s)).trans_eq (mul_zero _)) zero_le
-      rw [if_pos trivial, Verity.Game.value_map]
+      rw [ite_eq_left trivial, Verity.Game.value_map]
       by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
       · refine (Verity.Game.value_mono (fun l hl => ?_) _).trans (Verity.Game.value_false _).le
-        simp only [Served.lead, if_pos hm] at hl
+        simp only [Served.lead, ite_eq_left hm] at hl
         exact absurd (lt_of_lt_of_le hpos hl) (lt_irrefl 0)
       · have hb := hc i le_rfl (by omega) _ b hm
         refine (Verity.Game.value_mono (fun l hl => ?_) _).trans
           (value_lead_eq_zero G rec c T (i + 1) s' (M - c) (fun j hj hj' => hc j (by omega) (by omega)) hM').le
-        simp only [Served.lead, if_neg hm] at hl
+        simp only [Served.lead, ite_eq_right hm] at hl
         omega
 
 /-- **The run leaves `T·(K − 1) + 1` incorrect replay blocks undetected with probability at most `Σ_t ε_t`**: an
