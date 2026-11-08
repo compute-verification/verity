@@ -1,5 +1,6 @@
 module
 
+public import Flock.PortRoots
 public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.Claims.Bridge.Transports
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
@@ -50,7 +51,7 @@ def rowAt (c : _root_.Flock.Circuit) (pop : _root_.Flock.Public) (q u : ℕ) : �
 frame-v3 leaf, at the port's schema and published domain, of the tree leaf of row `r`'s `b ‖ c`. -/
 def pubLeaves (c : _root_.Flock.Circuit) (pop : _root_.Flock.Public) (q : ℕ) : Array ByteArray :=
   (Array.range (_root_.Flock.PortRoots.countOf pop q)).map fun r =>
-    _root_.Flock.Registered.leafAs (_root_.Flock.PortRoots.schemaOf c q) (_root_.Flock.PortRoots.idOf c pop q) r
+    _root_.Flock.FV3.Sha512.leafAs (_root_.Flock.PortRoots.schemaOf c q) (_root_.Flock.PortRoots.idOf c pop q) r
       (_root_.Flock.Hm96.Default512.treeLeaf (_root_.Flock.PortRoots.digOf c pop q r))
 
 /-- **Port `q`'s published tree as a registered port**: its root (`PortRoots.pubRoot`), leaf count, published domain
