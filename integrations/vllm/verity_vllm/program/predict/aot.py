@@ -9,7 +9,7 @@ of the trace:
                          it was lowered from, its module, views and slots), which only the trace yields
     instances.json.gz    the predicted Program's instance sequence (`pipeline.build.write_instances`), with the Call and weight
                          names the trace gave it (`traced_names`), which no digest covers and Match and the manifest read, and
-                         the predictor's `run` layout and checks (`BuildResult.run`, `.checks`), which the replay reads
+                         the predictor's checks (`BuildResult.checks`), which the replay reads
     the rest (CARRIED)   as the trace wrote them, with `aot` in result.json and construction_manifest.json: what predicted the
                          Program, from which trace
 
@@ -115,8 +115,6 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
     sup = dict(s) if (s := traced.get("supplied")) else {}
-    if r.run is not None:
-        sup["run"] = [r.run]       # the Program's one `run` parameter, which the predictor lays out
     write_instances(out, r.program, r.digest, traced.get("correspondence_digest"), {"supplied": sup} if sup else {},
                     names=names, params=params, checks=r.checks)
     block = {"mechanism": MECHANISM, "predicted_digest": r.digest, "code_version": S.code_version(), "timings": r.timings, **(aot or {})}

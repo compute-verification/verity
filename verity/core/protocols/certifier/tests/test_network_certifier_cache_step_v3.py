@@ -21,11 +21,13 @@ VECTORS = Path(__file__).parent / "fixtures" / "cache_step_v3_vectors.json"
 GLM = {"NB": 5000, "RW": 20, "KW": 11, "REFW": 9, "TW": 28}
 
 
-def _scenario(seed: int, S=S) -> V3.Stream:
+def _scenario(seed: int, S=S, cls=V3.Stream) -> V3.Stream:
     """Requests of 1 to 3 blocks over a few prompt families on a 5-block pool: each looks up its prefix, takes its hit if
     the free queue covers what it needs, allocates the rest (evicting from the queue's head), caches all or all but its
     last block; held requests are freed at random (and before a block could pass REFW holders), returning hashless
-    blocks to the front and cached ones to the back."""
+    blocks to the front and cached ones to the back. A request that doesn't fit stays at the head, as vLLM's does: it
+    looks up again with nothing changed (the memo's case), then after a free (which may change what it read), and
+    gives up after a few tries."""
     rng = random.Random(seed)
     fam: dict = {}
     keys, reqs = {}, {}
@@ -36,7 +38,7 @@ def _scenario(seed: int, S=S) -> V3.Stream:
             keys[V3.rk(S, r, k)] = fam.setdefault((f, k), rng.getrandbits(128) | 1) if k < share else \
                 rng.getrandbits(128) | 1
         reqs[r] = n
-    st = V3.Stream(S, V3.empty_pool(S, keys), 1, S.NB - 1)
+    st = cls(S, V3.empty_pool(S, keys), 1, S.NB - 1)
     nf, active = S.NB - 1, {}
     order = list(reqs)
     rng.shuffle(order)
@@ -45,7 +47,14 @@ def _scenario(seed: int, S=S) -> V3.Stream:
             q = rng.choice(sorted(active))
             nf += st.call(V3.Call("free", q, active.pop(q)))[0]
         n = reqs[r]
-        h, ev = st.call(V3.Call("hit", r, n - 1 if n > 1 and rng.random() < 0.5 else n))
+        lim = n - 1 if n > 1 and rng.random() < 0.5 else n
+        for tries in range(4):
+            h, ev = st.call(V3.Call("hit", r, lim))
+            if n - h + ev <= nf or not active:
+                break
+            if tries % 2:
+                q = rng.choice(sorted(active))
+                nf += st.call(V3.Call("free", q, active.pop(q)))[0]
         if n - h + ev > nf:
             continue
         if h:
@@ -62,6 +71,53 @@ def _scenario(seed: int, S=S) -> V3.Stream:
             break
     assert len(st.slots) <= S.NS and len(st.entries()) <= S.NE
     return st
+
+
+def _blocked(seed: int, cls=V3.Stream) -> V3.Stream:
+    """Head-of-line blocking on a 5-block pool. Each step a running request may finish (its free) or grow by a hashless
+    block (an alloc, evicting from the queue's head); then the waiting queue's head looks up its prefix and is admitted
+    (take, alloc, cache) only if the free queue covers it, else it stays at the head and looks up again next step, as
+    vLLM's scheduler does: the memo's case, and where the step changed what its walk read, the dirty bit's."""
+    rng = random.Random(seed)
+    fam, keys, need = {}, {}, {}
+    for r in range((1 << S.RW) - 1):
+        need[r], f = rng.randint(2, 4), rng.randrange(2)
+        for k in range(need[r]):
+            keys[V3.rk(S, r, k)] = fam.setdefault((f, k), rng.getrandbits(128) | 1)
+    st = cls(S, V3.empty_pool(S, keys), 1, S.NB - 1)
+    nf, held, waiting = S.NB - 1, {}, list(need)
+    while waiting and len(st.slots) < 110:
+        u = rng.random()
+        if held and u < 0.3:
+            q = rng.choice(sorted(held))
+            nf += st.call(V3.Call("free", q, held.pop(q)))[0]
+        elif held and nf and u < 0.6:
+            q = rng.choice(sorted(held))
+            if held[q] < 1 << S.KW:
+                st.call(V3.Call("alloc", q, held[q], 1))
+                held[q], nf = held[q] + 1, nf - 1
+        r = waiting[0]
+        n = need[r]
+        h, ev = st.call(V3.Call("hit", r, n - 1))
+        if n - h + ev > nf or len(held) >= 4:
+            continue
+        if h:
+            st.call(V3.Call("take", r, 0, h))
+        st.call(V3.Call("alloc", r, h, n - h))
+        if n - 1 > h:
+            st.call(V3.Call("cache", r, h, n - 1 - h))
+        nf -= n - h + ev
+        held[r] = n
+        waiting.pop(0)
+    assert len(st.slots) <= S.NS and len(st.entries()) <= S.NE
+    return st
+
+
+class _Blind(V3.Stream):
+    """A memo blind to what changed since its walk: no access dirties it."""
+
+    def _dirties(self, tag: int, v: int, w: int) -> int:
+        return 0
 
 
 def _coins(seed: int) -> tuple[int, int]:
@@ -96,6 +152,33 @@ def test_the_circuit_is_its_reference_on_random_calls() -> None:
     assert evictions > 5 and returns > 10 and held_takes > 2, (evictions, returns, held_takes)
 
 
+def test_the_memo_is_its_reference() -> None:
+    """Blocked heads that look up again: the circuit is its reference, whose every memoized hit is checked against a
+    walk of the memories as they are, and both the memo and its dirty bit's re-walks are reached."""
+    streams = [_blocked(s) for s in range(16)]
+    cases, want = [], []
+    for s, st in enumerate(streams):
+        al, ga = _coins(s)
+        cases.append(_args(st, al, ga))
+        want.append(_expected(st, al))
+    assert [tuple(o) for o in V3.evaluate(SMALL, cases)] == want
+    memos, rewalks = sum(st.memos for st in streams), sum(st.rewalks for st in streams)
+    assert memos > 30 and rewalks >= 2, (memos, rewalks)
+
+
+def test_the_memo_needs_its_dirty_bit() -> None:
+    """Blind to what changed since its walk, the memo returns a stale (hit, evictable) on some of those streams: an alloc
+    evicted a block the walk hit, or a free or take changed whether one is held. So the re-walks above are ones the
+    circuit's dirty bit must force."""
+    stale = 0
+    for s in range(16):
+        try:
+            _blocked(s, cls=_Blind)
+        except AssertionError:
+            stale += 1
+    assert stale >= 2, stale
+
+
 @pytest.mark.slow
 def test_the_circuit_runs_the_traces_windows() -> None:
     """Windows of the encodings' traces, each with evictions, the pool the trace left carried in: the circuit accepts
@@ -125,9 +208,11 @@ def _tampers(st: V3.Stream) -> dict[str, tuple[list, list]]:
     starts = [i for i, x in enumerate(sl) if x.start]
     hit = next(i for i in starts if sl[i].kind == V3.KINDS["hit"])
     mid = next(i for i in range(1, len(sl)) if not sl[i].start)
+    memo = next(i for i, x in enumerate(sl) if not x.use)
     idle = V3.Slot(*[0] * 11)
     e = rng.randrange(len(en))
     return {
+        "a memoized hit's read": (sl[:memo] + [sl[memo]._replace(v=1)] + sl[memo + 1:], en),
         "a read's value": (sl[:j] + [sl[j]._replace(v=sl[j].v ^ 1 << rng.randrange(128))] + sl[j + 1:], en),
         "a read's time": (sl[:j] + [sl[j]._replace(t=sl[j].t ^ 1)] + sl[j + 1:], en),
         "a read at its own now": (sl[:j] + [sl[j]._replace(t=j + 1)] + sl[j + 1:], en),
@@ -224,4 +309,4 @@ def test_the_ladder() -> None:
 def test_the_slot_price_at_glm_widths() -> None:
     """The measured price `benchmarks/mempool/cost.py` charges a stream slot and a list entry (before the witness
     hash), at GLM-5.3's widths: NB 5,000 blocks, 20-bit requests, 11-bit block indices, 9-bit holders, 28-bit times."""
-    assert V3.part_ands(tuple(GLM[k] for k in V3.SLOT_STATICS)) == {"PoolSlot": 15889, "PoolEntry": 10777, "PoolEnd": 129}
+    assert V3.part_ands(tuple(GLM[k] for k in V3.SLOT_STATICS)) == {"PoolSlot": 16058, "PoolEntry": 10777, "PoolEnd": 129}

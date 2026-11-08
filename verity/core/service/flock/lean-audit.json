@@ -70,7 +70,9 @@
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",
   "Flock.Test.TmplScope",
+  "Flock.Test.TmplSection",
   "Flock.Test.NetAt",
+  "Flock.Test.ByteLines",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",
@@ -122,7 +124,7 @@
   "Flock.Test.JsonParse.shw.go": "partial def: the test's printer of a parsed value (each number's mantissa and exponent), recursing through nested arrays and objects, to compare `JsonParse.parse` with `Lean.Json.parse` as text; no proof is about it, and the verifier never calls it"
  },
  "verifier": {
-  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith"],
+  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith", "Flock.Setup.ofCircuit"],
   "stop": [
    "Flock.Hm96.Default512.cols",
    "Flock.Hm96.Default512.key",
@@ -298,6 +300,7 @@
    "UInt8.ofBitVec",
    "UInt8.ofNat",
    "UInt8.ofNatLT",
+   "UInt8.shiftRight",
    "UInt8.toBitVec",
    "UInt8.toNat",
    "UInt8.toUInt32",
@@ -318,7 +321,9 @@
    "WellFounded.extrinsicFix₃",
    "mixHash",
    "panicCore",
-   "repeatM"
+   "ptrAddrUnsafe",
+   "repeatM",
+   "withPtrEq"
   ]
  },
  "witnesses": {

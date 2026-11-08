@@ -67,7 +67,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
   capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered hardware `ε_dark`, and the monitoring
-  period (core's `wipe_monitoring.PERIODS`, through `params.py`). `Units`
+  period (core's `reporting.PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the free compute

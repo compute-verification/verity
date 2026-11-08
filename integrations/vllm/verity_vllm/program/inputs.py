@@ -79,13 +79,9 @@ PARAMS: dict[str, Kind] = {
     "weights": Kind("registered", "the model's weights, registered before any coin"),
 }
 
-#: the declarations a field of the `run` parameter is read under (`RunInputs.value`'s ``declared``) -> its kind
-RUN: dict[str, Kind] = {
-    "dsa_topk_switches": Kind(
-        "witness", "a DSA row past TOPK keys: the Waksman settings that route its top-k order. Only the top-k set in ascending "
-                   "index order passes `DsaTopKLongRow_v1`, and every reader reads the routed rows, a function of that order, "
-                   "so the settings' redundant bits reach no output", relation="DsaTopKLongRow_v1"),
-}
+#: the declarations a field of the `run` parameter is read under (`RunInputs.value`'s ``declared``) -> its kind: none (a DSA row
+#: past TOPK keys selects its top-k in the circuit, `DsaTopKMask_v1`)
+RUN: dict[str, Kind] = {}
 
 #: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
 ALLOWED: dict[str, str] = {

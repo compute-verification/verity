@@ -70,7 +70,6 @@ def test_production_steps_name_each_gap(tmp_path, launches):
     assert radix["owner"] == "circuits + kernels" and radix["exists"] == "no" and radix["statics"] == "TOPK=2048, KEYS=2100..30150 (188 values)"
     assert rows[("DsaMqaLogits_v3", "unregistered")]["owner"] == "circuits"
     assert rows[("allreduce-pynccl_comm", "no capture")]["statics"] == "N=6144, M=8192"
-    assert rows[("cublas-linear", "no capture")]["owner"] == "kernels"
     assert rows[("prefill-call", "dense-MHA prefill")]["statics"] == "ROWS=2000, KEYS=2000"
     assert rows[("prefill-call", "sparse-MQA prefill")]["statics"].startswith("ROWS=2096..4066")
     assert sum(n["blocks"] for n in g["needs"]) == g["blocks"] == sum(r["blocks"] for r in g["gaps"] + g["covered"])

@@ -54,7 +54,7 @@ class Plan:
 
 
 class H1R:
-    def __init__(self, path: str):
+    def __init__(self, path: str) -> None:
         self.lib = C.CDLL(path)
         self.lib.h1r_launch.argtypes = [C.c_void_p, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p,
                                         C.c_int, C.c_int, C.c_void_p]

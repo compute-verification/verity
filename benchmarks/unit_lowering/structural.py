@@ -215,20 +215,25 @@ def _counts(low, struct: dict | None = None, commits: int | None = None) -> dict
 
 
 def _file(path: Path) -> dict:
-    """The file's first line, its META line's bytes and its SHA-512, read in chunks: a templated file's META holds the
-    whole template."""
+    """The file's first line, its META line's bytes, a templated file's template lines (its template section's header
+    ``TEMPLATE n``; None for a flat file) and its SHA-512, read in chunks."""
+    from verity_flock.circuit import TMPL_SECTION
+
     h, newlines, at = hashlib.sha512(), [], 0
     with open(path, "rb") as f:
         while b := f.read(1 << 24):
             h.update(b)
             start = 0
-            while len(newlines) < 2 and (nl := b.find(b"\n", start)) >= 0:
+            while len(newlines) < 3 and (nl := b.find(b"\n", start)) >= 0:
                 newlines.append(at + nl)
                 start = nl + 1
             at += len(b)
     with open(path, "rb") as f:
         head = f.read(newlines[0]).decode()
-    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "sha512": h.hexdigest()}
+        f.seek(newlines[1] + 1)
+        section = f.read(newlines[2] - newlines[1] - 1).split() if len(newlines) > 2 else []
+    lines = int(section[1]) if len(section) == 2 and section[0] == TMPL_SECTION.encode() else None
+    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "template_lines": lines, "sha512": h.hexdigest()}
 
 
 def _done(args, rec: dict) -> int:
@@ -327,9 +332,8 @@ def lower(args) -> int:
 
     def meta_captured(text):
         m = meta_of(text)
-        tl = m.get("template")
-        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None,
-                       "program_sha512": m.get("program_sha512"), "partition": m.get("partition")}
+        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "program_sha512": m.get("program_sha512"),
+                       "partition": m.get("partition")}
         return m
 
     CS.unit_lowering, FC.meta_of = captured, meta_captured
