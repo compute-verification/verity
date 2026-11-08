@@ -42,6 +42,13 @@ def eqHalf (v : Array F128) (lo n : Nat) : Half :=
 
 def Half.at (T : Half) (u : Nat) : F128 := T.2.1.getD (u % 2 ^ T.1) 0 * T.2.2.getD (u / 2 ^ T.1) 0
 
+/-- `Half.at` by shifts: `Nat.pow` builds a GMP number on every call. -/
+def Half.atFast (T : Half) (u : Nat) : F128 := T.2.1.getD (u &&& ((1 <<< T.1) - 1)) 0 * T.2.2.getD (u >>> T.1) 0
+
+@[csimp] theorem Half.at_eq_atFast : @Half.at = @Half.atFast := by
+  funext T u
+  simp only [Half.at, Half.atFast, Nat.one_shiftLeft, Nat.and_two_pow_sub_one_eq_mod, Nat.shiftRight_eq_div_pow]
+
 def bump {κ : Type} [BEq κ] [Hashable κ] (m : HashMap κ F128) (k : κ) (v : F128) : HashMap κ F128 :=
   m.insert k (m.getD k 0 + v)
 
@@ -165,6 +172,16 @@ the coordinates between. -/
 def rekeyAt (oc alc al' : Nat) (M : Half) (c : Nat) : Nat × F128 :=
   let P := oc + c * 2 ^ alc
   (P / 2 ^ al', M.at (P % 2 ^ al' / 2 ^ alc))
+
+/-- `rekeyAt` by shifts. -/
+def rekeyAtFast (oc alc al' : Nat) (M : Half) (c : Nat) : Nat × F128 :=
+  let P := oc + (c <<< alc)
+  (P >>> al', M.at ((P &&& ((1 <<< al') - 1)) >>> alc))
+
+@[csimp] theorem rekeyAt_eq_fast : @rekeyAt = @rekeyAtFast := by
+  funext oc alc al' M c
+  simp only [rekeyAt, rekeyAtFast, Nat.shiftLeft_eq, Nat.one_mul, Nat.and_two_pow_sub_one_eq_mod,
+    Nat.shiftRight_eq_div_pow]
 
 /-- Callee `e`'s class `(β', as')` at child-unit offset `oc`, its caller's chunks `2^al'` in child units: its table
 (`cachedTab`) re-keyed if `e` is reached on more than one path and placed at a multiple of its `palign`, else walked by
