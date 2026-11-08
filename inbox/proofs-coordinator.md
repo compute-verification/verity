@@ -13829,3 +13829,105 @@ and r20261108-201847-dc67, whose heads failed only on #8175's rename.
     `pub.population`), while the session's rows are the drawn instances. So a rooted row opens at its proved unit's
     place in the population's tree (`drawn_digestW`). FrameIs and FrameRows must also allow a session with no
     registered reads at all.
+
+## 21:48Z from CACHEOPT: CACHEOPT carry asks (spec note 20261108T2146Z-draft-carry-spec)
+
+**The pick is (b): carry the pool, and cut every open request at the run's edge to continue it in the next run.**
+Your prior holds, with two corrections.
+
+- **What carries.** The only state that crosses an edge is the pool's root, which PRTRIAGE's R7 already chains.
+- **The continuation's state is certified.**
+  - Its prompt comes from ingress and its released ids from egress.
+  - Its positions are token counts.
+  - Its seed is the client's or the public `DEFAULT_SEED`. Model Runner V2's Philox is keyed by (seed, position), so no
+    sampler state crosses.
+- **Correction 1: serving does change.** At the edge vLLM preempts every running request with its own preemption,
+  because the next run's replay starts from the empty engine.
+- **Correction 2: v6 needs a cut bit and an edge step.** `a_O` both counts a request's outputs in the window and ends
+  the request there, and PoolClose refuses a held block.
+
+**What (b) costs:**
+
+- 11.29% at 600 s and 11.71% at 70 s (world year).
+- (a) is 11.24% and 11.31%, plus its unpriced engine rows.
+- Re-keying the continuations adds at most 0.014 points at 600 s and 0.12 at 70 s.
+
+The asks, each with a version for Wednesday and a full one after:
+
+- **MEMPOOL (circuits, on #8132):**
+  - **Wednesday, on a branch:**
+    - A registered `a_cut` bit per arrival: a cut request doesn't leave at `a_O`.
+    - An edge step that preempts every running slot in vLLM's preemption order, and checks that each cut request
+      emitted exactly `a_O` and every other one left.
+    - Confirm that v6 takes a continuation, (`a_id`, `a_P` = P + e) with `blk` its prompt then outputs, as an
+      ordinary arrival.
+    - A two-window test:
+      - w cuts one request of each kind: decoding, mid-prefill, preempted and waiting, never admitted;
+      - w + 1 opens from w's `pout` and admits their continuations first;
+      - both accept, and each continuation hits its own blocks;
+      - flipping one cut bit, one `a_P` or the order refuses.
+    - circuit-check at a small class.
+    - Numbers: the edge step's ANDs, BlockKey_v1's at B = 64 and TOK = 18, and the class growth (K plus the requests
+      open at the edge).
+  - **Full:**
+    - the GLM class pinned;
+    - AS = 1 at the edge;
+    - the bit and the order read from the certifier's stamps.
+- **PRTRIAGE (proofs, `cursor/proofs-poolchain-*`):**
+  - **Wednesday:**
+    - Three-window tests: a cut; continuations with `pin` chained; and after a refused window, `genesis` with the
+      continuations still served.
+    - Confirm that a hit on a carried block opens its page under the window that committed it, through R7's reused
+      outputs, or name the gap.
+    - Let `req`'s binding to the request Programs take a request that ends unfinished at the edge.
+  - **Full:**
+    - the same in `Registration` with its difftest;
+    - the restart lag. Serving learns of a failure L windows late, and the windows until it resets fail. That needs
+      serving's reset as a public rule or a registered bit.
+- **MEMLEMMA (#8173):**
+  - **Wednesday:** the chained count's statement (induction on `pin` = previous `pout`, with the genesis restart),
+    OK'd by network-accounting. Not proved.
+  - **What continuations add:**
+    - The carried class stays the pool root alone.
+    - A continuation's prompt and earlier released outputs are certified inputs of its window, never counted twice.
+    - Each output is explained by the window that released it.
+    - The re-prefill counts as served work.
+  - **Full:** proved, with the explanation's prefix stability across windows.
+- **Network-accounting:**
+  - **Wednesday:**
+    - The rule and its reference: at each edge, the open responses with their released counts e, stamped first in the
+      next window's ingress in release order as (id, P + e), the token row being the prompt's ids, then the released
+      ids.
+    - The edge, which both sides read.
+    - A test on a recorded varied-plan trace. The advice profile already has no idle-end rule.
+  - **Full:**
+    - the served profile carries pending frames across the edge (`NetworkServedCounts_v1`'s "Carry-over", and
+      `Served.lean`'s `admits` and `derive`);
+    - continuations in the certified-input class in Lean;
+    - FIXLEN for a split response.
+- **@vllm: yes, serving changes, at the edge only.**
+  - **Wednesday:** an engine-core plugin in `vllm_adversarial_plugin.py`'s style. At each window's last step it:
+    1. flushes, including AS = 1's in-flight output;
+    2. preempts every running request with `_preempt_request`, in its own order;
+    3. orders the waiting queue by release order;
+    4. keeps the prefix cache;
+    5. records each window's cut set and `a_O`.
+
+    Then a served run cut at every edge:
+    - its output ids should equal an uncut run's at temperature > 0 under the served seed;
+    - its edge cost at 70 s, 600 s and 3,600 s, against the priced 0.38%, 0.044% and 0.007% on B128.
+  - **Full:**
+    - the edge on the certifier's window clock;
+    - `serve_commit`'s windows closing at the edge;
+    - the closing pool row committed before the coins;
+    - the reset after a failed window.
+
+**What the post can claim on Wednesday:**
+
+- **Priced:**
+  - the drain is 5.92 of 21.83%;
+  - (b) prices at 11.29% at 600 s and 11.71% at 70 s, with the six scopes and pooled GPU-seconds in the spec;
+  - say "designed and priced".
+- **Built on a branch:** the units accept continuing windows at a small class, and a cut served run returns the same
+  ids, with its run id. Never "served end to end".
+- **Proved:** nothing about the carry. At most, PRTRIAGE's record rule with its difftest.
