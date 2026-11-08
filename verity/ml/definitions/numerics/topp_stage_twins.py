@@ -215,12 +215,23 @@ def _argmax_prefix(y: np.ndarray) -> np.ndarray:
     return np.maximum.accumulate(np.where(up, np.arange(n), 0))
 
 
+def _scaled(E, V: int, logits, temp: int):
+    lg = np.asarray(logits, np.uint16).reshape(-1)
+    return T.temp_scale(E, E.free(V, 32, (lg.astype(np.uint64) << np.uint64(16))[None]), E.free(1, 32, [[int(temp)]]))
+
+
+def keep_bits(V: int, logits, top_p: int, temp: int, S: int) -> np.ndarray:
+    """Split count S's keep bits on the row (``top_p``, ``temp`` f32 bits), as its units compute them."""
+    E = FastEngine()
+    keep, _ = _pipeline(E, T.Geo(V, S), _scaled(E, V, logits, temp), E.free(1, 32, [[int(top_p)]]), {})
+    return vals(keep).astype(bool)
+
+
 def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[int, dict]:
     """(token, outs): the served token of ``GumbelTopPTokenSelect_v1{V}`` on the row, and ``outs[key]`` every unit's output
     fields by its `topp_stages.plan(V)` key (each a u64 word array)."""
     E = FastEngine()
-    lg = np.asarray(logits, np.uint16).reshape(-1)
-    x = T.temp_scale(E, E.free(V, 32, (lg.astype(np.uint64) << np.uint64(16))[None]), E.free(1, 32, [[int(temp)]]))
+    x = _scaled(E, V, logits, temp)
     p = E.free(1, 32, [[int(top_p)]])
     outs: dict = {}
     keep, counts = np.zeros(V, bool), {}
@@ -248,4 +259,4 @@ def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, split
     return int(bi[-1]), outs
 
 
-__all__ = ["FAST", "FastEngine", "stage_rows", "vals"]
+__all__ = ["FAST", "FastEngine", "keep_bits", "stage_rows", "vals"]
