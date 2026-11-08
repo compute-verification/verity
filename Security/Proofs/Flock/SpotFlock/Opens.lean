@@ -167,7 +167,7 @@ theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : �
           | none => simp [hit, hdr, hset, hw] at hr
           | some w =>
             simp only [hit, hdr, hset, hw, Bool.and_eq_true, beq_iff_eq] at hr
-            obtain ⟨⟨-, hreg⟩, hpin⟩ := hr
+            obtain ⟨⟨⟨-, -⟩, hreg⟩, hpin⟩ := hr
             unfold pinOk at hpin
             cases hw₀ : FlockDeploy.decode (h.xS₀ t) with
             | none => simp [hw₀] at hpin

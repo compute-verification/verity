@@ -128,7 +128,7 @@ theorem checkRegistered_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.C
   split at hr
   · rename_i it draw ins spec sts w hit _ hset hdec
     simp only [Bool.and_eq_true, beq_iff_eq] at hr
-    obtain ⟨⟨-, hreg⟩, -⟩ := hr
+    obtain ⟨⟨⟨-, -⟩, hreg⟩, -⟩ := hr
     obtain ⟨hins, hsetup⟩ := FlockDeploy.setupOf_some hset
     have hwi : w.ins = .ok ins := by
       obtain ⟨w', hw', hi⟩ := insOf_ok hins

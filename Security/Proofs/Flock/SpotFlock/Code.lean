@@ -8,6 +8,7 @@ public import Definitions.Claims.SamplingTwo
 public import Properties.Spot.Members
 public import Flock.Desc
 public import Flock.Comp
+public import Spot.SecondStage
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -43,9 +44,10 @@ framing (`frame`, a code whose verifier and samples are unread).
   verifier checks (`stmtOk`): the run's statement decodes and its partition and design evaluate, and template `t`'s
   statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked scope, in the scope Flock's
   soundness proof covers and with hidden outputs, and with `xS₀ t`'s table shapes (`sessionOk`), its sample is the
-  second stage's, its registered reads are the auditor's for template `t` at the run's roots and the interior
-  registration's, and it is `xS₀ t` but for its sample, its registered reads, its public file's rows and the four
-  fields of its public file's header the run sets (`pinOk`); it refuses the message otherwise;
+  second stage's draw within template `t`'s part and its public file's header names that part's slots (`readsOk`, by
+  round 2's statement check, `SecondStage`), its registered reads are the auditor's for template `t` at the run's
+  roots and the interior registration's, and it is `xS₀ t` but for its sample, its registered reads, its public file's
+  rows and the four fields of its public file's header the run sets (`pinOk`); it refuses the message otherwise;
 * rounds `off t` to `off t + k₀ t − 1`: template `t`'s session, Flock's masked verifier at its statement on the
   session's messages, its acceptance answered with the message `[]`, which Flock never answers, and the session's rounds
   after a decision (`decidedAt`) answered `[]` too;
@@ -305,16 +307,18 @@ def atKey (k : String) (f : Json → Json) (j : Json) : Json :=
   | .obj _, .ok v => j.setObjVal! k (f v)
   | _, _ => j
 
-/-- **A session statement's public file as `pinOk` compares it**: its header line's JSON with the fields the run sets
-nulled (`instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`); none where the header doesn't parse.
-The rows after the header line are the run's. -/
-def pinHeader (file : ByteArray) : Option Json := do
+/-- **A public file's header**: its first line's JSON (`Public.load`); none where it has no line or doesn't parse. -/
+def headerOf (file : ByteArray) : Option Json := do
   let nl ← _root_.Flock.findByte file 10
-  let text ← String.fromUTF8? (file.extract 0 nl)
-  let j ← (_root_.Flock.JsonParse.parse text).toOption
-  let null : Json → Json := fun _ => .null
-  pure <| atKey "instances" null <| atKey "units" (atKey "indices" null) <|
-    atKey "frame_v3" (atKey "roots" null ∘ atKey "domain_ids" null) j
+  (_root_.Flock.JsonParse.parse (← String.fromUTF8? (file.extract 0 nl))).toOption
+
+/-- **A session statement's public file as `pinOk` compares it**: its header with the fields the run sets nulled
+(`instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`). The rows after the header are the run's. -/
+def pinHeader (file : ByteArray) : Option Json :=
+  (headerOf file).map fun j =>
+    let null : Json → Json := fun _ => .null
+    atKey "instances" null <| atKey "units" (atKey "indices" null) <|
+      atKey "frame_v3" (atKey "roots" null ∘ atKey "domain_ids" null) j
 
 /-- **Template `t`'s session statement is its reference one** but for what the run sets: decoded as `w`, it is
 `xS₀ t`'s in every field but its sample, its registered reads and its public file, its circuit, tables and program
@@ -328,13 +332,22 @@ def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
       (pinHeader w.publicFile).isSome && pinHeader w.publicFile == pinHeader w₀.publicFile
   | none => false
 
+/-- **Template `t`'s part of the second stage's population** in a replay sample of `q` blocks: its `q · n_t` slots from
+`q · Σ_{t' < t} n_{t'}`, as `Select.secondLaw` lays out the cells, template by template. -/
+def partAt (q t : ℕ) : Spot.SecondStage.Part := ⟨"", q * (h.reg.ns.toList.take t).sum, h.reg.ns.getD t 0⟩
+
 /-- **Template `t`'s session statement reads the run's**, at the statement `s`, the round-1 message `m₁` and the coins
-of rounds 0 and 1: its sample is the second stage's, its registered reads are the auditor's for template `t` at the
-run's roots and the interior registration's, and it is otherwise template `t`'s reference statement (`pinOk`). -/
+of rounds 0 and 1: its sample is the second stage's draw within template `t`'s part (`SecondStage.ownDraw` at
+`partAt`), its public file's header names that part's slots (`SecondStage.populationOk`), its registered reads are the
+auditor's for template `t` at the run's roots and the interior registration's, and it is otherwise template `t`'s
+reference statement (`pinOk`). -/
 def readsOk (t : ℕ) (s : AuditStatement) (m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
   match interiorsOf m₁, secondDraw h c₀ c₁, FlockDeploy.setupOf true xS, FlockDeploy.decode xS with
   | some it, some draw, some (ins, _, _), some w =>
-    FlockDeploy.drawEq ins.read.draw (some (Flock.norm draw)) &&
+    let q := (h.reg.sample (src c₀)).size
+    FlockDeploy.drawEq ins.read.draw
+        (some (Flock.norm (Spot.SecondStage.ownDraw q (partAt h q t) ((Spot.Draw.proved draw).map Int.toNat)))) &&
+      ((headerOf w.publicFile).map (Spot.SecondStage.populationOk q (partAt h q t))).getD false &&
       w.registered.map ByteArray.data == some (h.registered t s.roots it.roots).data && pinOk h t w
   | _, _, _, _ => false
 
