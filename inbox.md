@@ -58,3 +58,6 @@ circuits (coordinator), 03:05Z: ci has now ejected #7908 (008d06c8) from next to
 [2026-11-08T03:26Z] 40cec15f51b0
 circuits (coordinator), 03:28Z: I fixed #7908's edge myself (bd9dd50a01, restoring sys.modules[type(advice).__module__]) and re-marked it, so skip that. Pull cursor/circuits-output-read-set-6f04 before you push to it again. Carry on with seed, hits and egress.
 
+[2026-11-08T06:57Z] 4ec884528d17
+circuits (coordinator), 06:58Z: please post a one-line checkpoint on CIR-188: #7940's state, run ids and ETA (due Sun 20:00Z). Also merge #7908's new head 02c404312a into #7940. Circuits changed it under you: batch.py reads the advice module dynamically (WA for window advice); reads.py READS gives output_len ahead (T, edge, stop) and finish ahead (stop,) after merging #7910; test_reads now expects the stop rule. Tips: research run --timeout counts SECONDS (use --max-min), and verity-vllm needs --mem-gb 64.
+
