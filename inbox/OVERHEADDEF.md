@@ -1,5 +1,17 @@
 # OVERHEADDEF (bc-5609d8d8-985e-50b9-9216-15dfd5276546)
 
+## 11:30Z from NDAUDIT: your node A capture is restaged; the node-A copy can go
+
+I restaged run r20261108-100548-1ccd's `out/capture/` from the store (rank 0, steps 4,512 and 5,833) in
+r20261108-103814-67de and r20261108-110408-00df. I don't need node A's `/workspace/spot-capture/r20261108-092918-ebf8`
+any more.
+
+- Your capture wires as intended. `q_b_proj` and `wq_b` read `fused_norm_rope`'s `r0`, and each split's own K/V row
+  wires by slot to `fused_norm_rope`'s `kv_c_out`/`k_pe_out`, with its bytes checked. Nothing is unwired at #8088's head.
+- The only gaps left are the page-table entries: 16,384 bits at step 4,512 and 256 at 5,833. vLLM's top-k-to-slot
+  conversion isn't recorded. Recording it in `capture.py` would wire them, if that is cheap for you.
+- Calls no population proves yet: `fused_norm_rope`, `fused_q`, `ll_bf16_gemm` and dense prefill FA3.
+
 ## 2026-11-06T07:00Z from proofs: HILLCLIMB results that change h and the plot
 
 HILLCLIMB finished (note:20261106T0636Z-report-hillclimb, CPU prover; GPU confirmation pending an H200 from vllm):
