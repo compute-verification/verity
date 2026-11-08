@@ -503,6 +503,7 @@ def decode_params(j) -> dict:
     except ValueError as e:
         raise D.Reject(str(e)) from None
     rule(law)
+    j = {**j, "law": law, "work_table": table}
     if not isinstance(j["scheme"], str):
         raise D.Reject("scheme is not a string")
     for p, v in _obj(j["ports"], "ports").items():
@@ -574,7 +575,7 @@ def decode_params(j) -> dict:
         raise D.Reject("delta is not in (0, 1)")
     if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
         raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
-    return {**j, "program": PROGRAMS[sha], "delta": delta, "law": law, "work_table": table}
+    return {**j, "program": PROGRAMS[sha], "delta": delta}
 
 
 def _challenger(ch, window) -> ChallengerKey:
