@@ -189,8 +189,8 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
     nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
     if any(reads_run(net, wrapper_keys(wrapper, M, LP, T)) for net in nets):
-        raise Unexpressible("vocabulary cannot express: a node Program whose rows read more than INDEX_TOPK keys (each rank's top-k "
-                            "order is its own `run` input, which its rank Program reads: `build.build_program`)")
+        raise Unexpressible("vocabulary cannot express: a node Program whose rows read a value the served run decides (each "
+                            "rank's is its own `run` input, which its rank Program reads: `build.build_program`)")
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     passes = [n] + [1] * (events - 1)

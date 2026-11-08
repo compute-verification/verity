@@ -340,8 +340,8 @@ class WorkloadRequest:
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` (on the
 # sparse-attention decoder with its index-K slots `prefix_ik` and scales `prefix_iks`), a resumed request's `last_token`, a TP rank
-# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`) and its `run` (the Waksman settings of its rows past
-# INDEX_TOPK, `predict.dsa.run_field`, whose checks fix them by its own logits)
+# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`) and its `run` (the values its served run decides,
+# `predict.common.run_input`)
 _REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "prefix_ik", "prefix_iks", "last_token", "schedule", "run")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 

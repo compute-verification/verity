@@ -58,7 +58,7 @@ def _ptypes(spec) -> tuple:
 
 
 def reads_run(net, keys: int) -> bool:
-    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
+    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (`net.reads_run`, where its decoder has one)."""
     return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
 
 

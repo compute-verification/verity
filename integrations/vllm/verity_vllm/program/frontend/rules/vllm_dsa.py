@@ -12,11 +12,12 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         -> attention rows [T, NH, L]
         the layer's caches as history keyed by `layer_name` (rows [kv_c | k_pe], index-K slots and scales); per query row of n = P + 1
         keys, on an indexer layer `DsaMqaLogits_v3{N=n,H,D}` and `DsaTopKShortRow_v1{TOPK}` (n <= TOPK: the kernels' short-row
-        shortcut, slot i = i), or past TOPK the run's Waksman settings (a field of the `run` input), the order they route
-        (`DsaWaksmanOrder_v1{N=n,TOPK}`) and `DsaTopKLongRow_v1{N=n,TOPK}`'s check that it is the logits' top-TOPK set in
-        ascending index order; on an IndexShare layer the top-k the last indexer layer wrote for the same positions; then explicitly pinned
-        `SparseMla_v1{T,...}` or default `SparseMlaSplit_v1{T,NS,...}` over the history's first n rows (T = n), or past TOPK over
-        the rows `DsaWaksmanRows_v1{N=n,K=TOPK,W,E=16}` reads at those settings (T = TOPK)
+        shortcut, slot i = i), or past TOPK the mask form at the row's class N (`long_row_keys`: n rounded up to a multiple of
+        TOPK, the keys past n `PAD_SCORE`): `DsaTopKMask_v1{N,TOPK}` of the logits and the settings `DsaButterflySettings_v1{N,K=TOPK}`
+        computes from it, with no `run` value; on an IndexShare layer the top-k the last indexer layer selected for the same
+        positions; then explicitly pinned `SparseMla_v1{T,...}` or default `SparseMlaSplit_v1{T,NS,...}` over the history's first
+        n rows (T = n), or past TOPK over the rows `DsaButterflyRows_v1{N,K=TOPK,W,E=16}` reads at those settings, the top-TOPK
+        set's in ascending index order (T = TOPK)
 
 and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
 and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.  The leaf the shim exports in
@@ -30,7 +31,7 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import torch
 
-from verity.ml.circuits.refs import Coll, PartLog, array_of, concat
+from verity.ml.circuits.refs import Coll, PartLog, Refs, array_of, broadcast, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
@@ -39,7 +40,7 @@ from verity_vllm.program.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
-from verity.ml.definitions.registry import dsa, dsa_topk
+from verity.ml.definitions.registry import dsa
 from verity.ml.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
 from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
 
@@ -61,18 +62,34 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                 "dsa_indexer_q": "the index query of _fused_q_kernel (DsaIndexerQ_v1)",
                 "dsa_mqa_logits": "DeepGEMM's fp8 MQA logits (DsaMqaLogits_v3)",
                 "dsa_topk_short_row": "the top-k of a row of at most TOPK keys (DsaTopKShortRow_v1)",
-                "dsa_topk_long_row": "the check of a row past TOPK keys that the run's top-k order is the logits' top-TOPK set in "
-                                     "ascending index order (DsaTopKLongRow_v1)",
-                "dsa_waksman_order": "the top-k order a row past TOPK keys reads its rows in, routed by the run's Waksman settings "
-                                     "(DsaWaksmanOrder_v1)",
-                "dsa_waksman_rows": "the history rows sparse MLA reads at a row's top-k order past TOPK keys, through a Waksman network "
-                                    "at the run's settings (DsaWaksmanRows_v1)",
+                "dsa_topk_mask": "the top-TOPK set of a row past TOPK keys as a mask over its keys (DsaTopKMask_v1)",
+                "dsa_butterfly_settings": "the settings of the concentrator that lists a mask's members in index order "
+                                          "(DsaButterflySettings_v1)",
+                "dsa_butterfly_rows": "the history rows sparse MLA reads past TOPK keys, the top-TOPK set's in ascending index order "
+                                      "through the concentrator (DsaButterflyRows_v1)",
                 "sparse_mla": "FA3's sparse MLA (SparseMla_v1)",
                 "sparse_mla_split": "FA3's sparse MLA at vLLM's default split count (SparseMlaSplit_v1)",
                 "attention_dot": "FA3's dense causal prefill attention, FlashAttnPrefillBackend's (Attention_v4; AttentionSplit_v1 "
                                  "where FA3 splits it)",
                 "batched_gemm": "the latent absorption bmm, cuBLAS's batched bf16 GEMM (BatchedGemm_v1{B,K,N,DOT})",
                 "const": "a constant word"}
+
+#: the score of a key past a long row's own (`long_row_keys`): its `dsa_topk.topk_key` is 0, the least, and a real key it ties
+#: with has the lower index, so every real key precedes it and the top-TOPK set of a row of at least TOPK keys never holds one
+PAD_SCORE = 0xFFFFFFFF
+
+
+def long_row_keys(n: int, topk: int) -> int:
+    """The class a row of n > topk keys is selected over: n rounded up to a multiple of topk, so a request's rows past TOPK share
+    one specialization of the mask form per class (each of its Definitions' bodies grows with its N) at under TOPK keys more a
+    row.  The keys past n score `PAD_SCORE` and their history rows are zero: no output of the concentrator reads one."""
+    return -(-int(n) // int(topk)) * int(topk)
+
+
+def repeat(pad: Coll, count: int) -> Refs:
+    """``count`` references to ``pad``'s one leaf (a long row's keys past its own: `long_row_keys`)."""
+    r = pad.refs
+    return broadcast(r.space, r.idx, r.base, count)
 
 
 def _args(node, names: tuple[str, ...]) -> dict:
@@ -437,35 +454,17 @@ def _append_rows(ctx, hist: dict, a: dict, has: bool) -> None:
             hist["iks"].append(iks[i])
 
 
-def _history_rows(ep, layer_kinds) -> dict[str, list[tuple[int, int, bool]]]:
-    """Per layer, each DSA leaf call's (rows before it, its rows, whether it is an indexer `dsa_indexer_attn`) in graph order: what
-    `_open_history` will find, read from the export's fake-tensor shapes before the translation."""
-    out: dict[str, list[tuple[int, int, bool]]] = {}
-    for node in ep.graph.nodes:
-        names = layer_kinds.get(node.target) if node.op == "call_function" else None
-        if names is None:
-            continue
-        a = _args(node, _DENSE if names == "dense" else _ATTN)
-        val = getattr(a.get("positions"), "meta", {}).get("val")
-        if not isinstance(a.get("layer_name"), str) or val is None or len(val.shape) != 1:
-            continue
-        calls = out.setdefault(a["layer_name"], [])
-        calls.append((sum(T for _, T, _ in calls), int(val.shape[0]), names == "attn" and a.get("index_q") is not None))
-    return out
-
-
 class DsaIndexerAttnRule(StateRule):
     """`vllm_iface.dsa_indexer_attn` (the sparse indexer and FA3's sparse MLA of one layer): the layer's MLA and index-K caches are
     implicit state keyed by `layer_name`, made explicit as histories.  A layer's history opens at its first call, at whatever position
     (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), and every later call continues it; row i of a call
     that finds P0 rows reads the first n = P0 + i + 1 rows.  An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
     the same positions, and both the pinned one-split or default split sparse MLA over the selected rows: with n <= TOPK the
-    selection is rows 0..n-1 in order.  Past TOPK the order is the served one, a value: the run binds the settings of a
-    Waksman network over the n history rows that route it (`dsa_topk.waksman_settings`), the field `<layer>/topk_switches[t=P]`
-    of the `run` input; `DsaWaksmanOrder_v1{N=n,TOPK}` routes the row indices through them, `DsaTopKLongRow_v1{N=n,TOPK}` checks
-    that order is the row's top-TOPK set in ascending index order, the one order the logits fix (one of the Program's checks;
-    `VERITY_DSA_TOPK=canonical` serves it), and sparse MLA reads the TOPK rows
-    `DsaWaksmanRows_v1{N=n,K=TOPK}` routes at the same settings, on an IndexShare layer too, so the wiring is static."""
+    selection is rows 0..n-1 in order.  Past TOPK the selection is the mask form's, computed from the logits with no `run` value:
+    at the row's class N (`long_row_keys`, the logits past n `PAD_SCORE` and the history rows past n zero) `DsaTopKMask_v1{N,TOPK}`
+    marks the row's top-TOPK set, `DsaButterflySettings_v1{N,K=TOPK}` sets the concentrator from the mask, and sparse MLA reads the
+    TOPK rows `DsaButterflyRows_v1{N,K=TOPK}` routes at those settings, the set's in ascending index order (the order
+    `VERITY_DSA_TOPK=canonical` serves), on an IndexShare layer too, so the wiring is static."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
@@ -477,27 +476,15 @@ class DsaIndexerAttnRule(StateRule):
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
-                                   "a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one reads the run's "
-                                   "Waksman settings, whose routed order DsaTopKLongRow_v1 checks and whose rows DsaWaksmanRows_v1 reads "
+                                   "a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one the mask form, "
+                                   "DsaTopKMask_v1 and DsaButterflySettings_v1 of its logits and the rows DsaButterflyRows_v1 reads "
                                    "(an IndexShare layer's rows have the indexer layer's key counts)",
                                    "layer_name static and written from one module; not under registered_values"),
-                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, DsaWaksmanOrder_v1, DsaTopKLongRow_v1, "
-                                    "DsaWaksmanRows_v1, SparseMla_v1 or SparseMlaSplit_v1")
+                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, DsaTopKMask_v1, "
+                                    "DsaButterflySettings_v1, DsaButterflyRows_v1, SparseMla_v1 or SparseMlaSplit_v1")
 
     def targets(self):
         return {iface.dsa_indexer_attn.default}
-
-    def run_inputs(self, ep, mode):
-        """An indexer layer's row past its TOPK keys reads the run's Waksman settings."""
-        kinds = {iface.dsa_indexer_attn.default: "attn", iface.dsa_dense_mha.default: "dense"}
-        topk = {}
-        for node in ep.graph.nodes:
-            if node.op == "call_function" and node.target is iface.dsa_indexer_attn.default:
-                a = _args(node, _ATTN)
-                if isinstance(a.get("topk"), int):
-                    topk.setdefault(a.get("layer_name"), a["topk"])
-        return any(indexer and P0 + T > topk.get(layer, P0 + T) for layer, calls in _history_rows(ep, kinds).items()
-                   for P0, T, indexer in calls)
 
     def applies(self, node, ctx):
         a = _args(node, _ATTN)
@@ -524,7 +511,7 @@ class DsaIndexerAttnRule(StateRule):
             return r
         hist = (ctx.state.get("dsa_history") or {}).get(layer)
         if (len(hist["latent"]) if hist else 0) + T > topk and (
-                r := _missing(ctx, ["dsa_waksman_rows"] + (["dsa_waksman_order", "dsa_topk_long_row"] if has else []))):
+                r := _missing(ctx, ["dsa_butterfly_rows", "const"] + (["dsa_topk_mask", "dsa_butterfly_settings"] if has else []))):
             return r
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
@@ -576,6 +563,13 @@ class DsaIndexerAttnRule(StateRule):
             by_keys = dict(zip(batch, launch_num_splits(batch, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0))))
             splits = [by_keys[min(n, TOPK)] for n in keys]
         past = [P for P, n in zip(pos, keys) if n > TOPK]
+        consts: dict[int, Coll] = {}
+
+        def const(w: int, bits: int) -> Coll:
+            if w not in consts:
+                consts[w] = ctx.call(ctx.kind("const", node, W=w, BITS=bits), node=node, rule=self, name=f"{h}/pad{w}")
+            return consts[w]
+
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
@@ -590,14 +584,12 @@ class DsaIndexerAttnRule(StateRule):
                     ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
                     continue
-                sw = ctx.run_value(f"{layer}/topk_switches[t={P}]", Array(dsa_topk.waksman_switches(n, TOPK), Value(1)), node)
-                order = ctx.call(ctx.kind("dsa_waksman_order", node, N=n, TOPK=TOPK), sw, node=node, rule=self,
-                                 name=f"{h}/topk[t={P}]")
-                ok = ctx.call(ctx.kind("dsa_topk_long_row", node, N=n, TOPK=TOPK), logits, order, node=node, rule=self,
-                              name=f"{h}/topk_order[t={P}]")
-                ctx.check(ok, f"{layer} t={P}: the top-{TOPK} order the run's Waksman settings route is the top-{TOPK} set of "
-                              f"{n} logits in ascending index order (DsaTopKLongRow_v1)")
-                selected[P] = sw
+                N = long_row_keys(n, TOPK)
+                scores = Coll(Array(N, Value(32)), concat([logits.refs, repeat(const(32, PAD_SCORE), N - n)]) if N > n else logits.refs)
+                mask = ctx.call(ctx.kind("dsa_topk_mask", node, N=N, TOPK=TOPK), scores, node=node, rule=self,
+                                name=f"{h}/topk_mask[t={P}]")
+                selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
+                                       name=f"{h}/topk[t={P}]")
             ctx.state["dsa_topk"] = {"layer": layer, "rows": selected, "keys": dict(zip(pos, keys))}
             source = layer
         else:
@@ -621,19 +613,23 @@ class DsaIndexerAttnRule(StateRule):
             attn = ctx.kind(role, node, **statics)
             kv = Coll(Array(n, row), latent.cut(n))
             if n > TOPK:
-                kv = ctx.call(ctx.kind("dsa_waksman_rows", node, N=n, TOPK=TOPK, W=L + R), selected[P], kv, node=node, rule=self,
+                N = long_row_keys(n, TOPK)
+                if N > n:
+                    kv = Coll(Array(N, row), latent.cut(n, [repeat(const(16, 0), (N - n) * (L + R))]))
+                kv = ctx.call(ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R), selected[P], kv, node=node, rule=self,
                               name=f"{h}/rows[t={P}]")
             outs.append(ctx.call(attn, ql[i], qr[i], kv, node=node, rule=self, name=f"{h}[t={P}]"))
         ctx.define(node, array_of(outs))
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": P0 + T, "NH": NH, "DR": R, "DV": L,
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
                                 "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots); past "
-                                "TOPK the order the run's Waksman settings route (`run` field <layer>/topk_switches[t=P], "
-                                "DsaWaksmanOrder_v1), checked by DsaTopKLongRow_v1, its rows by DsaWaksmanRows_v1 at the same settings",
+                                "TOPK the logits' top-TOPK set in ascending index order, at the row's class (long_row_keys): "
+                                "DsaTopKMask_v1, DsaButterflySettings_v1 and the rows DsaButterflyRows_v1 reads at those settings",
                                 "past_topk": past, "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T} (splits {splits})" +
                            (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T - len(past)}" if has else f" (top-k of {source})") +
-                           (f" + {'DsaWaksmanOrder_v1, DsaTopKLongRow_v1, ' if has else ''}DsaWaksmanRows_v1 x{len(past)}" if past else ""))
+                           (f" + {'DsaTopKMask_v1, DsaButterflySettings_v1, ' if has else ''}DsaButterflyRows_v1 x{len(past)}"
+                            if past else ""))
 
 
 class MlaAbsorbBmmRule(OpRule):
