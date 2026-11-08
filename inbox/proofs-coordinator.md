@@ -5513,3 +5513,41 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
 - **Blocked: the `PUT /api/panels/proofs/verifier-cost`.** The panel JSON is built and passes `verity_console.problems`: `panel.proofs-verifier-cost.json` in evidence art:919fbb0082f30fabb857f65f57de7cfda8f4428b28a6b183d934444223e64c8c. No panels:write key is reachable: none on this VM, none in env, none on vy-nebius-cpu-1, and `research run` can't reach vy-nebius-1. Can you or @infra PUT the file, or add the key as a Cloud Agent secret?
 - **Waiting on:** the render r20261108-021119-d449, then the figure art and the compare against v2.7 (the design fields move this time), and vllm's 03:00Z ticksweep for Figure 6 (b).
 - Note: proofs/20261108T0214Z-report-optmodes.
+
+## 02:15Z from TWOOPENS: land ask, #7928 at `0c5f8c9c51` (the rows vocabulary); `Reveals` is written down to two premises on `h`, its try running
+- **Land ask: #7928** (https://github.com/compute-verification/verity/pull/7928) at `0c5f8c9c51`, branch
+  `cursor/proofs-twoopens-rows-7c41`. Lane proofs, Stacks on #7909 (which, with #7892, #7878 and #7868, is on `checked`),
+  Goal proofs/spot-two-stage-sound, Refs PRF-460. Opened at 01:53Z and marked; `research queue status` shows it admitted.
+  It changes no guarantee and no premise and lists nothing.
+  - Try r20261108-012830-f42a (cpu-2): Lean exit 0, and its 10 theorems use only the three standard axioms.
+  - Records r20261108-013218-9520 (cpu-2): AUDIT PASS for `Security/Proofs` and both requirers; the lock is unchanged.
+  - Suites r20261108-013218-5f5d (cpu-2, `--quick`): 57 passed.
+- **TWOSESS has the SHA** (`inbox/TWOSESS.md`, 02:15Z), with the readers and the premise below.
+- **A correction to my 01:35Z plan: no Flock lemma moves out of `Claims/Recursion`.** The rows and parse facts are already
+  one lemma outside it: `Flock.InnerRows.rows_commit_check` (`Recursive/InnerRows.lean`). The commit string of a table row,
+  as the witness holds it, is the public file's digest at that row.
+- **Next PR: the facts and the composition**, branch `cursor/proofs-twoopens-facts-5d2e` @ `3122f3e139`, stacked on #7928.
+  It adds one module, `SpotFlock/RowsOpen.lean`:
+  - `rows_open`: each row's commit string opens its registered port at the read's position and path
+    (`rows_commit_check` after #7909's `opens_of_stmtOk`), given the premise `ScopedHidden xS` below.
+  - `decOf_bitAt`: the decoder at a table's column is the witness's bit there.
+  - `reveals_of_frameRows`: `Reveals h (decOf L)` from `SessionScoped h` and `FrameRows h L`. `sessionOpensTwo_of_rows` then
+    gives `SessionOpensTwo` from those two and `Embeds h L`.
+  - Try r20261108-021246-7b3d (cpu-2) is running, ETA 02:30Z. The first try, r20261108-015238-dde9, failed only on two names
+    I hadn't qualified (`Hm96.Default512.commitString`), now fixed; its other two theorems were clean. Records and suites
+    follow; I'll mark it when they pass, about 03:15Z. The VM restarted at 02:09Z and lost my unpushed commit, so I rebuilt
+    it from my notes; the branch is pushed now.
+- **The two premises on `h` it leaves, besides `Embeds`:**
+  - `FrameRows h L` is what the frame must give: for each needed gate, an opening of the witness's bit at the gate's wire,
+    under the right roots, that passes wherever the registered read of its row passes. It's TWOSESS's `FrameIs` side. They
+    prove it from `OwnRooted h.frame shapes`, `AtPorts` and the frame's row, salt and path facts by `opens_atPorts` and
+    `hm96_treeLeaf`, or tell me to reshape it.
+  - `SessionScoped h`: the check puts each session statement in Flock's scope (`Readable.Read.check`) with hidden outputs.
+    `rows_commit_check` needs both, and `stmtOk` checks neither today: `sessionOk` checks the sizes and the shape.
+  - **Ask for TSVERIFY:** add `FlockDeploy.scopeCheck true xS` and the hidden-outputs tag of `xS` to `sessionOk`. Then
+    `SessionScoped h` is a lemma and not a premise. `flock-verify` already refuses a statement outside its proved scope,
+    and the deployed session circuit hides its outputs, so honest sessions still pass. If TSVERIFY won't, it's a third
+    premise on `h`, and I'll list it open on PRF-460 beside `OwnRooted h.frame shapes`.
+- **Dates.** Facts and composition PR marked by 03:30Z. `SessionOpensTwo` from `Embeds`, `FrameRows` and `SessionScoped` is
+  then proved. Sun 20:00Z holds for discharging `FrameRows` (TWOSESS's `FrameIs`, statement about 03:30Z) and
+  `SessionScoped` (TSVERIFY's code, or a listed premise). `Embeds h L` stays a premise on the registration, as at 00:15Z.
