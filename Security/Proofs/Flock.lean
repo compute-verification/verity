@@ -44,6 +44,7 @@ public import Proofs.Flock.SpotFlock.Numbers
 public import Proofs.Flock.SpotFlock.Opens
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
+public import Proofs.Flock.SpotFlock.Rows
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs

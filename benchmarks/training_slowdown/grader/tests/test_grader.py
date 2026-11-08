@@ -1,8 +1,9 @@
-"""The grader (`grader.py`) on the lf model's tiny training step (conftest's `steps`), f32 and with bf16 matrix products, beside
-a stand-in for training's slowdown code (`CODE`): the hand-over it reads and each one it refuses; the step's matrix products as
-the step's ATen graph has them (each mm and bmm with its dims, phase, operand and output widths and token dims, and N and O);
-the products it refuses to read; the comparison with a trace in the slowdown code's row format (`against`); and |C|'s
-pricing."""
+"""The grader (`grader.py`) on the lf model's tiny training step (conftest's `steps`), f32, with bf16 matrix products, and with
+those on sm_120's cuBLAS routes, beside a stand-in for training's slowdown code (`CODE`): the hand-over it reads, in a fresh
+process too, and each one it refuses; the step's matrix products as the step's ATen graph has them (each mm and bmm with its
+dims, phase, operand and output widths and token dims, N and O, and its cells' |C|); the GPU step's linears as its tensor
+core's dots; the products it refuses to read; the comparison with a trace in the slowdown code's row format (`against`); and
+|C|'s pricing."""
 from __future__ import annotations
 
 import collections
@@ -12,11 +13,14 @@ import hashlib
 import json
 import math
 import shutil
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import torch
-from conftest import LF, STEP, STRUCTURE
+from conftest import CC, LF, STEP, STRUCTURE, dot_alone
 
 import grader as G
 from verity.ml.circuits.census import census
@@ -34,12 +38,8 @@ CODE = SimpleNamespace(opnames=SimpleNamespace(gemm_like=lambda name: name in G.
 #: the forward's matrix products of the tiny model: each layer's seven linears and attention's two, and the logits
 FORWARD = 9 * LF.SIZES["tiny"].n_layer + 1
 AGREE = ("count", "N", "O", "widths", "token_dims")
-
-
-@pytest.fixture
-def no_size(monkeypatch):
-    """`read` with a stand-in |C| (`circuit_size`), which `test_circuit_size_on_the_tiny_step` computes."""
-    monkeypatch.setattr(G, "circuit_size", lambda program: {"gates": 1000})
+#: the tiny steps: f32, bf16 products on torch CPU's arithmetic, and on sm_120's cuBLAS
+STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}
 
 
 def test_a_handover_reads_back(steps) -> None:
@@ -50,6 +50,17 @@ def test_a_handover_reads_back(steps) -> None:
     for where in (s.path, s.path.parent):
         h = G.load_handover(where)
         assert h.path == s.path and sorted(h.step.root.theta) == sorted(s.program.root.theta)
+
+
+@pytest.mark.slow
+def test_a_handover_reads_in_a_fresh_process(steps) -> None:
+    """A process that derived no step decodes a hand-over: the grader registers the Definitions the frontend lowers to, the
+    GPU's routes among them, before it decodes."""
+    s = steps(torch.bfloat16, CC)
+    script = (f"import sys; sys.path.insert(0, {str(Path(G.__file__).parent)!r}); import grader as G; "
+              f"print(len(G.load_handover({str(s.path)!r}).step.root.body.nodes))")
+    got = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    assert got.returncode == 0 and got.stdout.split() == [str(len(s.program.root.body.nodes))], got.stderr[-2000:]
 
 
 def _record(d, edit) -> None:
@@ -121,14 +132,27 @@ def _graph_products(gm, gm2) -> dict:
             for n in gm.graph.nodes if n.op == "call_function" and n.target in (aten.mm.default, aten.bmm.default)}
 
 
-@pytest.mark.parametrize("dtype", [None, torch.bfloat16], ids=["f32", "bf16"])
-def test_the_products_are_the_steps_matrix_products(dtype, steps, no_size) -> None:
+def _cell_gates(h) -> collections.Counter:
+    """Each occurrence's multiply-add cells' word gates, off the decoded step Program's own nodes."""
+    nodes, calls = h.step.root.body.nodes, h.step.annotations["correspondence"]["calls"]
+    got: collections.Counter = collections.Counter()
+    for nd, c in zip(nodes[len(nodes) - len(calls):], calls):
+        if getattr(nd.fn, "base_id", None) in G.MAC_CELLS:
+            got[c["occ"]] += (nd.n if nd.form in ("batch", "scan") else 1) * nd.fn.gates
+    return got
+
+
+@pytest.mark.parametrize("step", sorted(STEPS))
+def test_the_products_are_the_steps_matrix_products(step, steps, unit_prices) -> None:
     """Each mm and bmm of the step's ATen graph is one product row, with the graph's dims, operand and output widths (the bf16
     linears' 16 bits; attention's 32, as torch's math path computes it from upcast operands) and the token dims the structure's
     graph varies, in its phase: the forward's products, and two in the backward for each. Every operand depends on θ′, so N
-    is every product's MACs and O every output's wires."""
-    s = steps(dtype)
-    out = G.read(G.load_handover(s.path), CODE)
+    is every product's MACs and O every output's wires. Each row's |C| is its cells' (at one gate a primitive, their word
+    gates)."""
+    dtype, cc = STEPS[step]
+    s = steps(dtype, cc)
+    h = G.load_handover(s.path)
+    out = G.read(h, CODE)
     assert out["format"] == G.READ and out["slowdown_code"] == {"version": "stand-in", "commit": "0" * 40, "checked": False,
                                                                 "capture": G.CAPTURE}
     rows = [r for r in out["products"] if r["op"] in G.PRODUCTS]
@@ -141,18 +165,38 @@ def test_the_products_are_the_steps_matrix_products(dtype, steps, no_size) -> No
     assert t["N"] == t["macs"] == sum(math.prod(d.values()) for _, d, *_ in graph.values())
     assert t["O"] == sum(d["batch"] * d["m"] * d["n"] * w for _, d, _, (w,), _ in graph.values())
     assert (t["widths"], t["out_widths"]) == (([(16, 16), (32, 32)], [16, 32]) if dtype else ([(32, 32)], [32]))
+    assert {r["occ"]: r["gates"] for r in out["products"]} == _cell_gates(h) and not t["unpriced"]
+    assert t["gates"] == sum(t["gates_by_op"].values()) == sum(t["gates_by_phase"].values()) == sum(r["gates"] for r in rows)
 
 
-def test_a_structure_of_another_step_is_refused(steps, no_size) -> None:
+def test_the_gpu_steps_linears_are_its_tensor_cores_dots(steps, monkeypatch) -> None:
+    """On sm_120 each linear's GEMM is its route's row cells (conftest's `ROUTES`: unsplit, split-K over a bf16 workspace and
+    serial split-K), each k16 step a call of the tensor-core dot whose Boolean Definition the slowdown code prices a bf16 MAC
+    at (`HopperBF16WgmmaDot16_v2`, its gates over 16): priced at that dot alone, the linears' |C| is a trace's at its gates a
+    MAC exactly, and what their full |C| adds rounds and reduces. Attention's products stay `LinearRef_v1` rows at the 32
+    bits torch's math path computes them in, which call no dot."""
+    s = steps(torch.bfloat16, CC)
+    price = dot_alone(monkeypatch, s.program)
+    assert price["boolean"] == "HopperBF16WgmmaDot16_v2"
+    out = G.read(G.load_handover(s.path), CODE)
+    mm, bmm = ([r for r in out["products"] if r["op"] == op] for op in G.PRODUCTS)
+    assert {c.split("{")[0] for r in mm for c in r["cells"]} == set(G.ROWS) - {G.CELL}
+    assert all(16 * r["gates"] == r["macs"] * price["gates"] for r in mm)
+    assert all(r["gates"] == 0 and r["widths"] == [(32, 32)] and {c.split("{")[0] for c in r["cells"]} == {G.CELL} for r in bmm)
+    C = G.against(out, _trace(out["products"], 1.0, price["gates"] / 16), CODE)["C"]
+    assert C["mm"] == {"circuit": out["totals"]["gates_by_op"]["mm"], "trace": out["totals"]["gates_by_op"]["mm"], "ratio": 1.0}
+
+
+def test_a_structure_of_another_step_is_refused(steps) -> None:
     h = G.load_handover(steps().path)
     other = G.load_handover(steps(torch.bfloat16).path)
     with pytest.raises(G.Refused, match="derive both with step_program from the same model"):
         G.read(dataclasses.replace(h, structure=other.structure), CODE)
 
 
-def test_a_product_it_doesnt_read_is_refused(steps, no_size) -> None:
+def test_a_product_it_doesnt_read_is_refused(steps) -> None:
     """An op the slowdown code says computes products that isn't an mm or bmm (here the stand-in's mul), and an mm whose rows
-    aren't its LinearRef_v1 cells, are refused: the grader reads a step's products whole or not at all."""
+    aren't its row cells, are refused: the grader reads a step's products whole or not at all."""
     h = G.load_handover(steps().path)
     code = SimpleNamespace(**{**vars(CODE), "opnames": SimpleNamespace(gemm_like=lambda name: name in (*G.PRODUCTS, "mul"))})
     with pytest.raises(G.Refused, match=r"\(aten\.mul\.\w+\) computes matrix products the grader doesn't read"):
@@ -165,31 +209,43 @@ def test_a_product_it_doesnt_read_is_refused(steps, no_size) -> None:
         G._check_products(p, CODE)
 
 
-def _trace(rows: list[dict], cell: float) -> dict:
+#: a stand-in trace's |C| besides its products'
+REST = 500
+
+
+def _trace(rows: list[dict], cell: float, gates_per_mac: float = 2.0) -> dict:
     """The circuit's product `rows` as training's slowdown code writes a step's (its capture's .products.json): identical rows
-    one row with their count, each at the Definition whose gates are `cell`."""
+    one row with their count, each at the Definition whose gates are `cell`, a MAC at `gates_per_mac`, and the step's |C|
+    its products' and `REST`."""
     merged: dict = {}
     for r in rows:
         if r["op"] in G.PRODUCTS:
             d = r["dims"]
             row = {"phase": r["phase"], "op": r["op"], "dims": d, "token_dims": r["token_dims"], "macs": math.prod(d.values()),
                    "outputs": d["batch"] * d["m"] * d["n"], "affected": [True, True], "widths": list(r["widths"][0]),
-                   "cell_gates": cell}
+                   "cell_gates": cell, "gates_per_mac": gates_per_mac}
             key = json.dumps(row, sort_keys=True)
             merged[key] = {"count": merged.get(key, {}).get("count", 0) + 1, **row}
-    return {"capture": G.CAPTURE, "gates": 500, "rows": list(merged.values())}
+    rows = list(merged.values())
+    return {"capture": G.CAPTURE, "gates": sum(r["count"] * r["macs"] * gates_per_mac for r in rows) + REST, "rows": rows}
 
 
-def test_against_a_trace(steps, no_size) -> None:
+def test_against_a_trace(steps, unit_prices) -> None:
     """The circuit's products beside a trace of the same step in the slowdown code's row format agree at every (phase, op,
-    dims) on count, N, O, widths and token dims; each difference shows in its own column; a trace of another capture is
-    refused."""
+    dims) on count, N, O, widths and token dims; each difference shows in its own column; both sides' |C| are the step's,
+    each op's products', all products' and the rest's, the trace's products at its gates a MAC; a trace of another capture
+    is refused."""
     out = G.read(G.load_handover(steps().path), CODE)
     a = G.against(out, _trace(out["products"], 2.0), CODE)
     assert a["agree"] == dict.fromkeys(AGREE, True)
     t = out["totals"]
-    assert a["totals"]["circuit"] == a["totals"]["trace"] == {"count": 3 * FORWARD, "N": t["N"], "O": t["O"]}
-    assert len(a["rows"]) < 3 * FORWARD and a["C"] == {"circuit": 1000, "trace": 500, "ratio": 2.0}
+    base = {"count": 3 * FORWARD, "N": t["N"], "O": t["O"]}
+    assert (a["totals"]["circuit"], a["totals"]["trace"]) == ({**base, "gates": t["gates"]}, {**base, "gates": 2 * t["macs"]})
+    assert len(a["rows"]) < 3 * FORWARD
+    macs = {op: sum(r["macs"] for r in out["products"] if r["op"] == op) for op in G.PRODUCTS}
+    circuit = {"step": out["C"]["gates"], **t["gates_by_op"], "products": t["gates"], "rest": out["C"]["gates"] - t["gates"]}
+    trace = {"step": 2 * t["macs"] + REST, **{op: 2 * m for op, m in macs.items()}, "products": 2 * t["macs"], "rest": REST}
+    assert a["C"] == {k: {"circuit": circuit[k], "trace": trace[k], "ratio": circuit[k] / trace[k]} for k in circuit}
 
     def agree(edit=None, cell: float = 2.0) -> list[str]:
         trace = _trace(out["products"], cell)
@@ -226,8 +282,8 @@ def test_each_class_is_priced_at_its_primitives_boolean_prices() -> None:
            "nodes": {"callee": [0, 1, 1, 2], "n": [1, 4, 1, 5]}}
     prices = {"p": {"boolean": "P_v1", "gates": 10, "and": 3}, "q": {"boolean": None, "why": "no Boolean version"}}
     assert G.priced(cen, prices) == {
-        "classes": [{"class": "A", "instances": 5, "word_gates": 15, "gates": 100, "ands": 30},
-                    {"class": "B", "instances": 5, "word_gates": 5, "gates": 0, "ands": 0}],
+        "classes": [{"class": "A", "instances": 5, "word_gates": 15, "gates": 100, "ands": 30, "unpriced": ["q"]},
+                    {"class": "B", "instances": 5, "word_gates": 5, "gates": 0, "ands": 0, "unpriced": ["q"]}],
         "gates": 100, "ands": 30, "word_gates": 20, "unpriced_word_gates": {"q": 10}}
 
 

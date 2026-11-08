@@ -25,6 +25,7 @@ switches as ``collectives`` (`collectives`) and recorded, not judged: two engine
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -249,27 +250,24 @@ COLLECTIVE_SWITCHES = ("disable_custom_all_reduce", "VLLM_ALLREDUCE_USE_FLASHINF
 def collectives() -> dict[str, Any]:
     """In a serving process: the TP group's all-reduce routes as vLLM resolved them on this rank, in `CudaCommunicator.all_reduce`'s
     order: each communicator on or off, FlashInfer's workspace backend (which the fused all-reduce + RMSNorm shares; None before its
-    first call), the custom all-reduce's and torch symmetric memory's byte caps, and the NCCL version pynccl loaded.  A read that
-    fails is recorded as ``error``: this record is never a reason to fail a Commit."""
-    try:
-        from vllm.distributed.device_communicators import flashinfer_all_reduce as fi
-        from vllm.distributed.parallel_state import get_tp_group
-        dc = getattr(get_tp_group(), "device_communicator", None)
-        ws = getattr(fi, "_fi_ar_workspace", None)
+    first call, and in a process that never loaded FlashInfer's all-reduce), the custom all-reduce's and torch symmetric memory's
+    byte caps, and the NCCL version pynccl loaded.  Without a TP group it raises, as `read_rank`'s rank does."""
+    from vllm.distributed.parallel_state import get_tp_group
 
-        def on(name: str) -> bool:
-            c = getattr(dc, name, None)
-            return c is not None and not getattr(c, "disabled", False)
+    dc = getattr(get_tp_group(), "device_communicator", None)
+    ws = getattr(sys.modules.get("vllm.distributed.device_communicators.flashinfer_all_reduce"), "_fi_ar_workspace", None)
 
-        ca, sm, nc = (getattr(dc, n, None) for n in ("ca_comm", "symm_mem_comm", "pynccl_comm"))
-        return {"world": getattr(dc, "world_size", None), "flashinfer": on("fi_ar_comm"),
-                "flashinfer_backend": getattr(ws, "backend", None), "quick": on("qr_comm"),
-                "flashinfer_pcie_ipc": on("fi_pcie_ipc_ar_comm"), "aiter": on("aiter_ar_comm"), "custom": on("ca_comm"),
-                "custom_max_bytes": getattr(ca, "max_size", None) if on("ca_comm") else None, "symm_mem": on("symm_mem_comm"),
-                "symm_mem_max_bytes": getattr(sm, "max_size", None) if on("symm_mem_comm") else None, "pynccl": on("pynccl_comm"),
-                "nccl_version": getattr(nc, "nccl_version", None)}
-    except Exception as ex:  # noqa: BLE001
-        return {"error": f"{type(ex).__name__}: {ex}"}
+    def on(name: str) -> bool:
+        c = getattr(dc, name, None)
+        return c is not None and not getattr(c, "disabled", False)
+
+    ca, sm, nc = (getattr(dc, n, None) for n in ("ca_comm", "symm_mem_comm", "pynccl_comm"))
+    return {"world": getattr(dc, "world_size", None), "flashinfer": on("fi_ar_comm"),
+            "flashinfer_backend": getattr(ws, "backend", None), "quick": on("qr_comm"),
+            "flashinfer_pcie_ipc": on("fi_pcie_ipc_ar_comm"), "aiter": on("aiter_ar_comm"), "custom": on("ca_comm"),
+            "custom_max_bytes": getattr(ca, "max_size", None) if on("ca_comm") else None, "symm_mem": on("symm_mem_comm"),
+            "symm_mem_max_bytes": getattr(sm, "max_size", None) if on("symm_mem_comm") else None, "pynccl": on("pynccl_comm"),
+            "nccl_version": getattr(nc, "nccl_version", None)}
 
 
 def collectives_differ(a: Mapping[str, Any], b: Mapping[str, Any]) -> list[str]:

@@ -1513,6 +1513,38 @@ def test_an_antecedent_in_a_conclusion_headed_by_the_package_s_definition_is_a_n
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_honest_witness_concludes_a_premise_at_a_defeq_argument_and_not_at_another_instance(tmp_path):
+    """`Facts.lean`'s `agree` on a real build: `fixed_sound` takes `Fixed (@Val.v Unit zeroA)`. An honest witness at
+    `zeroB`, another instance with the same field, concludes it (`isDefEq`, where the texts differ), and so does one at
+    every `n`; one at `one`, an argument that differs from the premise's only in its instance, and not definitionally,
+    doesn't, though with the instances erased the two would read alike."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Agree.lean").write_text(
+        "namespace Control\nclass Val (α : Type) where v : Nat\n"
+        "instance zeroA : Val Unit := ⟨0⟩\ninstance zeroB : Val Unit := ⟨0⟩\ninstance one : Val Unit := ⟨1⟩\n"
+        "def Fixed (n : Nat) : Prop := n ≤ n\n"
+        "theorem fixed_sound (h : Fixed (@Val.v Unit zeroA)) : True := trivial\n"
+        "theorem fixed_same : Fixed (@Val.v Unit zeroB) := Nat.le_refl _\n"
+        "theorem fixed_other : Fixed (@Val.v Unit one) := Nat.le_refl _\n"
+        "theorem fixed_all : ∀ n, Fixed n := Nat.le_refl\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Agree\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ("Control.fixed_sound", "Control.fixed_same", "Control.fixed_other", "Control.fixed_all")
+
+    def cover(witness: str) -> tuple:
+        f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": dict.fromkeys(names, {}),
+                             "witnesses": {"Control.fixed_sound": {"honest": [witness]}}}, tmp_path)
+        (p,) = f["pins"]["Control.fixed_sound"]["premises"]
+        return p["head"], p["agree"], "Control.Fixed" in A.honest_concludes(f["pins"]["Control.fixed_sound"],
+                                                                           [f["pins"][witness]])
+
+    assert cover("Control.fixed_same") == ("Control.Fixed", True, True)
+    assert cover("Control.fixed_all") == ("Control.Fixed", True, True)
+    assert cover("Control.fixed_other") == ("Control.Fixed", False, False)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
     """`Facts.lean`'s one-step unfolding on a real build, without `--moved`: lifts with no binders, with binders whose argument
     the definition's own binder must shift (`Q`), universe-polymorphic (`R`), and with a named assumption kept as a binder
@@ -3384,6 +3416,36 @@ def test_a_domain_hypothesis_says_what_it_restricts_and_the_honest_witness_concl
                              "module": "P.Defs"}]}
     assert "witnesses.honest-form" not in witness_codes(opened, witnessed(honest=takes)[1])
     assert "witnesses.honest-form" in witness_codes(dom, witnessed(honest=takes)[1]), "it concludes a domain hypothesis"
+
+
+def test_an_honest_witness_concludes_a_premise_it_states_applied_at_the_arguments_the_guarantee_fixes():
+    """An honest witness whose statement is the premise applied at the deployed instance (`P.Compiled P.deploy`) concludes
+    it, as `Facts.lean` reads its type, also where that statement is a definition the witness rule reads lifted (`lifted`,
+    unfolded once past its head): a domain hypothesis it is stays covered, and the honest witness concludes the premise.
+    Where the guarantee fixes an argument (`P.Compiled P.circA`), the witness concludes it only where `Facts.lean` found its
+    conjunct at that argument (`agree`, by `isDefEq`): not where it found another, nor where it says nothing."""
+    pol, f = witnessed()
+    seed = {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}
+    opened = A.judge(pol | seed, f, FILES, update=True)[1]
+    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")}
+    hand = {k: v for k, v in opened.items() if k != "open"} | {
+        "domain": {"P.Compiled": entry | {"why": "the compiled circuits the bound is stated over"}}}
+    dom = A.judge(hand, f, FILES, update=True)[1]
+    assert A.judge(dom, f, FILES)[0] == [] and "P.Compiled" in dom["domain"]
+    lifted = wbody("LE.le", conclusion=[wk("LE.le", defs=["P.deploy"])])
+
+    def at(taken, agree=None):
+        premise = COMPILED | {"args": taken} | ({} if agree is None else {"agree": agree})
+        pol, f = witnessed({"premises": [premise]}, honest={"body": wbody("P.Compiled", lifted=lifted)})
+        return [x.code for x in A.judge(dom, f, FILES)[0] if x.code.startswith("domain.")], witness_codes(pol, f)
+
+    hp = witnessed(honest={"body": wbody("P.Compiled", lifted=lifted)})[1]["pins"]["P.sound_honest"]
+    assert "P.Compiled" not in A.concluded_constants(A.statement_read(hp)), "read lifted, its head is gone"
+    assert at([None]) == ([], []), "an argument over the guarantee's binders fixes nothing: the head decides"
+    assert at(["CP.circA \nR0"], True) == ([], [])
+    for agree in (False, None):
+        assert at(["CP.circA \nR0"], agree) == (["domain.uncovered"], ["witnesses.honest-uncovered"]), agree
+    assert A.honest_witnesses(pol) == {"P.sound": ["P.sound_honest"]}
 
 
 def test_another_listed_guarantee_s_statement_is_a_domain_hypothesis_citing_it():
