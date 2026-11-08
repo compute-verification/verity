@@ -23798,11 +23798,11 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Partition.IsCK"],
+    "open": [],
     "reads": []
    },
    "type_hash": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
-   "unfolded_hash": "88fa52f61fef7f02904d16c11e272cc9653e4331267135f8623d04c78a38fa60"
+   "unfolded_hash": "929d73b718ae3b41b7cad4290e95cff7335dc6ae3d935bb579fc153ca694263e"
   },
   "Verity.SecurityProofs.CountingSum": {
    "owner": "@lean",
@@ -23828,7 +23828,7 @@
     "reads": []
    },
    "type_hash": "7321aa6ea229f2fa211727e357fd61d3ae7d34b47eeb77fce279a9528f404513",
-   "unfolded_hash": "e9cd1e718e6e28ca53a1efbe18c49c202e2b2898ec110ad08f370179460b4341"
+   "unfolded_hash": "87ffa441813c3089d482fa26b2ffd3658f12b8f5936799cf54ad9664eae9ca45"
   },
   "Verity.SecurityProofs.Counting_nontrivial": {
    "owner": "@lean",
@@ -23841,7 +23841,7 @@
     "reads": []
    },
    "type_hash": "9695bf3061efadffc4747a3c68527a1a1be90984ca7abd91eec9b9a8f2eb2801",
-   "unfolded_hash": "2fd29e9644f000074d94ee73fff717237b7ebd621013daf35d2befdfdca187ac"
+   "unfolded_hash": "aae1e9ef97f3b8902686e8a8161ac67f3095b386bf09f45dfedab807f9c85666"
   },
   "Verity.SecurityProofs.CreditSizeLe": {
    "owner": "@lean",
@@ -32431,12 +32431,12 @@
    }
   },
   "Definitions.Core.Guarantees.Formalism": {
-   "digest": "64ffaa1bd9f2660edd59eba7c6da65a8012cd6ea62128ec6f4a8dbb2e08a4ac7",
+   "digest": "eb1913c63bff4ef513eabfb6df4326a0e119886ef7d283c5f99dcc80b7ce2043",
    "definitions": {
     "Verity.Guarantees.AndSizeLe": "9350d1ae3f31c74ddd50f1897253f464f1fa16189f0058edb6be6125a78b1aca",
     "Verity.Guarantees.BlockDescription": "2dc39050f76c064b0a468b4dd9472697d47d96f90e6b5e2302e9ab154604302f",
     "Verity.Guarantees.CKSize": "50a78d6ed20409fceb5292e5df612cd2fec1b0d0e109271b206ef248955537a9",
-    "Verity.Guarantees.Counting": "07291f2fde09b03708e7731aa735c20adfe1a1c13d78031cf9f00180f770a76d",
+    "Verity.Guarantees.Counting": "b22c62bb6913668d15cfa2e601a725e63fee43873efeac95ce40b14403fa0b67",
     "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76",
     "Verity.Guarantees.CreditSizeLe": "81c434be7e58752682f68665a64e271c48e1cd1eb363ed2a8125ad5e5397d389",
     "Verity.Guarantees.InferenceCap": "8cb66991f9d6bf7a627c1a31de466e777ecae9a79ecc3c0385110eafda097454",
@@ -32445,12 +32445,12 @@
    }
   },
   "Definitions.Core.Guarantees.Formalism.Witnesses": {
-   "digest": "53ea1fa69b3534537db61b0ab454371fdf2adf5382457c5f85ac369f8145180c",
+   "digest": "b828cca0f8cbf83f7012cc535ee42c9b45e1b81f18b13b18ef9f5de1899c998e",
    "definitions": {
     "Verity.Guarantees.CKSize_honest": "07a924d841239e97761e0cb68b60865cf6e37d99df68e8830f938ca16529fe20",
     "Verity.Guarantees.CKSize_nontrivial": "029c0a3984c25e7e074e1426c0f9ff0ed1d098be7fa2dfc944e2028d5e4445a9",
-    "Verity.Guarantees.Counting_honest": "9979743032bf7051dff3ccd1348bdf38e5e53866e3c7a021d8064f26bde1f334",
-    "Verity.Guarantees.Counting_nontrivial": "271b93c7a09ca28704eafe42080e61eb8266c82e9b07f6f6ef4d3fff8492c3f3"
+    "Verity.Guarantees.Counting_honest": "6bbf6cbe177c85e9424710d1ebeb209b15ae5990de21784e8eece232e8a290b5",
+    "Verity.Guarantees.Counting_nontrivial": "1525ed7a6513167ca8d6790d916582160e2ebe7b5e033c6d4213d946857d3624"
    }
   },
   "Definitions.Core.Guarantees.Game": {
