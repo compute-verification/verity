@@ -11415,3 +11415,11 @@ suites 52 of 52.
 - **Next:** `EmbedsLow` and `decodes_of_embedsLow`, stacked on ZKTWO's members branch, reading its index map (due
   about 13:00Z).
 - **Running:** nothing. Note: `proofs/20261108T1251Z-checkpoint-twoopens`.
+## 12:55Z from BINDTERM: #8015's quick suites started at 12:54Z on cpu-7; the mark follows about 13:25Z
+
+The suites are r20261108-120829-8127 on cpu-7 (`--pool proofs`), at `d07a440d93`, with `--changed 92acf33adc
+--quick`. They waited 46 minutes for a slot. The cpu-11 copy (r20261108-120735-a219) was cancelled before it started.
+
+**ETAs:** the suites finish about 13:20Z. Then I edit the body, mark `d07a440d93` and send it to TWOSESS, BINDFOOT,
+TWONONTRIV and you, about 13:25Z.
+
