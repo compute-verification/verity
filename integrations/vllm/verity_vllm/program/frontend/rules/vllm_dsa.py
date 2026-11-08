@@ -593,8 +593,7 @@ class DsaIndexerAttnRule(StateRule):
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
                     continue
                 N = long_row_keys(n, TOPK)
-                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n
-                              else logits.refs)
+                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs)
                 mask = ctx.call(ctx.kind("dsa_topk_mask", node, N=N, TOPK=TOPK), scores, node=node, rule=self,
                                 name=f"{h}/topk_mask[t={P}]")
                 selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
@@ -623,21 +622,17 @@ class DsaIndexerAttnRule(StateRule):
             kv = Coll(Array(n, row), latent.cut(n))
             if n > TOPK:
                 N = long_row_keys(n, TOPK)
-                if N > n:
-                    rest = Coll(Array(N - n, row), pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R)))
-                    kv = ctx.call(ctx.kind("dsa_butterfly_rows_pad", node, T=n, N=N, TOPK=TOPK, W=L + R), selected[P], kv, rest,
-                                  node=node, rule=self, name=f"{h}/rows[t={P}]")
-                else:
-                    kv = ctx.call(ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R), selected[P], kv, node=node, rule=self,
-                                  name=f"{h}/rows[t={P}]")
+                rest = (Coll(Array(N - n, row), pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R))),) if N > n else ()
+                rows = (ctx.kind("dsa_butterfly_rows_pad", node, T=n, N=N, TOPK=TOPK, W=L + R) if rest
+                        else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
+                kv = ctx.call(rows, selected[P], kv, *rest, node=node, rule=self, name=f"{h}/rows[t={P}]")
             outs.append(ctx.call(attn, ql[i], qr[i], kv, node=node, rule=self, name=f"{h}[t={P}]"))
         ctx.define(node, array_of(outs))
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": P0 + T, "NH": NH, "DR": R, "DV": L,
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
-                                "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots); past "
-                                "TOPK the logits' top-TOPK set in ascending index order, at the row's class (long_row_keys): "
-                                "DsaTopKMask_v1, DsaButterflySettings_v1 and the rows DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 "
-                                "below the class) reads at those settings",
+                                "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots); past TOPK the "
+                                "logits' top-TOPK set in ascending index order, at the row's class (long_row_keys): DsaTopKMask_v1, "
+                                "DsaButterflySettings_v1 and the rows DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below the class) reads at those settings",
                                 "past_topk": past, "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T} (splits {splits})" +
                            (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T - len(past)}" if has else f" (top-k of {source})") +
