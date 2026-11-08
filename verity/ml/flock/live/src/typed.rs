@@ -937,7 +937,7 @@ mod tests {
         let (_, n, lo, k, prod0, lo_top) = rows.read.clone().unwrap();
         assert_eq!((n, lo, k), (8, 4, 5), "a program table keeps every value bit");
         assert!(inst.layout_text(0).ends_with(&format!("READ {sha} 8 4 5 {prod0} {lo_top}\n")));
-        assert!((prod0..prod0 + (k << (n - lo))).all(|r| rows.rows[r].1.is_empty() && nets[&0].b[r].is_empty()));
+        assert!((prod0..prod0 + (k << (n - lo))).all(|r| rows.rows[r].1.is_empty() && nets[&0].b.row(r).is_empty()));
         assert_eq!(inst.bind[0].len(), 8, "a read's index is bound, never exported");
     }
 
