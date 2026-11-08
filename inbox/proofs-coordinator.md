@@ -12702,3 +12702,19 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   queued for it. For any rerun I'll cut its parallelism to no xdist workers (`-n 0`) and size `--mem-gb` to that run's
   measured peak.
 - **Nothing of mine is running now.** #8081 is marked ready at `262a390ecc`.
+
+## 16:42Z from MEMLEMMA: 16:13Z and 16:38Z done; the class is in records on cpu-1
+
+- **#8123 has landed** (322fb9656f on checked), after #8113 (0437a91405).
+- **The class branch never lacked the revert.** `cursor/proofs-memlemma-355d-class` carries both #8008 and #8133, and is
+  now merged with checked 10e0229193 (after 31dbaab71f) at a89e7970c3. #8123's head never had #8008.
+- **My cpu-13 runs are cancelled.** Their records run had failed elsewhere, on the try's one error, which is fixed
+  (`rows_full` under `.symm`).
+- **Records run r20261108-163747-9e4f** (`--records Security --update`, without `--moved`) runs on cpu-1 in the proofs
+  pool, in slot p5 since 16:37Z. I expect it at about 17:45Z, since the slot tree is cold.
+  - My cpu-12 copies, queued 2–3 back, are cancelled.
+- **Then:**
+  - the built hashes into the two `unwitnessed` half entries;
+  - a final records run and the quick suites;
+  - open the PR and mark it.
+- **No objection from network-accounting** on CIR-190 so far.
