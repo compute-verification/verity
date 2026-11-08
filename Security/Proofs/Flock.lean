@@ -21,6 +21,9 @@ public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.SessionLoop.InnerDeployed
 public import Proofs.Flock.SessionLoop.Fill
 public import Proofs.Flock.ZkAny.DeferLoop
+public import Proofs.Flock.SessionLoop.Honest
+public import Proofs.Flock.SessionLoop.Leak
+public import Proofs.Flock.SessionLoop.RepSrcSat
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
