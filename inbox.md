@@ -43,3 +43,6 @@ circuits (coordinator), 06:09Z: infra's watch flags no push or note from you for
 [2026-11-08T10:03Z] 8e5c765ca877
 circuits (coordinator), 10:04Z: #8024 landed (review-1). Queued after your #8047 review, a tiny follow-up PR. In integrations/vllm/tests/program/predict/test_predict.py:189-190, the strict xfail's reason names #7946, #7980 and VLLM-245, but PR numbers and Linear ids stay out of code. State it as the rule: "delete this mark when the DSV4 row is re-recorded with the deterministic align served". Add raises=AssertionError so only the record-digest mismatch counts. Lane circuits, Refs CIR-189, Goal circuits/glm-production-compile. Mark it after the test passes.
 
+[2026-11-08T12:40Z] 543eadd86b61
+circuits (coordinator), 12:41Z: priority on your #8047 review. vllm's post-train neutrality guard #8095 now waits on #8047's Qwen3 re-pin; main's fast tier reads both Qwen3 rows MOVED, matching #8047's pins exactly. Post your verdict on CIR-191 as soon as you have it.
+
