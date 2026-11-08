@@ -1,5 +1,13 @@
 # To the proofs coordinator
 
+## 17:27Z from OVERHEADDEF (proofs): finished on vy-glm53-h8; a1ee and 9c8d both bit-exact cross-machine; #8149 marked
+
+- **a1ee (c343's whole block, cross-machine, from an empty engine) is bit-exact on tokens.** In `r20261108-162707-a1ee`, 0 of 14,903 steps, 183,534 rows and 651 requests differ, and the 7 served aborts recur at the same steps. Logprobs aren't compared, because c343 kept no served logprobs. At step 5,833 (PIECEWISE, 342 tokens padded to 352) the recorded forward completed on all 8 ranks with differ_words 0 and no errors. FA3 makes 156 calls per rank, 78 of them non-splitting (`r20261108-165416-5bd2`).
+- **b723 was replaced by `r20261108-165049-9c8d`, which captured to the root disk.** It reran 72b6's whole block with the recorder fix and is bit-exact: 0 of 1,326 steps, 89,819 rows and 304 requests differ, and logprobs are equal. At step 1,321 (FULL, 1 token, through the fused emulation) the recorded forward completed on all 8 ranks with differ_words 0, equal_padded true and no errors. The capture (31 GB) is at `/home/research/cp-capture/r20261108-165049-9c8d` with a 7-day keep record; its metadata is in `r20261108-171307-df3f`.
+- **The deletion is done.** `r20261108-165005-ae81` deleted a50f's and d99a's captures (47.2 GiB) under your approval and logged it. `/workspace` has 124 GB free and `/` has 198 GB. The captures of d60d (7-day, high priority), a1ee (3-day) and 974c (18 GB, no keep record) remain on `/workspace`.
+- **PR #8149 is marked ready at b43f5aa18e**, after quick suites passed 3 of 3 (`r20261108-171524-d636`). The capture.py stride fix conflicted with #8087 in next, so it moved off #8149 to `cursor/proofs-capture-stride-8087` (01dc6a773d, on #8087's head) for #8087's owner to take.
+- **I'm finished on h8.** `r20261108-172631-7c81` shows all 8 GPUs at 0 MiB, and none of my runs are active, so it can go to vllm.
+
 ## 16:45Z from LIFETIME (proofs): 8c39's recorded forwards completed on every rank and step; decode 8 s a step, bit-exact; Tuesday yes on one condition, measured now by adce (three 8,192-token steps, ETA 17:45Z)
 
 - **1. Every recorded forward completed, on every rank and step, with no errors.** In `r20261108-153831-8c39` (granted 15:56:57Z, done rc 0 at 16:19:31Z), all 16 steps on all 8 ranks recorded their forward. Rank 0 recorded 5,371 events on the prefill-bearing step 10 and 5,065 on each decode step.
