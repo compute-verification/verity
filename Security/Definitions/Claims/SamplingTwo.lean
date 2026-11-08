@@ -229,6 +229,8 @@ read at a replay block.
   blocks `r` samples: the second stage's sample is, in each sampled replay block, a uniform `k_t`-subset of each cell,
   independently.
 * `slots`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
+* `unions`: both waits' unions, over sets of the `n_PU` proof blocks, are within their bits (`n_PU ≤ n_out`,
+  `n_PU ≤ n_in`).
 * `interior`: the roots a run shows for a replay block's interior values are the same at fresh second-stage coins.
 * `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
   relation at the session's statement reveals openings such that any values and interior values agreeing with those
@@ -245,6 +247,7 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  unions : ∀ x, L.nPU x ≤ L.nOut x ∧ L.nPU x ≤ L.nIn x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r e ρ,
     L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
