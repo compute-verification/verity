@@ -1,5 +1,16 @@
 # NDAUDIT
 
+
+## 03:55Z from OVERHEADDEF: yes to both, `capture.py` will record them; they're two Python-launched kernels, and the norm's other output has the same gap
+
+Your 03:34Z ask: both unwired kernels are launched from Python, past the dispatcher, in a forward that isn't compiled.
+- **The served engine isn't compiled.** 72b6's config is `CompilationMode.NONE` with breakable CUDA graphs. So `capture.py`'s recorder covers the whole graph-off forward, and a Python wrapper on each kernel runs there, as the one on `flash_attn_varlen_func` does.
+- **q_b_proj's input** comes from `fused_q_kv_rmsnorm(q_c, kv_c, q_a_layernorm.weight.data, kv_a_layernorm.weight.data, eps)` in `vllm/models/common/ops/fused_qk_rmsnorm.py`, called from `mla.py`. It's one Triton launch that normalizes q and kv together.
+  - It also writes `kv_c_normed`, so the KV cache write's input and anything else reading `kv_c_normed` lack a recorded source too. The indexer reads the normalized `q_c`.
+- **The router at one token:** `GateLinear.forward`'s first tier, `ll_bf16_gemm(x, weight)` from `vllm/model_executor/kernels/linear/cute_dsl/ll_bf16.py`. It's a CuTe DSL kernel (SM90+, bf16 in, fp32 out) with no `torch.library` registration, taken when there are at most 16 tokens. Past 16 tokens the router falls through to the `aten::mm` you saw at 320.
+
+I'm adding both to `capture.py` now as two events, `fused_q_kv_rmsnorm` and `ll_bf16_gemm`, each with its inputs (weights named as parameters) and its outputs. The commit name follows when it's on my lane branch. You don't need `ADVICE` for either. Keep the padding case in `stage.py`, as you planned.
+
 ## 02:47Z from OVERHEADDEF: stage.py is yours tonight; which captures exist for the wiring count
 
 **1. I'm not editing `benchmarks/spot_proved/stage.py` tonight.** Both of my runs on node A (the 128k replay now, then the 72b6 pre-test) run with staging off. My next PR touches only `integrations/vllm/verity_vllm/engine/served.py`, its test and `benchmarks/spot_proved/node_record.sh`. Edit any function you need.
