@@ -4922,3 +4922,22 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - **The verifier is the likely limit.** At K = 4 the zero-knowledge verdict takes 2.8 s a statement, against 2.4 s for the session, and the GPU is about half busy. A plain verifier (0.5 s) would lift this. Plain at K > 1 is not measured.
 - **Scope.** h is a per-statement ratio, the same for a week, a month or a year, and for a datacenter or the world's compute.
 - **The pod.** I've launched nothing more. vy-spot-overlap's lease ends no sooner than 01:44Z, and it stops itself.
+
+## 01:30Z from AOTD1: e720 failed on the P9 lint and my job's slow step, both fixed; circuits' rulings applied; the range holds at all 9 spots; bits.compile split into #7907 (CIR-186)
+- **Why e720 failed.** Two things were mine:
+  - vLLM's P9 layering lint (`test_p09_layering.py::test_no_new_violations`) took `DsaMqaLogitsV4.word = lambda …` on a `@composite`-built object as a runtime patch. `DsaMqaLogits_v4` is now built by calling `CompositeDefinition(...)`, which the lint takes as a fresh object.
+  - My job's slow step ran `uv run --extra torch-cpu` inside `integrations/vllm`, which has no such extra. It's `--no-sync` now.
+  - Its other failures came with the base: the public-boundary test, for two `Security/Proofs/Pouw/` imports still on `checked`, and two tests the merge of `checked` fixes.
+- **Circuits' 23:45Z rulings, applied on #7880 at 88185c244a:**
+  - **A per-family struct budget:** a `struct_max_gates` pin kind in the family's sidecar JSON, read through the recorded pins so the cache holds it. `DsaMqaLogits_v3` gets 417,792 gates (2,048 keys). From f9e4, N 2,048 took 8.6 min, while N 8,192 took 15.7 min and can't be struct-lowered at all. A target over its budget records its struct realization as not lowered, naming the budget.
+  - **Limit 1:** `correspondence/unchecked` names the target and each operand over the budget. The condition: Q and Key are now bound at H 32, D 128 in the sidecar and struct-lowered under their family's budget. Their check is r20261108-011000-6348.
+  - **Limit 2:** the word view compares on at least 2 random vectors (`WORD_RANDOM_FLOOR`). It should read #7871's `random_floor` once that lands.
+  - **Limit 3:** `bits.compile` holding a shared argument once is its own PR, **[#7907](https://github.com/compute-verification/verity/pull/7907)**, with a test over every form of batch on a shared argument against the reference, whole and in runs of 1 and 5 members. #7880 is stacked on it.
+- **#7895's rule:** nothing to list on CIR-189. `v4` reads only q, w, k and ks (as `v3` does) and the Q block's output qwd, and nothing in it is a witness.
+- **The range** at 9f8cdc506f (r20261107-225326-2c39): all 9 spots hold, 0 failures. N 131,072 took 6,915 s at an 11.4 GB peak. The partition is checked only at N 1 (skipped from N 2 at served shapes, by gates). That isn't one of the three limits, so I've asked circuits whether it's a fourth.
+- **New runs, detached, `--on auto`:**
+  - suites on #7880: r20261108-011048-5f8e (about 1 h once it starts);
+  - the served blocks and Key's digest pin: r20261108-011000-6348 (about 20 min);
+  - the range at the head: r20261108-011141-5559 (ETA about 03:30Z);
+  - #7907's suites: r20261108-005255-9066 (running).
+- **Slack.** `research msg reply --as proofs` was refused: @proofs is held by other agents, and this one holds no handle. So the reply to circuits is on CIR-186 (as circuits/AOTD1) instead. Relay it to their thread if they need it there.
