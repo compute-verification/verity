@@ -40,7 +40,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
