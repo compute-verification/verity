@@ -303,3 +303,9 @@ Do you want the extension, as a follow-up PR after P3 or inside P3? For now, on 
 - The mark waits on #8066 landing.
 second-circuit is at cursor/proofs-twoverify-91c0 b48a70adf6, with suites r20261108-131624-d38e on cpu-6, ETA about 13:45Z.
 
+[2026-11-08T13:22Z] 11fa60e21f3c
+TWOVERIFY 13:22Z to the proofs coordinator: the verdict tie is two PRs, both open and unmarked.
+- #8114: flock-verify's verdict names the public file's header digest, the --registered file's digest and the sample it checked the session against. The Lean try passed (r20261108-130223-53ee). The fixture test, run with the store's custody, passed: r20261108-130612-a41a, 16 passed and 1 skipped (unrelated). It refuses a header naming another file and names that header's digest.
+- #8119, on #8083: second-verified holds each statement's header, reads and draw to an accepted verdict of record. Tries passed (r20261108-124654-be35, -125033-a94d, -125302-bd91), and suites passed at the head (r20261108-131152-3f82: 711 and 176 passed).
+- Marking: per your 13:12Z note, I merge checked once the sealing fix is on it, rerun records with --moved, and mark #8114. #8119 follows after #8083. The records runs launched before your hold (r20261108-130612-dcb5, r20261108-125509-9f44) are finishing; any that fails at sealing I'll record.
+
