@@ -120,11 +120,11 @@ FLAT, STRUCTURAL = "flat", "structural"
 
 def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
-    netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
-    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The statement check covers H1's templated
-    statement with its ``--registered`` reads (`ProvedScope.scopeOkT`), but the knowledge-soundness form reads a flat
-    circuit (`KsScope`, `HmOut.parse`), so the Lean verifier refuses it after every other check, and it stays opt-in."""
+    netlist in the file); ``structural``, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
+    `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another layout mode
+    (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier takes either with its
+    ``--registered`` reads: the statement check and the knowledge-soundness form read a templated statement's template
+    (`ProvedScope.scopeOkT`, `KsScope`), and the soundness proof is at the flat circuit it unrolls to."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT
@@ -139,8 +139,8 @@ def layout() -> str | None:
 def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
     """``definition``'s `UnitStager` (``kw`` its ``circuit``, ``bind`` and ``public_inputs``): with ``layout`` the
     templated statement of its structural lowering (`struct_lower`, ``structural``), the flat unit never built; with
-    None, or where struct_lower refuses the Definition (its NotImplementedError: assertions or table reads, or a
-    specialization of 2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
+    None, or where struct_lower refuses the Definition (its NotImplementedError: an assertion, or a specialization of
+    2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
     (K ≤ 4096 served; past K ≈ 5,041 the lane fits no 2^27 block in either form, and compose refuses it)."""
     import sys
     from verity_flock import class_statement as CS

@@ -20,12 +20,13 @@ check the stream ran on it, in the stream's order.
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
-  sample's `Q · n` proof blocks, `n` those of one replay block (`Partition.units` of the challenger's replay block Program
-  under the check's query), replay block `sample[i]`'s being `[i·n, (i+1)·n)`: the public-items rule on the interior
-  values, the population (else `interior-population`), R1–R7 against its copies under `subset:Q·n` (all of them
-  committed), `population-order`, and its receipt; and `second`: the second stage on its own coins
-  (`Select.selectSecond`), read after the interior registration's digest and carrying their evidence as the first
-  stage's do (`coins`);
+  sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
+  (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
+  `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
+  public-items rule on the interior values, the population (else `interior-population`), R1–R7 against its copies under
+  `subset:Q·n` (all of them committed), `population-order`, and its receipt; and `second`: the second stage on its own
+  coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
+  registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
@@ -58,8 +59,9 @@ def RECEIPT : String := "verity/registration-receipt/v1"
 
 /-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
 (its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
-the interior values, the record and its place in the log, the second stage's coins and their evidence, and its audit
-record's proved units, instances, served units and session roots. -/
+the interior values, the record and its place in the log, the second stage's coins and their evidence, its audit
+record's proved units, instances, served units and session roots, and the circuit file each template's sessions verify
+against, by SHA-512, as the auditor's params name them (`templateCircuits`). -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -72,6 +74,7 @@ structure Interior where
   instances : Option Int
   served : Json
   sessionRoots : Json
+  circuits : Array (String × String) := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
 structure Input where
@@ -106,6 +109,26 @@ def digest? : Json → Bool
   | .str s => (s.length == 128 || (s.length == 129 && s.endsWith "\n")) && (s.toList.take 128).all hexDigit
   | _ => false
 
+/-- `service.template_circuits`: the auditor's params naming each template's circuit file, a two-stage run's
+`interior.params.proofs`, `{"templates": [{"template": <descriptor id>, "circuit": <SHA-512, lowercase hex>}, ...]}`, as
+(template, circuit) pairs in the order the check's template query `query` names the templates (`Select.templateIds`),
+which is REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives no pairs. An error for any
+other form, a circuit that isn't 128 lowercase hex digits, and a list that doesn't name each of the check's templates
+once, in its order. -/
+def templateCircuits (proofs query : Json) : V (Array (String × String)) := do
+  if proofs matches .null then return #[]
+  let ids ← Select.templateIds query
+  let form := "the params' proofs are {\"templates\": [{\"template\": <descriptor id>, \"circuit\": <SHA-512>}, ...]}"
+  let (some #["templates"], .arr es) := (keys? proofs, getD proofs "templates") | throw form
+  let pairs ← es.mapM fun e => match keys? e, getD e "template", getD e "circuit" with
+    | some #["circuit", "template"], .str t, .str c =>
+      if c.length == 128 && c.all hexDigit then pure (t, c)
+      else throw s!"{form}, each circuit a SHA-512 in lowercase hex: {e.compress}"
+    | _, _, _ => throw s!"{form}, each circuit a SHA-512 in lowercase hex: {e.compress}"
+  if pairs.map (·.1) != ids then
+    throw s!"the params name the circuits of {pairs.map (·.1)}, not the check's templates {ids}, each once, in its order"
+  return pairs
+
 /-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
 def receipt (record : Json) (challenger received : String) : V Json := do
   return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
@@ -135,25 +158,26 @@ private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
   | .twoStage grain _ _ => jeq query grain
   | _ => true
 
-/-- The interior registration and the second stage over the first stage's replay sample `sample`, `k` proof blocks in
-each: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step and
-codes. -/
-private def interiorSteps (i : Input) (it : Interior) (k : Nat) (sample : Array Nat) :
+/-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
+in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
+and codes. -/
+private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
   let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
   if !pub.codes.isEmpty then return .error ("interiors", pub.codes)
-  let n ← Partition.units it.replay v.query
-  let m := sample.size * n
+  let ns ← Select.replayCells it.replay v.query
+  let ks ← k.over (← Select.templateIds v.query) ns
+  let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
-  let (draw, read) ← Select.selectSecond sample n k it.source
+  let (draw, read) ← Select.selectSecond sample ns ks it.source
   if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then return .error ("second", #["coins"])
-  return .ok (it, receipt, draw, Select.secondLaw sample n k, read)
+  return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
 rule. -/

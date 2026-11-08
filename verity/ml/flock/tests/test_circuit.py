@@ -12,14 +12,13 @@ from verity_flock import circuit as FC
 from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit, const_bits
 
-pytest.importorskip("verity_numerical")
 from verity_flock import subcircuit_templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
+from synthetic_sets import synthetic_set  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 
 
 def _set(sid: str, n: int, tmp_path):
-    summary = generate(TM.parse_subcircuit_id(sid), n, 20260926, tmp_path)
+    summary = synthetic_set(TM.parse_subcircuit_id(sid), n, 20260926, tmp_path)
     return InputSet.open(summary["path"])
 
 

@@ -35,11 +35,11 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
 
 Main's prover writes the hidden-output statement (`verity/flock-circuit`, `Tags.hiddenOutputs = true`), which
-`Stmt.setupTables` sets up with `Stmt.setupHidden`. e2e-exec's acceptance lemmas (`Discharge/Exec`) and the plain
+`Stmt.setupTables` sets up with `Stmt.setupHidden`. `Discharge/Exec`'s acceptance lemmas and the plain
 headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.tags.hiddenOutputs = false`). This area:
 
 * `Defs`: `setupOne`, the setup `setupTables` calls for a tag.
-* `Statements`, `Setup`, `Accepts`: e2e-exec's acceptance lemmas without `hh` (`SetupTablesOkAny`, `AcceptsSetupOne`,
+* `Statements`, `Setup`, `Accepts`: `Discharge/Exec`'s acceptance lemmas without `hh` (`SetupTablesOkAny`, `AcceptsSetupOne`,
   `AcceptsOneAny`, `AcceptsRetainedAny`, `AcceptsAllRetainedAny`, `AcceptsRepRoundsAny`, `AcceptsTablesHm96Any`,
   `AcceptsTablesHm96OfLeafAny`, `AcceptsVerdictHm96Any`), and what `setupHidden` returns (`SetupHiddenWF`,
   `SetupHiddenPublic`, `SetupHiddenParse`, `SetupHiddenDrawn`).

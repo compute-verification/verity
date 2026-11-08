@@ -161,7 +161,6 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 
 def _program(path: Path, d: int) -> Path:
     """The RoPE Definition's descriptor at head dimension `d`, as the verifier's own `--program` file."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import subcircuit_templates as TM
 
     from verity.ml.circuits.codec import canonical_json, encode_program
@@ -196,7 +195,7 @@ def plain(rope, program, tmp_path_factory):
 
 #: the fixture's statement, a selftest build's on seed coins: `verify` refuses it once every check has passed
 SELFTEST = (f"refused: {STATEMENT}, a selftest build's statement, whose coins the prover injected: verify takes only "
-            "verity/flock-circuit and verity/flock-circuit+plain-leaves")
+            "verity/flock-circuit, verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl")
 
 
 @pytest.mark.slow

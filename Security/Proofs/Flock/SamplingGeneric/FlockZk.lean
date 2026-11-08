@@ -43,8 +43,8 @@ Flock's ZK server (`Claims.ZKServer.Flock.zk_server_lean_loop`) releases the ses
 the claims core's `ZKOut` at the factor `1`: the instance of `ZkArg.ZK`'s notion at Flock's masked session.
 
 * `Sess`, `Tape`, `Release`, `PC`, `FC`, `Stops`, `rounds`: the server's session, tape, release, frame states and rounds.
-* `Live`, `LiveRel`: the live path's premises at a statement, each as `zk_server_lean_loop` takes it, and the relation
-  the server is zero knowledge at.
+* `Live`, `LiveRel`: the live path's premises at a statement, each `zk_server_lean_loop`'s or one that gives it, and the
+  relation the server is zero knowledge at.
 * `simOut`, `errOut`: the server's simulator given the outcome, and its error per outcome.
 * `zkOut_stops`, `server_zkOut`: `zk_server_lean_loop` per outcome.
 
@@ -99,9 +99,10 @@ abbrev roundsAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr) : Cla
 /-- The server's rounds at `x`: the masked verifier's and the `Hello`. -/
 noncomputable abbrev rounds (rel : Parser) : Claims.Msg → ℕ := roundsAt (FlockDeploy.deployZk rel)
 
-/-- **The live path's premises at `(x, w)`**, each as `zk_server_lean_loop` takes it: the transport's frame states
-(`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
-`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). -/
+/-- **The live path's premises at `(x, w)`**, each `zk_server_lean_loop`'s or one that gives it: the transport's frame
+states (`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
+`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
+worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
@@ -195,7 +196,7 @@ theorem zkOut_stops (H : Claims.Msg → Claims.Msg) {Coin Col Tr : Type} (D : Cl
     (L.refD H _ _ wk x w
       ⟨L.helloRefine_withStops S Rf vs H x w hH,
         L.ownRefine_withStops S Rf vs H (roundsAt D) wk x w hK hlast hst hO hLk hF,
-        L.liveRefine_withStops S Rf vs H wk x w hlast hst hO hE,
+        L.liveRefine_withStops S Rf vs H wk x w hlast hst hO hE.own,
         L.fillRefine_withStops S Rf vs H (roundsAt D) wk x w hK.le hlast hst hO hEf,
         L.stopRefine_withStops S Rf vs H (roundsAt D) wk x w hK.le hst⟩)
     Vs θ hk o Ev
