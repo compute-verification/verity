@@ -28,8 +28,9 @@ top-k inputs (`long_rows`).
   by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each sampled instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
-* **Wires.** Each value a staged instance reads has a source under the step root (`Wires`): the recorded call that output it,
-  a parameter held to ``params.json``, or an `ADVICE` input charged at its width. A MoE pair's expert is the router's output
+* **Wires.** Each value a staged instance reads has a source under the step root (`Wires`): the recorded call that output it
+  (or wrote its real rows through a strided view, a padded batch's rows past the step's tokens charged as advice at their
+  width), a parameter held to ``params.json``, or an `ADVICE` input charged at its width. A MoE pair's expert is the router's output
   (`ROUTERS`), never the align's schedule. An instance that reads anything else is not staged, and its reason names the fix.
   Staging checks the wiring against the committed capture; a11 proves the staged units alone and doesn't read it.
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
@@ -899,7 +900,9 @@ class Wires:
     but not proved), read from a parameter held to ``params.json`` (``registered``), or an `ADVICE` input charged at its width
     (``advice``). An input of a call is wired to the latest earlier call on its rank (one enclosing it excepted, whose outputs
     come after) that output the same bytes, else that output a tensor it is a strided view of (its recorded strides from some
-    offset); an output read is its own call's. Anything else is `Unwired`."""
+    offset), else whose output is a strided view into its real rows (`cover`: an ``out=`` buffer a later call reads whole),
+    with the rows past them, a padded batch's that no call writes, charged as advice at their width (``padding``, once a
+    buffer); an output read is its own call's. Anything else is `Unwired`."""
 
     def __init__(self, cap: Capture) -> None:
         self.cap = cap
@@ -961,14 +964,15 @@ class Wires:
             bits = int(np.prod(ref["shape"], dtype=np.int64)) * 8 * np.dtype(NP[ref["dtype"]]).itemsize
             return {"kind": "advice", "rank": r, "seq": seq, "op": e["op"], "in": name, "bits": bits, "why": ADVICE[(e["op"], name)]}
         skip = {x["seq"] for x in self.enclosing(r, seq)}
-        hit = next(((s, o, None) for s, o in reversed(self.made.get((r, ref.get("sha512")), [])) if s < seq and s not in skip), None)
-        hit = hit or self.view(r, seq, ref, skip)
+        hit = next(((s, o, {}) for s, o in reversed(self.made.get((r, ref.get("sha512")), [])) if s < seq and s not in skip), None)
+        hit = hit or self.view(r, seq, ref, skip) or self.cover(r, seq, ref, skip)
         if hit is None:
             raise Unwired(f"rank {r} {e['op']} (seq {seq}) reads {name}, a {ref.get('dtype')} {ref.get('shape')} that no earlier "
-                          f"recorded call output, whole or as a strided view, and that is no parameter: wire it (record the call "
-                          f"that writes it in capture.py) or declare ({e['op']!r}, {name!r}) in stage.ADVICE, charged at its width")
-        s, o, view = hit
-        return {**self.call(r, s, o), "into": {"seq": seq, "op": e["op"], "in": name}, **({"view": view} if view else {})}
+                          f"recorded call output, whole or as a strided view, or wrote through one, and that is no parameter: "
+                          f"wire it (record the call that writes it in capture.py) or declare ({e['op']!r}, {name!r}) in "
+                          f"stage.ADVICE, charged at its width")
+        s, o, how = hit
+        return {**self.call(r, s, o), "into": {"seq": seq, "op": e["op"], "in": name}, **how}
 
     def call(self, r: int, seq: int, name: str) -> dict:
         e = self.by_seq[r][seq]
@@ -977,7 +981,7 @@ class Wires:
 
     def view(self, r: int, seq: int, ref: dict, skip: set) -> tuple[int, str, dict] | None:
         """The latest earlier output on rank ``r`` that ``ref`` is a strided view of, by its recorded strides, from the offset
-        where every one of a few probed elements and then the whole view agree."""
+        where every one of a few probed elements and then the whole view agree, with ``{"view": {offset, stride}}``."""
         stride, shape = ref.get("stride"), ref.get("shape")
         if not self.cap.kept(r, ref) or not stride or not shape or min(stride) < 0 or not all(shape):
             return None
@@ -1002,7 +1006,41 @@ class Wires:
             for off in offs[:VIEW_OFFSETS]:
                 v = np.lib.stride_tricks.as_strided(y[off:], shape=shape, strides=[st * y.itemsize for st in stride])
                 if np.array_equal(v, x):
-                    return s, o, {"offset": int(off), "stride": list(stride)}
+                    return s, o, {"view": {"offset": int(off), "stride": list(stride)}}
+        return None
+
+    def cover(self, r: int, seq: int, ref: dict, skip: set) -> tuple[int, str, dict] | None:
+        """The latest earlier output on rank ``r`` that is a strided view, by its recorded strides, into a row-major ``ref``'s
+        real rows (`Capture.real_rows`), every element of them once and nothing past them, and equal to them there, with
+        ``{"cover": {stride, rows}}`` and, when ``ref`` has rows past them, ``{"padding": {rows, bits, sha512}}``: those rows
+        charged as advice at their width."""
+        shape = ref.get("shape")
+        if not shape or not all(shape) or ref.get("stride") != [int(np.prod(shape[i + 1:])) for i in range(len(shape))]:
+            return None
+        real, row = self.cap.real_rows(r, shape[0]), int(np.prod(shape[1:]))
+        size, x, tried = real * row, None, 0
+        if not size:
+            return None
+        for s, o, out in reversed(self.outs.get(r, [])):
+            stride = out.get("stride")
+            if (s >= seq or s in skip or out.get("dtype") != ref.get("dtype") or not stride or min(stride) < 0
+                    or int(np.prod(out["shape"], dtype=np.int64)) != size
+                    or sum((d - 1) * st for d, st in zip(out["shape"], stride)) != size - 1):
+                continue
+            hit = np.zeros(size, bool)
+            np.lib.stride_tricks.as_strided(hit, shape=out["shape"], strides=stride)[...] = True
+            if not hit.all() or not self.cap.kept(r, out) or not self.cap.kept(r, ref):
+                continue
+            tried += 1
+            if tried > VIEW_CANDIDATES:
+                break
+            x = self.cap.tensor(r, ref).reshape(-1) if x is None else x
+            v = np.lib.stride_tricks.as_strided(x, shape=out["shape"], strides=[st * x.itemsize for st in stride])
+            if np.array_equal(v, self.cap.tensor(r, out)):
+                pad = shape[0] - real
+                return s, o, {"cover": {"stride": list(stride), "rows": real},
+                              **({"padding": {"rows": pad, "bits": pad * row * 8 * x.itemsize, "sha512": ref["sha512"]}}
+                                 if pad else {})}
         return None
 
 
@@ -1023,6 +1061,8 @@ def wiring(types: dict) -> dict:
                     advice[(s["rank"], s["seq"], s["in"])] = s["bits"]
                 elif s["kind"] == "call":
                     unproved.setdefault(s["op"], set()).add((s["rank"], s["seq"]))
+                if "padding" in s:
+                    advice[(s["rank"], s["padding"]["sha512"])] = s["padding"]["bits"]
     unwired = {label: [g["unwired"] for g in rec.get("gate", ()) if "unwired" in g] for label, rec in types.items()}
     return {"inputs": inputs, "advice_bits": sum(advice.values()),
             "unproved_calls": {op: len(v) for op, v in sorted(unproved.items())}, "unwired": {k: v for k, v in unwired.items() if v}}
