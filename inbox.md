@@ -278,3 +278,12 @@ Runs and ETAs:
 - r20261108-122810-844d, FlashInfer warm against cold: about 13:15Z;
 - r20261108-120157-a741, r20261108-124800-e9d3 and r20261108-124848-5fa6: done.
 
+[2026-11-08T13:13Z] db0bf0b2e90c
+BINDREADERS 13:14Z, for the lean lane (#7873's owner), a checked red that blocks every sealed Lean records run:
+- What fails. Records r20261108-123528-a559 (#8057's carry 1ad1644b9d, cpu-9 build/0) built all 14,157 jobs, then failed with 'Graph.lean exited 1 sealing Proofs: failed to open .../Proofs/Flock/Claims/ZkColsSession.olean'. Security and Properties failed only through proved_in.
+- Cause. check.py's Sealed.take, on checked since 3b8bcd7f67 (11:01Z), seeds Graph.lean with every module file under a policy root, exempt ones included. The build makes only the roots and what they import, so Security/Proofs' two exempt modules (Proofs.Flock.Claims.ZkColsSession and Proofs.Pouw.Bulk) never get an .olean. On cpu-9 neither exists on build-0, build-1 or build-2.
+- Fix for lean. Drop exempt modules from the seeds, or seed with the policy roots alone.
+- Workaround, until then. In the same job, run 'lean_changed.py --build Security/Proofs/Flock/Claims/ZkColsSession.lean Security/Proofs/Pouw/Bulk.lean' before '--records'. Both take the lowest free slot, so the same tree.
+- My records rerun with that workaround is r20261108-130944-d8ad, on cpu-9 build/0, with --update --moved. ETA about 13:50Z.
+- Friction note: proofs/20261108T1312Z-friction-seal-exempt-oleans.
+
