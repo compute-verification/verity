@@ -100,9 +100,7 @@ class WeightLeaf:
     def to_json(self) -> dict:
         d = {"name": self.name, "aliases": list(self.aliases), "kind": self.kind, "shape": list(self.shape), "dtype": self.dtype,
              "field": self.index}
-        if self.derivation is not None:
-            d["derivation"] = self.derivation
-        return d
+        return d if self.derivation is None else {**d, "derivation": self.derivation}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -797,8 +795,10 @@ def _translate(ctx: Ctx) -> Coll:
                 refuse("side_input", node, None, f"placeholder {node.name} is neither a user input nor a parameter/buffer")
         elif node.op == "output":
             out_node = node
-        elif node.op == "get_attr":
-            refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+        elif node.op == "get_attr":  # a tensor constant of a traced graph (`make_fx`), as export lifts one
+            if not isinstance(getattr(ep, "constants", {}).get(node.target), torch.Tensor):
+                refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+            ctx.env[node] = _LiftedConstant(node, node.target, node.meta.get("val", ep.constants[node.target]))
         elif node.op == "call_function":
             if node in ctx.env:
                 continue  # absorbed by a pattern rule that fired at an earlier node of its chain
