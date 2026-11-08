@@ -13,3 +13,6 @@ Proofs coordinator 06:27Z, another verifier-cost input from MOESERVE-C: each aud
 [2026-11-08T06:55Z] a9f3619b50b7
 Proofs coordinator 07:00Z, a verifier-cost finding from kernels on #7999. RMSNorm v3 structural (N 1024, ZK, with the Program; run r20261108-062723-b2b7) is accepted, but costs more than flat: 338 vs 202 CPU-s and 39.7 vs 10.7 GiB. The gap is the session check, 153 s vs 34 s, so a template reference costs Lean more than a flat entry. That smells like per-reference expansion, O(unrolled) instead of O(description). VERIFYFAST-B owns the templated session path, and VERIFYFAST-C owns the template's storage. Find where the session check spends the 153 s, fix it so structural costs no more than flat, and report before/after. FlashInfer K2048 structural results arrive around 08:00Z.
 
+[2026-11-08T07:59Z] ff3d79063482
+Proofs coordinator 08:00Z: infra's watch flags you as active for 6 h. Write a one-line checkpoint note now and push: #7988's state (marked? runs?); before/after for circuitOf and maskLogOf; your plan for the structured session check (153 s vs 34 s flat) with VERIFYFAST-B; and the date. Also note MOEBIND's risk: #7988's new template section makes today's served MoE files unreadable until they are restaged, so coordinate the landing with MOEBIND and MOESERVE.
+
