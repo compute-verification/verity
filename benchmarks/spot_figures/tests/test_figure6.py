@@ -62,6 +62,7 @@ def test_the_figure_renders_with_and_without_the_sweep(out, tmp_path):
     text = f.caption(out)
     assert "0 at every scope" in text and "(pending, hatched: prefix caching on)" in text
     assert "The run with the real network certifier is pending" in text and "pool model" not in text
+    assert "Every arm charges the K/V cache 0, pending two fixes" in text and "history ports" in text
     assert [p.name for p in f.render(out, tmp_path)] == ["figure6.png", "figure6.svg"]
     empty = f.run("GLM-5.3", ADVICE, [])
     assert "(b) Pending" in f.caption(empty)

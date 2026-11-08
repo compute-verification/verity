@@ -68,7 +68,9 @@ PATH = {"steps": [
              "total"},
     {"label": "the advice charge", "status": "charged",
      "note": "until StopRule_v1 checks length and finish in-circuit, the advice line charges log2(max_tokens)+1 bits a "
-             "request, which no β covers at either scope; every break-even here holds once StopRule_v1 lands"},
+             "request, which no β covers at either scope; every break-even here holds once StopRule_v1 lands and K/V "
+             "reads are proved, the K/V cache's 0 pending its cache writes as proof blocks and its earlier rows as "
+             "history ports"},
 ]}
 COLORS = ("#08306B", "#D95F02", "#1B9E77", "#7570B3")
 

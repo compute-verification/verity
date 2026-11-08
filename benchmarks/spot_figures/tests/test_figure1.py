@@ -140,9 +140,9 @@ def test_the_design_card_picks_the_main_panels_lines(out):
     among = [r for r in main if max([r["value"]] if "value" in r else r["by_scope"].values()) > 0]
     assert {r["label"] for r in main} == {"GLM-5.3's weights", "GLM-5.3's weights at FP4 (376.7 GB)",
                                          "Advice today: the response length, 18 bits a request (no circuit checks "
-                                         "the stop rule yet)",
-                                         "Advice once the length rule is checked in-circuit, prefix caching off "
-                                         "(pending)"}
+                                         "the stop rule yet; K/V reads charged 0, pending)",
+                                         "Advice once the length rule is checked in-circuit and K/V reads are "
+                                         "proved, prefix caching off (pending)"}
     assert 0 < len(among) <= 6 - len(f.MAIN["exfiltration"]) and len(refs) > len(main)
     for r in main:
         assert r["style"] == next(v for k, v in chosen.items() if r["label"].startswith(k.format(model="GLM-5.3")))
@@ -150,6 +150,7 @@ def test_the_design_card_picks_the_main_panels_lines(out):
     caps = out["scopes"]["world year"]["captions"]
     for panel, sentences in out["inputs"]["notes"]["value"].items():
         assert all(s in caps[panel] for s in sentences)
+    assert "Every advice line charges the K/V cache 0 bits, and that 0 is pending on two fixes" in caps["exfiltration"]
     assert all(s["main"] == (s["design"] in f.MAIN["exfiltration"]) for s in out["panels"]["exfiltration"]["series"])
 
 
