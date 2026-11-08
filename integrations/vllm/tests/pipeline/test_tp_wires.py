@@ -49,14 +49,14 @@ def _bits(sites: TW.Sites, wires=None) -> int:
                for w in (sites.circuit.wires if wires is None else wires))
 
 
-def _stage(sites: TW.Sites, stage: str) -> set[str]:
+def _templates_at(sites: TW.Sites, stage: str) -> set[str]:
     return {tid for (_i, _j, s, _r), rs in sites.units.items() if s == stage for tid, _a, _n in rs}
 
 
 def peer_bits(sites: TW.Sites) -> int:
     """The bits of the wires from producer units: every rank's partial into each combine unit's parts, or into a gather's
     readers."""
-    return _bits(sites, [w for w in sites.circuit.wires if w.writer in _stage(sites, TW.PRODUCER)])
+    return _bits(sites, [w for w in sites.circuit.wires if w.writer in _templates_at(sites, TW.PRODUCER)])
 
 
 def in_order(sites: TW.Sites, wires: tuple[I.Wire, ...] | None = None) -> None:
@@ -148,7 +148,7 @@ def test_every_peer_row_of_a_tp_window_is_wired_from_its_producer_units_output_r
     peer row free. Every wire runs forward in the window's public order, and the verifier derives the same members from
     the record."""
     tp = TW.sites_circuit(toy, "tp")
-    combines, fns = _stage(tp, TW.COMBINE), _fns(tp)
+    combines, fns = _templates_at(tp, TW.COMBINE), _fns(tp)
     assert tp.unwired == () and {fns[t].id for t in combines} == {"AllReduce2_v1{N=1}"}
     assert {t: tp.circuit.cuts[t] for t in combines} == {t: {"parts": W} for t in combines}
     assert {fns[t].id: c for t, c in tp.circuit.cuts.items() if t not in combines} == {
