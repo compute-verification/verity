@@ -672,7 +672,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a sampled member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
-    members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
+    members, publics, checks, composed, programs_ok, forms, kept, read = [], {}, {}, {}, {}, {}, {}, set()
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -712,6 +712,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         fv = header["frame_v3"]
         if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
+            forms[m.template, circ.pin] = a0.templated(meta, st_dir, getattr(a, "tmpl_unit_bin", None))
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
@@ -730,7 +731,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json",
-                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
+                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **forms[m.template, circ.pin]},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
@@ -1110,6 +1111,8 @@ def streamed(a: argparse.Namespace) -> bool:
 FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
+TMPL_UNIT_HELP = ("flock-tmpl-unit (verity/ml/flock/tests/lean/TmplUnit.lean), for a window whose record states a templated "
+                  "statement: it places that statement's unit rows, which its prover reads (`a0.templated`)")
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
 ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
 
@@ -1335,6 +1338,7 @@ def main() -> int:
                     "compose each chunked template once, every later rank taking that circuit with its own binding")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
+    ap.add_argument("--tmpl-unit-bin", help=TMPL_UNIT_HELP)
     ap.add_argument("--firewall", help=FIREWALL_HELP)
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)

@@ -12,9 +12,12 @@
 # (default the rank's step and blobs: its commit.json holds every rank's root, so the step root checks without the others).
 #   MW_CAPTURE=DIR|TAR.GZ MW_STEP=S MW_LAYER=L (MW_TABLES=FILE MW_KEY=FILE | MW_SELF=1) [MW_RANK=0] [MW_TOKENS=1]
 #   [MW_LAW=stratified:1] [MW_CAP=2048] [MW_BLOCKS="--block w13=1 --block w2=32"] [MW_ARMS="served forged bench"] [MW_SEED=1]
-#   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] [MW_THREADS=N] [MW_FUSED=1] bash benchmarks/spot_proved/run_moe_window.sh
+#   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] [MW_THREADS=N] [MW_FUSED=1] [MW_READ_LAYOUT=MODE]
+#   bash benchmarks/spot_proved/run_moe_window.sh
 # MW_THREADS is the prover's thread count (default the slot's cores): arms timed in separate runs compare at one count.
 # MW_FUSED=1 stages the fused cut (moe_window.py --fused): each GEMM reads its own weight rows.
+# MW_READ_LAYOUT=MODE (iv/hybrid/4, the served path's) states each table read as the verifier's read template at MODE
+# (moe_window.py --read-layout), and builds flock-tmpl-unit for the audit's provers.
 # MW_PORTS (default 64) is the audit's --ports: a session a member with a sampled unit, its closure's included (stratified:1
 # samples one unit a template), and an audit needing more refused before any session listens (a5.port_refusal).
 # records_audit's default, one a member, finds no free run of ports for a real layer's thousands of members.
@@ -80,6 +83,13 @@ LAW=${MW_LAW:-stratified:1}
 BASE=(--capture "$CAP" --step "${MW_STEP:?}" --layer "${MW_LAYER:?}" --rank "${MW_RANK:-0}" --tokens "${MW_TOKENS:-1}"
       --cap "${MW_CAP:-2048}" --law "$LAW" ${MW_CHECKPOINT:+--checkpoint "$MW_CHECKPOINT"})
 [ "${MW_FUSED:-0}" = 1 ] && BASE+=(--fused)
+TU=()
+if [ -n "${MW_READ_LAYOUT:-}" ]; then
+  BASE+=(--read-layout "$MW_READ_LAYOUT")
+  tu=$(cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+  [ -x "$tu" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 7; }
+  TU=(--tmpl-unit-bin "$tu")
+fi
 if [ -n "${MW_TABLES:-}" ]; then REG=(--tables "$MW_TABLES" --key "${MW_KEY:?}")
 elif [ "${MW_SELF:-0}" = 1 ]; then
   read -ra BLK <<< "${MW_BLOCKS:---block w13=1 --block w2=32}"; REG=(--self-register --key "$W/served.key" "${BLK[@]}")
@@ -120,7 +130,7 @@ arm() {   # arm NAME [moe_window flags]: stage NAME's window, then audit it; -> 
   log "moe-window $name: audit ${flags[*]}"
   "$VPY" "$RA" audit --window "$d/stage/window" --law "$LAW" --circuit "${held% *}" --run "${held#* }" \
     --registered "$d/stage/tables.json" --challenger local --main "$MAIN" --m0-pythonpath "$PYTHONPATH" --bin "$BIN" --lean "$LEAN" --firewall "$FC_FIREWALL_LEAN" \
-    --ports "${MW_PORTS:-64}" --out "$d/audit" "${flags[@]}" > "$o/audit.log" 2>&1
+    --ports "${MW_PORTS:-64}" --out "$d/audit" "${TU[@]}" "${flags[@]}" > "$o/audit.log" 2>&1
   rc=$?
   for f in summary.json window/audit.json; do [ -e "$d/audit/$f" ] && cp "$d/audit/$f" "$o/$(basename "$f")"; done
   log "moe-window $name: audit exit $rc: $(grep -E '^(RECORDS|PROOF-EDITS) ' "$o/audit.log" | cut -c1-900)"

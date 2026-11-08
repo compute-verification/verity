@@ -218,6 +218,24 @@ def test_the_fused_cut_reads_each_blocks_rows_inside_its_gemm(MW, captured):
     assert held["ingress"] == 0 and held["registered"] > 0 and held["free"] == left
 
 
+def test_read_layout_states_the_table_reads_as_the_served_path_does(MW):
+    from types import SimpleNamespace
+
+    from verity_vllm.pipeline import chunk_rows as CR
+
+    rows = {"in_rows": [["tok", "s", 16, ["tok"]]], "out_rows": [["s", [0]]]}
+    read, gemm = "EmbeddingRead_v1{V=32,H=4}", "MoeExpertFp8BlockGemm_v4{K=64}"
+
+    class Win:
+        def circuit_record(self) -> dict:
+            return {"statements": {t: {**rows, "reads": "inline"} for t in (read, gemm)}}
+
+    assert MW.stated(Win(), None).circuit_record() == Win().circuit_record()
+    got = MW.stated(Win(), CR.READ_LAYOUT).circuit_record()["statements"]
+    assert got[read] == {**rows, **CR.statement(SimpleNamespace(layout="read"))}
+    assert got[gemm] == Win().circuit_record()["statements"][gemm]
+
+
 @pytest.mark.slow
 def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, captured, tmp_path, capsys):
     """The whole staging on the synthetic capture, its forged arm and ``--circuit-only``, and the verifier's side of the window

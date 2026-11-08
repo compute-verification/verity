@@ -3,7 +3,7 @@
 
     python benchmarks/spot_proved/moe_window.py --capture DIR --step S --layer L --out DIR --key FILE
         (--tables FILE | --self-register) [--rank 0] [--tokens 1] [--cap 2048] [--law stratified:1] [--forge w13]
-        [--bench SEED] [--circuit-only] [--full-gate] [--checkpoint DIR] [--fused]
+        [--bench SEED] [--circuit-only] [--full-gate] [--checkpoint DIR] [--fused] [--read-layout MODE]
 
 * **The cut.** `expert_rows`' cut of one layer on one TP rank at T of the step's tokens, as a stated circuit (the form of
   `test_fp8_moe_per_expert._cut`): the router's slots (`MoeRouterSigmoidBiasSlots_v2`, a unit a token), each slot's
@@ -14,7 +14,8 @@
   logits and bias and each GEMM's activation and scales are the window's free inputs (in the served circuit, the blocks
   before it write them). ``--fused`` cuts each projection's reads of its weight rows into its GEMM: one
   `MoeExpertFp8ReadGemm(W)_v1` unit a block of a pair, table-major, reads its block's rows and multiplies by them; the
-  scale reads stay.
+  scale reads stay. Every template's statement is flat unless ``--read-layout MODE`` states the table reads as the served
+  path does, the verifier's read template at MODE (`stated`).
 * **Values.** Each unit's values are the capture's recorded tensors of the opened MoE layer, every one held to the step's
   commitment as `stage.Capture` loads it: the router's logits the gate's f32 ``aten::mm`` rows and its bias the layer's
   ``e_score_correction_bias``; each pair's expert its place in the launch's ``sorted_token_ids`` and ``expert_ids``, its
@@ -314,6 +315,29 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str, fused: bool = Fa
     return WI.Circuit(name, tuple((fn, n) for fn, n in units.values()), wires=tuple(WI.coalesce(wires)), registered=reg), plan
 
 
+def stated(win: WI.Window, layout: str | None) -> WI.Window:
+    """``win`` with each table read (`serving_templates.READ`) stated as the served path states it (`chunk_rows.statement`):
+    the verifier's read template at layout mode ``layout``, structural. Without ``layout`` every template stays flat, as
+    `WI.Window.circuit_record` states it. The prover's record and the verifier's held digest (``--circuit-only``) both read
+    the statements through ``win.circuit_record``."""
+    if layout is None:
+        return win
+    from verity_vllm.pipeline.serving_templates import READ
+
+    flat = win.circuit_record
+
+    def record() -> dict:
+        rec = flat()
+        for t, st in rec["statements"].items():
+            if t.split("{", 1)[0] == READ:
+                del st["reads"]
+                st.update(layout=layout, structural=True)
+        return rec
+
+    win.circuit_record = record
+    return win
+
+
 # ---- the tables and the window -----------------------------------------------------------------------------------------------
 
 def commit_tables(v: dict, plan: dict, committer: dict) -> dict:
@@ -432,6 +456,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--circuit-only", action="store_true")
     ap.add_argument("--full-gate", action="store_true", help="also evaluate every unit's template (Window.mismatches)")
     ap.add_argument("--fused", action="store_true", help="each GEMM reads its own weight rows (module docstring)")
+    ap.add_argument("--read-layout", metavar="MODE", help="state each table read as the verifier's read template at layout "
+                    "mode MODE (iv/hybrid/4, the served path's; `stated`)")
     ap.add_argument("--repo", default="zai-org/GLM-5.3", help="with --self-register: the registration's model")
     ap.add_argument("--revision", default="capture", help="with --self-register: the registration's revision")
     a = ap.parse_args(argv)
@@ -469,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
               "statics": {p: {k: (x.id if k == "dot" else x) for k, x in v[p].items()} for p in ("up", "down")},
               "templates": {k: descriptor_id(fn) for k, fn in fns.items() if k != "word_router"}}
     if a.circuit_only:
-        win = WI.Window(circuit, run, law, a.cap)
+        win = stated(WI.Window(circuit, run, law, a.cap), a.read_layout)
         digest = hashlib.sha512(WI.circuit_bytes(win.circuit_record())).hexdigest()
         print(json.dumps({"circuit": digest, "run": run, "members": len(win.window.members)}))
         return 0
@@ -504,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
         (out / "stage.json").write_text(json.dumps(report, indent=1, default=str))
         raise SystemExit(f"{len(wrong)} tables' served rows are not the registered ones (first {wrong[0]}): nothing staged")
     (out / "tables.json").write_text(json.dumps(reg.dump(), indent=1) + "\n")
-    win = WI.Window(circuit, run, law, a.cap, registered=tables)
+    win = stated(WI.Window(circuit, run, law, a.cap, registered=tables), a.read_layout)
     win.supply(REG)
     report["units"] = record(win, v, fns, plan, tables, a.forge)
     if a.full_gate:

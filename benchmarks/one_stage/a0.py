@@ -31,6 +31,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
+from verity_flock.circuit import TMPL_STATEMENT
 from verity_flock.input_sets import InputSet
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
@@ -62,6 +63,25 @@ def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 360
     p = subprocess.run(cmd, capture_output=True, text=True, env=environ(env), timeout=timeout)
     log.write_text(f"$ {' '.join(cmd)}\n# rc {p.returncode} in {time.time() - t:.1f} s\n--- stdout\n{p.stdout}\n--- stderr\n{p.stderr}")
     return p
+
+
+def templated(meta: dict, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one, by its META): `verify`'s statement, and the
+    prover's unit rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the template
+    and layout mode META holds (``d/unit.tmpl``, ``d/unit.layout``)."""
+    if meta.get("statement") != TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("a templated statement's prover reads the unit --tmpl-unit-bin places")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text("\n".join(meta["template"]) + "\n")
+        (d / "unit.layout").write_text(meta["layout"])
+        p = run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": TMPL_STATEMENT, "tmpl_unit": placed}
 
 
 #: the development challenger's layout: one family, the coins one sample reads
