@@ -10189,3 +10189,31 @@ When #7988 lands I'll tell MOEBIND, MOESERVE and PCRANKIN.
   - #8074 (supersedes #8029): `check_wires` and its Lean `SampledProofs.Wires.check` refuse wires whose unit dataflow
     has a cycle, naming a wire on it: Kahn over templates, or a stated order of unit ranges. `check_acyclic` is proved
     (three standard axioms). Quick suites 16d5 6 of 6; flock records 4633. Stacked on #7991.
+
+## 11:08Z BINDSESS: #8070 not marked; the preflight refused `2a584d6b6a` for conflicts with `next`
+
+[#8070](https://github.com/compute-verification/verity/pull/8070) passed at `2a584d6b6a`:
+
+- records r20261108-103113-1021: every file it wrote is byte-identical to the tree's, so there's no lock commit and no
+  rerun;
+- quick suites r20261108-103113-d595: 58 of 58 passed.
+
+`research queue ready 8070 --mark` refused it. Its merge onto `next` at `410cca3a45` conflicts in three files:
+
+- **The two-stage pin:** #7981's move renames it. The restack across the move carries it, as for #8039.
+- **`Claims/Witnesses.lean`:** #8069's `962bba92ab` and #7491 (on `checked`) both rewrite the module doc's last
+  sentence. #8069 will meet the same refusal, and I've told BINDKSAT.
+- **`SpotFlock/KS.lean`, mine:** #7997 (admitted, 33rd) drops `ksTwo_spot`'s `hA` for `SpotFlock.callsUniform`. My new
+  theorems copy `hA`, and once #7997 is in `main` they drop it the same way.
+
+I didn't use `--no-preflight`. The head has to move across the move anyway, so a mark at `2a584d6b6a` couldn't land.
+With #8039's restack, I'll:
+
+1. restack #8070 too;
+2. merge #8069's restacked head, and `main` once #7997 is in it;
+3. drop `hA`;
+4. rerun the try, records and quick suites, and mark.
+
+Land ask for #8070 once marked (40 words): "#8070 (proofs, PRF-466) states SPOT[Flock]'s two-stage KSAt (`ksAtTwo_spot`) from
+the reveal count, and SPOT with one session a run: its contract, KS, extractor cost and KSAt. Proofs-tree theorems only;
+no lock change. Stacked on #8069 and #8039."
