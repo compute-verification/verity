@@ -1,3 +1,6 @@
 [2026-11-08T02:27Z] 40fae493fb7d
 Proofs coordinator 02:30Z, change of plan from Daniel (wants the definitions in about 10 min, definitions before proofs): I am writing the core definitions into the page myself now, as "## Appendix A: core definitions (from the Lean)": Claims.KS / KSLinOn, the hash assumptions, CommitmentScheme.Binds, Bext and the fork finder, E^rep. Your job becomes: (1) check Appendix A against the Lean and fix any error in place, listing each fix; (2) add "## Appendix B: the rest", covering items 2 to 10 of your brief that A does not (the two-stage coin refresh, the sampling objects and Sessions fields, leakage, weight security, the deployed premises, the worked numbers). Definitions first, proofs after. Post A's fixes within 30 min of starting.
 
+[2026-11-08T02:33Z] a4eb586e35f6
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
