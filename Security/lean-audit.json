@@ -330,6 +330,14 @@
    "owner": "@proofs",
    "digest": "2c7e1138e7bbc4840bff376fd43d2c0fc3d466c38d3ff020a6a41feaddcaf198",
    "why": "The bound δ on what the audit leaves undetected at the budget M, which the bound is stated at; the deployed audit gives it (TheftServedDeployed)."
+  },
+  "Claims.Sampling.Design.Two.FirstRate": {
+   "owner": "@proofs",
+   "why": "`CapTwo` is stated at a first stage that catches each replay block at rate `r₁`: the cap's rate is what it says. (met by `capTwo_honest`)"
+  },
+  "Claims.Sampling.Design.Two.SecondRate": {
+   "owner": "@proofs",
+   "why": "`CapTwo` is stated at a second stage that samples each nonempty cell at rate `r₂`: the cap's rate is what it says. (met by `capTwo_honest`)"
   }
  },
  "open": {
@@ -3932,7 +3940,9 @@
    "Claims.Encodings.Linked": "a helper the claims read: pairs that link positions, which `RegLink.Opens`, `RelinkR` and `LinkBinds` read",
    "Claims.Encodings.RegLink.Opens": "a helper the claims read: a registration link's contract, the code fact the linked compiler's statements take of a link",
    "Claims.Encodings.CompilerKSLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
-   "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved"
+   "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
+   "Claims.Sampling.Design.Two.FirstRate": "a helper the claims read: a first stage that catches each replay block at a rate, which `CapTwo` reads",
+   "Claims.Sampling.Design.Two.SecondRate": "a helper the claims read: a second stage that samples each cell at a rate, which `CapTwo` reads"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -3954,7 +3964,8 @@
    "Claims.Encodings.ByPosBinds": "Claims.Encodings.byPosBinds",
    "Claims.Encodings.CodeBinds": "Claims.Encodings.codeBinds",
    "Claims.Encodings.LinkBinds": "Claims.Encodings.linkBinds",
-   "Claims.Encodings.RelinkR": "Claims.Encodings.relinkR"
+   "Claims.Encodings.RelinkR": "Claims.Encodings.relinkR",
+   "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo"
   }
  },
  "witnesses": {
@@ -4346,6 +4357,10 @@
   "Claims.Encodings.relinkR": {
    "honest": ["Claims.Encodings.relinkR_honest"],
    "nontrivial": "Claims.Encodings.relinkR_nontrivial"
+  },
+  "Claims.SecurityProofs.CapTwo": {
+   "honest": ["Claims.Witness.SamplingGeneric.capTwo_honest"],
+   "nontrivial": "Claims.Witness.SamplingGeneric.capTwo_nontrivial"
   }
  },
  "unwitnessed": {
@@ -24732,6 +24747,15 @@
    },
    "type_hash": "8e5244a0e2b442ec2d7f535eb5774ec55c7f866c873684cdbd9e4a6342420620",
    "unfolded_hash": "12187ab64b5baaa5cfccda4088790402e0e8a6c614379af8cbe8d5adb9e4fc61"
+  },
+  "Claims.SecurityProofs.CapTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.capTwo_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.capTwo_nontrivial": {
+   "owner": "@proofs"
   }
  },
  "shape": {
