@@ -132,12 +132,12 @@ def SessForkZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Pr
     (selfSFinderZ A Hs T pre post cap₀ σ).Finds Hs.H
 
 theorem sessCRZ_of_not_fork {σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))}
-    (h : ¬ SessForkZ A Hs T pre post cap₀ σ) : SessCRZ A Hs T pre post cap₀ σ 0 0 where
-  fork r hr ℓ hℓ := Finder.cr_of_not_finds (fun hf => h (Or.inl ⟨r, hr, ℓ, hℓ, hf⟩)) 0
-  pads r hr := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inl ⟨r, hr, hf⟩))) 0
-  tau r hr := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inl ⟨r, hr, hf⟩)))) 0
-  level0 := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inl hf))))) 0
-  self := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inr hf))))) 0
+    (h : ¬ SessForkZ A Hs T pre post cap₀ σ) : SessCRZ A Hs T pre post cap₀ σ 0 0 :=
+  ⟨fun r hr ℓ hℓ => Finder.cr_of_not_finds (fun hf => h (Or.inl ⟨r, hr, ℓ, hℓ, hf⟩)) 0,
+    fun r hr => Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inl ⟨r, hr, hf⟩))) 0,
+    fun r hr => Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inl ⟨r, hr, hf⟩)))) 0,
+    Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inl hf))))) 0,
+    Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inr hf))))) 0⟩
 
 end Session
 

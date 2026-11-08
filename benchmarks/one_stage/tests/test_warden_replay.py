@@ -84,10 +84,10 @@ def test_each_request_is_answered_with_the_tokens_the_server_streamed_it(run):
 
 def test_the_served_window_is_its_own_flag_beside_the_wardens_schedule(run):
     """The served run's Commit window and the warden's own window (`WardenParams.window`, in buckets) are separate flags, and the
-    schedule's flags reach the warden as `warden_serve.py rehearse` passes them."""
+    schedule's flags reach the warden as `warden_serve.py rehearse` passes them, in the bytes egress form."""
     args = WP.parser().parse_args(["rehearse", "--serve-run", str(run), "--serve-window", "212", "--out", str(run / "o"),
                                    "--window", "300"])
     assert args.serve_window == 212 and WP.ws._params(args).window == 300
     assert WP.ws._params(WP.parser().parse_args(["rehearse", "--serve-run", str(run), "--serve-window", "4", "--out", "o"])) \
-        == WP.WardenParams(**WP.ws.SCHEDULE)
+        == WP.ws.WardenParams(**WP.ws.SCHEDULE | {"egress": "bytes"})
     assert WP.parser().parse_args(["endpoint", "--serve-run", str(run), "--serve-window", "4", "--listen", "127.0.0.1:0"]).serve_window == 4

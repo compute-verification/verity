@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.FaultyRightC
 public import Proofs.Flock.Bridge.Refused
+public import Proofs.Flock.Bridge.ScopeGate
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -45,8 +46,8 @@ import Proofs.Flock.Bridge.Transports
 `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`: `AssemblyTargetC` (`assemblyTargetC`) with
 canonical transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the slot count (`partBlocks`), the count lemma
 (`count`) and `EndToEndHiddenC` (`endToEndHiddenC_of`, from `openingsCanon`) plugged in.
-`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`: V2 with its file preconditions read off the
-verifiers' acceptance (`sampledKSLiveV3_of`).
+`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`: V2 with its statement, file and draw
+preconditions read off the verifiers' acceptance (`sampledKSLiveV3_of`).
 -/
 
 @[expose] public section
@@ -56,7 +57,9 @@ theorem Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2 
   Flock.Bridge.assemblyTargetC Flock.Bridge.transportsLiveC Flock.Bridge.faultyRightTargetC Flock.Bridge.partBlocks
     Flock.Bridge.count (Flock.Bridge.endToEndHiddenC_of Flock.Bridge.openingsCanon)
 
-/-- **The sampled audit's knowledge soundness, live, on the event that the verifiers accept the files**
-(`Flock.Guarantees.SampledKSLiveV3`): no hypothesis on the files' rows, names, roots or population order. -/
+/-- **The sampled audit's knowledge soundness, live, on the event that `verify --zk` accepts the statement, the files and
+the draw** (`Flock.Guarantees.SampledKSLiveV3`): no hypothesis on the files' rows, names, roots or population order, nor
+that the statement is untyped, the unit built, the circuit in `scopeOkH`, the draw's `k` a multiple of the tables or the
+tags `TagsOkZHJ`. -/
 theorem Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3 :=
   Flock.Guarantees.sampledKSLiveV3_of Flock.SecurityProofs.SampledKSLiveV2
