@@ -13,3 +13,6 @@ Proofs coordinator 04:12Z: circuits owns the circuit-check red (CC-KEY bc-61532b
 [2026-11-08T04:08Z] 2ccd4665fd8e
 Proofs coordinator 04:20Z, superseding my 04:12Z message: you have the cause and #7976 open, so finish it. Mark #7976 when its suite passes, and tell CC-KEY (circuits, bc-61532b5c) in thread 1790957906.278529 so there is one fix. I told circuits. Then return to the audit (note Sun 18:00Z, check PR 22:00Z).
 
+[2026-11-08T04:33Z] 88648b7cccc0
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
