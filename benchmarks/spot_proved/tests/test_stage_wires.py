@@ -1,9 +1,9 @@
 """`stage.Wires` on a committed capture: a staged instance's input is wired to the latest earlier call that output its bytes
 (``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of, or
 whose output is a strided view into its real rows, its padding rows uncharged; a parameter is ``registered`` with its
-committed SHA-512; an `ADVICE` input is charged at its width; anything else, and an output of the call enclosing the reader,
-is `Unwired` with the fix. `traced` records what an instance's arguments read, and `wiring` charges each advice argument
-once."""
+committed SHA-512; an `ADVICE` input is charged at the union of the parts instances read (`Capture.part`), else at its
+width; anything else, and an output of the call enclosing the reader, is `Unwired` with the fix. `traced` records what an
+instance's arguments read, and `wiring` charges each advice argument once."""
 from __future__ import annotations
 
 import hashlib
@@ -149,3 +149,29 @@ def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_charges_a
                             {"key": [0, 2, 0], "unwired": "rank 0 ..."}]}}
     w = stage.wiring(types)
     assert w["advice_bits"] == 2 * 6 * 4 * 16 and len(w["inputs"]["A"]) == 2 and w["unwired"] == {"A": ["rank 0 ..."]}
+
+
+def test_an_advice_input_is_charged_at_the_union_of_the_parts_staged_instances_read(step) -> None:
+    stage, cap, wires = step
+    kv = cap.events[0][4]["in"]["kv_gathered"]
+    row = 4 * 16
+
+    def read(*keys):
+        reads: list = []
+        got = stage.traced(cap, lambda: [cap.part(0, kv, k) for k in keys], reads)()
+        assert all(np.array_equal(x, cap.tensor(0, kv)[k]) for x, k in zip(got, keys))
+        return wires.of(reads)
+
+    a, b, whole = read((0, slice(1, 4)), (0, slice(2, 5))), read((1, slice(0, 2))), read((1, slice(0, 2)), (0,))
+    assert a[0]["parts"] == [[[0, 1], [1, 4]], [[0, 1], [2, 5]]] and a[0]["bits"] == 4 * row, "token 0's rows 1 to 4, once"
+    assert b[0]["bits"] == 2 * row and "parts" not in wires.source(0, kv), "a reference's own source stays whole"
+    assert whole[0]["parts"] == [[[1, 2], [0, 2]], [[0, 1]]] and whole[0]["bits"] == 8 * row
+
+    def charged(*instances):
+        return stage.wiring({"S": {"gate": [{"key": [0, 4, i], "sources": s} for i, s in enumerate(instances)]}})["advice_bits"]
+
+    assert charged(a, b, a) == 6 * row, "the union over instances, each row once: 6 of the 12 rows"
+    assert charged(a, whole) == 8 * row, "a part over fewer axes takes the rest of them whole: all of token 0's rows"
+    reads: list = []
+    stage.traced(cap, lambda: [cap.tensor(0, kv)[0, 1:4]], reads)()
+    assert charged(a, wires.of(reads)) == 12 * row, "a read through `Capture.tensor` takes the input whole"
