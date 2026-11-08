@@ -4934,6 +4934,40 @@ def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_p
         "reading the live files instead passes the swapped-in good bytes: the private copies are what protect the verdict"
 
 
+def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_path):
+    """The hole a seal under ``base/<pid>`` would still have: a killed run leaves its copies there, and a new run under the
+    same pid (container pids are low, a slot persists) would read them, since `Sealed.copy` skips a file already present.
+    `Seals` takes a fresh `mkdtemp` directory per run instead, with the pid only a prefix so `sweep` still drops a dead
+    run's directory.  Here a stale `base/<pid>` directory holds a wrong `.olean` where that layout put it; the seal the run
+    takes reads this build's bytes, not the stale copy, and `sweep` removes a gone process's directory in either naming."""
+    base = tmp_path / "sealed"
+    pkg = tmp_path / "pkg"
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    lib.mkdir(parents=True)
+    olean = lib / "Foo.olean"
+    olean.write_bytes(b"this build's bytes")
+    stale = base / f"{os.getpid()}"                              # a killed run's leftover, the old `base/<pid>` layout
+    stale_copy = A.Sealed(pkg, "x", stale / "pkg-0").moved(olean.resolve())
+    stale_copy.parent.mkdir(parents=True)
+    stale_copy.write_bytes(b"a stale run's wrong bytes")
+    seals = A.Seals(base)
+    try:
+        assert seals.dir != stale and seals.dir.name.startswith(f"{os.getpid()}-"), \
+            "the run takes a fresh directory whose pid is only a prefix, not the reused-pid leftover"
+        read = A.Sealed(pkg, "x", seals.dir / "pkg-0")
+        read.copy(olean.resolve())
+        assert read.moved(olean.resolve()).read_bytes() == b"this build's bytes", \
+            "the seal reads this build's `.olean`, not the stale copy a reused pid left"
+    finally:
+        seals.close()
+    gone = tmp_path / "noproc"
+    gone.mkdir()
+    (base / "999999-abcd").mkdir()                               # a dead run's directory, the new `<pid>-<suffix>` layout
+    A.Seals(base).sweep(proc=gone)
+    assert not stale.exists() and not (base / "999999-abcd").exists(), \
+        "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
+
+
 def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():
     """A dependency module that has not passed is checked, and every module importing it joins the replay unchecked, since
     an import of one would bring it in unchecked; the rest stay imported."""

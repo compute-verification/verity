@@ -4325,22 +4325,28 @@ class Sealed:
 
 class Seals:
     """The seals of a check run: a `Sealed` per package, taken at its seal and kept until the run ends, so a dependent that
-    reads a package's facts (`proved`) reads the same copies.  ``base`` holds every run's seals under its process id; a run
-    sweeps the directories of processes that are gone (`sweep`) and removes its own at the end (`close`).  ``take`` is
-    copy-once per package and safe to call from two threads (a package's own audit and a dependent's `proved`)."""
+    reads a package's facts (`proved`) reads the same copies.  ``base`` holds every run's seals in its own fresh directory,
+    named ``<pid>-<suffix>``; a run sweeps the directories of processes that are gone (`sweep`) and removes its own at the
+    end (`close`).  The directory is `mkdtemp`-fresh, never ``base/<pid>``, so a run under a reused pid (container pids are
+    low, and a slot persists) cannot read a killed run's copies, which `Sealed.copy` would otherwise keep (it skips a file
+    already there).  ``take`` is copy-once per package and safe to call from two threads (a package's own audit and a
+    dependent's `proved`)."""
 
     def __init__(self, base: Path):
         self.base = base
-        self.dir = base / f"{os.getpid()}"
+        base.mkdir(parents=True, exist_ok=True)
+        self.dir = Path(tempfile.mkdtemp(prefix=f"{os.getpid()}-", dir=base))
         self.sealed: dict[Path, Sealed] = {}
         self.locks: dict[Path, threading.Lock] = {}
         self.lock = threading.Lock()
         self.sweep()
 
     def sweep(self, proc: Path = Path("/proc")) -> None:
-        """Remove the seal directories of processes that are gone, so a suspended run leaves nothing behind."""
+        """Remove the seal directories of processes that are gone, so a suspended run leaves nothing behind.  A run's
+        directory is ``<pid>-<suffix>`` (`mkdtemp`); the pid is the prefix, so a leftover from either naming sweeps away."""
         for d in self.base.glob("*") if self.base.is_dir() else []:
-            if d.name.isdigit() and not (proc / d.name).exists():
+            pid = d.name.split("-", 1)[0]
+            if pid.isdigit() and not (proc / pid).exists():
                 shutil.rmtree(d, ignore_errors=True)
 
     def take(self, pkg: Path, toolchain: str, policy_roots: list[str], work: Path, log=print) -> Sealed:
