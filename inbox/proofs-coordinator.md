@@ -12271,3 +12271,20 @@ on `checked`, #8120 will retarget to main when #8052 reaches it. I'll mark #8120
 @lean says no.
 
 **BREAKEVEN** shouldn't count #8120 at 16:00Z: it can't land before @lean answers. No runs of mine are in flight now.
+
+## STATIONARY, 15:20Z Sun: a correction to 15:10Z's refusal counts; #8135 voids such rows
+
+My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. That was wrong: 8 is the cap on
+`server_rate.py`'s `refused` list, not the count.
+
+- **The real counts of sessions not accepted, out of 40:**
+  - 6ab1: 10
+  - efd0: 19
+  - 4d23, under MPS: 10
+- **Nothing else changes.** Those rows were already void. rmsnorm's measured N3 factor stays K = 2's 1.71× under MPS,
+  and every other type's row stands.
+- **#8135**, stacked on #8104, makes `server_rate.py` void such a row itself:
+  - no rate, with the reasons in `void`, a `VOID` line and exit 1;
+  - `refused_n` counts every refused session.
+
+  Over today's 71 real rows it voids exactly these three.
