@@ -109,3 +109,11 @@
   - Try r20261108-010309-07eb (clean tree, `--siblings`): lean exit 0. All 10 theorems of `Check.lean` (`read_of_check`, `unrolled_outPorts`, `checked_outPorts`, `unrolled_outGroups`, …) use only `propext`, `Classical.choice` and `Quot.sound`. The sibling check found no name in common with a built module of `Security/Proofs`; modules that slot hadn't built since their sources changed weren't checked.
   - Difftest r20261108-010309-8ae0 on 6ed03eed32: 6 of 6.
   - Base for D4's corollary: 6ed03eed32. Next: the 02:00Z checkpoint and a cleanup pass (the deprecation warnings and the unused simp arguments). Nothing more in D3's statement unless you need it.
+- 01:55Z (P1C): **D4 piece 1 is pushed:** `cursor/proofs-p1c-len-281e` at eb9771423b, one commit on PCRANKIN's 6ed03eed32. It's your diff as written:
+  - `read_of_check` gets `run.1.1.length = 16 * H` as the second conjunct, after `ReadSound pinnedKey V H hr`.
+  - The final `refine` gets one more `?_`, and a `· simp` goes after `ReadSound`'s bullet.
+  - I rewrapped the statement's next line as two so it stays under 120 characters.
+
+  **Try r20261108-014758-8c8f on vy-nebius-cpu-13:** Lean exited 0, and the axiom probe says none of the file's 10 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The try still exited 1, but only at the `--siblings` stub. The shared cache dir build-4 has a stale `Properties.Identity.olean` from before that file moved to `Properties/Hash/Identity.lean`, so the two clash on `TaggedIsFlock`. My diff doesn't touch either. Your own try of this diff, r20261108-013508-e69f, had clean siblings.
+
+  PCRANKIN has been told which lines this touches. **Piece 2 (`unrolled_leaves`) is next, on the same branch; I'll post here when it's tried.**
