@@ -1024,9 +1024,9 @@ enum WitData {
 }
 
 /// A rep's witness: for an honest prover on the GPU (`device`), the device witness's inputs (the compression slots' and the
-/// units' input words, the hm96 slots computed here, and M1's mask slot; with `mapped`, the host slots in mapped host memory);
-/// otherwise the packed host witness.
-fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> (WitData, f64) {
+/// units' input words, the hm96 slots computed here or with `hm96` their input words, and M1's mask slot; with `mapped`, the
+/// host slots in mapped host memory); otherwise the packed host witness.
+fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool, hm96: bool) -> (WitData, f64) {
     let t = Instant::now();
     #[cfg(feature = "gpu")]
     let pack = |h: &[flock_live::gpu_circuit::HostSlot]| if mapped { HostSlots::pack(h) } else { HostSlots::pack_pageable(h) };
@@ -1057,37 +1057,51 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
         lap("rowin", &mut tl, &mut parts);
         let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
-        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        let mut hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         lap("rows", &mut tl, &mut parts);
-        let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
+        let mut host = if hm96 { Vec::new() } else { flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm) };
         host.extend(mask_slots());
+        let hm96_rows: Vec<F128> = if hm96 { std::mem::take(&mut hm).into_iter().flatten().collect() } else { Vec::new() };
         lap("hm96", &mut tl, &mut parts);
+        let with_hm96 = |mut h: HostSlots, rows: Vec<F128>| {
+            h.hm96_rows = rows;
+            h
+        };
         let unit_inputs = || (0..st.blocks() * ur.count).into_par_iter().map(|x| (w.inputs)(x / ur.count, x % ur.count));
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             let inputs: Vec<F128> = unit_inputs().flatten_iter().collect();
-            return (WitData::DevCut(rows, pack(&host), inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
+            return (WitData::DevCut(rows, with_hm96(pack(&host), hm96_rows), inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
         }
         if host_units {
             let ins: Vec<Vec<F128>> = unit_inputs().collect();
             lap("unit_inputs", &mut tl, &mut parts);
             if mapped {
-                let packed = HostSlots::pack_units(st, &host, st.c.unit_net, &ins);
+                let packed = with_hm96(HostSlots::pack_units(st, &host, st.c.unit_net, &ins), hm96_rows);
                 lap("units_pack", &mut tl, &mut parts);
                 if times {
                     eprintln!("WITNESS\t{}", Value::Object(parts));
                 }
-                return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
+                let s = t.elapsed().as_secs_f64();
+                // the slots and inputs the pack copied are freed beside the session, off its critical path (WITNESSFREE: how long)
+                flock_live::spawn(move || {
+                    let t = Instant::now();
+                    drop((host, hm, ins));
+                    if times {
+                        eprintln!("WITNESSFREE\t{}", json!({"s": t.elapsed().as_secs_f64()}));
+                    }
+                });
+                return (WitData::Dev(rows, packed, Vec::new()), s);
             }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             lap("units", &mut tl, &mut parts);
-            let packed = pack(&host);
+            let packed = with_hm96(pack(&host), hm96_rows);
             lap("pack", &mut tl, &mut parts);
             if times {
                 eprintln!("WITNESS\t{}", Value::Object(parts));
             }
             return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
         }
-        return (WitData::Dev(rows, pack(&host), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
+        return (WitData::Dev(rows, with_hm96(pack(&host), hm96_rows), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
     }
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
@@ -1099,15 +1113,19 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         let ins = st.converge_with(&*w.inputs, None, &w.nets, None);
-        let mut host = flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm);
+        let mut host = if hm96 { Vec::new() } else { flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm) };
         for ni in (0..c.nets.len()).filter(|&n| n != c.sha_net && n != c.hm_net && n != c.unit_net) {
             host.extend(flock_live::gpu_circuit::host_slots(st, ni, &ins[ni]));
         }
         host.extend(mask_slots());
         let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
-        return (WitData::Dev(rows, pack(&host), inputs), t.elapsed().as_secs_f64());
+        let mut packed = pack(&host);
+        if hm96 {
+            packed.hm96_rows = hm.into_iter().flatten().collect();
+        }
+        return (WitData::Dev(rows, packed, inputs), t.elapsed().as_secs_f64());
     }
-    let _ = (device, host_units, mapped);
+    let _ = (device, host_units, mapped, hm96);
     let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
     if let Some((n, x, col)) = w.cut_flip {
         let word = &mut ins[n][x][col / 128];
@@ -3465,7 +3483,8 @@ fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused:
            "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
            "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
            "rep_reused": reused, "native_sha": native_sha,
-           "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" }})
+           "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" },
+           "hm96_native": matches!(wt, WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) if !h.hm96_rows.is_empty())})
 }
 
 /// One rep on the GPU; with `reuse_tag`, rep 0 keeps its level-0 commitment on the device and rep 1 takes it.
@@ -3722,21 +3741,27 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 }
 
 /// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
-/// and the host slots in mapped memory.
-fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool) {
+/// the host slots in mapped memory, and the hm96 slots built on the device natively (beside the compressions' native witness).
+fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool, bool) {
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     #[cfg(feature = "gpu")]
-    let host_units = device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st));
+    let (host_units, hm96) = (device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st)),
+                              device && native_sha(plan) && flock_live::gpu_circuit::hm96_native(st));
     #[cfg(not(feature = "gpu"))]
-    let host_units = { let _ = st; false };
-    (device, host_units, plan.host_mapped.unwrap_or(true))
+    let (host_units, hm96) = { let _ = st; (false, false) };
+    (device, host_units, plan.host_mapped.unwrap_or(true), hm96)
+}
+
+/// Whether the device builds the compression slots' witness natively (`Plan::native_sha`)
+fn native_sha(plan: &Plan) -> bool {
+    plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"))
 }
 
 /// A one-table session's witness, built ahead of it: for this statement, seed and witness mode only.
 struct Prebuilt {
     st: Arc<Stmt>,
     seed: ProverSeed,
-    mode: (bool, bool, bool),
+    mode: (bool, bool, bool, bool),
     w0: Wit,
     wt0: WitData,
     built_s: f64,
@@ -3758,9 +3783,9 @@ fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed
 /// (`HostSlots::upload`), which the session's device then reads; otherwise its compression rows copied to page-locked memory
 /// (`HostSlots::pin_rows`). Built ahead (`prebuild`), the copies run beside the previous session's device work; either way their
 /// time counts as the build's.
-fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool)) -> (WitData, f64) {
+fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool, bool)) -> (WitData, f64) {
     #[allow(unused_mut)]
-    let (mut wt, mut s) = witness(st, w, mode.0, mode.1, mode.2);
+    let (mut wt, mut s) = witness(st, w, mode.0, mode.1, mode.2, mode.3);
     #[cfg(feature = "gpu")]
     if let WitData::Dev(rows, h, _) = &mut wt {
         let t = Instant::now();
@@ -3863,11 +3888,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let tree = is_zk(st) || plain_tree(st);
     let mut commit: Vec<F128> = Vec::new();
-    let (device, host_units, mapped) = witness_mode(st, plan);
+    let (device, host_units, mapped, hm96) = witness_mode(st, plan);
     // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
     // witness again, under M1 too: both reps commit one level-0 codeword
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    let native_sha = plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"));
+    let native_sha = native_sha(plan);
     let reuse_tag = (plan.gpu && !plan.rep1_other_witness
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
@@ -3919,6 +3944,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
         flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
+    // Hello's round trip beside the witness build (FC_HELLO_AHEAD=0: after it): Hello reads no witness, and nothing else reaches
+    // the transport before it. Not through the ZK server's Lean session loop
+    let hello_ahead = (!plan.lean_session && plan.lean_frames.is_none() && std::env::var("FC_HELLO_AHEAD").as_deref() != Ok("0")).then(|| {
+        let (t, h) = (t.clone(), hello.clone());
+        flock_live::spawn(move || call(&t, Req::Hello(h)))
+    });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
     let mut witness_s = 0.0;
@@ -3931,7 +3962,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
             .flatten()
             .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
-            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped));
+            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped, hm96));
         let (w0, wt0, tw0) = match pre {
             Some(p) => {
                 witness_prebuilt_s = Some(p.built_s);
@@ -3939,12 +3970,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             }
             None => {
                 let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
-                let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped));
+                let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped, hm96));
                 (w0, wt0, tw0)
             }
         };
         let (wt1, tw1) = if plan.rep1_other_witness {
-            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped);
+            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped, hm96);
             (Some(w), t)
         } else {
             (None, 0.0)
@@ -3973,7 +4004,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut early = 0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
-        match call(&t, Req::Hello(hello.clone()))? {
+        let hello_got = match hello_ahead {
+            Some(h) => h.join().unwrap_or_else(|e| Err(format!("hello: {}", panic_msg(e)))),
+            None => call(&t, Req::Hello(hello.clone())),
+        };
+        match hello_got? {
             // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them,
             // or the ZK server did), or under the Lean session loop, which checked them, the loop's id for the session in their
             // place (4, `Session.idFrame`)
@@ -4179,7 +4214,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                         (0, true) => wt0.take(),
                         (0, false) if per_rep => wt0.take(),
                         (0, false) => wt0.clone(),
-                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device, host_units, mapped).0)),
+                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device, host_units, mapped, hm96).0)),
                     }.expect("a rep's witness")
                 };
                 #[cfg(feature = "sha512")]
@@ -4445,6 +4480,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("verify_ahead_matches_serial", true, false),
     ("host_units_match_witness", true, false),
     ("native_sha_matches_eval64", true, false),
+    ("device_hm96_matches_host", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_final_c_solved_after_the_batching_coins", false, true),
@@ -5070,6 +5106,32 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             !acc && in_scope(&v)["why"].as_str().is_some_and(|w| w.contains("R7"))
         };
         return json!({"case": name, "gpu": gpu, "accepted": acc, "pass": pass, "unit_draw": draw, "why": v["why"], "replay": replay});
+    }
+    if name == "device_hm96_matches_host" {
+        // the hm96 slots as the device builds them natively (fc_hm96_tape, then the rows from the plan's runs) are
+        // Stmt::slot_zab's word for word, on every slot of every block, padding instances included
+        #[cfg(all(feature = "gpu", feature = "sha512"))]
+        if gpu {
+            use rayon::prelude::*;
+            let w = wit(st, inst, &Plan::default(), false, ProverSeed::from_os(), 0);
+            let hm: Vec<Vec<F128>> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| (w.rowin)(b).1).collect();
+            let net = &st.c.nets[st.c.hm_net].1;
+            let mut checked = 0;
+            for chunk in hm.chunks(1024) {
+                let dev = match flock_live::gpu_circuit::device_hm96_slots(st, chunk) {
+                    Ok(d) => d,
+                    Err(e) => return json!({"case": name, "gpu": true, "pass": false, "why": e}),
+                };
+                let host = st.slot_zab(st.c.hm_net, net, chunk);
+                if host.len() != chunk.len() || !host.par_iter().all(|(x, z, a, b)| dev[*x].0 == *z && dev[*x].1 == *a && dev[*x].2 == *b) {
+                    return json!({"case": name, "gpu": true, "pass": false, "slots_checked": checked, "why": "an hm96 slot's words differ"});
+                }
+                checked += chunk.len();
+            }
+            return json!({"case": name, "gpu": true, "expect": "the device's native hm96 slots equal the host's", "slots": checked,
+                          "pass": checked > 0 && checked == hm.len()});
+        }
+        return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]
@@ -6151,7 +6213,7 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
-           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "hm96_native": [used_a("hm96_native"), used("hm96_native")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
            "pass": accepted && pe && te})
 }
 
