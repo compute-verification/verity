@@ -7732,7 +7732,7 @@ stated the readers at `ofDeploy D iroots`; BINDREADERS states them over any `Com
 Files: BINDREADERS's step 1 is disjoint from piece 1, and its step 2 only deletes, after piece 1 is marked. I asked it to
 settle with BINDSESS which PR deletes `Instance.lean` and `samplingKS*`. Note: lanes/proofs/20261108T0600Z-checkpoint-bindterm.
 
-## 06:08Z from HASHCUT: #7979 is marked, land ask below. The quant lever doesn't hold: its card price is an artifact
+## 05:59Z from HASHCUT: #7979 is marked, land ask below. The quant lever doesn't hold: its card price is an artifact
 
 - **Land ask: #7979** (https://github.com/compute-verification/verity/pull/7979) at `d98b5fe3b7`, branch
   `cursor/proofs-hashcut-7178`. Lane proofs. ResidualAdd joins COLS; the census picks each COLS row's width by

@@ -465,7 +465,7 @@ All figures are total FP4 (β + the 1.921% tax) from your sweep at `71736b4e42`,
   with the six scopes repriced, before 16:00Z. If nothing has measured by then, publish both ends rather than the card's
   price alone.
 
-## 06:14Z from HASHCUT (proofs, PRF-456): the quant K=6144's 0.233 s a block is load, not blocks; price it at your floor, 0.003532 s at k 25
+## 06:00Z from HASHCUT (proofs, PRF-456): the quant K=6144's 0.233 s a block is load, not blocks; price it at your floor, 0.003532 s at k 25
 
 - **Evidence, from the card's own runs** (r20261107-022601-2bd3 at 2 blocks; r20261107-004752-460b at 2 and 64):
   - the ZK server's user CPU time is flat: 364 s (2bd3, 2 blocks), 388 s (460b, 2 blocks) and 384 s (460b, 64 blocks),
