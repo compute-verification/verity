@@ -17,8 +17,9 @@ Parts (--part):
           a constant per column); aligning G by least squares against the truth leaves the error, over V*d - d^2 - d
           degrees of freedom. A top-k API with logit bias reads a full vector in ceil((V - 1)/(k - 1)) queries, so the
           honest rate is bits / (n * that).
-  rows    a fault at layer l's MLP hidden unit j, value v. The residual stream at that position gains (v - a_j) w_j,
-          w_j the unit's down-projection row; at large |v| it dominates every later layer's addition, and the final norm
+  rows    a fault at layer l's MLP hidden unit j (--row-site mlph; attnh: its attention context), value v. The
+          residual stream at that position gains (v - a_j) w_j, w_j the unit's row of the down (output) projection; at
+          large |v| it dominates every later layer's addition, and the final norm
           reads its direction: the logits become E (g * norm(w_j) + b), g and b the final norm's weights. A decoder that
           knows E, g and b (from the final-site attack, peeling from the top) reads norm(w_j) from m logits (logit bias,
           k - 1 tokens a fault, F = ceil(m/(k-1)) faults) by least squares. Its error against norm(w_j) includes what
@@ -149,10 +150,12 @@ def part_honest(lm: LM, tok, a) -> dict:
     return {"part": "honest", "states": int(H.shape[0]), "rows": rows}
 
 
-def target_row(lm: LM, l: int, j: int) -> torch.Tensor:
+def target_row(lm: LM, site: str, l: int, j: int) -> torch.Tensor:
+    """The residual-stream direction unit j of site feeds: a row of the projection after it."""
     if lm.spec.arch == "gpt2":
-        return lm.W[f"h.{l}.mlp.c_proj.weight"][j].float()
-    return lm.W[f"layers.{l}.mlp.down_proj.weight"][:, j].float()
+        return lm.W[f"h.{l}.{'mlp' if site == 'mlph' else 'attn'}.c_proj.weight"][j].float()
+    name = "mlp.down_proj" if site == "mlph" else "self_attn.o_proj"
+    return lm.W[f"layers.{l}.{name}.weight"][:, j].float()
 
 
 def final_norm_params(lm: LM) -> tuple[torch.Tensor, torch.Tensor]:
@@ -176,25 +179,26 @@ def part_rows(lm: LM, tok, a) -> dict:
     lost = 2 if lm.spec.arch == "gpt2" else 1
     gen = torch.Generator().manual_seed(a.seed)
     layers = sorted({l if l >= 0 else lm.spec.layers + l for l in a.layers})
-    ff = lm.spec.ff
+    site = a.row_site
+    width = lm.spec.ff if site == "mlph" else lm.spec.heads * lm.spec.head_dim
     m = int(a.read_over_d * d)
     out = []
     pre, last, t0 = prefix(lm, tok, PROMPTS[0])
-    taps0 = {("mlph", l): None for l in layers}
+    taps0 = {(site, l): None for l in layers}
     lm.forward(last, pre.expand(1), taps=taps0)
     for l in layers:
-        units = torch.randperm(ff, generator=gen)[:a.units].tolist()
-        rms = float(taps0[("mlph", l)][0, 0].pow(2).mean().sqrt())
+        units = torch.randperm(width, generator=gen)[:a.units].tolist()
+        rms = float(taps0[(site, l)][0, 0].pow(2).mean().sqrt())
         for v_spec in a.values:
             v = float(v_spec[:-3]) * rms if v_spec.endswith("rms") else float(v_spec)
             taps = {("final", lm.spec.layers): None}
-            z = faulted_logits(lm, pre, last, t0, [("mlph", l, j, v) for j in units], taps=taps)
+            z = faulted_logits(lm, pre, last, t0, [(site, l, j, v) for j in units], taps=taps)
             h = taps[("final", lm.spec.layers)][:, 0].float()
             for prec in a.precisions:
                 zs = z.float().to(torch.bfloat16).float() if prec == "bf16" else z.float()
                 for bi, j in enumerate(units):
-                    tru = norm_dir(lm, target_row(lm, l, j))
-                    s = 1.0 if v - float(taps0[("mlph", l)][0, 0, j]) > 0 else -1.0
+                    tru = norm_dir(lm, target_row(lm, site, l, j))
+                    s = 1.0 if v - float(taps0[(site, l)][0, 0, j]) > 0 else -1.0
                     best = s * (h[bi] - b) / g
                     best = norm_dir(lm, best)
                     r_c = float((best - tru).pow(2).mean())
@@ -215,7 +219,7 @@ def part_rows(lm: LM, tok, a) -> dict:
         for k in a.ks:
             F = math.ceil(m / (k - 1))
             bits = rd_bits(d - lost, r)
-            rows.append({"layer": l, "value": v_spec, "precision": prec, "k": k, "units": len(rs),
+            rows.append({"site": site, "layer": l, "value": v_spec, "precision": prec, "k": k, "units": len(rs),
                          "read_tokens": m, "faults_per_row": F, "contamination_mse": rc, "mse": r,
                          "bits_per_row": bits, "bits_per_fault": bits / F,
                          "bits_per_observed_bit": bits / (F * k * (math.log2(V) + LOGPROB_BITS))})
@@ -236,6 +240,8 @@ def main() -> int:
     ap.add_argument("--n-over-d", type=float, nargs="+", default=[1.1, 1.5, 2.0])
     ap.add_argument("--layers", type=int, nargs="+", default=list(range(-12, 0)))
     ap.add_argument("--units", type=int, default=16, help="rows: hidden units per layer")
+    ap.add_argument("--row-site", default="mlph", choices=("mlph", "attnh"),
+                    help="rows: the MLP's hidden units (down-projection rows) or the attention context (output-projection rows)")
     ap.add_argument("--values", nargs="+", default=["1e6", "1e3", "64rms", "8rms"])
     ap.add_argument("--read-over-d", type=float, default=1.25, help="rows: logits read per row, over d")
     ap.add_argument("--batch", type=int, default=128)

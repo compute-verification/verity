@@ -5,6 +5,7 @@ snapshot's safetensors and pinned by revision (`MODELS`). Each forward takes a K
 faulted sequences shares one honest prefix, and every activation a fault can hit is a named site:
 
   emb (layer -1)  the residual stream into layer 0 (token plus position embedding)
+  attnh l         layer l's attention context, its heads' outputs concatenated: the input of its output projection
   attn  l         layer l's attention output, after its output projection and before the residual add
   mlph  l         layer l's MLP hidden activation, the input of its down (c_proj) projection
   mlp   l         layer l's MLP output, after its down projection and before the residual add
@@ -33,7 +34,7 @@ MODELS = {
     "qwen2.5-0.5b": {"repo": "Qwen/Qwen2.5-0.5B", "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987"},
 }
 FILES = ("config.json", "model.safetensors", "tokenizer.json")
-SITES = ("emb", "attn", "mlph", "mlp", "resid", "final")
+SITES = ("emb", "attnh", "attn", "mlph", "mlp", "resid", "final")
 ST_DTYPES = {"F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 
 
@@ -209,6 +210,7 @@ class LM:
         q, k, v = (z.view(b, t, s.heads, s.head_dim).transpose(1, 2) for z in (q, k, v))
         k, v = cache.append(l, k, v)
         a = self._attend(q, k, v, pos0).transpose(1, 2).reshape(b, t, s.d)
+        a = self._site("attnh", l, a, pos0, fault, taps)
         a = a @ W[p + "attn.c_proj.weight"] + W[p + "attn.c_proj.bias"]
         x = x + self._site("attn", l, a, pos0, fault, taps)
         h = F.layer_norm(x, (s.d,), W[p + "ln_2.weight"], W[p + "ln_2.bias"], s.eps)
@@ -230,6 +232,7 @@ class LM:
         v = v.view(b, t, s.kv_heads, s.head_dim).transpose(1, 2)
         k, v = cache.append(l, k, v)
         a = self._attend(q, k, v, pos0).transpose(1, 2).reshape(b, t, s.heads * s.head_dim)
+        a = self._site("attnh", l, a, pos0, fault, taps)
         a = a @ W[p + "self_attn.o_proj.weight"].T
         x = x + self._site("attn", l, a, pos0, fault, taps)
         h = self._rms(x, W[p + "post_attention_layernorm.weight"])
