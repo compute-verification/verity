@@ -79,7 +79,7 @@ CHUNK = 16 << 10
 #: `chunks_sha512` on the device, one thread a piece, from ``sha512.cuh`` (`site` copies it beside this file)
 CHUNKS_CU = r"""
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAStream.h>
 #include "sha512.cuh"
 
 __global__ void spot_chunks(const uint8_t* __restrict__ data, long long nbytes, long long chunk, long long n, uint8_t* out) {
@@ -110,7 +110,7 @@ torch::Tensor chunks(torch::Tensor flat, int64_t chunk) {
   TORCH_CHECK(flat.numel() == 0 || reinterpret_cast<uintptr_t>(flat.data_ptr<uint8_t>()) % 8 == 0);
   const int64_t nbytes = flat.numel(), n = (nbytes + chunk - 1) / chunk;
   auto out = torch::empty({n * 64}, flat.options());
-  if (n) spot_chunks<<<(unsigned)((n + 127) / 128), 128, 0, at::cuda::getCurrentCUDAStream()>>>(
+  if (n) spot_chunks<<<(unsigned)((n + 127) / 128), 128, 0, c10::cuda::getCurrentCUDAStream().stream()>>>(
       flat.data_ptr<uint8_t>(), nbytes, chunk, n, out.data_ptr<uint8_t>());
   return out;
 }
@@ -826,6 +826,9 @@ def _device_chunks() -> Any:
             hdr = next(p for p in (here.with_name("sha512.cuh"), here.parents[2] / "verity/ml/kernels/sha512.cuh") if p.is_file())
             major, minor = torch.cuda.get_device_capability()
             os.environ.setdefault("TORCH_CUDA_ARCH_LIST", f"{major}.{minor}")
+            import shutil
+            if shutil.which("ninja") is None:  # torch builds with ninja from PATH; a venv's sits beside its python
+                os.environ["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"
             tag = hashlib.sha512(CHUNKS_CU.encode() + hdr.read_bytes()).hexdigest()[:16]
             t = time.time()
             S.dev = load_inline(f"spot_chunks_{tag}", cpp_sources="torch::Tensor chunks(torch::Tensor flat, int64_t chunk);",
