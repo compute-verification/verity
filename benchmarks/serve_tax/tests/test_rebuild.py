@@ -266,15 +266,81 @@ def kv_cache_utils(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_hits_seed_poisons_a_dummy_s_missing_pages_and_never_lets_one_stand_in_for_the_target(kv_cache_utils: None) -> None:
     pool = Pool({(b"p0", 0): 7, (b"t1", 0): 8})
-    poisoned: list[int] = []
+    kv = Writes()
     taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0}
-    shape = NS(dummy=lambda rid: rid != "t", poison=lambda ids: poisoned.extend(ids), taken=taken)
-    h = RB.Hits(NS(block_pool=pool), [], lambda h: None, {}, 4, lambda: 0, shape, lambda h: None)
+    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken)
+    h = RB.Hits(NS(block_pool=pool), kv, lambda h: None, {}, 4, lambda: 0, shape, lambda h: None)
     h.seed(NS(request_id="d", block_hashes=[b"p0", b"p1"]), 8)
-    assert poisoned == [51] and pool.cache[(b"p1", 0)] == 51 and pool.freed == [51]
+    h.put()
+    assert kv.calls == [({51: RB.FILL_PAGE}, "zero")] and pool.cache[(b"p1", 0)] == 51 and pool.freed == [51]
     assert taken["pages_seeded_poisoned"] == 1 and h.loaded == 0
     h.seed(NS(request_id="t", block_hashes=[b"t0", b"t1"]), 8)
-    assert taken["target_pages_unavailable"] == 2 and h.loaded == 0 and (b"t0", 0) not in pool.cache
+    h.put()
+    assert taken["target_pages_unavailable"] == 2 and h.loaded == 0 and (b"t0", 0) not in pool.cache and len(kv.calls) == 1
+
+
+class Writes:
+    """A K/V that records `Hits`' writes."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[dict[int, Any], str]] = []
+
+    def write(self, ops: dict[int, Any], mode: str) -> None:
+        self.calls.append((dict(ops), mode))
+
+
+def test_hits_writes_a_step_s_pages_at_once_each_block_s_last_and_takes_the_target_s_own_page_only_if_cached(
+        kv_cache_utils: None) -> None:
+    pool = Pool({(b"t1", 0): 8})
+    kv = Writes()
+    taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0, "target_pages_loaded": 0,
+             "target_pages_overwritten": 0}
+    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken)
+    served = {b"t0": ("near", 3), b"t1": ("far", 4)}
+    h = RB.Hits(NS(block_pool=pool), kv, served.get, {"t": [(5, 16)]}, 4, lambda: 5, shape,
+                lambda x: RB.OWN_PAGE if x in (b"t2", b"t3") else None)
+    pool.cache[(b"t2", 0)] = 9
+    h.due({"t": NS(request_id="t", block_hashes=[b"t0", b"t1", b"t2", b"t3"])}, 5)
+    assert kv.calls == [({51: ("near", 3), 8: ("far", 4)}, "zero")]
+    assert taken | {"pages_seeded_poisoned": None} == {"pages_seeded_poisoned": None, "target_pages_unavailable": 1,
+                                                       "target_pages_own": 1, "target_pages_loaded": 1,
+                                                       "target_pages_overwritten": 1}
+    h.ops = {7: ("near", 1)}
+    h.ops[7] = RB.FILL_PAGE
+    h.put()
+    assert kv.calls[-1] == ({7: RB.FILL_PAGE}, "zero") and h.ops == {}
+
+
+def test_rank_kv_groups_a_step_s_loads_by_dump_fills_the_rest_and_refills_a_dummy_s_slots_by_block() -> None:
+    calls: list[tuple[str, tuple]] = []
+
+    def rpc(fn: Any, args: tuple = ()) -> list[Any]:
+        calls.append((fn.__name__, args))
+        if fn.__name__ == "block_roots":
+            return [{"rank": r, "roots": {"a": "x" if r != 2 else "y"}} for r in (1, 0, 2)]
+        return [None]
+
+    kv = RB.RankKv(rpc, 4, RB.Path("/e1"), [{"block_bytes": 10}, {"block_bytes": 6}])
+    assert kv.block_bytes == 16
+    kv.write({5: ("/e1", 50), 6: RB.FILL_PAGE, 7: ("/e2", 70), 8: ("/e1", 80)}, "nan")
+    assert calls == [("copy_blocks", ("/e1", [[50, 5], [80, 8]])), ("copy_blocks", ("/e2", [[70, 7]])),
+                     ("fill_blocks", ([6], RB.T.FILL))]
+    assert kv.loaded_from == {"/e1": 2, "/e2": 1}
+    calls.clear()
+    kv.fill_slots([9, 10, 3, 17], "zero")
+    assert calls == [("fill_blocks", ([0, 2, 4], 0))]
+    calls.clear()
+    kv.load([(11, 1), (12, 2)], [(2, 3)], "copy")
+    assert calls == [("copy_blocks", ("/e1", [[11, 1], [12, 2]]))]
+    with pytest.raises(SystemExit, match="--tail copy"):
+        kv.load([], [], "zero")
+    calls.clear()
+    assert kv.roots({"a": ([1, 2, 3], 9)}) == {"a": "x"}
+    assert calls == [("block_roots", ({"a": [1, 2]},))] and kv.ranks_disagree == [{"requests": 1, "ranks": [2]}]
+
+
+def test_full_pages_are_the_blocks_a_request_s_computed_tokens_fill() -> None:
+    assert RB.full_pages({"a": ([4, 5, 6], 9), "b": ([7], 3), "c": ([1, 2], 8)}, 4) == {"a": [4, 5], "b": [], "c": [1, 2]}
 
 
 def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None:
