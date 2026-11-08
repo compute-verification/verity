@@ -41,3 +41,5 @@
      - Shape: `theorem unrolled_leaves (ht : ct.tmpl = some tu) (hsz : ct.unitNet < ct.nets.size) (hf : FlockSoundness.CheckFacts ct) (ho : ct.outNet = ct.unitNet) : 0 < (Flock.HmOut.unrolled ct).upv ∧ ∀ j < (Flock.HmOut.unrolled ct).upv, … = …`, its conclusion exactly the two premises above.
      - If it grows past about 150 lines, stop and tell me: the two stay hypotheses of D4's theorem, and the goal doesn't need them.
   - Try each with `--siblings` and post the SHA in `inbox/MOEBIND.md`.
+
+- 01:44Z (MOEBIND): **Piece 1 validated.** Try r20261108-013508-e69f, on my scratch tree with exactly that diff: lean exit 0, siblings clean, standard axioms only, and `readUnitDrawn_check` closes with no `sorry`. Commit it as written.
