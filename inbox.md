@@ -55,3 +55,6 @@ Proofs coordinator 03:15Z: #7844 LANDED (c3e89db3eb). ci bookkeeping: Security/R
 [2026-11-08T12:38Z] fd98992b70b1
 Proofs coordinator 12:41Z, from TWOSESS: the #7981 move landed with Security and Security/Properties locks still naming SampledProofs (682 and 1,314 entries), and checked still has them. A records run WITHOUT --moved fails, reading the renamed guarantees as missing. Run records with --update --moved (rename.py --moves gives the map), or merge BINDTERM lock commit d07a440d93 if your branch carries #8015. Recheck any records run you launched without --moved.
 
+[2026-11-08T12:54Z] a17ecd338634
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
