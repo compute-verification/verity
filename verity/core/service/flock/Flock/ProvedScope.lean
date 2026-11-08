@@ -50,23 +50,6 @@ theorem allFrom_eq (f : Nat → Bool) : ∀ k i, allFrom f k i = (List.range' i 
   | zero => intro i; rfl
   | succ k ih => intro i; simp only [allFrom, ih, List.range'_succ, List.all_cons]
 
-/-- `rd32` at `o`, its bytes read with `uget`. -/
-@[inline] def rd32U (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
-    Nat :=
-  ((data.uget o (by omega)).toUInt32 |||
-    ((data.uget (o + USize.ofNat 1) (by rw [Sha512.toNat_add_ofNat o 1 (by omega)]; omega)).toUInt32 <<< 8) |||
-    ((data.uget (o + USize.ofNat 2) (by rw [Sha512.toNat_add_ofNat o 2 (by omega)]; omega)).toUInt32 <<< 16) |||
-    ((data.uget (o + USize.ofNat 3) (by rw [Sha512.toNat_add_ofNat o 3 (by omega)]; omega)).toUInt32 <<< 24)).toNat
-
-theorem rd32U_eq (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
-    rd32U data o h hs = rd32 data o.toNat := by
-  rw [← rd32Fast_eq]
-  unfold rd32U rd32Fast
-  rw [Sha512.uget_eq_get! data o o.toNat rfl,
-    Sha512.uget_eq_get! data _ (o.toNat + 1) (Sha512.toNat_add_ofNat o 1 (by omega)),
-    Sha512.uget_eq_get! data _ (o.toNat + 2) (Sha512.toNat_add_ofNat o 2 (by omega)),
-    Sha512.uget_eq_get! data _ (o.toNat + 3) (Sha512.toNat_add_ofNat o 3 (by omega))]
-
 /-- `p` on the `k` entries from byte `o` of `data`, read with `rd32U`. -/
 @[specialize] def rowAllU (data : ByteArray) (p : Nat → Bool) :
     (k : Nat) → (o : USize) → o.toNat + 4 * k ≤ data.size → o.toNat + 4 * k < USize.size → Bool
@@ -83,10 +66,6 @@ theorem rowAllU_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ (k t : Nat) (
   | k + 1, t, o, ho, h, hs => by
     rw [rowAllU, rowAllGo, rd32U_eq, ho,
       rowAllU_eq m s p k (t + 1) _ (by rw [Sha512.toNat_add_ofNat o 4 (by omega), ho]; omega)]
-
-theorem toNat_toUSize (s : Nat) (h : s < USize.size) : s.toUSize.toNat = s := by
-  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
-  rw [Nat.toUSize, USize.toNat_ofNat', Nat.mod_eq_of_lt (by omega)]
 
 /-- `rowAllGo m s p k 0`, with `rowAllU` where the row lies in `m.data` and its offsets fit a `USize`. -/
 @[inline] def rowAll (m : Sparse) (s : Nat) (p : Nat → Bool) (k : Nat) : Bool :=
