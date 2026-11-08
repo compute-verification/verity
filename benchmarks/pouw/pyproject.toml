@@ -154,7 +154,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/torch_gpu/s8_linear/sass_gate.py", "benchmarks/torch_gpu/attn_bf16/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
-          "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
+          "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]

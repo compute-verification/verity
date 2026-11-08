@@ -26,6 +26,7 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -34,16 +35,19 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
+
 from h1r import H1R, Call, words  # noqa: E402
 
-from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
+if TYPE_CHECKING:
+    from h1r import Plan
 
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 LAYERS = 32
 POISON = np.uint32(0xA5A5A5A5).view(np.int32)
 
 
-def weights(dev) -> list[torch.Tensor]:
+def weights(dev: torch.device) -> list[torch.Tensor]:
     """The 128 served linears' int8 weights [N, K] in SERVE-H1's order, merged as vLLM merges them."""
     from safetensors import safe_open
     idx = json.loads((Path(PIN) / "model.safetensors.index.json").read_text())["weight_map"]
@@ -67,7 +71,8 @@ def weights(dev) -> list[torch.Tensor]:
     return out
 
 
-def step(ws: list[torch.Tensor], t: int, rows: tuple[int, int], s: int, seed: int, dev):
+def step(ws: list[torch.Tensor], t: int, rows: tuple[int, int], s: int, seed: int,
+         dev: torch.device) -> tuple[list[Call], list[dict]]:
     """The step's calls (h1r's and receipts.py's view of each) at T = t, call i admitting rows[i % 2] slots."""
     g = torch.Generator(device="cpu").manual_seed(seed)
     rng = np.random.default_rng(seed)
@@ -93,11 +98,12 @@ def step(ws: list[torch.Tensor], t: int, rows: tuple[int, int], s: int, seed: in
     return calls, meta
 
 
-def ours(plan, i: int) -> np.ndarray:
+def ours(plan: Plan, i: int) -> np.ndarray:
     return plan.receipts(i).cpu().numpy().view(np.uint32)
 
 
-def gate(lib, v: int, calls, meta, salt: bytes, salt_dev, want: list, refs_want: list, replay_want: list) -> dict:
+def gate(lib: H1R, v: int, calls: list[Call], meta: list[dict], salt: bytes, salt_dev: torch.Tensor, want: list,
+         refs_want: list, replay_want: list) -> dict:
     """Version v against the step's answers (computed once, for every version)."""
     doc: dict = {"version": v}
     plan = lib.plan(calls)
