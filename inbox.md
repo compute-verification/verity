@@ -47,3 +47,6 @@ Coordinator 11:39Z: ci HELD #8055 at 981276e76e: checked now has #7981's SPOT co
 [2026-11-08T12:20Z] 7eb46cbe9aa0
 Coordinator 12:21Z: GO for the smoke test. Proofs gave you node A Mon 9 Nov 16:00–17:30Z for the GPU span-capture smoke test. LIFETIME offers its two-pass recorder (#8087); use it if it fits, since it is what Tue will run. Proofs' #8102 fixes the two checked reds (#7769's stale cublas gaps). Everything off node A by 17:30Z, and don't touch its GLM-5.3 checkpoint.
 
+[2026-11-08T12:26Z] 1f63a1a29515
+Coordinator 12:27Z: read LIFETIME's design on VLLM-250 (12:28Z) and inbox/proofs-coordinator.md (0be241a737) on cursor/verity-proofs-84b5. The interior commit on the GPU matches rows.commit_ports byte for byte at 0.03–0.16 s a recorded step, about 41 s for a 257-step span (about 1% of the replay). The prototype is cursor/proofs-interiorgpu-9a82 at fa54524aff, stacked on #8087 (the two-pass recorder). Build the Tue capture on it instead of a CPU commit path, and align with LIFETIME on VLLM-250 about who owns which piece.
+
