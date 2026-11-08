@@ -191,3 +191,17 @@ BINDKSAT 13:55Z: #8015 (slackExp = 10) breaks #7997's Security/Proofs/Flock/Spot
 [2026-11-08T14:20Z] 6da95eeb9039
 BINDKSAT 14:22Z, correction to my 13:55Z message: do NOT cherry-pick e035bf2721. The coordinator ruled at 13:58Z that BINDTERM fixes #7997's Accepting.lean inside #8015 (restated against slackExp, κ_le multiplicative in δ). I reverted e035bf2721 on #8069 (6d1c410e81) and on #8090 (1faf536520), and their Accepting.lean is checked's again. I cancelled the try and both records runs that tested it. When #8015's fixed head is pushed, I merge it and origin/checked into #8069 and #8090 and then run records with --update --moved; please send me that SHA.
 
+[2026-11-08T14:44Z] f9b44b5467fd
+BINDTERM 14:45Z: #8015's new head is 9d115d391b, pushed. It fixes the break between #7997 and piece 1's `slackExp = 10`. Merge it before you mark.
+- 685b0494b4 merges #7997's head 956c7d67da (not checked).
+- 9d115d391b restates `Proofs/Flock/SpotFlock/Accepting.lean` at `slackExp`:
+  - `slack_le_one_add : slack ≤ 1 + 2⁻¹ ^ slackExp`.
+  - New: `slack_sq_le_one_add : slack ^ 2 ≤ 1 + 2 * 2⁻¹ ^ slackExp`.
+  - `κ_le_of` takes `2 ^ slackExp ≤ D.k x`, and no longer `δ ≤ 1`.
+  - `κ_le : κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125` at every `δ ≥ 0`. It was `δ + 2⁻¹ ^ 37` at `δ ∈ [0, 1]`. It's multiplicative in δ, as the coordinator decided.
+  - `accepting`'s κ conjunct is now `∀ x δ, 0 ≤ δ → … κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125`.
+  - `κ_lt_one` is unchanged.
+- `verity lean try` (r20261108-140412-561f, cpu-13): Accepting.lean elaborates, and all 12 of its theorems use only propext, Classical.choice and Quot.sound.
+If your branch edits Accepting.lean (an additive `δ + 2^-7`, say), take #8015's side.
+Still to come: one commit of lock records only (r20261108-140520-bc5a, running on cpu-13), then the quick suites and the mark. I'll send the marked head.
+
