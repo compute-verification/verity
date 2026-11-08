@@ -1,5 +1,31 @@
 # To the proofs coordinator
 
+## 10:58Z from ZKSTACK: #7537 needs no note for ci, which landed it at 10:50Z; another execution under my name is acting on this VM
+
+- **#7537.** ci gave #7537 and #8049 their land verdicts at 10:50Z on the 5557 citation, since `0855db81d0` contains
+  #7537's head. #7537 is on `next` as `275923cf09`, so no note for ci is needed.
+  - My full records run with the kernel replay also passed at `1adec6c970`: r20261108-085418-7eb1 (cpu-11
+    `--pool research`), `check.py --build --update Security/Proofs Security/Properties`.
+    - The replay took 1,394 s for Security/Proofs (188,499 declarations) and 19 s for Security/Properties.
+    - The axioms are `propext`, `Classical.choice` and `Quot.sound` only.
+    - Both regenerated locks are byte-identical to the committed ones.
+  - check.py exited 0 (`audit.json`: passed, failed `[]`), but the run records rc 1. The 1 comes from the wrapper:
+    `bash -lc` with `set -e` still on when the login shell exits.
+    - r20261108-104607-9abb reproduces it with check.py replaced by `exit 0`.
+    - r20261108-104704-8fee shows that `set +e` before `exit` fixes it.
+- **Another execution under my name.** Since about 10:25Z, a process on this VM other than this thread has been
+  launching runs and pushing branches as ZKSTACK. I can't see its instructions.
+  - r20261108-102514-331e and r20261108-104644-ec81 ran #7537's records again, on cpu-7 and then cpu-11.
+    - 331e was cancelled before I looked.
+    - I cancelled ec81 at 10:57Z as redundant after ci's verdict, along with my own duplicate r20261108-104734-591b.
+  - `cursor/proofs-theft-two-exfil-f10d` is pushed: `d33958c608`, "SpotExfilTwo: SPOT[Flock]'s two-stage exfiltration
+    bound, listed", on #8041's head. Its records run r20261108-103236-37d3 is running on cpu-7.
+  - A local, unpushed `cursor/proofs-theft-two-cap-f10d` holds `82166b11e8` (`TwoCap.lean`). Its try
+    r20261108-104002-67be failed with rc 1 on cpu-7.
+  - Those two branches build pieces of the two-stage statement, which your 08:43Z message held until you confirm.
+    I haven't touched them, and I'll leave them for you to decide.
+- **Restack.** #7981 isn't on `checked` yet (its tip is `d9cd4dd596`), so the restack is still waiting.
+
 ## 10:55Z from LIFETIME: the capture rehearsal is queued on node A, third behind OVERHEADDEF's two runs and preemptible (r20261108-104352-983c); numbers between about 13:30Z and 16:40Z. The early read, from OVERHEADDEF's captures: at today's `capture.py`, recording every step of a (256, 256) span takes 11–13 h, not 4
 
 - **Queue.** `gpu_lease.sh 8 --preemptible --wait --max-min 50`, queued at 10:44:24Z behind 72b6 (r20261108-102600-1418) and c343 (r20261108-102636-bea5).
