@@ -54,7 +54,7 @@ use rayon::prelude::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
+use crate::{chunk::log2ceil, ir_block::{IrUnitNet, RowRead}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
@@ -1146,7 +1146,7 @@ impl Composite {
         // the bit and its gate's value to zero (elsewhere it would only force A·z · B·z to zero, or free the bit)
         for (n, r) in self.pinned_rows() {
             let net = &self.nets[n].1;
-            if (0..16).any(|t| r.checked_add(t).and_then(|i| net.b.get(i)).map(Vec::as_slice) != Some(&[net.const_pos][..])) {
+            if (0..16).any(|t| r.checked_add(t).is_none_or(|i| i >= net.b.n_rows() || !net.b.row_is(i, &[net.const_pos]))) {
                 return Err(PINNED_LINEAR.into());
             }
         }
@@ -1471,7 +1471,7 @@ impl Composite {
         let ands = ours.map(|n| {
             let net = &self.nets[n].1;
             let port = |r: usize| net.in_groups.iter().chain(&net.out_groups).any(|g| (g.col * WORD..(g.col + g.words) * WORD).contains(&r));
-            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count()
+            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a.row_len(r) == 0 && net.b.row_len(r) == 0)).count()
         }).sum();
         (rows, ands)
     }
@@ -2276,7 +2276,7 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
             match r.kind {
                 Kind::Net(i) => {
                     let net = &c.nets[i].1;
-                    cols.extend((if a { &net.a } else { &net.b }).get(q - slot0).into_iter().flatten().map(|&k| slot0 + k));
+                    cols.extend((if a { &net.a } else { &net.b }).cols_or_empty(q - slot0).map(|k| slot0 + k));
                 }
                 Kind::Mask => cols.push(q),
             }
@@ -2642,9 +2642,8 @@ fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
 pub const GPU_NNZ_MAX: u64 = u32::MAX as u64;
 
 /// Refuses a circuit whose A or B side holds more than `limit` nonzeros.
-pub fn nnz_within(name: &str, a: &[Vec<usize>], b: &[Vec<usize>], limit: u64) -> Result<(), String> {
-    let count = |m: &[Vec<usize>]| m.iter().map(|r| r.len() as u64).sum::<u64>();
-    let (na, nb) = (count(a), count(b));
+pub fn nnz_within<R: RowRead + ?Sized>(name: &str, a: &R, b: &R, limit: u64) -> Result<(), String> {
+    let (na, nb) = (a.nnz() as u64, b.nnz() as u64);
     if na.max(nb) > limit {
         return Err(format!("{name}: {na} nonzeros in A and {nb} in B, past the GPU prover's {limit} (32-bit offsets): the CPU prover"));
     }
