@@ -22,8 +22,9 @@ for f in serve_logprobs.patch replay_aborts.patch dsa_topk.py dsa_topk_kernels.p
     gpu-lease sitecustomize.py long_rows.py spot_canonical.sh tree_allreduce.py node_record.sh; do cp "$HERE/$f" "$IN/" || exit 2; done
 # user research can't create directories at /workspace's top level here, so the inputs and the capture go under /workspace/cp
 X=/workspace/cp/spot-inputs/$BLOCK; export CAP_ROOT=/workspace/cp/spot-capture
-if [ ! -f "$X/$ARMDIR/meta.json" ]; then
-  research data fetch "$ART" --to "$X" --path "$ARMDIR/**" --path "$EEF" --path out/topk-serve.json \
+PLANP=$(dirname "$ARMDIR")/plan.jsonl  # the plan beside the record arm, where serve_tax/replay.py looks
+if [ ! -f "$X/$ARMDIR/meta.json" ] || [ ! -f "$X/$PLANP" ]; then
+  research data fetch "$ART" --to "$X" --path "$ARMDIR/**" --path "$PLANP" --path "$EEF" --path out/topk-serve.json \
     --path "out/served/**" --path out/served.json >/dev/null || { echo "replay: fetching $ART failed"; exit 3; }
   research keep "$X" --owner @proofs --expires 2026-11-15 --priority low --art "$ART" \
     --why "$BLOCK's served record arm for OVERHEADDEF's cross-machine replays on this node" --by "$BY" >/dev/null || true
