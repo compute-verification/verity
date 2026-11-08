@@ -282,17 +282,72 @@ def Tab.rowsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
   let st := rows.foldl (Tab.rowK D pt A B as gL pos fac rowLow alpha nk) (o, 0, 0, Array.replicate 64 0)
   Tab.flushP st.1 st.2.1 st.2.2.1 st.2.2.2
 
+/-- One reference of `Tab.rowsT`'s rows, weight `w`: an own column's weight summed into its column's `W[v]`, any
+other reference through `Tab.ref` at copy `0`. -/
+@[specialize]
+def Tab.colT (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (cx : Nat) (w : F128)
+    (st : Tab × Array F128) (v : Nat) : Tab × Array F128 :=
+  let (o, W) := st
+  if v < D.cols then (o, W.modify v (· + w)) else (Tab.ref D pt false A B as gL pos o 0 cx w v, W)
+
+/-- One row `(x, ra, rb)` of `Tab.rowsT`: its weight formed once, an `A` reference's times `α`, its references through
+`Tab.colT`. -/
+@[specialize]
+def Tab.rowT (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (rowLow : Nat → Nat → F128) (alpha : F128) (cx : Nat) (st : Tab × Array F128) (r : Nat × Array Nat × Array Nat) :
+    Tab × Array F128 :=
+  let (x, ra, rb) := r
+  let ex := rowLow 0 (pos x)
+  let st := ra.foldl (Tab.colT D pt A B as gL pos cx (alpha * ex)) st
+  let st := rb.foldl (Tab.colT D pt A B as gL pos cx ex) st
+  ({ st.1 with work := st.1.work + (ra.size + rb.size) }, st.2)
+
+/-- `Tab.rowsT`'s columns `v, v + 1, …`, `n` of them: each nonzero sum `W[v]` times its factor at its slot, on pending
+sums (`Tab.refDK` at one copy). -/
+@[specialize]
+def Tab.colsP (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
+    (cx : Nat) (W : Array F128) : Nat → Nat → Tab × Nat × Nat × Array F128 → Tab × Nat × Nat × Array F128
+  | 0, _, st => st
+  | n + 1, v, st =>
+    let x := W.getD v 0
+    Tab.colsP D pt A B as gL pos fac cx W n (v + 1)
+      (if x.isZero then st else Tab.refDK D pt A B as gL pos fac 1 cx #[x] st v)
+
+/-- Explicit rows of one row chunk `cx` at one copy, column by column, as the flat fold's `Sparse.foldT` folds: each
+row's weight summed per own column (`Tab.rowT`), then each column's sum times its factor (`Tab.colsP`), so a
+reference costs a sum and a column a product. -/
+@[specialize]
+def Tab.rowsT (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
+    (rowLow : Nat → Nat → F128) (alpha : F128) (cx : Nat) (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) :
+    Tab :=
+  let st := rows.foldl (Tab.rowT D pt A B as gL pos rowLow alpha cx) (o, Array.replicate D.cols 0)
+  let st := Tab.colsP D pt A B as gL pos fac cx st.2 D.cols 0 (st.1, 0, 0, Array.replicate 64 0)
+  Tab.flushP st.1 st.2.1 st.2.2.1 st.2.2.2
+
+/-- Explicit rows at every copy at once (each copy's low part below `B`, `B` dividing 64): column by column
+(`Tab.rowsT`) at one copy whose rows are of one row chunk and make at least one reference per column, else row by row
+(`Tab.rowsK`). -/
+@[specialize]
+def Tab.rowsC (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
+    (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat) (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) :
+    Tab :=
+  let cx := pos (rows.getD 0 (0, #[], #[])).1 / A
+  if nk == 1 && D.cols ≤ rows.foldl (fun n r => n + (r.2.1.size + r.2.2.size)) 0 &&
+      rows.all (fun r => pos r.1 / A == cx) then
+    Tab.rowsT D pt A B as gL pos fac rowLow alpha cx rows o
+  else Tab.rowsK D pt A B as gL pos fac rowLow alpha nk rows o
+
 /-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`; all copies at
-once (`Tab.rowsK`, an own column's factor `fac`) while explicit with every copy's low part below `B` and `B` dividing
-64. Specialized at `walk`'s `pos` and `fac`, as are `Tab.ref`, `Tab.refs`, `Tab.refStep`, `Tab.rowsK`, `Tab.rowK`,
-`Tab.halfK`, `Tab.refDK`, `Tab.refsK`, `Tab.refStepK` and `tabled`, so a reference reads its position and factor from
-their tables without a closure call. -/
+once (`Tab.rowsC`, an own column's factor `fac`) while explicit with every copy's low part below `B` and `B` dividing
+64. Specialized at `walk`'s `pos` and `fac`, as are `Tab.ref`, `Tab.refs`, `Tab.refStep`, `Tab.rowsC`, `Tab.rowsT`,
+`Tab.rowT`, `Tab.colT`, `Tab.colsP`, `Tab.rowsK`, `Tab.rowK`, `Tab.halfK`, `Tab.refDK`, `Tab.refsK`, `Tab.refStepK` and
+`tabled`, so a reference reads its position and factor from their tables without a closure call. -/
 @[specialize]
 def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (fac : Nat → F128) (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat)
     (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) : Tab :=
   if !summed && 64 % B == 0 && (List.range nk).all (fun k => as.getD k 0 < B) then
-    Tab.rowsK D pt A B as gL pos fac rowLow alpha nk rows o
+    Tab.rowsC D pt A B as gL pos fac rowLow alpha nk rows o
   else
     rows.foldl (fun o (x, ra, rb) =>
       let P := pos x
