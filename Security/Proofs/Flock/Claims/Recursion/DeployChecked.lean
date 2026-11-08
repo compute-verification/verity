@@ -125,7 +125,7 @@ theorem run_replay_out {C : Type} [Inhabited C] {Ω : Type} (H : Msg → Msg) (P
 theorem exists_of_pr_pos {α : Type} [Fintype α] {p : α → Prop} (h : 0 < Claims.Pr p) : ∃ a, p a := by
   classical
   by_contra hn
-  unfold Claims.Pr at h
+  unfold Claims.Pr Claims.prUniform at h
   rw [Finset.filter_false_of_mem fun a _ ha => hn ⟨a, ha⟩] at h
   simp at h
 

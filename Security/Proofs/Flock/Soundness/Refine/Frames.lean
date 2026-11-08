@@ -8,7 +8,7 @@ import Proofs.Flock.Verifier.Transcript
 import VCVio.Prelude.Core
 
 /-!
-# The transcript's frames (R11b, framing)
+# The transcript's frames (framing, for the decoder premise)
 
 The replay transcript (`Flock.Transcript`) appends one frame per domain, label, absorb or zero-coin squeeze to its pending
 bytes, and a squeeze answers the pending bytes and its own header; on the unsalted path the server retained each round's

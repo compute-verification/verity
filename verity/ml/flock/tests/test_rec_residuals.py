@@ -336,7 +336,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     (`verifier_value`, a function of the two v's alone), so the statement has no public input; and, when Lean is built, its
     `statement` under the reads file. Under a name of V*'s parts (`rec-residuals/…`) the toy S is refused: such a unit must be
     the verifier's own part net (`Flock.HmRow`)."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     g = random.Random(11)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)

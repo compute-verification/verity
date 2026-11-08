@@ -19,10 +19,16 @@ The pricing (ANDs; `window_cost`):
   witness.
 - each block of tokens gets its key once: BlockKey_v1 at 64 tokens of 18 bits (SHA-512 over its parent's key and its
   tokens, two compressions, and its print under the window's live coin).
-- each window: the pool chained in and out as `compile_slice_v5`'s pool window does it (`chain_cost`): the pool row's
-  digest under the input root and the output root (`Sha512RowSeg_v1` over its 2·NW + (NB − 1)(5·NW + 512) bits), each
-  block's key printed in and out (KeyPrint_v1), a PoolOpen and a PoolClose step a block, and the M run listing every key
-  the pool carries (NB − 1 at most) beside the ones the window touches, each M entry a PoolCopies step.
+- each window: the 512-bit keys it carries (the cached blocks', NB at most, and its requests' blocks', at most the RK
+  addresses it touches) hashed in and out and printed under its coin (KeyPrint_v1).
+
+The compile side (`compile_cost`) is the unit that checks a window whole, `compile_slice_v5.CompileSlice_v5`, at the
+class of the load's busiest window (`compile_statics`): its parts' ANDs at the class times their calls
+(`compile_slice_v5.parts`, which its tests hold to the built unit's), and SHA-512 over its checked witness at the same
+rate. The class: the engine's R, W = 1 and A = R + 1, K (and Q, D and DA) the ladder's class of the window's requests,
+P its steps, CU = L / B, and NS, NM, NRB and NRK the ladder's classes of its stream slots (as `window_cost` counts them
+for each kind of lookup), its M and RB addresses, and its ragged row's blocks (each request's blocks to the last its
+keys are read at). It starts from an empty engine and pool, so it carries no keys in or out.
 
 What a window's ANDs are compared with is the caller's to state, with its source: ``--against NAME=ANDS`` reports the
 window's ANDs as a ratio of ANDS, and ``--node-share NAME=SHARE@ANDS`` scales a share of the node that a window of ANDS
@@ -31,10 +37,12 @@ ANDs takes under a proving setting NAME to each window. Both are recorded in the
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import random
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pool_ram as PR
@@ -43,7 +51,6 @@ from pool_ram import RP
 
 from verity.core.protocols.certifier.head_check import ands
 from verity.ml.circuits.defs import bind
-from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.gates import block_key as BK
 from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v5 as V5
 
@@ -52,6 +59,9 @@ SHA_BLOCK = 58120
 SHA_BIT = SHA_BLOCK / 1024
 S = PR.GLM
 P_STEPS = 4964
+#: the compile side's request ids and token widths: a session's ids, and `glm_load`'s tokens (below 150,000)
+IW = 20
+CTW = 18
 
 #: the stream's accesses a pool operation makes, at most (`cache_step_v3`'s calls, per lookup unit or block): a lookup
 #: RK, M and B; a take RK, M, B and its queue neighbours, RB; an alloc the queue's head, its next, K and RB, and an
@@ -65,32 +75,11 @@ ENTRY_WITNESS = 1 + 3 + 128 + 2 * 128 + S.TW
 
 
 def measured(NB: int = 5000) -> dict[str, int]:
-    """ANDs of CacheStep_v3's parts and the pool window's open, close and copy steps at the class's widths, and of a
-    block's key with its print and of a carried key's print."""
-    key = (NB, S.RW, S.KW, S.REFW, S.TW)
-    p = V3.part_ands(key)
-    st = dict(zip(V3.SLOT_STATICS, key))
+    """ANDs of CacheStep_v3's parts at the class's widths, and of a block's key with its print and of a carried key's
+    print."""
+    p = V3.part_ands((NB, S.RW, S.KW, S.REFW, S.TW))
     return {"slot": p["PoolSlot"], "entry": p["PoolEntry"], "end": p["PoolEnd"],
-            "block key": ands(bind(BK.BlockKey, B=64, TOK=18)), "key print": ands(bind(BK.KeyPrint)),
-            **{name: ands(bind(d, **st)) for name, d in (("open", V5.PoolOpen), ("close", V5.PoolClose),
-                                                          ("copies", V5.PoolCopies))}}
-
-
-def row_compressions(NB: int) -> int:
-    """SHA-512 compressions of the pool row's `Sha512RowSeg_v1` digest at NB blocks (`gates.rowleaf`'s cost): a segment's
-    ceil((ceil(m / 8) + 17) / 128), the outer hash's ceil((s + 1) / 2) for its s segments."""
-    NW = max((NB - 1).bit_length(), 1)
-    segments = RL.sha512_row_seg_segments(2 * NW + (NB - 1) * (5 * NW + 512))
-    return sum(-(-((m + 7) // 8 + 17) // 128) for m in segments) + (len(segments) + 2) // 2
-
-
-def chain_cost(m: dict[str, int], NB: int, touched_m: int) -> dict[str, float]:
-    """ANDs of chaining the pool through one window (`compile_slice_v5.PoolWindow`) beyond the touched list's entries: the
-    two row digests, the 2(NB − 1) key prints, a PoolOpen and a PoolClose step a block, and a PoolCopies step for each M
-    entry, the carried keys (NB − 1 at most) and the `touched_m` the window touches."""
-    n = NB - 1
-    return {"row digests in and out": 2 * row_compressions(NB) * SHA_BLOCK, "key prints in and out": 2 * n * m["key print"],
-            "open and close steps": n * (m["open"] + m["close"]), "M run copies": (n + touched_m) * m["copies"]}
+            "block key": ands(bind(BK.BlockKey, B=64, TOK=18)), "key print": ands(bind(BK.KeyPrint))}
 
 
 # --- GLM-5.3-like loads ---------------------------------------------------------------------------------------------------
@@ -162,7 +151,9 @@ def stream_window(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) ->
 
 def measure(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) -> dict[str, Any]:
     """The load's busiest window: the P_STEPS consecutive steps with the most accesses (the whole replay if shorter),
-    found on a first replay; a second, identical one collects the sparse addresses that window touches."""
+    found on a first replay; a second, identical one collects the sparse addresses that window touches. Its requests are
+    those that arrive before it ends and run at or past its start (step s of the count is the replay's step s − 1), and
+    its ragged blocks each touched request's blocks up to the last whose key it reads."""
     how = {"every": 10**9, "keep": False, "decide": lambda i, k, o: admit[i] <= k}
     m = PR.run(eng, reqs, **how)
     per = [accesses(c) for c in m.steps]
@@ -172,6 +163,10 @@ def measure(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) -> dict[
     assert [accesses(c) for c in w.steps] == per, "the replay is not deterministic"
     tot = sum((w.steps[s] for s in window), Counter())
     acc = sorted(per[1:])
+    last: dict[int, int] = {}
+    for rid, k in w.touched["RK"]:
+        last[rid] = max(last.get(rid, 0), k + 1)
+    present = sum(1 for i, a in enumerate(admit) if a < s0 + n and w.last_step.get(i, len(per)) >= s0 - 1)
     return {"NB": eng.num_gpu_blocks, "steps": m.counts["steps"], "requests": len(reqs), "tokens": m.counts["tokens"],
             "replay": {"ops": {k: m.pool.ops[k] for k in (*PR.SHAPE, "evict")}, **{k: m.counts[k] for k in (
                 "calls", "lookups", "allocations", "refused allocations", "refused after a lookup", "frees",
@@ -180,11 +175,22 @@ def measure(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) -> dict[
             "window": {"steps": [s0, s0 + n], "accesses": best, "ops": {k: tot[k] for k in (*PR.SHAPE, "evict")},
                        "calls": tot["calls"], "keys": tot["keys"], "repeated units": tot["repeated units"],
                        "certificate saves": tot["certificate saves"],
-                       "touched": {k: len(v) for k, v in w.touched.items()}},
+                       "touched": {k: len(v) for k, v in w.touched.items()},
+                       "requests": present, "ragged blocks": sum(last.values())},
             "accesses per step": {"mean": sum(acc) / max(len(acc), 1),
                                   "p99": acc[int(0.99 * (len(acc) - 1))] if acc else 0,
                                   "p99.9": acc[int(0.999 * (len(acc) - 1))] if acc else 0,
                                   "max": acc[-1] if acc else 0}}
+
+
+def stream_slots(load: dict[str, Any], lookups: str) -> int:
+    """U, the stream slots of the load's busiest window under `lookups` (`window_cost`)."""
+    w = load["window"]
+    ops = {k: w["ops"][k] for k in (*PR.SHAPE, "evict")}
+    ops["lookup"] -= {"walked": 0, "certified": w["certificate saves"], "memo": w["repeated units"]}[lookups]
+    if lookups == "memo" and "stream" in load:
+        return load["stream"]["slots"]
+    return sum(STREAM[k] * n for k, n in ops.items())
 
 
 def window_cost(load: dict[str, Any], m: dict[str, int], NB: int = 5000, lookups: str = "walked") -> dict[str, float]:
@@ -194,22 +200,47 @@ def window_cost(load: dict[str, Any], m: dict[str, int], NB: int = 5000, lookups
     `pool_ram.Mirror.certify`), or "memo": CacheStep_v3's own stream with its head-of-line memo, U its busiest window's
     slots (`stream_window`), or for a load measured without it, the bound "memo" had before the memo was built (a walk
     whose (hit, evictable) equals the request's last one is reused, its stamps and dirty bit not counted). The touched
-    list, the calls and the keys are `measure`'s window's in every case; the touched list also lists every key the pool
-    carries in (NB − 1 at most), and the pool goes in and out as `chain_cost` prices it."""
+    list, the calls and the keys are `measure`'s window's in every case."""
     w = load["window"]
-    ops = {k: w["ops"][k] for k in (*PR.SHAPE, "evict")}
-    ops["lookup"] -= {"walked": 0, "certified": w["certificate saves"], "memo": w["repeated units"]}[lookups]
-    u = sum(STREAM[k] * n for k, n in ops.items())
-    if lookups == "memo" and "stream" in load:
-        u = load["stream"]["slots"]
-    ne = 2 * NB + sum(w["touched"].get(k, 0) for k in ("M", "RB", "RK")) + NB - 1
+    u = stream_slots(load, lookups)
+    ne = 2 * NB + sum(w["touched"].get(k, 0) for k in ("M", "RB", "RK"))
     ns_c, ne_c = V3.size_class(u), V3.size_class(ne)
     out = {"U": u, "NS (U's class)": ns_c, "NE": ne, "NE's class": ne_c,
            "stream": ns_c * (m["slot"] + SHA_BIT * SLOT_WITNESS),
            "touched list": ne_c * (m["entry"] + SHA_BIT * ENTRY_WITNESS) + m["end"],
            "bus, ReplayStep_v1's side": w["calls"] * (MUL + 128 + SHA_BIT * 2 * (S.KW + 1)),
-           "block keys": w["keys"] * m["block key"], **chain_cost(m, NB, w["touched"].get("M", 0))}
+           "block keys": w["keys"] * m["block key"],
+           "carried 512-bit keys": (NB + w["touched"].get("RK", 0)) * (SHA_BIT * 2 * 512 + m["key print"])}
     out["total"] = sum(v for k, v in out.items() if k not in ("U", "NS (U's class)", "NE", "NE's class"))
+    return out
+
+
+def compile_statics(load: dict[str, Any], engine: dict[str, Any], lookups: str) -> dict[str, Any]:
+    """`compile_slice_v5`'s statics for the load's busiest window under `lookups` (the module's docstring)."""
+    w, c = load["window"], V3.size_class
+    R, steps = engine["max_num_seqs"], w["steps"][1] - w["steps"][0]
+    K = c(w["requests"])
+    return V5.statics(R, 1, R + 1, engine, IW, Q=K, D=K, P=steps, K=K, CTW=CTW,
+                      CU=engine["max_model_len"] // engine["block_size"], DA=K, NS=c(stream_slots(load, lookups)),
+                      NM=c(w["touched"]["M"]), NRB=c(w["touched"]["RB"]), NRK=c(w["ragged blocks"]))
+
+
+#: `compile_slice_v5.parts`' order, each part's term
+COMPILE_TERMS = ("load", "steps (CompileStep)", "bus records (CompileBus)", "arrivals (CompileArrivals)",
+                 "stream slots (PoolSlot)", "touched list (PoolEntry)", "ragged keys (RaggedKey)", "pool end",
+                 "verdict")
+
+
+def compile_cost(st: dict[str, Any], memo: dict) -> dict[str, float]:
+    """ANDs of CompileSlice_v5 at statics `st`: each part's ANDs times its calls, and SHA-512 over the checked witness;
+    `memo` holds each part's ANDs across calls (`head_check.ands`)."""
+    out: dict[str, float] = {}
+    for term, (p, n) in zip(COMPILE_TERMS, V5.parts(**st), strict=True):
+        out[term] = n * ands(p, memo)
+    for d in V5.PARTS:
+        d.traced.cache_clear()  # a part's trace is dropped once counted: the step's at R = 256 holds gigabytes
+    out["checked witness hash"] = SHA_BIT * V5.data_bits(SimpleNamespace(**st))["chk"]
+    out["total"] = sum(out.values())
     return out
 
 
@@ -227,37 +258,52 @@ def _stated(items: list[str], share: bool) -> dict[str, Any]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--json", type=Path)
-    ap.add_argument("--quick", action="store_true", help="one small load (a smoke test)")
+    ap.add_argument("--quick", action="store_true", help="one small load at R = 16 (a smoke test)")
     ap.add_argument("--from", dest="src", type=Path, help="reprice a report's measured loads instead of replaying them")
+    ap.add_argument("--no-compile", action="store_true", help="price the pool alone, not the compile side")
     ap.add_argument("--against", action="append", default=[], metavar="NAME=ANDS",
                     help="report each window's ANDs as a ratio of ANDS, a budget the caller states with its source")
     ap.add_argument("--node-share", action="append", default=[], metavar="NAME=SHARE@ANDS",
                     help="the share of the node a window of ANDS ANDs takes under proving setting NAME, scaled to each window")
     a = ap.parse_args()
     against, shares = _stated(a.against, False), _stated(a.node_share, True)
+
+    def compared(total: float) -> dict[str, Any]:
+        return {"vs": {name: total / x for name, x in against.items()},
+                "node share": {name: s * total / x for name, (s, x) in shares.items()}}
+
     m = measured()
     slot = m["slot"] + SHA_BIT * SLOT_WITNESS
     print("measured ANDs:", m, f"a stream slot with its witness hash: {slot:.0f}")
-    report: dict[str, Any] = {"measured": m, "slot": slot, "row compressions": row_compressions(5000),
-                              "parameters": {"against": against, "node share": shares}, "loads": {}}
+    report: dict[str, Any] = {"measured": m, "slot": slot, "parameters": {"against": against, "node share": shares},
+                              "loads": {}}
     if a.src:
-        loads = {k: (v["load"], v["load"].get("NB", 5000)) for k, v in json.loads(a.src.read_text())["loads"].items()}
+        loads = {k: (v["load"], v.get("engine")) for k, v in json.loads(a.src.read_text())["loads"].items()}
     else:
         loads = {}
         for kind, seed in [("chat", 1), ("pressure", 2)] if not a.quick else [("chat", 1)]:
-            eng, reqs, admit = glm_load(seed, kind=kind, **({"steps": 300, "NB": 800} if a.quick else {}))
-            loads[kind] = ({**measure(eng, reqs, admit), "stream": stream_window(eng, reqs, admit)}, eng.num_gpu_blocks)
-    for kind, (load, NB) in loads.items():
+            eng, reqs, admit = glm_load(seed, kind=kind, **({"steps": 300, "NB": 800, "R": 16} if a.quick else {}))
+            loads[kind] = ({**measure(eng, reqs, admit), "stream": stream_window(eng, reqs, admit)},
+                           dataclasses.asdict(eng))
+    memo: dict = {}
+    for kind, (load, engine) in loads.items():
+        NB = load.get("NB", 5000)
         print(kind, json.dumps(load))
-        report["loads"][kind] = {"load": load}
+        report["loads"][kind] = {"load": load, "engine": engine}
         for how in ("walked", "certified", "memo"):
             cost = window_cost(load, m if NB == 5000 else measured(NB), NB=NB, lookups=how)
-            total = cost["total"]
-            report["loads"][kind][how] = {
-                "window ANDs": cost, "vs": {name: total / x for name, x in against.items()},
-                "node share": {name: s * total / x for name, (s, x) in shares.items()}}
-            print(kind, how, {k: f"{v:.3g}" for k, v in cost.items()},
-                  {name: f"{v:.3g}" for name, v in report["loads"][kind][how]["vs"].items()})
+            report["loads"][kind][how] = {"window ANDs": cost, **compared(cost["total"])}
+            print(kind, how, {k: f"{v:.3g}" for k, v in cost.items()}, report["loads"][kind][how]["vs"],
+                  report["loads"][kind][how]["node share"])
+            if a.no_compile or engine is None or "requests" not in load["window"]:
+                continue
+            st = compile_statics(load, engine, how)
+            cc = compile_cost(st, memo)
+            report["loads"][kind][how]["compile slice"] = {
+                "statics": {k: st[k] for k in ("R", "W", "A", "K", "P", "CU", "NS", "NM", "NRB", "NRK")},
+                "ANDs": cc, **compared(cc["total"])}
+            print(kind, how, "CompileSlice_v5", {k: f"{v:.3g}" for k, v in cc.items()},
+                  report["loads"][kind][how]["compile slice"]["node share"], flush=True)
     if a.json:
         a.json.write_text(json.dumps(report, indent=1, default=str))
 

@@ -167,8 +167,8 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, monkeypatch):
-    """Without being asked: vy-nebius-cpu-1 was registered at 15:20Z on 7 Oct and invisible to every other agent's `run --on`
-    until a notes sync at 19:25Z."""
+    """Without being asked: a machine registered on one machine is visible to every other agent's `run --on` without waiting
+    for a later notes sync."""
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
     seed = tmp_path / "seed"
@@ -206,8 +206,8 @@ def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, mon
 
 
 def test_an_override_directory_never_hides_a_machine_the_notes_clone_lists(tmp_path, monkeypatch):
-    """The lander's VM, 8 Oct 03:43Z: RESEARCH_MACHINES_D=/tmp/machines.d, copied by hand on 30 Sep, refused vy-nebius-cpu-1,
-    which had been in the notes' machines.d since 7 Oct 17:16Z."""
+    """A RESEARCH_MACHINES_D=/tmp/machines.d copied by hand must not refuse a machine registered in the notes' machines.d since
+    it was copied."""
     notes_d, override = tmp_path / "notes" / "machines.d", tmp_path / "copy"
     for d, names in ((notes_d, ("vy-new", "vy-both")), (override, ("vy-both",))):
         d.mkdir(parents=True)

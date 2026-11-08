@@ -1,7 +1,7 @@
 """Each attention layer's KV slots as an acquisition source: per layer and step, the slot every token row's KV went to,
 `<layer name>/slot_mapping` (int64 [rows], slot = page * block_size + offset), in the same step stream and run root as the
 run's other values.  Opt-in (commit and tp-commit `--memory-map`, a TP rank's own layers), never the record: the memory map
-(`pipeline.memory_map`) takes each block's page from them and assumes none.
+(PoUB's `commit_map`) takes each block's page from them and assumes none.
 
 The layers are the modules the engine bound a KV cache to (`layer_name`, `kv_cache`): attention's and MLA's.  DSA's indexer
 cache (`DeepseekV32IndexerCache`, named by `prefix`, no `layer_name`) is none of them: its 132-byte rows pack across 4 KiB

@@ -19,11 +19,11 @@ coin-dependent layer at the budget `S·(√δ_fork + n_π·δ_ZK) ≤ 2^-41`, `S
 the premises that read the play, are met by an honest run too, and `ProofsSoundOfPinned` gives (I8) at `0`
 (`keyedPlay_proofsSound`).
 
-The sampled form needs no restatement: `DrawnLayer` binds each position at its own cut, a unit's outputs at the sample,
-after the coins its noise reads. `keyedDrawn n` is the served shape over `n + 1` rounds, one coin before each round's
+The sampled form needs no restatement: `SampledLayer` binds each position at its own cut, a unit's outputs at the sample,
+after the coins its noise reads. `keyedSampled n` is the served shape over `n + 1` rounds, one coin before each round's
 sample (the salt) and one unit, whose slots are its operand (cut before the salt) and its receipt (cut at the sample), the
-operand keyed by the salt. Its receipt moves with the salt (`keyedDrawn_receipt_moves`), and it meets binding at every
-position's cut (both forms), joint soundness and pinning at `0`, within the budget (`keyedDrawn_meets_budget`).
+operand keyed by the salt. Its receipt moves with the salt (`keyedSampled_receipt_moves`), and it meets binding at every
+position's cut (both forms), joint soundness and pinning at `0`, within the budget (`keyedSampled_meets_budget`).
 
 `guess_rel_last`: for a prover that guesses round `w`'s receipt (`true`) instead of keying its operand, the committed
 values satisfy every relation on one path and fail the last round's on its continuation that flips the last coin again, so
@@ -223,7 +223,7 @@ theorem salt_spliceAt {n : ℕ} (w : Fin n) (x z : Paths (Paths Bool 1 × Unit) 
 unit, whose slots are its operand (`false`, position `(w, false)`, cut before the salt) and its receipt (position
 `(w, true)`, cut at the sample, after the salt): every proof accepted, opening the honest values; the unit's relation and
 rightness, that the receipt is the operand keyed by the salt. -/
-def keyedDrawn (n : ℕ) : DrawnLayer Bool Unit (n + 1) 1 1 Unit Bool (Fin (n + 1) × Bool) Bool where
+def keyedSampled (n : ℕ) : SampledLayer Bool Unit (n + 1) 1 1 Unit Bool (Fin (n + 1) × Bool) Bool where
   draw _ _ := ()
   pos w _ k := (w, k)
   coin _ _ := 0
@@ -234,8 +234,8 @@ def keyedDrawn (n : ℕ) : DrawnLayer Bool Unit (n + 1) 1 1 Unit Bool (Fin (n + 
   rel x w _ v := v true = key (v false) (salt x w)
   right x w _ v := v true = key (v false) (salt x w)
 
-theorem keyedDrawn_opens (n : ℕ) (y : Paths (Paths Bool 1 × Unit) (n + 1)) (w : Fin (n + 1)) (k v : Bool) :
-    (keyedDrawn n).Opens y (w, k) v ↔ v = val y w k := by
+theorem keyedSampled_opens (n : ℕ) (y : Paths (Paths Bool 1 × Unit) (n + 1)) (w : Fin (n + 1)) (k v : Bool) :
+    (keyedSampled n).Opens y (w, k) v ↔ v = val y w k := by
   constructor
   · rintro ⟨w', i, k', hp, -, hv⟩
     have hp' : (w', k') = (w, k) := hp
@@ -244,22 +244,22 @@ theorem keyedDrawn_opens (n : ℕ) (y : Paths (Paths Bool 1 × Unit) (n + 1)) (w
   · intro hv
     exact ⟨w, 0, k, rfl, trivial, hv.symm⟩
 
-theorem keyedDrawn_val_cont (n : ℕ) (x z : Paths (Paths Bool 1 × Unit) (n + 1)) (w : Fin (n + 1)) (k : Bool) :
-    val ((keyedDrawn n).cont (w, k) x z) w k = val x w k := by
+theorem keyedSampled_val_cont (n : ℕ) (x z : Paths (Paths Bool 1 × Unit) (n + 1)) (w : Fin (n + 1)) (k : Bool) :
+    val ((keyedSampled n).cont (w, k) x z) w k = val x w k := by
   cases k
   · rfl
   · show key false (salt (spliceAt (w : ℕ) 1 x z) w) = key false (salt x w)
     rw [salt_spliceAt]
 
-theorem keyedDrawn_committed (n : ℕ) (x : Paths (Paths Bool 1 × Unit) (n + 1)) (w : Fin (n + 1)) (k : Bool) :
-    (keyedDrawn n).committed x (w, k) = val x w k := by
-  have h := plural_eq ((keyedDrawn n).cont (w, k)) (fun y v => (keyedDrawn n).Opens y (w, k) v)
-    (fun y => val y w k) (fun y v => keyedDrawn_opens n y w k v) x x (fun z => keyedDrawn_val_cont n x z w k)
+theorem keyedSampled_committed (n : ℕ) (x : Paths (Paths Bool 1 × Unit) (n + 1)) (w : Fin (n + 1)) (k : Bool) :
+    (keyedSampled n).committed x (w, k) = val x w k := by
+  have h := plural_eq ((keyedSampled n).cont (w, k)) (fun y v => (keyedSampled n).Opens y (w, k) v)
+    (fun y => val y w k) (fun y v => keyedSampled_opens n y w k v) x x (fun z => keyedSampled_val_cont n x z w k)
   exact h
 
 /-- **The receipt moves with the salt**: redrawing round `w`'s salt (from its coin `0` on) changes its receipt, so a
 cut before the salt would fail binding for this honest layer. -/
-theorem keyedDrawn_receipt_moves (n : ℕ) (w : Fin (n + 1)) (x : Paths (Paths Bool 1 × Unit) (n + 1)) :
+theorem keyedSampled_receipt_moves (n : ℕ) (w : Fin (n + 1)) (x : Paths (Paths Bool 1 × Unit) (n + 1)) :
     ∃ z, key false (salt x w) ≠ key false (salt (spliceAt (w : ℕ) 0 x z) w) := by
   refine ⟨Paths.const (((!salt x w, ()), ()) : Paths Bool 1 × Unit) (n + 1), ?_⟩
   have h : salt (spliceAt (w : ℕ) 0 x (Paths.const (((!salt x w, ()), ()) : Paths Bool 1 × Unit) (n + 1))) w =
@@ -270,43 +270,43 @@ theorem keyedDrawn_receipt_moves (n : ℕ) (w : Fin (n + 1)) (x : Paths (Paths B
   rw [h]
   exact key_flip _
 
-theorem keyedDrawn_binding (n : ℕ) : (keyedDrawn n).BindingAt 0 := by
+theorem keyedSampled_binding (n : ℕ) : (keyedSampled n).BindingAt 0 := by
   intro w
   refine le_of_eq (prob_zero fun x h => ?_)
   obtain ⟨i, _, hi⟩ := h
-  exact hi (funext fun k => (keyedDrawn_committed n x w k).symm)
+  exact hi (funext fun k => (keyedSampled_committed n x w k).symm)
 
-theorem keyedDrawn_fork (n : ℕ) (ℓ : Fin (n + 1) × Bool) :
+theorem keyedSampled_fork (n : ℕ) (ℓ : Fin (n + 1) × Bool) :
     prob (fun p : Paths (Paths Bool 1 × Unit) (n + 1) × Paths (Paths Bool 1 × Unit) (n + 1) =>
-      (keyedDrawn n).Forked ℓ p.1 p.2) ≤ 0 := by
+      (keyedSampled n).Forked ℓ p.1 p.2) ≤ 0 := by
   obtain ⟨w, k⟩ := ℓ
   refine le_of_eq (prob_zero fun p h => ?_)
   obtain ⟨v, v', hv, hv', hne⟩ := h
-  rw [keyedDrawn_opens] at hv hv'
-  rw [keyedDrawn_val_cont] at hv'
+  rw [keyedSampled_opens] at hv hv'
+  rw [keyedSampled_val_cont] at hv'
   exact hne (hv.trans hv'.symm)
 
-theorem keyedDrawn_sound (n : ℕ) : (keyedDrawn n).JointSound 0 := by
+theorem keyedSampled_sound (n : ℕ) : (keyedSampled n).JointSound 0 := by
   intro w
   refine le_of_eq (prob_zero fun x h => ?_)
   obtain ⟨i, _, hi⟩ := h
   exact hi rfl
 
-theorem keyedDrawn_pins (n : ℕ) : (keyedDrawn n).Pins := by
+theorem keyedSampled_pins (n : ℕ) : (keyedSampled n).Pins := by
   intro x w j v h
   exact h
 
 /-- **The honest coin-keyed sampled layer meets the premises at the budget**, over `S = n + 1` rounds: binding at
 `δ_bind = 0` and its fork form at every position's cut at `δ_fork = 0`, joint soundness at `δ_ks = 0` and pinning, with
 `S·(δ_bind + δ_ks)` and `S·(|L|·√δ_fork + δ_ks)` (`|L| = 2`, a round's positions) both within `2^-41`. -/
-theorem keyedDrawn_meets_budget (n : ℕ) :
-    ∃ δbind δfork δks : ℝ, (keyedDrawn n).BindingAt δbind ∧
+theorem keyedSampled_meets_budget (n : ℕ) :
+    ∃ δbind δfork δks : ℝ, (keyedSampled n).BindingAt δbind ∧
       (∀ ℓ, prob (fun p : Paths (Paths Bool 1 × Unit) (n + 1) × Paths (Paths Bool 1 × Unit) (n + 1) =>
-        (keyedDrawn n).Forked ℓ p.1 p.2) ≤ δfork) ∧
-      (keyedDrawn n).JointSound δks ∧ (keyedDrawn n).Pins ∧
+        (keyedSampled n).Forked ℓ p.1 p.2) ≤ δfork) ∧
+      (keyedSampled n).JointSound δks ∧ (keyedSampled n).Pins ∧
       ((n + 1 : ℕ) : ℝ) * (δbind + δks) ≤ (1 / 2) ^ 41 ∧
       ((n + 1 : ℕ) : ℝ) * (2 * Real.sqrt δfork + δks) ≤ (1 / 2) ^ 41 := by
-  refine ⟨0, 0, 0, keyedDrawn_binding n, keyedDrawn_fork n, keyedDrawn_sound n, keyedDrawn_pins n, ?_, ?_⟩
+  refine ⟨0, 0, 0, keyedSampled_binding n, keyedSampled_fork n, keyedSampled_sound n, keyedSampled_pins n, ?_, ?_⟩
   · simp only [add_zero, mul_zero]
     positivity
   · simp only [Real.sqrt_zero, mul_zero, add_zero]

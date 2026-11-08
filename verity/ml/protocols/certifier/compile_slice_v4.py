@@ -5,7 +5,7 @@ replaced by records on a bus to `CacheStep_v3`'s stream (`cache_step_v3`), which
         (adv, ing, req, srv, cout, coin, chk) -> verdict[16]
 
 **Why.** CompileSlice_v3 derives each hit, evictable count and return by CacheStep_v2 calls that read and write the
-whole pool table, so its price grows with the pool: 9.2e14 ANDs a 600 s window at GLM-5.3's class. Here a step's pool
+whole pool table, so its price grows with the pool's size. Here a step's pool
 calls are records on a bus, and one stream of NS memory-checked access slots (CacheStep_v3) runs them: a window costs
 its accesses, whatever the pool's size.
 
@@ -20,9 +20,10 @@ its accesses, whatever the pool's size.
   each placed slot's returns), and the stream's witness: its NS slots (start, kind, r, a, b, the read's v and t) and
   its touched list's final values and times.
 A registered row is padded to whole words (`compile_slice.WORD`); its padding must be zero. `CLASSES` names each input's
-class. The checked witness is a computed check, not advice: the valid witness is unique, its coins are drawn after it
-is committed, and a wrong one passes only with the fingerprints' collision probability, which enters the soundness
-error. `free_width` counts the inputs of no class but advice.
+class. The checked witness is a computed check: the valid witness is unique, its coins are drawn after it is committed,
+and a wrong one passes only with the fingerprints' collision probability, which enters the soundness error. It still
+counts as free input at its width until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's
+nondeterminism rule), so `free_width` counts the advice and the checked witness.
 
 **The output**: ``verdict``, 16 bits: CompileSlice_v3's ``load``, ``steps``, ``cache`` (here the step side's bounds on its
 calls), ``served`` and ``carry``, and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its
@@ -90,7 +91,8 @@ FLAGS = ("load", "steps", "cache", "served", "carry", "pool")
 ACCEPT = (1 << len(FLAGS)) - 1
 ROWS = ("adv", "ing", "req", "srv", "cout", "coin", "chk")
 #: each input row's class: the advice is free; ingress and registered gates aren't counted in the window's c, the coins
-#: are the verifier's, and the checked witness is a computed check (the module's docstring)
+#: are the verifier's, and the checked witness is a computed check, free at its width until its lemma (the module's
+#: docstring)
 CLASSES = {"adv": "advice", "ing": "ingress", "req": "registered", "srv": "registered", "cout": "registered",
            "coin": "coin", "chk": "checked"}
 #: the rows padded to whole words (`compile_slice.WORD`)
@@ -172,12 +174,12 @@ def row_bits(S) -> dict[str, int]:
 
 
 def free_width(S, widths: dict[str, int] | None = None) -> int:
-    """The unit's input bits of no class but advice (`CLASSES`); `widths`, each input row's bits (default the
-    signature's)."""
+    """The unit's free input bits: the advice and the checked witness (`CLASSES`; the module's docstring); `widths`, each
+    input row's bits (default the signature's)."""
     widths = row_bits(S) if widths is None else widths
     if set(widths) != set(CLASSES):
         raise ValueError(f"inputs {sorted(widths)} aren't the classified rows {sorted(CLASSES)}")
-    return sum(b for r, b in widths.items() if CLASSES[r] == "advice")
+    return sum(b for r, b in widths.items() if CLASSES[r] in ("advice", "checked"))
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------------
@@ -491,24 +493,6 @@ def _sig(S):
     return tuple((r, Array(bits[r], BIT)) for r in ROWS), Array(16, BIT)
 
 
-def block_keys(B, Kc, S, req, delta) -> dict[tuple[int, int], list]:
-    """RK's initial values in a body `B`: each arrival slot k's CU BlockKey_v1 calls chained from `block_key.ROOT` over
-    its tokens in ``req``, block j's print under ``delta`` at (k, j)."""
-    sh = shape(S)
-    bk = bind(BK.BlockKey, B=S.B, TOK=sh.TOK)
-    tok = RC._split(_refs(req), fields(S)["req"])["tok"]
-    root = [x for i in range(8) for x in Kc.bits(int.from_bytes(BK.ROOT[8 * i:8 * i + 8], "big"), 64)]
-    prints = {}
-    for k in range(S.K):
-        parent = root
-        for j in range(S.CU):
-            at = (k * S.CU + j) * S.B
-            tk = [x for t in tok[at:at + S.B] for x in list(t) + Kc.bits(0, sh.TOK - S.CTW)]
-            o = _refs(B.call(bk, delta, _coll(BK.DIGEST, parent), _coll(Array(S.B, Array(sh.TOK, BIT)), tk)))
-            parent, prints[(k, j)] = o[:512], o[512:640]
-    return prints
-
-
 def _body(B, S, adv, ing, req, srv, cout, coin, chk):
     Kc = _Consts(B)
     sh = shape(S)
@@ -532,7 +516,18 @@ def _body(B, S, adv, ing, req, srv, cout, coin, chk):
         recs.append(_coll(Array(n, t), out[at:at + wd]))
         at += wd
     bus = _refs(B.scan(bus_p, _coll(Array(TT + 128, BIT), Kc.bits(0, TT) + Kc.bits(1, 128)), recs, [alpha]))[:TT + 128]
-    prints = block_keys(B, Kc, S, req, delta)
+
+    bk = bind(BK.BlockKey, B=S.B, TOK=sh.TOK)
+    tok = RC._split(_refs(req), F_["req"])["tok"]
+    root = [x for i in range(8) for x in Kc.bits(int.from_bytes(BK.ROOT[8 * i:8 * i + 8], "big"), 64)]
+    prints = {}
+    for k in range(S.K):
+        parent = root
+        for j in range(S.CU):
+            at = (k * S.CU + j) * S.B
+            tk = [list(t) + Kc.bits(0, sh.TOK - S.CTW) for t in tok[at:at + S.B]]
+            o = _refs(B.call(bk, delta, _coll(BK.DIGEST, parent), col(Array(sh.TOK, BIT), tk)))
+            parent, prints[(k, j)] = o[:512], o[512:640]
 
     lay, elay = V3S._carry_layout(S3), V3S._entry_layout(S3)
     size, esize = V3S._size(lay), V3S._size(elay)
@@ -747,10 +742,9 @@ def rk_keys(S, sl: CS.Slice, delta: int) -> dict[int, int]:
     return out
 
 
-def scan(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = None) -> SimpleNamespace:
-    """The window as a prover runs it from `sl` (the module's docstring), its calls on `stream` (default a new one on the
-    empty pool, RK's keys `rk_keys`'). ``refused`` says why the load, a step or a call refuses the slice, where one does,
-    and the run ends there; it is None otherwise."""
+def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
+    """The window as a prover runs it from `sl` (the module's docstring). ``refused`` says why the load, a step or a call
+    refuses the slice, where one does, and the run ends there; it is None otherwise."""
     sh = shape(S)
     Sc, St = CS.chain(S), CS.step_statics(S)
     arrivals = tuple(map(tuple, sl.arrivals))
@@ -759,8 +753,7 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = Non
         return SimpleNamespace(refused="the load refuses the slice")
     cur, win = loaded
     rnum = request_numbers(sl)
-    if stream is None:
-        stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
+    stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
     CA, R, names = sh.CA, S.R, RC.arrival_names(Sc)
     nc, fl = (0,) * R, (0,) * R
     zero = ((0,) * R, (0,) * CA, (0,) * CA, (0,) * R)
@@ -823,14 +816,14 @@ def _encode_pool(S, nc: Sequence[int], fl: Sequence[int]) -> list[int]:
     return [b for v in nc for b in CS._bits(v, CW)] + ([int(x) for x in fl] if S.AS else [])
 
 
-def reference(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = None) -> SimpleNamespace | None:
+def reference(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace | None:
     """The registered rows and the checked witness the unit accepts `sl`'s advice with under the print coin δ, by `scan`'s
-    run on `stream` (``srv``, ``cout`` and ``chk``'s bits, unpadded), or None where the load, a step, a step's heads
+    run (``srv``, ``cout`` and ``chk``'s bits, unpadded), or None where the load, a step, a step's heads
     (`replay_chain.advance`: it takes more arrivals than are queued, or reads more than A decisions or past the
     window's), a call or the class (the stream past NS slots or NM M entries, an access outside the touched list's
     runs) refuses the slice."""
     sh = shape(S)
-    sc = scan(S, sl, delta, stream)
+    sc = scan(S, sl, delta)
     if sc.refused is not None:
         return None
     for u, (cur, nxt) in enumerate(zip(sc.states, sc.states[1:])):

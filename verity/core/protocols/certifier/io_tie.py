@@ -80,8 +80,8 @@ from verity.ml.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _ui
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
-from verity.core.protocols.sampled_proofs.one_stage import produced
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 BIT, BYTE = HC.BIT, HC.BYTE
 ID_DIGITS = 10

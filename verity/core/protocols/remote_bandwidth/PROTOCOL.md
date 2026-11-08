@@ -66,7 +66,7 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
+receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledSample`'s): \(\sum_t s'_t/2^{64}\) for
 a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
 under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
@@ -168,8 +168,8 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier samples.
-- **The challenger** is the proof system's one challenger (`sampled_proofs.challenger`, on the auditor's host through
-  `sampled_proofs.remote` when it is remote). It flips every coin of a session, commits to them before the session,
+- **The challenger** is the proof system's one challenger (`spot.challenger`, on the auditor's host through
+  `spot.remote` when it is remote). It flips every coin of a session, commits to them before the session,
   and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
   In the reference, `audit.AuditRun` is the verifier and drives the challenger.
@@ -350,7 +350,7 @@ process ends early, until `--close`. The registry's record holds digests and out
 ## 4. The coins and the chained passes
 
 Before a session the challenger flips its coins and commits to them, one epoch of the proof system's live coins
-(`coins.py`, `sampled_proofs.challenger`), and the verifier holds the commitment before the first coin. The prover
+(`coins.py`, `spot.challenger`), and the verifier holds the commitment before the first coin. The prover
 receives each coin's value as it is released and the commitment only once the session has its outcome:
 
 ~~~text
@@ -524,7 +524,7 @@ paced session's windows are its groups, and its \(L\) counts them at their nomin
 (the verifier's; `Params` alone counts a group as the pace's stated window, the fewest the life allows): 353 for k = 1
 at 85 ms over a 60 s stretch (706 groups), and 6 for k = 82 at 61 ms (12 groups). The duration is what the carrier term
 needs. A carrier of a registered circuit's may work on a block from its append's coin until the block leaves, so what the
-carriers may hold grows with the passes in \(L\) windows: `Accounting.Guarantees.DeclaredCircuitRequirement` charges
+carriers may hold grows with the passes in \(L\) windows: `Accounting.Guarantees.RegisteredCircuitRequirement` charges
 \(\lceil 1024 \cdot L c P N \cdot 4096 / E \rceil\) bits a pass for it, \(128\, L P c / E\) of the store, at the
 property's cap \(c\) a certified byte. A count of 60 windows was an hour at the stated window, which put that share at
 916% for 8B (\(c\) = 0.442, eight engines) and 190% for 70B (TP8, 0.0918), so the guarantee said nothing. Over 30 s of
@@ -1158,7 +1158,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
   the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
   \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
-  understate `DeclaredCircuitRequirement`'s \(\delta\), which grows as \(2^a\), by \(2^{100}\) (red team).
+  understate `RegisteredCircuitRequirement`'s \(\delta\), which grows as \(2^a\), by \(2^{100}\) (red team).
   Under a cap of 300 both are credited at 300; under one of 200 its 300-bit schedules are refused, and those
   sessions credit nothing after the seed. Open: the schedule is witness (a
   request's arrivals and lengths), in the clear here as v0's plans are, so deployed it is committed and the check is
@@ -1329,11 +1329,11 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 - **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
-  `Accounting.Guarantees.RateWindowDraw`, a window's pooled sample over its passes' receipts, and `RateSessionDraw`,
-  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
+  `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
+  the horizon and every window at once, both from `PooledSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ in \(U_t\), and its samples are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
+  size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each sample's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
@@ -1341,7 +1341,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
   and reads at most \(s_t\) first blocks of the stream it is given). It has no hiding term: the prover is sent each
   coin's value as it is released and the coin commitment only once the session has its outcome (§4), so the session
-  it plays is the one `PooledDraw` reads, `Live` of that session. Plus the receipts' binding term
+  it plays is the one `PooledSample` reads, `Live` of that session. Plus the receipts' binding term
   (`Receipts.binding`, `ledger.binding`): `Refused` lets an opened receipt through only correct or moved off the row
   its root holds (`Receipts.held`, the plurality of the accepted rows it shows over its window's continuations from
   the cut before its coin, the same at every continuation: `Binding.held_cont`, `tally_le_held`), and a move is two
@@ -1354,7 +1354,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   cut fixes the roots; that the deployed prover's play fixes them is the gap `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
-  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
+  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledSample`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
   record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
   window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
@@ -1370,7 +1370,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   openings coins root it alike. What is open is the Lean: a model of the prover's play over the cut and a statement
   that it fixes each window's receipts by its cut, \(\mathrm{split}_t = 0\), `Binding.binding_le_of_fixed`'s
   hypothesis. Until it lands `ledger.binding` takes \(\mathrm{split}_t = 0\), and every line says it is conditional
-  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledDraw` already reads the session the prover plays, with no
+  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledSample` already reads the session the prover plays, with no
   hiding term; `LineHeld` still reads the prover's records through the commitment (`Committed.play`), and charges
   its hiding terms.
 - **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
@@ -1432,7 +1432,7 @@ registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's o
 tiles. A Fiat–Shamir sample would multiply all of this by 1.5–2.6 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
-windows' samples pool (`RateSessionDraw`, §8). Each window samples its \(s_t\) after its own roots from its own openings
+windows' samples pool (`RateSessionSample`, §8). Each window samples its \(s_t\) after its own roots from its own openings
 coin, so however the prover adapts each window to the samples before it, every sample passes while
 \(\sum_t s_t g_t \le (1-\bar d) \sum_t s_t\) with probability at most \((1-\bar d)^{\sum_t s_t}\), where \(g_t\) is
 window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wrong shares \(f_t = 1 - g_t\) have
