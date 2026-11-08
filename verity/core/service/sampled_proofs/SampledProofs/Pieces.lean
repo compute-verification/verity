@@ -612,9 +612,11 @@ def run (j : Json) : V Json := do
         | .null => pure none
         | .arr ss => pure (some ss)
         | _ => throw "an interior's statements is a list"
+      let some links := SecondStage.linksOf? (getD it "links")
+        | throw "an interior's links is a list of {template, port, value}, strings"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
-                    statements } : Run.Interior))
+                    statements, links } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
@@ -622,7 +624,8 @@ def run (j : Json) : V Json := do
 
 /-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
 first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
-registrations' records, the second stage's units (`drawn`) and the statements, null for none. -/
+registrations' records, the second stage's units (`drawn`), the design's links, the verdicts, whose verifiers of record
+report the sessions' reads (`Record.sessionRegistered`), and the statements, null for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -631,6 +634,13 @@ def secondStatements (j : Json) : V Json := do
   let some drawn := ds.mapM nat? | throw "drawn is not a list of slots"
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
+  let some links := SecondStage.linksOf? (getD j "links") | throw "links is not a list of {template, port, value}, strings"
+  let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
+  let verdicts := entries (getD j "verdicts")
+  unless verdicts.all fun (_, v) => (v matches .obj _) && (!(truthy (getD v "of_record") &&
+      jeq (getD v "accepted") (.bool true) && (getD v "registered" matches .obj _)) ||
+      (entries (getD v "registered")).all fun (_, e) => (getD e "value" matches .str _) && (field? e "root").isSome) do
+    throw "a verdict is not an object, or one of record reports reads that are not objects with a string value and a root"
   let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
   let stmts ← match getD j "statements" with
     | .null => pure none
@@ -638,7 +648,7 @@ def secondStatements (j : Json) : V Json := do
     | _ => throw "statements is not a list"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
-      boundary := getD j "boundary", drawn }
+      boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts }
   return (SecondStage.check allow own stmts).toJson
 
 def table : List (String × (Json → V Json)) :=

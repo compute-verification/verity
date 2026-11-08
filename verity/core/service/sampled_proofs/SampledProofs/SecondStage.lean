@@ -18,16 +18,20 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
     count;
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
-    reads aside, are not the record's for exactly its template's ports (port `p` of template `t` is the record's `t/p`
-    when the record names its ports by template, else `p`);
+    reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
+    record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second draw's units in its part as a subset of its slots
     (`ownDraw`);
-  - `second-link`: a registered read is neither a boundary port at the boundary record's root, domain and leaves, each
-    slot reading only rows of its cell's replay block (`[S[i]·r, (S[i] + 1)·r)`, `r` the port's leaves over the
-    boundary population), nor a value either registration registers, at its root, domain and leaves.
+  - `second-read`: a port's registered read (`readOk`) is none of: its own port of the interior record, each slot `u`
+    reading only its own rows (`[(u - off_t)·r, (u - off_t + 1)·r)`, `r` the port's leaves over the part's `Q·n_t`
+    slots); the boundary port its link names (`Link`, the verifier's own), each slot reading only its cell's replay
+    block's rows (`[S[i]·r, (S[i] + 1)·r)`, `r` the port's leaves over the boundary population); a value either
+    registration registers. Each is read at its root, domain and leaves.
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-statements` when
-  no statements are given, and `second-cover` for each part the second draw samples that no statement is for. A
-  passing check (`check_ok`) holds every session's sample to the second draw, cell by cell.
+  no statements are given, `second-cover` for each part the second draw samples that no statement is for, and
+  `second-reported` when the `{value: root}` the verifiers of record report the sessions read (`Record.sessionRegistered`)
+  is not the statements' (`statementReads`). A passing check (`check_ok`) holds every session's sample to the second
+  draw, cell by cell, and every read it reports to a statement's.
 * **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
   doesn't, no run passes (`check_refused`).
 -/
@@ -59,6 +63,9 @@ def CELLS_WHY : String :=
 
 def STATEMENTS_WHY : String :=
   "a two-stage outcome names its second-stage sessions' statements: each one's template, header, draw and registered reads"
+
+def REPORTED_WHY : String :=
+  "the registered reads the verifiers of record report are not the statements' registered reads, value by value"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -99,14 +106,36 @@ def Stmt.ofJson? (j : Json) : Option Stmt :=
   | .str t, .obj h, .obj d, .obj r => some ⟨t, .obj h, .obj d, .obj r⟩
   | _, _, _, _ => none
 
+/-- A link of the two-stage design: template `template`'s session port `port` reads the boundary registration's port
+`value`. -/
+structure Link where
+  template : String
+  port : String
+  value : String
+  deriving Repr, Inhabited, DecidableEq
+
+/-- The design's links from their JSON: none (null), or a list of objects of exactly `template`, `port` and `value`,
+each a string. -/
+def linksOf? : Json → Option (Array Link)
+  | .null => some #[]
+  | .arr ls => ls.mapM fun l =>
+    if keys? l != some #["port", "template", "value"] then none else
+    match getD l "template", getD l "port", getD l "value" with
+    | .str t, .str p, .str v => some ⟨t, p, v⟩
+    | _, _, _ => none
+  | _ => none
+
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
-registrations' records, and the second draw's units. -/
+registrations' records, the second draw's units, the design's links, and the `{value: root}` the verifiers of record
+report the sessions read (`Record.sessionRegistered`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
   interior : Json
   boundary : Json
   drawn : Array Nat
+  links : Array Link := #[]
+  reported : Option (Array (String × Json)) := none
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -124,8 +153,9 @@ def populationOk (q : Nat) (p : Part) (h : Json) : Bool :=
   | .arr is, some m => m == q * p.n && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
   | _, _ => false
 
-/-- The header's scheme is the interior record's, and its `frame_v3` roots outside `reads` are the record's for exactly
-template `t`'s ports, each at the record's root, its `domain_ids` entry the record's domain. -/
+/-- The header's scheme is the interior record's, its `frame_v3` roots outside the ports `reads` reads are the record's
+for template `t`'s ports, each at the record's root, its `domain_ids` entry the record's domain, and each of those ports
+is one it roots or reads. -/
 def rootsOk (named : Bool) (rec : Json) (t : String) (h : Json) (reads : Array String) : Bool :=
   let fv := getD h "frame_v3"
   let roots := (entries (getD fv "roots")).filter fun (p, _) => !reads.contains p
@@ -134,7 +164,8 @@ def rootsOk (named : Bool) (rec : Json) (t : String) (h : Json) (reads : Array S
     roots.all (fun (p, r) => match reg.find? (·.1 == portOf named t p) with
       | some (_, e) => jeq r (getD e "root") && jeq (getD (getD fv "domain_ids") p) (getD e "domain")
       | none => false) &&
-    (templatePorts named t rec).all fun x => roots.any fun (p, _) => portOf named t p == x
+    (templatePorts named t rec).all fun x =>
+      roots.any (fun (p, _) => portOf named t p == x) || reads.any fun p => portOf named t p == x
 
 /-- **The verifier's own sample** for part `p`'s session: the second draw's units among its slots, counted from its
 first, as `unit_draw` writes a subset of its population. -/
@@ -151,33 +182,36 @@ def registeredEntry (rec : Json) (v : String) : Option Json :=
 def sameAt (e x : Json) : Bool :=
   jeq (getD e "root") (getD x "root") && jeq (getD e "domain") (getD x "domain") && jeq (getD e "leaves") (getD x "leaves")
 
-/-- Slot `u`'s read `x` of a boundary port of `rows` rows to a replay block: none, or a row of its cell's replay block,
-`u` one of part `p`'s slots. -/
-def readOk (own : Own) (p : Part) (rows u : Nat) : Json → Bool
-  | .null => true
-  | x => match nat? x, own.sample[p.span u]? with
-    | some pos, some b => p.holds own.sample.size u && decide (b * rows ≤ pos) && decide (pos < (b + 1) * rows)
-    | _, _ => false
-
-/-- Every read of a boundary port's registered-reads entry `e` (slot `reads_from + k` reads `reads[k]`) is `readOk`,
-its rows to a replay block its leaves over the boundary population. -/
-def readsOk (own : Own) (p : Part) (e : Json) : Bool :=
+/-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
+part `p`'s slots `u`, of a row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units` each. -/
+def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option Nat) : Bool :=
   let first : Option Nat := match getD e "reads_from" with | .null => some 0 | x => nat? x
-  match nat? (getD e "leaves"), nat? (getD own.boundary "population"), getD e "reads", first with
-  | some leaves, some n, .arr rs, some f =>
-    decide (0 < n) && leaves % n == 0 &&
-      (List.range rs.size).all fun k => readOk own p (leaves / n) (f + k) (rs.getD k .null)
-  | _, _, _, _ => false
+  match nat? (getD e "leaves"), getD e "reads", first with
+  | some leaves, .arr rs, some f =>
+    decide (0 < units) && leaves % units == 0 && (List.range rs.size).all fun k =>
+      match rs.getD k .null with
+      | .null => true
+      | x => match nat? x, unit (f + k) with
+        | some pos, some b =>
+          p.holds q (f + k) && decide (b * (leaves / units) ≤ pos) && decide (pos < (b + 1) * (leaves / units))
+        | _, _ => false
+  | _, _, _ => false
 
-/-- A registered read `e` is held to the registrations: a boundary port at its root, domain and leaves, read only in
-each slot's cell's replay block (`readsOk`), else a value either registration registers, at its root, domain and
-leaves. -/
-def linkOk (own : Own) (p : Part) (e : Json) : Bool :=
+/-- Template `p.template`'s session port `port` may read registered-reads entry `e`: its own port of the interior
+record, each slot only its own rows; else the boundary port a link names for it, each slot only its cell's replay
+block's rows; else a value either registration registers. Each at its root, domain and leaves. -/
+def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
+  let q := own.sample.size
   match getD e "value" with
   | .str v =>
-    match (Record.byPort own.boundary).find? (·.1 == v) with
-    | some (_, b) => sameAt e b && readsOk own p e
-    | none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
+    match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
+    | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
+    | none, some (_, b) =>
+      own.links.any (fun l => l.template == p.template && l.port == port && l.value == v) && sameAt e b &&
+        match nat? (getD own.boundary "population") with
+        | some m => rowsOk q p e m fun u => own.sample[p.span u]?
+        | none => false
+    | none, none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
       | some x => sameAt e x
       | none => false
   | _ => false
@@ -189,7 +223,8 @@ def stmtCodes (own : Own) (named : Bool) (p : Part) (s : Stmt) : List String :=
   [("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
-   ("second-link", reads.all fun (_, e) => linkOk own p e)].filterMap fun (code, ok) => if ok then none else some code
+   ("second-read", reads.all fun (port, e) => readOk own named p port e)].filterMap fun (code, ok) =>
+    if ok then none else some code
 
 def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJson i), ("template", t)]
 
@@ -215,10 +250,28 @@ def coverFailures (own : Own) (ps : Array Part) (ss : List Json) : List (String 
       some ("second-cover", Json.mkObj [("template", Json.str p.template)])
     else none
 
+/-- The `{value: root}` statements `ss` read, merged as `Record.sessionRegistered` merges the verdicts': a value read
+under two roots maps to null. -/
+def statementReads (ss : List Json) : Array (String × Json) :=
+  ss.foldl (fun acc j => match Stmt.ofJson? j with
+    | some s => (entries (getD s.registered "ports")).foldl (fun acc (_, e) => match getD e "value" with
+      | .str v =>
+        let root := getD e "root"
+        match acc.find? (·.1 == v) with
+        | some (_, r) => acc.map fun (k, x) => if k == v then (k, if jeq r root then r else .null) else (k, x)
+        | none => acc.push (v, root)
+      | _ => acc) acc
+    | none => acc) #[]
+
+/-- `second-reported` when the reads the verifiers of record report are not those statements `ss` state. -/
+def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
+  if Record.sameDict (own.reported.getD #[]) (statementReads ss) then [] else [("second-reported", Json.str REPORTED_WHY)]
+
 /-- Every failure of statements `ss` over parts `ps`, then, when there is none and the form isn't allowed, its
 refusal. -/
 def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
-  let found := (List.range ss.length).flatMap (stmtFailures own ps ss) ++ coverFailures own ps ss
+  let found := (List.range ss.length).flatMap (stmtFailures own ps ss) ++ coverFailures own ps ss ++
+    reportedFailures own ss
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- **Round 2's statement check** (module docstring) of statements `stmts`, the two-stage form allowed when `allow`
@@ -296,14 +349,15 @@ theorem check_refused (own : Own) (stmts : Option (Array Json)) : (check false o
   split <;> simp [failures_ne_nil]
 
 /-- **What a passing check says**: the form is allowed, the interior program's strata make parts, each statement is one
-for a part's template, no earlier statement's, and passes every check (`stmtCodes_nil`), and each part the second draw
-samples has a statement. -/
+for a part's template, no earlier statement's, and passes every check (`stmtCodes_nil`), each part the second draw
+samples has a statement, and the reads the verifiers of record report are the statements'. -/
 theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
     allow = true ∧ ∃ ps, own.parts = some ps ∧
       (∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
         ps.find? (·.template == s.template) = some p ∧ (templates (ss.toList.take i)).contains s.template = false ∧
         stmtCodes own (byTemplate own.interior) p s = []) ∧
-      (∀ p ∈ ps.toList, own.drawn.any (p.holds own.sample.size) = true → (templates ss.toList).contains p.template = true) := by
+      (∀ p ∈ ps.toList, own.drawn.any (p.holds own.sample.size) = true → (templates ss.toList).contains p.template = true) ∧
+      Record.sameDict (own.reported.getD #[]) (statementReads ss.toList) = true := by
   simp only [check, fold_codes_empty] at h
   split at h
   · simp at h
@@ -315,9 +369,9 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
     · simp at h
     · rename_i hne
       simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
-      simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range] at h
-      obtain ⟨hst, hcov⟩ := h
-      refine ⟨by simpa using hne, ps, hp, ?_, ?_⟩
+      simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
+      obtain ⟨hst, hcov, hrep⟩ := h
+      refine ⟨by simpa using hne, ps, hp, ?_, ?_, ?_⟩
       · intro i hi
         have hi' : i < ss.toList.length := by simpa using hi
         have := hst i hi'
@@ -339,13 +393,17 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         · rename_i hc
           simp only [hd, Bool.and_true, Bool.not_eq_true', Bool.not_eq_false] at hc
           simpa using hc
+      · unfold reportedFailures at hrep
+        split at hrep
+        · assumption
+        · simp at hrep
 
 /-- A passing statement's checks: its population, roots, sample and registered reads. -/
 theorem stmtCodes_nil {own : Own} {named : Bool} {p : Part} {s : Stmt} (h : stmtCodes own named p s = []) :
     populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
-      (entries (getD s.registered "ports")).all (fun (_, e) => linkOk own p e) = true := by
+      (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true := by
   simpa [stmtCodes, List.filterMap_eq_nil_iff] using h
 
 private def exRoot (i : Nat) : String := String.ofList (List.replicate 128 (Char.ofNat (48 + i)))
@@ -379,5 +437,26 @@ private def exStmt (indices units : List Nat) : Json :=
 #guard (check true exOwn (some #[])).codes == #["second-cover"]
 #guard (check true exOwn none).codes == #["second-statements"]
 #guard (check true { exOwn with parts := parts 4 #[("Pair_v0", #[(0, 6)])] } none).codes == #["second-cells"]
+
+/-- Port `x`'s statement reading `value`'s tree of `leaves` leaves at root `root`, domain `dom`, slot `k` its `reads[k]`. -/
+private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat) : Json :=
+  (exStmt [0, 1, 2, 3, 4, 5] [2, 4]).setObjVal! "registered" (Json.mkObj [("ports", Json.mkObj [("x", Json.mkObj [
+    ("value", value), ("root", exRoot root), ("domain", exRoot dom), ("leaves", Lean.toJson leaves),
+    ("reads_from", (0 : Nat)), ("reads", natsJson reads.toArray)])])])
+
+private def exReported (value : String) (root : Nat) (own : Own := exOwn) : Own :=
+  { own with reported := some #[(value, .str (exRoot root))] }
+
+private def exLinked : Own := { exOwn with links := #[⟨"Pair_v0", "x", "bx"⟩] }
+
+#guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes.isEmpty
+#guard (check true exOwn (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-reported"]
+#guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]])).codes == #["second-read"]
+#guard (check true (exReported "out" 3) (some #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-read"]
+#guard (check true (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes.isEmpty
+#guard (check true (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]])).codes == #["second-read"]
+#guard (check true (exReported "bx" 5) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes == #["second-read"]
+#guard (check false (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes ==
+  #["two-stage-form"]
 
 end SampledProofs.SecondStage
