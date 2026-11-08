@@ -4944,7 +4944,7 @@ _BAD_PARTS = ("Bad.olean", "Bad.olean.server", "Bad.olean.private", "Bad.ir.sig"
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_path, monkeypatch):
-    """The gap LEAN-212 closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
+    """The gap this closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
     reader of the live files could be shown bytes the build swaps out and back.  The audit copies the build at the seal and
     reads the copies.  Here a package is built with a `Control.Bad` whose declaration skips the kernel (the sealed, true
     state), and a dependent package's compile-time `#eval` overwrites that `.olean` with a good one during the window; the
@@ -5059,7 +5059,7 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_seal_skips_an_exempt_module_with_no_olean(tmp_path):
-    """The regression #7873 landed: the seal seeded every module under the lock's roots, an `exempt` one under them
+    """A regression the seal had: it seeded every module under the lock's roots, an `exempt` one under them
     included, but an exempt module (a scratch file, a `runs` test) is not built, so `Graph.lean` was sent after an
     `.olean` that is not there and the seal, and every audit of the package, failed.  Here a package has an exempt module
     `Control.Stub` under its root that nothing imports or builds; the sealed audit passes, and the seal seeds and copies

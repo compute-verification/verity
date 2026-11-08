@@ -784,7 +784,7 @@ def test_an_inline_premise_one_side_dropped_stays_where_the_other_restated_its_g
 
 
 def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_still_prints_stays():
-    """`TileUnpredictableOfNCPU`'s premise as #7347 renamed its binder `γ₀` to `g₀`, which changed the printed text and no
+    """`TileUnpredictableOfNCPU`'s premise as a rename of its binder `γ₀` to `g₀` left it, which changed the printed text and no
     record.  Theirs renames it, restating the guarantee (another hash of the `Guarantees` definition its signature names),
     while ours has the old text as the base had it: the merge has the new text alone, not the old one beside it (`next`
     held 19 such old texts over its `INLINE` cap).  A base that lists both texts, merged with a side whose `--update` dropped
