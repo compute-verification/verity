@@ -5,7 +5,7 @@ inside one statement; these join statements (one coordinate's K-chunks, chunk c'
 a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a sampled proof block's input is the committed output of
 the unit that wrote it.  A unit whose wired row is not its writer's row is incorrect in the wired flattening (its outputs
 are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it samples
-(`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
+(`check_drawn`, `Spot.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
 sampled proof blocks); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
 ``x`` its writer's output, its ``w`` a weight row): it is then a shared-row member, its wired port a table of its units' own
 rows, and a unit's string is the row its ref names (`_strings`), the one its statement reads."""
