@@ -19,12 +19,15 @@ def resized(population: Sequence[tuple[Any, int]]) -> list[tuple[Any, int]]:
     return [(d, (n - 1 if n > 1 else n + 1) if i == 0 else n) for i, (d, n) in enumerate(population)]
 
 
-def program(population: Sequence[tuple[Any, int]], *, mixed: bool, version: int = P.POPULATION_VERSIONS[0]):
+def program(population: Sequence[tuple[Any, int]], *, mixed: bool, version: int = P.POPULATION_VERSIONS[0],
+            values: Sequence[tuple[str, int, int]] = ()):
     """The population program over `resized(population)` at `version`, built as the arm builds its own: `TemplatePopulations`
-    when `mixed`, else `TemplateInstances` over the one template."""
+    when `mixed`, else `TemplateInstances` over the one template. ``values``: the window's (`mixed_population_program`'s, a
+    served window's tables), which the other partition takes too, so it differs from the window's in its partition alone;
+    only a `TemplatePopulations` takes them."""
     other = resized(population)
     if mixed:
-        return P.mixed_population_program(other, version=version)
-    if len(other) != 1:
-        raise ValueError("a TemplateInstances population has one template")
+        return P.mixed_population_program(other, version=version, values=values)
+    if len(other) != 1 or values:
+        raise ValueError("a TemplateInstances population has one template and takes no values")
     return P.population_program(*other[0], version=version)

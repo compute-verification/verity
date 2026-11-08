@@ -262,7 +262,7 @@ fire() {
 
 audit() {
   local run=${HOST_RUN:-$OUT/host/$(cat "$OUT/host-run.txt" 2> /dev/null || echo DRY)}
-  # PEER empty: the sessions' challenger peer is the host record's (the verifier host), not the prover's node
+  # PEER empty: the sessions' challenger peer is the host record's (the verifier host), not the developer's node
   if [ -n "${DRY:-}" ]; then
     echo "DRY: PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$run PERIOD=$PERIOD PIN=$PIN COMMIT=$COMMIT" \
       "bash benchmarks/remote_session/auditor.sh"
