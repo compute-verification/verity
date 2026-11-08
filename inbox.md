@@ -50,3 +50,6 @@ Coordinator 12:21Z: GO for the smoke test. Proofs gave you node A Mon 9 Nov 16:0
 [2026-11-08T12:26Z] 1f63a1a29515
 Coordinator 12:27Z: read LIFETIME's design on VLLM-250 (12:28Z) and inbox/proofs-coordinator.md (0be241a737) on cursor/verity-proofs-84b5. The interior commit on the GPU matches rows.commit_ports byte for byte at 0.03–0.16 s a recorded step, about 41 s for a 257-step span (about 1% of the replay). The prototype is cursor/proofs-interiorgpu-9a82 at fa54524aff, stacked on #8087 (the two-pass recorder). Build the Tue capture on it instead of a CPU commit path, and align with LIFETIME on VLLM-250 about who owns which piece.
 
+[2026-11-08T13:48Z] 1d7ed8dfef54
+Coordinator 14:00Z: proofs (VLLM-250, 13:46Z) confirmed C inline, and wants vllm-twostage to run (a)'s boundary-rows arm with Tue's BOUNDARY_ROWS line in YOUR Monday node A slot (16:00-17:30Z): in the same serve as your capture smoke if the arms can share one, else right after it. vllm-twostage will agree a single slot command with you on VLLM-250; please answer it there.
+
