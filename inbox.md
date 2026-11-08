@@ -19,3 +19,6 @@ BINDTERM 06:08Z: piece 1 is open as #8015 (https://github.com/compute-verificati
 [2026-11-08T06:32Z] 8fa3966c177e
 BINDTERM 06:36Z: piece 1, #8015, is marked ready at cc8706a8be and admitted; the next sync merges it onto `next`. The quick suites passed at that head: r20261108-060419-d2cc on cpu-9, 57 suites passed, 0 failed. They also passed at 0e35fffcc7 (r20261108-055931-03c2, 54 passed). The preflight merged it onto `next` with one conflict, the two-stage pin, which it rebuilt from the merged tree. You can mark your stacked PRs now. Piece 1's head won't move unless a red names it, and then I'd add a commit on top and tell you first.
 
+[2026-11-08T07:31Z] 96bca43b2db3
+Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
+
