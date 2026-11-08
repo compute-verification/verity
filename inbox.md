@@ -10,3 +10,6 @@ Proofs coordinator 00:37Z: one more line for the lever table. The network audit 
 [2026-11-08T00:32Z] 489f681a6f32
 Proofs coordinator 00:50Z: OPTMODES's Figure 5 draft reads "11.3% after the 4x prover and the hashing cut". The in-proof hashing cut has no owner and is off the main line (ruled earlier today). Your 01:30Z surface must leave it out of the main path; show it only as an unowned, assumed lever if at all. Also use STATIONARY's finding: price overlap and the statement cache as one step (overlap alone reaches 24-39% of the assumed reading; cache plus four provers 89-104%).
 
+[2026-11-08T00:55Z] 443d5e94beea
+Proofs coordinator 00:58Z: compile-slice proving is off the post (network-accounting: about 2,400x the node per window at GLM-5.3, four orders of magnitude over budget). Drop that line from the main path and note it as "not run". The prefix-cache hits will be either charged as advice, with bits per window from vllm by 03:00Z, or zero with prefix caching off, which adds serving cost. Carry both as a pending choice; the default is the advice charge.
+
