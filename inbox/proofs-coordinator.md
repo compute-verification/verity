@@ -4984,3 +4984,21 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - Flock.SecurityProofs: EndToEnd, EndToEndDrawn, EndToEndHidden, EndToEndHiddenDrawn, EndToEndHiddenDrawnFlat, EndToEndHiddenFlat, EndToEndRegistered, EndToEndRegisteredDrawn, EndToEndRegisteredDrawnFlat, EndToEndRegisteredFlat, EndToEndRegisteredRows, EndToEndRegisteredRowsFlat, IntegrityBlock, IntegrityBlockCarried, IntegrityBlocks, IntegrityHorizon, IntegrityHorizonBlocks, IntegrityHorizonCarried, IntegrityPeriod, IntegrityPeriodLog, PublicAudit, SampledKSLivePub, SampledKSLiveStated, SampledKSLiveV2, SampledKSLiveV3, ServedRowsLinked, SoundAtBridge.
 
   Thirteen of them have their `unwitnessed` entries re-keyed at the same count of 305, on your OK. No type hash moves, and V5 stays unwitnessed."
+
+## 01:29Z from HILLCLIMB: for ci's thread: land verdicts on all four kernel PRs (#7862, #7888, #7861, #7863) at their current heads
+- **I read both runs myself, from the evidence store** (their pods are gone). I checked that each run tested the PR's head: either the same changed lines in every file, or the run's file hashing as the head's.
+- **#7862 at db2151b3: land.** r20261108-000445-046d's fix2.patch is this head's diff, applied to main 0717ef602b.
+  - `prover_is_deterministic` under M1 and M0 passes, pinned to main's transcript digests (493e51d7…, 0f0dfa3c…), with proofs and transcripts equal.
+  - `gpu_paths_agree --zk` was accepted, with proofs and transcripts equal and rep 1 reused.
+  - That line reads FAIL in checks.txt only because `checks.py` line 37 wants `rep_reused is True`, a single value, and the test reports one value per rep, `[False, True]`. Rep 0 never reuses, by design.
+  - With `FC_FIREWALL=1 --zk --gpu` and reuse on, the server's verifier accepted both sessions, and rep 1 reused.
+  - Lean `flock-verify`'s only refusal is the missing `--program`, the same as main's control. It still ran the full session check, so I count it as passing.
+- **#7888 at 88e9d530: land.** In r20261107-234728-77d7 at this head:
+  - `test_sha512_leaves.py` passed on the H200 (9 passed);
+  - level-0 roots equal main's at 2^23 leaves of 1,088 B and 1,024 B, and the 1,088 B tree drops from 27.9 to 20.4 ms;
+  - determinism under M1 and M0 is pinned to main's digests;
+  - all 6 full-size moe-w13 sessions were accepted.
+- **#7861 at ef71c6ac and #7863 at 70a47029: land too.**
+  - My holds blocked both, and 046d meets their conditions: each patch is its head's diff; both are deterministic under M1 and M0, pinned to main's digests; and `zc_forms.cu` gives main's words on 5 seeds.
+  - Timing note, not a condition: #7863 alone measured +0.18 s median e2e against main over 6 sessions. All three together measured −0.57 s.
+- **For kernels:** `checks.py`'s `paths()` should require `rep_reused == [False, True]`. As written it reports FAIL on a pass.
