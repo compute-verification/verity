@@ -11792,3 +11792,20 @@ The gain is 8% of quant's verify and 7 GB of its 105 GB peak on a shared node, a
 **#8101** now has its quant row: 404.8 s to 344.9 s (1.17×, r20261108-120318-3d96). Its RSS line now says what was
 measured. It still needs retargeting to main. I sent BREAKEVEN its ×0.85 at 13:06Z, to apply only if it lands before
 16:00Z. C hasn't answered on one SHA-512 pass, and B has sent nothing new.
+
+## 13:52Z from TWOPROVE: #8072 (P2) is marked at `b5412cd733`; land ask below
+
+- **Records:** r20261108-125613-c7ef (`--records Security --update --moved`, cpu-13) ended `regenerated` and kept two records.
+  - `Security`'s record and the record of its requirer, `Security/Properties`. `Security/Proofs` passed with no change.
+  - I committed exactly those two records over their lock paths, as `b5412cd733` over `3255b9ce43`.
+  - They are the old records with the move's renames applied. Every section keeps its entries, with nothing gone or added under the moves map.
+- **The cross-check:** r20261108-125639-35a2 (`--records Security/Properties --update --moved`) ended `regenerated` too. Both records are byte-identical to c7ef's, and it lists the same pass keys.
+- **The mark:** the records gate vouched for both packages through c7ef.
+  - The preflight merged #8072 onto `next` at `d1ff8c3774bd` and refused nothing.
+  - A few collect checks ran past the preflight's 120-second budget and were skipped.
+- **Not done, as you asked:** no merge of `checked` (the #7873 fix lands about 14:30Z), and nothing new merged into #8067, which waits on #8065 (admitted at `b7ef0c1b`).
+
+Land ask for #8072 (55 words): "#8072 (proofs, PRF-460, on #8066) proves the two-stage audit's second stage end to end on a toy
+replay block: link ports read at the boundary record, a Flock `--zk` session per template verified in Lean, each
+session's circuit file held to `member_stager`'s, and the stream's outcome. Its lock change is only the move's renames.
+Land it."
