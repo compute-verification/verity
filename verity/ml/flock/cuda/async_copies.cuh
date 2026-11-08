@@ -5,11 +5,10 @@
 // as it returns) and a kernel on the stream copies them, so the host doesn't wait for the kernels queued before it. hc_get
 // queues a kernel that copies into staging; hc_wait synchronizes the stream once and moves every queued read into its
 // destination, which must stay valid until then. A transcript read is its hc_gets then one hc_wait; a read the host doesn't
-// need yet (an opening's rows and paths) waits in the queue for the next transcript read. The copies are kernels, not
-// cudaMemcpyAsync: a copy queued behind the stream's kernels would hold a copy engine's queue, where the witness upload
-// beside the session (another stream, or under MPS another prover's) waits behind it. Staging is reused only after an
-// hc_wait, which completes every copy queued before it: a copy that doesn't fit waits first, and one larger than HC_DIRECT
-// goes through cudaMemcpy. The state is the calling thread's.
+// need yet (an opening's rows and paths) waits in the queue for the next transcript read. The copies are kernels on the
+// stream, not cudaMemcpyAsync, with which the next session's witness, built beside this one on another thread, kept its
+// session waiting longer. Staging is reused only after an hc_wait, which completes every copy queued before it: a copy that
+// doesn't fit waits first, and one larger than HC_DIRECT goes through cudaMemcpy. The state is the calling thread's.
 #pragma once
 #include <algorithm>
 #include <cstdint>
