@@ -119,6 +119,23 @@ def test_a_caller_route_a_session_dir_and_a_negative_control(binary, tmp_path):
     assert record(s)["proved"]["line"]["self_check"] == "skip"
 
 
+def test_provers_a_device_each_with_its_own_verifier_of_a_type(binary, tmp_path):
+    """Two provers on one device, one type: each session goes to the prover with fewer unfinished sessions, and meets its
+    own line at a verifier of that prover's (one verifier taking both provers' connections would pair them by arrival)."""
+    pin = "55" * 64
+    with ProofServer(binary, tmp_path / "ps", devices=[3], provers=2) as ps:
+        sessions = [ps.submit(statement(tmp_path, pin), draw([i % 4]), f"s{i}") for i in range(8)]
+        got = [s.result() for s in sessions]
+    assert {s.prover for s in got} == {"prover-gpu3-0", "prover-gpu3-1"}
+    assert set(ps.exits) == {"prover-gpu3-0", "prover-gpu3-1", f"verifier-{pin[:16]}-0", f"verifier-{pin[:16]}-1"}
+    assert set(ps.pids) == set(ps.exits) and all(pid > 0 for pid in ps.pids.values())
+    for s in got:
+        assert s.accepted and s.device == 3 and s.live["device"] == "3"
+        assert s.dir.parent.name == f"verifier-{pin[:16]}-{s.prover[-1]}" and record(s)["queue"]["label"] == s.label
+    with pytest.raises(ValueError, match="at least 1"):
+        ProofServer(binary, tmp_path / "ps0", provers=0)
+
+
 def test_one_cpu_prover_without_devices(binary, tmp_path):
     with ProofServer(binary, tmp_path / "ps") as ps:
         s = ps.submit(statement(tmp_path, "ee" * 64), draw([3]), "cpu").result()
