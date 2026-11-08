@@ -18,7 +18,7 @@ inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files h
 the row layout it needs (`RowsOk`), no two of its ports share a name, every sample size divides into the session's tables,
 and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's population (`PopMatches`) is a
 statement about the registration, not the files, and is no conjunct here; the statement takes no hypothesis on the
-sampling design it samples under (it is `lawOf`'s, never a Bernoulli law) or on the registration's roots (its `ecr/sha-512` term at the roots finder pays for them), and the finders' collision resistance
+sampling design it samples under (it is `designAt`'s, never a Bernoulli law) or on the registration's roots (its `ecr/sha-512` term at the roots finder pays for them), and the finders' collision resistance
 is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
 

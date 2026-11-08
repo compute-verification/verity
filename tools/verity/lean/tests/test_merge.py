@@ -1297,14 +1297,13 @@ def _caps(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
     return M.caps(tmp / "base", tmp / "ours", tmp / "theirs")
 
 
-def test_two_branches_that_each_move_the_ratchet_caps_merge_them_as_counters(tmp_path, capsys):
-    """Every PR that witnesses or grandfathers a guarantee edits its lock's count on one line, so any two conflict as text.
-    Here ours grandfathers one in Security and witnesses one each in Security/Properties and flock, theirs grandfathers one
-    in Security/Properties: theirs plus ours' change from the base, on each cap line, with theirs' other edits kept."""
+def test_two_branches_that_each_move_the_ratchet_caps_merge_them_as_the_larger(tmp_path, capsys):
+    """Every PR that witnesses a guarantee, and drive's lock run, edit a lock's count on one line, so any two conflict as
+    text. Each key merges as the larger of the two sides' caps, on each cap line, with theirs' other edits kept."""
     base = packages({SEC: 354, PROPS: 184, FLOCK: 8}, {SEC: 1422, PROPS: 129, FLOCK: 6})
     ours = packages({SEC: 355, PROPS: 183, FLOCK: 7}, {SEC: 1423, PROPS: 129, FLOCK: 6})
     theirs = packages({SEC: 354, PROPS: 185, FLOCK: 8}, {SEC: 1422, PROPS: 128, FLOCK: 6}, doc="only shrinks")
-    want = packages({SEC: 355, PROPS: 184, FLOCK: 7}, {SEC: 1423, PROPS: 128, FLOCK: 6}, doc="only shrinks")
+    want = packages({SEC: 355, PROPS: 185, FLOCK: 8}, {SEC: 1423, PROPS: 129, FLOCK: 6}, doc="only shrinks")
     for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
         (tmp_path / n).write_text(t)
     plain = subprocess.run(["git", "merge-file", "-p", *(str(tmp_path / n) for n in ("ours", "base", "theirs"))],
@@ -1316,20 +1315,24 @@ def test_two_branches_that_each_move_the_ratchet_caps_merge_them_as_counters(tmp
 
 
 def test_a_cap_key_one_side_adds_or_lacks_counts_from_the_base(tmp_path):
-    """A key only one side has counts as the base's count there, or 0 where the base lacks it too: a package one side gives a
-    cap keeps that count, placed after the key the side has before it, and one a side dropped keeps the other side's."""
+    """A key only one side has counts as the base's count on the other side: a package one side gives a cap keeps that
+    count, placed after the key the side has before it; one a side dropped is the larger of the base's and the other
+    side's; and one both sides dropped is gone."""
     inline = {SEC: 1422}
     text, left = _caps(tmp_path, packages({SEC: 354, PROPS: 184}, inline), packages({SEC: 355, PROPS: 184, FLOCK: 7}, inline),
                        packages({SEC: 354, PROPS: 185, POUS: 2}, inline))
     assert (text, left) == (packages({SEC: 355, PROPS: 185, POUS: 2, FLOCK: 7}, inline), 0)
     text, left = _caps(tmp_path, packages({SEC: 354, FLOCK: 8}, inline), packages({SEC: 355}, inline),
                        packages({SEC: 354, FLOCK: 7}, inline))
-    assert (text, left) == (packages({SEC: 355, FLOCK: 7}, inline), 0)
+    assert (text, left) == (packages({SEC: 355, FLOCK: 8}, inline), 0)
+    text, left = _caps(tmp_path, packages({SEC: 354, FLOCK: 8}, inline), packages({SEC: 355}, inline),
+                       packages({SEC: 353}, inline))
+    assert (text, left) == (packages({SEC: 355}, inline), 0)
 
 
-def test_a_cap_whose_comment_both_sides_reword_merges_as_counters_under_theirs_comment(tmp_path):
+def test_a_cap_whose_comment_both_sides_reword_merges_as_the_larger_under_theirs_comment(tmp_path):
     """A PR that moves a cap rewords the comment above it, so the count and the comment sit in one hunk: the count merges
-    as counters all the same, a comment both sides reworded differently is theirs', and one both reworded alike is that."""
+    as the larger all the same, a comment both sides reworded differently is theirs', and one both reworded alike is that."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
     text, left = _caps(tmp_path, base, packages({SEC: 355, PROPS: 184}, inline, above="ours"),
@@ -1337,21 +1340,21 @@ def test_a_cap_whose_comment_both_sides_reword_merges_as_counters_under_theirs_c
     assert (text, left) == (packages({SEC: 355, PROPS: 185}, inline, above="theirs"), 0)
     text, left = _caps(tmp_path, base, packages({SEC: 381, PROPS: 188}, inline, above="both"),
                        packages({SEC: 384, PROPS: 186}, inline, above="both"))
-    assert (text, left) == (packages({SEC: 411, PROPS: 190}, inline, above="both"), 0)
+    assert (text, left) == (packages({SEC: 384, PROPS: 188}, inline, above="both"), 0)
     alike = packages({SEC: 381, PROPS: 188}, inline, above="both")
     assert _caps(tmp_path, base, alike, alike) == (alike, 0), "a line both sides changed alike is that line, not twice"
 
 
-def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_as_counters(tmp_path):
+def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_as_the_larger(tmp_path):
     """A branch that brings a new cap (a new check's count) and a branch that moves an old cap and rewords its comment
     merge as when both hold the same caps: the new cap is its side's line, whichever side brings it, and the old one
-    merges as counters under theirs' comment."""
+    merges as the larger under theirs' comment."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
     new = '\n\n#: the spec\'s theorems\nSPEC_THEOREMS = {"Security": 154}\n'
     ours, theirs = packages({SEC: 355, PROPS: 184}, inline, above="ours"), packages({SEC: 380, PROPS: 185}, inline, above="theirs")
-    assert _caps(tmp_path, base, ours, theirs + new) == (packages({SEC: 381, PROPS: 185}, inline, above="theirs") + new, 0)
-    assert _caps(tmp_path, base, ours + new, theirs) == (packages({SEC: 381, PROPS: 185}, inline, above="theirs") + new, 0)
+    assert _caps(tmp_path, base, ours, theirs + new) == (packages({SEC: 380, PROPS: 185}, inline, above="theirs") + new, 0)
+    assert _caps(tmp_path, base, ours + new, theirs) == (packages({SEC: 380, PROPS: 185}, inline, above="theirs") + new, 0)
     text, left = _caps(tmp_path, base + new, ours, theirs + new)
     assert left == 1 and "<<<<<<< ours\n" in text, "a cap the base holds and a side dropped stays git's"
 
@@ -1366,10 +1369,23 @@ def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_co
     assert (text, left) == (base + "\n\n" + packages({SEC: 535, PROPS: 207}, {SEC: 1700}, above="theirs"), 0)
 
 
+def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_below_its_count(tmp_path, capsys):
+    """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["Security"]` from 331 to 311, its count then, and a PR,
+    from an older base at 331, lowered it by its own 24 to 307. As counters (311 - 24) the merged cap was 287 against a
+    merged count of 305, since what the two lowerings dropped overlapped, and every PR on it failed `grew`. As the larger,
+    311 holds the count, and the lock run lowers it to the count and its room."""
+    inline = {SEC: 917, PROPS: 132}
+    base, checked, pr = (packages({SEC: n, PROPS: 191}, inline) for n in (331, 311, 307))
+    want = packages({SEC: 311, PROPS: 191}, inline)
+    assert _caps(tmp_path, base, checked, pr) == _caps(tmp_path, base, pr, checked) == (want, 0)
+    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
+
+
 def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, capsys):
     """Only the caps and the comments merge: a conflict in a docstring stays git's beside a cap that merges, and the caps
-    stay git's where the sides hold different caps or a count would go below 0 (both sides dropped the same entries, which
-    this file can't tell)."""
+    stay git's where the sides hold different caps. Both sides lowering one cap below what counters could hold (both
+    dropped entries, maybe the same ones) merges as the larger."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
     ours, theirs = packages({SEC: 355, PROPS: 184}, inline, doc="shrinks"), packages({SEC: 354, PROPS: 185}, inline, doc="drops")
@@ -1378,12 +1394,11 @@ def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, caps
     assert "<<<<<<< ours\n    \"\"\"A lock's `unwitnessed` shrinks.\"\"\"\n" in text and ">>>>>>> theirs\n" in text
     assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
     assert "merge.py: tests/test_lean_packages.py: 1 conflict(s) beyond the ratchet caps" in capsys.readouterr().err
-    for o, a, b in ((base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
-                     packages({SEC: 354, PROPS: 185}, inline)),
-                    (packages({SEC: 2, PROPS: 5}, inline), packages({SEC: 0, PROPS: 5}, inline),
-                     packages({SEC: 1, PROPS: 6}, inline))):
-        text, left = _caps(tmp_path, o, a, b)
-        assert left == 1 and "<<<<<<< ours\n" in text and "||||||| base\n" in text, text
+    text, left = _caps(tmp_path, base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
+                       packages({SEC: 354, PROPS: 185}, inline))
+    assert left == 1 and "<<<<<<< ours\n" in text and "||||||| base\n" in text, text
+    assert _caps(tmp_path, packages({SEC: 2, PROPS: 5}, inline), packages({SEC: 0, PROPS: 5}, inline),
+                 packages({SEC: 1, PROPS: 6}, inline)) == (packages({SEC: 1, PROPS: 6}, inline), 0)
 
 
 def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(tmp_path, monkeypatch):
@@ -1416,7 +1431,7 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
     assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ")
     git(repo, "merge", "--no-edit", "b")
-    assert caps.read_text() == packages({SEC: 355, PROPS: 184, FLOCK: 7}, inline)
+    assert caps.read_text() == packages({SEC: 355, PROPS: 185, FLOCK: 8}, inline)
 
 
 def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_driver(tmp_path, monkeypatch):
@@ -1449,10 +1464,10 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     for branch, start, other in (("a", "x", "y"), ("b", "y", "x")):
         git(repo, "checkout", "-q", "-b", branch, start)
         git(repo, "merge", "--no-edit", other)
-        assert caps.read_text() == packages({SEC: 357}, inline, above=other)
+        assert caps.read_text() == packages({SEC: 356}, inline, above=other)
     commit("a2", "a", 358, "a2")
-    commit("b2", "b", 356, "b2")
+    commit("b2", "b", 353, "b2")
     assert len(git(repo, "merge-base", "--all", "a2", "b2").stdout.split()) == 2
     git(repo, "checkout", "-q", "a2")
     git(repo, "merge", "--no-edit", "b2")
-    assert caps.read_text() == packages({SEC: 357}, inline, above="b2")
+    assert caps.read_text() == packages({SEC: 358}, inline, above="b2")

@@ -187,7 +187,7 @@ def test_without_protocols_nothing_is_installed(built):
 
 
 def test_a_refused_set_raises_before_the_engine_is_built(built):
-    with pytest.raises(ValueError, match="sampled proofs runs in the Commit stage"):
+    with pytest.raises(ValueError, match="SPOT runs in the Commit stage"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:rows-sha512")
     with pytest.raises(ValueError, match="unknown protocol"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols={"zk": "v1"})

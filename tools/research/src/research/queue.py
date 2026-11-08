@@ -34,11 +34,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    when the page can't be read, said in one line), and (the records gate,
                                                    `RecordsGate`: the lock run after its landing regenerates the records, and
                                                    a failure there blames it) when the head changes a Lean lock against the
-                                                   landing branch that no records run or Lean check passed, of the head or of
-                                                   a commit whose files of the package and the
-                                                   packages it requires (tests and docs aside), lean-toolchain and the Lean
-                                                   checker's files a records run reads (`records_read`) are the head's,
-                                                   naming the run to start; then,
+                                                   landing branch that no records run or Lean check of any commit passed on
+                                                   the head's Lean inputs (their key, `lean_changed.py --inputs-key`: the
+                                                   files of the package and of the packages it reads, their toolchains and
+                                                   the Lean checker), naming the run to start; then,
                                                    in about a minute, the preflight (`Preflight`) refuses, with
                                                    the fix, a head that conflicts with a
                                                    fresh `next` outside the pins (naming the paths), contains an
@@ -204,10 +203,11 @@ the mark admits the PR, and the sync's merge onto `next` is the only check after
 Records gate.  The lock run after a landing regenerates the records of the locks it changed, and what it can't regenerate fails
 it, a red whose culprit is fixed forward or reverted; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
 would record it, when a head's change against the landing branch (drive.toml's `land_into` at `main`: `checked`, else `main`)
-touches a `lean-audit.json` and the store holds no records run or Lean check of that head that passed the package on its lock,
-nor of a commit whose inputs for the package are the head's (its files and those of the packages it requires, tests and docs
-aside; `lean-toolchain` and the checker whole), nor vouches for it through a head that only merged the landing branch or committed
-the record a run regenerated (`RecordsGate`), and go on.  It reads the store's remote and warns when it can't.
+touches a `lean-audit.json` and, for that package, the store holds no records run or Lean check of any commit whose result lists
+the package's Lean inputs key at the head among its `passes` (`lean_passed`: the key `lean_changed.py --inputs-key` prints, of the
+files of the package and of the packages it reads, their toolchains and the checker), nor vouches for it through a head that only
+merged the landing branch or only changed other packages' locks (`RecordsGate`), and go on.  It reads the store's remote and warns
+when it can't.
 
 `next`.  Its first-parent chain above `checked` (`Queue.base`) is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
@@ -482,11 +482,38 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
     if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
         for k in DATES:
             full.pop(k, None)
-    r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       errors="surrogateescape", env=full)
+    with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
+        r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
+                           errors="surrogateescape", env=full)
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
+
+
+def _subcommand(args: tuple[str, ...]) -> str:
+    """The git subcommand of ``args``: their first word past the `-c NAME=VALUE` settings."""
+    i = 0
+    while args[i:i + 1] == ("-c",):
+        i += 2
+    return args[i] if i < len(args) else ""
+
+
+#: the clone's worktree lock, in its git directory: `tools/move/restack.py` adds and forgets each scratch worktree holding it
+#: alone, because `git worktree add` writes a placeholder HEAD before the real one, and a fetch, whose connectivity check
+#: reads every worktree's HEAD, holds it shared
+WORKTREES_LOCK = "research-worktrees.lock"
+
+
+@contextlib.contextmanager
+def _worktrees_shared(repo: Path, env: dict[str, str]):
+    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
+                            env=env).stdout.strip()
+    if not common:
+        yield
+        return
+    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_SH)
+        yield
 
 
 def _out(repo: Path, *args: str) -> str:
@@ -725,6 +752,8 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
                "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
+#: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
+HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
 #: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
 EXECUTOR_MODES = ("off", "shadow", "on")
 #: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
@@ -799,6 +828,10 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it
+    #: (`drive.Driver._bottom`), and the minutes it waits before each ring
+    bottom_ring: tuple[str, ...] = ("@ci", "@top")
+    bottom_wait_min: int = 30
     #: count a ready mark or land verdict only when its `label_auth` companion authenticates it as its author's, or as an agent's
     #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
     #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)
@@ -876,6 +909,15 @@ class DriveFlags:
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
                                               "and file name globs, as [\"*.lean\", \"verity/core/\"]")
             got["lowrisk_excludes"] = tuple(v)
+        if "bottom_ring" in doc:
+            v = doc["bottom_ring"]
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
+                raise bad("bottom_ring", "a non-empty list of handles, each `@` and its lower-case name, as [\"@ci\"]")
+            got["bottom_ring"] = tuple(v)
+        if "bottom_wait_min" in doc:
+            if type(doc["bottom_wait_min"]) is not int or doc["bottom_wait_min"] < 1:
+                raise bad("bottom_wait_min", "a whole number of minutes, 1 or more")
+            got["bottom_wait_min"] = doc["bottom_wait_min"]
         for k in ("regenerate_locks", "verdict_first", "lowrisk_lane", "signed_verdicts"):
             if k in doc:
                 if not isinstance(doc[k], bool):
@@ -1156,15 +1198,20 @@ def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, s
     return p.returncode, p.stdout if p.returncode in (0, 1) else (p.stderr or p.stdout).strip()[-400:]
 
 
-def move_scripts(repo: Path, at: str) -> dict[str, str]:
-    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code),
-    `move_check.py` and the pins list it reads."""
+def scripts_at(repo: Path, at: str, paths: Iterable[str]) -> dict[str, str]:
+    """{path: blob} of the Python files at ``at`` of ``paths`` (a file, or a directory's own files when it ends in `/`)."""
     out = {}
-    for line in _out(repo, "ls-tree", "-z", at, "--", MOVE_DIR, MOVE_CHECK, MOVE_PINS).split("\0"):
+    for line in _out(repo, "ls-tree", "-z", at, "--", *paths).split("\0"):
         meta, _, path = line.partition("\t")
         if path.endswith(".py") and meta.split()[1:2] == ["blob"]:
             out[path] = meta.split()[2]
     return out
+
+
+def move_scripts(repo: Path, at: str) -> dict[str, str]:
+    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code),
+    `move_check.py` and the pins list it reads."""
+    return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
 
 
 def write_scripts(repo: Path, scripts: dict[str, str], dest: Path) -> Path:
@@ -4792,50 +4839,30 @@ class MarkOnly:
         return None
 
 
-#: the Lean fast path's result kind (`lean_changed.py --records`), and the Lean check's step in a check's result
-FAST_KIND, LEAN_AUDIT_STEP = "lean-fast/v1", "lean-audit"
+#: the result kinds whose `passes` ({Lean inputs key: package}) say a package passed Lean on those inputs: the Lean fast path's
+#: (`lean_changed.py --records`, each package whose records passed) and a check's, a shard's or an after-landing run's (its
+#: `lean-audit` step's, `check.py`'s `lean_passes`: each package audited on the commit's own lock with the kernel replay)
+FAST_KIND, CHECK_KINDS = "lean-fast/v1", ("check/v1", "check-shard/v1", "check-deferred/v1")
+PASS_KINDS = (FAST_KIND, *CHECK_KINDS)
+#: the Lean check's step in a check's result
+LEAN_AUDIT_STEP = "lean-audit"
+#: an attempt whose result may list passes (`index_lean_results`): a check (`check.py`) or a records run
+PASS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b|lean_changed\.py\b.*\s--records\b")
+#: the attempts the records gate reads from the store's remote for passes: those started in the lookback before now
+PASSES_LOOKBACK_S = 3 * 86400
+#: what keys a package's Lean inputs at a commit (`lean_keys`): that commit's own `KEY_COMMAND --inputs-key`, run from the Python
+#: files of `KEY_CODE` there, the directories it loads its helpers from
+KEY_COMMAND = "tools/verity/lean/lean_changed.py"
+KEY_CODE = ("tools/verity/lean/", "tools/verity/check/", "tools/verity/graph/verity_graph/")
+KEY_TIMEOUT_S = 600
 #: the fast path's command, which `RecordsGate` names for each package it can't vouch for
 RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
 #: why `RecordsGate` warns and never refuses, which each of its warnings says
 RECORDS_AFTER_LANDING = ("the lock run after its landing regenerates the records, and what it can't regenerate fails that run, "
                          "a red whose culprit, the PR, is fixed forward or reverted")
-#: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
-#: package's, PKG's and a requirer's, is also under `record/<path>/`)
-RECORD_KEPT = "record/" + LEAN_LOCK
-#: a requirer's report in a records run's files (`lean_changed.reports`: `requirer-<path, each run of other characters `_`>/`)
-REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
-#: how many commits below a head `RecordsGate` follows one that only merged the landing branch, or only committed a record a run regenerated
+#: how many commits below a head `RecordsGate` follows one that only merged the landing branch or only changed other packages' locks
 RECORDS_WALK = 8
-#: the attempts `RecordsGate` reads from the store's remote: those started in the lookback before now, whatever the head's history
-#: (a window counted from its commits dropped same-input runs of earlier the same night on a branch with many merges)
-RECORDS_LOOKBACK_S = 3 * 86400
-#: an attempt that may hold a pass of a package (`RecordsGate._commits`): a Lean check (`check.py`), or a records run of the
-#: package it names (`lean_changed.py --records NAME`, NAME a package's path or a part of it, as `lean_changed.py` resolves it)
-RECORDS_CHECK_RE, RECORDS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b"), re.compile(r"lean_changed\.py\b.*?\s--records[=\s]+(\S+)")
-#: the repository's paths besides the packages' own that decide a records run's verdict: the toolchain they may share, and the
-#: checker `RECORDS_COMMAND` runs: the files of `tools/verity/lean/` a records run reads (`records_read`), and the `common.py`
-#: and the task graph's contract the audit loads (`lean_slot.py` and `slot.py` only take a slot)
-RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py")
-#: the most commits with runs in the window that may vouch for a package, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
-#: (a safety bound, above the ~2,500 that 3 days held for `Security/Proofs`, whose inputs span most packages): those this clone
-#: lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in halves until the commits the remote
-#: won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read vouches for nothing
-RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 5000, 200, 48
-#: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
-#: `tests/` or `test/` directory of it, Markdown and READMEs, but never a `.lean` file, a lakefile, `lake-manifest.json` or a
-#: lock, wherever it sits (the audit walks every `.lean` file of the package); everything else stays, as a build may read any file
-RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
-#: the files of `tools/verity/lean/` besides its `tests/` and Markdown that no records run reads (`records_read`): Lean's
-#: `lean_audit.NOT_READ` less the `lean_changed.py` a run is and the `merge.py` it loads to merge a lock across a merge of
-#: `main` (`path: reused`); `tools/verity/lean`'s suite fails when Lean's records key (`lean_changed.tool_inputs`) disagrees
-RECORDS_TOOL_UNREAD = frozenset({"lean-deps.json", "pyproject.toml", "run_daily.py", "tool.py", "Upstream.lean", "unread.py",
-                                 "unread-caps.json", "unread_gate.py"})
-_SHA = re.compile(r"[0-9a-f]{40}")
-
-
-def _slug(pkg: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]+", "_", pkg)
 
 
 def _blob(repo: Path, commit: str, path: str) -> bytes | None:
@@ -4843,113 +4870,116 @@ def _blob(repo: Path, commit: str, path: str) -> bytes | None:
     return r.stdout if r.returncode == 0 else None
 
 
-def records_read(path: str) -> bool:
-    """Whether a records run reads ``path``, a file of `RECORDS_SHARED`: every one but those of `tools/verity/lean/` in its
-    `tests/`, its Markdown and `RECORDS_TOOL_UNREAD`, so a new file of the checker counts until it is listed there."""
-    tool = "tools/verity/lean/"
-    rel = path[len(tool):] if path.startswith(tool) else None
-    return rel is None or not (rel.startswith("tests/") or rel.endswith(".md") or rel in RECORDS_TOOL_UNREAD)
+def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dict[str, str]:
+    """{package: its Lean inputs key at ``commit``} for each of ``pkgs`` (by default every package with a lock there, the
+    auditor's fixtures aside): the key a records run or a Lean check of a commit with the same Lean inputs lists among its
+    `passes`, printed by ``commit``'s own `KEY_COMMAND --inputs-key` from git's objects in ``repo`` (no checkout, no build), its
+    code (`KEY_CODE`'s Python files at ``commit``) written to a temporary directory.  {} when ``commit`` has no such command or
+    no package; QueueError when it fails."""
+    if pkgs is None:
+        pkgs = [posixpath.dirname(f) for f in _out(repo, "ls-tree", "-r", "-z", "--name-only", commit).split("\0")
+                if f.endswith("/" + LEAN_LOCK) and not f.startswith(LEAN_FIXTURES)]
+    code = scripts_at(repo, commit, KEY_CODE)
+    if not (pkgs := sorted(set(pkgs))) or KEY_COMMAND not in code:
+        return {}
+    with tempfile.TemporaryDirectory(prefix="queue-keys-", ignore_cleanup_errors=True) as d:
+        tool = write_scripts(repo, code, Path(d)) / KEY_COMMAND
+        if "--inputs-key" not in tool.read_text(errors="replace"):
+            return {}
+        try:
+            r = subprocess.run([sys.executable, str(tool), "--inputs-key", *pkgs, "--head", commit, "--repo", str(Path(repo).resolve())],
+                               cwd=d, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=KEY_TIMEOUT_S,
+                               env=git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1"))
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} ran over {KEY_TIMEOUT_S} s") from None
+    if r.returncode:
+        raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} exited {r.returncode}: "
+                         f"{(r.stderr or r.stdout).strip()[-300:]}")
+    bad = QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} printed no {{package: key}}: {r.stdout.strip()[-200:]}")
+    try:
+        keys = json.loads(r.stdout)
+    except ValueError:
+        raise bad from None
+    if not isinstance(keys, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in keys.items()):
+        raise bad
+    return keys
 
 
-@dataclass
-class RecordsRun:
-    """A records run (`lean_changed.py --records PKG`) of one commit, as `research run` published it: its result (`FAST_KIND`:
-    PKG, `validation.status`, `path`: `slot`, `dev-cache` or `reused`) and its run files ({path: sha256}), which hold check.py's
-    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, for each package whose record `--update` wrote differs
-    from the commit's lock (PKG, or a requirer whose every failure was a record difference), `record/<path>/lean-audit.json`,
-    PKG's also as `record/lean-audit.json`."""
-    id: str
-    pkg: str
-    passed: bool
-    path: str
-    files: dict[str, str]
-    art: str | None
-
-    def kept_record(self, pkg: str | None = None) -> str | None:
-        """The sha256 of the record `--update` wrote for ``pkg`` (PKG by default) that differs from the commit's lock, or None
-        when there's none."""
-        pkg = self.pkg if pkg is None else pkg
-        want = [f"record/{pkg}/{LEAN_LOCK}", *([RECORD_KEPT] if pkg == self.pkg else [])]
-        return next((s for p, s in sorted(self.files.items()) if any(p == w or p.endswith("/" + w) for w in want)
-                     and "requirer-" not in p), None)
-
-    def audits(self) -> list[str]:
-        """check.py's `audit.json` files in the run: PKG's first, then each requirer's."""
-        top = [p for p in self.files if (p == "audit.json" or p.endswith("/audit.json")) and "requirer-" not in p
-               and not re.search(r"(?:^|/)audit-[^/]*/", p)]
-        return sorted(top) + sorted(p for p in self.files if REQUIRER_AUDIT.search(p))
-
-    def reports_of(self, pkg: str) -> list[str]:
-        """The per-package reports (`audit-<tag>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
-        beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report.
-        The tag is lean/check.py's: the package's repository path with each run of other characters as `_`
-        (`audit-Security_Proofs`), or its directory's name alone when the build is outside the checkout, as a records run's
-        is (`audit-Proofs`)."""
-        tags = dict.fromkeys((re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/")), posixpath.basename(pkg.strip("/"))))
-        each = (posixpath.join(posixpath.dirname(a), f"audit-{t}", "report.json") for a in self.audits() for t in tags)
-        return [p for p in each if p in self.files]
+def lean_passed(store, pkg: str, key: str) -> tuple[str, str, str] | None:
+    """Whether package ``pkg`` passed Lean on the inputs whose key (`lean_keys`) is ``key``: (the run, its result's kind, the
+    commit it ran on) of the newest attempt, of any commit, that ended by itself on a clean checkout and whose result, of one of
+    `PASS_KINDS`, lists ``key`` for ``pkg`` among its `passes`; None when none does.  One indexed query of the store's index,
+    which holds what this machine has read of the store (`index_lean_results` reads the newest results from its remote)."""
+    rows = store.index.sql(
+        "SELECT t.id, a.kind, t.source_commit FROM artifact_meta m JOIN artifacts a ON a.id = m.id "
+        "JOIN attempt_outputs o ON o.artifact = m.id AND o.name = 'result' JOIN attempts t ON t.id = o.attempt "
+        f"WHERE m.key = ? AND m.value = ? AND a.kind IN ({', '.join('?' * len(PASS_KINDS))}) AND t.state IN ('done', 'failed') "
+        "AND t.rc BETWEEN 0 AND 127 AND t.source_dirty = 0 ORDER BY t.start_utc DESC, t.id DESC LIMIT 1",
+        (f"passes.{key}", pkg, *PASS_KINDS))
+    return (str(rows[0][0]), str(rows[0][1]), str(rows[0][2])) if rows else None
 
 
-@dataclass
-class LeanCheck:
-    """A check of one commit whose result's `lean-audit` step passed, as `research run` published it: its attempt's state and
-    rc, its result's verdict, the step's parts (a shard's or a deferred run's share, `lean-audit:PKG`; None when unsharded) and
-    its run files, which hold the step's report (`lean-audit/audit.json`)."""
-    id: str
-    state: str | None
-    rc: int | None
-    verdict: str | None
-    parts: list[str] | None
-    art: str | None
+def index_lean_results(store, since: str, jobs: int = 16) -> list[str]:
+    """Index the result of each attempt this store holds since ``since`` (a run id or its prefix) that may list passes
+    (`PASS_RUN_RE`: a check, or a records run) and that its index lacks, the manifest fetched from the store's remote
+    (`get_manifest`, ``jobs`` at a time), so `lean_passed` finds their `passes`.  What can't be read, a line each."""
+    rows = store.index.sql("SELECT id, manifest_json FROM attempts WHERE id > ? AND source_dirty = 0 "
+                           "AND (manifest_json LIKE '%check.py%' OR manifest_json LIKE '%lean_changed.py%')", (since,))
+    want: dict[str, None] = {}
+    errs: list[str] = []
+    for rid, doc in rows:
+        try:
+            att = json.loads(doc)
+            argv, art = " ".join(map(str, att.get("argv") or [])), (att.get("outputs") or {}).get("result")
+        except (ValueError, TypeError, AttributeError) as e:
+            errs.append(f"{rid}: its manifest can't be read ({type(e).__name__})")
+            continue
+        if isinstance(art, str) and PASS_RUN_RE.search(argv) and store.index.artifact(art) is None:
+            want[art] = None
+
+    def get(art: str) -> str | None:
+        try:
+            store.get_manifest(art)
+        except Exception as e:  # noqa: BLE001  (a result that can't be read lists no pass)
+            return f"{art}: {type(e).__name__}: {e}"
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+        errs += [e for e in ex.map(get, want) if e]
+    return errs
 
 
 class RecordsGate:
     """`ready`'s records gate, before the preflight and the mark, which warns and never refuses: a head whose change against the
     landing branch (`into_at` `main`: `checked` under `land_into = "checked"`, else `main`, whose locks the PRs that landed there
     were held to; from their merge base) touches a Lake package's lock (`lean-audit.json`) samples a warning, naming the run that
-    would record it, for each such package unless the store holds a records run of that exact head in which the package passed
-    on the head's own lock (as PKG, or as a requirer PKG's run audited), or a Lean check of the head that audited the package
-    and passed it on that lock (`_checked`).  The lock run after its landing regenerates the records (`RECORDS_AFTER_LANDING`),
-    so nothing here holds the mark.  A records run that printed `AUDIT: FAIL` still writes a record, which reads as a pass: it
-    vouches for nothing, and the warning names it with the package's first failure (`_failures`).
+    would record it, for each such package unless the store holds a pass of it on the head's Lean inputs (`lean_passed`): a
+    records run or a Lean check, of any commit, whose result lists the package's Lean inputs key at the head among its
+    `passes`.  The lock run after its landing regenerates the records (`RECORDS_AFTER_LANDING`), so nothing here holds the mark.
+    The key covers every file of the package and of each package it reads (`lean_changed.closure_inputs`: its lock, tests and
+    docs included), their toolchains and the checker, so a pass on it is a pass of the head's lock wherever it ran: a PR that
+    carries another PR's Lean change needs no run of its own.  A records run lists a package whose record its `--update` wrote
+    under that record's key, so the commit of exactly the records one run kept over the commit it ran on is vouched for with no
+    run of its own, and the commit it ran on isn't.  A run that failed a package lists no pass of it, and the warning names the
+    package's failures (`_failures`).
 
-    Four heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
-    byte for byte (a merge that resolved to its own side, the parent vouched); one whose one parent is vouched and has the
-    package's inputs (`_inputs`, non-Lean tests and docs aside: a tests-only fix above a record commit); one that commits
-    exactly the record a records run of its one parent regenerated for a package that passed there (`--update`'s
-    `record/<path>/lean-audit.json`, PKG's or a requirer's), changing nothing but locks, or of a commit below a chain of such
-    commits (Security's record on top of Security/Proofs'), each lock each of them changes being a record a records run that
-    passed its package regenerated below it in the chain; and one that only merged `main` into a vouched commit, every file it
-    changed being main's whole but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast
-    path reports `path: reused` for it: a candidate, which the lock run after its landing rebuilds and regenerates where it
-    differs).
+    Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that only merged the
+    landing branch into a vouched commit, every file it changed being that branch's whole but a lock, which is that branch's or
+    `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused` for it: a candidate, which the
+    lock run after its landing rebuilds and regenerates where it differs); and one whose one parent is vouched and that changes
+    only other packages' locks over it, which a package's records don't read.
 
-    A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): every file of
-    the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
-    `lakefile.toml`'s, transitively) or its lock names under `proved_in`, less those a records run doesn't read (in a `tests/` or
-    `test/` directory, Markdown, READMEs: `RECORDS_UNREAD_DIRS`), the same blob there as at the head; and `RECORDS_SHARED` (the
-    root `lean-toolchain` and the checker: `tools/verity/check/common.py`, the task graph's contract and each file of
-    `tools/verity/lean/` a records run reads, `records_read`) the same, so a pass under another checker vouches for nothing.
-    A PR that carries another PR's Lean change needs no run of its own for the packages that change passed in.  The candidates
-    are the commits of the attempts in the window read that may hold a pass of the package (`RECORDS_CHECK_RE`,
-    `RECORDS_RUN_RE`: a Lean check, or a records run of a package among its inputs), the newest first (`RECORDS_FETCH` of
-    them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
-
-    The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts of the last `RECORDS_LOOKBACK_S`,
-    however many commits the head has gained since); a store with no usable remote, or one that can't be listed, vouches for
-    nothing, and the warning says why, as it does for a head whose changed locks can't be told."""
+    The store is read from its remote (`refresh(attempts_only=True, since=...)` and `index_lean_results`: the runs of the last
+    `PASSES_LOOKBACK_S`, beside the passes this machine read before); a store with no usable remote, or one that can't be listed,
+    vouches for nothing, and the warning says why, as it does for a head whose changed locks can't be told."""
 
     def __init__(self, repo: Path, remote: str, store, *, log: Callable[[str], None] = print,
                  now: Callable[[], float] = time.time, lock_merge: Path | None = None):
         self.repo, self.remote, self.store, self.log, self.now = Path(repo), remote, store, log, now
         self.lock_merge = lock_merge or self.repo / "tools" / "verity" / "lean" / "merge.py"
-        self._runs: dict[str, tuple[list[RecordsRun], list[LeanCheck]]] = {}
         self._merges: dict[str, bool] = {}
-        self._since = ""
-        self._candidates: dict[str, list[str]] = {}
-        self._readable: dict[str, list[str]] = {}
-        #: the commits a fetch has asked the remote for: another package's search doesn't ask again for those it won't serve
-        self._tried: set[str] = set()
+        #: {commit: {package: its Lean inputs key there}} (`lean_keys`)
+        self._keys: dict[str, dict[str, str]] = {}
         self.notes: list[str] = []
         #: the landing branch the head's change is judged against (`_locks`)
         self.into = "main"
@@ -4964,12 +4994,6 @@ class RecordsGate:
                     f"{RECORDS_AFTER_LANDING}")
         if not locks:
             return None
-        inputs: dict[str, list[str]] = {}
-        for pkg in locks:
-            try:
-                inputs[pkg] = self._inputs(pr.head, pkg)
-            except (QueueError, ValueError, TypeError, AttributeError) as e:   # no search on the same inputs for it; the rest stands
-                self.notes.append(f"{pkg}'s inputs at {pr.head[:12]} can't be read ({type(e).__name__}: {e})")
         try:
             self._read()
         except Exception as e:  # noqa: BLE001  (no store, no remote, a failed listing: vouch for none, never from what's here)
@@ -4978,7 +5002,7 @@ class RecordsGate:
                     f"records gate vouches for none: {RECORDS_AFTER_LANDING}")
         missing = []
         for pkg in locks:
-            if how := self._vouch(pr.head, pkg, 0) or (pkg in inputs and self._same_inputs(pr.head, pkg, inputs[pkg])):
+            if how := self._vouch(pr.head, pkg, 0):
                 self.log(f"research queue: records gate: {pkg}: {how}")
             else:
                 missing.append(pkg)
@@ -4987,356 +5011,81 @@ class RecordsGate:
         lines = []
         for pkg in missing:
             lines += self._failures(pr.head, pkg)
-            lines.append(f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`; when its run files hold "
-                         f"records under `lean-audit/record/` (`lean-audit/record/{pkg}/{LEAN_LOCK}`, a requirer's beside it), "
-                         f"commit exactly each over the lock of its path and mark that commit, which needs no run of its own")
+            lines.append(f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`; when its result keeps "
+                         f"records (`lean-audit/record/<path>/{LEAN_LOCK}`, {pkg}'s and each requirer's it regenerated), commit "
+                         f"exactly those over the locks of their paths and mark that commit, which needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
-        return (f"it changes the Lean lock of {', '.join(missing)} against `{self.into}`, and the store holds no records run of "
-                f"{pr.head[:12]} in which {'it' if len(missing) == 1 else 'each'} passed on the head's own lock, nor a Lean check of "
-                f"it, nor such a run below a head that only merged `{self.into}` or committed the record a run regenerated, nor at a "
-                f"commit whose inputs for it are the head's{notes}: {RECORDS_AFTER_LANDING}:\n  - " + "\n  - ".join(lines))
+        return (f"it changes the Lean lock of {', '.join(missing)} against `{self.into}`, and the store holds no pass of "
+                f"{'it' if len(missing) == 1 else 'each'} on {pr.head[:12]}'s Lean inputs (`{KEY_COMMAND} --inputs-key`) by a "
+                f"records run or a Lean check of any commit, nor below a head that only merged `{self.into}` or changed only other "
+                f"packages' locks{notes}: {RECORDS_AFTER_LANDING}:\n  - " + "\n  - ".join(lines))
 
     def _locks(self, pr: PR) -> dict[str, str]:
         """{package: its lock's path} for each lock the head's change against the landing branch (`self.into`) touches and the
         head still has, the auditor's fixtures (`LEAN_FIXTURES`) aside: no records run reads one (`lean_changed.py --records`
-        matches no package there), and the controls write their records."""
+        matches no package there), and the controls write their records. A head stacked on a PR since landed there, which also
+        merged `main`, has several merge bases with it, and from the stacked-on PR's head everything that merge brought counts
+        as the head's own: so a file is the head's change only where it differs from every merge base."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/records/main",
              f"+refs/pull/{pr.number}/head:refs/queue/records/pr")
         self.into = into_at(self.repo, "refs/queue/records/main")
         _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{self.into}:refs/queue/records/base")
         if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
-        files = _out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/base...{pr.head}").splitlines()
+        bases = _out(self.repo, "merge-base", "--all", "refs/queue/records/base", pr.head).split()
+        files = set.intersection(*(set(_out(self.repo, "diff", "--name-only", "--no-renames", b, pr.head).splitlines())
+                                   for b in bases)) if bases else \
+            set(_out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/base...{pr.head}").splitlines())
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
                 and not f.startswith(LEAN_FIXTURES) and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
     def _read(self) -> None:
-        """Bring this store's attempts of the last `RECORDS_LOOKBACK_S` up to date from its remote."""
+        """Bring this store's attempts of the last `PASSES_LOOKBACK_S`, and the results among them that may list passes, up to
+        date from its remote."""
         if self.store.remote is None:
             raise QueueError("this machine's store has no remote, so the runs other machines published aren't here")
-        self._since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(self.now() - RECORDS_LOOKBACK_S))
-        rep = self.store.refresh(attempts_only=True, since=self._since)
+        since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(self.now() - PASSES_LOOKBACK_S))
+        rep = self.store.refresh(attempts_only=True, since=since)
         if errs := rep.get("errors"):
             self.notes.append(f"{len(errs)} attempt(s) on the remote couldn't be read, e.g. {errs[0]}")
+        if errs := index_lean_results(self.store, since):
+            self.notes.append(f"{len(errs)} result(s) that may list passes couldn't be read, e.g. {errs[0]}")
 
-    def _inputs(self, head: str, pkg: str) -> list[str]:
-        """The paths whose files decide ``pkg``'s records at ``head``: the package, each in-repo Lake package it requires by
-        path (its `lake-manifest.json`'s and `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and
-        `RECORDS_SHARED`.  Raises on a file it can't parse or a path outside the repository."""
-        seen: list[str] = []
-        todo = [pkg]
-        while todo:
-            p = todo.pop()
-            if p in seen:
-                continue
-            seen.append(p)
-            at = (lambda f: f) if p == "." else (lambda f: f"{p}/{f}")
-            named: list = []
-            if (b := _blob(self.repo, head, at("lake-manifest.json"))) is not None:
-                named += [d.get("dir") for d in json.loads(b).get("packages") or [] if d.get("type") == "path"]
-            if (b := _blob(self.repo, head, at("lakefile.toml"))) is not None:
-                named += [r.get("path") for r in tomllib.loads(b.decode()).get("require") or [] if "path" in r]
-            if (b := _blob(self.repo, head, at(LEAN_LOCK))) is not None:
-                named += list(json.loads(b).get("proved_in") or [])
-            for d in named:
-                q = posixpath.normpath(posixpath.join(p, d)) if isinstance(d, str) else ""
-                if not q or posixpath.isabs(q) or q == ".." or q.startswith("../"):
-                    raise QueueError(f"{p} names {d!r}, which isn't a package of this repository")
-                todo.append(q)
-        return sorted({*seen, *RECORDS_SHARED})
-
-    def _present(self, commits: list[str]) -> set[str]:
-        """The ``commits`` this clone can read, by one `git cat-file --batch-check`."""
-        r = subprocess.run(["git", "cat-file", "--batch-check=%(objecttype)"], cwd=self.repo, capture_output=True, text=True,
-                           input="".join(f"{c}^{{commit}}\n" for c in commits), env=git_env(), check=False)
-        lines = r.stdout.splitlines()
-        if r.returncode or len(lines) != len(commits):
-            raise QueueError(f"git cat-file --batch-check: {r.stderr.strip()[-300:]}")
-        return {c for c, ln in zip(commits, lines) if ln.split()[-1] == "commit"}
-
-    def _commits(self, pkg: str, inputs: list[str]) -> list[str]:
-        """The clean commits of the attempts since the window's start that may hold a pass of ``pkg``, the newest first,
-        `RECORDS_FETCH` at most: a Lean check's, or a records run's of a package NAME names among ``inputs`` (``pkg``, a package
-        it requires, whose run audits it as a requirer, or one whose directory holds it), as `lean_changed.py` resolves NAME (the
-        path, or a part of it).  A store holds thousands of other runs a day, which would push these past the bound."""
-        if pkg not in self._candidates:
-            dirs = [p for p in inputs if p not in RECORDS_SHARED]
-            rows = self.store.index.sql(
-                "SELECT source_commit, manifest_json FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
-                "AND (manifest_json LIKE '%check.py%' OR manifest_json LIKE '%lean_changed.py%') ORDER BY id DESC", (self._since,))
-            out: dict[str, None] = {}
-            bad: list[str] = []
-            for c, doc in rows:
-                if c in out or not _SHA.fullmatch(str(c)):
-                    continue
-                try:
-                    argv = " ".join(map(str, json.loads(doc).get("argv") or []))
-                except (ValueError, AttributeError) as e:
-                    bad.append(f"{str(c)[:12]} ({type(e).__name__})")
-                    continue
-                name = (m := RECORDS_RUN_RE.search(argv)) and m.group(1).strip("'\"").rstrip("/")
-                if (name and any(name in d for d in dirs)) or (not name and RECORDS_CHECK_RE.search(argv)):
-                    out[c] = None
-            if bad:
-                self.notes.append(f"{len(bad)} attempt(s) whose manifest can't be read weren't searched for {pkg}'s, "
-                                  f"e.g. at {bad[0]}")
-            if len(out) > RECORDS_FETCH:
-                self.notes.append(f"{len(out) - RECORDS_FETCH} older commit(s) with runs that may hold {pkg}'s are past the "
-                                  f"search's bound of {RECORDS_FETCH}")
-            self._candidates[pkg] = list(out)[:RECORDS_FETCH]
-        return self._candidates[pkg]
-
-    def _readable_commits(self, pkg: str, inputs: list[str]) -> list[str]:
-        """`_commits` this clone can read once it fetched those it lacks from the remote by sha, in `RECORDS_FETCH_CHUNK`s,
-        a chunk that fails split in halves until the commits the remote won't serve stand alone, `RECORDS_FETCH_CALLS` fetches
-        at most."""
-        if pkg not in self._readable:
-            cands = self._commits(pkg, inputs)
-            have = self._present(cands)
-            lacking = [c for c in cands if c not in have and c not in self._tried]
-            self._tried.update(lacking)
-            todo = [lacking[i:i + RECORDS_FETCH_CHUNK] for i in range(0, len(lacking), RECORDS_FETCH_CHUNK)]
-            calls = 0
-            while todo and calls < RECORDS_FETCH_CALLS:
-                part = todo.pop(0)
-                calls += 1
-                if _git(self.repo, *STALL, "fetch", "-q", self.remote, *part, check=False).returncode and len(part) > 1:
-                    todo[:0] = [part[:len(part) // 2], part[len(part) // 2:]]
-            if lacking:
-                have = self._present(cands)
-            if unread := len(cands) - len(have):
-                self.notes.append(f"{unread} of {len(cands)} commit(s) with runs can't be read here or from {self.remote}")
-            self._readable[pkg] = [c for c in cands if c in have]
-        return self._readable[pkg]
-
-    def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
-        """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
-        differs and a records run reads (`records_read`), or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`
-        aside, never Lean), Markdown and READMEs aside in both."""
-        if not commits:
-            return set()
-        # `diff-tree --stdin` reads a line whose second field isn't a full sha as one commit and prints no paths for it, so a
-        # short head would vouch for every candidate: resolve every name first
-        names = [head, *commits]
-        r = subprocess.run(["git", "rev-parse", *(f"{c}^{{commit}}" for c in names)], cwd=self.repo, capture_output=True, text=True,
-                           env=git_env(), check=False)
-        full = r.stdout.split()
-        if r.returncode or len(full) != len(names):
-            raise QueueError(f"git rev-parse: can't resolve every one of {len(names)} commits to a full sha (head {head})")
-        head, resolved = full[0], dict(zip(commits, full[1:]))
-        commits = [resolved[c] for c in commits]
-        r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
-                           cwd=self.repo, capture_output=True, input="".join(f"{c} {head}\n" for c in commits).encode(),
-                           env=git_env(), check=False)
-        if r.returncode:
-            raise QueueError(f"git diff-tree --stdin: {r.stderr.decode(errors='replace').strip()[-300:]}")
-        shared = [p for p in inputs if p in RECORDS_SHARED]
-        pkgs = sorted((p for p in inputs if p not in RECORDS_SHARED), key=len, reverse=True)
-        out, at, n = set(), None, 0
-        for tok in r.stdout.decode(errors="surrogateescape").split("\0"):
-            if n < len(commits) and tok == commits[n]:          # `--always`: each pair's header, in order, its paths after it
-                at, n = tok, n + 1
-                continue
-            if not tok or at in out:
-                continue
-            if at is None:
-                raise QueueError(f"git diff-tree --stdin printed {tok!r} before any commit")
-            name = posixpath.basename(tok)
-            prose = name.lower().endswith(".md") or name.startswith("README")
-            if any(tok == s or tok.startswith(s + "/") for s in shared):
-                if not prose and records_read(tok):
-                    out.add(at)
-                continue
-            p = next((p for p in pkgs if p == "." or tok.startswith(p + "/")), None)
-            rel = tok if p in (None, ".") else tok[len(p) + 1:]
-            lean = name.endswith(".lean") or name.startswith("lakefile.") or name in ("lake-manifest.json", LEAN_LOCK)
-            if lean or not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or prose):
-                out.add(at)
-        if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
-            raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
-        back = {v: k for k, v in resolved.items()}
-        return {back.get(c, c) for c in out}
-
-    def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
-        """Why a pass of ``pkg`` at another commit whose ``inputs`` are the head's (`_differs`) vouches for it, or None."""
-        try:
-            cands = [c for c in self._readable_commits(pkg, inputs) if c != head]
-            differ = self._differs(head, cands, inputs)
-        except Exception as e:  # noqa: BLE001  (a search that can't finish vouches for nothing)
-            self.notes.append(f"{pkg}'s inputs can't be compared ({type(e).__name__}: {e})")
-            return None
-        for c in cands:
-            if c not in differ and (how := self._passed(c, pkg)):
-                return f"a {how[0]} of {c[:12]} ({how[1]}) with identical inputs"
-        return None
-
-    def _at(self, commit: str) -> tuple[list[RecordsRun], list[LeanCheck]]:
-        """(the records runs of ``commit``, its attempts whose result's `lean-audit` step passed), newest first."""
-        if commit in self._runs:
-            return self._runs[commit]
-        runs, checks = [], []
-        rows = self.store.index.sql("SELECT id, manifest_json, state, rc FROM attempts WHERE source_commit = ? AND source_dirty = 0 "
-                                    "ORDER BY start_utc DESC, id DESC", (commit,))
-        for rid, doc, state, rc in rows:
-            out = (json.loads(doc).get("outputs") if doc else None) or {}
+    def _key(self, commit: str, pkg: str) -> str | None:
+        """``pkg``'s Lean inputs key at ``commit`` (`lean_keys`, every package's at once), None when it has none (said)."""
+        if commit not in self._keys:
             try:
-                meta = self.store.get_manifest(out["result"]).meta if out.get("result") else {}
-                step = next((s for s in meta.get("steps") or [] if isinstance(s, dict) and s.get("step") == LEAN_AUDIT_STEP), None)
-                if meta.get("kind") == FAST_KIND:
-                    fp = meta.get("workload_fingerprint") or {}
-                    files = {f["path"]: f["sha256"] for f in self.store.listing(out["run_files"])} if out.get("run_files") else {}
-                    runs.append(RecordsRun(rid, str(fp.get("package")), (meta.get("validation") or {}).get("status") == "passed",
-                                           str(fp.get("path") or "slot"), files, out.get("run_files")))
-                elif step is not None and step.get("status") == "passed":
-                    sharded = any(isinstance(meta.get(k), dict) for k in ("shard", "deferred"))
-                    parts = step.get("parts")
-                    checks.append(LeanCheck(rid, state, rc, (meta.get("validation") or {}).get("status"),
-                                            [str(p) for p in parts] if isinstance(parts, list) else [] if sharded else None,
-                                            out.get("run_files") or out.get("run_record")))
-            except Exception as e:  # noqa: BLE001  (a run whose records can't be read vouches for nothing; say so)
-                self.notes.append(f"{rid}'s result or files can't be read ({type(e).__name__})")
-        self._runs[commit] = (runs, checks)
-        return runs, checks
-
-    def _audited(self, run: RecordsRun, pkg: str) -> tuple[bool, str | None]:
-        """(whether ``pkg`` passed its audit in ``run``, the first line of its first failure when it failed).  A run that passed
-        passed every package check.py audited in it: PKG (on the `reused` path too, where nothing ran), each requirer, and
-        each package audited beside one, read from its own report.  A failed run's are read from its `audit.json` files and
-        those reports."""
-        if run.passed:
-            if pkg == run.pkg or any(m.group(1) == _slug(pkg) for p in run.files if (m := REQUIRER_AUDIT.search(p))):
-                return True, None
-            return any(self._reported(run, p, pkg) == (True, None) for p in run.reports_of(pkg)), None
-        for p in [*run.audits(), *run.reports_of(pkg)]:
-            got = self._reported(run, p, pkg)
-            if got is not None:
-                return got
-        return False, (f"records run {run.id} failed with no report of {pkg}" if pkg == run.pkg else None)
-
-    def _reported(self, run: RecordsRun, path: str, pkg: str) -> tuple[bool, str | None] | None:
-        """What run file ``path`` (an `audit.json`, or one package's `report.json`) says of ``pkg``; None when it doesn't name it."""
-        try:
-            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
-                doc = json.loads((self.store.fetch(run.art, Path(d), paths=[path]) / path).read_text())
-        except Exception as e:  # noqa: BLE001
-            return False, f"records run {run.id}'s {path} can't be read ({type(e).__name__})"
-        reps = doc.get("packages") if path.endswith("/audit.json") or path == "audit.json" else [doc]
-        rep = next((r for r in reps or [] if isinstance(r, dict) and (str(r.get("package")) == pkg
-                                                                     or str(r.get("package")).endswith("/" + pkg))), None)
-        if rep is None:
-            return None
-        if not rep.get("failures"):
-            return True, None
-        return False, f"records run {run.id} failed {pkg}: {str(rep['failures'][0]).strip().splitlines()[0][:300]}"
+                self._keys[commit] = lean_keys(self.repo, commit)
+            except QueueError as e:
+                self._keys[commit] = {}
+                self.notes.append(f"the Lean inputs of {commit[:12]} can't be keyed ({e})")
+            else:
+                if not self._keys[commit]:
+                    self.notes.append(f"{commit[:12]} has no `{KEY_COMMAND} --inputs-key` to key its Lean inputs by: merge "
+                                      f"`{self.into}` into it")
+        return self._keys[commit].get(pkg)
 
     def _vouch(self, commit: str, pkg: str, depth: int) -> str | None:
-        """Why ``pkg``'s lock at ``commit`` passed its records, or None."""
-        if how := self._passed(commit, pkg):
-            kind, rid, path = how
-            if kind == "Lean check":
-                return f"the Lean check {rid} of {commit[:12]} passed it"
-            return (f"records run {rid} of {commit[:12]} passed it" +
-                    (" (`path: reused`: its records passed on the same inputs)" if path == "reused" else ""))
+        """Why ``pkg``'s lock at ``commit`` passed Lean, or None: a pass on its Lean inputs there (`lean_passed`), or one below a
+        commit that only merged the landing branch or only changed other packages' locks."""
+        if (key := self._key(commit, pkg)) and (got := lean_passed(self.store, pkg, key)):
+            rid, kind, at = got
+            what = f"records run {rid}" if kind == FAST_KIND else f"the Lean check {rid}"
+            return f"{what} of {at[:12]} passed it on {commit[:12]}'s Lean inputs (key {key[:12]})"
         if depth >= RECORDS_WALK:
             return None
         parents = _out(self.repo, "rev-list", "--parents", "-n", "1", commit).split()[1:]
-        tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}").strip()
-        for p in parents:
-            if _out(self.repo, "rev-parse", f"{p}^{{tree}}").strip() == tree and (how := self._vouch(p, pkg, depth + 1)):
-                return f"{commit[:12]} has {p[:12]}'s tree byte for byte, where {how}"
         if len(parents) == 2 and self._main_merge(commit, *parents):
-            if how := self._vouch(parents[0], pkg, depth + 1):
-                return f"{commit[:12]} only merges `main`'s {parents[1][:12]} into {parents[0][:12]}, where {how}"
-            return None
+            how = self._vouch(parents[0], pkg, depth + 1)
+            return how and f"{commit[:12]} only merges `{self.into}`'s {parents[1][:12]} into {parents[0][:12]}, where {how}"
         if len(parents) != 1:
             return None
-        below = parents[0]
-        try:
-            same = below not in self._differs(commit, [below], self._inputs(commit, pkg))
-        except (QueueError, ValueError, TypeError, AttributeError) as e:
-            self.notes.append(f"{pkg}'s inputs at {commit[:12]} can't be compared with {below[:12]}'s ({type(e).__name__}: {e})")
-            same = False
-        if same:
-            how = self._vouch(below, pkg, depth + 1)
-            return how and f"{commit[:12]} changes none of {pkg}'s records inputs over {below[:12]}, where {how}"
-        files = _out(self.repo, "diff", "--name-only", "--no-renames", below, commit).splitlines()
-        if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
-            return None
+        files = _out(self.repo, "diff", "--name-only", "--no-renames", parents[0], commit).splitlines()
         lock = f"{pkg}/{LEAN_LOCK}" if pkg != "." else LEAN_LOCK
-        if lock not in files:
-            how = self._vouch(below, pkg, depth + 1)
-            return how and f"{commit[:12]} changes only other packages' locks over {below[:12]}, where {how}"
-        sha = hashlib.sha256(_blob(self.repo, commit, lock) or b"").hexdigest()
-        chain, steps = [below], []        # steps[i]: {lock: its sha} of each lock chain[i] changes over chain[i + 1]
-        while True:
-            base = chain[-1]
-            if all(self._kept(chain[i + 1:], f, s) for i, step in enumerate(steps) for f, s in step.items()):
-                for run in self._at(base)[0]:
-                    if run.kept_record(pkg) == sha and self._audited(run, pkg)[0]:
-                        via = f", over {len(steps)} commit(s) of records runs' records," if steps else ""
-                        return (f"{commit[:12]} commits the record records run {run.id} of {base[:12]}{via} regenerated, "
-                                f"where {pkg} passed")
-            if depth + len(chain) >= RECORDS_WALK:
-                return None
-            parents = _out(self.repo, "rev-list", "--parents", "-n", "1", base).split()[1:]
-            files = _out(self.repo, "diff", "--name-only", "--no-renames", parents[0], base).splitlines() if len(parents) == 1 else []
-            if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
-                return None
-            steps.append({f: hashlib.sha256(_blob(self.repo, base, f) or b"").hexdigest() for f in files})
-            chain.append(parents[0])
-
-    def _kept(self, commits: list[str], lock: str, sha: str) -> bool:
-        """Whether a records run at one of ``commits`` passed ``lock``'s package and kept ``sha`` as the record `--update` wrote."""
-        pkg = posixpath.dirname(lock) or "."
-        return any(run.kept_record(pkg) == sha and self._audited(run, pkg)[0]
-                   for c in commits for run in self._at(c)[0])
-
-    def _passed(self, commit: str, pkg: str) -> tuple[str, str, str] | None:
-        """(`records run` or `Lean check`, its id, a records run's `path`) of the first run of ``commit`` that passed ``pkg`` on
-        the commit's own lock, or None."""
-        runs, checks = self._at(commit)
-        for run in runs:
-            if self._audited(run, pkg)[0] and not run.kept_record(pkg):
-                return "records run", run.id, run.path
-        for check in checks:
-            if self._checked(check, pkg)[0]:
-                return "Lean check", check.id, ""
-        return None
-
-    def _checked(self, check: LeanCheck, pkg: str) -> tuple[bool, str | None]:
-        """(whether Lean check ``check`` passed ``pkg`` on the commit's own lock, why not when it ran but didn't).  Only what the
-        run's own records show counts: it ended by itself (not cancelled, killed or stopped by a signal), its step's parts, when
-        it is a shard or a deferred run, hold `lean-audit:PKG`, and its report (`lean-audit/audit.json`) lists ``pkg`` with no
-        failure and not passed on a regenerated record.  A package the run didn't audit, or a report that can't be read,
-        vouches for nothing."""
-        from .merge import AUDIT
-
-        if check.state not in ("done", "failed") or not isinstance(check.rc, int) or not 0 <= check.rc < 128 \
-                or check.verdict == "not_run":
-            return False, (f"the Lean check {check.id} didn't finish (state {check.state}, rc {check.rc}, verdict "
-                           f"{check.verdict}), so it vouches for nothing")
-        if check.parts is not None and f"{LEAN_AUDIT_STEP}:{pkg}" not in check.parts:
-            return False, (f"the Lean check {check.id} is a shard that audited only "
-                           f"{', '.join(p.partition(':')[2] for p in check.parts) or 'nothing'}, not {pkg}")
-        try:
-            if not check.art or AUDIT not in {f["path"] for f in self.store.listing(check.art)}:
-                return False, f"the Lean check {check.id} published no {AUDIT}"
-            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
-                audit = json.loads((self.store.fetch(check.art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
-            reps = audit.get("packages")
-            regen = audit.get("regenerated") or {}
-            rep = next((r for r in reps if isinstance(r, dict) and r.get("package") == pkg), None) \
-                if isinstance(reps, list) else None
-        except Exception as e:  # noqa: BLE001  (a report that can't be read vouches for nothing)
-            self.notes.append(f"the Lean check {check.id}'s report can't be read ({type(e).__name__})")
-            return False, None
-        if rep is None:
-            return False, f"the Lean check {check.id}'s {AUDIT} lists no audit of {pkg}"
-        if rep.get("failures") != []:
-            return False, f"the Lean check {check.id} failed {pkg}"
-        if rep.get("settled") or not isinstance(regen, dict) or pkg in regen:
-            return False, f"the Lean check {check.id} passed {pkg} only on a record it regenerated, not the commit's lock"
-        return True, None
+        if not files or lock in files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
+            return None
+        how = self._vouch(parents[0], pkg, depth + 1)
+        return how and f"{commit[:12]} changes only other packages' locks over {parents[0][:12]}, where {how}"
 
     def _main_merge(self, commit: str, ours: str, theirs: str) -> bool:
         """Whether ``commit`` only merges the landing branch's ``theirs`` into ``ours``: each file it changes over ``ours`` is
@@ -5372,20 +5121,41 @@ class RecordsGate:
                 return False
 
     def _failures(self, head: str, pkg: str) -> list[str]:
-        """What the records runs of ``head`` say against ``pkg``: the newest failing run's first failure line, or a passing run whose
-        `--update` wrote a record the head doesn't hold; and why each Lean check of ``head`` whose `lean-audit` step passed
-        doesn't vouch for it."""
-        runs, checks = self._at(head)
-        out = [why for c in checks if (why := self._checked(c, pkg)[1])]
-        for run in runs:
-            ok, line = self._audited(run, pkg)
-            if ok and run.kept_record(pkg):
-                out.append(f"records run {run.id} of {head[:12]} passed {pkg} only with the record its `--update` wrote, which "
-                           f"differs from the head's lock: commit its "
-                           f"`{RECORD_KEPT if pkg == run.pkg else f'record/{pkg}/{LEAN_LOCK}'}`")
+        """What the runs of ``head`` say against ``pkg``, the newest first, down to the newest finished records run that names
+        it: a Lean check or a records run that didn't finish, a Lean check whose result lists no pass of it, and a records run
+        that passed it only on the record its `--update` wrote (which the head doesn't hold), failed it or refused."""
+        out = []
+        rows = self.store.index.sql("SELECT id, state, rc, manifest_json FROM attempts WHERE source_commit = ? AND source_dirty = 0 "
+                                    "ORDER BY start_utc DESC, id DESC", (head,))
+        for rid, state, rc, doc in rows:
+            try:
+                art = (json.loads(doc).get("outputs") or {}).get("result")
+                meta = (self.store.index.artifact(art) or {}).get("manifest", {}).get("meta") or {} if isinstance(art, str) else {}
+            except (ValueError, TypeError, AttributeError) as e:
+                out.append(f"run {rid} of {head[:12]}: its result can't be read ({type(e).__name__}: {e}), so it says nothing")
+                continue
+            step = rec = None
+            if meta.get("kind") in CHECK_KINDS:
+                step = next((s for s in meta.get("steps") or [] if isinstance(s, dict) and s.get("step") == LEAN_AUDIT_STEP), None)
+            elif meta.get("kind") == FAST_KIND:
+                rec = (meta.get("records") or {}).get(pkg)
+            if not isinstance(step, dict) and not isinstance(rec, dict):
+                continue
+            what = f"the Lean check {rid}" if step is not None else f"records run {rid}"
+            if state not in ("done", "failed") or not isinstance(rc, int) or not 0 <= rc <= 127:
+                out.append(f"{what} of {head[:12]} didn't finish (state {state}, rc {rc}), so it vouches for nothing")
+                continue
+            if step is not None:
+                out.append(f"{what} of {head[:12]} lists no pass of {pkg} on the head's lock among its result's `passes` (its "
+                           f"`lean-audit` step {step.get('status')})")
+                continue
+            if rec.get("outcome") == "regenerated" and rec.get("record"):
+                out.append(f"records run {rid} of {head[:12]} passed {pkg} only on the record its `--update` wrote, which differs "
+                           f"from the head's lock: commit its `{rec['record']}` over `{pkg}/{LEAN_LOCK}`")
                 break
-            if line:
-                out.append(line)
+            if rec.get("outcome") in ("failed", "refused"):
+                out.append(f"records run {rid} of {head[:12]} {rec['outcome']} {pkg} (`research status {rid}` and its "
+                           f"`lean-audit/` reports say why)")
                 break
         return out
 
@@ -6236,10 +6006,8 @@ def main(argv: list[str]) -> int:
                          f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
                          "one no node can build refuses the mark, one not "
                          "built in time is a skipped check); the records gate (which warns of a changed Lean lock with no records "
-                         "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
-                         "(tests and docs aside), lean-toolchain and the Lean checker's files a records run reads "
-                         "(tools/verity/lean but its tests, docs and unread files; common.py; the task graph's contract) are "
-                         "the head's) still runs")
+                         "run or Lean check, of any commit, that passed its package on the head's Lean inputs, by their key "
+                         "`tools/verity/lean/lean_changed.py --inputs-key`) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: after a landing that changes Lean, a lock or the spec, run lean-audit alone on `checked`'s tip "
                          "(the lock run) and commit the lock records it regenerated onto `checked` (`Regenerated:`), which "
@@ -6535,7 +6303,8 @@ def main(argv: list[str]) -> int:
                    after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
-                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps).tick(dry_run=a.dry_run)
+                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps, bottom_ring=flags.bottom_ring,
+                   bottom_wait_min=flags.bottom_wait_min).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

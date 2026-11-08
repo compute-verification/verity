@@ -36,8 +36,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
-  exported to the public repository (Daniel, 4 Nov); new infra goes here too. compute-verification/infra holds only the
-  website.
+  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
+  (its `infra/`) and its `.cursor`, nothing else.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -98,12 +98,25 @@ The rules in force, each stated as itself; the friction skill has the standing r
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
+- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the certifier's record of
+  every byte out, timing included) must be a function of what came in (x, certified), registered information (weights,
+  configs, the compiler B, Definitions), advice (a, committed before the coins) and the wrong blocks: given those, at most
+  one y is self-consistent (else the bound adds log₂ of how many are). Explanation: the circuit C = B(x, y, a) outputs y's
+  serialization and the audit checks the equality, and every bit B reads from y is such an output. Prefix stability:
+  changing y at or after step s doesn't change what C computes before s. Every block is a function of its committed
+  inputs. Anything the prover chooses that reaches y or B is advice and is charged; anything else that leaves is refused
+  by the egress spec.
+- **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
+  blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
+  (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
+  unique, and it is still a function.
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
-- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest prover's GPU
+- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
@@ -187,7 +200,7 @@ team skill). A red's culprit is the one landing whose change touches what its fa
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal samples a warning, never a refusal. A change a `warn_gates`
+is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
 ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
 next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
