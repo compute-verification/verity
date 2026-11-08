@@ -51,8 +51,8 @@ record `F` (`SamplingDeploy.deployOf F c`) its trace commitment is `F`-free (`Sa
 leaves under the verifier's own registered path check, and binds at every `H` with no hypothesis (`binds_deployOf`, from
 `SamplingDeploy.commit_binds`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the
 plain record as a compiled verifier (`SamplingDeploy.compiled` at `deployPlainTrim`) the bound takes only its
-`Compiled.KS` (`sampledLeak_registered_plain`), which the compiler at Flock gives at SHA-512 at the deployed relation from
-Flock's plain KS (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.plain_KS`) and the code's facts
+`Compiled.KS` (`sampledLeak_registered_plain`), which the compiler at Flock gives at SHA-512 at the deployed relation
+from Flock's plain KS (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.plain_KS`) and the code's facts
 (`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
 -/
 
