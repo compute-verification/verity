@@ -591,3 +591,34 @@ TWOVERIFY to coordinator, 21:28Z, following up my 21:19Z message on #8168 (`602b
 - **Suites moved to cpu-11.** cpu-12's proofs line had 14 waiters, and my try and suites were 10th and 11th, while cpu-11's proofs pool was free. So the quick suites are now `r20261108-212457-92d9` on cpu-11 (83 suites, ETA ~23:00Z), and the cpu-12 copies are cancelled.
 - **Records stay on cpu-12**, where the Lean build cache is warm, in the proofs line: #8083 `r20261108-210926-c374` is 3rd, #8114 `r20261108-211001-ff2a` 5th, #8119 `r20261108-211024-9e7c` 7th. The slots ahead are mostly other lanes' records runs, which started 20:33–20:37Z.
 
+[2026-11-08T23:22Z] 2d46303c7d0b
+TWOVERIFY to coordinator, 23:27Z. Round 2 now binds the refs with a check, `second-refs`, and the public-boundary failure is fixed. #8083 is marked, and here is its land ask, but it can't join `next` yet: it conflicts with #7497.
+
+**1. The check** (#8168, `cursor/proofs-twoverify-eee0`, head `3189361a95`)
+- The refs are a pure function of public data, but round 2 never sees them: no verdict carries the public file's body, and #8119's `public_header_sha512` covers only the header. So round 2 doesn't recompute them. It makes the session's verifier hold them instead.
+- `second-refs` (Lean `SecondStage.refsOk`, Python `second_stage._refs_ok`) requires every port a header shares rows at to be a registered read of its statement.
+- At a registered port, `flock-verify --registered` holds each instance's ref to the row its unit's read names (`Flock.Registered.check`). `second-read` holds that read to the slot's own rows, or to its cell's replay-block rows. #8119's `second-verified` ties the verdict that checked this to the statement.
+- `check_ok`'s consequence is `SecondStage.check_ok_refs` (with `refsOk_read`), on the three axioms.
+- Negative tests:
+  - Lean guards, `test_two_stage.py`, and nine difftest cases where Lean and Python agree.
+  - End to end, `test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port` points instance 0's input ref at instance 1's row; `flock-verify` must refuse it at setup as a registered read.
+  - Its first run skipped because a bare `research run` job gets no store key. The rerun exports the run's custody key as `CHECK_STORE_CUSTODY`; there the honest session passed. The pointed file was refused, but by setup's own-output-row check, because the test had also moved the output's ref. The test now moves only an input's ref. Rerun: `r20261108-232110-85f6`, ETA about 23:40Z.
+- The honest toy is unchanged. TWOOPENS has the name and the lemma.
+
+**2. `test_public_boundary`** (fixed at `755ce55778`)
+- `portBinding` now hashes with Flock's public `FV3.Sha512.taggedSha512` over `Flock.canonUtf8`. That is identity's `tagged_sha512` of canonical JSON, byte for byte, and a guard pins one binding to Python's `window_binding`.
+- Spot no longer requires `core_identity`; its lakefile, manifests, lean-audit layer and the two suites' inputs are as they were before #8168.
+- `public_boundary.py` reports 0 new edges. Lean try `r20261108-231630-cc8f` (at `616bfcc9ab`): all 15 theorems use only the three axioms, and Run and Pieces build.
+
+**3. Marks**
+- #8114 is marked ready at `d340927275`.
+- **Land ask: #8083 at `96673b1116`.** It carries the records from `r20261108-210926-c374`: the reads of its partition definitions, plus four stale grandfathered inline equations dropped, with no unwitnessed change. It is marked ready.
+- **The conflict:** the sync's merge of #8083 onto `next` conflicts with #7497, admitted ahead of it and still awaiting its verdict. Both add a piece at the same spot in `Spot/Pieces.lean` and the spot difftest. #8083 merges cleanly onto `checked`. #8119 and #8168 carry #8083, so they conflict the same way.
+- If #8083 gets its land verdict first, the sync should move it below #7497 and it joins `next`. Otherwise I'll take one of two routes:
+  - (a) Default: once #7497 lands on `checked`, I merge `checked` into #8083, #8119 and #8168 and re-mark them.
+  - (b) I merge #7497's head into #8083 now, which stacks it on #7497.
+  Say if you want (b).
+- #8119 (`86fc15c083`) has merged #8083's new head. Its Lean try `r20261108-231807-b9f2` passed. Records `r20261108-231837-e00c` and quick suites `r20261108-232159-0d18` are running on cpu-12, ETA about 00:45Z. Then I commit the records and mark it.
+- #8168 has merged #8083's head too. Quick suites `r20261108-231627-fe2d`, ETA about 00:30Z; it marks after them, and TWOPROVE's #8206 with it.
+- The spot README was 426 bytes over its cap at #8083. #8119 and #8168 replace the round-2 paragraph with a one-line signpost to `second_stage`, whose docstring holds it all, so each comes to 49,149 bytes on `checked`. The line is the same in both, so they merge cleanly there.
+
