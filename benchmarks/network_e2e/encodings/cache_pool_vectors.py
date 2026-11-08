@@ -426,9 +426,11 @@ def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True
                 rp = RP.replay(inp.engine, inp.requests, admit=inp.before)
     finally:
         H.__call__ = intern
-    got = [list(s.rows) for s in rp.steps]
-    if got != inp.rows:
-        k = next((k for k, (a, b) in enumerate(zip(got, inp.rows)) if a != b), min(len(got), len(inp.rows)))
+    # a step's rows compare as a set (`replay.compare`'s): a served trace keeps Model Runner V2's batch order (sorted by
+    # n), the replay the scheduler's
+    got = [sorted(s.rows) for s in rp.steps]
+    if got != [sorted(r) for r in inp.rows]:
+        k = next((k for k, (a, b) in enumerate(zip(got, inp.rows)) if a != sorted(b)), min(len(got), len(inp.rows)))
         raise AssertionError(f"the replay leaves the trace at step {k}")
     drv.counts["steps"] = len(got)
     return drv
