@@ -20,7 +20,9 @@ queued on `next` rewrites, or whose messages mirror the Lean's (``PENDING``), un
 and the rename follows it.
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
-names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``).
+names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
+sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
+(`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
@@ -152,7 +154,7 @@ DOC_TERMS = {
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
            "memory wipe's, or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
@@ -448,6 +450,42 @@ def test_no_retired_word_in_a_new_lean_name():
     _held("RETIRED_NAMES", RETIRED_NAMES, {w: len(v) for w, v in found.items()}, "the Lean names with a retired word",
           "name the new one with the Glossary's term instead (" + "; ".join(f"{t} for {w}" for w, (_, t) in LEAN_WORDS.items())
           + "; GLOSSARY.md, Older names): `git diff -U0 origin/main -- '*.lean'` shows it")
+
+
+#: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
+#: (`_held`). A sampled proof block, and its proof, keep their words and aren't counted where "block" follows.
+SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 1134, "SampledProofs": 2530, "sampled-proofs": 507}
+_GAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
+SPOT_SPELLINGS = {"sampled proof(s)": re.compile(rf"\bsampled{_GAP}proofs?\b(?!{_GAP}blocks?\b)", re.I),
+                  "sampled_proofs": re.compile("sampled_proofs", re.I), "SampledProofs": re.compile("[Ss]ampledProofs"),
+                  "sampled-proofs": re.compile("sampled-proofs", re.I)}
+
+
+def spot_names(files: list[str], read=_read) -> dict[str, int]:
+    """Each of SPOT_SPELLINGS' count in the scanned ``files``."""
+    out = dict.fromkeys(SPOT_SPELLINGS, 0)
+    for f in scanned(files):
+        if (text := read(f)) is not None and "sampled" in text.lower():
+            for k, spelling in SPOT_SPELLINGS.items():
+                out[k] += len(spelling.findall(text))
+    return out
+
+
+def test_spot_s_older_name_only_falls():
+    """The sampled proof system is SPOT: its older name's count in every spelling only falls."""
+    _held("SPOT_NAMES", SPOT_NAMES, spot_names(_tracked()), "SPOT's older name, sampled proofs,",
+          "write SPOT in prose and strings, `spot` in a new path or Python name and `Spot` in a new Lean name (GLOSSARY.md, "
+          "Older names): `git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
+
+
+def test_the_spot_scan_reads_each_form():
+    """On toy files: the words count in either case and wrapped behind a comment marker, a sampled proof block doesn't,
+    and each code spelling counts under its own key, never under the words."""
+    toy = {"a.py": "# Sampled proofs' verifier, a sampled proof, the sampled\n# proofs; sampled proof blocks, a sampled proof block\n",
+           "b.lean": "import SampledProofs\n/-- `sampledProofsSound_of`, `core_sampled_proofs`, `SAMPLED_PROOFS` -/\n",
+           "c.toml": 'id = "verity/sampled-proofs/v1"\n'}
+    assert spot_names(list(toy), read=toy.get) == {"sampled proof(s)": 3, "sampled_proofs": 2, "SampledProofs": 2,
+                                                   "sampled-proofs": 1}
 
 
 def test_the_lean_name_scan_reads_each_form():
