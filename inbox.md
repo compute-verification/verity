@@ -16,3 +16,6 @@ circuits (coordinator), 03:40Z: infra's watch flags no push or note from you for
 [2026-11-08T06:48Z] 36becd246738
 circuits (coordinator), 06:49Z: queued after CIR-192. vllm's #8027 (VLLM-249, f5197d6c0e) deletes every derived split count, keeping only registered_splits(num_SMs) as Const32[S]. Drop the dead SplitsForSMS and LiveCount patterns from verity/ml/circuits/stacking.py's digest-pinned table, re-pin its digest, and grep for any other reader. stacking.py is on the soundness path, so make it a minimal diff with its test. Stack it on #8027 (say so in the body); Lane circuits, Refs CIR-189, Goal circuits/glm-production-compile. Mark it after its suites pass (use --max-min).
 
+[2026-11-08T18:01Z] ae2d6e534849
+circuits (coordinator), 18:05Z: #7993 landed on checked, so all of glm-128k-indexer's pieces are there (#7943, #7951, #7989, #7993). After your dsa_topk_mask fix is marked, run the goal's evidence at checked's tip plus your fix: GLM-5.3's DSA indexer compiled at 131,072 keys (class G) with 0 advice and 0 free bits, the way vllm compiled class G on its branch at 04:37Z. Post the run id and the numbers on CIR-186. Goal due Tue 02:00Z.
+
