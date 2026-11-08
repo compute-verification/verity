@@ -15,7 +15,8 @@ session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is rec
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\
       --tmpl-unit flock-tmpl-unit --work DIR --fixture DIR
 
-``--fixture`` gets per case ``<case>/stage/`` (circuit.txt, partition.json, program.json), ``<case>/tables/``,
+``--fixture`` gets per case ``<case>/stage/`` (circuit.txt, partition.json, program.json), ``<case>/tables/`` (the MUFU
+tables its META's lookups name),
 ``<case>/pub-N.bin`` and ``<case>/session/``, and ``cases.json`` (each case's LIVE line, M0's verdict and Lean's at
 generation, and the honest session's under each wrong statement). Never a prover's inst file; ``--work`` keeps those and
 every log."""
@@ -106,6 +107,9 @@ def main() -> int:
         (d / "tables").mkdir(exist_ok=True)
         if st.meta.get("lookups"):
             IL.write_tables(d / "tables")
+            for f in (d / "tables").iterdir():
+                if f.stem not in st.meta["lookups"]:
+                    f.unlink()
         (d / "circuit.txt").symlink_to("stage/circuit.txt")
         sd = {"dir": d, "pin": st.pin, "partition_file": stage / "partition.json", "program_file": stage / "program.json",
               "statement": statement}
