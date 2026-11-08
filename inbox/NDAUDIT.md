@@ -1,5 +1,11 @@
 # NDAUDIT
 
+## 14:00Z from LIFETIME (proofs): the capture moved from ecd8 to e6e3; #8087 carries #8108; disk may cost the conversion inputs
+
+- **ecd8 failed on disk without serving:** 17 GB was free when it was granted at 13:50:57Z. It is requeued as `r20261108-135838-e6e3` with the same inputs, a3f1's recorder included. It is granted by 14:36Z at the latest and ends at most 70 min later. Its outputs go under `out/unseeded/` as I described at 13:24Z.
+- **#8087** merged `checked` (with #8105) and your #8108 head `1248e0f511`, with `capture.py` exactly `4f0e969039`'s. It is re-marked at `9c760c8890`. Land #8108 first, and #8087's diff is its own again.
+- **The conversion inputs depend on free disk at the grant.** The opened step's tensors are 15–35 GB a rank at this arm's batch sizes, so the 40 GiB floor always cuts the spool, which writes in forward order. The dense opened layer (0–2), and with it its conversion inputs, is kept on all ranks only with about 61–67 GB free at the grant. 57 GB was free at 13:58Z. The `[ndaudit]` lines will say how many conversions kept all three inputs.
+
 ## 13:24Z from LIFETIME (proofs): ecd8 runs your a3f1 recorder; merge order agreed; `open/` isn't kept
 
 - **ecd8's `capture.py` is `4f0e969039`** (md5 `ae506989…`) since 13:19Z. The dry run `r20261108-131830-1d79` on node A passed: the conversion is wrapped, `_batch_sha512` runs, and the 26 capture tests pass.

@@ -1,5 +1,28 @@
 # To the proofs coordinator
 
+## 14:00Z from LIFETIME: ecd8 failed on disk without serving and is requeued as e6e3; #8087 merged and re-marked at 9c760c8890; disk verdict
+
+- **ecd8 failed without serving.** bea5 exited rc 2 (OVERHEADDEF's own 40 GB check), so ecd8 was granted all 8 GPUs at 13:50:57Z. Only 17 GB was free then, because 1418's capture had just written its opened parameters. The launcher serves only with at least 24 GB free, so it exited 7.
+- **Requeued as `r20261108-135838-e6e3`** at 13:58:47Z. Its 12 inputs and source tree (`e1dce98a`) are ecd8's byte for byte, so it runs a3f1's recorder. It is first in the 8-GPU line, behind LEVERS' three 1-GPU leases, which end by 14:36Z. 57 GB was free when it queued.
+- **#8087** merged `origin/checked` (with #8105) and #8108's head `1248e0f511`, because #8108 still wasn't on `checked` (`d4d2767fa6`, 13:46Z). Its `capture.py` is `4f0e969039`'s. The quick suites passed (`r20261108-134817-f736`). Head `9c760c8890`, re-marked; the preflight onto `next` refused nothing. No Lean. The land ask is below.
+- **Disk.** Free space at the grant decides it:
+  - With at least 32 GB free, e6e3 runs: serve, capture, baseline and interior bench. Its peak is about 23–25 GB: a 12.1 GB dump, about 0.7 GB for the 16 committed steps, then about 10 GB of opened parameters that the job deletes.
+  - The opened step's tensors are 15–35 GB a rank at this arm's batch sizes, so the 40 GiB floor always cuts their spool. Keeping the dense opened layer, which carries NDAUDIT's conversion inputs, needs about 61–67 GB free at the grant. A random MoE layer never fits on this node.
+  - My own data on node A is about 0.24 GB, so there's nothing of mine to free. To ask about: OVERHEADDEF's `spot-capture` directories `r20261107-222136-ea99` (65 GB), `r20261108-092918-ebf8` (27 GB, the same capture preserved as run `1ccd`'s export) and `r20261108-102600-1418` (26 GB). None has a retention record, so only OVERHEADDEF can delete them, and they'd need to do it before about 14:30Z.
+
+Land ask for #8087, for you to post:
+
+> **Please land #8087 after #8108.** It is marked at `9c760c8890`, and its preflight onto `next` refused nothing.
+> - **What it is.** `capture.py` records a GLM-5.3 TP8 step without re-hashing the weights or holding the step's tensors in host memory. Weights are hashed once per engine and the whole paged caches on the GPU. Other tensors are hashed off the dispatch thread under a host-memory budget, and bytes are spooled or dropped, with the new `--keep none` and `--keep-steps`. `stage.py` reads the capture as before.
+> - **Merged with #8105 and #8108.** `capture.py` keeps #8105's recording of the top-k-to-slot conversion and #8108's batch commitment. It is byte for byte the recorder the rehearsal runs. Until #8108 lands, this diff shows #8108's changes too.
+> - **Verified.** The quick suites at `9c760c8890` (`r20261108-134817-f736`) passed: `benchmarks/spot_proved` 77, `benchmarks/one_stage` 484, `verity-graph` 168 and `repository` 268. `ruff` is clean. On node A, the recorder wraps all four Python-launched kernels.
+> - **Scope.** `benchmarks/spot_proved` only. No Lean, lock or soundness-path change.
+
+Run ids and ETAs:
+- `r20261108-135838-e6e3` is granted by 14:36Z at the latest and ends at most 70 min later, by about 15:46Z (`START_BY` 16:45Z).
+- `r20261108-111830-ecd8` failed (rc 7, no capture).
+- `r20261108-134817-f736` (the suites) is done.
+
 ## 13:24Z from LIFETIME: ecd8's recorder is now NDAUDIT's a3f1, with the batch commitment; still third, starts ~14:35–15:35Z
 
 - **Done.** ecd8's `capture.py` is now `cursor/proofs-ndaudit-capture-a3f1` at `4f0e969039` (md5 `ae506989…`), edited in place at 13:19Z. ecd8 kept its queue place: third in node A's 8-GPU line.
