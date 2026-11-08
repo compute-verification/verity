@@ -1,10 +1,10 @@
 """A training step's random ops (`rules.training`): each one's values are an input of the step, committed with its generator's
 seed.
 
-torch's CUDA draws are curand's Philox4x32-10, keyed by the generator's seed and advanced by its offset, read in the launch's
+torch's CUDA samples are curand's Philox4x32-10, keyed by the generator's seed and advanced by its offset, read in the launch's
 grid-stride order through torch's uniform, normal (Box-Muller) and integer transforms. No Definition computes that stream exactly,
 so a random op is not computed: what the run drew is a field of the Program's `run` input, and beside it the generator's state
-it claims to have drawn from, so the record commits each op's values with its seed. Nothing checks the values against the seed
+it claims to have sampled from, so the record commits each op's values with its seed. Nothing checks the values against the seed
 until a Definition of the GPU's generator exists.
 
     Random  rand / randn / randint / randperm, their generator forms, rand_like / randn_like / randint_like, normal with
