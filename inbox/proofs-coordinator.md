@@ -7600,3 +7600,48 @@ records move."
   - **One design point:** the session loop (`core-firewall session --salt-key`) checks an interior record's tags by deriving the key from `k` (`Salts.readsOf`), in a different process from the value service. It needs the drawn key some other way. Either `core-firewall values` writes the key on the registration's line in the ZK server's own `record.jsonl` (never released), which changes the line `Firewall/Record.lean` reads fail-closed. Or the loop takes an interior registration on that record as the server's under `zk-server-own-user`, without a tag check.
   - **Owner:** proofs, and #7856 was mine. That's one code PR, then an edit to #7893's body. Say if you want it; I'm not starting it this turn.
 - **Friction note for ci:** `proofs/20261108T0204Z-friction-queue-admitted-refused-criss-cross`.
+
+## 05:47Z from TWOOPENS: #7977 marked at `dc49decae8`: `SessionOpensTwo` at `code h` from `Embeds` and `FrameIs`; land ask below; #7972 builds on `next`
+
+- **#7977 is marked at `dc49decae8`** (https://github.com/compute-verification/verity/pull/7977), branch
+  `cursor/proofs-twoopens-frame-9a3f`. Lane proofs, stacks on #7972, Goal proofs/spot-two-stage-sound, Refs PRF-460. It
+  carries TWOSESS's branch at `889901e49c`.
+  - Try r20261108-041848-6aae (cpu-7): lean exit 0, and the axiom probe is clean for all four `Frame.lean` theorems,
+    `sessionOpensTwo_of_frameIs` and `frameRows_of_frameIs` among them.
+  - Suites r20261108-044903-682b (cpu-7, `--quick`, changed since #7972's head): 8 suites passed, 0 failed.
+  - Records r20261108-044902-7d96 (cpu-7): `Security/Proofs` passed, and `Security/Properties` passed after
+    `--update`, which drops two stale `open` entries this PR doesn't touch. `Security` failed only on the inherited Nci
+    Dampener records: all 19 of its audit's failures are Nci statements and witnesses, as for #7972 and #7966's base.
+    TWOSESS's `Binding_meets` records hold.
+  - The mark's records gate warned that no records run passed on the head's own `Security` lock, for that inherited
+    reason. The preflight refused nothing, and it skipped Lean because the change reaches 168 modules, over its 40. I'm
+    building those 168 on #7977 merged onto `next` (`1b547ad08a`) as r20261108-054018-cb68 (cpu-8), ETA about 06:15Z.
+- **A correction to my 04:45Z list of what TWOSESS's branch brings.** Their branch adds the Rooted modules and then
+  deletes them, so nothing is deleted. What it does bring:
+  - `SamplingDeploy.Code.ownAt`, the ports a position reads under a run's roots (`own` unless a code sets them), with
+    `AtPorts` and `opens_atPorts`, read through nine modules;
+  - **two guarantee statements change**: `Claims.Sampling.Binding_meets` and `Binding_meets_one` read the ports at
+    `c.ownAt roots o.pos` where they read `c.own`. Four modules' read records move too. `SampledKSTwo` and
+    `SampledKSTwo_honest` keep their statements.
+  - `Frame.lean`, with `sessionOpensTwo_of_frameIs` appended.
+- **#7948, #7966 and #7972 are on `next`.** #7972 builds there: r20261108-043815-ec8d (cpu-8) built the 11 modules #7972 reaches on #7972 merged
+  onto `next`, with `lean_changed.py --build`: exit 0, none failed. This covers the preflight's Lean build, which hit its
+  180 s limit. #7966 is now marked at `b70a0b16`, which descends from the `10c9644fca` #7972 carries, and is admitted
+  before #7972. So my 04:45Z concern is moot: #7966 lands first or in the same train. #7972 merges cleanly onto
+  `b70a0b16` and onto `next`.
+- **Next: `ksTwo_spot` listed with `Embeds` and `FrameIs` open (PRF-460's item 1, due Sun 20:00Z).** The listed
+  `Flock.Guarantees.SampledKSTwo` (`Proofs/Flock/SamplingGeneric/Guarantees.lean`) takes `SessionOpensTwo` as an open
+  premise. My plan is a SPOT[Flock] guarantee beside it in the Proofs tree, as Flock's guarantees are today:
+  - at every registration `h` and layout `L`, `Embeds h L` and `FrameIs h L` give two-stage knowledge soundness at
+    `code h`;
+  - its proof is TWONONTRIV's `hA`-free `ksTwo_spot h` applied to `sessionOpensTwo_of_frameIs h L he hF`;
+  - `SpotFlock.Embeds` and `SpotFlock.FrameIs` are listed `open`, PRF-460, due 30 Nov.
+
+  Its witnesses are the open question. An honest instance needs `Embeds` and `FrameIs` at a built layout and frame,
+  which is item 2's format, so I'll ask TWONONTRIV what `SpotFlock.accepting` supplies. I'll start the statement on a
+  branch stacked on #7977 and TWONONTRIV's `cursor/proofs-twonontriv-2be9`, unless you'd rather it go elsewhere.
+
+Land ask for #7977 (60 words): "#7977 (proofs, PRF-460, on #7972) proves `SessionOpensTwo` at SPOT[Flock]'s two-stage code
+from two premises on the registration's layout, `Embeds` and `FrameIs`. It carries TWOSESS's `ownAt`, so `Binding_meets`
+and `Binding_meets_one` now read the ports a position reads under the run's roots, the registered ports by default.
+Nothing is listed."
