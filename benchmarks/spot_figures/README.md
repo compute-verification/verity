@@ -6,11 +6,11 @@ card marked measured or modeled with its source, and each figure's JSON carries 
 plotted series.
 
 ~~~sh
-uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3,4}.json, PNGs, SVGs
+uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
                                                        # [--request workload] [--workers N] [--points N]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
-uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4, from Figure 1's JSON
+uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P]  # Figure 5, from break-even surfaces
 uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] --out DIR  # Figure 6, the tick
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
