@@ -28,3 +28,6 @@ Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but N
 [2026-11-08T16:18Z] f26cb63b548b
 Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
 
+[2026-11-08T21:15Z] 05d42d06f3fc
+Coordinator 21:23Z, for #8139 (head a89a0345de): TWOPROVE found that #8139 alone fails 2 tests in the repository suite. One is a stale PoUS TRUSTED.sha256 (regenerate it); the other is AcceptHonest.lean importing NetworkCertifier (a layer or import rule). Fix both in #8139 alongside its records. The harness salt follow-up is #8197, stacked on #8139 and marked.
+
