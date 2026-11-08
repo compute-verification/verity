@@ -221,6 +221,9 @@ HERE = Path(__file__).resolve().parent
 #: where the Lean files are run from: `main` points it at a copy taken before the first build
 TOOL = HERE
 ROOT = HERE.parents[2]
+#: where a run's seals go (`Seals`): node-local scratch under the gitignored `.lake`, swept by pid. A module constant so a
+#: test that drives `main` can redirect it off the checkout, which the test suite's read guard would otherwise flag
+SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
 #: the facts document `facts_of` keeps beside a package's reports, gzipped with no timestamp: equal facts are equal bytes
 FACTS = "facts.json.gz"
@@ -5011,7 +5014,7 @@ def main(argv: list[str]) -> int:
     reports: dict[Path, dict] = {}
     #: the run's seals: a private copy of each package's build, taken before it is announced, that every reader reads
     #: instead of the live `.lake` (`Seals`), so no dependent's build can change a package's facts, replay or scans
-    run_seals = Seals(ROOT / ".lake" / "sealed")
+    run_seals = Seals(SEAL_BASE)
 
     def seal(pkg: Path) -> None:
         """After ``pkg``'s build: seal its `.olean` files, then let the packages that require it build."""

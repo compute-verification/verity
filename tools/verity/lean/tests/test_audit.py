@@ -65,6 +65,13 @@ def every_failure_has_a_code(monkeypatch):
     monkeypatch.setattr(A, "audit", audited)
 
 
+@pytest.fixture(autouse=True)
+def seal_off_the_checkout(tmp_path_factory, monkeypatch):
+    """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
+    real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
+    monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
+
+
 def unshaped(rep: dict) -> list[str]:
     """A report's failures other than the shape rule's, for a test of something else that adds guarantees to the control
     without entering them under `shape.properties`."""
