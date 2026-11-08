@@ -58,8 +58,11 @@ window back from the committed bytes into the served record (`commit.served_reco
 committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
 seeds, by position. Once a request has finished, `BlockValues.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
-(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). Before it
-listens, under bounded staging, the committer learns its declared static shape's plans in a learn-only pass (`serve_learn`).
+(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). With it,
+``VERITY_POOL_ROW`` (the carried pool's class past the served rows', `engine.pool_row.POOL_STATICS`) keys the cache's blocks
+by BlockKey_v1 and exports the pool's row at each close (`engine.pool_row`, `CommitWindows._pool_row`): ``pool_rows/w<k>.json``
+and the window line's ``pool_row``. Before it listens, under bounded staging, the committer learns its declared static
+shape's plans in a learn-only pass (`serve_learn`).
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
@@ -117,6 +120,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
@@ -526,6 +530,21 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
+def pool_extra() -> dict[str, int] | None:
+    """``VERITY_POOL_ROW``'s class past the served rows' (`engine.pool_row.POOL_STATICS`), or None when it is off."""
+    from verity_vllm.engine.pool_row import POOL_STATICS
+
+    if not (raw := settings.VERITY_POOL_ROW):
+        return None
+    try:
+        given = json.loads(raw)
+    except ValueError:
+        given = None
+    if not isinstance(given, dict) or set(given) != set(POOL_STATICS) or not all(type(v) is int for v in given.values()):
+        raise UsageError(f"VERITY_POOL_ROW {raw}: a JSON object of {', '.join(POOL_STATICS)}, each an int")
+    return given
+
+
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -545,6 +564,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
+    if settings.VERITY_POOL_ROW and not (opts.prefix_caching and opts.commit):
+        raise UsageError("VERITY_POOL_ROW exports the prefix cache's pool at each Commit window's close: it needs "
+                         "--prefix-caching and the Commit")
+    pool_extra()
     if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
@@ -598,13 +621,20 @@ def main(opts: Options) -> int:
         arm = SH.arm_of(opts, llm, com, out, flush=trace.drain)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
+        statics = served_statics(scheduler_config(trace.sched), served_class(opts))
+        pool = pool_cls = None
+        if (extra := pool_extra()) is not None:
+            from verity_vllm.engine import pool_row as PR
+
+            pool_cls = PR.pool_class(statics, extra)
+            PR.install_keys(pool_cls)
+            pool = lambda: trace.sched.kv_cache_manager.block_pool   # noqa: E731
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
-                                seal=SS.seal_of(opts) if opts.seal else None,
-                                served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
+                                seal=SS.seal_of(opts) if opts.seal else None, served=statics, sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws)
+                                request_cap=opts.window_requests, arm=arm, release=draws, pool=pool, pool_class=pool_cls)
         if arm is not None:
             arm.drawing(draws)
     if draws_dir is not None:
