@@ -520,9 +520,11 @@ def _wide_experts(E: int):
 def test_an_expert_gemm_resolves_only_the_expert_a_vector_selects(monkeypatch):
     """An expert GEMM's stack read lazily: each vector that selects an expert reads its N K weights and no other's, the walk's
     parameter resolutions (`verity.ml.circuits.layout._arg_ref`) are the same over 4 experts as over 16, so a vector costs
-    what its expert's rows cost and not every expert's, and the reference equals it on the same words flattened."""
+    what its expert's rows cost and not every expert's, and the reference equals it on the same words flattened.  On a vector that
+    selects an expert, the lazy evaluation's whole trace is the eager walk's."""
     from verity.ml.circuits import layout
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.evaluation import evaluate, evaluate_region
+    from verity.ml.circuits.evaluation.reference import standalone_call
 
     resolutions = {}
     for E in (4, 16):
@@ -552,6 +554,13 @@ def test_an_expert_gemm_resolves_only_the_expert_a_vector_selects(monkeypatch):
                 xq, sx, e, ws = VX.instance_args(other, xs, i)
                 words = [VX.wide_words(params[3], i, rec["edge_vectors"], opts.seed, 3)(k) for k in range(params[3].leaves)]
                 assert ref[i] == tuple(evaluate(t, xq, sx, e, words, ws))
+            i = next(i for i in range(n) if 0 <= VX.instance_args(other, xs, i)[2] < E)
+            xq, sx, e, ws = VX.instance_args(other, xs, i)
+            words = [VX.wide_words(params[3], i, rec["edge_vectors"], opts.seed, 3)(k) for k in range(params[3].leaves)]
+            prog, call = standalone_call(t)
+            bound = dict(zip(call.args, [v for a in (xq, sx, e, words, ws) for v in ([a] if isinstance(a, int) else a)]))
+            lazy = evaluate_region(prog.circuit, call, dict(bound))
+            assert lazy == evaluate_region(prog.circuit, list(call), dict(bound))
     assert resolutions[4] == resolutions[16], resolutions
 
 

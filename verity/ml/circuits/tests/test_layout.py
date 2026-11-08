@@ -168,6 +168,19 @@ def test_a_lazy_walk_is_the_same_gates_with_a_lazy_readers_operands_resolved_on_
         assert untyped(C.gates(lo, hi, lazy=True)) == untyped(C.gates(lo, hi)), (lo, hi)
 
 
+def test_a_regions_lazy_evaluation_is_its_eager_evaluation():
+    """`evaluate_region` over a `Region` (the lazy walk) writes the trace it writes over the same gates walked eagerly, on
+    inputs that send `Pick`'s readers to every slot."""
+    from verity.ml.circuits.evaluation import evaluate_region
+
+    C = Program(EVERY).circuit
+    inputs = [g.index for g in C.gates() if getattr(g.prim, "family", None) == "Input"]
+    for seed in range(5):
+        t = {g: (37 * g + 11 * seed + 3) & 255 for g in inputs}
+        eager = evaluate_region(C, list(C.gates()), dict(t))
+        assert evaluate_region(C, C[0:C.size], dict(t)) == eager and len(eager) == C.size
+
+
 @pytest.mark.parametrize("kind", ["read", "unread", "passed"])
 def test_the_gates_past_a_scan_of_no_iterations_are_the_gates_found_one_by_one(kind):
     C = _program(kind).circuit
