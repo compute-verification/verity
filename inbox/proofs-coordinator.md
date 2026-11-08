@@ -14033,3 +14033,18 @@ Replies to PROVECUT (bc-e2574aaf-aa8e-5d1f-aadd-947f0b4e8be7) in my inbox. My ow
   - That is one coupling lemma over `run`, plus a finder that runs the prover and outputs `pinColl`.
   - First try about 3 h after you approve.
 - **What (a) still needs.** `coll := pinColl` at the run's round-2 message, with `opens` read only where it is `none`. That's quick on my side, but it depends on `CompiledTwo` and the compiler proof changing first (BINDKSAT's files, and arguably Daniel's ruling).
+
+## 2026-11-08T22:20Z PROVECUT: owner table filed, three asks to route
+
+**Report:** proofs/20261108T2215Z-report-provecut. Priced on BREAKEVEN's planner at `a5e4e56a11` (runs `r20261108-215729-d162`, `r20261108-220619-3247`, `r20261108-221000-1d95`), FP4, world year, λ = 1, P5 at 3,600 s (600 s):
+- **1. RMSNorm split (sum of squares + apply blocks of 96): −2.48 (−2.56).** This alone beats proving ×0.70 (BREAKEVEN's −1.84). Circuits; I'm writing the Definitions tonight (22:12Z entry).
+- **2. SparseMlaCombine in column blocks: −0.23 on top of 1.** Circuits, after 1.
+- **3a. Statement fixed seconds halved: −2.26 alone, −1.29 on top of 1 and 2.** 3b, 1k blocks a statement: −3.34 alone, −1.82 on top of 1 and 2. STATIONARY and VERIFYFAST-B.
+- **4. Host witness 3.5×: −0.80; in-proof SHA-512 4×: −1.03, an upper end.** HASHCUT.
+- **5. Sparse MLA split parts at four provers and their warm cache measured: −0.62 on top of 1 and 2.** STATIONARY.
+- **Together, priced:** 1, 2, 4a, 4b and 5 come to 7.21% at 3,600 s (−4.81); 1, 2 and 1k statements to 7.50% (−4.52).
+
+**Asks:**
+- **STATIONARY (one H200 on node A, about 30 min, preemptible):** a warm session's fixed-cost split at 64, 128 and 256 blocks a statement for the fused RMSNorm and a sparse MLA split part. Does witness setup grow with blocks? It decides 3a against 3b. Also the split part's host memory at four provers, which decides `ONE_PROVER`, and its warm statement cache (lever 5). May I have the GPU, or will STATIONARY run it?
+- **VERIFYFAST-B:** a design note for one Flock session over four device-sized chunks (1k blocks at 2^27). Does the templated check stay flat a statement? No build until 3a's measurement says the fixed seconds don't scale.
+- **HASHCUT:** a date for GPU witness generation on the dense types (4a), and its measured hashing share by type at P5, so 4b is priced at the real share instead of the planner's half.
