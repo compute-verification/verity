@@ -617,11 +617,13 @@ def scan_pieces(a8, units: list[SimpleNamespace], salts: dict, chain_: SimpleNam
                 circuit: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
     """`blobs_of`'s rows as the scan finds them: each row of at least the scan's 16-byte piece cut whole, less the
     pieces the staged circuit holds (`leak_scan.public_pieces`), and each shorter row whole (an ``srv`` row of a few
-    steps, 10 bytes at the demo's G = 2, which `leak_scan.cut` refuses); the held ones, and the left-out pieces' hex."""
+    steps, 10 bytes at the demo's G = 2, which `leak_scan.cut` refuses); the held ones, and the left-out pieces' hex.
+    The instance file lays each row's words straight after the row before it (`circuit.write`), so a row's zero-padded
+    last chunk is scanned for but not held (``fields``): its last 16 bytes, which cover the same tail, are."""
     rows, held = blobs_of(units, salts, chain_, srv)
     short = {k: x for k, x in rows.items() if len(x) < a8.PIECE}
     long_ = {k: x for k, x in rows.items() if k not in short}
-    cut, kept, public = LS.public_pieces(a8, long_, held - set(short), circuit)
+    cut, kept, public = LS.public_pieces(a8, long_, held - set(short), circuit, fields=True)
     return {**cut, **short}, kept | (held & set(short)), public
 
 

@@ -144,7 +144,9 @@ def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
     whole: the ``srv`` rows of a few steps (10 bytes at the demo's G = 2, 6 at G = 1), which `leak_scan.cut` refuses
     and the aligned cutter before it never scanned. Such a row is found raw or as hex, a raw one under 8 bytes too
     (`a8.find` keys each needle on its first 8 bytes, so `_find` searches those itself), and judged by the rule: leaked
-    off the statement's bytes, structured once a ``pub`` row holds them."""
+    off the statement's bytes, structured once a ``pub`` row holds them. The instance file lays the rows back to back
+    (`circuit.write`), so the control holds a row's last 16 bytes and not its zero-padded last chunk, which the scan
+    still looks for."""
     Z = _load()
     a8 = SimpleNamespace(PIECE=16,
                          needles=lambda pieces: {nd: k for k, x in pieces.items() for nd in (x, x.hex().encode())},
@@ -156,14 +158,14 @@ def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
     pieces, held, public = Z.scan_pieces(a8, units, {}, SimpleNamespace(public=False), ("srv0", "srv1"), b"")
     assert pieces == {"wit 0 @0": Z._u16(wit)[:16], "wit 0 @16": Z._u16(wit)[16:32], "wit 0 @20": Z._u16(wit)[20:],
                       "wit 0 @32": Z._u16(wit)[32:].ljust(16, b"\0"), "srv0 0": Z._u16(srv0), "srv1 0": Z._u16(srv1)}
-    assert held == set(pieces) and public == []
+    assert held == set(pieces) - {"wit 0 @32"} and public == []
     vdir = tmp_path / "verifier"
     vdir.mkdir()
     (vdir / "openings.json").write_bytes(Z._u16(srv0).hex().encode() + b"," + Z._u16(srv1) + b"\x01\x02")
-    (tmp_path / "inst.bin").write_bytes(Z._u16(wit).ljust(48, b"\0") + Z._u16(srv0) + Z._u16(srv1))
+    (tmp_path / "inst.bin").write_bytes(Z._u16(wit) + Z._u16(srv0) + Z._u16(srv1))
     got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
     assert got["verifier_found"] == ["srv0 0", "srv1 0"] and got["leaked"] == ["srv0 0", "srv1 0"]
-    assert got["control"]["holds_all"] and got["control"]["pieces_found"] == 6
+    assert got["control"]["holds_all"] and got["control"]["pieces_found"] == 5
     (vdir / "pub-2.bin").write_bytes(Z._u16(srv1) + bytes(4))
     got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
     assert got["leaked"] == ["srv0 0"] and got["structured"] == {"srv1 0": "public"}
