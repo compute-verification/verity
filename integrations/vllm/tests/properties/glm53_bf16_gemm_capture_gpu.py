@@ -78,11 +78,12 @@ served default's before the first GEMM and after the last).
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--workers N] [--quick] [--no-default]
         [--no-scan] [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
 
-The route table (`bf16_gemm_check.CUBLAS_ROUTES`) is one served-default scan process per model and tabled phase (`TABLED`), so
-each profiler session stays small, then `--write-routes` (`route_table`), which needs no GPU:
+The route table (`bf16_gemm_check.CUBLAS_ROUTES`) is one served-default scan process per model, tabled phase (`TABLED`) and M
+range, so each profiler session stays small, then `--write-routes` (`route_table`), which needs no GPU:
 
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models MODEL --only PHASE --scan-m LO:HI \\
-        --scratch DIR --out SCANS/MODEL-PHASE        # LO 1, the router's 17; HI the largest launch served (m_max)
+        --scratch DIR --out SCANS/MODEL-PHASE-LO     # the ranges tile 1:m_max, the router's 17:m_max; m_max the largest
+                                                     # launch served
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --write-routes SCANS/*/scan.json --run-record ART \\
         --out ../../verity/ml/definitions/registry
 """
