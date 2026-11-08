@@ -292,6 +292,7 @@ theorem sessBlocks_eq_singleton {L : Compiled Coin A} {x : Msg} {l : List ℕ} {
 
 end Sessions
 
+omit [Nonempty Coin] in
 /-- **A sample has at most `n_sess` sessions**: their first slots have distinct keys (`first_eq_of_key`), each one of
 the sample's (`Sessions.keys`). -/
 theorem card_first_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (x : Msg)
