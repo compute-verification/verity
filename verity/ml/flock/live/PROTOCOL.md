@@ -249,7 +249,9 @@ What is changed:
    ~~~
 
    It is folded into the induced basis's enforced sum (`zk::enforced_extra`). The induced basis itself is unchanged. The
-   identity holds at every position, as an identity of codewords.
+   identity holds at every position, as an identity of codewords. `Enc(c·ybar^r ‖ ybar^r)` is evaluated at the queries alone
+   (`zk::pad_codeword_at`): its message is nonzero on `2 t_pad` entries, so a query's value needs only the transform's last
+   `⌈log₂ t_pad⌉` layers within its block, never the whole length-`2L` codeword (`zk::pad_codeword`, the test's reference).
 5. **Exposed** (padded, §2): the level-0 OOD value, the six lane-round messages and `e^r`. The prover's lane chain becomes
    the two lane-phase rows (§4).
 6. **Level 0's query count and padding.** The padded code is `RS[2L, L + t_pad]`, of rate `ρ' = (L + t_pad)/2L`, and the
@@ -295,7 +297,7 @@ is the minimum.
 
 **Checked:**
 - `zk_veil` test `exact::a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not`: at toy size (4 witness lanes of 16
-  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword`, `ybar` and
+  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword_at`, `ybar` and
   `enforced_extra`. For fixed coins the view is F128-linear in the witness and the randomness, and it hides the witness
   exactly when the witness's images lie in the span of the randomness's. Even with all of both `y_1'^r` revealed, the
   per-rep pairs hide it; a shared pair does not, nor does `t_pad` below the distinct opened positions. The verifier's row
@@ -703,6 +705,15 @@ opened: a stack that commits its values in `m` sessions and registers the one wh
 leak through `m` too. So the service of record fixes `m` at 1, protocol structure: an epoch opens one session, and a
 commit while its session is not yet registered is refused (`err the current epoch's session is not yet registered: …`),
 nothing of it answered. The stack chooses neither `m` nor a session, every record says `m = 1`, and the term is 0.
+
+**Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
+sample, so the service commits it apart (`interior J D₀ N₀ S₀ …`, the commit request's form and body;
+`Salts.interiorAnswer`). Once the request is whole it samples `s` and each leaf's 192-byte salt from the OS, and holds
+the salts by session while it runs, answering them to `salts`; a service started again holds none. The tables' tags and
+the registration's record tag are under the session's own key `SHA-512(k ‖ L' ‖ s)` (`Salts.interiorKey`, `L'` the
+SHA-512 of `verity/zk-server/interior-key/v1\0`), which the release side derives from `k` and the record's session. So
+nothing made under `k` reads a value or a root that may follow the sample: `k` meets the interior only at `s`, sampled
+once the request is whole. The registration is numbered, appended and admitted as any other.
 
 The release side admits each registration once, oldest first (the record's rule 5, `Core.Firewall.admitReads`, §10.5). Given the
 key (`core-firewall session --salt-key FILE`; `FC_FIREWALL_SALT_KEY` for `flock-circuit --firewall-state`), every hm96

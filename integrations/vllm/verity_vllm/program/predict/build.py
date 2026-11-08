@@ -39,6 +39,7 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
 from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, finish_run, in_launch, kind,
@@ -738,8 +739,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     n_peers, run = len(params) - n_user, run_input(net, params, wrapper_keys(wrapper, M, LP, T))
-    params.append(("weights", wrec))
-    params = tuple(params)
+    params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     ids, W, schedule = inputs[0], inputs[-1], inputs[history - 1] if words else None
