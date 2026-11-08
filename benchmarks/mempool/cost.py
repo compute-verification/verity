@@ -14,8 +14,12 @@ The pricing (ANDs; `price`, `slot_price`):
   committed as hm96 rows before the coins are drawn and its rows are hashed in-circuit.
 - `price` is the floor beside it: each operation at its own kind's slot (plus MUX_OVERHEAD), as if kinds were public.
 - lookup and cache read their key from RK[(r, k)] (one more access, a 2-chunk record) instead of a key descriptor.
-- each block of tokens gets its key once: a polynomial hash under a live coin β (9 products over its 64 tokens of 18
-  bits, chained to its parent's key) and one RK write.
+- each block of tokens gets its key once: SHA-512 over its parent's key and its 64 tokens of 18 bits (two compression
+  blocks; the whole output is the key's identity, which carries across windows), and inside the window a 128-bit
+  fingerprint of it under the window's live coin (3 products), written to RK. The memories hold fingerprints. A
+  fingerprint under one coin for all windows won't do: content that arrives after the coin could be chosen to collide.
+- each window: the 512-bit keys it carries (the cached blocks', NB at most, and its requests' blocks', at most the
+  RK addresses it touches) hashed in and out and fingerprinted under its coin.
 - each pool call is one factor on each side of the bus between ReplayStep and the access stream (a product and a mux),
   with its result (hit and evictable counts, or returns) as witness.
 - each window: the initial and final records of the dense memories (B, K: NB each) and of the sparse ones' touched
@@ -35,7 +39,8 @@ import pool_ram as PR
 from pool_ram import RP
 
 MUL = 2187
-SHA_BIT = 58120 / 1024
+SHA_BLOCK = 58120
+SHA_BIT = SHA_BLOCK / 1024
 MUX_OVERHEAD = 0.15
 S = PR.GLM
 P_STEPS = 4964
@@ -83,7 +88,8 @@ def price(slots: dict[str, dict]) -> dict[str, float]:
             c += rk - SHA_BIT * S.HW + (SHA_BIT * (S.RW + S.KW) if kind == "lookup" else 0)
         out[kind] = c
     out["call"] = 2 * (MUL + 128) + SHA_BIT * 2 * (S.KW + 1)
-    out["block key"] = 9 * MUL + access_ands("RK") + SHA_BIT * S.TW
+    out["block key"] = 2 * SHA_BLOCK + 3 * MUL + access_ands("RK") + SHA_BIT * S.TW
+    out["carried key"] = SHA_BIT * 2 * 512 + 3 * MUL
     out["dense address"] = {"B": 2 * (MUL + 128) + SHA_BIT * (S.TW + 2 * VBITS["B"]),
                             "K": 2 * (2 * MUL + 128) + SHA_BIT * (S.TW + 2 * VBITS["K"])}
     out["sparse address"] = {m: 2 * ((2 if m != "RB" else 1) * MUL + 128) + aw + SHA_BIT * (aw + 2 * VBITS[m] + S.TW)
@@ -189,7 +195,8 @@ def window_cost(load: dict[str, Any], pr: dict[str, Any], slot: tuple[float, flo
     ops["lookup"] -= {"walked": 0, "certified": w["certificate saves"], "memo": w["repeated units"]}[lookups]
     fixed = {"calls (bus)": w["calls"] * pr["call"], "block keys": w["keys"] * pr["block key"],
              "dense init/final (B, K)": NB * (pr["dense address"]["B"] + pr["dense address"]["K"]),
-             "sparse init/final (M, RB, RK)": sum(w["touched"].get(k, 0) * pr["sparse address"][k] for k in ("M", "RB", "RK"))}
+             "sparse init/final (M, RB, RK)": sum(w["touched"].get(k, 0) * pr["sparse address"][k] for k in ("M", "RB", "RK")),
+             "carried 512-bit keys": (NB + w["touched"].get("RK", 0)) * pr["carried key"]}
     u = sum(STREAM_SHAPE[k] * n for k, n in ops.items())
     out = {"U": u, "stream, low": u * slot[0], "stream, high": u * slot[1],
            "floor (each operation at its kind's slot)": sum(n * pr[k] for k, n in ops.items()), **fixed}
