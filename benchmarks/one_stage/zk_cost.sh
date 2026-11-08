@@ -16,11 +16,13 @@
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      LEASE_MEM_GB (the lease's memory cap, gpu-lease's --mem-gb; else gpu-lease's own per-GPU default)
 #      ZK_NICE=0 (the staging's and the builds' nice; the sessions run at the job's own)
-#      ZK_NEED_GB (this run's peak under FLOCK_WORK: the builds, each staged statement's circuit.txt, and the stagers'
-#      memory where FLOCK_WORK is a tmpfs; given, nothing is built or staged until FLOCK_WORK's filesystem, and memory
-#      for a tmpfs, has ZK_NEED_GB + ZK_MARGIN_GB=30 free, plus the GB of each ZK_HOLD="RUN_ID:GB ..." run not yet
-#      done, failed or cancelled; ZK_GATE_UNTIL, a UTC time, gives up the wait. FLOCK_WORK=/dev/shm/... keeps it all
-#      off a shared disk; each staged statement is deleted once its last point is proved)
+#      ZK_SCRATCH=$FLOCK_WORK (the run's scratch, a mktemp dir under it: the staged statements, each deleted once its last
+#      point is proved; data only, so a noexec tmpfs such as /dev/shm keeps them, about 24 GB of circuit.txt for
+#      FlashInfer K=2048 a size, off a shared disk)
+#      ZK_NEED_GB, ZK_WORK_GB (this run's peaks under ZK_SCRATCH, with the stagers' memory where it is a tmpfs, and under
+#      FLOCK_WORK, the builds; given, nothing is built or staged until each filesystem, and memory for a tmpfs, has its
+#      peak + ZK_MARGIN_GB=30 free, plus the GB of each ZK_HOLD="RUN_ID:GB ..." run not yet done, failed or cancelled;
+#      ZK_GATE_UNTIL, a UTC time, gives up the wait)
 #      ZK_LAST_START (a UTC time no point starts at or after: one granted later gives its GPU back unproved)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server; with ZK_UNITS and no fw
 #      arm, no Lean build either: nothing then reads flock-verify or the ZK server's Lean frame)
@@ -34,10 +36,19 @@ REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
 mkdir -p "$PT_WORK" 2>/dev/null && [ -w "$PT_WORK" ] || PT_WORK=$FLOCK_WORK/verifier
-S=$(mktemp -d "$FLOCK_WORK/zk-cost.XXXXXX"); trap 'rm -rf "$S"' EXIT; trap 'exit 143' TERM INT HUP
+ZK_SCRATCH=${ZK_SCRATCH:-$FLOCK_WORK}; mkdir -p "$ZK_SCRATCH" || { echo "cannot make $ZK_SCRATCH" >&2; exit 1; }
+S=$(mktemp -d "$ZK_SCRATCH/zk-cost.XXXXXX"); trap 'rm -rf "$S"' EXIT; trap 'exit 143' TERM INT HUP
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
+free_gb() {
+  local f m; f=$(df -B1G --output=avail "$1" | tail -1 | tr -d ' ')
+  if [ "$(stat -f -c %T "$1")" = tmpfs ]; then
+    m=$(awk '/^MemAvailable:/ {print int($2 / 1048576)}' /proc/meminfo); [ "$m" -lt "$f" ] && f=$m
+  fi
+  echo "$f"
+}
 room() {
-  local h st held free mem need said= runs=${RESEARCH_RUN_DIR:-/workspace/research/runs/-}
+  local h st held d f n ok msg said= runs=${RESEARCH_RUN_DIR:-/workspace/research/runs/-}
+  local -A need at
   while :; do
     held=0
     for h in ${ZK_HOLD:-}; do
@@ -45,21 +56,23 @@ room() {
         "${runs%/*}/${h%%:*}/status.json" 2> /dev/null)
       case $st in done | failed | cancelled) ;; *) held=$((held + ${h##*:})) ;; esac
     done
-    free=$(df -B1G --output=avail "$FLOCK_WORK" | tail -1 | tr -d ' ')
-    if [ "$(stat -f -c %T "$FLOCK_WORK")" = tmpfs ]; then
-      mem=$(awk '/^MemAvailable:/ {print int($2 / 1048576)}' /proc/meminfo); [ "$mem" -lt "$free" ] && free=$mem
-    fi
-    need=$((${ZK_NEED_GB:-0} + ${ZK_MARGIN_GB:-30} + held))
-    [ "$free" -ge "$need" ] && { log "zk-cost: room under $FLOCK_WORK: $free GB free, $need needed ($held held)"; return 0; }
+    need=() at=() ok=1 msg=
+    for h in "$ZK_SCRATCH:${ZK_NEED_GB:-0}" "$FLOCK_WORK:${ZK_WORK_GB:-0}"; do
+      d=$(stat -c %d "${h%:*}"); at[$d]=${h%:*}; need[$d]=$((${need[$d]:-0} + ${h##*:}))
+    done
+    for d in "${!need[@]}"; do
+      f=$(free_gb "${at[$d]}"); n=$((need[$d] + ${ZK_MARGIN_GB:-30} + held))
+      msg="$msg ${at[$d]}: $f GB free, $n needed;"; [ "$f" -ge "$n" ] || ok=0
+    done
+    [ "$ok" = 1 ] && { log "zk-cost: room ($held GB held):$msg"; return 0; }
     if [ -n "${ZK_GATE_UNTIL:-}" ] && [ "$(date -u +%s)" -ge "$(date -u -d "$ZK_GATE_UNTIL" +%s)" ]; then
-      log "zk-cost: no room under $FLOCK_WORK by $ZK_GATE_UNTIL: $free GB free, $need needed ($held held)"; return 1
+      log "zk-cost: no room by $ZK_GATE_UNTIL ($held GB held):$msg"; return 1
     fi
-    [ "$said" = "$free/$need" ] || log "zk-cost: waiting for room under $FLOCK_WORK: $free GB free, $need needed ($held held)"
-    said=$free/$need; sleep 60
+    [ "$said" = "$msg" ] || log "zk-cost: waiting for room ($held GB held):$msg"
+    said=$msg; sleep 60
   done
 }
-[ -z "${ZK_NEED_GB:-}" ] || room || exit 75
-export TMPDIR=$S/tmp; mkdir -p "$TMPDIR"
+[ -z "${ZK_NEED_GB:-}${ZK_WORK_GB:-}" ] || room || exit 75
 export PYTHONDONTWRITEBYTECODE=1
 unset CARGO_TARGET_DIR
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; } > "$O/host.txt" 2>&1
