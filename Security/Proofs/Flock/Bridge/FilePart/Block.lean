@@ -22,7 +22,7 @@ open FlockSoundness FlockSoundness.Audit
 
 section abstract
 
-variable {C : Audit.Circuit} {n : ℕ} (P : Audit.Partition C n) {k m : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {k m : ℕ}
 
 theorem off_of (hsize : ∀ g : Fin C.N, gateSize (C.op g) = if g.val < k then 1 else 3) :
     ∀ j, j ≤ C.N → off C j = min j k + 3 * (j - k)

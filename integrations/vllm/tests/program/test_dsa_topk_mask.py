@@ -151,7 +151,8 @@ def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
 
 
 def test_the_accelerators_resolve_by_id_in_a_cold_decode() -> None:
-    assert lookup_primitive(REGISTRY, "DsaTopKThreshold131072x2048_v1") is M.threshold(131072, 2048)
+    assert lookup_primitive(REGISTRY, "DsaTopKThresholdKey131072x2048_v1") is M.threshold(131072, 2048)[0]
+    assert lookup_primitive(REGISTRY, "DsaTopKThresholdIndex131072x2048_v1") is M.threshold(131072, 2048)[1]
     assert lookup_primitive(REGISTRY, "DsaTopKSlot131072x2048_v1") is M.slot(131072, 2048)
     with pytest.raises(ValueError, match="1 <= TOPK <= N"):
         M.threshold(4, 5)
