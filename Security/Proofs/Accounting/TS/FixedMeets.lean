@@ -323,7 +323,7 @@ theorem prob_glue : prob (fun b : Bool => sampleF b 2 = 2) = 1 / 2 := by
     simp only [Finset.mem_univ, true_and]
     clear inst
     cases b <;> decide
-  unfold prob
+  unfold prob Claims.prUniform
   rw [h, Fintype.card_bool]
   norm_num
 

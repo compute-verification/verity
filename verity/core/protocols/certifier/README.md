@@ -106,6 +106,19 @@ A spec-level reference for network accounting's timing channel:
   evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
   ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
   (`free_width`), and the charge is ℓ_w;
+- the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4`, `CompileSlice_v3` with its
+  pool calls records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys
+  the arrivals' `BlockKey_v1` chains printed under a live coin. The hits, evictable counts and returns the steps read,
+  and the stream's slots and touched list, are checked witness, unique and bound by live coins. Until a Lean lemma
+  shows that uniqueness, the witness counts as free input at its width, so the free
+  input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
+  `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the replay's `_KV`;
+- the compile slice at its window's activity (`compile_slice_v5`): `CompileSlice_v5`, `CompileSlice_v4` with the
+  arrivals' tokens registered in ``req`` as one ragged row of the NRK blocks the window keys (a keyed block count a
+  slot, and one key a block), RB's touched list the NRB addresses the stream touches, and each running slot's request
+  number carried in the slot row, which ``cout`` registers, rather than looked up at every call. Its free input is the
+  advice and the checked witness, as v4's (`free_width`), and its verdict adds bit 6 ``keys``. `parts` prices it at any
+  class, which `benchmarks/mempool/cost.py` does at a served load's;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`
@@ -285,7 +298,7 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
@@ -366,11 +379,10 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   certifier case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included: 193 execution phases of seven runs, plain and served, 180 accepted and 13 refused, each with nine
-  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
-  network certifier runs give 30 execution phases from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a
-  sample of 8 on the H200 network certifier run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused
-  (r20261026-104647-c07b, r20261026-105654-6220). Each has ten controls: nine that both reject, among them another
-  network certifier's digest, and `unread`, a sync off Σ_sync that changes neither verdict.
+  injected controls that both reject. The network certifier runs give 30 execution phases from two runs, the latter a
+  sample of 8 on the H200 network certifier. Of those, 21 are accepted and 9 refused. Each has ten controls: nine that
+  both reject, among them another network certifier's digest, and `unread`, a sync off Σ_sync that changes neither
+  verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the

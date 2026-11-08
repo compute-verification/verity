@@ -45,7 +45,8 @@ all through `--policy`, `--policy --unrolled` and the Python reference, which mu
 summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
 
 ~~~sh
-research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
+B1_BUILD=$(python3 -c 'import json; print(json.load(open("benchmarks/sampling_plan/glm53_blocks.json"))["build"])')
+research data fetch "$B1_BUILD" --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
@@ -148,8 +149,15 @@ verifier would read.
 ~~~sh
 research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
   --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
-  [--layout iv/hybrid/4 [--structural]]
+  [--layout iv/hybrid/4 [--structural] [--stmt [--base REV]]]
 ~~~
+
+`flock_served/Main.lean` parses the circuit as `verify` does (`circuitOfKnowing`: the file's SHA-512 already known). On a
+templated statement, `--stmt` times that parse instead with `flock-tmpl stmt` (`flock_tmpl/Main.lean`): whole, then a
+stage at a time (`tmplOf`, `Tmpl.parse`, each of `TmplUnit.read`'s checks, `HmRow.parseWith`'s decode, split, class
+digest and sections), with the template's size against the unrolled unit's (rows and entries, the copies multiplied
+through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
+same staged statement (stmt-base.jsonl).
 
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
 config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs

@@ -38,6 +38,121 @@ pub struct Group {
     pub bits: Vec<usize>,
 }
 
+/// A net's rows by index, as the builders read them: row `i` lists the columns its A (or B) reads, in order, repeats kept.
+/// `[Vec<usize>]` and [`Rows`] read alike.
+pub trait RowRead {
+    fn n_rows(&self) -> usize;
+    fn row_len(&self, i: usize) -> usize;
+    fn row_cols(&self, i: usize) -> impl ExactSizeIterator<Item = usize> + '_;
+    fn nnz(&self) -> usize {
+        (0..self.n_rows()).map(|i| self.row_len(i)).sum()
+    }
+    /// Whether row `i` is exactly `cols`, in order.
+    fn row_is(&self, i: usize, cols: &[usize]) -> bool {
+        self.row_len(i) == cols.len() && self.row_cols(i).eq(cols.iter().copied())
+    }
+    /// Row `i`'s columns, and none past the last row.
+    fn cols_or_empty(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
+        (i < self.n_rows()).then(|| self.row_cols(i)).into_iter().flatten()
+    }
+}
+
+impl RowRead for [Vec<usize>] {
+    fn n_rows(&self) -> usize {
+        self.len()
+    }
+    fn row_len(&self, i: usize) -> usize {
+        self[i].len()
+    }
+    fn row_cols(&self, i: usize) -> impl ExactSizeIterator<Item = usize> + '_ {
+        self[i].iter().copied()
+    }
+}
+
+impl RowRead for Vec<Vec<usize>> {
+    fn n_rows(&self) -> usize {
+        self.len()
+    }
+    fn row_len(&self, i: usize) -> usize {
+        self[i].len()
+    }
+    fn row_cols(&self, i: usize) -> impl ExactSizeIterator<Item = usize> + '_ {
+        self[i].iter().copied()
+    }
+}
+
+/// A net's rows held once, in one allocation per side: row `i` is `cols[off[i]..off[i + 1]]`. The offsets are u64 because a
+/// unit's rows can hold 2^32 entries or more; a column is a u32, and one past `u32::MAX` is refused.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rows {
+    off: Vec<u64>,
+    cols: Vec<u32>,
+}
+
+impl Default for Rows {
+    fn default() -> Self {
+        Rows::with_capacity(0, 0)
+    }
+}
+
+impl Rows {
+    pub fn with_capacity(rows: usize, nnz: usize) -> Self {
+        let mut off = Vec::with_capacity(rows + 1);
+        off.push(0);
+        Rows { off, cols: Vec::with_capacity(nnz) }
+    }
+
+    pub fn push(&mut self, row: &[usize]) {
+        self.cols.extend(row.iter().map(|&c| u32::try_from(c).unwrap_or_else(|_| panic!("column {c} is past u32::MAX"))));
+        self.off.push(self.cols.len() as u64);
+    }
+
+    pub fn from_vecs(rows: &[Vec<usize>]) -> Self {
+        let mut r = Rows::with_capacity(rows.len(), rows.iter().map(Vec::len).sum());
+        rows.iter().for_each(|row| r.push(row));
+        r
+    }
+
+    pub fn to_vecs(&self) -> Vec<Vec<usize>> {
+        self.iter().map(|row| row.iter().map(|&c| c as usize).collect()).collect()
+    }
+
+    pub fn row(&self, i: usize) -> &[u32] {
+        &self.cols[self.off[i] as usize..self.off[i + 1] as usize]
+    }
+
+    pub fn len(&self) -> usize {
+        self.off.len() - 1
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn nnz(&self) -> usize {
+        self.cols.len()
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &[u32]> + '_ {
+        (0..self.len()).map(|i| self.row(i))
+    }
+}
+
+impl RowRead for Rows {
+    fn n_rows(&self) -> usize {
+        self.len()
+    }
+    fn row_len(&self, i: usize) -> usize {
+        (self.off[i + 1] - self.off[i]) as usize
+    }
+    fn row_cols(&self, i: usize) -> impl ExactSizeIterator<Item = usize> + '_ {
+        self.row(i).iter().map(|&c| c as usize)
+    }
+    fn nnz(&self) -> usize {
+        Rows::nnz(self)
+    }
+}
+
 /// A `flock-ir-unit/v2` netlist.
 #[derive(Clone)]
 pub struct IrUnitNet {
@@ -85,10 +200,20 @@ impl Clone for FlatCache {
     }
 }
 
+/// Whether row `i` of `rows` is `[i]`.
+fn own_row<R: RowRead + ?Sized>(rows: &R, i: usize) -> bool {
+    rows.row_len(i) == 1 && rows.row_cols(i).next() == Some(i)
+}
+
 impl Flat {
     fn of(net: &IrUnitNet) -> Option<Flat> {
+        Flat::of_rows(net, &net.a, &net.b)
+    }
+
+    /// [`Flat`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
+    fn of_rows<R: RowRead + Sync + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> Option<Flat> {
         let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
-        if u == 0 || cp != u - 1 || first > cp || net.a[cp] != [cp] || net.b[cp] != [cp] || net.order.is_some() {
+        if u == 0 || cp != u - 1 || first > cp || !own_row(a, cp) || !own_row(b, cp) || net.order.is_some() {
             return None;
         }
         const CHUNK: usize = 1 << 14;
@@ -97,17 +222,17 @@ impl Flat {
             let (mut off, mut cols, mut own) = (Vec::with_capacity(2 * rows.len()), Vec::new(), Vec::with_capacity(rows.len()));
             for i in rows {
                 let mut o = 0u8;
-                for (side, row) in [&net.a[i], &net.b[i]].into_iter().enumerate() {
+                for (side, rows) in [a, b].into_iter().enumerate() {
                     off.push(cols.len() as u32);
                     if i < first {
-                        match row.as_slice() {
-                            [] => {}
-                            [c] if *c == i => o |= 1 << side,
+                        match rows.row_len(i) {
+                            0 => {}
+                            1 if own_row(rows, i) => o |= 1 << side,
                             _ => return None,
                         }
                         continue;
                     }
-                    for &c in row {
+                    for c in rows.row_cols(i) {
                         if c == i {
                             o ^= 1 << side;
                         } else if c < i || c == cp {
@@ -237,7 +362,7 @@ impl IrUnitNet {
 
     /// Whether column `i` is an input column (its row is `A = B = [i]`).
     pub fn is_input(&self, i: usize) -> bool {
-        i < self.in_words * WORD && self.a[i].len() == 1
+        i < self.in_words * WORD && self.a.row_len(i) == 1
     }
 
     pub fn load(path: &str) -> Self {
@@ -257,11 +382,16 @@ impl IrUnitNet {
     /// Up to 64 units at once (lane l = unit l): `input(col)` is the lanes' bit at input column `col`; returns (z, a, b) per
     /// row, bit-sliced.
     pub fn eval64(&self, input: impl Fn(usize) -> u64) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+        self.eval64_of(&self.a, &self.b, input)
+    }
+
+    /// [`IrUnitNet::eval64`] of this net's layout with its rows `a` and `b` read through [`RowRead`].
+    fn eval64_of<R: RowRead + ?Sized>(&self, a: &R, b: &R, input: impl Fn(usize) -> u64) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
         let u = self.useful;
         let first = self.in_words * WORD;
         let mut z = vec![0u64; u];
         for (i, zi) in z.iter_mut().enumerate().take(first) {
-            if self.a[i].len() == 1 {
+            if a.row_len(i) == 1 {
                 *zi = input(i);
             }
         }
@@ -274,13 +404,13 @@ impl IrUnitNet {
             if i == self.const_pos {
                 continue;
             }
-            let x = self.a[i].iter().fold(0u64, |s, &k| s ^ z[k]);
-            let y = self.b[i].iter().fold(0u64, |s, &k| s ^ z[k]);
+            let x = a.row_cols(i).fold(0u64, |s, k| s ^ z[k]);
+            let y = b.row_cols(i).fold(0u64, |s, k| s ^ z[k]);
             z[i] = x & y;
         }
-        let a: Vec<u64> = (0..u).map(|i| self.a[i].iter().fold(0u64, |s, &k| s ^ z[k])).collect();
-        let b: Vec<u64> = (0..u).map(|i| self.b[i].iter().fold(0u64, |s, &k| s ^ z[k])).collect();
-        (z, a, b)
+        let av: Vec<u64> = (0..u).map(|i| a.row_cols(i).fold(0u64, |s, k| s ^ z[k])).collect();
+        let bv: Vec<u64> = (0..u).map(|i| b.row_cols(i).fold(0u64, |s, k| s ^ z[k])).collect();
+        (z, av, bv)
     }
 
     /// [`IrUnitNet::eval64`], equal to it bit for bit, in one pass over flat u32 forms of `a` and `b` built on the first call
@@ -790,13 +920,13 @@ pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
         if i == net.const_pos {
             continue;
         }
-        let assertion = net.b[i] == [net.const_pos] && net.a[i].contains(&i);
-        for &c in net.a[i].iter().chain(&net.b[i]) {
+        let assertion = net.b.row_is(i, &[net.const_pos]) && net.a.row_cols(i).any(|c| c == i);
+        for c in net.a.row_cols(i).chain(net.b.row_cols(i)) {
             if c >= i && c != net.const_pos && !(assertion && c == i) {
                 return Err(format!("unit row {i} reads column {c}, not an earlier one"));
             }
         }
-        if net.a[i] == [i] && net.b[i] == [i] {
+        if net.a.row_is(i, &[i]) && net.b.row_is(i, &[i]) {
             return Err(format!("unit row {i} is a free row"));
         }
     }
@@ -897,5 +1027,86 @@ mod tests {
             assert!(fwd.eval64_flat(input) == fwd.eval64(input));
             assert!(fwd.flat.0.get().is_some_and(|f| f.is_none()), "a later column took the one-pass path");
         }
+    }
+
+    #[test]
+    fn row_shapes_read_alike() {
+        let net = random_net(0x51ed, 2, 3000);
+        let rows = Rows::from_vecs(&net.a);
+        let (n, cp) = (net.a.len(), net.const_pos);
+        for i in 0..n + 3 {
+            let want = net.a.get(i).cloned().unwrap_or_default();
+            assert_eq!(rows.cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from Rows");
+            assert_eq!(net.a[..].cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from a slice");
+            assert_eq!(net.a.cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from a Vec");
+            if i >= n {
+                continue;
+            }
+            let (mut short, mut rev) = (want.clone(), want.clone());
+            short.pop();
+            rev.reverse();
+            for probe in [want.clone(), short, rev, vec![i], vec![cp], vec![], vec![i, i]] {
+                let is = want == probe;
+                assert_eq!((rows.row_is(i, &probe), net.a[..].row_is(i, &probe), net.a.row_is(i, &probe)), (is, is, is), "row {i} is {probe:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn evaluators_read_rows_alike() {
+        let flat = |f: Option<Flat>| f.map(|f| (f.off, f.cols, f.own));
+        for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
+            let net = random_net(seed, in_words, useful);
+            // a later column and an input row other than `[i]` or empty, which Flat refuses; a placed net, which it refuses too
+            let mut fwd = net.clone();
+            fwd.a[in_words * WORD + 3].push(in_words * WORD + 8);
+            let mut odd = net.clone();
+            odd.b[2] = vec![2, 5];
+            for (n, one_pass) in [(&net, true), (&placed(&net), false), (&fwd, false), (&odd, false)] {
+                let (ra, rb) = (Rows::from_vecs(&n.a), Rows::from_vecs(&n.b));
+                for k in 0..3u64 {
+                    let input = |col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(k as u32 * 7);
+                    assert!(n.eval64_of(&ra, &rb, input) == n.eval64(input), "net {seed}, inputs {k}: eval64 from Rows");
+                }
+                let want = flat(Flat::of(n));
+                assert_eq!(want.is_some(), one_pass, "net {seed}: the flat form's refusal");
+                assert!(flat(Flat::of_rows(n, &ra, &rb)) == want, "net {seed}: the flat form from Rows");
+            }
+        }
+    }
+
+    fn reads<R: RowRead + ?Sized>(r: &R) -> (Vec<Vec<usize>>, Vec<usize>, usize) {
+        ((0..r.n_rows()).map(|i| r.row_cols(i).collect()).collect(), (0..r.n_rows()).map(|i| r.row_len(i)).collect(), r.nnz())
+    }
+
+    #[test]
+    fn rows_read_as_the_vectors_they_hold() {
+        let nets = [random_net(3, 1, 300), random_net(0x51ed, 2, 3000)];
+        let gaps = placed(&nets[0]);
+        for (k, net) in nets.iter().chain([&gaps]).enumerate() {
+            for side in [&net.a, &net.b] {
+                let rows = Rows::from_vecs(side);
+                assert_eq!(rows.to_vecs(), *side, "net {k}: the round trip");
+                let mut pushed = Rows::default();
+                side.iter().for_each(|r| pushed.push(r));
+                assert_eq!(pushed, rows, "net {k}: built row by row");
+                let want = (side.clone(), side.iter().map(Vec::len).collect::<Vec<_>>(), side.iter().map(Vec::len).sum::<usize>());
+                assert_eq!(reads(&rows), want, "net {k}: Rows");
+                assert_eq!(reads(side.as_slice()), want, "net {k}: a slice of rows");
+                assert_eq!(reads(side), want, "net {k}: a vector of rows");
+                assert!(rows.iter().zip(side.iter()).all(|(r, s)| r.iter().map(|&c| c as usize).eq(s.iter().copied())));
+                assert_eq!((rows.len(), rows.nnz()), (side.len(), want.2));
+            }
+        }
+        let none = Rows::default();
+        assert!(none.is_empty() && none.nnz() == 0 && none.to_vecs().is_empty() && none == Rows::from_vecs(&[]));
+        assert_eq!(Rows::from_vecs(&[vec![], vec![]]).to_vecs(), vec![Vec::<usize>::new(); 2]);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    #[should_panic(expected = "past u32::MAX")]
+    fn a_column_past_u32_is_refused() {
+        Rows::default().push(&[1, u32::MAX as usize + 1]);
     }
 }

@@ -448,7 +448,7 @@ open FlockSoundness FlockSoundness.Audit
 (`laid_linkUnit`): let the verifier build `net` from the layout of `VStar.linkUnit UB PB` (`netOf`), and let unit `u` be
 an instance of `k` stacked copies of the net's rows, the transcript `tr` carrying 1 at the stack's constant. Then at copy
 `j`'s column values (`copyVal`), `laid_linkUnit` holds. -/
-theorem unit_linkUnit {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_linkUnit {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (tr : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : tr (I.wire ((Rows.ofNet hB).stack k).one) = true) {UB PB : ℕ} {U : VStar.UnitC}
     (hU : VStar.linkUnit UB PB = .ok U) {l : Laid} (hl : U.laid = .ok l) {name : String}

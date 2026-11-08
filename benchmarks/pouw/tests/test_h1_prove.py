@@ -450,7 +450,7 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
 def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
-    for assertions or table reads), the flat statement, said on stderr."""
+    for an assertion), the flat statement, said on stderr."""
     from verity.ml.circuits.boolean import BIT
     from verity.ml.circuits.boolean.forms import add
     from verity.ml.circuits.boolean.trace import definition
@@ -469,7 +469,7 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     assert np.array_equal(tmpl.low.evaluate(x)[0], flat.low.evaluate(x)[0])
 
     def refuse(definition, **_):
-        raise NotImplementedError(f"{definition.id}: assertions and table reads are not laid out by the structural lowering yet")
+        raise NotImplementedError(f"{definition.id}: an assertion is not laid out: its row reads its own column")
 
     monkeypatch.setattr(SL, "lower", refuse)
     capsys.readouterr()

@@ -1107,6 +1107,95 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_from_judges_from_a_stored_document_as_a_full_audit_does(tmp_path):
+    """Stage B of the lock run (`--facts-from`, `audit_from_facts`) gives the full audit's verdict and record from the
+    stored facts document alone, with no build: the control fixture passes both, each lock violation fails both the same,
+    and an `--update` writes the same lock byte for byte. The document is schema-versioned and position-free, so no file's
+    bytes, a declaration's line or a module's build path leaks into what drive's after-landing lock run reuses."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)
+    recorded = A.load(pkg)
+
+    doc = tmp_path / A.FACTS_DOC
+    full = A.audit(pkg, tmp_path / "full", build=False, replay=False, runs=False, facts_out=doc, log=noop)
+    assert full["failures"] == [], full["failures"]
+
+    body = json.loads(gzip.decompress(doc.read_bytes()))
+    assert body["schema"] == A.FACTS_SCHEMA and "spans" not in body["facts"] and "oleans" not in body["facts"]
+    main = body["facts"]["pins"]["Control.main_thm"]
+    assert "at" not in main and len(main["type_sha256"]) == 64 and main["hypotheses"], "the augmented facts, position-free"
+    assert all("olean" not in g for g in body["facts"]["graph"].values()) and "/.elan/" not in json.dumps(body)
+    assert doc.read_bytes()[4:8] == bytes(4), "no timestamp in the gzip, so equal facts are equal bytes"
+
+    assert A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)["failures"] == []
+
+    # an --update from the document writes the lock an --update from the build writes, byte for byte, from the same start
+    stripped = json.loads(json.dumps(recorded))
+    for g in stripped["guarantees"].values():
+        for k in ("type_hash", "signature", "premises", "assumptions"):
+            g.pop(k, None)
+    stripped.pop("dependencies", None)
+    for a in stripped.get("assumptions", {}).values():
+        a.pop("digest", None)
+    A.dump(pkg, stripped)
+    before = (pkg / A.POLICY).read_text()
+    A.audit(pkg, tmp_path / "uf", build=False, replay=False, runs=False, update=True, log=noop)
+    from_build = (pkg / A.POLICY).read_text()
+    A.dump(pkg, stripped)
+    A.audit_from_facts(pkg, tmp_path / "us", doc, update=True, log=noop)
+    assert (pkg / A.POLICY).read_text() == from_build != before, "the record from the document is the record from the build"
+
+    # each lock violation fails stage B exactly as the full audit, with the document (the facts) untouched
+    mutations = {
+        "a guarantee's recorded type hash": lambda l: l["guarantees"]["Control.main_thm"].__setitem__("type_hash", "0" * 64),
+        "a guarantee with no owner": lambda l: l["guarantees"]["Control.main_thm"].pop("owner"),
+        "a recorded assumption's digest": lambda l: l["assumptions"]["Control.Hyp"].__setitem__("digest", "0" * 64),
+        "a witness naming a guarantee that is gone": lambda l: l["claims"]["witnesses"]["Control.Small"].__setitem__("fails", "Control.Nope"),
+        "the dependencies' recorded toolchain digest": lambda l: l["dependencies"].__setitem__("toolchain", "0" * 64),
+    }
+    for name, mutate in mutations.items():
+        bad = json.loads(json.dumps(recorded))
+        mutate(bad)
+        A.dump(pkg, bad)
+        fb = A.audit(pkg, tmp_path / "mb", build=False, replay=False, runs=False, log=noop)["failures"]
+        sb = A.audit_from_facts(pkg, tmp_path / "ms", doc, log=noop)["failures"]
+        assert fb, f"the full audit itself missed {name}"
+        assert list(map(str, sb)) == list(map(str, fb)), f"stage B differs from the full audit on {name}"
+        assert [f.code for f in sb] == [f.code for f in fb], f"the codes differ on {name}"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_from_applies_the_reflexive_witness_exemption_as_the_full_audit_does(tmp_path):
+    """The reflexive exemption lives in `judge` (`witness_scope` -> `reflexive`), which `--facts-from` runs, so a reflexive
+    guarantee (the claims tuples' `claims = claims`) is held to no witnesses in stage B exactly as in a full audit, and a
+    non-reflexive `Eq` that stays in scope fails both the same. Stage B reads the reflexivity from the stored facts
+    (`body`), never from a build."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Claims.lean").write_text(REFLEXIVE)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Claims\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["Control.SecurityProofs.Stated", "Control.statedAt", "Control.same"]
+    policy = unclaimed(A.load(pkg))
+    policy["guarantees"] = policy["guarantees"] | {n: {"owner": "@lean"} for n in names}
+    A.dump(pkg, policy)
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)
+
+    doc = tmp_path / A.FACTS_DOC
+    full = A.audit(pkg, tmp_path / "full", build=False, replay=False, runs=False, facts_out=doc, log=noop)
+    sb = A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)
+    assert list(map(str, sb["failures"])) == list(map(str, full["failures"]))
+    # the two reflexive guarantees are exempt and the non-reflexive `Holds (f n) = Holds (g n)` is not, in stage B as in full
+    body = json.loads(gzip.decompress(doc.read_bytes()))["facts"]["pins"]
+    assert [A.reflexive(body[n]) for n in names] == [True, True, False]
+    assert [f.entry for f in sb["failures"] if (f.code or "").startswith("witnesses")] == ["Control.same"]
+
+
 def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
     """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
     kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
@@ -3775,6 +3864,94 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
         "Control.SecurityProofs.G": {"Eq (Control.double n) 5": WHY}, "Control.offends": {"Eq (Control.double n) 4": WHY}}
 
 
+def test_a_reflexive_statement_needs_no_witnesses_and_its_unwitnessed_entry_drops():
+    """A guarantee whose statement, its definition unfolded once, concludes `a = a` with the same `Expr` on both sides
+    (`reflexive`: the claims tuples' `claims = claims`, a text record whose change reaches the lock's review) is held to
+    no witnesses, behind `∀` and `→` binders too, and `--update` drops its `unwitnessed` entry, which until then is stale.
+    An `Eq` that `Facts.lean` doesn't report as a reflexivity (`f x = g x` of definitionally equal `f` and `g`), a
+    reflexive `↔`, an `∃` before it or a second conjunct keeps it in scope."""
+    refl = {"head": "Eq", "defs": ["P.Holds"], "refl": True, "assumed": False}
+    stated = wbody("P.Guarantees.Stated", conclusion=[wk("P.Guarantees.Stated")], lifted=wbody("Eq", conclusion=[refl]))
+    pol, f = witnessed({"body": stated})
+    pin, pol = f["pins"]["P.sound"], {**pol, "witnesses": {}}
+    assert A.reflexive(pin) and A.witness_scope("P.sound", pol, pin) is None
+    assert witness_codes(pol, f) == []
+    listed = {**pol, "unwitnessed": {"P.sound": {"type_hash": pin["type_sha256"], "unfolded_hash": sha("unfolded")}}}
+    assert A.witness_failures(listed, f, WOWN) == [
+        "witnesses: `unwitnessed` lists P.sound, which the rule doesn't hold to witnesses; remove the entry"]
+    assert A.unwitnessed_kept(listed, f, {}) == {}
+    behind = witnessed({"body": wbody("Eq", binders=["∀", "→"], conclusion=[refl])})[1]
+    assert A.reflexive(behind["pins"]["P.sound"]) and witness_codes(pol, behind) == []
+    for lifted in (wbody("Eq", conclusion=[refl | {"refl": False}]), wbody("Iff", conclusion=[refl | {"head": "Iff"}]),
+                   wbody("Eq", binders=["∃"], conclusion=[refl]), wbody("And", conclusion=[refl, wk("P.Holds")])):
+        kept = witnessed({"body": stated | {"lifted": lifted}})[1]
+        assert not A.reflexive(kept["pins"]["P.sound"]) and witness_codes(pol, kept) == ["witnesses.missing"], lifted
+
+
+REFLEXIVE = """\
+namespace Control.Claims
+
+def Holds (n : Nat) : Prop := n < 5
+
+def Other : Prop := True
+
+def f (n : Nat) : Nat := n
+
+def g (n : Nat) : Nat := n
+
+end Control.Claims
+
+namespace Control.Guarantees
+
+def Stated : Prop :=
+  let claims := (Control.Claims.Holds, Control.Claims.Other)
+  claims = claims
+
+end Control.Guarantees
+
+namespace Control
+
+theorem SecurityProofs.Stated : Guarantees.Stated := rfl
+
+theorem statedAt : ∀ n : Nat, (Claims.Holds n, Claims.Other) = (Claims.Holds n, Claims.Other) := fun _ => rfl
+
+theorem same : ∀ n : Nat, Claims.Holds (Claims.f n) = Claims.Holds (Claims.g n) := fun _ => rfl
+
+end Control
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_reflexive_statement_is_read_syntactically_on_a_real_build(tmp_path):
+    """On a real build, `Facts.lean`'s `refl` is syntactic: the claims tuple `let claims := …; claims = claims` behind a
+    `Guarantees` definition, and a tuple equal to itself under a `∀`, are reflexivities and need no witnesses, and
+    `--update` drops their `unwitnessed` entries; `Holds (f n) = Holds (g n)`, with `f` and `g` definitionally equal (it
+    holds by `rfl`) but different constants, stays in scope and keeps its entry."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Claims.lean").write_text(REFLEXIVE)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Claims\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["Control.SecurityProofs.Stated", "Control.statedAt", "Control.same"]
+    policy = unclaimed(A.load(pkg))
+    policy["guarantees"] = policy["guarantees"] | {n: {"owner": "@lean"} for n in names}
+    f = A.facts_of(pkg, policy, tmp_path)
+    pins = {n: f["pins"][n] for n in names}
+    assert [A.reflexive(p) for p in pins.values()] == [True, True, False]
+    assert [A.witness_scope(n, policy, p) for n, p in pins.items()] == [
+        None, None, ("acceptance", "it reads the claim Control.Claims.Holds")]
+    own = {"Control", "Control.Assumptions", "Control.Claims", "Control.Defs", "Control.Thms"}
+    assert [(x.code, x.entry) for x in A.witness_failures(policy, f, own)] == [("witnesses.missing", "Control.same")]
+    stated = pins["Control.SecurityProofs.Stated"]
+    allow = {"Control.SecurityProofs.Stated": {"type_hash": stated["type_sha256"],
+                                               "unfolded_hash": stated["lift"]["unfolded_sha256"]},
+             "Control.statedAt": pins["Control.statedAt"]["type_sha256"], "Control.same": pins["Control.same"]["type_sha256"]}
+    listed = policy | {"unwitnessed": allow}
+    assert [(x.code, x.entry) for x in A.witness_failures(listed, f, own)] == [
+        ("witnesses.unwitnessed-stale", "Control.SecurityProofs.Stated"), ("witnesses.unwitnessed-stale", "Control.statedAt")]
+    assert A.unwitnessed_kept(listed, f, {}) == {"Control.same": allow["Control.same"]}
+
+
 def test_a_lifted_guarantee_is_witnessed_as_the_statement_it_lifts():
     """A four-name guarantee (`P.SecurityProofs.sound : P.Guarantees.sound`) is read with its `Guarantees` definition
     unfolded once (`lifted`): its nontrivial witness negates the head of the lifted statement, and its witnesses are not
@@ -4856,7 +5033,7 @@ _BAD_PARTS = ("Bad.olean", "Bad.olean.server", "Bad.olean.private", "Bad.ir.sig"
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_path, monkeypatch):
-    """The gap LEAN-212 closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
+    """The gap this closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
     reader of the live files could be shown bytes the build swaps out and back.  The audit copies the build at the seal and
     reads the copies.  Here a package is built with a `Control.Bad` whose declaration skips the kernel (the sealed, true
     state), and a dependent package's compile-time `#eval` overwrites that `.olean` with a good one during the window; the
@@ -4971,7 +5148,7 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_seal_skips_an_exempt_module_with_no_olean(tmp_path):
-    """The regression #7873 landed: the seal seeded every module under the lock's roots, an `exempt` one under them
+    """A regression the seal had: it seeded every module under the lock's roots, an `exempt` one under them
     included, but an exempt module (a scratch file, a `runs` test) is not built, so `Graph.lean` was sent after an
     `.olean` that is not there and the seal, and every audit of the package, failed.  Here a package has an exempt module
     `Control.Stub` under its root that nothing imports or builds; the sealed audit passes, and the seal seeds and copies
