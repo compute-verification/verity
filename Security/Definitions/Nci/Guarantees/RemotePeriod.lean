@@ -16,7 +16,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
   `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`, at window `t`'s
   play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
-  premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
+  premises; that bridge is not stated. `ComposeMonitoringPeriod.CircuitCreditPeriod` credits live words over a period's
   accepted prefix, not time, so it does not give `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
@@ -130,12 +130,12 @@ def DampenerRemotePeriod : Prop :=
       1 - (p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t) ≤
         prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) (fun ξ =>
           efficiency κ (M ξ) C U ≤
-              unmonitoredShare C U +
-                  (1 - unmonitoredShare C U) *
+              unregisteredShare C U +
+                  (1 - unregisteredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                 declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ ∧
-            remoteDampener mfu (unmonitoredShare C U)
-                ((1 - unmonitoredShare C U) *
+            remoteDampener mfu (unregisteredShare C U)
+                ((1 - unregisteredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                   declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ≤
               hardwareMultiple mfu κ (M ξ) C U)
@@ -186,12 +186,12 @@ def DampenerRemotePeriod_honest : Prop :=
     (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
     (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) ∧
     p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t ≤ 1 / 10 ^ 6 ∧
-    ∀ ξ, 1 < remoteDampener mfu (unmonitoredShare C U)
-        ((1 - unmonitoredShare C U) *
+    ∀ ξ, 1 < remoteDampener mfu (unregisteredShare C U)
+        ((1 - unregisteredShare C U) *
             (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
           declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ∧
-      remoteDampener mfu (unmonitoredShare C U)
-          ((1 - unmonitoredShare C U) *
+      remoteDampener mfu (unregisteredShare C U)
+          ((1 - unregisteredShare C U) *
               (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
             declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ≤
         hardwareMultiple mfu κ (M ξ) C U
@@ -276,13 +276,13 @@ def DampenerRemotePeriod_nontrivial : Prop :=
   ¬ (1 - (0 / (1 / 2) + (∅ : Finset Unit).card * (1 - 1) ^ ((0 : ℕ) + 1) + ∑ t, AcceptAll.ks t) ≤
       prob (PMF.uniformOfFintype (Fin 1 → Bool)) (fun ξ =>
         efficiency 2 (AcceptAll.M ξ) 1 0 ≤
-            unmonitoredShare 1 0 +
-                (1 - unmonitoredShare 1 0) *
+            unregisteredShare 1 0 +
+                (1 - unregisteredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
               declaredShare 2 (rhoT ((1 : ℝ) / ((1 : ℕ) : ℝ)) 100 1) 1 0 + 0 ∧
-          remoteDampener 1 (unmonitoredShare 1 0)
-              ((1 - unmonitoredShare 1 0) *
+          remoteDampener 1 (unregisteredShare 1 0)
+              ((1 - unregisteredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
                 declaredShare 2 (rhoT ((1 : ℝ) / ((1 : ℕ) : ℝ)) 100 1) 1 0 + 0) ≤

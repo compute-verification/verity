@@ -10,7 +10,7 @@ prover's state at registration (its registration and its session strategy for ev
 its incorrect proof blocks; nobody computes it. A unit is **incorrect** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
-design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`LinkSound`) is the
+design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`BindSound`) is the
 Glossary's $\varepsilon_{bind}$.
 
 **Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`): each is stated in `../ASSUMPTIONS.md`.
@@ -18,7 +18,7 @@ Glossary's $\varepsilon_{bind}$.
 **What the reviewer checks here.** The theorems hold for every choice of committed trace `X` and extractor `ext`,
 so their meaning rests on `X` being the committed values. At the oracle layer `X` is the registration itself
 (`Partition.oracle`). At the compiled layer it is the plurality of what the extractor recovers behind each commit
-string, which the instantiation defines and `LinkSound` ties to the extractor. A consumer who opens values under the
+string, which the instantiation defines and `BindSound` ties to the extractor. A consumer who opens values under the
 roots gets `X`'s values up to that opening's own binding term, which the audit does not count.
 
 **Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the sample misses $B$:
@@ -193,21 +193,9 @@ $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_spli
 split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's sample is under a distinct
 context.
 
-**Theorems, two-stage** (`Audit/TwoStage.lean`):
-
-- `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective acceptance
-  probability
-  $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
-  $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
-- `effAcceptProb_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
-- `effAcceptProb_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
-  any second stage, $m_u$ the largest second-stage acceptance probability inside $u$;
-- `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
-- `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
-  behind (b).
-- `Refines.oracle₂_profile`, `oracle₂_full_profile`: the same at the oracle layer, from a sound fine-level session
-  (`SessionSound₂ ε`), with the binding error zero. These are the plan's `two_stage_b_profile` and
-  `two_stage_full_eq_one_stage` as stated there.
+**Two-stage sampling** is stated in `Claims.SamplingTwo` and proved in `Proofs.Flock.SamplingGeneric.Two`
+(`Claims.SamplingGeneric.compilerKSTwo`), with its acceptance probability $\bar P_a$ at the footprint
+(`Claims.Sampling.Design.Two.Pa`). With a Bernoulli first stage, $\bar P_a$ is Partitioning's `NestedEscape` product.
 
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
@@ -226,8 +214,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   members;
 - `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
   \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
-  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay blocks, with $e_{\text{eff}}$
-  and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
+  $\log_2 |\mathrm{influenceSet}|$ bits.
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
   each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
@@ -243,26 +230,8 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
   meets `card_influenceSet_le_harm`'s on any partition and sampling design, with the exits as separators and each unit's
-  exported width as its harm.
-  `Two.influence` meets `Refines.twoStage_influence`'s, with `AnchorsSound₂`, on a two-stage audit that accepts with
-  probability 1 (`Two.accepts`), and `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
+  exported width as its harm; `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
   message.
-
-**Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
-fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates in the second stage and an ideal session):
-
-- `two_stage_b_tight`: for every first-stage sampling design, a prover whose chains are all incorrect is accepted with
-  probability exactly `twoStage_count`'s bound, $\mathbb E_{S_1}[q^{|S_1|}]$ with
-  $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
-- `naive_two_level_unsound`: if the second stage leaves a gate unsampled and the first samples anything, that exceeds
-  $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
-  the retired Python `TwoStageLaw.profile`, at $m = n_v$) would give. Nested sampling dilutes;
-- `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), an incorrect chain is accepted
-  with probability 1.
-
-- `effAcceptProb_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
-  the effective acceptance probability of any set of chains is its acceptance probability under the one-stage
-  Bernoulli($p\,k_2/n_v$) sample, $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
 
 **The Flock instantiation, oracle layer** (`Audit/Flock.lean`, the only audit file that imports Flock's theorems):
 
@@ -276,9 +245,6 @@ fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates i
 - `flock_oracle_drawn`: sampled proof blocks correct up to $2^{-205}$;
 - `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-205}$.
 
-- `flock_two_stage_sound`, `flock_two_stage_full_profile`: **two-stage (b1) on Flock** is one-stage over the coarse
-  partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-205}$, given the fine partition's lowering.
-
 The hypotheses are the lowerings.
 
 **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`; `../DESIGN.md`
@@ -288,7 +254,7 @@ The hypotheses are the lowerings.
   extractor**. Per sampled proof block, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
   probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
   on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
-  `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
+  `KnowledgeSound.toExtraction` and `BindSound.toExtraction`);
 - `flock_batched_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit in the protocol's batched session
   of several tables (`batchedSession`, `sessionB`), with the leaf layer registered. Each sampled proof block is read from one
   table of the plan (`tab`). The knowledge term is, after each sample, the largest over the plan's tables of the table's

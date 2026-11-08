@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Flock.Audit.Harm
+public import Proofs.Flock.Soundness.Audit.OneStage
 public import Proofs.Flock.Soundness.Audit.Harm
-public import Proofs.Flock.Soundness.Audit.TwoStage
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Module.Field
@@ -30,8 +30,7 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 * `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their wrong units form a set
   whose escape `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the law and `δ`, never by
   the prover, and `card_influenceSet_le` bounds its size by `∑_{B : δ ≤ e B} 2^|K B|`.
-* `audit_influence` (one-stage) and `Refines.twoStage_influence` (two-stage, over replay units, with `effAcceptProb`): the
-  audit accepts while the delivered values lie outside the influence set with probability at most
+* `audit_influence`: the audit accepts while the delivered values lie outside the influence set with probability at most
   `δ + ε_ks + δ_link + δ_in`. The influence in bits is `log₂ |influenceSet|`.
 * `card_influenceSet_le_harm` and `card_admissible_le`: the influence is at most `H + log₂ ∑_{j ≤ K} C(n, j)` bits. `H` is
   a harm bound (`IsHarmBound`) with each unit's harm the width it adds to a separator, for example its exits
@@ -283,7 +282,7 @@ variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Boo
 /-- **The influence of an accepted audit** (one-stage): the audit accepts while the committed transcript delivers on
 `D` a value outside the influence set at `δ` with probability at most `δ + ε_ks + δ_link + δ_in`. -/
 theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
-    (hlink : (P.analysis X ext).LinkSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
+    (hlink : (P.analysis X ext).BindSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
     (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)
         (audit L Reg session) σ ≤ δ + εks + δlink + δin := by
@@ -304,7 +303,7 @@ theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
 and a receiver `g` that sees only what is delivered on `D`, succeed together (the audit accepts and `g` returns `m`) with
 probability at most `|influenceSet|/|M| + δ + ε_ks + δ_link + δ_in`. -/
 theorem audit_exfiltration_influenceSet {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
-    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (δ : ℝ≥0∞) (σ : M → Strategy (audit L Reg session)) (g : (D → Bool) → M) :
     avg (fun m => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ m)) (cont (σ m)))) = m)
         (audit L Reg session) (σ m)) ≤
@@ -344,7 +343,7 @@ receiver `g` that sees only what is delivered on `D`, succeed together with prob
 a separator (the value bits) and `miss (k + 1) < δ` (which units are wrong). With `|M| = 2^ℓ`, the first term is
 `2^(H + log₂ ∑_{j ≤ k} C(n, j) − ℓ)`. -/
 theorem audit_exfiltration {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
-    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
     {δ : ℝ≥0∞} {H k : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) (hk : L.miss (k + 1) < δ)
@@ -359,51 +358,6 @@ theorem audit_exfiltration {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
   gcongr
 
 end OneStage
-
-section TwoStage
-
-variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞}
-  {D : Finset (Fin C.N)}
-
-/-- **The influence of an accepted two-stage audit**, variant (b), over replay units: the committed coarse transcript
-delivers on `D` a value outside the coarse partition's influence set, with the effective escape, with probability at
-most `δ + ε_ks + δ_link + δ_in`, given the two-stage input hypothesis `AnchorsSound₂`. A replay unit's separator can be
-its exits (`separates_exits`). -/
-theorem Refines.twoStage_influence (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type}
-    {Int : Finset (Fin nc) → Type}
-    {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
-    (X : (R : Reg) → Cont₁ L₁ L₂ Reg Int session R → (Fin C.N → Bool))
-    (Yint : (R : Reg) → (ω₁ : L₁.Ω) → (I : Int (L₁.draw ω₁)) → Cont₂ L₁ L₂ Reg Int session R ω₁ I →
-      (Fin C.N → Bool))
-    (ext : (S : Finset (Fin nf)) → (R : Reg) → (S₁ : Finset (Fin nc)) → (I : Int S₁) →
-      Strategy (session S R S₁ I) → Fin nf → Option (Fin C.N → Bool))
-    (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)
-    (hin : AnchorsSound₂ X a δin) (δ : ℝ≥0∞) (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
-    prob (fun o => o.1 = true ∧ out D (X (reg₂ σ) (cont₁ σ)) ∉ Pc.influenceSet D (effAcceptProb L₁ L₂ r.parent) a δ)
-        (twoStage L₁ L₂ Reg Int session) σ ≤ δ + εks + δlink + δin := by
-  let W := Pc.wrong (X (reg₂ σ) (cont₁ σ))
-  let good : Bool × Finset (Fin nc) × Finset (Fin nf) → Prop := fun o =>
-    o.1 = true ∧ effAcceptProb L₁ L₂ r.parent W < δ
-  let bad : Bool × Finset (Fin nc) × Finset (Fin nf) → Prop := fun o =>
-    o.1 = true ∧ ¬ C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a
-  have hsplit : ∀ o : Bool × Finset (Fin nc) × Finset (Fin nf),
-      (o.1 = true ∧ out D (X (reg₂ σ) (cont₁ σ)) ∉ Pc.influenceSet D (effAcceptProb L₁ L₂ r.parent) a δ) →
-      good o ∨ bad o := by
-    intro o h
-    by_cases hia : C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a
-    · exact Or.inl ⟨h.1, lt_of_not_ge fun hge => h.2 (Pc.out_mem_influenceSet hia hge)⟩
-    · exact Or.inr ⟨h.1, hia⟩
-  have hgood : prob good (twoStage L₁ L₂ Reg Int session) σ ≤ δ + εks + δlink := by
-    refine (twoStage_profile (r.analysis₂ X Yint ext) hks hlink
-      (fun B => effAcceptProb L₁ L₂ r.parent B < δ) σ).trans ?_
-    gcongr
-    exact iSup₂_le fun B hB => hB.le
-  calc _ ≤ prob (fun o => good o ∨ bad o) (twoStage L₁ L₂ Reg Int session) σ := prob_mono hsplit _ _
-    _ ≤ prob good (twoStage L₁ L₂ Reg Int session) σ + prob bad (twoStage L₁ L₂ Reg Int session) σ :=
-        prob_or_le good bad _ _
-    _ ≤ δ + εks + δlink + δin := add_le_add hgood (hin σ)
-
-end TwoStage
 
 end Partition
 
