@@ -8794,7 +8794,7 @@ The full report is note `20261108T0735Z-report-proof-server-steady-state`; the e
     because its first step named a wrong path and collected nothing.
   - r20261108-075620-0491 passed: 56 passed, and each of the four tests is PASSED by name.
 
-Land ask for #7910 (58 words): "#7910 (proofs, PRF-461, CIR-188) wires the length rule: each request Program checks its end
+Land ask for #7910 (49 words): "#7910 (proofs, PRF-461, CIR-188) wires the length rule: each request Program checks its end
 against #7911's StopRule_v1. Re-marked at 34f914ba3f after its ejection: two stub fixtures gain the rows array every
 writer writes (check_rows unchanged), and two class-G tests count the rule. Full verity-vllm suite passed. Carries
 #7911's commits."
