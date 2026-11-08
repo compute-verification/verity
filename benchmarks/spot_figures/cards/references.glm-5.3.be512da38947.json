@@ -1,0 +1,67 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "references",
+ "model": "GLM-5.3",
+ "status": "measured",
+ "provisional": true,
+ "source": "Exfiltration lines (the scheduler's advice), in order: today's advice, the response length charged until a circuit checks the stop rule; the advice once one does, 0; and, in the appendix, the registered cap without the certified tick, measured with prefix caching on (pending). Today's advice with the certified tick: no circuit checks the stop rule yet, so a response's length and finish are advice, charged at log2(max_tokens) + 1 bits a request, 18 bits at the 131,072-token cap that bounds every request's max_tokens, times the scope's requests (figure1.scopes on the GLM-5.3 workload card: 3.891e+14 a world week, 1.038e+11 a datacenter week). At each request's own max_tokens it is less, 8.75 bits a request on average over vLLM's 128k serve plan. With certified arrivals (the run with the real network certifier is pending; in the measured runs a client stood in for the certifier) and prefix caching off, the length is the whole advice; with prefix caching on, each hit sent whole and charged as advice would add to it (pending). Once a circuit checks the stop rule (pending), with the certified tick, certified arrivals (the run with the real network certifier is pending; in the measured runs a client stood in for the certifier) and prefix caching off, the advice is 0 bits in every window, at every scope: with no prefix-cache hit to send, every coded symbol of v1 has one value. With prefix caching on, the alternative is each hit sent whole and charged as advice (pending). The windows measured so far served with prefix caching on, so their 0s are pending: re-encoded with no hit sent, which leaves each hit for the verifier to derive, the tick's 90 bits over three 600 s windows and its 300 over twenty-three 60 s windows fell to 0, and every trace round-trips (runs r20261107-204341-1fd1, r20261107-204925-11cd and r20261107-211843-d3b6). Without certified arrivals the server picks each request's admission step and its order within the step: up to 8,721 bits a 600 s window at capacity under the tick (run r20261108-000518-c194), measured with prefix caching on (pending). Without the tick, the advice term of the network leak bound is a registered cap on v1, the scheduler's advice encoding, the smallest cap a 600 s machine-window that admits every honest window measured on GLM-5.3 at TP8, with prefix caching on (pending). The bound counts the advices the registered codec admits: at most 2^c strings are charged c bits or fewer (Kraft; the premise hAs of EncardAccSeqsSampledLe, Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean), and the codec and its cap are registered before the first window, with advice over the cap refused (certifier PROTOCOL.md, A7). An adversarial prover picks any advice up to c_w, so each line is c_w times the scope's machine-windows, not the honest mean; an honest window above its cap is refused (completeness, not soundness). The compiler doesn't read v1 yet: each cap is what it will charge once it does. Machine-windows: figure1.scopes on the GLM-5.3 workload card, 4.724e+10 a world week and 1.26e+07 a datacenter week (12,500 machines), 8,236 requests a machine-window at the census's rate. The measured windows hold at most 4,346 requests, fewer than that: a window with more fits the cap if its advice doesn't grow with its requests, and above capacity, where a standing queue leaves little timing choice, it fell. Superseded: art:e2d8a4de324ec7991c10d77174fc2a1ad824f16d73d5d12adfc28270bb90e44d's caps of 0.1, 6, 40 bits and 8 kbit a request, from vLLM's scheduler serving Llama 3 models on the RTX PRO 6000 (the 6-bit one with the KV pool in the circuit, designed, not built; the 8-kbit one the raw schedule, which v1's exact replan makes unneeded). Supersedes art:1e8521857026cfe26ee2f4e00586daa1342f61517460bbd1618180d7876b8522, whose 0 rested on prefix-cache hits the verifier derives.",
+ "runs": [
+  "r20261107-122301-1f31",
+  "r20261107-115356-82d6",
+  "r20261107-163938-3ff9",
+  "r20261107-204341-1fd1",
+  "r20261107-204925-11cd",
+  "r20261107-211843-d3b6",
+  "r20261107-235451-1a69",
+  "r20261108-000518-c194"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "lines": [
+   {
+    "panel": "exfiltration",
+    "label": "Advice today: the response length, 18 bits a request (no circuit checks the stop rule yet)",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 7004223118957404.0,
+     "world month": 3.0018099081246016e+16,
+     "world year": 3.652202054884932e+17,
+     "datacenter week": 1867992084210.9568,
+     "datacenter month": 8005680360904.1,
+     "datacenter year": 97402444390999.9
+    },
+    "source": "Today's advice with the certified tick: no circuit checks the stop rule yet, so a response's length and finish are advice, charged at log2(max_tokens) + 1 bits a request, 18 bits at the 131,072-token cap that bounds every request's max_tokens, times the scope's requests (figure1.scopes on the GLM-5.3 workload card: 3.891e+14 a world week, 1.038e+11 a datacenter week). At each request's own max_tokens it is less, 8.75 bits a request on average over vLLM's 128k serve plan. With certified arrivals (the run with the real network certifier is pending; in the measured runs a client stood in for the certifier) and prefix caching off, the length is the whole advice; with prefix caching on, each hit sent whole and charged as advice would add to it (pending)."
+   },
+   {
+    "panel": "exfiltration",
+    "label": "Advice once the length rule is checked in-circuit, prefix caching off (pending)",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 0.0,
+     "world month": 0.0,
+     "world year": 0.0,
+     "datacenter week": 0.0,
+     "datacenter month": 0.0,
+     "datacenter year": 0.0
+    },
+    "source": "Once a circuit checks the stop rule (pending), with the certified tick, certified arrivals (the run with the real network certifier is pending; in the measured runs a client stood in for the certifier) and prefix caching off, the advice is 0 bits in every window, at every scope: with no prefix-cache hit to send, every coded symbol of v1 has one value. With prefix caching on, the alternative is each hit sent whole and charged as advice (pending). The windows measured so far served with prefix caching on, so their 0s are pending: re-encoded with no hit sent, which leaves each hit for the verifier to derive, the tick's 90 bits over three 600 s windows and its 300 over twenty-three 60 s windows fell to 0, and every trace round-trips (runs r20261107-204341-1fd1, r20261107-204925-11cd and r20261107-211843-d3b6)."
+   },
+   {
+    "panel": "exfiltration",
+    "label": "Advice cap without the tick, 5,582 bits/window (v1, GLM-5.3 TP8, prefix caching on: pending)",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 263700000000000.0,
+     "world month": 1130000000000000.0,
+     "world year": 1.375e+16,
+     "datacenter week": 70330000000.0,
+     "datacenter month": 301400000000.0,
+     "datacenter year": 3667000000000.0
+    },
+    "source": "A registered cap of c_w = 5,582 bits a 600 s machine-window on v1, the largest of the 21 honest windows (at capacity, async, its first window: 5,582 bits over 3,309 requests), so every honest window fits; the line is c_w times the scope's 600 s machine-windows, the most any accepted advice is charged. Measured on GLM-5.3 at TP8 on one 8xH200 node (FlashInfer FP8, prefix caching on, the corpus recorder) over six served sessions, half load, at capacity and above it, each sync and async, and the tick set's arrival trace at capacity, three 600 s windows each, the last its drain; each window is charged v1's held-out bits, each trace's book fit on the other traces of its set. The windows run 0.108 to 2.742 bits a request and hold 310 to 4,346 requests; above capacity a standing queue leaves little timing choice, so the bits fall. Every trace round-trips, and vLLM's replanner rebuilds all 41,502 steps of 7 traces exactly from v1; the 23 kernel launch choices are functions of rows and config (class G), so kernel statics add no bits. Measured with prefix caching on, so the cap is pending until the hits are charged whole or prefix caching is off."
+   }
+  ],
+  "caption": "The advice line (solid) is today's: with the certified tick, no circuit checks the stop rule yet, so each response's length and finish are advice, charged at log2(max_tokens) + 1 bits, 18 bits a request at the 131,072-token cap, times the scope's requests. The dashed line along the floor is the advice once the length rule is checked in-circuit (pending): 0 bits in every window with prefix caching off and certified arrivals, whose run with the real network certifier is pending (in the measured runs a client stood in for the certifier). With no prefix-cache hit to send, every coded symbol of v1 then has one value; with prefix caching on, the alternative is each hit sent whole and charged as advice (pending). The windows measured so far served with prefix caching on, so their advice figures are pending: re-encoded with no hit sent, the tick's 90 bits over three 600 s windows and its 300 over twenty-three 60 s windows fell to 0 (runs r20261107-204341-1fd1, r20261107-204925-11cd and r20261107-211843-d3b6); without certified arrivals the server picks each request's admission step and its order within the step, up to 8,721 bits a 600 s window at capacity under the tick (run r20261108-000518-c194); and without the tick, the appendix's advice line is a registered cap of 5,582 bits a 600 s machine window on v1, the scheduler's advice encoding, times the scope's machine windows: the most any accepted advice is charged, and the smallest cap that admits each of the 21 honest windows measured serving GLM-5.3 at TP8, from half load to above capacity. The compiler doesn't read v1 yet, so each charge is what it will be once it does. v1 replans every traced step exactly, and the 23 kernel launch choices are functions of rows and config, so kernel statics add no bits."
+ },
+ "art": "art:be512da3894785fbcf1e331bc4f643acaed6282baee9e2e30e7704e34b5032e5"
+}

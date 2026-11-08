@@ -134,6 +134,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
 CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
+#: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
+CONCEPTS += ("Extractor", "Simulator")
+CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
+CANONICAL["Simulator"] = (f"{CORE}Interaction.lean::Claims.Simulator",)
+#: What a second declaration of a concept loses, said in its failure.
+WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
+                    "can open a hiding commitment to any trace, so it meets any contract",
+       "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
@@ -595,6 +603,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
     "Security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Binding.Trace":
         "homonym, the value a binding commits at each of its positions (`Pos → Val`): rename (proofs)",
+    "Security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Extractor":
+        "duplicate of `Claims.Extractor` as free bound fields (`ks`, `link`), read by no listed guarantee: becomes a reading of it or goes (proofs)",
     "Security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean::FlockSoundness.Discharge.Exec.Transcript":
         "homonym, a session directory's files: rename (proofs)",
     "Security/Proofs/Flock/Soundness/ExecPlacement.lean::FlockSoundness.Layout":
@@ -1051,6 +1061,7 @@ def test_every_hit_is_canonical_or_listed():
     found = classify(_scanned())
     assert len(found) >= 300, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
     unlisted = [f"{k} (line {h.line}) declares {concept} again: read {_read(concept)}, or rename it if it is another thing"
+                + (f" ({WHY[concept]})" if concept in WHY else "")
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
     assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
                           + "\n  ".join(unlisted))
@@ -1254,6 +1265,18 @@ def test_readings_and_slots_are_exempt():
     assert reads == {f"{pouw}::Pouw.Coins"}
     assert not reads_canonical(s.hits["Draw"][0], {f"{core}::Verity.Coins"}, s)
     assert slots(s) == {f"{pouw}::Pouw.Registration"}
+
+
+def test_a_second_extractor_is_refused():
+    """An extractor of free fields beside the counted one (a statement over it is met by an extractor that opens a hiding
+    commitment to any trace) is a second declaration of the concept; the claims core's is canonical."""
+    core, sampled = f"{CORE}Interaction.lean", "Security/Proofs/Flock/Sampled/Defs.lean"
+    found = classify(scan({core: "namespace Claims\nstructure Extractor (W : Type) where\n  ext : Nat → RP Nat W\n"
+                                 "structure Simulator where\n  prog : Nat → SP Nat\nend Claims\n",
+                           sampled: "namespace Sampled\nstructure Extractor where\n  ks : Nat → Nat\nend Sampled\n"}))
+    assert {k: (c, status) for k, (c, _, status) in found.items()} == {
+        f"{core}::Claims.Extractor": ("Extractor", "canonical"), f"{core}::Claims.Simulator": ("Simulator", "canonical"),
+        f"{sampled}::Sampled.Extractor": ("Extractor", "unlisted")}
 
 
 def test_prune_deletes_stale_lines():

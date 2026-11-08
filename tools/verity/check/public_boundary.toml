@@ -25,7 +25,9 @@ spot = [
 flock = [
     "verity/ml/flock",
     "verity/core/service/flock",
+    "Security/Proofs/Properties/Flock{,.lean}",
     "Security/*/Flock{,.lean}",
+    "Security/Definitions/Assumptions/Flock.lean",
 ]
 ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
@@ -50,6 +52,8 @@ vllm = ["integrations/vllm"]
 shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/core/difftest",
+    # the reporting grid every monitoring-period report states: its periods and δs
+    "verity/core/protocols/reporting.py",
     "tools/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
     # Accounting's B200 sheet, so it stays private)
@@ -69,8 +73,12 @@ benchmarks = [
     "benchmarks/{flock_s8_block,recursion_e2e}",
     "benchmarks/one_stage/{served_verdicts,served_pearlplus,served_composite}.sh",
     "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
+    # the block record the served verdicts write, which `served_verdicts.py` loads from `examples/h200/interfaces`
+    "examples/h200/interfaces/verity_e2e_demo/block_record.py",
     "benchmarks/one_stage/{served_overhead,served_compare}.py",
     "benchmarks/one_stage/{pyproject.toml,README.md}",
+    # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
+    "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
 ]
 
 [private]
@@ -96,6 +104,8 @@ protocols = [
     "integrations/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
+    # PoUB's opening unit's test, which holds it to PoUB's Python verifier
+    "verity/ml/commitments/tests/test_block_check.py",
 ]
 # vLLM's tests that read a private protocol (the network certifier, NCI, the bandwidth audit, PoUS)
 protocol_tests = [
@@ -104,11 +114,15 @@ protocol_tests = [
     "integrations/vllm/tests/program/test_io_shell.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
+    "integrations/vllm/tests/pipeline/test_serve_remote.py",
+    "integrations/vllm/tests/engine/int8_store_gpu.py",
 ]
-# vLLM's adapter of PoUS, which `verity_vllm.protocols.adapter` loads by name and refuses as not on this tree where it
-# is absent
+# vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
+kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
+# vLLM's adapter of PoUS and driver of the bandwidth audit, which `verity_vllm.protocols.adapter` and `driver` load by name
+# and refuse as not on this tree where they are absent
 adapters = [
-    "integrations/vllm/verity_vllm/protocols/pous.py",
+    "integrations/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
 # vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
 checks = [

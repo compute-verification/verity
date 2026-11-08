@@ -82,6 +82,10 @@
   with digest D (its last naming V), whose leaves, words and word bits must be the value's own (`R7-output` when the log
   holds no such record or value, or they differ). Nothing is registered afresh: a record whose entry names another domain
   or root is `R7-domain` or `R7-held`, as for a port.
+* **Window history**: an output value the verifier gives only a port (`{value: {"port": P}}`) is port P of the previous
+  record, the log's last, which R6 holds `previous` to (`last_digest`): the verifier names the record itself, so a
+  window's history, the earlier windows' outputs it reads, is held to the previous window's root and domain for P, and
+  with no previous record it is `R7-output`.
 """
 from __future__ import annotations
 
@@ -179,7 +183,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
     ones that are outputs of an earlier run or reuse an earlier record's registered value (`outputs`: `{parameter:
-    {"record", "port" | "value"}}`); and of the ones it doesn't fill,
+    {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and of the ones it
+    doesn't fill,
     those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
     that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
@@ -209,12 +214,12 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
-    outs = _outputs(outputs, registered or {}, sup, pins)
+    log = list(log)
+    outs = _outputs(outputs, registered or {}, sup, pins, log)
     formats = _schemas(schemas, registered or {}, sup)
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
-    log = list(log)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
@@ -337,23 +342,39 @@ def refuse_unwindowed(again: Sequence[str]) -> None:
                          "the window), and a value held across windows is named in `held` (or pinned)")
 
 
+def last_digest(log: Sequence[Mapping[str, Any]]) -> str:
+    """The previous record's digest, the one R6 holds `previous` to: the log's last record's, and empty, which names no
+    record, when the log is empty (`Registration.lastDigest`)."""
+    if not log:
+        return ""
+    try:
+        return digest(log[-1])
+    except (TypeError, ValueError):
+        return ""
+
+
 def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mapping[str, int], supplied: Mapping[str, Any],
-             pinned: Mapping[str, str]) -> dict[str, tuple[str, str, str]]:
+             pinned: Mapping[str, str], log: Sequence[Mapping[str, Any]] = ()) -> dict[str, tuple[str, str, str]]:
     """The verifier's output values, `{value: (record digest, "port" | "value", name)}`, each of a value it expects
     registered and neither fills nor pinned, an object of exactly a `record` (lowercase hex of 64 bytes) and either a `port`
-    or a `value` (a string: the earlier record's port, or its registered value); ValueError otherwise, which the Lean
-    verifier refuses too (`OneStage.paramsOfJson`)."""
+    or a `value` (a string: the earlier record's port, or its registered value), or of a `port` alone, a window's
+    history: that port of the previous record, whose digest the verifier takes from `log` (`last_digest`); ValueError
+    otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
     if outputs is None:
         return {}
     if not isinstance(outputs, Mapping) or not registered:
         raise ValueError(f"output values are an object of registered values' earlier ports or values: {outputs!r}")
     out = {}
     for v, o in outputs.items():
+        if (v in registered and v not in supplied and v not in pinned and isinstance(o, Mapping) and set(o) == {"port"}
+                and isinstance(o["port"], str)):
+            out[v] = (last_digest(log), "port", o["port"])
+            continue
         kind = next((k for k in ("port", "value") if isinstance(o, Mapping) and set(o) == {k, "record"}), None)
         if (v not in registered or v in supplied or v in pinned or kind is None or not isinstance(o[kind], str)
                 or not (isinstance(o["record"], str) and len(o["record"]) == 128 and _HEX.fullmatch(o["record"]))):
             raise ValueError(f"output value {v!r}: not a registered value it neither fills nor pinned, with an earlier "
-                             f"record's digest and a port or a value: {o!r}")
+                             f"record's digest and a port or a value, or a port of the previous record: {o!r}")
         out[v] = (o["record"], kind, o[kind])
     return out
 

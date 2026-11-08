@@ -82,8 +82,8 @@ class Rule:
 
     def run_inputs(self, ep, mode: str) -> bool:
         """Whether this rule reads values the served run decides (`Ctx.run_value`) for the exported graph `ep`: values no circuit
-        computes, which the Program takes as fields of its `run` parameter and checks in gates (`Ctx.check`), as the top-k order of
-        a DSA row past TOPK. Default: none."""
+        computes, which the Program takes as fields of its `run` parameter, as a training survey's holes (`training_survey`).
+        Default: none."""
         return False
 
     @property

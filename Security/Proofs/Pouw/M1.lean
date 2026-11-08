@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
 public import Definitions.Pouw.Witness.Honest
 import Mathlib.Tactic.Positivity.Finset
+public import Definitions.Pouw.Assumptions.GameStatements
 
 /-!
 # Facts about the named instance `D1.m1`
@@ -204,14 +204,14 @@ theorem m1Wref_real (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
 end M1
 
 /-- **The named instance.** -/
-theorem milestoneInstance : Pinned.MilestoneInstance := fun Wref =>
+theorem milestoneInstance : GameStatements.MilestoneInstance := fun Wref =>
   ⟨M1.isMilestone Wref, M1.noiseRange Wref, M1.queryBound Wref,
     fun s s' u u' A A' w w' hu hu' x hx hx' => M1.elQ_unique Wref s s' u u' A A' w w' hu hu' x hx hx',
     fun _ => ((4 : Fin 7), true), ⟨0, M1.salt_zero_lt⟩, M1.sixteen, 0, M1.sixteen_inDomain,
     by norm_num [M1.sixteen], M1.noise_ne_zero Wref _ 0⟩
 
 /-- **The milestone's `W_ref`**: `W_mm ≤ m1Wref ≤ (65769/65536)·W_mm` on the domain, and `g = 14017/1644225`. -/
-theorem milestoneWref : Pinned.MilestoneWref :=
+theorem milestoneWref : GameStatements.MilestoneWref :=
   ⟨fun U hU u hu => ⟨M1.Wmm_le_m1Wref U.layout u, M1.m1Wref_real U.layout hU.2.1 u hu⟩,
     by unfold D1.m1Omega; norm_num,
     by unfold reductionGap Params.gap0 D1.m1Omega; norm_num⟩
