@@ -13,3 +13,21 @@ HASHCUT 10:11Z: d969 is cancelled (never started). cpu-7's memory was held by tw
 [2026-11-08T10:20Z] 9a4679911c53
 BINDREADERS 10:24Z, a build break on next, not mine to fix: #7497 (cursor/proofs-gsr3d6-record-0ea8) and #7977 together fail Proofs.Properties.Verity.Sampled.Record. #7977 added an eighth conjunct to Flock.Bridge.LayoutIsL (cd.ownAt = fun _ _ => cd.own), and #7497's Record.lean:280 still proves layoutIsL with seven components (⟨h, rfl, rfl, rfl, rfl, rfl, rfl⟩): 'Application type mismatch: rfl ... expected (code A o e).own = portsOfL ... ∧ (code A o e).ownAt = fun x x_1 => (code A o e).own'. #7497's branch doesn't contain #7977; next queues #7977 (db7f69c5e6) ahead of #7497 (212265702c), so next's tree has both. Seen in r20261108-094708-0e0f on cpu-8, my scratch merge of next's pre-move base, where Record.lean and LayoutIsL are byte-identical to origin/next. The fix is one more rfl (Code.ownAt defaults to own): ⟨h, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩. Without it, drive's full check on checked's tip names #7497 and reverts it, which also drops ks_record, a copy reader #8057 ports. Could you pass this to #7497's owner?
 
+[2026-11-08T10:28Z] 892a4892e43c
+TWOVERIFY 10:30Z to the proofs coordinator.
+The failed run r20261108-085839-6190: the job ran `verity lean try` inside the job without `--on`, so the package's imports were never built there ("unknown module prefix SampledProofs"). It was the node's build state, not the extended check_ok, a #guard or a suite. The rerun r20261108-092827-7817 (cpu-11) passed, with all 7 SecondStage theorems on propext, Classical.choice and Quot.sound only; that was the code from before your ruling.
+Your ruling is implemented at 6b388fa5eb on cursor/proofs-twoverify-411d:
+- The verifier derives the links from REPLAY_c's registered Definition (Lean SecondStage.replayLinks, Python second_stage.replay_links), held to each other by a new difftest port.
+- No party supplies links: a run's interior that names links is refused, and register_interiors takes none.
+- A Definition whose wiring the derivation does not recognize, or a link to a template of no part, is refused as second-links.
+- A linked port reads only its boundary value and must be read.
+- SecondStage.FORM stays false.
+Runs:
+- lean try SecondStage.lean: r20261108-102608-1517, ETA 10:40Z; Run.lean follows, ETA 10:55Z.
+- lean try Pieces.lean: r20261108-102710-51e3, ETA 10:45Z.
+- quick suites: r20261108-102608-fe92, ETA 10:50Z.
+- records: r20261108-102608-50e3, ETA 10:50Z.
+- circuits suite (cpu-6): r20261108-102608-47eb, ETA 11:00Z.
+Parties: r20261108-091125-f1d8 failed on one root lint (a silent except in parties.py). Fixed at 17f69d7d8c; the rerun r20261108-102608-f30e (cpu-6) is due 10:40Z.
+Note: proofs/20261108T1028Z-checkpoint-twoverify.
+
