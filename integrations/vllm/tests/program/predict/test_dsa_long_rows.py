@@ -224,9 +224,11 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     long, short = c.requests
     assert (long.LP, long.T, long.chunks, short.LP, short.chunks) == (10, 2, (6, 4), 3, ())
     sigs = sorted((_families(p.fn.body.nodes)["DsaTopKMask_v1"], str(p.fn.signature()[1])) for p in c.programs.values())
-    assert sigs == [(0, str(Array(2, I32))), (3 * 8, str(Array(3, I32)))], "rows 4..11 of the long one, at each indexer layer"
+    rule = Array(1, Value(1))
+    assert sigs == [(0, str(TupleT(Array(2, I32), rule))), (3 * 8, str(TupleT(Array(3, I32), rule)))], \
+        "rows 4..11 of the long one, at each indexer layer; each Program's length rule last"
     alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
-                          batch=long.batch(), chunks=long.chunks)
+                          batch=long.batch(), chunks=long.chunks, stop=long.stop)
     assert alone.digest in c.programs
 
 
@@ -268,14 +270,18 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
           for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, idle, into)]
     assert all(c.batch_rule is None for c in cs) and cs[2].idle == (0,)
     prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
+    def calls(p) -> list[str]:
+        ids = [n.fn.id for n in p.fn.body.nodes]
+        assert ids[-1].startswith("StopCheck_v1"), "each window's Program ends in its own length rule"
+        return ids[:-1]
     for r in (0, 1):
-        assert [n.fn.id for n in prog[0][r].fn.body.nodes] == [n.fn.id for p in prog[1:] if r in p for n in p[r].fn.body.nodes]
+        assert calls(prog[0][r]) == [i for p in prog[1:] if r in p for i in calls(p[r])]
     assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
     ret = field_types(prog[1][0].fn.signature()[1])
-    assert ret[0] == Array(4, I32) and ret[1:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
-                                                   Array(3, Array(6, Value(32))))
+    assert ret[:2] == (Array(4, I32), Array(1, Value(1))) and ret[2:] == (
+        Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))), Array(3, Array(6, Value(32))))
     wls = [c.workload for c in cs]
-    assert field_types(wls[1].fn.signature()[1])[0] == Array(4, I32)
+    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(*ret[:2])
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
         ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
@@ -287,7 +293,7 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
         params = dict(wls[w].fn.signature()[0])
         assert wls[w].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
         assert [len(field_types(params[p])) for p in wls[w].ports] == held
-        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[2].leaves]
+        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[3].leaves]
     names = [n for n, _ in wls[2].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n]
     assert names == [f"request[{rids[2][0]}].{g}" for g in ("prompt", "prefix_ik", "prefix_iks")], "B's index-K history is its own"
     assert [n for n, _ in wls[3].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n] == [f"request[{rids[3][0]}].prompt"]
