@@ -14,6 +14,11 @@ deployment's guarantees are to discharge, taken as hypotheses until they do:
   sees the honest answer, never an internal value of the circuit.
 * `Simulable`: the class the assumption is about holds the outsider with each covert string written in, which the
   class of all parties does.
+
+`FaultedUseHard` is the model claim under SPOT's fault model, taken as a hypothesis: setting at most `M` faults in the
+served circuit, beside honest queries, hands out the weights at most `N^(λ - 1)` times faster than honest use, `N` the
+number of fault pattern sequences of total size at most `M` (`patternCount`), so `log₂ N` is the faults' arbitrary-data
+capacity and the factor is `2^((λ - 1) · log₂ N)`. It is about the served function alone, as `HonestUseHard` is.
 -/
 
 @[expose] public section
@@ -53,5 +58,36 @@ def LeaksThrough [Fintype Ω] [Fintype R] (C : Θ → X → Y) (gen : Ω → Θ)
 class holds it at `A = Set.univ`; at a time bound, `O`'s time plus the channel's `ask` and `tell` must be within it. -/
 def Simulable (A : Set (Outsider R X Y Θ')) (O : Outsider R X M Θ') (ch : Channel R X Y M) : Prop :=
   ∀ s, O.withString ch s ∈ A
+
+variable {F : Type}
+
+/-- **The parties that set at most `M` faults**: each query carries a fault pattern `φ : F` beside its input, and on
+every coin and against every responder the patterns of the first `q` queries have sizes summing to at most `M`. -/
+def FaultBudget (size : F → ℕ) (q M : ℕ) : Set (Outsider R (X × F) Y Θ') :=
+  {P | ∀ r resp, ((P.view r resp q).map fun e => size e.1.2).sum ≤ M}
+
+/-- **The number of fault pattern sequences**: sequences of `q` patterns whose sizes sum to at most `M`. Its `log₂` is
+the faults' arbitrary-data capacity: about `M · (c + ℓ)` at patterns that name proof blocks and the values they write,
+`c` a block's output bits and `ℓ` the bits that name a block. -/
+noncomputable def patternCount [Fintype F] (size : F → ℕ) (q M : ℕ) : ℕ :=
+  Fintype.card {φ : Fin q → F // ∑ t, size (φ t) ≤ M}
+
+/-- `faulted-use-hard` (proposed; about the served function alone). **Faults hand out the weights at most
+`N^(λ - 1)` times faster than honest use.** `Cf θ (x, φ)` is the served function `C`'s circuit run at the weights `θ`
+and the input `x` with the proof blocks the fault pattern `φ` names writing `φ`'s values instead, and `Af` a class of
+parties that query it. Wherever every party of `A` steals the weights from `q` honest queries with probability at most
+`p`, every party of `Af` that sets at most `M` faults over its `q` queries (`FaultBudget`) steals them with probability
+at most `N^(λ - 1) · p`, `N = patternCount size q M`: that is, `2^((λ - 1) · C_arb)` with `C_arb = log₂ N` the faults'
+arbitrary-data capacity. At `λ = 1` faults are worth no more than honest use; at `λ` large they are worth as much as
+`λ · C_arb` free covert bits.
+
+It is a claim about the model, not about Verity: whether a server that may corrupt `M` proof blocks' outputs, each
+within its format, learns to steal the weights faster than by asking. With `Stolen` restricted to a typical set of
+weights (`θ ∈ Typ ∧ Stolen θ θ'`), it need hold only there. -/
+def FaultedUseHard [Fintype Ω] [Fintype R] [Fintype F] (C : Θ → X → Y) (Cf : Θ → X × F → Y) (size : F → ℕ)
+    (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (q M : ℕ) (A : Set (Outsider R X Y Θ'))
+    (Af : Set (Outsider R (X × F) Y Θ')) (lam : ℝ) : Prop :=
+  ∀ p, HonestUseHard C gen Stolen q A p →
+    HonestUseHard Cf gen Stolen q (Af ∩ FaultBudget size q M) ((patternCount size q M : ℝ) ^ (lam - 1) * p)
 
 end WeightSecurity.Assumptions

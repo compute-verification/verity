@@ -102,8 +102,10 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
+public import Definitions.WeightSecurity.Faulted
 public import Definitions.WeightSecurity.Served
 public import Definitions.WeightSecurity.Toy
+public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
 public import Definitions.Assumptions
 
