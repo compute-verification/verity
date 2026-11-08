@@ -226,6 +226,7 @@ def window_requests(w: int) -> list:
     return _served(w)[1].requests
 
 
+@functools.cache
 def run_windows() -> list[tuple[list[int], list]]:
     """Each of the run's windows 0 … `WINDOW`: its decisions, as the window's own replay asks them (`RP.decisions`),
     and its requests."""

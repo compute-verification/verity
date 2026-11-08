@@ -1,7 +1,8 @@
-"""compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
-received judges every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count
-exemption, each row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves
-(`compile_slice_zk.prove` does, on a node)."""
+"""compile_slice_zk proves w212 at its run's engine class, scheduler included; the slice it proves (CompileSlice_v4)
+charges each certified arrival's length term as code_v1 sends it; and its scan of what the verifier received judges
+every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count exemption, each
+row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves (`compile_slice_zk.prove` does,
+on a node, under ``--zk`` or ``--plain``)."""
 
 from __future__ import annotations
 
@@ -37,6 +38,62 @@ def test_w212_is_proved_at_its_runs_engine_class(monkeypatch):
         Z.load("w212")
 
 
+def _length_widths(max_tokens) -> int:
+    """code_v1's bits for these requests' length terms (`lengths.widths`: each output length in width(max_tokens + 1)
+    bits, then its finish in 1)."""
+    from verity_vllm.pipeline.advice_code import lengths
+
+    return sum(lengths.widths([SimpleNamespace(max_tokens=m) for m in max_tokens], [range(len(max_tokens))])[0])
+
+
+def test_the_proved_slices_charge_covers_its_length_terms():
+    """The demo's honest unit charges its decisions as CompileSlice_v1 does from the session's first carry, plus each
+    certified arrival's length term at code_v1's width, max_tokens 8 (its request's output length, a power of two),
+    16 and 255 among them. ``tails``, declaring the decisions' charge alone, is refused by its charge check.
+    ``max-tokens``, request 2's max_tokens lowered from 255 to its output length 3, passes every check at 6 bits less,
+    with a ``cert`` row other than the honest one, so the verifier's cert binding alone refuses it (`prove` holds
+    ``cert_bound`` to `CERT`)."""
+    Z = _load()
+    x = Z.load("demo")
+    x.carry = Z.chain(x, "compile-slice-zk-test", "00" * 64).carry
+    honest, tails, low = Z.cases(x, 3, ("honest", "tails", "max-tokens"))
+    v1 = Z.CS.case(x.S, x.sl, Z.BOOK, served=x.rows).length
+    assert (x.sl.max_tokens, _length_widths(x.sl.max_tokens), Z.tails(x.sl)) == ((8, 16, 255), 20, 20)
+    assert (honest.charge, tails.charge, low.charge) == (v1 + 20, v1, v1 + 14)
+    assert all(honest.case.flags.values()) and all(low.case.flags.values())
+    assert [f for f, ok in tails.case.flags.items() if not ok] == ["charge"]
+    assert low.words["cert"] != honest.words["cert"] and tails.words["cert"] == honest.words["cert"]
+    assert "max-tokens" in Z.CERT and "tails" not in Z.CERT
+    with pytest.raises(ValueError, match="stops at its cap"):
+        Z.lowered(Z.V4.Slice(((0, 9, 8),), (), 1, (), (8,)))
+
+
+def test_w212s_unit_charges_code_v1s_window_with_its_length_tails():
+    """w212's unit, from the chain's carry over the run's windows 0 … 211, charges window 212 what code_v1 does with its
+    requests' length terms as tails (`window_code.encode`'s ``lens`` on the run's windows, each with its requests'
+    output lengths and finishes at `lengths.widths`), which is the chain's (`charged`); each of its three requests stops
+    at its max_tokens, so no ``max-tokens`` kind is offered there."""
+    from verity.ml.protocols.certifier.window_charge import Window
+    from verity_vllm.pipeline.advice_code import lengths, window_code
+
+    Z = _load()
+    x = Z.load("w212")
+    run = Z.run_windows()
+    tails = []
+    for _d, rq in run:
+        values = [v for r in rq for v in (r.output_len, int(r.output_len >= r.max_tokens))]
+        tails.append(list(zip(values, lengths.widths(rq, [range(len(rq))])[0])))
+    lens = window_code.encode([Window(arrived=d) for d, _rq in run], window_code.Book.from_json(Z.BOOK), tails).lens
+    ch = Z.chain(x, "compile-slice-zk-test", "00" * 64)
+    x.carry = ch.carry
+    honest, = Z.cases(x, 1, ("honest",))
+    assert (honest.charge, ch.window, Z.charged(x, ch, [honest])["bits"]) == (lens[Z.WINDOW],) * 3
+    assert Z.tails(x.sl) == _length_widths(x.sl.max_tokens) == 14
+    assert [a[2] for a in x.sl.arrivals] == list(x.sl.max_tokens) and "max-tokens" not in Z.REFUSED["w212"]
+    with pytest.raises(ValueError, match="stops at its cap"):
+        Z.lowered(x.sl)
+
+
 def test_a_piece_with_one_nonzero_byte_is_judged_by_the_rule(tmp_path):
     """No piece is left out for its byte count: a witness piece with one nonzero byte found in a file whose format isn't
     read is leaked, and one whose bytes the public rows hold is structured."""
@@ -54,26 +111,27 @@ def test_a_piece_with_one_nonzero_byte_is_judged_by_the_rule(tmp_path):
 
 
 def test_the_carry_rows_are_each_scanned_whole_under_the_rule(tmp_path):
-    """Each unit's carry rows (12 bytes) are scanned whole, the public priors' ``cin`` not among them. A restart's zero
-    ``cin`` row is structured where the public rows hold its bytes, and leaked where they don't; a carry row found off
-    them is leaked; the control holds every row."""
+    """Each unit's carry rows (`window_charge`'s, 20 bytes) are scanned whole, the public first carry's ``cin`` not
+    among them. A restart's zero ``cin`` row is structured where the public rows hold its bytes, and leaked where they
+    don't; a carry row found off them is leaked; the control holds every row."""
     Z = _load()
-    zero, live, sent = [0] * 6, [58, 50, 58, 0, 392, 48], [1, 2, 3, 4, 5, 6]
+    assert Z.WC.ROW_BITS == 160
+    zero, live, sent = [0] * 10, [58, 50, 58, 0, 392, 48, 0, 0, 0, 0], list(range(1, 11))
     units = [SimpleNamespace(words={"cin": zero, "cout": live}, chained=False),
              SimpleNamespace(words={"cin": live, "cout": sent}, chained=True)]
     assert list(Z.carry_rows(units, SimpleNamespace(public=True))) == ["cout 0", "cin 0", "cout 1"]
     carry = Z.carry_rows(units, SimpleNamespace(public=False))
-    assert carry == {"cout 0": Z._u16(live), "cin 0": bytes(12), "cout 1": Z._u16(sent), "cin 1": Z._u16(live)}
+    assert carry == {"cout 0": Z._u16(live), "cin 0": bytes(20), "cout 1": Z._u16(sent), "cin 1": Z._u16(live)}
     vdir = tmp_path / "verifier"
     vdir.mkdir()
     (vdir / "openings.json").write_bytes(bytes(64) + Z._u16(sent))
-    (vdir / "pub-2.bin").write_bytes(b"\x07" + bytes(20))
+    (vdir / "pub-2.bin").write_bytes(b"\x07" + bytes(28))
     (tmp_path / "inst.bin").write_bytes(b"".join(carry.values()))
     got = Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))
     assert got["verifier_found"] == ["cin 0", "cout 1"]
     assert got["structured"] == {"cin 0": "public"} and got["leaked"] == ["cout 1"] and got["control"]["holds_all"]
 
-    (vdir / "pub-2.bin").write_bytes(bytes(range(1, 22)))
+    (vdir / "pub-2.bin").write_bytes(bytes(range(1, 30)))
     assert Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))["leaked"] == ["cin 0", "cout 1"]
 
 
