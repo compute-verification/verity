@@ -370,8 +370,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
                           **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
-                                                   "witness_prebuilt_s", "prove_total_s", "wait_s", "wire_sent", "wire_recv",
-                                                   "k_log", "dense_m", "instances", "gpu", "prover")}})
+                                                   "witness_prebuilt_s", "prove_total_s", "wait_s", "wait_e2e_s", "calls",
+                                                   "wire_sent", "wire_recv", "k_log", "dense_m", "instances", "gpu", "prover")}})
     for x, cpu in zip(lives, session_cpu(peak.marks, ("serve", "prover"))):
         x["cpu_s"] = cpu
     built = next((float(x.rsplit("built in ", 1)[1].rstrip("s")) for x in (o / "prove.err").read_text().splitlines()
@@ -636,11 +636,12 @@ def line(points: dict[int, list[float]]) -> dict:
     return {"fixed_s": float(coef[0]), "marginal_s": float(coef[1]), "marginal_se_s": se, "points": len(xs)}
 
 
-#: a session's parts, from its LIVE record: the witness, the proving, the wait on the ZK server's live verifier, and the rest
-#: of the prover's host work; on a CPU node the first two run on its CPUs, on a GPU node on the device
+#: a session's parts of its end-to-end seconds, from its LIVE record: the witness, the proving, the wait on the ZK server's live
+#: verifier inside them (`wait_e2e_s`; `wait_s` adds the final verdict's, after the proofs are sent), and the rest of the
+#: prover's host work. On a CPU node the first two run on its CPUs, on a GPU node on the device
 PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x["prove_total_s"],
-         "wait": lambda x: x.get("wait_s") or 0.0,
-         "rest": lambda x: x["e2e_s"] - (x.get("witness_s") or 0.0) - x["prove_total_s"] - (x.get("wait_s") or 0.0)}
+         "wait": lambda x: x["wait_e2e_s"],
+         "rest": lambda x: x["e2e_s"] - (x.get("witness_s") or 0.0) - x["prove_total_s"] - x["wait_e2e_s"]}
 
 
 def overhead(a) -> int:
@@ -682,9 +683,11 @@ def overhead(a) -> int:
                        "dense_m": {c: xs[0]["dense_m"] for c, xs in whole.items()}, "amortized_s": med / cmax,
                        "cold_wall_s": {c: [r["wall_s"] for r in mine if r["mode"] == "cold" and r["c"] == r["k"] == c] for c in whole},
                        "peak_rss_kb": max(r["peak_rss_kb"] for r in mine),
+                       # records from before the harness kept wait_e2e_s have no parts
                        "parts": {n: {**line({c: [f(x) for x in xs] for c, xs in whole.items()}),
                                      "s": {c: float(np.median([f(x) for x in xs])) for c, xs in whole.items()}}
-                                 for n, f in PARTS.items()},
+                                 for n, f in PARTS.items()}
+                       if all(x.get("wait_e2e_s") is not None for xs in whole.values() for x in xs) else {},
                        "lean": [{"c": v["c"], "k": v["k"], "passes": v["passes"], "why": v["why"]}
                                 for v in verifies if v["tag"] == tag and v["arm"] == arm]}
             cpu = {c: [x["cpu_s"] for x in xs if x.get("cpu_s")] for c, xs in whole.items()}

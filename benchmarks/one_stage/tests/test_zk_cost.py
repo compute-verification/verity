@@ -111,9 +111,10 @@ def test_overhead_fits_each_part_of_a_cpu_nodes_sessions(tmp_path):
     rec.mkdir()
     stage = [{"unit": "gq:K=6144", "tag": "gq-k6144", "c": c, "ands": 1, "k_log": 25, "full": 1024, "definition": "Gq",
               "macs": 0, "format": None, "stage_s": 1.0} for c in (2, 64)]
-    # the proving grows 0.1 s a block and the wait 0.01 s, the witness and the rest don't; the sessions scatter by ±0.5 s
-    lives = lambda c: [{"warm": w, "witness_s": 10.0, "prove_total_s": 1.0 + 0.1 * c, "wait_s": 40.0 + 0.01 * c,  # noqa: E731
-                        "e2e_s": 101.0 + 0.11 * c + d, "dense_m": 1,
+    # the proving grows 0.1 s a block and the wait inside e2e 0.01 s, the witness and the rest don't; the sessions scatter by
+    # ±0.5 s; wait_s's final verdict is outside e2e and no part of it
+    lives = lambda c: [{"warm": w, "witness_s": 10.0, "prove_total_s": 1.0 + 0.1 * c, "wait_e2e_s": 40.0 + 0.01 * c,  # noqa: E731
+                        "wait_s": 70.0 + 0.5 * c, "e2e_s": 101.0 + 0.11 * c + d, "dense_m": 1,
                         "cpu_s": {"load1": 1.0, "prover_user_s": 50.0 + c, "prover_sys_s": 5.0, "serve_user_s": 30.0,
                                   "serve_sys_s": 3.0}} for w, d in ((True, 0.0), (False, -0.5), (False, 0.5))]
     prove = [{"unit": "gq:K=6144", "tag": "gq-k6144", "arm": "dev", "mode": "warm", "c": c, "k": c, "accepted": True,
@@ -127,3 +128,8 @@ def test_overhead_fits_each_part_of_a_cpu_nodes_sessions(tmp_path):
     for n, want in {"witness": [10.0, 0.0], "proving": [1.0, 0.1], "wait": [40.0, 0.01], "rest": [50.0, 0.0]}.items():
         assert [dev["parts"][n]["fixed_s"], dev["parts"][n]["marginal_s"]] == pytest.approx(want, abs=1e-9), n
     assert dev["cpu_s"]["64"]["prover_user_s"] == 114.0 and "overhead_marginal" not in dev
+    # the toy records from before wait_e2e_s was kept have no parts
+    _records(tmp_path / "old")
+    Z.overhead(argparse.Namespace(out=str(tmp_path / "old"), card="h200-sxm-141gb", run="r-test"))
+    (old,) = json.loads((tmp_path / "old" / "overhead.json").read_text())["types"].values()
+    assert old["arms"]["dev"]["parts"] == {}
