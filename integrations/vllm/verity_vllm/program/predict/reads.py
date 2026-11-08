@@ -47,8 +47,9 @@ target nothing else; in class G then, for its rows past INDEX_TOPK keys, the bit
 ones, and for a request the window leaves with outputs to keep, its edge (`build.build_program`'s ``edge``). It returns no
 terminator and no finish reason: its ids end where its shape does, at ``output_len``, advice until a request Program checks
 the stop rule (no stop token before the last output, which is a stop token or the cap's); a finish reason is the advice's
-(eos or length follows from the ids and the cap once the stop rule is checked, and abort is the client's). A record of y that
-holds each response's ids and then a terminator is those ids with the terminator after the n-th.
+(eos or length follows from the ids and the cap once the stop rule is checked, and abort is the client's). The egress record
+(the network certifier's, per request) is n ``DATA`` cells, the token ids in order, then one ``END`` at cell n, and ``PAD``
+elsewhere; it sends no finish reason. Its ``DATA`` cells are the Program's ids, and its ``END`` sits at ``output_len``.
 """
 from __future__ import annotations
 
