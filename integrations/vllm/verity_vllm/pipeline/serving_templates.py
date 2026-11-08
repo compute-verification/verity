@@ -125,6 +125,7 @@ def template(t: str) -> Template:
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.commitments.gates import embedding  # noqa: F401  (registers EmbeddingRead_v1, a read's and a READ static's, which BB.load does not)
     from verity.ml.definitions import boolean as BB
     from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics

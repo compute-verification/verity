@@ -16,6 +16,8 @@ router's slots, the reads of the scale rows and the fused blocks:
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from functools import cache
 from types import SimpleNamespace
 
@@ -361,6 +363,16 @@ def test_a_pair_row_holds_its_fused_blocks(proj):
     assert dict(SRW.unit_templates(pr.row))[pr.fused] == B
     assert SRW.template(pr.fused).layout == "fused" and SRW.template(pr.fused).word == pr.fused
     assert EX.kind(pr.fused, spec_statics(pr.row)) == ("fused", NR)
+
+
+FRESH = "import sys\nfrom verity_vllm.pipeline import serving_templates as ST\nprint(*(ST.template(t).layout for t in sys.argv[1:]))"
+
+
+def test_a_fresh_process_resolves_a_partitions_read_and_fused_templates():
+    """A process that resolves a partition's templates before anything imported the read's module (a verifier's circuit, a cap
+    builder) resolves its reads and fused blocks: this module imports `gates.embedding` itself, so only a fresh interpreter sees it."""
+    r = subprocess.run([sys.executable, "-c", FRESH, READ_WS, PROJ["w2"].fused], capture_output=True, text=True, check=True)
+    assert r.stdout.split() == ["read", "fused"]
 
 
 @pytest.mark.parametrize("proj", PROJ)
