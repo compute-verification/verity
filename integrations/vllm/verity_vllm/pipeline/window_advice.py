@@ -275,9 +275,10 @@ class Advice:
         return I1.Advice(tuple(q.i1() for q in self.requests), self.steps, self.release)
 
 
-def outputs(advice: Advice) -> tuple[Output, ...]:
-    """The window's kept outputs, step by step and row by row: `advice.release[k]` is output k's bucket."""
-    return _replay(advice.carried, advice.requests, advice.steps).outputs
+def outputs(advice: Any) -> tuple[Output, ...]:
+    """The window's kept outputs, step by step and row by row: `advice.release[k]` is output k's bucket. An I1 v0 `Advice`, which
+    carries no request in, has I1's (`advice.outputs`)."""
+    return _replay(getattr(advice, "carried", ()), advice.requests, advice.steps).outputs
 
 
 def close(advice: Advice) -> tuple[Close, ...]:
