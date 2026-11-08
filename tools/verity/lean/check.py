@@ -8,202 +8,20 @@
     python tools/verity/lean/check.py --lift FILE [--build] PACKAGE_DIR   lift guarantees into `SecurityProofs.G : G` (`lift`)
 
 For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
-environment extension loaded, so none of the package's code runs), and replays the audited modules through the kernel
-(`Replay.lean`). It fails a package when:
+environment extension loaded, so none of the package's code runs) and replays the audited modules through the kernel
+(`Replay.lean`). A heavy package's build on a large machine also replays its modules as Lake builds them, in batches keyed
+on private copies of the files they read (`Pipeline`); the replay after the build reuses those whose files are unchanged,
+and is the one that judges. The audits of `UNREAD_FACTS` that replay also write what each constant of their roots mentions
+(`Unread.lean`, `unread_facts`), which `unread.py`'s ratchet on wholly unread modules reads.
 
-    axioms       a declaration of an audited module uses an axiom outside `axioms` (default propext, Classical.choice,
-                 Quot.sound): `sorryAx` is a sorry, `Lean.ofReduceBool` or `Lean.trustCompiler` a native_decide
-    unreported   a declaration of an audited module, or of a package `proved_in` names, holds a `sorry` the elaborator
-                 made for an error it did not report (`sorryAx _ true`): its module built with a warning only, and the
-                 proofs it stands for never ran. `lean_changed.py --records` on a spec package audits no proving package
-                 but reads each one's facts, so this fails its fast path as well, where `axioms` does not
-    dropped      a top-level declaration in an audited module's source (or a proving package's) is in no declaration
-                 range its `.olean` holds: Lean elaborated nothing there and reported nothing (a `variable` whose
-                 binders use a local notation over section variables can make it drop the declarations after it; so
-                 does `#exit`), so the build passed without them
-    declared     an audited module declares an `axiom` (assumptions are named `Prop`s, taken as hypotheses)
-    escapes      a declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
-                 `@[extern]`) is not listed in `escapes` with a reason, or a listed one no longer is one
-    orphans      a .lean file of the package is neither an audited module nor under an `exempt` prefix
-    unchecked    a source file or the lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a
-                 `bootstrap.*` option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings aside); so does
-                 the source of a module the package imports from a fetched package (`.lake/packages/*`), or that
-                 package's lakefile, unless `dependency_unchecked` lists it with a reason
-    compile-time a source file runs code while it compiles (an initializer, `#eval`, `run_cmd`, an elaborator or macro:
-                 each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`; a
-                 listing names one module with the digest of its file as it was reviewed, so a later edit needs a new
-                 review (`--update` records the digest), and no listed module may declare a guarantee or a definition a
-                 guarantee reads
-    instance     an audited module declares an instance without a name (`instance : C α`): Lean names it from its type
-                 and, when nothing in the type is the project's own, the project's root (`_proofs`), so a move or a split
-                 renames it, and with it every record whose definitions use it; `--name-instances` writes each one's
-                 current name into its declaration, which changes no record
-    policy       the package has no `lean-audit.json` (the message carries a template)
-    dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
-                 toolchain provides differ from the record, which changes only with the package's imports or at a bump
-    layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
-                 `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
-                 `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
-                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it). A module no package of
-                 this repository builds (the toolchain's, a fetched dependency's) that the admitted imports and `Init`
-                 already reach is no import outside the layer: it brings nothing in (an `import all Init.Data.Array.Basic`
-                 a proof takes to see a body)
-    assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module` or a
-                 module under it, taken as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared
-                 elsewhere, or its definition no longer has the digest its record holds; or the policy still lists
-                 assumption modules, which `--update` converts into the definitions the guarantees read there; or one
-                 declared elsewhere is listed beside its `open` or `domain` entry, which `--update` drops
-    open         a premise declared outside `assumptions_module` and the modules under it is not listed under `open` with
-                 its `owner`, the Linear `issue` that discharges it and its `due` date (`--update` adds one only under
-                 `open_seed`), or its entry has no owner, no guarantee takes it, or its definition no longer has its
-                 recorded digest
-    domain       a premise listed under `domain` (part of what its guarantee says, with a one-line `why` and no issue;
-                 another listed guarantee's statement is one, `cites` naming it) has no owner or `why`, is declared in
-                 `assumptions_module` or under it, no guarantee takes it, its digest changed, or a guarantee that takes it has
-                 honest witnesses none of which concludes it at the deployed instance (then it is `open`)
-    guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
-                 hypothesis that is not a listed premise, or no longer says what its record says:
-                 signature, named assumptions, premises (the named assumptions, domain hypotheses and open premises its
-                 statement rests on, and the assumptions-module `Prop`s it only reads, `assumption_records`),
-                 type hash and, for a statement that is a definition under `meaning` (`theorem G : Guarantees.G`), the
-                 hash of that statement with the definition unfolded once (`unfolded_hash`, `Facts.lean`'s `liftOf`),
-                 so a restated definition changes the guarantee's record, and (under `reads`, per module) the
-                 definitions the guarantees read and the digest of those definitions, which with the type hashes fix
-                 what each guarantee reads, so the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a
-                 canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
-                 checked as they are until `--update` rewrites them); a record written before guarantees were called
-                 that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
-                 (`@lane`) of the lane that answers for it
-    witnesses    a guarantee that states what an acceptance means (a property of a function's acceptance, or a statement
-                 reading a claim, the one theorem's vocabulary or a verifier's acceptance) names no `honest` lemma (its
-                 hypotheses hold at the honest deployed instance) and `nontrivial` lemma (its conclusion fails at a
-                 verifier that accepts everything) under `witnesses`; or an exclusion theorem (a bound over a partition
-                 or covering, reading no acceptance) names no `honest` lemma at the deployed partition and parameters
-                 and `nontrivial` one at an explicit circuit where its other premises hold, a named premise fails and
-                 the bound fails (with no premise, where a tighter bound fails; further `nontrivial` lemmas, a list,
-                 are each in that exclusion form and drop a premise no earlier one drops); or a
-                 witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
-                 that is no named assumption the lock lists, or is an honest one at an accept-all verifier
-                 (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
-                 statement's hash (and its `unfolded_hash`)
-    reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
-                 and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
-                 prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
-                 module outside `meaning`, which the record therefore does not hold; a module of the proofs tree is
-                 the trees check's
-    inline       a `Prop` a guarantee takes, its `Guarantees` definition unfolded once, past a leading `∀` over data and
-                 split at `∧`, is neither a named assumption the lock lists, another listed guarantee's statement nor a
-                 plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
-                 `shape.inline`, which only shrinks, lists it (`inline_failures`), or did under names a rename changed
-                 (`paired`); its size is the AUDIT line's inline debt
-    trust        (`trust`: the premises that are the trust base, `base`, each with which trust assumption it states,
-                 and a deployed guarantee's own, `extra`, each with the reason a ruling's rule gives; `deployed`: the
-                 guarantees that state the deployed system)
-                 a deployed guarantee rests on a premise outside its trust that its `trust_gap` entry doesn't list (an
-                 update adds none, so the gap only shrinks), or the entry lists one it no longer rests on, or
-                 `trust_gap` lists a guarantee `deployed` doesn't (`--update` drops both): what it rests on is the named
-                 assumptions and open premises its record lists, and through each domain hypothesis that is another
-                 listed guarantee's statement (`cites`) that guarantee's, transitively (`trust_gaps`); the report prints
-                 each one's gap
-    trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
-                 the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
-                 tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
-                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails);
-                 the record follows a statement through an excepted module's definitions as through `meaning`'s
-                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`, and a claim
-                 or verifier it reads there holds it to witnesses as one under `meaning` does
-    proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
-                 one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
-                 imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
-                 by two
-    replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
-                 one import of what they import from outside, one declaration per task on Lean's threads
-                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use), one of a module under the module system
-                 that it stops on (its recursion) again on its imports' public parts, as `lean` checked it: a
-                 declaration that skipped the kernel shows no axiom, and only this catches it (the `kernel` control);
-                 or the axioms found by walking the replayed
-                 environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
-                 kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
-                 module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
-                 unchecked, and its constants are still walked for axioms. With `--closure`, the kernel also rejects a
-                 declaration of a module of the import closure (the toolchain's, Mathlib's, ArkLib's) that has not passed
-                 the replay under its key, each checked with its imports present (`replay_step`, `closure_plan`). A heavy
-                 package's build on a large machine also replays its modules as Lake builds them, in batches that store
-                 what the kernel accepted, keyed on private copies of the files they read (`Pipeline`); the replay after
-                 the build then reuses those whose files are unchanged, and is the one that judges
-    upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
-                 a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
-                 a bump that brings such a proof fails until someone has looked at it
-    fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
-                 Mathlib and core included
-    runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run beside the replay by
-                 `lake env lean --run` in the sandbox, exits nonzero, or a data file it reads (the package's own, or what
-                 its `generate` command writes) has a SHA-256 other than the record's (`--update` records it); or its
-                 `generate` or `args` names a path outside the package other than as `{repo}/...`, which check's scratch
-                 tree would not hold
-    tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
-                 built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
+It judges what it read against the package's policy and records, `lean-audit.json`. README.md says how: "What it checks"
+lists every way a package fails (each failure carries a code, `Failure`, which the report lists in `failure_codes`), then
+the sandbox, the Lean slot and the memory floors; the sections after it cover the policy, `proved_in`, `--update`,
+`--moved` and lifts, `--regenerate` and its bookkeeping, merging records and `upstream`.
 
-A spec package's guarantees may be proved in other packages, which `require` it by path: its policy's `proved_in` lists
-them (paths relative to it), each with a policy of its own that records no guarantee (its roots, layers and the rest).
-The guarantees are then read from the `.olean` files of the package that declares each in a module under its roots, with
-the spec's `meaning`, `axioms` and `assumptions` (`proved`), and judged, recorded and updated in the spec's policy exactly
-as guarantees proved in the spec package itself: moving a proof into another package leaves the record as it was. A
-package `proved_in` names is audited in the same run (its own replay is what checks its proofs), without `--update`
-unless named, and the spec's reading waits for its build.
-
-`--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
-everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
-cannot; the `compile-time` check stands in for it then. It first takes one of the node's Lean audit slots, of pool
-LEAN_SLOT_POOL else `audit` (`--repo`'s `tools/verity/check/lean_slot.py`), unless it runs in one already (check's
-lean-audit step, `lean_changed.py --records`); refused, or with the node's slot file but no `lean_slot.py`, it exits 2.
-
-A record holds the statement, not the proof, so a guarantee may be recorded on a `sorry` stub and pass once a proof with
-allowed axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, puts the
-whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
-publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
-guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: the landing DM lists them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
-`--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
-side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
-same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a merge
-on `next` carries its record.  Every failure carries a code (`Failure`: `guarantees.signature`, `orphan.file`), which the report
-lists beside its text (`failure_codes`, `settled_codes`); what settles is decided by code, never by the text.  With
-`--regenerate` (the lean-audit step of the Lean check of a commit of `next`) such a package passes instead, and
-`audit.json`'s `regenerated` maps each to its record for drive to commit when it lands that commit; the package's own lock
-is never written, and every other failure fails as before.  `--regenerate --bookkeeping warn` (drive's lock run after a
-landing) passes a package that fails only on its lock's bookkeeping (`BOOKKEEPING`) on the lock with it
-repaired (`repaired`), each repair a warning (`bookkeeping_warnings`) in the report's and audit.json's `bookkeeping`; the
-policy's checks are judged again on that lock, so the build, the replay, the axioms and a malformed lock fail as before.
-A guarantee whose statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
-one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
-and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
-for the statement, not what it says.  So does a guarantee lifted into a
-definition of a `Guarantees` module (`theorem t (xs) : G as` for `theorem t (xs) : e`): certified when its type, with `G`
-unfolded once (its value at the type's universe levels, its leading `fun`s instantiated by `as`, nothing else reduced),
-hashes to the record's type hash and its named assumptions are the record's (`lifted_into`); `G` then needs no reading of
-its own, and any other lift is a change of meaning.  `--moved FILE` (a JSON object of old names to new ones, each a
-declaration or a namespace) renames the record's guarantees and compares the build with the records under the old names: a
-guarantee moved or lifted that says what its record says, and the definitions the same under their old names, get one
-line each.  `--all` first runs the controls (`controls`): a fixture package built with each audited toolchain (which
-`--build` installs first), which must pass clean and fail each check once a violation is added.
-Each package's report lists, without failing, the spec definitions that no guarantee reads, neither its own nor one of a
-package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
-The audits of `UNREAD_FACTS` that replay also write what each constant of their roots, and of the modules those import
-through the packages they require by path, mentions (`Unread.lean`, `unread_facts`; the report's `unread_facts`), which
-`lean_audit.py`'s ratchet on wholly unread modules reads (`unread.py`): a failure of that program is the package's
-(`unread`).
-Each audit keeps its facts document beside its reports (`audit-TAG/facts.json.gz`, and its provers' under `proved-in-*/`),
-which `status_export.py --facts` reads of a check run; `--facts named` keeps only the named packages' own, which
-`trusted_size.py --run` reads of a records run, and `--facts none` keeps none (`facts_of`).
-The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
-package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
-too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
-Its reading and replay run beside the builds that follow.
-Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
-
-This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
-repository can copy it and use it with policies of its own (`README.md`).
+Exit 0 when every package passes, 1 when one fails, 2 on a usage error or a refusal. This directory is self-contained (the
+standard library, `lake` and the toolchain's `lean` and `leanchecker`): another repository can copy it and use it with
+policies of its own (README.md, "Using it from another repository").
 """
 from __future__ import annotations
 
@@ -384,12 +202,12 @@ MEM_FLOOR_GIB = 24
 #: 48 threads and is killed at a 128 GiB cap at 16, so the replay's resident base is
 #: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
 SPEC_FLOOR_GIB = 160
-#: where a machine below the floor runs it instead
-ON_NODE = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone "
-           "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg}")
+#: the run a machine below the floor prints instead, which `research run --on auto` places
+BELOW_FLOOR_RUN = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone "
+                   "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg}")
 #: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
-ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
-                "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
+BELOW_SPEC_FLOOR_RUN = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
+                        "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -501,8 +319,9 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
         return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
     what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
             f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
+    run = BELOW_SPEC_FLOOR_RUN if heavy and spec else BELOW_FLOOR_RUN
     return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
-            f"GiB floor: run it on a node, `{(ON_NODE_SPEC if heavy and spec else ON_NODE).format(pkg=rel(pkgs[0]))}` "
+            f"GiB floor: run it on a node, `{run.format(pkg=rel(pkgs[0]))}` "
             f"(add --update for the record), or set "
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
@@ -1191,6 +1010,25 @@ def record_scope(policy: dict) -> list[str]:
     return list(dict.fromkeys([*meaning, *sorted(extra)]))
 
 
+def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
+    """The lock slice `Facts.lean` reads (`facts_of`'s config, less the scratch paths it writes to): the roots, the record's
+    scope, the allowed axioms, the guarantee names, the spec, the premises and listed assumptions, the verifier's entries,
+    the moves and the honest witnesses. The facts are a function of this and the `.olean` files, so `facts_key` hashes it."""
+    premises = (policy.get("shape") or {}).get("premises")
+    inline = (policy.get("shape") or {}).get("inline")
+    texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
+    asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
+    return {"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
+            "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
+            "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+            "spec": spec_of(policy),
+            "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
+            "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
+            "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
+            "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
+            "honest": honest_witnesses(policy)}
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True,
              sealed: "Sealed | None" = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
@@ -1210,22 +1048,10 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     kept, config = work / FACTS, work / "facts-config.json"
     for p in (kept, work / "facts.json", work / "canon.jsonl"):
         p.unlink(missing_ok=True)
-    premises = (policy.get("shape") or {}).get("premises")
-    inline = (policy.get("shape") or {}).get("inline")
-    texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
-    asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
     hashes, renamed_as, lifts = {}, {}, {}
     with tempfile.TemporaryDirectory(prefix="lean-facts-", dir=SCRATCH) as scratch:
         out, canon = Path(scratch) / "facts.json", Path(scratch) / "canon.jsonl"
-        config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                      "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
-                                      "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
-                                      "spec": spec_of(policy),
-                                      "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
-                                      "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
-                                      "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
-                                      "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
-                                      "honest": honest_witnesses(policy), "out": str(out), "canon": str(canon)}))
+        config.write_text(json.dumps(facts_config(policy, moved) | {"out": str(out), "canon": str(canon)}))
         prefix = sealed.env() if sealed else ["lake", "env"]
         rc, text = run([*prefix, facts_program(pkg), str(config)], pkg, work / "facts.log")
         if rc or not out.exists():
@@ -1270,8 +1096,9 @@ def stored_facts(path: Path) -> dict:
 
 
 #: the facts fields `facts_document` drops: the absolute `.olean` paths and the source positions, which a path move or a
-#: blank line above a proof changes but no lock check reads, so two builds of the same declarations give one document
-POSITIONAL = ("oleans", "spans")
+#: blank line above a proof changes but no lock check reads, so two builds of the same declarations give one document; and
+#: `proved_keys` (`proved`), which names the provers' build for `facts_key` and so changes on a prover's proof-only edit
+POSITIONAL = ("oleans", "spans", "proved_keys")
 
 
 def facts_document(facts: dict, files: dict[str, str], findings: dict, toolchain: str) -> dict:
@@ -2348,8 +2175,10 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     of its text under the old names when its record has that hash too (renamed, it says the same, and `--update` re-keys
     the entry): a new guarantee, and one whose statement changed, carry both. Of a guarantee whose statement is a
     definition (`lift`), the entry also holds the hash of that statement with the definition unfolded once
-    (`unfolded_hash`), so a restated definition fails it as a changed statement does (`--update` writes the hash into an
-    entry without one). An entry {type_hash, missing, why} exempts only the half `missing` names, of a
+    (`unfolded_hash`), so a restated definition fails it as a changed statement does. Its type hash is the constant's,
+    which a restated body leaves as it is, so an entry of such a guarantee without `unfolded_hash` exempts it only at the
+    hash of its statement unfolded (the guarantee's text before a lift), and fails `witnesses.unwitnessed-changed` at any
+    other, with or without `--update`. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
     witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
@@ -2386,12 +2215,22 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"{half} witness, and `witnesses` lists none of its: list the other half there"))
                 continue
             mv, rec = pin.get("moved") or {}, guarantees.get(g) or {}
-            u = unwitnessed_unfolded(allow[g])
-            if (h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash"))) or (
-                    u is not None and u != (pin.get("lift") or {}).get("unfolded_sha256") and u != mv.get("unfolded_sha256")):
-                fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
-                                     + (f"exempted its {half} witness, so it carries that witness now" if half else
-                                        f"listed it, and the rule holds it to witnesses ({why}), so it carries them now")
+            u, unfolded = unwitnessed_unfolded(allow[g]), (pin.get("lift") or {}).get("unfolded_sha256")
+            unkeyed = bool(unfolded) and u is None
+            if unkeyed:
+                changed = h not in (unfolded, mv.get("unfolded_sha256"))
+            else:
+                changed = (h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash"))) or (
+                    u is not None and u != unfolded and u != mv.get("unfolded_sha256"))
+            if changed:
+                since = (f"witnesses: `unwitnessed` lists {g} without `unfolded_hash`, and its statement is the definition "
+                         f"{pin['lift'].get('head')}, whose body its type hash doesn't cover, so the entry can't show the "
+                         f"statement is the one it was listed with" if unkeyed else
+                         f"witnesses: {g} changed since `unwitnessed` " + (f"exempted its {half} witness" if half else
+                                                                            "listed it"))
+                fails.append(Failure("witnesses.unwitnessed-changed", g, since
+                                     + (", so it carries that witness now" if half else
+                                        f", and the rule holds it to witnesses ({why}), so it carries them now")
                                      + f": {witness_shapes(g, pin, policy, own)}, and remove its `unwitnessed` entry"))
             if not half:
                 continue
@@ -2555,7 +2394,9 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
     """The `unwitnessed` entries an `--update` writes: each of a guarantee still in scope without witnesses (`witness_scope`)
     whose statement is the one it was listed with, under the hash of its new record (``kept``) when it says the same under
     another (moved, `--moved`, or lifted, `lifted_into`), and each of a guarantee the lock doesn't list yet, as it is (one a
-    PR ahead on `next` brings). Every other entry drops, and none is added."""
+    PR ahead on `next` brings). An entry without `unfolded_hash` of a guarantee whose statement is a definition gets one
+    only when its hash is that of the statement unfolded (the text before a lift), never at its type hash, which a
+    restated body leaves as it is. Every other entry drops, and none is added."""
     out, ws, guarantees = {}, policy.get("witnesses") or {}, policy.get("guarantees") or {}
     wit = claim_witnesses(policy)
     for g, v in sorted((policy.get("unwitnessed") or {}).items()):
@@ -2571,12 +2412,16 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
         unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
         if was is not None and was != unfolded and was != mv.get("unfolded_sha256"):
             continue
-        if h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv))):
-            keyed = {"unfolded_hash": unfolded} if unfolded else {}
-            if half is None:
-                out[g] = {"type_hash": built} | keyed if keyed else built
-            else:
-                out[g] = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
+        if was is None and unfolded:
+            if h not in (unfolded, mv.get("unfolded_sha256")):
+                continue
+        elif not (h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv)))):
+            continue
+        keyed = {"unfolded_hash": unfolded} if unfolded else {}
+        if half is None:
+            out[g] = {"type_hash": built} | keyed if keyed else built
+        else:
+            out[g] = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
     return out
 
 
@@ -3846,15 +3691,19 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
 
 
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
-           ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None) -> tuple[list[str], dict, dict[str, list[str]]]:
+           ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None,
+           keys: bool = False) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
     and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
     pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
-    guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). Raises
-    RuntimeError when a package's build did not pass or its facts cannot be read.  With ``seals`` (the run's seals) a
-    prover's facts are read from the copies taken at its own seal, which its build announced before this one reads it."""
+    guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). With ``keys``, the
+    facts carry `proved_keys` (each prover's own modules' `replay_keys`, folded) for `facts_key`, which stage A computes
+    and a normal audit does not. Raises RuntimeError when a package's build did not pass or its facts cannot be read.
+    With ``seals`` (the run's seals) a prover's facts are read from the copies taken at its own seal, which its build
+    announced before this one reads it."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
+    proved_keys: list[list[str]] = []
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
         fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
     for entry, q in provers(pkg, policy) if isinstance(named, list) else []:
@@ -3914,6 +3763,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         fails += unreported(qf, f"{entry}'s ") + dropped(q, files, qf, f"{entry}'s ")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
+        if keys:
+            qkeys = replay_keys(qf, (q / "lean-toolchain").read_text().strip())
+            proved_keys.append([entry, hashlib.sha256(
+                "".join(f"{m}\0{qkeys[m]}\n" for m in sorted(qf["modules"])).encode()).hexdigest()])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
     own = sorted(set().union(*(own_modules(f) for _, f, _ in sources)))
     walked = {}
@@ -3923,7 +3776,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     tables = [f.get("constants") for _, f, _ in sources]
     constants = None if None in tables else {c: e for t in tables for c, e in t.items()}
     return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own,
-                                  "assumption_reads": walked, "constants": constants}, by
+                                  "assumption_reads": walked, "constants": constants} | (
+                                      {"proved_keys": sorted(proved_keys)} if keys else {}), by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
@@ -4535,6 +4389,41 @@ def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     return keys
 
 
+#: the lock sections the stored findings read that `facts_config` leaves out, so `facts_key` folds them: `compile_time`
+#: (`scans`, `listings`), `dependency_unchecked` (`dependency_scans`) and `upstream` (the upstream finding). The judge
+#: re-reads `guarantees`, `reads` and `dependencies` from the live lock in stage B, so those stay out of the key.
+FINDINGS_SECTIONS = ("compile_time", "dependency_unchecked", "upstream")
+
+
+def facts_key(facts: dict, policy: dict, toolchain: str, pkg: Path, files: dict[str, str],
+              moved: dict[str, str] | None = None) -> str:
+    """The content address of a package's stage-A facts document (`--facts-only`): a SHA-256 over `FACTS_SCHEMA`, the
+    toolchain, `Facts.lean`, the lock slice `facts_of` feeds `Facts.lean` (`facts_config`), the `replay_keys` of the
+    package's own modules, each of which folds its `.olean` files and its imports', the SHA-256 of every source file the
+    document records (``files``, {module: path}) and of the lakefile, which the source scans (`scans`, `heartbeats`,
+    `dropped`, `anonymous_instances`, `listings`) read and whose findings the document carries, and the lock sections
+    those findings read that `facts_config` omits (`FINDINGS_SECTIONS`). So the key names exactly the build the facts were
+    read from and the sources and lock the findings were taken from: a source edit the scans read (a `set_option
+    maxHeartbeats`, an `unchecked` option) or a change to one of those lock sections changes the key even when the `.olean`
+    bytes do not. The toolchain (`lean-toolchain`'s text) is already a factor; the dependency digests the findings carry
+    are a function of the imported `.olean` files, which the `replay_keys` already fold. A `proved_in` package also folds
+    each prover's own modules' key (`proved_keys`, left on ``facts`` by `proved`), since its facts take each guarantee from
+    the prover that proves it, and the prover is not in its graph."""
+    keys = replay_keys(facts, toolchain)
+    srcs = {rel: sha256(pkg / rel) for rel in files.values()}
+    srcs |= {f: sha256(pkg / f) for f in ("lakefile.toml", "lakefile.lean") if (pkg / f).is_file()}
+    h = hashlib.sha256(f"{FACTS_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Facts.lean')}\0".encode())
+    h.update((json.dumps(facts_config(policy, moved), sort_keys=True) + "\0").encode())
+    h.update((json.dumps({s: policy.get(s, {}) for s in FINDINGS_SECTIONS}, sort_keys=True) + "\0").encode())
+    for rel, digest in sorted(srcs.items()):
+        h.update(f"src:{rel}\0{digest}\n".encode())
+    for m in sorted(facts["modules"]):
+        h.update(f"{m}\0{keys[m]}\n".encode())
+    for entry, digest in sorted(facts.get("proved_keys", [])):
+        h.update(f"proved:{entry}\0{digest}\n".encode())
+    return h.hexdigest()
+
+
 def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
     """(the dependency modules to check, those to add unchecked) for the replay of the import closure: each module of the
     closure outside the package's own (``facts``' `graph` less its `modules`) that has not ``passed``, and every one that
@@ -5055,7 +4944,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
-          store: bool | None = None) -> dict:
+          store: bool | None = None, facts_cache: Path | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -5084,8 +4973,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     on every failure those checks don't make (the build, the replay, the scans, the tests), else its report names the lock
     (`regenerated`) and its repairs (`bookkeeping`, `bookkeeping_warnings`).  ``facts_out`` writes the stage-A facts
     document there (`facts_document`, `write_facts_document`): the facts and the source and dependency findings a later
-    `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record (`--facts-only` drives
-    this with the replay and the tests off)."""
+    `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record.  ``facts_cache`` (a
+    directory, `--facts-only` with the replay and the tests off) writes it instead under its content address
+    (`facts_key`), so the lock run and the records step of one landing share the one document; the report's `facts_key`
+    and `facts_document` name it (the caller drops it on a tamper)."""
     rep, policy, work = _open(pkg, out)
     if policy is None:
         return reported(rep)
@@ -5202,7 +5093,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if "proved_in" in policy:
             p = time.monotonic()
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover,
-                                                    keep=kept_facts == "all", seals=seals)
+                                                    keep=kept_facts == "all", seals=seals, keys=facts_cache is not None)
             rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
@@ -5302,6 +5193,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    if facts_cache is not None:
+        rep["facts_key"] = facts_key(facts, current, rep["toolchain"], pkg, files, moved)
+        facts_out = facts_cache / f"{rep['facts_key']}.json.gz"
+        rep["facts_document"] = str(facts_out)
     if facts_out is not None:
         findings = {"cross": failures_json(cross), "scans": failures_json(scn), "dropped": failures_json(drp),
                     "dependency_scans": {"missed": failures_json(dep_missed), "read": rep["dependency_sources"]},
@@ -5629,6 +5524,11 @@ def main(argv: list[str]) -> int:
                     "(`audit-<tag>/facts-doc.json.gz` under DIR, or a single document file) instead of building: the lock "
                     "checks and the stored source and dependency findings, no build, no kernel replay, no tests "
                     "(`audit_from_facts`).  Its verdict and, with --update, its record are a full audit's")
+    ap.add_argument("--facts-only", type=Path, metavar="DIR", help="stage A: read each named package's facts (build it with "
+                    "--build, as drive does, for a fresh sealed build) and write its facts document, keyed by that build "
+                    "(`facts_key`), into DIR, so `--facts-from DIR` judges from it with no build.  It does not record, "
+                    "replay or run tests; it passes once it has written each document (a lock failure is `--facts-from`'s "
+                    "to report)")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
@@ -5641,6 +5541,14 @@ def main(argv: list[str]) -> int:
                                      or a.replay_cache or a.artifacts or a.dev_cache):
         ap.error("--facts-from judges from a stored facts document: name packages, and not with --all, --build, --lift, "
                  "--name-instances, --fresh, --closure, --replay-cache, --artifacts or --dev-cache (the build's flags)")
+    if a.facts_only is not None:
+        if a.facts_from is not None:
+            ap.error("--facts-only writes a facts document and --facts-from judges from one: give one, not both")
+        if a.update or a.lift or a.name_instances or a.regenerate or a.moved or a.fresh or a.closure \
+                or a.replay_cache or a.dev_cache:
+            ap.error("--facts-only writes the facts, it does not record, judge or replay: not with --update, --lift, "
+                     "--name-instances, --regenerate, --moved, --fresh, --closure, --replay-cache or --dev-cache "
+                     "(`--facts-from` judges, with --update it records)")
     due = (datetime.date.today() + datetime.timedelta(days=BOOKKEEPING_DAYS)).isoformat() if a.bookkeeping else None
     moved = None
     if a.moved:
@@ -5731,13 +5639,15 @@ def main(argv: list[str]) -> int:
                 rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
                                        moved if mine else None, due, log=print)
             else:
-                rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
-                            built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
+                rep = audit(pkg, out, a.build, a.update and mine, (not a.no_replay) and a.facts_only is None, a.fresh,
+                            built=lambda: (passed.add(pkg), seal(pkg)),
+                            runs=(not a.no_runs) and a.facts_only is None, repo=a.repo.resolve(),
                             moved=moved if mine else None,
                             ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                             name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                             closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                            bookkeeping=due, seals=run_seals)
+                            bookkeeping=due, seals=run_seals,
+                            facts_cache=a.facts_only.resolve() if a.facts_only and mine else None)
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
@@ -5747,6 +5657,8 @@ def main(argv: list[str]) -> int:
                 rep["failures"] += tamper
                 if regen := rep.pop("regenerated", None):
                     Path(regen).unlink(missing_ok=True)
+                if doc := rep.get("facts_document"):     # the seal didn't hold: the stored facts may not be this build's
+                    Path(doc).unlink(missing_ok=True)
             if a.regenerate and rep.get("regenerated") and rep["failures"]:
                 rep["settled"], rep["failures"] = rep["failures"], []
             reports[pkg] = reported(rep)
@@ -5804,7 +5716,12 @@ def main(argv: list[str]) -> int:
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")
         print(f"audit: lifted {len(lifts)} guarantees; build, then `check.py --update --moved {moved} {pkgs[0]}` certifies each "
               f"lift as the same statement or prints the change", flush=True)
-    failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
+    if a.facts_only is not None:                        # stage A passes once it has written each named document; the lock
+        failed = by_controls + [r["package"] for r in reports  # verdict is `--facts-from`'s, not this run's
+                                if Path(r["package"]) in named and not (r.get("facts_document")
+                                                                        and Path(r["facts_document"]).is_file())]
+    else:
+        failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: say so in the PR; the landing message shows the changes above (review.txt in "
