@@ -163,7 +163,7 @@ def spec(n: int, q: int, k: int | Mapping[str, int], proof_deadline: float = 360
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
               *(S.Public(f"{x}:{p}", "structure", f"{p}'s layout") for p in sorted(names) for x in ("leaves", "domain")))
     return S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())),
-                  S.TwoStage(P.template_instance_query(REPLAY), f"subset:{q}", k),
+                  S.TwoStage(P.template_instance_query(REPLAY), f"rate:{q}/{n}", k),
                   S.Check(tuple(P.program_digest(Program(t)) for t in TEMPLATES), P.template_instances_query(TEMPLATES),
                           proof_deadline=proof_deadline),
                   public, RUN_TAG)

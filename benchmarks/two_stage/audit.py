@@ -117,7 +117,7 @@ def needs(stream: S.Stream, n: int, q: int) -> tuple[int, int]:
         reads.append(k)
         return bytes(k)
     S.select_second(list(range(q)), stream.cells, stream.counts, zeros)
-    return AC.need(f"subset:{q}", w.program, w.query, n), -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
+    return AC.need(f"rate:{q}/{n}", w.program, w.query, n), -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
 
 
 def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
