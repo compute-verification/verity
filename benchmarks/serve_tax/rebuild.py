@@ -71,7 +71,7 @@ import os
 import pickle
 import sys
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -638,9 +638,10 @@ class Dummies:
     target holds. `scheduled` also notes each page the target has written (``target_pages``)."""
 
     def __init__(self, target: str, mode: str, sched: Any, kvm: Any, kv: Any, block_size: int,
-                 keep_tokens: list[int], finish: dict[str, int]) -> None:
+                 keep_tokens: list[int], finish: dict[str, int], stops: dict[str, int] | None = None) -> None:
         self.target, self.mode, self.sched, self.kvm, self.bs = target, mode, sched, kvm, block_size
         self.kv, self.finish = kv, finish
+        self.stops = {rid: s for rid, s in (stops or {}).items() if rid != target}
         full = len(keep_tokens) // block_size * block_size
         self.keep = set(page_chain(keep_tokens[:full], block_size))
         self.target_pages: set[bytes] = set()
@@ -648,7 +649,7 @@ class Dummies:
         self.taken = {"dummies": 0, "tokens_substituted": 0, "pages_kept_target_shared": 0, "finishes_forced": 0,
                       "blocks_poisoned_at_start": 0, "pages_seeded_poisoned": 0, "slots_poisoned": 0,
                       "target_pages_loaded": 0, "target_pages_overwritten": 0, "target_pages_own": 0,
-                      "target_pages_unavailable": 0}
+                      "target_pages_unavailable": 0, "stops_forced": 0}
 
     def dummy(self, rid: str) -> bool:
         return rid != self.target
@@ -662,12 +663,34 @@ class Dummies:
 
     def params(self, rid: str, r: dict) -> dict:
         """``r`` (sampling and max_tokens) for a dummy: it ignores EOS and its stop tokens and stops at its served output
-        count."""
+        count, or, if serving stopped it on a token (``stops``), one past it, so the scheduler gives it the next step's
+        row as serving's did, and `stopper` finishes it where serving did."""
         s = {k: v for k, v in r["sampling"].items() if k != "stop_token_ids"} | {"ignore_eos": True}
         n = self.finish.get(rid)
         if n is not None:
             self.taken["finishes_forced"] += 1
+            if rid in self.stops:
+                n += 1
         return {"sampling": s, "max_tokens": n if n is not None else r.get("max_tokens")}
+
+    def stopper(self, trace: Any) -> Callable[[Any], Any]:
+        """A wrapper of the scheduler's ``update_from_output`` that finishes each dummy in ``stops`` once the step that
+        stopped it in serving has its output, as serving's scheduler finished it on reading the stop token. Under async
+        scheduling that scheduler had already given it a row in the next step, which a length the scheduler can see
+        ahead would not."""
+        def update_from_output(orig: Callable[..., Any]) -> Callable[..., Any]:
+            def wrapped(so: Any, mro: Any, *a: Any, **kw: Any) -> Any:
+                step = trace._pending.get(id(so))
+                got = orig(so, mro, *a, **kw)
+                due = [rid for rid, s in self.stops.items() if s == step and rid in self.sched.requests]
+                if due:
+                    from vllm.v1.request import RequestStatus
+
+                    self.sched.finish_requests(due, RequestStatus.FINISHED_STOPPED)
+                    self.taken["stops_forced"] += len(due)
+                return got
+            return wrapped
+        return update_from_output
 
     def target_blocks(self) -> set[int]:
         return set(self.kvm.get_block_ids(self.target)[0]) if self.target in self.sched.requests else set()
@@ -730,6 +753,13 @@ def served_finish(st_requests: dict[str, int], outputs: dict[int, dict], steps: 
             n[rid] = n.get(rid, 0) + len(v[0])
     done = {rid for rec in steps.values() for rid in (rec.get("finished") or {})}
     return {rid: n.get(rid, 0) for rid in done}
+
+
+def served_stops(steps: dict[int, dict]) -> dict[str, int]:
+    """Each request the record finishes inside the block on anything but its length (a stop token, an abort), which the
+    scheduler learns only from a step's output: the step whose output finished it."""
+    return {rid: s for s, rec in sorted(steps.items()) for rid, v in (rec.get("finished") or {}).items()
+            if (v or {}).get("reason") != "length"}
 
 
 def served_seeds(st: dict[str, Any]) -> dict[str, int]:
@@ -1021,8 +1051,8 @@ def dummies(a: argparse.Namespace, w: dict[str, Any], st0: dict[str, Any], begin
     r_end = max((s for s, o in outs.items() if rid in o), default=None)
     if r_end is None:
         raise SystemExit(f"{rid}: the record has no output of it from step {first}")
-    finish = served_finish(base, outs, {s: v for s, v in w["steps"].items() if s >= first})
-    return Dummies(rid, a.dummy, sched, kvm, kv, bs, mine, finish), r_end
+    block = {s: v for s, v in w["steps"].items() if s >= first}
+    return Dummies(rid, a.dummy, sched, kvm, kv, bs, mine, served_finish(base, outs, block), served_stops(block)), r_end
 
 
 def shape_view(steps: dict[int, dict], target: str) -> dict[int, dict]:
@@ -1144,6 +1174,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     hooks = Hooks(tag="serve-tax-rebuild")
     hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, lambda rec: outs.__setitem__(rec["step"], rec["out"]),
                                                               lambda: True))
+    if shape:
+        hooks.wrap(sched, "update_from_output", shape.stopper(trace))
     if hits:
         hooks.wrap(kvm, "get_computed_blocks", hits.lookup)
     pending = sorted((r for r in w["arrive"] if r["before_step"] >= first), key=lambda r: r["before_step"])
@@ -1397,6 +1429,8 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
     hooks = Hooks(tag="serve-tax-rebuild")
     hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, lambda rec: outs.__setitem__(rec["step"], rec["out"]),
                                                               lambda: True))
+    if shape:
+        hooks.wrap(sched, "update_from_output", shape.stopper(trace))
     if hits:
         hooks.wrap(kvm, "get_computed_blocks", hits.lookup)
     pending = sorted(w["arrive"], key=lambda r: r["before_step"])

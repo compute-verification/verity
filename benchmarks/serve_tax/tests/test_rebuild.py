@@ -369,6 +369,29 @@ def test_the_perturbed_row_is_sampled_as_the_block_s_first_arrival_and_never_sto
     assert RB.perturb_row(8, 0, [])["sampling"] == {"ignore_eos": True}
 
 
+def test_a_dummy_served_stopped_on_a_token_gets_the_next_row_and_is_finished_where_serving_finished_it(monkeypatch) -> None:
+    steps = {5: {"finished": {"a": {"reason": "length"}, "b": {"reason": "stop", "stop_reason": 7}}},
+             6: {"finished": {"t": {"reason": "stop"}}}, 7: {}}
+    assert RB.served_stops(steps) == {"b": 5, "t": 6}
+    finished = []
+    sched = NS(requests={"a": 1, "b": 2, "t": 3}, finish_requests=lambda ids, status: finished.append((list(ids), status)))
+    d = RB.Dummies("t", "zero", sched, None, None, 4, [], {"a": 3, "b": 4, "t": 9}, RB.served_stops(steps))
+    assert d.stops == {"b": 5}
+    assert d.params("a", {"sampling": {}})["max_tokens"] == 3 and d.params("b", {"sampling": {}})["max_tokens"] == 5
+    vllm = ModuleType("vllm")
+    vllm.v1 = ModuleType("vllm.v1")
+    vllm.v1.request = ModuleType("vllm.v1.request")
+    vllm.v1.request.RequestStatus = NS(FINISHED_STOPPED="stopped")
+    for name, mod in (("vllm", vllm), ("vllm.v1", vllm.v1), ("vllm.v1.request", vllm.v1.request)):
+        monkeypatch.setitem(sys.modules, name, mod)
+    so4, so5 = object(), object()
+    trace = NS(_pending={id(so4): 4, id(so5): 5})
+    wrapped = d.stopper(trace)(lambda so, mro: "outs")
+    assert wrapped(so4, None) == "outs" and finished == []
+    assert wrapped(so5, None) == "outs" and finished == [(["b"], "stopped")]
+    assert d.taken["stops_forced"] == 1
+
+
 def test_the_perturbed_row_jumps_the_waiting_queue() -> None:
     from collections import deque
 
