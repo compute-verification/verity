@@ -76,7 +76,7 @@ def lines(r: dict) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--plan", required=True, help="the prover's sessions in order (honest, skip:F), comma-separated")
+    ap.add_argument("--plan", required=True, help="the prover's runs in order (honest, skip:F), comma-separated")
     ap.add_argument("--gib", type=float, default=24.0, help="the store, whole 1 GiB chunks")
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
@@ -181,7 +181,7 @@ def main() -> int:
         try:
             r = v.session(msg["k"], allowance, v.clock.now(), V.pace_of(msg["paced"], pass_ms))
         except (wire.Closed, audit.SessionError) as e:
-            emit("error", why=f"session {msg['k']}: {type(e).__name__}: {e}")
+            emit("error", why=f"run {msg['k']}: {type(e).__name__}: {e}")
             rc = 3
             break
         results.append(r)

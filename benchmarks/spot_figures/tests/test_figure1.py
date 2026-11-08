@@ -88,8 +88,9 @@ def test_sparseloco_goes_as_the_served_models_parameters(out):
 def test_every_references_card_adds_its_lines(out):
     arts = [c["art"] for c in out["cards"]["references"]]
     assert len(arts) == len(set(arts)) >= 2
-    shown = {r.get("art") for r in out["panels"]["exfiltration"]["references"]}
-    assert set(arts) <= shown
+    for card in out["cards"]["references"]:
+        for panel in {line["panel"] for line in card["value"]["lines"]}:
+            assert card["art"] in {r.get("art") for r in out["panels"][panel]["references"]}, (card["art"], panel)
 
 
 def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
@@ -114,6 +115,19 @@ def test_a_capped_caption_says_what_it_rests_on():
         assert "the token ids, 1e-07 of the scope's compute" in caps[panel], panel
 
 
+def test_every_caption_names_spots_roles_and_what_its_bounds_rest_on():
+    """Each panel's caption says, after its deployment, that the proof server proves with no ZK server, that the
+    network certifier is a layer of its own, and that its bound is soundness alone on the trust list."""
+    caps = f.captions(1.0)
+    for panel in ("exfiltration", "exfiltration_appendix", "skipped_work"):
+        deployment = f.DEPLOYMENT["skipped_work" if panel == "skipped_work" else "exfiltration"]
+        assert caps[panel].startswith(f"{deployment} {f.ROLES} {f.TRUST} "), panel
+    assert "no ZK server and no recursion" in f.ROLES and "network certifier" in f.ROLES
+    assert all(x in f.TRUST for x in ("soundness alone", "SHA-512's collision resistance",
+                                       "uniform verifier randomness", "an honest verifier", "certifier's own assumptions"))
+    assert "zero knowledge" not in f.ROLES + f.TRUST
+
+
 def test_a_references_cards_caption_joins_its_panels_captions():
     line = {"label": "x", "unit": "bit", "value": 1.0, "source": "s"}
     notes = f.reference_notes([
@@ -134,7 +148,7 @@ def test_the_design_card_picks_the_main_panels_lines(out):
     refs = out["panels"]["exfiltration"]["references"]
     main = [r for r in refs if r["main"]]
     assert {r["label"] for r in main} == {"GLM-5.3's weights", "GLM-5.3's weights at FP4 (376.7 GB)",
-                                         "Advice cap 6 bits/req (KV pool in circuit)"}
+                                         "Advice cap 5,582 bits/window (v1, measured on GLM-5.3 TP8)"}
     assert 0 < len(main) <= 6 - len(f.MAIN["exfiltration"]) and len(refs) > len(main)
     for r in main:
         assert r["style"] == next(v for k, v in chosen.items() if r["label"].startswith(k.format(model="GLM-5.3")))
@@ -407,4 +421,4 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
                                        "figure1_overhead_appendix_datacenter_week.png",
                                        "figure1_overhead_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (stem("world year"), appendix_stem("world year")) == ("figure1_overhead", "figure1_overhead_appendix")
+    assert (stem("datacenter year"), appendix_stem("datacenter year")) == ("figure1_overhead", "figure1_overhead_appendix")

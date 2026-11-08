@@ -39,10 +39,12 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, finish_run, in_launch, kind, launch_batch,
-                     launch_rows, launch_seqlen_q, request_passes, run_input, select_token, served_class, with_checks, wrapper_keys)
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, finish_run, in_launch, kind,
+                     launch_batch, launch_rows, launch_seqlen_q, request_passes, run_input, select_token, served_class, with_checks,
+                     with_edge, wrapper_keys)
 from .domain import check_phi
 from .phi import Phi
 
@@ -684,7 +686,7 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = ()) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -700,7 +702,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     request's prefill as the engine ran it, in launches of these rows in turn (the chunked request wrapper), where its kernels read
     the launch: per chunk one forward at its own step of `batch` (its chunks, then its T decodes), the sample after the last chunk,
     a chunk that leaves the prompt incomplete sampling nothing (vLLM discards that sample); the SRC config is `{"chunks": [...]}`
-    (its wrapper's class unchanged); one chunk is the request wrapper."""
+    (its wrapper's class unchanged); one chunk is the request wrapper. `edge`: the history groups (`dsa.Net.edge_groups`) a request
+    a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples and checks,
+    every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`); its SRC config holds them."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
@@ -711,7 +715,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
                             f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
-    resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense)
+    resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense, bool(edge))
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
     events = sum(sampled)
@@ -735,15 +739,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     n_peers, run = len(params) - n_user, run_input(net, params, wrapper_keys(wrapper, M, LP, T))
-    params.append(("weights", wrec))
-    params = tuple(params)
+    params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
-    ids = Coll(params[0][1], Affine("p", 0, 0, n))
-    W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
-    user = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[:n_user])]
-    schedule = user[history - 1] if words else None
-    peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:n_user + n_peers], start=n_user)],
-                   world, rank, schedule)
+    inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
+    ids, W, schedule = inputs[0], inputs[-1], inputs[history - 1] if words else None
+    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank, schedule)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
@@ -757,14 +757,15 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)
     if C:
-        model.open_with(user[history:n_user - resumed], C)
+        model.open_with(inputs[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
-                 last=user[n_user - 1] if resumed else None)
+                 last=inputs[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     params, (out, checks) = finish_run(run, params, B), with_checks(model, out)
+    out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None
     if finish is not None:
@@ -778,7 +779,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
-                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
+                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
