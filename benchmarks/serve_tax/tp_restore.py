@@ -5,7 +5,7 @@ its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` m
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240]
                         [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling own]
                         [--max-model-len 40960] [--tp N] [--long-share 0.05] [--long-tokens 8192,32768]
-                        [--saver MODULE:FUNCTION ...]
+                        [--saver MODULE:FUNCTION ...] [--dump 1]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
@@ -17,7 +17,8 @@ generation-config defaults; ``--unseeded-share`` of the sampled requests go with
 draws theirs, and the rest carry the public seed rule's. A named ``--sampling`` goes on every request instead, where
 ``production`` sends no sampling fields: the generation config's defaults apply (GLM-5.3: temperature 1.0, top-p 0.95)
 and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
-generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record. OUT
+generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record; the
+first ``--dump`` edges write their blocks, the rest only their digests and state. OUT
 gets each ``edge.json``, the step outputs from the first edge to the last, the client's records and the step trace.
 Once the last edge is written the server stops, unless ``--run-out``: nothing after it is compared, and the requests in
 flight then are recorded with the tokens they streamed.
@@ -246,13 +247,13 @@ def serve(a: argparse.Namespace) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
-    env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver,
+    env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": a.dump, "savers": a.saver,
                              "outputs": True, "whole_pool": True})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
                             "checkpoint": str(checkpoint), "plan": str(plan_file), "plan_base": str(base),
                             "plan_file": a.plan_file, "unseeded_share": a.unseeded_share,
                             "long_share": None if a.plan_file else a.long_share, "long_tokens": a.long_tokens,
-                            "server_argv": argv[1:], "pins": PINS, "edges_at": a.edges_at, "savers": a.saver,
+                            "server_argv": argv[1:], "pins": PINS, "edges_at": a.edges_at, "dump": a.dump, "savers": a.saver,
                             "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(),
                             "host": os.uname().nodename}
     meta["open_files"] = S.open_files()
@@ -774,6 +775,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--max-model-len", type=int)
     s.add_argument("--tp", type=int, help="the tensor-parallel size, when not the model's own")
     s.add_argument("--saver", action="append", default=[])
+    s.add_argument("--dump", type=int, default=1, help="how many of the first edges write their blocks")
     s.add_argument("--startup-s", type=float, default=3600.0)
     s.add_argument("--drain-s", type=float, default=600.0)
     s.add_argument("--run-out", action="store_true",
