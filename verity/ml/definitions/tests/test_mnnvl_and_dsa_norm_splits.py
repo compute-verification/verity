@@ -41,12 +41,12 @@ def _dsa(N: int, G: int) -> tuple[object, object, object]:
 
 
 #: (norm, statics): MNNVL's norm at one CTA of one and two warps and over a 2- and 4-CTA cluster, each shot, the + EPS unfused and
-#: fused; GLM-5.3's at its hidden width at the clusters FlashInfer picks for it (8 up to 16 tokens, 4, then 1); the DSA norm at
-#: its least row and GLM-5.3's kv_a and q_a rows
+#: fused; GLM-5.3's at its hidden width at the clusters FlashInfer picks for it (8 up to 16 tokens, 4 up to 33, 2 up to the
+#: fused path's 42); the DSA norm at its least row and GLM-5.3's kv_a and q_a rows
 CASES = [*((_mnnvl, (N, shot, cluster, fma, G)) for N, cluster, G in ((256, 1, 64), (512, 1, 128), (512, 2, 128), (1024, 4, 128))
            for shot in (1, 2) for fma in (False, True)),
          *(pytest.param(_mnnvl, (6144, shot, cluster, True, 96), marks=pytest.mark.slow)
-           for shot, cluster in ((1, 8), (2, 4), (2, 1))),
+           for shot, cluster in ((1, 8), (2, 4), (2, 2))),
          *((_dsa, (N, 64)) for N in (256, 512)), pytest.param(_dsa, (2048, 64), marks=pytest.mark.slow)]
 
 
@@ -103,7 +103,7 @@ def _row_bytes(fn) -> list[int]:
     return [2 * w for _, w in lay.rows + lay.outs]
 
 
-@pytest.mark.parametrize("units,statics", [(_mnnvl, (6144, 2, 1, True, 96)), (_dsa, (2048, 64)), (_dsa, (512, 64))])
+@pytest.mark.parametrize("units,statics", [(_mnnvl, (6144, 2, 2, True, 96)), (_dsa, (2048, 64)), (_dsa, (512, 64))])
 def test_at_glm_widths_each_unit_fits_a_proof_block_and_returns_at_most_g_words_of_a_row(units, statics):
     """Each norm reads its row and the weights' and writes a whole row. Its sum of squares reads the row and writes the 4 B
     scale; an apply unit reads G elements of the row and the weights and the scale, and writes G elements."""
