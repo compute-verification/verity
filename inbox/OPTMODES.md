@@ -945,3 +945,52 @@ has the pieces), so use today's column.
   36.00%.
   - Until `StopRule_v1` checks the length and the finish in-circuit, no β breaks even at either scope.
 - **Note:** `note:proofs/20261108T0026Z-report-breakeven-reprice`, refreshed 01:45Z.
+
+## 2026-11-08T01:55Z from LIFETIME: the five replay options, one table on c343 (128k) and fe57 (40k)
+
+- 01:55Z (LIFETIME): **Trace: c343, not C128.**
+  - c343's seven 124k–131k rows were aborted after prefill. That understates whole-request replay by 7–14% (492–524 GPU-s,
+    not 458) and the whole-request hold by a similar share. The span rows are unchanged, and no row changes order.
+  - C128 isn't on any machine I can reach, and it serves over capacity (median queue delay 101 s).
+  - Everything is modeled from traces and artifacts; no GPU ran. Model run: r20261108-014735-a77a.
+  - Each cell reads "128k; 40k". Copy rates are MB/s on one rank.
+  - β is BREAKEVEN's refreshed main line: FP4, 4× prover, world year, 128k. Each cell gives β without the Lean verifier's
+    CPU, then with it (R6x4), totals in brackets. Every total holds only once `StopRule_v1` lands.
+
+| Option | Serving tax | GPU hold × live K/V (pool overflow) | Copy rate a rank (MB/s) | Replay GPU-s a sample | β without / with the verifier (totals) | Status | What the Lean statement needs | What it takes to build |
+|---|---|---|---|---|---|---|---|---|
+| 1. Batch-invariant kernels + single-request replay | ≈25.6% (kernels 23.7% [22.1, 25.2] on an MoE model, 14–31% across three models; + 1.92%) | ≈0.001× (hit pages only); none | ≈0.01; ≈0 | 194; 46 (own compute × 1.24) | ≈13.1% / ≈42.3% (≈38.7% / ≈68%) | Modeled. vLLM refuses batch invariance with GLM-5.3's sparse MLA on sm_90 | Unchanged statement; requests as replay blocks (row 3's code change); a Definition per batch-invariant kernel | A batch-invariant sparse MLA and indexer for sm_90 (none exists), their Definitions and circuit-check |
+| 2. 600 s segment replay (today's baseline) | 2.04% | 0; none | 10.8; 27.1 (live K/V at each edge) | 5,258; 5,633 | 15.39% / ≈44.6% (17.43% / ≈46.6%) | Bit-exact on GLM-5.3 TP8 at 40k with the deterministic top-k (r20261107-125416-f460) | Nothing | Built; the proof server's loop remains |
+| 3a. Lifetime, whole request, host mirror | 1.92% | 0; none (host 22.5 GB mean, 61 GB max) | 141; 179 | 458; 833 | 13.24% / 42.46% (15.16% / 44.38%) | Start state bit-exact on Moonlight (#7889), including mid-block starts and preemption | Unchanged statement. Code theorem: `RegTwo`'s n and k per replay block, `ksTwo_code` re-proved; a work-rate first stage | Mirror and commit-on-write plugins (500–850 lines); a forced-schedule replay engine (730–1,030 lines) |
+| 3b. Lifetime, whole request, GPU hold | 1.92% | 2.44× (16%); 0.62× (38%) | 0.39 + 43 spill; 1.2 + 25 spill | 458; 833 | As 3a | Modeled | As 3a | As row 4 |
+| 4. Spans of 5 s / 10 s, GPU hold, spill on pressure, per-step commit-on-write | 1.91–1.92% (129; 347 leaves a second, same bytes) | 5 s: 0.12× (0%); 0.07× (10%, spilled). 10 s: 0.22× (0%); 0.13× (16%, spilled) | 5 s: 3.5; 17.4 + 11.9 spill. 10 s: 1.9; 9.3 + 25.3 spill | 5 s: 38; 39. 10 s: 74; 77 | 13.2% / ≈42.5% (15.2% / ≈44.4%) | Modeled. Starting at any step from per-step slot copies is bit-exact on Moonlight | As 3a, plus public span boundaries fixed before any coin | 3a's engine plus held-block release at the last dependent coin, a spill path, per-step leaves and 1 s coins |
+| 5. Shape-only replay with dummy batch-mates | 1.91–1.92% | Whole: 0.001×; 0.0004×. Spans: ≤0.013×. Adds no overflow | Whole: 0.01; ≈0. 5 s: 1.0; 0.3. 10 s: 0.5; 0.05 | As rows 3 and 4 | As rows 3 and 4 | No result; can be exact (below) | As row 3 or 4, nothing more | 3a's engine with dummy rows, own-page hold and copy, a per-kernel shape audit, and a Moonlight test (about one GPU-hour) |
+
+- 01:55Z (LIFETIME): **Row 5 can be exact on GLM-5.3 as served** (TritonExperts at TP8 without EP, FlashMLA sparse). A
+  request's bits read its batch-mates only through shapes:
+  - **MoE:** the tile config reads M, the step's token count. Per the circuit registry's kernel checks, the per-expert
+    grouping (`moe_align_block_size`) is a schedule that never enters an output word, and quantization is per row. So
+    routing counts don't reach the request's bits.
+  - **Split-k and tiles** read M (dense FP8 picks its variant by M % 4).
+  - **Attention:** sparse decode splits by context lengths. The indexer is canonical under the top-k plugin.
+  - **All-reduce:** the algorithm and chunking read the message size, and each element's sum reads no other token.
+  - **Sampling:** a seeded request uses its own generator; an unseeded draw reads its row index and the generator's
+    offset. Graph padding is a shape.
+- 01:55Z (LIFETIME): **Under #7895, what the replay takes rather than computes:**
+  - **Step shapes:** registered values that the compiler computes from certified arrivals and outputs under the tick (0
+    advice bits per VLLM-228); advice without the tick.
+  - **Batch-mates' values:** no block of the replay reads them.
+  - **The request's own prefix and hit pages:** committed on write.
+  - **If a kernel picked its config from per-expert counts** (DeepGEMM's masked grouped GEMM under EP), the counts (256
+    experts × 78 layers a step) would be values the request's blocks read. They'd need a counting block whose outputs the
+    batch-mates' proofs must produce, or advice at ≈256 × 78 × ⌈log₂ M⌉ bits a step, or a count-invariant kernel. Today's
+    stack needs none of this.
+- 01:55Z (LIFETIME): **Reading:**
+  - Row 1 fails on the tax.
+  - Row 2 works today and costs 2.15 points of β.
+  - Rows 3–5 tie on β and differ only in serving state.
+  - If row 5 is exact, it dominates rows 3 and 4: the same replay at 0.001–0.013× hold and ≤1 MB/s copy.
+  - The replay choice moves β by at most 2.2 points, against 29.2 for the Lean verifier's CPU.
+  - Next: a Moonlight shape-only replay with zero- and NaN-filled batch-mates through `rebuild.py`, about one GPU-hour,
+    then GLM-5.3 TP8.
+  - Note: `note:proofs/20261108T0151Z-report-replay-options`.
