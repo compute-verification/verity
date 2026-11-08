@@ -161,7 +161,6 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 
 def _program(path: Path, d: int) -> Path:
     """The RoPE Definition's descriptor at head dimension `d`, as the verifier's own `--program` file."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import subcircuit_templates as TM
 
     from verity.ml.circuits.codec import canonical_json, encode_program

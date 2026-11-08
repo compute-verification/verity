@@ -651,7 +651,7 @@ KNOWN: dict[str, str] = {
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
-    "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
+    "verity/ml/flock/python/verity_flock/lowerings.py::Registry":
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "verity/ml/flock/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",

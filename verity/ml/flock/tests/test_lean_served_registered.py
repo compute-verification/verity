@@ -56,7 +56,6 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 @pytest.fixture(scope="module")
 def built():
-    pytest.importorskip("verity_numerical")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
 
 

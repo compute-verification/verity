@@ -6,8 +6,8 @@ requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "numpy", "blake3>=1.0"]
 
 [project.optional-dependencies]
-# the numerical benchmarks' spine (templates, input sets, generator, lowerings), which its benchmark and statement-building
-# entry points and its tests import where they run
+# the numerical bench (its contract, cell, generator suites and frozen instance sets), which Flock's bench drivers,
+# `instances` and their tests import where they run
 bench = ["verity-numerical"]
 
 [build-system]
@@ -55,6 +55,7 @@ untraced = [
     "tests/test_lean_typed_statement.py",
     "tests/test_lean_typed_template.py",
     "tests/test_lean_verifier.py",
+    "tests/test_lean_width_refusals.py",
     "tests/test_lean_zk.py",
     "tests/test_lean_zk_mask.py",
     "tests/test_pod_lean_verdicts.py",
@@ -118,6 +119,10 @@ artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
 [[tool.verity.tests.reads]]
 tests = ["tests/test_backend.py"]
 paths = ["verity/ml/flock/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_backend_bench.py"]
+paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/ml/flock/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_challenger_audit.py"]
@@ -199,7 +204,15 @@ tests = [
 paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_lean_verifier.py"]
+tests = ["tests/test_ir_lowering_bench.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "tools/research/src/research",
+    "verity/ml/flock/python/verity_flock/templates",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_lean_verifier.py", "tests/test_lean_width_refusals.py"]
 paths = ["verity/ml/circuits/tests", "verity/ml/flock/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]

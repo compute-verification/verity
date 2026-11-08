@@ -41,14 +41,14 @@ def staged(tmp_path_factory):
     """The bit-row circuit bound to the program and its partition, x and cs_table registered in their ports' formats, the
     verifier's own reads file and the honest statement."""
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-bit-rows")
     program, query = _program()
     part = P.partition(program, query)
-    s = InputSet.open(generate(TM.rope_head(64), N, 20260928, d / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s), port_bits=[16 * WORDS, 16 * WORDS], seg_ports=frozenset({"cs"}))
     meta = json.loads(text.split("\n", 2)[1][5:])
@@ -82,14 +82,14 @@ def one_value(tmp_path_factory):
     N + POSITIONS[u] at cs, each port its own registered port of the value; the verifier's reads file and the honest
     statement."""
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")
     program, query = _program()
     part = P.partition(program, query)
-    s = InputSet.open(generate(TM.rope_head(64), N, 20260928, d / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s), port_bits=[16 * WORDS, 16 * WORDS])
     assert [tuple(r) for r in json.loads(text.split("\n", 2)[1][5:])["row_schemas"][:2]] == [(G.SCHEMA_V2, 1024)] * 2

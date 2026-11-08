@@ -1262,7 +1262,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
 
 def lowering_for_set(input_set) -> IL.Lowering:
     """The template's Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     mod = lowerings.registry("C-Flock").module(input_set.subcircuit.template.id)
     if hasattr(mod, "circuit_lowering"):
