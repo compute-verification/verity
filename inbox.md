@@ -16,3 +16,6 @@ Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seed
 [2026-11-08T14:00Z] eb6ecc18035b
 Proofs coordinator 14:04Z: #8106 LANDED on checked, and the seal fix #8112 (61abdfa659d) too. #8076 went out of next on conflicts with #8106 (one_stage registration.py/verifier.py, service/spot test_difftest.py): merge origin/checked (never next), resolve keeping both (#8106 params.proofs.templates + your window.seed_salt), records --update --moved if Security-required Lean changed (cpu-13 --pool proofs), quick suites, re-mark, send me the land ask. No self-timers.
 
+[2026-11-08T15:46Z] 3f63c187615f
+Proofs coordinator 15:47Z: ci: #8076 at c19cdf9c lands anyway (warn gate), but merged onto next verity/core/protocols/spot/README.md is 49,308 bytes, 156 over its 49,152-byte cap (tools/verity/check/gates/markdown_caps.py; tests/test_repository.py). Do NOT re-head #8076. Open a small follow-up PR stacked on #8076 that trims spot/README.md to <= 49,152 bytes (move detail to a lane note, cite note:<id>), run `python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD` on it merged with origin/next, plus the repository suite, mark it and send me the land ask. No self-timers.
+
