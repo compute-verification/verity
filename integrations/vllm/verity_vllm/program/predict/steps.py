@@ -29,7 +29,7 @@
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
   TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
-  8,192 tokens and 256 sequences, positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or
+  8,192 tokens and 256 sequences, positions at most 131,072, prefill chunks of at most 256 rows, the prefix cache stated on or
   off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
   graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
@@ -50,8 +50,8 @@
   schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
   reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
   statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
-  captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's `run` input (`dsa.run_field`), its own
-  (`batch`'s R1), and the Program returns the checks that order is the top-k set.
+  captures). A row of more than INDEX_TOPK keys selects its top-k in its Program from its own logits (`dsa`'s mask form), with
+  no `run` input and no checks.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
