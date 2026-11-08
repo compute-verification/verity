@@ -25,3 +25,6 @@ Proofs coordinator 01:47Z, compile-slice line (network-accounting/ODBRANCH, ANDs
 [2026-11-08T01:47Z] 926cf48c387a
 Proofs coordinator 01:58Z, one more CPU line for the cost table, from circuits (CIR-184): compiling a sampled request's circuit (B's compile_steps, flat form) scales with rows x layers, about 4,450 nodes a row, so a 40k request takes about 4 h on one core (#7842 cut job 6's window from 145 to 29.5 min, 53 GiB). At your 81.8 core-s per GPU-s that is about 176 GPU-s a sampled 40k request, the same order as replay's 458. Add "compile (B) CPU per sampled request" as its own line, at 128k as well if you can scale it (rows x layers), labelled as estimated. Circuits' row-batched form (CIR-184, scoped Sun 20:00Z) is the lever.
 
+[2026-11-08T02:19Z] 19135e9db24e
+Proofs coordinator 02:30Z, from OPTMODES: Figure 1's total_cost now adds the verifier to total compute (verifier_cost card art:d8f40870, core-s per proof-block type at 81.8 core-s per GPU-s). When you rebase onto #7894, pass verify=False to _lines, or your verifier step counts it twice.
+
