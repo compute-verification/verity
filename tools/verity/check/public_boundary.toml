@@ -78,6 +78,8 @@ protocols = [
     "integrations/vllm/tests/pipeline/test_registration_log.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
+    # PoUB's opening unit's test, which holds it to PoUB's Python verifier
+    "verity/ml/commitments/tests/test_block_check.py",
 ]
 team = [
     "infra",
