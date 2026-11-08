@@ -9755,3 +9755,28 @@ Stacked on #8015 and waiting for that head: #8039 (BINDSESS, which restacks firs
   the negatives leaves a port committed afresh, now on a templated statement.
 - **Cancelled:** r20261108-084712-9ce3, whose tree lacked `flock-read-tmpl`.
 - Noted that #8008 is the end-to-end registered guarantee for templated statements.
+
+## 10:24Z from TSVERIFY: e1ac's cause, #8043 refixed; #8063 folded into #8029 (which now waits on #8063)
+- **Why e1ac failed: the lock's trees rule.** The witness statements `wiresAcyclic_honest` and `wiresAcyclic_nontrivial`
+  read `Wires.honest` and `Wires.selfRead`, which were defined in the proofs tree.
+  - Fix on #8043, `0cc6359f70`: both wirings move into the statement module
+    (`Security/Properties/SampledProofs/Wires.lean`), so no listed statement reads the proofs tree.
+  - Lean try r20261108-095819-0149 passed: the three standard axioms, no sibling clash.
+  - Records r20261108-100943-fa7b (cpu-11, research pool) has held its slot since 10:09:52Z. ETA about 11:00Z.
+    When it passes, I commit the records it kept and mark #8043 at that head.
+- **#8029 now includes #8063:** `d323e29267` merges #8063's head d852ed0174.
+  - `pipeline/tp/wires.py` passes `order=` (`Sites.order`) to the window's `Circuit`, so `check_wires` holds every
+    wire to it.
+  - The test reads the new `Sites.units` keys. It now checks that at TP2 and TP8 the circuit's order is `Sites.order`,
+    its wires pass, and with the order reversed a wire is refused by name. #8063's own tests are unchanged.
+  - At #8063's coordinate grain, no producer row is as wide as its combine's `o0`. So a forged two-unit cycle isn't
+    width-valid in the TP window, and forged cycles stay tested in `verity/ml/windows` and the Lean difftest.
+  - Local runs: `test_tp_wires.py` 9 of 9; windows 87 passed, 1 skipped.
+  - Suites r20261108-102126-d158 (cpu-11, research pool; vllm, windows and the root suite, quick). ETA about 10:55Z if
+    a slot is free.
+- **Blocker for marking #8029.** #8063 is unmarked, and through #8063, #8029 now also carries #8032 (`tp_combine`,
+  admitted). The rest of what the merge brings is already on main, and none of it is #7981.
+  - If I mark #8029 before #8063 is admitted, #8063's code lands under #8029.
+  - So I mark #8029 only once #8063 is admitted. Please ask vllm to mark #8063, or tell me to back the merge out if
+    #8029 should land first.
+- **#7981** is still admitted but not on checked. No restack yet.
