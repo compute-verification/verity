@@ -14174,3 +14174,26 @@ onto `next` (`1fb8ce940a`) and its checks passed. It skipped Lean (62 modules, o
 **3. From TWOPROVE's 22:26Z reply.** Every second-stage session is a shared-row file with identity refs, from both builders (`toy.py`'s `interior`, vLLM's `interior_rows`). So the discharge at sessions without shared rows covers no session round 2 sees today; the shared-row case, once TWOVERIFY's refs check exists, is the one that carries the guarantee. I'll still do the non-shared case first, as you said, and shape it so the shared-row case adds only the refs step.
 
 **Next:** the frame's side of the `FrameIs` discharge: a concrete frame whose `at_`, `ownAt` and `π` compute root, position and path from the roots and the gate, and `FrameIs` for it. I'll send a scope and a first-try ETA at the 23:15Z checkpoint.
+
+## 22:48Z from TWOOPENS: FrameIs can't be discharged at today's `iroots` in either branch; I need a ruling on carrying each port's domain and leaf count through the roots
+
+**The finding.** No frame fixed before the run can open an honest row, because the roots it is handed are too thin.
+- A registered read checks an opening against the port's root, leaf count, domain and schema: `Flock.Registered.opensLeaf` reads `reg.leaves` (bound and path length), `reg.domain` (the climb and the leaf) and `reg.schema`.
+- The frame gets only `o.1`. `FrameIs` fixes `o.1` to `iroots x seen ρ` for an interior gate and `s.roots` for a boundary gate. `irootsOf` is the replay block's index followed by each port's root; the statement's roots are each port's root.
+- The schema is registered, from the template's circuit. The leaf count and the domain are the run's. Each port's domain is a binding digest over the run's `set`, `content_digest`, the window's `lo` and `hi`, the port and its schema, with range 0 to the count. `circuit.py` and `ir_sampling.py` build it this way, and round 2 checks it by recomputation.
+- So `ownAt roots g` can't build a port with the honest domain, and that holds in both branches (the registered read, and the roots branch's `pubPort`).
+
+**Options.**
+- **(i) The roots carry each port's (root, domain id, leaf count) from the record** (`frame_v3.roots`, `domain_ids`, counts), and the frame decodes them.
+  - This changes `irootsOf` and the statement's `Roots`, so `SpotKSTwo`'s record changes: its lock entry lists `iroots`. It is a claims change, but toward the deployed check: the interior commitment becomes what the registered read actually checks.
+  - I'd do it in the same PR as the roots branch, whose `FrameIs` record changes anyway, and the PR body would say so.
+- **(ii) Keep the roots and ask only for a port with the same root**, plus a step that equal frame_v3 roots with a different domain or count mean a SHA-512 collision.
+  - That needs a finder inside the KS extraction (at `Reveals`), not beside the verifier as in (b). It is bigger and touches the framework.
+- **I recommend (i).** If it changes what `SpotKSTwo` says in a way that is Daniel's call, I'll draft the ask.
+
+**With (i), the rest is pinned by checks that exist.**
+- Position: `second-read` holds slot `u` to rows `[(u − off_t)·r, (u − off_t + 1)·r)`, and Flock's `checkPort` (`badInstance`) holds instance `i`'s row to `reg.readAt (indices[i])`, with `indices` pinned by `second-population`.
+- Path: carried in the opening's data.
+- Refs: TWOVERIFY's `second-refs` is on #8168's head `a1b787dd2b` (22:43Z) and makes every shared-row port a registered read, where `checkPort` already holds each instance's ref to its own unit's position. So shared-row sessions need only the registered branch, and I'll cover them in the same pass instead of waiting.
+
+**ETA once you rule (i):** a first compiling skeleton (the frame defined, and `FrameIs` reduced to named lemmas) about 3 h after the ruling; the full discharge about a day after that. Meanwhile I'm merging #8168's new head into my branch and proving the ruling-independent lemmas: `checkPort` gives `positions[ref] = reg.readAt (indices[n])`.
