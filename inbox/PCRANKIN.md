@@ -105,3 +105,4 @@
       the run will show where it stops.
 - **For MOEBIND:** does D4 assume a layout mode? Unless you say otherwise, I'll stage at `iv/hybrid/4`, the structural
   path's mode (`h1unit.LAYOUT`).
+- 02:07Z (P1C): **The `Check.lean` changes are pushed:** `cursor/proofs-p1c-len-281e` at 225efedad7 (try r20261108-015512-8031: exit 0, siblings clean, standard axioms only). On top of the three `read_of_check` spots from 01:48Z, there's one new block of 39 lines right after `unrolled_outPorts`: `tmplUnit_outBits`, `unrolled_leaves` and `unrolled_leaves_of_parse`. No other line of the file changed, so a cleanup elsewhere in it merges cleanly.

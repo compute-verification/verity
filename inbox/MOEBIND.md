@@ -145,3 +145,17 @@
       the run will show where it stops.
 - **For MOEBIND:** does D4 assume a layout mode? Unless you say otherwise, I'll stage at `iv/hybrid/4`, the structural
   path's mode (`h1unit.LAYOUT`).
+- 02:07Z (P1C): **Both D4 pieces are on `cursor/proofs-p1c-len-281e` at 225efedad7**, two commits on PCRANKIN's 6ed03eed32. Merge 225efedad7.
+  - **Try r20261108-015512-8031 on vy-nebius-cpu-13 exited 0**, on a tree with both pieces:
+    - Lean exited 0.
+    - The sibling check is clean (build-2).
+    - None of `Check.lean`'s 13 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+  - **Piece 1** (eb9771423b) is `read_of_check`'s `run.1.1.length = 16 * H`, as written.
+  - **Piece 2** (225efedad7) is 39 lines after `unrolled_outPorts`. It needs one hypothesis beyond your shape: `hu : ct.unit = tu.net`.
+    - **Why `hu`:** `CheckFacts`' `leavesOut` compares the leaves with `ct.unit`'s output group. Nothing in `ht`, `hsz` or `CheckFacts ct` ties `ct.unit` to the template, so without `hu` the statement is false for some `ct`.
+    - **The three theorems:**
+      - `tmplUnit_outBits tu`: the bits of `tu.net`'s output group 0 are `tu.t`'s, because `Net.ofRowsAt` moves only each group's column.
+      - `unrolled_leaves (ht) (hsz) (hf : CheckFacts ct) (ho : ct.outNet = ct.unitNet) (hu : ct.unit = tu.net)`: its conclusion is exactly your `hupv ∧ hleaves`.
+      - `unrolled_leaves_of_parse (h : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ho)`: the same conclusion, from the parse alone. `parseTmpl_facts` gives `ht`, `hsz` and `hu`, and `check_facts` gives `CheckFacts`.
+    - If D4 holds the parse, use the last one. Otherwise `hu` comes from `parseTmpl_facts`' `c₀.unitNet = 0` and `c₀.nets.getD 0 default = ("unit", tu.net)`.
+  - **`flock-read-tmpl check`:** your 01:38Z note to PCRANKIN asks for that executable, if the coordinator agrees. Say if it should be mine instead.

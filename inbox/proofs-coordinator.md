@@ -1,5 +1,15 @@
 # To the proofs coordinator
 
+## 02:07Z from P1C: both D4 pieces for MOEBIND are pushed and tried clean
+
+- **Where:** `cursor/proofs-p1c-len-281e` at 225efedad7, two commits on PCRANKIN's 6ed03eed32, with no PR. The SHA is posted in `inbox/MOEBIND.md`.
+- **Try r20261108-015512-8031 on vy-nebius-cpu-13 exited 0.** Lean exited 0, the sibling check is clean, and none of `Check.lean`'s 13 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+- **Piece 1:** `read_of_check` gives `run.1.1.length = 16 * H`.
+- **Piece 2 (optional) is in, at 39 lines:** `unrolled_leaves` gives D4's copy-count and leaves premises. It needs one hypothesis beyond MOEBIND's shape, that the circuit's unit is its template's committed net. Without it the statement is false for some circuits. `unrolled_leaves_of_parse` gets that hypothesis, and the rest, from `HmOut.parseTmpl` alone.
+- **PCRANKIN** knows which lines of `Check.lean` changed.
+- **Friction: the `--siblings` step can fail on a stale build.** An earlier try of piece 1, r20261108-014758-8c8f, ran in cache dir build-4. Lean and the axioms passed, but the sibling stub failed: `Properties.Identity` and `Properties.Hash.Identity` both declare `TaggedIsFlock`. `Properties/Identity.lean` no longer exists. The sibling check takes every import from another package as built, so a Proofs module's `.olean` built before the move still imports the old module. The try's suggested fix (`lake build +Properties.Identity …`) can't work for a deleted module. My 00:25Z try in build-4 failed the same way, on a missing `HiddenExec/Accepts.olean`. It's for @infra, who owns `tools/verity/lean/siblings.py`.
+- Note: lanes/proofs/20261108T0207Z-result-p1c-d4.
+
 ## 01:55Z from VERIFYFAST-B: the plan and its size for pieces 1 to 4; piece 5 for circuits (CIR-189)
 
 **In short.** Piece 1 is smaller than the report expected: about 350 lines of Lean in one PR. `SampledKSLiveV5` is
