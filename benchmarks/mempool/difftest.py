@@ -84,7 +84,7 @@ def fingerprints(ram: PR.Ram, rng: random.Random, *, full: bool = True) -> dict[
     j = rng.randrange(len(ram.log))
     a, v, t, w, now = ram.log[j]
     bad = PR.Ram(ram.initial)
-    bad.cells, bad.first, bad.now = ram.cells, ram.first, ram.now
+    bad.cells, bad.first = ram.cells, ram.first
     if isinstance(v, int):
         v2 = v ^ 1
     elif isinstance(v, tuple) and hasattr(v, "_replace"):

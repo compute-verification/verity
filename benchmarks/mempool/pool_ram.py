@@ -56,15 +56,27 @@ class Blk(NamedTuple):
     owner: int = 0
 
 
+class Op(NamedTuple):
+    kind: str
+    desc: dict
+    base: int                   # 8·(o + 1) for the o-th operation: its position j accesses at base + j
+    at: dict                    # position -> index in the log
+
+
 class Ram:
-    """Memories under offline memory checking: `access` logs (address, value read, its time, value written, now)."""
+    """Memories under offline memory checking: `access` logs (address, value read, its time, value written, now). Each
+    access belongs to an operation (`begin`) and is at one of its positions, whose time is fixed: operation o's position
+    j is at 8·(o + 1) + j, used or not (in the circuit, slot o's times are wiring)."""
 
     def __init__(self, initial: Callable[[tuple], Any]) -> None:
         self.initial = initial
         self.cells: dict[tuple, tuple[Any, int]] = {}
-        self.now = 0
         self.log: list[tuple[tuple, Any, int, Any, int]] = []
         self.first: dict[tuple, Any] = {}
+        self.ops: list[Op] = []
+
+    def begin(self, kind: str, **desc: Any) -> None:
+        self.ops.append(Op(kind, desc, 8 * (len(self.ops) + 1), {}))
 
     def value(self, a: tuple) -> Any:
         """The value at a now, without an access: an operation's write may depend on a read it makes later (the circuit
@@ -72,16 +84,20 @@ class Ram:
         c = self.cells.get(a)
         return c[0] if c else self.initial(a)
 
-    def access(self, a: tuple, f: Callable[[Any], Any] = lambda v: v) -> Any:
-        self.now += 1
+    def access(self, pos: int, a: tuple, f: Callable[[Any], Any] = lambda v: v) -> Any:
+        op = self.ops[-1]
+        assert pos < SHAPE[op.kind] and pos not in op.at, (op.kind, pos)
+        now = op.base + pos
         if a in self.cells:
             v, t = self.cells[a]
         else:
             v, t = self.initial(a), 0
             self.first[a] = v
+        assert t < now
         w = f(v)
-        self.cells[a] = (w, self.now)
-        self.log.append((a, v, t, w, self.now))
+        self.cells[a] = (w, now)
+        op.at[pos] = len(self.log)
+        self.log.append((a, v, t, w, now))
         return v
 
     def multisets(self) -> tuple[Counter, Counter]:
@@ -118,35 +134,58 @@ def gf_mul(a: int, b: int) -> int:
     return r
 
 
-#: widths of a record's fields, by memory (the GLM-5.3 class's: NB < 2^13, keys 128 bits, requests < 2^20, k < 2^11)
-def _pack(rec: tuple, tw: int = 26) -> list[int]:
-    (a, v, t) = rec
-    tag = a[0]
-    if tag == "B":
-        fields = [(0, 3), (a[1], 13), *((x, 13) for x in v[:4]), (v.ref, 9), (v.owner, 20), (t, tw)]
-    elif tag == "K":
-        fields = [(1, 3), (a[1], 13), (v, 128), (t, tw)]
-    elif tag == "M":
-        fields = [(2, 3), (a[1], 128), (v[0], 13), (v[1], 13), (t, tw)]
-    else:
-        fields = [(3, 3), (a[1], 20), (a[2], 11), (v, 13), (t, tw)]
+class Widths(NamedTuple):
+    """Field widths: block ids (NW), requests (RW), a request's block index (KW), holders (REFW), times (TW), keys (HW).
+    The defaults are the GLM-5.3 class's: NB ≤ 2^13, 2^20 requests a window, L/B ≤ 2^11, R ≤ 2^9, 2^25 operations."""
+    NW: int = 13
+    RW: int = 20
+    KW: int = 11
+    REFW: int = 9
+    TW: int = 28
+    HW: int = 128
+
+
+GLM = Widths()
+TAGS = {"B": 0, "K": 1, "M": 2, "RB": 3}
+
+
+def fields(rec: tuple, S: Widths = GLM) -> list[tuple[int, int]]:
+    """A record (address, value, time) as (value, width) fields, LSB first: the tag, the address, the value, the time."""
+    a, v, t = rec
+    head = [(TAGS[a[0]], 2)]
+    if a[0] == "B":
+        return head + [(a[1], S.NW), *((x, S.NW) for x in v[:4]), (v.ref, S.REFW), (v.owner, S.RW), (t, S.TW)]
+    if a[0] == "K":
+        return head + [(a[1], S.NW), (v, S.HW), (t, S.TW)]
+    if a[0] == "M":
+        return head + [(a[1], S.HW), (v[0], S.NW), (v[1], S.NW), (t, S.TW)]
+    return head + [(a[1], S.RW), (a[2], S.KW), (v, S.NW), (t, S.TW)]
+
+
+def pack(rec: tuple, S: Widths = GLM) -> list[int]:
+    """A record's bits in 128-bit chunks."""
     x, s = 0, 0
-    for val, w in fields:
+    for val, w in fields(rec, S):
         assert 0 <= val < 1 << w, (rec, val, w)
         x |= val << s
         s += w
     return [(x >> (128 * i)) & ((1 << 128) - 1) for i in range(cdiv(s, 128))]
 
 
-def fingerprint(ms: Counter, alpha: int, gamma: int) -> int:
-    """∏ (α + Σ_i γ^i c_i) over the records' 128-bit chunks c_i (addition is XOR)."""
+def element(rec: tuple, gamma: int, S: Widths = GLM) -> int:
+    """Σ_i γ^i c_i over the record's chunks c_i."""
+    e, g = 0, 1
+    for c in pack(rec, S):
+        e ^= gf_mul(g, c)
+        g = gf_mul(g, gamma)
+    return e
+
+
+def fingerprint(ms: Counter, alpha: int, gamma: int, S: Widths = GLM) -> int:
+    """∏ (α + `element`) over the records (addition is XOR)."""
     out = 1
     for rec, n in ms.items():
-        chunks = _pack(rec)
-        e, g = 0, 1
-        for c in chunks:
-            e ^= gf_mul(g, c)
-            g = gf_mul(g, gamma)
+        e = element(rec, gamma, S)
         for _ in range(n):
             out = gf_mul(out, alpha ^ e)
     return out
@@ -186,11 +225,11 @@ class RamPool:
             return []
         out, ev = [], 0
         for h in r.block_hashes[: (r.num_tokens - 1) // self.B]:
-            self.ops["lookup"] += 1
-            first, _ = self.ram.access(("M", h))
+            self._begin("lookup", key=h)
+            first, _ = self.ram.access(0, ("M", h))
             if not first:
                 break
-            ev += self.ram.access(("B", first)).ref == 0
+            ev += self.ram.access(1, ("B", first)).ref == 0
             out.append(first)
         self.looked[r.i] = (out, ev)
         return out
@@ -227,92 +266,98 @@ class RamPool:
             self.cache_blocks(r, min(total + n, r.num_tokens))
         return True
 
+    def _begin(self, kind: str, **desc: Any) -> None:
+        self.ops[kind] += 1
+        self.ram.begin(kind, **desc)
+
     def _take(self, i: int, k: int, b: int) -> None:
-        self.ops["take"] += 1
-        old = self.ram.access(("B", b), lambda v: v._replace(ref=v.ref + 1, **({"prev": 0, "next": 0} if not v.ref else {})))
+        self._begin("take", rid=i, k=k, b=b)
+        old = self.ram.access(0, ("B", b),
+                              lambda v: v._replace(ref=v.ref + 1, **({"prev": 0, "next": 0} if not v.ref else {})))
         if not old.ref:
             p, n = old.prev, old.next
-            self.ram.access(("B", p), lambda v: v._replace(next=n))
-            self.ram.access(("B", n), lambda v: v._replace(prev=p))
+            self.ram.access(1, ("B", p), lambda v: v._replace(next=n))
+            self.ram.access(2, ("B", n), lambda v: v._replace(prev=p))
             self.nf -= 1
-        self._set_rb(i, k, b)
+        self._set_rb(3, i, k, b)
 
-    def _set_rb(self, i: int, k: int, b: int) -> None:
+    def _set_rb(self, pos: int, i: int, k: int, b: int) -> None:
         def put(v: int) -> int:
             assert v == 0, (i, k, v)
             return b
-        self.ram.access(("RB", i, k), put)
+        self.ram.access(pos, ("RB", i, k), put)
 
     def _alloc(self, i: int, k: int) -> None:
-        self.ops["alloc"] += 1
+        self._begin("alloc", rid=i, k=k)
         b = self.ram.value(("B", 0)).next
         assert b, "alloc from an empty free queue"
         n = self.ram.value(("B", b)).next
-        self.ram.access(("B", 0), lambda v: v._replace(next=n))
-        old = self.ram.access(("B", b), lambda v: Blk(ref=1, owner=i + 1))
-        self.ram.access(("B", n), lambda v: v._replace(prev=0))
+        self.ram.access(0, ("B", 0), lambda v: v._replace(next=n))
+        old = self.ram.access(1, ("B", b), lambda v: Blk(ref=1, owner=i + 1))
+        self.ram.access(2, ("B", n), lambda v: v._replace(prev=0))
         self.nf -= 1
         if self.caching:
-            key = self.ram.access(("K", b), lambda v: 0)
+            key = self.ram.access(3, ("K", b), lambda v: 0)
             if key:
                 self.ops["evict"] += 1
-                self._unlink(key, b, old.cprev, old.cnext)
-        self._set_rb(i, k, b)
-
-    def _unlink(self, key: int, b: int, cp: int, cn: int) -> None:
-        f, l = self.ram.access(("M", key), lambda v: (cn if v[0] == b else v[0], cp if v[1] == b else v[1]))
-        if cp:
-            self.ram.access(("B", cp), lambda v: v._replace(cnext=cn))
-        if cn:
-            self.ram.access(("B", cn), lambda v: v._replace(cprev=cp))
+                cp, cn = old.cprev, old.cnext
+                self.ram.access(4, ("M", key), lambda v: (cn if v[0] == b else v[0], cp if v[1] == b else v[1]))
+                if cp:
+                    self.ram.access(5, ("B", cp), lambda v: v._replace(cnext=cn))
+                if cn:
+                    self.ram.access(6, ("B", cn), lambda v: v._replace(cprev=cp))
+        self._set_rb(7, i, k, b)
 
     def cache_blocks(self, r: Any, num_tokens: int) -> None:
+        """vLLM pops a block's old key before caching it under a new one; the blocks a request caches (past its cached
+        count) were all allocated since, so have none, and the cache operation requires that."""
         done = self.num_cached.get(r.i, 0)
         full = num_tokens // self.B
         if done >= full:
             return
         for k in range(done, full):
-            self.ops["cache"] += 1
             h = r.block_hashes[k]
-            b = self.ram.access(("RB", r.i, k))
-            old = self.ram.value(("K", b))
-            if old:
-                self.ops["recache"] += 1
-                cur = self.ram.value(("B", b))
-                self._unlink(old, b, cur.cprev, cur.cnext)
-            self.ram.access(("K", b), lambda v: h)
-            _, l = self.ram.access(("M", h), lambda v: (v[0] or b, b))
+            self._begin("cache", rid=r.i, k=k, key=h)
+            b = self.ram.access(0, ("RB", r.i, k))
+
+            def put(v: int) -> int:
+                assert v == 0, f"request {r.i}: block {b} at {k} is already cached"
+                return h
+            self.ram.access(1, ("K", b), put)
+            _, l = self.ram.access(2, ("M", h), lambda v: (v[0] or b, b))
             if l:
-                self.ram.access(("B", l), lambda v: v._replace(cnext=b))
-            self.ram.access(("B", b), lambda v: v._replace(cprev=l, cnext=0))
+                self.ram.access(3, ("B", l), lambda v: v._replace(cnext=b))
+            self.ram.access(4, ("B", b), lambda v: v._replace(cprev=l, cnext=0))
         self.num_cached[r.i] = full
 
     def free_request(self, r: Any) -> int:
-        """Frees r's blocks, deepest first; returns how many it returned to the free queue."""
+        """Frees r's blocks, deepest first; returns how many it returned to the free queue. `cur` is the last block this
+        free pushed to the front (0 for none): vLLM's front pushes, in `reversed(first)`, leave its hashless blocks at
+        the queue's front in the order freed."""
         held = self.held.pop(r.i, 0)
         self.num_cached.pop(r.i, None)
         cur, ret = 0, 0
         for k in reversed(range(held)):
-            self.ops["free"] += 1
-            b = self.ram.access(("RB", r.i, k), lambda v: 0)
+            self._begin("free", rid=r.i, k=k, cur=cur)
+            b = self.ram.access(0, ("RB", r.i, k), lambda v: 0)
             if self.ram.value(("B", b)).ref > 1:
-                self.ram.access(("B", b), lambda v: v._replace(ref=v.ref - 1))
+                self.ram.access(1, ("B", b), lambda v: v._replace(ref=v.ref - 1))
                 continue
             key = self.ram.value(("K", b)) if self.caching else 0
             if not key:
                 c, n = cur, self.ram.value(("B", cur)).next
-                self.ram.access(("B", b), lambda v: v._replace(ref=0, prev=c, next=n))
+                self.ram.access(1, ("B", b), lambda v: v._replace(ref=0, prev=c, next=n))
                 if self.caching:
-                    self.ram.access(("K", b))
-                self.ram.access(("B", c), lambda v: v._replace(next=b))
-                self.ram.access(("B", n), lambda v: v._replace(prev=b))
+                    self.ram.access(2, ("K", b))
+                self.ram.access(3, ("B", c), lambda v: v._replace(next=b))
+                self.ram.access(4, ("B", n), lambda v: v._replace(prev=b))
                 cur = b
             else:
                 t = self.ram.value(("B", 0)).prev
-                self.ram.access(("B", b), lambda v: v._replace(ref=0, prev=t, next=0))
-                self.ram.access(("K", b))
-                self.ram.access(("B", t), lambda v: v._replace(next=b))
-                self.ram.access(("B", 0), lambda v: v._replace(prev=b))
+                self.ram.access(1, ("B", b), lambda v: v._replace(ref=0, prev=t, next=0))
+                self.ram.access(2, ("K", b))
+                self.ram.access(3, ("B", t), lambda v: v._replace(next=b))
+                self.ram.access(4, ("B", 0), lambda v: v._replace(prev=b))
             ret += 1
             self.nf += 1
         return ret
