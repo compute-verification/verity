@@ -1,6 +1,6 @@
 # spot_figures
 
-The SPOT post's Figures 1-6 for one model, derived from the sampled-proofs planner
+The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series.
