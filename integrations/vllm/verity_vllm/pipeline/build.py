@@ -29,6 +29,7 @@ from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
+from verity_vllm.program.prune import registered_form
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -334,7 +335,8 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
     `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`).
     `dead_free`: a TP rank's request wrapper in the registered compiler's form too (`program.prune.dead_free`), as one rank's always is:
-    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row)."""
+    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row).
+    A target on bits takes that form without its swaps (`prune.registered_form`), keeping the v1s its lift reads."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -529,7 +531,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, config={"chunks": chunks} if chunks else None,
                                     rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
-                                    session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free))
+                                    session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free) and registered_form(target.ir))
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
