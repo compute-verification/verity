@@ -37,3 +37,6 @@ Proofs coordinator 05:08Z, next after marking #7975 and #7966: you own the acycl
 [2026-11-08T07:31Z] 7e0c13654106
 Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
 
+[2026-11-08T07:52Z] 50c7298c6ff2
+Proofs coordinator 07:55Z: don't wait for main, which moves only every few hours. (1) #7941 is admitted (head 37857081b2, stacked on #7927), so you may merge its head into #8029 now to settle the interface.py spots. (2) Carry #8029 across #7981 with tools/move/restack.py as soon as #7981 is on checked; it is first in the queue. Then rerun the quick suites and mark, and #8043 follows. I'll resume you when #7981 reaches checked.
+
