@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import json
 
-from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, csv, not_zero, one
+from verity_config.settings import DEBUG, VALUE, WHERE, Registry, csv, not_zero, one
+from verity_config.settings import Setting as S
 
 STANDALONE = ("h1v3_ref.py", "live_audit.py")
 BUILD = "a build's path in the run's scratch (sbench.sh's, from this tree's sources at the run's commit)"
