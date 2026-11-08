@@ -1,10 +1,11 @@
 """I2, the compiler: a served session's advice -> the Programs its committed rows must pass (v0, request-major).
 
-`compile_steps(registered, advice, ingress, coin=)` reads these and nothing else of the run, and of the advice and the bodies only
-the fields `reads.READS` declares, each with its account in the output accounting (the advice through `reads.gate`):
+`compile_steps(registered, advice, ingress, salt=)` reads these and nothing else of the run, and of the advice and the bodies
+only the fields `reads.READS` declares, each with its account in the output accounting (the advice through `reads.gate`):
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), and ℓ, the
   public cap on the advice's length in bits.
-- `coin`: the window's verifier coin, public, which a stochastic request's seed derives from where its body names none (`reads.seed_of`).
+- `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
+  (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
@@ -265,12 +266,12 @@ def _number(x: Any) -> bool:
     return type(x) in (int, float) and math.isfinite(x)
 
 
-def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "", coin: bytes | None = None,
+def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "", salt: bytes | None = None,
               carried: bool = False) -> tuple[dict, int | None]:
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (None when greedy), from the parameters its
     body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p takes the registered split
     count S = registered_splits(num_SMs), the S serving pins every top-p launch to (`engine.topp_pin`), at any top_p. The seed is
-    `reads.SEED`'s, the body's or derived from ``request_id`` and the window's ``coin`` (`reads.seed_of`), else refused."""
+    `reads.SEED`'s, the body's or derived from ``request_id`` and the window's seed ``salt`` (`reads.seed_of`), else refused."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -291,7 +292,7 @@ def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "
     if t == 0:
         return {"kind": "greedy"}, None
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
-             "splits": registered_splits(int(num_sms))}, reads.seed_of(i, request_id, seed, coin, carried))
+             "splits": registered_splits(int(num_sms))}, reads.seed_of(i, request_id, seed, salt, carried))
 
 
 def advice_of(registered: Registered, advice: Any) -> Any:
@@ -524,10 +525,10 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
     return replace(r, digest=program_digest(r.program))
 
 
-def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: bytes | None = None, partial: bool = False,
+def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: bytes | None = None, partial: bool = False,
                   named: bool = False) -> Compiled:
     """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
-    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice`, `ingress` and the window's `coin` only, and
+    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice`, `ingress` and the window's seed `salt` only, and
     compiles them or raises `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would
     otherwise refuse the session, a request whose Program the vocabulary refuses (a launch no capture covers) included.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
@@ -536,7 +537,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
     from verity_vllm.program import workload as W
 
     from .score import request_component
-    plan = plan_steps(registered, advice, ingress, partial=partial, coin=coin)
+    plan = plan_steps(registered, advice, ingress, partial=partial, salt=salt)
     built: dict[str, Any] = {}
     lost: dict[int, str] = {}
     for u in plan.distinct():
@@ -575,7 +576,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
     try:
-        check_compiled(registered, adv, ingress, compiled, lambda *a: plan_steps(*a, coin=coin))
+        check_compiled(registered, adv, ingress, compiled, lambda *a: plan_steps(*a, salt=salt))
     except BatchDependent as e:
         if not partial:
             raise
@@ -583,7 +584,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
     return compiled
 
 
-def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, coin: bytes | None = None) -> Plan:
+def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, salt: bytes | None = None) -> Plan:
     """`compile_steps` up to building Programs: every refusal, each request's shape and policy, and each step's live rows."""
     adv = advice_of(registered, advice)
     phi0 = registered.phi
@@ -675,7 +676,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
-                policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, coin=coin,
+                policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
                 if bi and C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "

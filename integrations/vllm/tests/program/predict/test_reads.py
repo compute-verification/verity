@@ -66,7 +66,7 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     (R.Field("body", "temperature", "advice", role="policy"), "body.temperature: a certified body's field, account 'advice'"),
     (R.Field("body", "min_p", "certified", role="policy", inert=(0,)), "body.min_p: role 'policy' with inert values (0,)"),
     (R.Field("body", "seed", "advice", role="policy"), "body.seed: a stochastic request's seed is certified, its body's seed or "
-                                                       "derived from its id and the window's coin"),
+                                                       "derived from its id and the window's seed salt"),
     (R.Field("served", "seed", "output"), "served.seed: a stochastic request's seed is certified"),
     (R.Field("row", "cache_hit", "advice"), "row.cache_hit: a prefix-cache hit is a row's advice, charged at its width, under "
                                             "enable_prefix_caching: never derived by verifier-side Python"),
@@ -74,8 +74,9 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     (R.Field("served", "cache_hit", "output"), "served.cache_hit: a prefix-cache hit is a row's advice"),
     (R.Field("body", "stream", "certified", role="transport", switch=R.PREFIX_CACHE),
      "body.stream: switched by enable_prefix_caching, so it is advice the registration can switch off, not 'certified'"),
-    (R.Field("window", "salt", "certified"), "window.salt: of the window the compiler reads only its verifier coin"),
-    (R.Field("window", "coin", "advice"), "window.coin: a stochastic request's seed is certified"),
+    (R.Field("window", "salt", "certified"), "window.salt: of the window the compiler reads only its seed salt"),
+    (R.Field("window", "coin", "certified"), "window.coin: of the window the compiler reads only its seed salt, certified"),
+    (R.Field("window", "seed_salt", "advice"), "window.seed_salt: a stochastic request's seed is certified"),
 ])
 def test_a_field_the_accounting_cant_take_is_refused_by_name(field, why):
     table = tuple(f for f in R.READS if (f.record, f.name) != (field.record, field.name)) + (field,)
