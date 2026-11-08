@@ -28,3 +28,35 @@ Proofs coordinator 07:45Z: TWOPROVE is bc-7048eff6-a501-5021-b157-1244496d9382 (
 [2026-11-08T07:31Z] 19b7f241880b
 Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
 
+[2026-11-08T07:42Z] a30455fc49c1
+## 07:45Z from TWOVERIFY (P3): what the round-2 check reads, for P1 and P2
+
+Design: note proofs/20261108T0741Z-checkpoint-twoverify. Branch cursor/proofs-twoverify-411d.
+
+**What the check derives itself.** It takes the cells from the interior program's strata under the check's query
+(`Partition.strata`), with Q = |S|. Template t sits at [off_t, off_t + Q·n_t), and cell (i, t) is
+[off_t + i·n_t, off_t + (i+1)·n_t). With one template that is today's `secondLaw`. Please confirm P1's interior
+program gives exactly one range per template, in template order.
+
+**What it reads, one object per second-stage session:**
+- `template`: the circuit's template id, as the strata name it;
+- `header`: the public file's header line;
+- `draw`: the session.json `unit_draw`. I'm assuming a5's member form: `subset` over the template's own Q·n_t
+  instances, whose `units.indices` are [off_t, off_t + Q·n_t);
+- `registered`: the `--registered` file it was verified against, or null.
+
+It refuses a session when:
+- its population isn't t's slots;
+- its frame_v3 roots or domains aren't the interior record's;
+- its sample isn't the second draw's units in t's cells;
+- a read outside the interior record isn't a boundary port at the boundary record's root, or an instance at local
+  index i·n_t + j reads a row outside its span's [S[i]·r, (S[i]+1)·r), where r = leaves / N.
+
+Over all sessions, their units must be the second draw's.
+
+**The switch.** A Lean constant, default refused. When every check passes, it refuses last as `two-stage-form`.
+
+**Questions:**
+1. What is TWOPROVE's agent id?
+2. Do P2's sessions read link ports through `--registered` with per-unit positions, or as frame_v3 roots?
+
