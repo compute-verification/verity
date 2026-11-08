@@ -91,6 +91,102 @@ VERIFY_TEMPLATED = 125.0 / 2100.0
 #: (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa
 #: core, two vCPUs at $0.015 a vCPU-hour, with its 8 GiB at $0.0045 a GiB-hour
 CORE_PER_GPU = 5.40 / (2 * 0.015 + 8 * 0.0045)
+#: the flat Lean verifier with its proved twins (`fast`): today's column times the after-over-before ratio measured in
+#: one job a type on FlashInfer K2048 (0.207), quant K6144 (0.217) and the MoE GEMM (0.577); the other six by a
+#: fixed-plus-per-entry fit to those two (0.21 to 0.23, assumed)
+VERIFY_FAST = {"FlashInferFp8Linear_v1{K=2048,": 513.0, "Fp8GroupQuantUe8m0_v1{K=6144,": 456.0,
+               "SparseMlaCombine_v1{NSPLIT=12,": 359.0, "RMSNormFusedCudaVector8_v1{N=6144,": 169.0,
+               "Fp8GroupQuantUe8m0_v1{K=2048,": 150.0, "Fp8GroupQuantUe8m0_v1{K=1536,": 112.0,
+               "SparseMlaCombine_v1{NSPLIT=2,": 75.0, "AllReduceMultimem_v1{": 72.0, "MoeExpertFp8GemmW_v1{": 8.7}
+VERIFY_FAST_MEASURED = ("FlashInferFp8Linear_v1{K=2048,", "Fp8GroupQuantUe8m0_v1{K=6144,", "MoeExpertFp8GemmW_v1{")
+#: the types whose templated session check measured costlier than the flat verifier, which keep the flat
+VERIFY_FLAT_CHEAPER = ("RMSNorm", "DsaRMSNorm", "RmsNormMnnvl")
+VERIFY_COLUMNS = {"today": (VERIFY, VERIFY_FIXED), "fast": (VERIFY_FAST, min(VERIFY_FAST.values()))}
+
+#: the long-running proof server on one H200, one prover, the statement cache warm: (fixed GPU-seconds a statement,
+#: GPU-seconds a block, the device's busy share, blocks a full statement) by block prefix, a two-point fit at full and a
+#: quarter of a statement (rmsnorm and the all-reduce at full and half), host work and stalls included; the fused
+#: blocks' w13 from its sessions a second at full statements, split as the server's fit splits it, and w2 by the
+#: server's w2 over w13 (assumed)
+SERVER = {"ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": (0.98, 1.41e-3, 0.28, 2048),
+          "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": (0.79, 0.74e-3, 0.28, 4096),
+          "DsaMqaLogits_v3{N=1,H=32,D=128}": (0.96, 0.71e-3, 0.28, 4096),
+          "ResidualAdd_v1{N=6144}": (1.95, 5.33e-3, 0.28, 512),
+          "RMSNormFusedCudaVector8_v1{N=6144,": (5.11, 10.38e-3, 0.27, 256),
+          "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": (3.79, 9.40e-3, 0.27, 256)}
+FUSED_SESSIONS_S = (0.53 + 0.59) / 2
+FUSED_SERVER = {e: (f * k, m * k, 0.87, 1 << (35 - FUSED_K_LOG))
+                for e, (f, m), k in (("w13", (1.24, 2.77e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)),
+                                     ("w2", (1.30, 2.93e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)))}
+#: the types whose prover and verifier need 100 GiB or more of host memory a copy: one prover an H200
+HOST_BOUND = ("Fp8GroupQuantUe8m0_v1{K=6144,", "FlashInferFp8Linear_v1{K=2048,", "FlashInferFp8Linear_v1{K=6144,",
+              "SparseMlaSplitPart_v1")
+#: K provers' chains overlap at this efficiency: the light types' statements a second at K = 4 over K = 1 (2.87) over 4
+OVERLAP_EFFICIENCY = 2.87 / 4
+#: the quant K6144's price a block at the floor its K2048 sibling's runs show
+QUANT_FLOOR = 0.003532
+
+
+def gpu_factor(busy: float, prover: float = 1.0, k: int = 1, front: bool = False) -> float:
+    """A statement's GPU time over one prover's: the device share `busy` sped up `prover` times, the host share never;
+    the next session's front run beside this one's device work (`front`), and `k` provers sharing the GPU, their chains
+    overlapping at OVERLAP_EFFICIENCY."""
+    device, host = busy / prover, 1.0 - busy
+    chain = max(device, host) if front else device + host
+    return chain if k == 1 else max(device, chain / (k * OVERLAP_EFFICIENCY))
+
+
+def server_price(x) -> tuple[float, float, float, int] | None:
+    e = expert(x) if x.get("kind") == "fused" else None
+    if e:
+        return FUSED_SERVER[e]
+    return next((v for p, v in SERVER.items() if x["block"].startswith(p)), None)
+
+
+def apply_server(strata, prover=1.0, k4=False, front=False, quant_floor=True, host=1.0, plain=False, verify=0.0,
+                 column="fast", tmpl=False, fused_busy=None, verify_other=None):
+    """The strata priced as the long-running proof server proves them, with the statement cache warm: the measured
+    types at their server prices and full statements, the rest at the card with the cache's factor; then a GPU prover
+    `prover` times faster on device shares, four provers an H200 on full statements (`k4`, none on HOST_BOUND types),
+    the next session's front beside this one's device work (`front`), the dense types' host witness `host` times
+    lower, Flock without --zk, and the Lean verifier's core-seconds a statement from `column` times `verify` (the
+    templated estimate where it is cheaper, `tmpl`; the assumed types at `verify_other` when given)."""
+    table, floor = VERIFY_COLUMNS[column]
+    out = []
+    for x in strata:
+        fixed, marginal, cap = x["fixed_seconds"], x["seconds_per_block"], x["statement_blocks"]
+        sp = server_price(x)
+        if sp:
+            fixed, marginal, b, cap = sp
+            if fused_busy is not None and x.get("kind") == "fused":
+                b = fused_busy
+            bf = bm = b
+        else:
+            if quant_floor and x["block"].startswith("Fp8GroupQuantUe8m0_v1{K=6144,"):
+                marginal = QUANT_FLOOR
+            e = expert(x)
+            f, hs, _ = (EXPERT[e]["cache"], 0.0, "") if e else cache_factor(x)
+            fixed *= f
+            host_s = hs * fixed
+            if host != 1.0 and x["block"].startswith(DENSE):
+                fixed, host_s = fixed - host_s * (1 - 1 / host), host_s / host
+            bf, bm = (1 - host_s / fixed if fixed else 1.0), 1.0
+        k = 4 if k4 and not x["block"].startswith(HOST_BOUND) else 1
+        fixed *= gpu_factor(bf, prover, k, front)
+        marginal *= gpu_factor(bm, prover, k, front)
+        if plain:
+            p = 1 - share(PLAIN, x)
+            fixed, marginal = fixed * p, marginal * p
+        if verify:
+            v, how = verifier_seconds(x, table, floor)
+            if tmpl and not x["block"].startswith(VERIFY_FLAT_CHEAPER):
+                v = min(v, VERIFY_TEMPLATED * verifier_seconds(x)[0])
+            if how == "assumed" and verify_other is not None:
+                v = verify_other
+            fixed += verify * v / CORE_PER_GPU
+        out.append(x | {"fixed_seconds": fixed, "seconds_per_block": marginal, "statement_blocks": int(cap),
+                        "priced": "measured" if sp else x["priced"]})
+    return out
 
 
 def expert(x) -> str | None:
@@ -118,22 +214,23 @@ def share(table, x) -> float:
     return next((v for p, v in table.items() if x["block"].startswith(p)), 0.0)
 
 
-def verifier_seconds(x) -> tuple[float, str]:
-    """The Lean verifier's core-seconds a statement of `x`'s type, and how they are known."""
+def verifier_seconds(x, table=VERIFY, floor=VERIFY_FIXED) -> tuple[float, str]:
+    """The Lean verifier's core-seconds a statement of `x`'s type from a column of measured types, and how they are
+    known."""
     b = x["block"]
-    for p, t in VERIFY.items():
+    for p, t in table.items():
         if b.startswith(p):
             return t, "measured"
     if m := re.match(r"SparseMlaCombine_v1\{NSPLIT=(\d+),", b):
-        lo, hi = VERIFY["SparseMlaCombine_v1{NSPLIT=2,"], VERIFY["SparseMlaCombine_v1{NSPLIT=12,"]
+        lo, hi = table["SparseMlaCombine_v1{NSPLIT=2,"], table["SparseMlaCombine_v1{NSPLIT=12,"]
         return lo + (int(m[1]) - 2) * (hi - lo) / 10, "interpolated"
     for types, member, size, at in VERIFY_FAMILY:
         if b.startswith(types):
             m = size and re.search(rf"[{{,]{size}=(\d+)", b)
             if not m:
-                return VERIFY[member], "family"
-            return VERIFY_FIXED + (VERIFY[member] - VERIFY_FIXED) * int(m[1]) / at, "family"
-    return VERIFY_DEFAULT, "assumed"
+                return table[member], "family"
+            return floor + (table[member] - floor) * int(m[1]) / at, "family"
+    return statistics.median(table.values()), "assumed"
 
 
 def price_fused(strata, how="h200"):

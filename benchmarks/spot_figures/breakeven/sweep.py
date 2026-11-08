@@ -39,6 +39,13 @@ REPLAY_FACTOR = c["replay_factor"].value
 COMMIT_WRITE = reprice.COMMIT_WRITE
 #: how the main line prices the fused per-expert blocks (`reprice.price_fused`)
 FUSED = "h200"
+#: the FLOPs the 128k plan's prefix-cache hits skip, over the FLOPs it computes, served with caching on
+PREFIX_OFF = 0.1386
+#: advice a machine's window when every prefix-cache hit is sent whole: the codec's hit term, a 2k served trace's
+#: full-window mean
+HITS_WINDOW_BITS = 5181.0
+#: compiling one sampled request's Programs on 8 ranks, core-hours, by 135 s a Program a rank over a 256-step span
+COMPILE_CORE_H = (3.1, 3.8)
 TAX_ONE_STAGE = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("every_block",))["every_block"]["tax"]
 
 
@@ -70,28 +77,45 @@ class Case:
     verify: float = 0.0
     verify_expert: float | None = None
     verify_other: float | None = None
+    server: bool = False
+    k4: bool = False
+    front: bool = False
+    quant_floor: bool = True
+    column: str = "fast"
+    tmpl: bool = False
+    fused_busy: float | None = None
+    advice_window_bits: float = 0.0
+    prefix_off: bool = False
+    compile_core_h: float = 0.0
 
     def tax(self) -> float:
         """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
         length, or none when the replay reads the edge's state live; every full K/V page hashed when written if
-        `commit_write`.  The one-stage design's is the every-block line's, hashing every block's outputs."""
+        `commit_write`; the prefill a prefix-cache hit would have skipped if `prefix_off`.  The one-stage design's
+        is the every-block line's, hashing every block's outputs."""
         if self.form == "one-stage":
             return TAX_ONE_STAGE
         edge = 0.0 if self.live else EDGE_PAUSE / (self.edge_s or WINDOW)
         return (PARTS["certified-tick rule"] + PARTS["deterministic top-k"] + edge
-                + (COMMIT_WRITE if self.commit_write else 0.0))
+                + (COMMIT_WRITE if self.commit_write else 0.0) + (PREFIX_OFF if self.prefix_off else 0.0))
 
 
 def build(case: Case):
     strata = None
-    per_type = case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain or case.verify
+    per_type = (case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain or case.verify
+                or case.server)
     if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type:
         strata = priced_strata(case.line)
         if case.fuse:
             strata = fuse_reads(strata, fixed="sum" if case.fixed_sum or case.fused else "read")
             if case.fused:
                 strata = reprice.price_fused(strata, case.fused)
-        if per_type:
+        if case.server:
+            strata = reprice.apply_server(strata, prover=case.prover, k4=case.k4, front=case.front,
+                                          quant_floor=case.quant_floor, host=case.host, plain=case.plain,
+                                          verify=case.verify, column=case.column, tmpl=case.tmpl,
+                                          fused_busy=case.fused_busy, verify_other=case.verify_other)
+        elif per_type:
             strata = reprice.apply(strata, cache=case.cache, overlap=case.overlap, prover=case.prover,
                                    full=case.full, host=case.host, plain=case.plain, verify=case.verify,
                                    verify_expert=case.verify_expert, verify_other=case.verify_other)
@@ -145,12 +169,22 @@ def solve(L, target: float, scope: str, scale: float, lo: float = 1e-5, hi: floa
 
 
 def run_case(job):
+    """A case's bounds at REPORT's betas and its break-even betas, the target each weight's bits less the advice it
+    charges over the scope's machine windows (none where the advice alone reaches it); with `compile_core_h`,
+    compiling the requests the FP4 break-even's plan samples, a share of the scope's compute at CORE_PER_GPU."""
     name, case, scope = job
     L = build(case)
-    out = {"case": name, "scope": scope, "tax": case.tax(), "h": L[2][2] * case.scale,
+    s = SCOPES[scope]
+    advice = case.advice_window_bits * s.gpu_seconds / (MACHINE_GPUS * WINDOW)
+    out = {"case": name, "scope": scope, "tax": case.tax(), "h": L[2][2] * case.scale, "advice_bits": advice,
            "bound": {str(b): bound(L, b, scope, case.scale) for b in REPORT},
            "floor": floor_bits(L, 0.01, scope) if case.scale == 1.0 else bound(L, 0.01, scope, 1e-12),
-           "beta": {w: solve(L, t, scope, case.scale) for w, t in WEIGHTS.items()}}
+           "beta": {w: solve(L, t - advice, scope, case.scale) if t > advice else None for w, t in WEIGHTS.items()}}
+    b4 = out["beta"]["FP4"]
+    if case.compile_core_h and b4 is not None:
+        sampled = bound(L, b4, scope, case.scale, full=True)[1]["plan"]["replay_sample"]
+        out["compile"] = {"sampled": sampled, "share": {str(h): sampled * h * 3600 / reprice.CORE_PER_GPU
+                                                        / s.gpu_seconds for h in (*COMPILE_CORE_H, 14.0)}}
     return out
 
 
@@ -300,6 +334,36 @@ def repriced() -> dict[str, Case]:
         out[f"{s}-1s"] = replace(out[s], form="one-stage")
         out[f"{s}-cpuratio"] = replace(out[s], fused="cpu")
     out["R6x4-served"] = replace(out["R6x4"], ctx="c343-served")
+    return out | served_line()
+
+
+def served_line() -> dict[str, Case]:
+    """(A′) at 128k priced as the long-running proof server proves it (`N0`..`N5`): today's measured server prices,
+    main's verifier and the quant K6144 at its floor, then each lever in turn, each type's overlap set by its device's
+    busy share; the extras on `N5`, and the advice charged two ways."""
+    hash4 = 1 - 0.5 * (1 - 1 / 4)
+    life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
+    n0 = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K, fuse=True, fused=FUSED, server=True,
+              verify=1.0, column="today", compile_core_h=1.0)
+    steps = {"N0": n0}
+    steps["N1"] = steps["N0"] | dict(column="fast")
+    steps["N2"] = steps["N1"] | life
+    steps["N3"] = steps["N2"] | dict(k4=True)
+    steps["N4"] = steps["N3"] | dict(front=True)
+    steps["N5"] = steps["N4"] | dict(prover=4.0)
+    out = {n: Case(**kw) for n, kw in steps.items()}
+    extras = {"host": dict(host=3.5), "hash4": dict(marginal=hash4), "plain": dict(plain=True),
+              "tmpl": dict(tmpl=True), "vfloor": dict(verify_other=reprice.VERIFY_COLUMNS["fast"][1]),
+              "fusedfront": dict(fused_busy=0.55), "card": dict(quant_floor=False),
+              "host+tmpl": dict(host=3.5, tmpl=True), "host+hash4+tmpl": dict(host=3.5, marginal=hash4, tmpl=True),
+              "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True),
+              "host+tmpl+prefixoff": dict(host=3.5, tmpl=True, prefix_off=True)}
+    for e, kw in extras.items():
+        out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
+    for s in ("N2", "N3"):
+        out[f"{s}+hits"] = Case(**(steps[s] | dict(advice_window_bits=HITS_WINDOW_BITS)))
+        out[f"{s}+prefixoff"] = Case(**(steps[s] | dict(prefix_off=True)))
+    out["N2+tmpl"] = Case(**(steps["N2"] | dict(tmpl=True)))
     return out
 
 
