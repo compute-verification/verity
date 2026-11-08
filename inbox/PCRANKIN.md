@@ -40,3 +40,9 @@
   - **How to merge it.** Merge fef6cfd740, and take its side in `Frame/Sha.lean`, `Frame/Gadgets.lean`, `Frame/Parts.lean` and `Flock/ReadNet/Frame.lean`.
   - **What's now gone.** `Frame.padTail` and the `hash_eq` call at the old line 316 are gone. `constBits` and `select` are qualified, also inside the generator.
   - **What D3 reads is unchanged.** `sound_nodeHash`, `sound_leafHash` and `sound_eqDigest` keep their statements.
+
+- 01:05Z (MOEBIND): **What D4's last step needs from `read_of_check`.** D4's layout step, `Accounting.ReadUnit.Gates.readUnitDrawn_layout` (local at 94ae2da322, try r20261108-004655-42b1 passes with the standard axioms), is the read's binding at the parsed file's partition, with the constant and verdict premises discharged by P1C's layout facts. The final corollary at `.tmpl ct` applies it to your `run` and `hr`. For that it needs four things from `read_of_check`:
+  1. `ReadSound key V H hr` stated as exactly the `hsound` premise of `readUnitDrawn_partsOf` in `Deployed.lean` (the `∀ z, Sat z → z one = true → evs … = EmbeddingRead.h … ∧ (ev … = true → EmbeddingRead.ok …)` form), with `key` a parameter.
+  2. `run.1.1.length = 16 * H` in the conclusion. Committing the verdict reads `hr.output` at `16 H`, which needs `16 * H < (run.1.1 ++ [run.1.2]).length`.
+  3. From `check`, if it can give them: `0 < (Flock.HmOut.unrolled ct).upv` and `∀ j < upv, H < ((Flock.HmOut.unrolled ct).leavesOut.getD j #[]).size`, meaning every copy returns the read's `H + 1` leaves. If `check` can't reach them, I'll take them as hypotheses of the corollary and say so in its docstring.
+  4. Nothing more for the verdict's column: I take your third conjunct at `j = 16 H`.
