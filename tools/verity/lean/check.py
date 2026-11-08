@@ -3821,7 +3821,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                                f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
-        qview = seals.take(q, (q / "lean-toolchain").read_text().strip(), qpol["roots"], qwork,
+        qview = seals.take(q, (q / "lean-toolchain").read_text().strip(), qpol["roots"], qpol.get("exempt", {}), qwork,
                            log=lambda *_: None) if seals else None
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
@@ -4333,14 +4333,22 @@ class Sealed:
         libraries, so only the search path and sysroot are set)."""
         return ["env", f"LEAN_PATH={os.pathsep.join(self.search)}", f"LEAN_SYSROOT={self.sysroot}", str(self.sysroot / "bin" / name)]
 
-    def take(self, roots: list[str], work: Path, log=print) -> "Sealed":
+    def take(self, roots: list[str], exempt, work: Path, log=print) -> "Sealed":
         """Take the seal: the import graph of the package's audited modules (`Graph.lean`, which reads only headers, so it
         takes seconds), a copy of every module of that closure whose `.olean` is under a `writable` root, the sources and
-        lakefiles the dependency scans read, and the search path mapped to the copies.  Idempotent per package (every copy
-        is copy-once), and safe to call while a dependent builds, since it reads only paths a dependent cannot reach once
-        the first `.olean` is copied: the caller takes it before the package's build is announced."""
+        lakefiles the dependency scans read, and the search path mapped to the copies.  The seeds are the package's modules
+        under the lock's ``roots`` that are not under an ``exempt`` prefix, the set the build builds and `facts_of` reads:
+        an exempt module (a scratch file, a `runs` test) is not built, so seeding it would send `Graph.lean` after an
+        `.olean` that is not there.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
+        builds, since it reads only paths a dependent cannot reach once the first `.olean` is copied: the caller takes it
+        before the package's build is announced."""
         self.dir.mkdir(parents=True, exist_ok=True)
-        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m))
+        lib = self.pkg / ".lake" / "build" / "lib" / "lean"
+        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m) and not under(exempt, m))
+        if missing := [m for m in seeds if not (lib / Path(*m.split(".")).with_suffix(".olean")).is_file()]:
+            it = "it" if len(missing) == 1 else "them"
+            raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "
+                               f"({', '.join(roots)}); build {it}, or list {it} (or a prefix) under `exempt` in {POLICY}")
         (work / "graph-modules").write_text("".join(f"{m}\n" for m in seeds))
         rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
                         f"@{work / 'graph-modules'}"], self.pkg, work / "graph.log")
@@ -4398,7 +4406,7 @@ class Seals:
             if pid.isdigit() and not (proc / pid).exists():
                 shutil.rmtree(d, ignore_errors=True)
 
-    def take(self, pkg: Path, toolchain: str, policy_roots: list[str], work: Path, log=print) -> Sealed:
+    def take(self, pkg: Path, toolchain: str, policy_roots: list[str], exempt, work: Path, log=print) -> Sealed:
         key = pkg.resolve()
         with self.lock:
             lock = self.locks.setdefault(key, threading.Lock())
@@ -4410,7 +4418,7 @@ class Seals:
             # hold the package's `writable` directories while the copy reads them, so a build that shares one (a sibling
             # that requires the same path dependency) cannot rewrite a file mid-copy (`writing`)
             with writing(pkg, log):
-                s.take(policy_roots, work, log)
+                s.take(policy_roots, exempt, work, log)
             self.sealed[key] = s
             return s
 
@@ -5040,7 +5048,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
     try:
-        sealed = seals.take(pkg, rep["toolchain"], policy["roots"], work, log) if seals is not None else None
+        sealed = seals.take(pkg, rep["toolchain"], policy["roots"], policy.get("exempt", {}), work, log) if seals is not None else None
     except RuntimeError as e:                           # the build cannot be sealed; `one`'s finally announces it unpassed
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         return reported(rep)

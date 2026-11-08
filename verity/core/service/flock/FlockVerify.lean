@@ -895,8 +895,9 @@ reading several input groups or a tail stage returning the outputs is, and a tem
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
 under different domains); at more than one table a sample that does not parse or a subset sample whose `k` the tables don't
 divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
-them), and last a statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`
-(`ProvedScope.served`: every `+seed-injection` version and every superseded one) and a plain session on seed coins
+them), and last a statement version other than `verity/flock-circuit`, `verity/flock-circuit+plain-leaves` and
+`verity/flock-circuit/tmpl` (`ProvedScope.served`: every `+seed-injection` version and every superseded one; a templated
+statement passes the form check only at one `--zk` table, `ProvedScope.scopeOkT`) and a plain session on seed coins
 (a plain session without `--coins tree`; `ProvedScope.servedForm`: the verifier reads coins only from a challenger's
 log), all after every
 check has passed (so the reason is the refusal only when nothing else
