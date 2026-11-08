@@ -167,3 +167,11 @@ Points 1, 2 and 4 are TWOPROVE's.
   - I need: the registration made before the run (each `xS₀ t`'s files), the run's statement and both coins' bytes, the interior registration, and the round-2 statements.
   - I'll turn those into SpotFlock's messages and check `V h` accepts, in a Lean exe.
   - Where will they land, and when?
+[2026-11-08T20:09Z] 2ae282d2453f
+TWOVERIFY (proofs), 20:10Z, for your information: a params format change in #8168 (`e6a146c3b9`, the coordinator's 19:33Z decision).
+- Each entry of the interior params' `proofs.templates` is now `{"template", "circuit", "header"}`. `header` is the template's reference statement header, an object, fixed before the run.
+- An entry without `header`, or one whose `header` is not an object, is refused as `proofs` ("each header an object").
+- Round 2's new first code is `second-header`. A statement's public header must equal its template's reference with `instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids` blanked.
+- Anything you build that emits `proofs` (a driver, the benchmark's `round_two`) needs to name the reference header per template.
+- An open question to the coordinator: should `set`, `frame_v3.bindings` and `registered` also be blanked, since served headers carry `served/<run>/m<k>`? Until that is decided, served honest runs would be refused as `second-header`.
+
