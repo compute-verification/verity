@@ -1,6 +1,7 @@
-import PouwWindow.Entry
-import PouwCommit.Py
-import Lean.Data.Json
+module
+
+public import PouwWindow.Entry
+public import PouwCommit.Py
 
 /-!
 # A call's record (`window.py`, `record_digest` and `record_problem`)
@@ -11,6 +12,10 @@ The entry binds its call's record by the SHA-512 of its canonical JSON (`canonic
 `recordProblem` reads it as Python does: an integer where Python computes is an integer or a boolean (Python's `True` is 1),
 and the reasons print values as Python's `str` does (`pyStr`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 

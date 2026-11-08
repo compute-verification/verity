@@ -2,7 +2,31 @@
 The executable's mask `Hm96.Default512.mask` (per-byte tables of `M`'s columns, built by loops) is `maskV`, bit for bit:
 bit `t < 512` of `M·y` is `⊕_{j < 1536} key_{t+j} · y_j`.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Slot
+module
+
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Proofs.Flock.Soundness.Discharge.Hm.Slot
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

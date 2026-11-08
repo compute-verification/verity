@@ -1,8 +1,9 @@
-import Std.Data.HashMap
-import Flock.Canon
-import RemoteAudit.P2
-import RemoteAudit.Pooled
-import RemoteAudit.Session
+module
+
+public import Flock.Canon
+public import RemoteAudit.P2
+public import RemoteAudit.Pooled
+public import RemoteAudit.Session
 
 /-!
 # A session over a P2 store, of record: `p2_party.py`
@@ -27,6 +28,10 @@ line out of form rejects the session `malformed` at the window filling (`fail`),
 read the prover's message. The registration's C* is too large to read whole: what is checked of it is each opened
 unit's four blocks, on the registered vk root.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2Session
 
@@ -133,7 +138,7 @@ challenger's to set as it releases them), before its first event. -/
 def init (held : Held) (params : Session.Params) (coins : Array ByteArray) (notBeforeNs : Nat) : Session.State :=
   { Session.State.init params (standIn held.reg) coins #[] notBeforeNs with digest := held.reg.digest }
 
-/-- `p2.Session.verify` on window `w`'s draws: each opening checked on PoUS's vk root in the order drawn
+/-- `p2.Session.verify` on window `w`'s draws: each opening checked on PoUS's vk root in the order sampled
 (`P2.checkOpeningWith`, each pass's seed and sign rows derived once), the first that fails with its draw, or accept;
 `malformed` for another number of openings than draws. -/
 def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array P2.Opening) :

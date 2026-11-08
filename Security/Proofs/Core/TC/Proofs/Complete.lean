@@ -1,3 +1,9 @@
+module
+
+public import Definitions.Core.TC.Bridge
+public import Proofs.Core.TC.Proofs.Group
+public import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Proofs.Norm
 import Proofs.Core.TC.Proofs.Step
 
 /-!
@@ -7,6 +13,8 @@ import Proofs.Core.TC.Proofs.Step
 magnitudes), and `group_complete` checks each of the group's predicates on it, for any admissible accumulator and any
 sixteen BF16 operand pairs.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

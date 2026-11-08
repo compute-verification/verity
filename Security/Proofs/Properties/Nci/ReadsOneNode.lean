@@ -1,4 +1,25 @@
-import Proofs.Properties.Nci.ReadsExact
+module
+
+public import Proofs.Properties.Nci.ReadsExact
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `ReadsExact.RootOneNode`, proved: a root read's gates are one root node's
@@ -19,6 +40,8 @@ gate is one of its gates (`locW_lt`), so shifted to a member's first gate it is 
 `rootN` reads it at the root, through `carriesRead_of`, and `rootOneNode_of` turns its nodes into the root's
 (`nodeGates_of_inNode`): with the decoder's facts, `RootOneNode` holds (`BodiesOk.rootOneNode`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 open NciCheck.Desc (Piece Seg PS Tgt)

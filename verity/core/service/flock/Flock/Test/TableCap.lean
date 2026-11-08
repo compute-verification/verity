@@ -4,11 +4,16 @@ build's mirror (`proved_scope.rs`, `statement_why`) gives; one of `zkTableCap` t
 without `--zk` the rule is still at most one table. Under `--plain-tables` (`ProvedScope.checkP`) a plain session of
 public or hidden outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, a statement with hidden
 outputs and plain SHA-512 leaves is refused at any count, and the verifier's own program must be the one META binds
-(`ProvedScope.programWhyP`). Its draw is by the
-subset law alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public outputs draws
-by the stratified law alone.
+(`ProvedScope.programWhyP`). Its sample is by the
+subset sampling design alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public outputs samples
+by the stratified sampling design alone.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.TableCap
 

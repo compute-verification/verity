@@ -1,4 +1,4 @@
-"""The PoUB session's verifier and challenger as a party of their own, so they run on a host the prover
+"""The PoUB session's verifier and challenger as a party of their own, so they run on a host the developer
 doesn't control (the challenger host, `trusted-host`) while the prover stays on its node.
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
@@ -85,7 +85,7 @@ class Remote:
         return [] if got is None else got
 
     def end(self, commitment: C.LiveCommitment | None = None, openings: Sequence[C.LiveOpening] = ()) -> None:
-        """The session's last message, with its coins disclosed (`audit.Session.disclose`), or without for a session
+        """The session's last message, with its coins disclosed (`audit.AuditRun.disclose`), or without for a session
         left undecided; sent once."""
         if not self.ended:
             _send(self.f, {"end": {} if commitment is None else {"commitment": commitment.to_json(),
@@ -144,10 +144,10 @@ def side_of(period: Mapping[str, Any], node: str) -> Side:
 
 def placement(node: str, host: str) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the verifier and its challenger
-    ran on a machine the prover doesn't control, which is never the prover's node."""
+    ran on a machine the developer doesn't control, which is never the developer's node."""
     return {"parties": {"challenger": host, "prover": node, "verifier": host},
-            PREMISE: (f"holds: the verifier and its challenger ran on {host}, not the prover's {node}" if host != node else
-                      f"unmet: the verifier and its challenger ran on the prover's node {node}")}
+            PREMISE: (f"holds: the verifier and its challenger ran on {host}, not the developer's {node}" if host != node else
+                      f"unmet: the verifier and its challenger ran on the developer's node {node}")}
 
 
 def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,

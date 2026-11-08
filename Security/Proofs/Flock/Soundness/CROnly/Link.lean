@@ -1,4 +1,9 @@
+module
+
+public import Proofs.Flock.Soundness.CROnly.Defs
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Truncate
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # The link finders under `cr/sha-512`
@@ -10,11 +15,13 @@ one run's, so `T ≥ t'`, and the bound is at most `T'/2^256` for `T'` its expec
 `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`. That is `LinkCR` at that cost (`linkCR_of_strict`), and every theorem
 that takes `LinkCR` holds with `t'` replaced by `strictRunCost t' q`.
 
-**The loss.** The link term's `2t'(1 + k)/2^256` becomes `2(1 + k)·(t'/q + q²/2^513)`. At `q³ = t'·2^512` it is
+**The loss.** The binding error's `2t'(1 + k)/2^256` becomes `2(1 + k)·(t'/q + q²/2^513)`. At `q³ = t'·2^512` it is
 `3(1 + k)·q²/2^512 = 3(1 + k)·t'^{2/3}/2^{512/3}` (`strictRunCost_at_cube`). Reading the stopped finder's bound as
 linear in `T` costs a factor `(2(1 + k))^{1/3}` against the best budget for the finder's own `T ≤ 2(1 + k)t'`, which
 would give `(3/2)·(2(1 + k)t')^{2/3}/2^{512/3}`; that form would need the link layer restated over a concave bound.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 
@@ -132,7 +139,7 @@ theorem strictRunCost_pos {t' q : ℝ} (ht : 0 < t') (hq : 0 < q) : 0 < strictRu
   unfold strictRunCost
   positivity
 
-/-- **The link term's hash part at the best budget**: at `q³ = t'·2^512`, `2(1 + k)·strictRunCost t' q/2^256` is
+/-- **The binding error's hash part at the best budget**: at `q³ = t'·2^512`, `2(1 + k)·strictRunCost t' q/2^256` is
 `3(1 + k)·q²/2^512`, that is `3(1 + k)·t'^{2/3}/2^{512/3}`. -/
 theorem strictRunCost_at_cube {t' q : ℝ} (k : ℕ) (hq : 0 < q) (hcube : q ^ 3 = t' * 2 ^ (512 : ℝ)) :
     2 * (strictRunCost t' q * (1 + k)) / 2 ^ (256 : ℝ) = 3 * (1 + k) * (q ^ 2 / 2 ^ (512 : ℝ)) := by

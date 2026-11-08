@@ -1,5 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
 
 /-!
 # `zk_session_soundJ_custody`, "wrong" measured against the public file
@@ -9,7 +25,7 @@ registration (`ZkLink.Public`) in place of `Partition.wrong`, at the same bound.
 correct in the committed transcript and one opening per commit string makes the key program's evaluation on the committed
 inputs, on every committed wire the unit reads or computes, the bit of an opening of that wire's registered commit
 string: on its outputs, the program's output on the committed inputs opens the registered output commitments. Its
-wrong units contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so its event implies that one's.
+incorrect proof blocks contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so its event implies that one's.
 
 * `Layout.keyProg_readsOwn`: the key program's units read only their own gates and input gates (from `keyProg_reads`),
   which `zk_flock_countC_reg` needs, so that on each unit's wires the key program's evaluation is the unit's own
@@ -17,6 +33,8 @@ wrong units contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so
 * `rsZJ_wrongRegZ`: the registered commit strings are the public file's, so `wrongRegZ` is one set at every
   registration.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 
@@ -71,7 +89,7 @@ theorem rsZJ_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : 
   intro p
   rfl
 
-/-- **One `--zk` sampled session of `J` tables is sound against the registration, at the coin server's custody.**
+/-- **One `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's custody.**
 `zk_session_soundJ_custody` with "wrong" `wrongRegZ` at the prover's registration `reg σ`, read through the rows'
 value binding (`rsZJ`): the registered commit strings are the public file's `b ‖ c` digests at rows and its output
 words' leaves elsewhere. -/

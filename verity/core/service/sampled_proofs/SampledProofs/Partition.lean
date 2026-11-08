@@ -1,7 +1,7 @@
 /-
 The partition as a named query over the verifier's own program (`one_stage/partition.py`): core's `verity/partition/v1`
-object and its digest (C-Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
-applies to the program: the template queries (C-Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
+object and its digest (Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
+applies to the program: the template queries (Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other.
 Every unit's committed bits fit a public size class (`UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits,
 provisional), its class the least that holds them (`unitClass`), a public property of its Definition: a program with a unit
@@ -10,13 +10,13 @@ wider than the widest class is refused (a template instance's bits are its disti
 `Q_word` unit's are its cut's), and so is a program with a template of no gate. The verifier holds its own copy of the
 program and applies the query itself; it never takes a population or a unit index on the prover's word.
 -/
-import Flock.HmRow
-import Flock.TemplateQuery
-import Flock.Draw
-import Flock.Extract
-import Flock.Qcall
-import SampledProofs.Json
-import SampledProofs.Program
+module
+
+public import Flock.HmRow
+public import SampledProofs.Json
+public import SampledProofs.Program
+
+@[expose] public section
 
 namespace SampledProofs.Partition
 
@@ -24,11 +24,11 @@ open Lean (Json)
 open Flock (V)
 open Flock.TemplateQuery (TRange)
 
-/-- `partition_object.QUERIES`, the queries a partition may name. C-Flock's form check leaves the names open. -/
+/-- `partition_object.QUERIES`, the queries a partition may name. Flock's form check leaves the names open. -/
 def QUERIES : List (String × Nat) :=
   [("Q_word", 1), ("Q_word", 2), Flock.HmRow.Q_CALL, ("Q_template_instance", 0), ("Q_template_instances", 0)]
 
-/-- `partition_object.validate`: C-Flock's form check, narrowed to core's queries, with `Q_word`'s `X` and `W` at most
+/-- `partition_object.validate`: Flock's form check, narrowed to core's queries, with `Q_word`'s `X` and `W` at most
 `PARAM_MAX` as core's are. -/
 def valid (obj : Json) : Bool :=
   match Flock.HmRow.checkPartitionObject obj with

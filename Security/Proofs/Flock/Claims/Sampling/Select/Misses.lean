@@ -1,13 +1,56 @@
-import Proofs.Flock.Claims.Sampling.Select.Bounds
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Bounds
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
+import VCVio.Prelude.Core
 
 /-!
 # `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.SampledProofs.DrawMisses`)
 
-* `misses_layout`: a draw that checks no proof unit at a slot of `B` leaves `B` no input slot, and proves no unit at a
+* `misses_layout`: a sample that checks no proof block at a slot of `B` leaves `B` no input slot, and proves no unit at a
   population slot of `B`.
 * `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
-* `drawMisses`: the draw is accepted and misses `B` with probability at most `missBound`.
+* `drawMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
 -/
+
+@[expose] public section
 
 open SampledProofs
 
@@ -51,7 +94,7 @@ theorem inputClass_blocks (d : Program) : ∀ b ∈ popBlocks (inputClass d), b.
     obtain ⟨g, -, rfl⟩ := hb
     rfl
 
-/-- **A draw that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
+/-- **A sample that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
 input slot, and no unit at a population slot of `B` is proved. -/
 theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut S.toList pop.toList)
@@ -171,8 +214,8 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
   | nil => simp
   | cons s l ih => intro a; simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons, Nat.mul_comm s.work]; omega
 
-/-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the law it samples, on
-the population's strata: the units `drawUnits` draws hold none at a slot of `W`. -/
+/-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the sampling design it samples, on
+the population's strata: the units `drawUnits` samples hold none at a slot of `W`. -/
 theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList

@@ -1,8 +1,52 @@
-import Proofs.Flock.Claims.Complete.Shaped.Walk
-import Proofs.Flock.Claims.Complete.Shaped.Piop
+module
+
+public import Proofs.Flock.Claims.Complete.Shaped.Walk
+public import Proofs.Flock.Claims.Complete.Shaped.Piop
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+public import Proofs.Flock.Claims.Complete.Shape
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Json.Stmt
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.Soundness.Refine.Regions
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest rep's proof fits its shape
@@ -17,6 +61,8 @@ is `fileBound_lt`: the file of a statement of `m ≤ 35` with at most 2,050 clai
 `extraClaims_size`, at most 1,024 regions by `Case.scheme`) is under `2^64` bytes, since a registered scheme's digests
 and salts are within SHA-512's (`scheme_sizes`, `schedPart_mono`) and `fast100`'s file part at those is under `2^32`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

@@ -1,24 +1,25 @@
-import CoreProtocol.Live
-import SampledProofs.ChallengerDraw
-import SampledProofs.OneStage
+module
+
+public import SampledProofs.OneStageZk
 
 /-!
-# Coins from the device's log: what a draw's coins are, stated against the code that reads them
+# Coins from the device's log: what a sample's coins are, stated against the code that reads them
 
-A component whose draw reads live coins (`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
+A component whose sample reads live coins (`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
 what that record shows, for every input: the coins the challenger device drew, or a break the run carries.
 
 * `LiveAnswer`: what `Protocol.answer` accepts, `Protocol.answerAt` accepts at the coins its evidence's record shows.
   It follows from `Live.factors` and reads no device.
 * `CoinsFromLog`, the target: what a component that reads its coins through that reader (`ReadsChallenger`)
-  accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
+  accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`),
+  and so does its v2 on the proofs (`oneStageZkReads`), which reads coins only under a challenger it names.
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a run of the device released after `after`, a run the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 
-**The device's history** (`History`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs
-sessions, each a run (`Run`): it draws each coin and its salt by position, commits to the frame-v3 root over their live
+**The device's history** (`History`) is the proof system's challenger as `challenger.py` runs it. Under its key it runs
+sessions, each a run (`Run`): it flips each coin and its salt by position, commits to the frame-v3 root over their live
 leaves (`Run.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
 released after it), and signs its record before any coin opens and its close over the log once the run ends. A run its
 ledger opens withheld (`OpensOn`, `remote.open_session(..., withhold=True)`) releases, while it runs, each coin's raw
@@ -28,7 +29,7 @@ the root enters soundness. It also signs the auditor's ledger, line by line. `Si
 role per key: a key also used for another role is outside the model, and a `forgery` witness is then an EUF-CMA break
 only under that one-role reading.
 
-**The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a draw reads the concatenation
+**The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a sample reads the concatenation
 of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
 stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
@@ -48,6 +49,8 @@ Nothing is assumed of SHA-512 or LMS here. What the device releases when, and th
 device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device
 model.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 
@@ -180,7 +183,7 @@ def fv3Message (tag : String) (parts : List ByteArray) : ByteArray :=
 
 /-- What `taggedSha512 tag manifest` hashes, when the manifest has a canonical form. -/
 def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
-  match Flock.canon manifest with
+  match Flock.canonUtf8 manifest with
   | .ok s =>
     let t := tag.toUTF8
     let b := s.toUTF8
@@ -350,7 +353,7 @@ def Break (dev : History) (key : ChallengerKey) (label : String) (coins : Json) 
 /-! ## The coins, as raw bits -/
 
 /-- A byte string's bits in order, bit `t` being bit `t mod 8` of byte `⌊t/8⌋`: a coin's raw bits, as the device drew them
-and a draw reads them. -/
+and a sample reads them. -/
 def bitsOf (b : ByteArray) : List Bool :=
   b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit i
 
@@ -371,7 +374,7 @@ def DrawnByDeviceAt (read : ChallengerKey → String → String → ByteArray �
       (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
         Break dev key label coins
 
-/-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
+/-- **The coins a sample reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
 from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
 after `after`, then `ξ` is the coins of `label` that a run of the device under `key` released after `after`, a
 run the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
@@ -379,7 +382,7 @@ def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
 
 /-! ## The target: a component's coins, from the device's log -/
 
-/-- What a draw's coins are read under, all of it the verifier's: the challenger's key, the window (its open root,
+/-- What a sample's coins are read under, all of it the verifier's: the challenger's key, the window (its open root,
 lowercase hex), the family, and what the coins were released after. -/
 structure Draws where
   key : ChallengerKey
@@ -443,5 +446,34 @@ def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProof
   record := SampledProofs.OneStage.Evidence.coins
   decode := fun b => (some b : Option ByteArray)
   reads := oneStage_reads
+
+/-! ## One-stage v2 reads its coins through the challenger -/
+
+/-- What v2's coins are read under (`OneStageZk.coinsOf`): v1's, on its parameters' v1 part. -/
+def oneStageZkSource (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment) : Option Draws :=
+  oneStageSource p.base c
+
+theorem oneStageZk_reads (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment) (d : Draws)
+    (h : oneStageZkSource p c = some d) (e : SampledProofs.OneStageZk.Evidence) (ξ : ByteArray)
+    (hξ : SampledProofs.OneStageZk.coinsOf p c e = .ok ξ) :
+    ∃ raw, drawCoins d.key d.window d.label d.after e.base.coins = .ok raw ∧ raw = ξ := by
+  unfold SampledProofs.OneStageZk.coinsOf at hξ
+  cases h1 : SampledProofs.OneStage.coinsOf p.base c e.base with
+  | error r => simp [h1, bind, Except.bind] at hξ
+  | ok o =>
+    cases o with
+    | none => simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hξ
+    | some ξ' =>
+      simp [h1, bind, Except.bind, pure, Except.pure] at hξ
+      obtain ⟨raw, hr, he⟩ := oneStage_reads p.base c d h e.base (some ξ') h1
+      exact ⟨raw, hr, by cases he; exact hξ⟩
+
+/-- **One-stage v2 reads its coins through the challenger's reader** (`OneStageZk.live`), on any blobs. -/
+def oneStageZkReads (bs : Array ByteArray) :
+    ReadsChallenger (SampledProofs.OneStageZk.protocol.on bs) (SampledProofs.OneStageZk.live bs) where
+  source := oneStageZkSource
+  record e := SampledProofs.OneStage.Evidence.coins (SampledProofs.OneStageZk.Evidence.base e)
+  decode := id
+  reads := oneStageZk_reads
 
 end Properties.Challenger

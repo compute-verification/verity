@@ -1,7 +1,46 @@
-import Proofs.Flock.Claims.KS.ZkBound
-import Proofs.Flock.Claims.KS.PlainKS
+module
+
+public import Proofs.Flock.Claims.KS.PlainKS
+public import Proofs.Flock.Claims.KS.ZkBound
+public import Std.Tactic.BVDecide.Normalize.Prop
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Trim
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
 # The deployed masked verifier's KS from the live sessions' bound at one table
@@ -12,7 +51,7 @@ relation, from two premises:
 * `ZkOne`: every statement some run accepts parses with one table (`zk_KS_of_table`'s `hone`). The masked scope admits
   several tables (`InScope`'s `tables ≤ if zk then zkTableCap else 1`), so this holds of a masked deployment only
   where no run accepts a statement of several;
-* `ZkLive x` at every statement some run accepts: at C-Flock ZK's padded table there (`zkTab`), every prover has
+* `ZkLive x` at every statement some run accepts: at Flock ZK's padded table there (`zkTab`), every prover has
   escapes at injective fork rounds and, at each tape and each table of full-width columns, live strategies whose verdict
   bounds the deployed runs accepting on the table, a decoder right for that verdict, and escapes' events bounding their
   `Adv`s and self-clash (`ZkLiveAt` at `hs512`, the hypothesis `zk_tableBoundθAt_of_live` reads).
@@ -20,10 +59,12 @@ relation, from two premises:
 Everything else is proved here at a statement some run accepts with one table, which parses in scope and sets up:
 table 0's layout and link layout (`zk_table0`), `Zk.schedule`'s schedule and `t_pad` at its `m` (`zk_schedule_ok`), the
 padded table `zkTab` at them with the executable's padding constant, pads layout and inner code (`DrawSetupZK.tabAt`'s
-fields, without a draw), that `zkTab` is at C-Flock ZK's parameters (`zkTab_m1`), and that a table that does not extract
+fields, without a sample), that `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and that a table that does not extract
 is not committed to it (`zk_not_committed`, `zkTab_committed`). `zk_tableBoundθ_live` is the bound at full-width
 columns, the form the trimmed record reads (`zk_KS_trim`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -85,7 +126,7 @@ theorem innerN_dvd_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.s
   rw [hb]
   exact Nat.pow_dvd_pow 2 (by omega)
 
-/-- **C-Flock ZK's padded table at a statement**, the fields of `DrawSetupZK.tabAt` at layout `L`'s model statement
+/-- **Flock ZK's padded table at a statement**, the fields of `DrawSetupZK.tabAt` at layout `L`'s model statement
 at its regions: `Zk.schedule`'s schedule and `t_pad` at its `m`, the padding constant `PAD_C`, two extra lanes, link
 layout `PT_LOCAL`, the pads at `PadLayout.new m kLog k0`'s positions, and the inner code `verifyInner` reads (`innerN`
 columns, column `j` at `j + 1`, `K_PAD` padding symbols, `Q` queries at `w.lo mod innerN`, the unique-decoding
@@ -124,7 +165,7 @@ noncomputable def zkTab {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad
   hL := innerN_ge _
   hδ := le_rfl
 
-/-- **`zkTab` is at C-Flock ZK's parameters**: `m1Schedule` and `m1Pad` at `m`, two extra lanes, the shape `acct`,
+/-- **`zkTab` is at Flock ZK's parameters**: `m1Schedule` and `m1Pad` at `m`, two extra lanes, the shape `acct`,
 at most `2^13` inner columns, 168 queries, a radius of at least `7/16`, and the deployed pads domain. -/
 theorem zkTab_m1 {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) (spec : SessionSpec)

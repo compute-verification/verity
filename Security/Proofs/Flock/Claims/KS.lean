@@ -1,178 +1,180 @@
-import Proofs.Flock.Claims.KS.Wait
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.KS.Game
-import Proofs.Flock.Claims.KS.Deploy
-import Proofs.Flock.Claims.KS.Range
-import Proofs.Flock.Claims.KS.Joint
-import Proofs.Flock.Claims.KS.Trace
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ConflictOC
-import Proofs.Flock.Claims.KS.ConflictMerkle
-import Proofs.Flock.Claims.KS.ConflictWithin
-import Proofs.Flock.Claims.KS.PlainQueryRound
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.ConflictTied
-import Proofs.Flock.Claims.KS.TableBound
-import Proofs.Flock.Claims.KS.Refit
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Claims.KS.SessionSC
-import Proofs.Flock.Claims.KS.SessionRaw
-import Proofs.Flock.Claims.KS.OffAlign
-import Proofs.Flock.Claims.KS.PlainOff
-import Proofs.Flock.Claims.KS.OffSim
-import Proofs.Flock.Claims.KS.PlainOffLive
-import Proofs.Flock.Claims.KS.PlainOffRd
-import Proofs.Flock.Claims.KS.CapChunk
-import Proofs.Flock.Claims.KS.PlainCapPrefix
-import Proofs.Flock.Claims.KS.PlainQueried
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.Trim
-import Proofs.Flock.Claims.KS.PlainKS
-import Proofs.Flock.Claims.KS.Escapes
-import Proofs.Flock.Claims.KS.OnAcc
-import Proofs.Flock.Claims.KS.PlainAcc
-import Proofs.Flock.Claims.KS.RoundsN
-import Proofs.Flock.Claims.KS.MixtureZk
-import Proofs.Flock.Claims.KS.ZkBound
-import Proofs.Flock.Claims.KS.ZkKS
-import Proofs.Flock.Claims.KS.JointJ
-import Proofs.Flock.Claims.KS.ZkTables
-import Proofs.Flock.Claims.KS.ZkBoundJ
-import Proofs.Flock.Claims.KS.ZkLiveJ
-import Proofs.Flock.Claims.KS.ZkAccJ
-import Proofs.Flock.Claims.KS.RoundsNZk
-import Proofs.Flock.Claims.KS.LevelZero
-import Proofs.Flock.Claims.KS.LevelZeroAcc
-import Proofs.Flock.Claims.KS.OffSC
-import Proofs.Flock.Claims.KS.Entries
-import Proofs.Flock.Claims.KS.DecodeSC
-import Proofs.Flock.Claims.KS.DecodeDeploy
-import Proofs.Flock.Claims.KS.DecodeHidden
-import Proofs.Flock.Claims.KS.PlainWrP
-import Proofs.Flock.Claims.KS.PlainEvent
-import Proofs.Flock.Claims.KS.LiveMix
-import Proofs.Flock.Claims.KS.PlainFirst
-import Proofs.Flock.Claims.KS.PlainThird
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.KS.PlainSimW
-import Proofs.Flock.Claims.KS.FnFork
-import Proofs.Flock.Claims.KS.PlainWire
-import Proofs.Flock.Claims.KS.PlainClashL
-import Proofs.Flock.Claims.KS.ForkCoupling
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.KS.PlainDrawAcc
-import Proofs.Flock.Claims.KS.PlainDrawDec
-import Proofs.Flock.Claims.KS.PlainDrawSim
-import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Claims.KS.PlainDrawRCols
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainDrawK
-import Proofs.Flock.Claims.KS.PlainDrawAccK
-import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainLeafDecK
-import Proofs.Flock.Claims.KS.PlainClashLaterK
-import Proofs.Flock.Claims.KS.PlainClash0K
-import Proofs.Flock.Claims.KS.PlainLeafClashK
-import Proofs.Flock.Claims.KS.PlainDrawJ
-import Proofs.Flock.Claims.KS.PlainDrawJMove
-import Proofs.Flock.Claims.KS.PlainDrawJRun
-import Proofs.Flock.Claims.KS.PlainDrawJCols
-import Proofs.Flock.Claims.KS.PlainSlackFit
-import Proofs.Flock.Claims.KS.PlainSim
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.KS.PlainParts
-import Proofs.Flock.Claims.KS.PlainClash0
-import Proofs.Flock.Claims.KS.PlainLevels
-import Proofs.Flock.Claims.KS.LevelsAll
-import Proofs.Flock.Claims.KS.PlainClashLater
-import Proofs.Flock.Claims.KS.ForkSim
-import Proofs.Flock.Claims.KS.PlainFork
-import Proofs.Flock.Claims.KS.PlainForkClash
-import Proofs.Flock.Claims.KS.PlainCapsDep
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Claims.KS.SlotDist
-import Proofs.Flock.Claims.KS.RepDist
-import Proofs.Flock.Claims.KS.RepDistDeploy
-import Proofs.Flock.Claims.KS.SlotLead
-import Proofs.Flock.Claims.KS.PlainAlign
-import Proofs.Flock.Claims.KS.PlainSched
-import Proofs.Flock.Claims.KS.SimLead
-import Proofs.Flock.Claims.KS.PlainLead
-import Proofs.Flock.Claims.KS.PlainLive
-import Proofs.Flock.Claims.KS.PlainLeafKS
-import Proofs.Flock.Claims.KS.PlainRawL
-import Proofs.Flock.Claims.KS.PlainRdRun
-import Proofs.Flock.Claims.KS.PlainKSLin
-import Proofs.Flock.Claims.KS.ZkPlanJ
-import Proofs.Flock.Claims.KS.ZkPlanHJ
-import Proofs.Flock.Claims.KS.ZkDrawJ
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.KS.ZkXferJ
-import Proofs.Flock.Claims.KS.ZkSessionSC
-import Proofs.Flock.Claims.KS.ZkPads
-import Proofs.Flock.Claims.KS.ZkSessionW
-import Proofs.Flock.Claims.KS.ZkOffSC
-import Proofs.Flock.Claims.KS.ZkEntries
-import Proofs.Flock.Claims.KS.ZkDecodeW
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkFirst
-import Proofs.Flock.Claims.KS.FitsR
-import Proofs.Flock.Claims.KS.ZkFitsW
-import Proofs.Flock.Claims.KS.ZkBoundW
-import Proofs.Flock.Claims.KS.ZkLiveW
-import Proofs.Flock.Claims.KS.JointR
-import Proofs.Flock.Claims.KS.ZkXferW
-import Proofs.Flock.Claims.KS.ZkTrimW
-import Proofs.Flock.Claims.KS.ZkSimW
-import Proofs.Flock.Claims.KS.ZkAbortR
-import Proofs.Flock.Claims.KS.ZkAbortJR
-import Proofs.Flock.Claims.KS.ZkClashRaw
-import Proofs.Flock.Claims.KS.ZkSlackW
-import Proofs.Flock.Claims.KS.ZkSlackFit
-import Proofs.Flock.Claims.KS.ZkSim
-import Proofs.Flock.Claims.KS.ZkLock
-import Proofs.Flock.Claims.KS.ZkStep
-import Proofs.Flock.Claims.KS.ZkClash0
-import Proofs.Flock.Claims.KS.ZkLevelsAll
-import Proofs.Flock.Claims.KS.ZkPadsPair
-import Proofs.Flock.Claims.KS.ZkTauFork
-import Proofs.Flock.Claims.KS.ZkTauPair
-import Proofs.Flock.Claims.KS.ZkLevels
-import Proofs.Flock.Claims.KS.ZkClashL
-import Proofs.Flock.Claims.KS.ZkFork0
-import Proofs.Flock.Claims.KS.ZkPadsLog
-import Proofs.Flock.Claims.KS.ZkClashPads
-import Proofs.Flock.Claims.KS.TrimBridge
-import Proofs.Flock.Claims.KS.ZkFork
-import Proofs.Flock.Claims.KS.ZkAlign
-import Proofs.Flock.Claims.KS.RepDistZ
-import Proofs.Flock.Claims.KS.ZkSched
-import Proofs.Flock.Claims.KS.SlotBatch
-import Proofs.Flock.Claims.KS.PushSched
-import Proofs.Flock.Claims.KS.ZkBatch
-import Proofs.Flock.Claims.KS.BatchProj
-import Proofs.Flock.Claims.KS.BatchSteps
-import Proofs.Flock.Claims.KS.BatchSched
-import Proofs.Flock.Claims.KS.BatchMove
-import Proofs.Flock.Claims.KS.BatchSim
-import Proofs.Flock.Claims.KS.ZkLiveSched
-import Proofs.Flock.Claims.KS.ZkBatchSim
-import Proofs.Flock.Claims.KS.ZkForkClash
-import Proofs.Flock.Claims.KS.ZkPadsSlot
-import Proofs.Flock.Claims.KS.ZkKSAlign
-import Proofs.Flock.Claims.KS.SlotDistOn
-import Proofs.Flock.Claims.KS.ZkTauSlot
-import Proofs.Flock.Claims.KS.ZkUntrim
-import Proofs.Flock.Claims.KS.Extend
-import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Claims.KS.PlainUntrim
-import Proofs.Flock.Claims.KS.ZkOuter
-import Proofs.Flock.Claims.KS.PlainAccPrR
+module
 
-/-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
+public import Proofs.Flock.Claims.KS.Wait
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.KS.Flock
+public import Proofs.Flock.Claims.Bridge
+public import Proofs.Flock.Claims.KS.Deploy
+public import Proofs.Flock.Claims.KS.Range
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.KS.Trace
+public import Proofs.Flock.Claims.KS.Width
+public import Proofs.Flock.Claims.KS.ConflictOC
+public import Proofs.Flock.Claims.KS.ConflictMerkle
+public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Claims.KS.PlainQueryRound
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.ConflictTied
+public import Proofs.Flock.Claims.KS.TableBound
+public import Proofs.Flock.Claims.KS.Refit
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.KS.Mixture
+public import Proofs.Flock.Claims.KS.SessionSC
+public import Proofs.Flock.Claims.KS.SessionRaw
+public import Proofs.Flock.Claims.KS.OffAlign
+public import Proofs.Flock.Claims.KS.PlainOff
+public import Proofs.Flock.Claims.KS.OffSim
+public import Proofs.Flock.Claims.KS.PlainOffLive
+public import Proofs.Flock.Claims.KS.PlainOffRd
+public import Proofs.Flock.Claims.KS.CapChunk
+public import Proofs.Flock.Claims.KS.PlainCapPrefix
+public import Proofs.Flock.Claims.KS.PlainQueried
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.Trim
+public import Proofs.Flock.Claims.KS.PlainKS
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.KS.RoundsN
+public import Proofs.Flock.Claims.KS.MixtureZk
+public import Proofs.Flock.Claims.KS.ZkBound
+public import Proofs.Flock.Claims.KS.ZkKS
+public import Proofs.Flock.Claims.KS.JointJ
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.KS.ZkBoundJ
+public import Proofs.Flock.Claims.KS.ZkLiveJ
+public import Proofs.Flock.Claims.KS.ZkAccJ
+public import Proofs.Flock.Claims.KS.RoundsNZk
+public import Proofs.Flock.Claims.KS.LevelZero
+public import Proofs.Flock.Claims.KS.LevelZeroAcc
+public import Proofs.Flock.Claims.KS.OffSC
+public import Proofs.Flock.Claims.KS.Entries
+public import Proofs.Flock.Claims.KS.DecodeSC
+public import Proofs.Flock.Claims.KS.DecodeDeploy
+public import Proofs.Flock.Claims.KS.DecodeHidden
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.KS.PlainEvent
+public import Proofs.Flock.Claims.KS.LiveMix
+public import Proofs.Flock.Claims.KS.PlainFirst
+public import Proofs.Flock.Claims.KS.PlainThird
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.KS.PlainSimW
+public import Proofs.Flock.Claims.KS.FnFork
+public import Proofs.Flock.Claims.KS.PlainWire
+public import Proofs.Flock.Claims.KS.PlainClashL
+public import Proofs.Flock.Claims.KS.ForkCoupling
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.PlainDrawAcc
+public import Proofs.Flock.Claims.KS.PlainDrawDec
+public import Proofs.Flock.Claims.KS.PlainDrawSim
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Claims.KS.PlainDrawRCols
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainDrawK
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
+public import Proofs.Flock.Claims.KS.PlainLeafDecK
+public import Proofs.Flock.Claims.KS.PlainClashLaterK
+public import Proofs.Flock.Claims.KS.PlainClash0K
+public import Proofs.Flock.Claims.KS.PlainLeafClashK
+public import Proofs.Flock.Claims.KS.PlainDrawJ
+public import Proofs.Flock.Claims.KS.PlainDrawJMove
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
+public import Proofs.Flock.Claims.KS.PlainDrawJCols
+public import Proofs.Flock.Claims.KS.PlainSlackFit
+public import Proofs.Flock.Claims.KS.PlainSim
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.KS.PlainParts
+public import Proofs.Flock.Claims.KS.PlainClash0
+public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.KS.LevelsAll
+public import Proofs.Flock.Claims.KS.PlainClashLater
+public import Proofs.Flock.Claims.KS.ForkSim
+public import Proofs.Flock.Claims.KS.PlainFork
+public import Proofs.Flock.Claims.KS.PlainForkClash
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Claims.KS.SlotDist
+public import Proofs.Flock.Claims.KS.RepDist
+public import Proofs.Flock.Claims.KS.RepDistDeploy
+public import Proofs.Flock.Claims.KS.SlotLead
+public import Proofs.Flock.Claims.KS.PlainAlign
+public import Proofs.Flock.Claims.KS.PlainSched
+public import Proofs.Flock.Claims.KS.SimLead
+public import Proofs.Flock.Claims.KS.PlainLead
+public import Proofs.Flock.Claims.KS.PlainLive
+public import Proofs.Flock.Claims.KS.PlainLeafKS
+public import Proofs.Flock.Claims.KS.PlainRawL
+public import Proofs.Flock.Claims.KS.PlainRdRun
+public import Proofs.Flock.Claims.KS.PlainKSLin
+public import Proofs.Flock.Claims.KS.ZkPlanJ
+public import Proofs.Flock.Claims.KS.ZkPlanHJ
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.KS.ZkXferJ
+public import Proofs.Flock.Claims.KS.ZkSessionSC
+public import Proofs.Flock.Claims.KS.ZkPads
+public import Proofs.Flock.Claims.KS.ZkSessionW
+public import Proofs.Flock.Claims.KS.ZkOffSC
+public import Proofs.Flock.Claims.KS.ZkEntries
+public import Proofs.Flock.Claims.KS.ZkDecodeW
+public import Proofs.Flock.Claims.KS.ZkEvent
+public import Proofs.Flock.Claims.KS.ZkFirst
+public import Proofs.Flock.Claims.KS.FitsR
+public import Proofs.Flock.Claims.KS.ZkFitsW
+public import Proofs.Flock.Claims.KS.ZkBoundW
+public import Proofs.Flock.Claims.KS.ZkLiveW
+public import Proofs.Flock.Claims.KS.JointR
+public import Proofs.Flock.Claims.KS.ZkXferW
+public import Proofs.Flock.Claims.KS.ZkTrimW
+public import Proofs.Flock.Claims.KS.ZkSimW
+public import Proofs.Flock.Claims.KS.ZkAbortR
+public import Proofs.Flock.Claims.KS.ZkAbortJR
+public import Proofs.Flock.Claims.KS.ZkClashRaw
+public import Proofs.Flock.Claims.KS.ZkSlackW
+public import Proofs.Flock.Claims.KS.ZkSlackFit
+public import Proofs.Flock.Claims.KS.ZkSim
+public import Proofs.Flock.Claims.KS.ZkLock
+public import Proofs.Flock.Claims.KS.ZkStep
+public import Proofs.Flock.Claims.KS.ZkClash0
+public import Proofs.Flock.Claims.KS.ZkLevelsAll
+public import Proofs.Flock.Claims.KS.ZkPadsPair
+public import Proofs.Flock.Claims.KS.ZkTauFork
+public import Proofs.Flock.Claims.KS.ZkTauPair
+public import Proofs.Flock.Claims.KS.ZkLevels
+public import Proofs.Flock.Claims.KS.ZkClashL
+public import Proofs.Flock.Claims.KS.ZkFork0
+public import Proofs.Flock.Claims.KS.ZkPadsLog
+public import Proofs.Flock.Claims.KS.ZkClashPads
+public import Proofs.Flock.Claims.KS.TrimBridge
+public import Proofs.Flock.Claims.KS.ZkFork
+public import Proofs.Flock.Claims.KS.ZkAlign
+public import Proofs.Flock.Claims.KS.RepDistZ
+public import Proofs.Flock.Claims.KS.ZkSched
+public import Proofs.Flock.Claims.KS.SlotBatch
+public import Proofs.Flock.Claims.KS.PushSched
+public import Proofs.Flock.Claims.KS.ZkBatch
+public import Proofs.Flock.Claims.KS.BatchProj
+public import Proofs.Flock.Claims.KS.BatchSteps
+public import Proofs.Flock.Claims.KS.BatchSched
+public import Proofs.Flock.Claims.KS.BatchMove
+public import Proofs.Flock.Claims.KS.BatchSim
+public import Proofs.Flock.Claims.KS.ZkLiveSched
+public import Proofs.Flock.Claims.KS.ZkBatchSim
+public import Proofs.Flock.Claims.KS.ZkForkClash
+public import Proofs.Flock.Claims.KS.ZkPadsSlot
+public import Proofs.Flock.Claims.KS.ZkKSAlign
+public import Proofs.Flock.Claims.KS.SlotDistOn
+public import Proofs.Flock.Claims.KS.ZkTauSlot
+public import Proofs.Flock.Claims.KS.ZkUntrim
+public import Proofs.Flock.Claims.KS.Extend
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Claims.KS.PlainUntrim
+public import Proofs.Flock.Claims.KS.ZkOuter
+public import Proofs.Flock.Claims.KS.PlainAccPrR
+
+/-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` samples, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
 collision among the verifier's own calls in a fork or in one run, covered by `B` and gathered into one square root
 (`Fork`, `Escapes.le`); `Flock.KS` from one wait's bound on the opened columns, where an opened word within `θ` of a
@@ -257,10 +259,10 @@ count (`FlockDeploy.plainNs`, `FlockDeploy.custody_vals_plain`). At `--zk`, one 
 cap and then `sessAtZ` with no other game, so a live verdict at one masked table is no likelier than any verdict after
 `Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`),
 and at a masked statement of one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a
-table `T` at C-Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not
+table `T` at Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not
 extract committed to `T` (`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`,
 `FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live sessions' bound `FlockDeploy.KS.ZkLiveAt`). At the deployed
-masked record, `T` is C-Flock ZK's padded table of the statement's table 0 (`ZkKS`: `FlockDeploy.KS.zkTab`,
+masked record, `T` is Flock ZK's padded table of the statement's table 0 (`ZkKS`: `FlockDeploy.KS.zkTab`,
 `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` at the trimmed record follows from one table at every statement some run
 accepts (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give) and the live sessions' bound at
 `zkTab` (`FlockDeploy.KS.ZkLive`, `FlockDeploy.KS.zk_KS_of_live`). At several tables (`JointJ`), one wait follows
@@ -277,7 +279,7 @@ statement (`FlockDeploy.KS.zk_not_committedJ`). So every table's bound at a stat
 some run accepts (`FlockDeploy.KS.zk_tableBoundJ_of_acc`). After `Commit` table `j` is at position `j` of the batch, so
 a live verdict is no likelier than table `j`'s verdict after `Commit` (`ZkLiveJ`: `FlockDeploy.KS.simAtJZ`,
 `FlockDeploy.KS.mean_live_le_simAtJZ`), and the masked sessions follow from the live sessions' bound at every table
-(`FlockDeploy.KS.ZkLiveAtJ`, `FlockDeploy.KS.zkSessJ_of_liveJ`). At the deployed masked record the tables are C-Flock
+(`FlockDeploy.KS.ZkLiveAtJ`, `FlockDeploy.KS.zkSessJ_of_liveJ`). At the deployed masked record the tables are Flock
 ZK's padded tables of the statement's tables (`FlockDeploy.KS.zkTabs`), so `Flock.KS` follows at every number of tables
 from the live sessions' bound there (`FlockDeploy.KS.ZkLiveJ`) and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_liveJ`). At the
 masked record an output at the empty openings never self-clashes, so table `j`'s self-clash after `Commit` arises only
@@ -307,33 +309,33 @@ self-clashes, on the outcomes flock-verify accepts at the live root where the de
 in scope with public outputs, that table is `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for
 (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). With hidden outputs and `hm96-sha512/v1` leaves, the hidden table is
 `plainTab` too, and the same holds at its openings (`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`,
-`FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets up at a draw, so the plain chain asks only for the
+`FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets up at a sample, so the plain chain asks only for the
 mixture at those decoders, whether or not the outputs are hidden, and for `PlainLiveAccAt` itself at hidden outputs
 under the plain SHA-512 leaves the scope also admits, where the decoders at `leaf512` are not right (`PlainWrP`:
 `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
 `FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the
-statement's draw, the event the mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
+statement's sample, the event the mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the rest
 of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the merged
 coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
 `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
 `Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). A live prover simulates the deployed prover on
 coins of uniform law where its live outcome is the run's wherever the run accepts, and at the coins that merge each live
-coin with the rest of a deployed coin the law holds, so the simulation of the runs alone suffices (`PlainFirst`:
+coin with the rest of a deployed coin the sampling design holds, so the simulation of the runs alone suffices (`PlainFirst`:
 `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
-`FlockDeploy.KS.plainSim_of_run`); the checks compare draws only up to `JsonEquiv`, which holds between different
-terms (`FlockDeploy.KS.drawEq_ne`), so acceptance gives the draw only up to it (`FlockDeploy.KS.RecordDrawEquiv`,
+`FlockDeploy.KS.plainSim_of_run`); the checks compare samples only up to `JsonEquiv`, which holds between different
+terms (`FlockDeploy.KS.drawEq_ne`), so acceptance gives the sample only up to it (`FlockDeploy.KS.RecordDrawEquiv`,
 `FlockDeploy.KS.recordDrawEquiv`). At those coins, a deployed event that the live event implies bounds the mixture, the
 third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). The simulator's bounds read an accepting run or
 fork with its collision, and its fork bound holds up to a slack (`PlainSimW`: `FlockDeploy.KS.plainEv₁`,
 `FlockDeploy.KS.plainForkEv`, `FlockDeploy.KS.PlainClashRun`). The slack is the later rounds' forks and
 the one-run collision at the chances `δ_t` that a fork's coins at round `t` agree where the simulator's tape reads them,
 `Σ_{j<i<K} Δ_{j,i} Pr[F_i] + Δ_{j,K} Pr[F_K]` with `Δ_{j,i} = Π_{j≤t<i} δ_t` and `F_K` the one-run collision; a coupling
-of the fork's coin law gives it (`ForkSlack`: `Claims.Flock.ForkCoinCoupling`, `Claims.Flock.slack_of_coupling`), and it
+of the fork's coin distribution gives it (`ForkSlack`: `Claims.Flock.ForkCoinCoupling`, `Claims.Flock.slack_of_coupling`), and it
 folds into one combined fork event per round with the old escapes, which fit the plain weight in level 0's room
 (`Claims.Flock.slackEsc`, `Claims.Flock.slackEsc_term`, `FlockDeploy.KS.slackEsc_fitsFork_plain`). The tape may hold the
 rest of each deployed coin (`plainCoins`) or uniform functions read at the live coins seen so far, so that a fork that
-redraws them reads fresh entries (`LiveMix`: `Claims.Bridge.Live.fnC`, `Claims.Bridge.Live.Pr_fnC`,
+resamples them reads fresh entries (`LiveMix`: `Claims.Bridge.Live.fnC`, `Claims.Bridge.Live.Pr_fnC`,
 `Claims.Bridge.Live.Pr_fnAt`). Two different columns an accepted plain run's reps open at one position collide in its
 own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`, `FlockDeploy.KS.plain_opening_raw`,
 `FlockDeploy.KS.plain_selfClash_tied`), so the simulator's self-clashes at level 0 need only give such columns
@@ -351,8 +353,8 @@ simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the en
 `Claims.Flock.FnFork.prefixKey_histKey`, `Claims.Flock.FnFork.fnC_coupling`, `Claims.Flock.FnFork.fnAt_coupling`,
 `Claims.Flock.FnFork.δAt_eq`), so the simulator on such a tape has the coupling at those `δ_t`, and its slack
 (`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
-`FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's draw reads `verify` at the setup at that draw,
-not the record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
+`FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's sample reads `verify` at the setup at that sample,
+not the record's, so an accepting run gives it at its live outcome whatever sample its record carries (`PlainDraw`:
 `Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
 `FlockDeploy.KS.plainVerdictAt_of_run`), and at every `keep` an accepting run of `VK keep` gives it read through
 `keep`, its rounds the live outcome's up to their digests (`PlainDrawK`:
@@ -364,12 +366,12 @@ SHA-512 leaves and the later entries (`PlainLeafDecK`: `FlockDeploy.KS.plain_hde
 `FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`) and the level-0 clashes
 (`PlainClash0K`, `PlainLeafClashK`: `FlockDeploy.KS.plain_clash₀AtK`, `FlockDeploy.KS.plain_clash₀HUAtK`,
 `FlockDeploy.KS.plain_laterClashHUAtK`). The acceptance lemmas the plain
-decoders read hold at a draw value by their proofs, through `keep` and at `keep := id`
+decoders read hold at a sample value by their proofs, through `keep` and at `keep := id`
 (`PlainDrawAccK`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyDK`; `PlainDrawAcc`:
-`FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
+`FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the sample
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
 `FlockDeploy.KS.plain_hdecHAt`), and the plain table bound at a statement holds from a simulator at that verdict, with
-nothing asked of the record's draw (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
+nothing asked of the record's sample (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
 `FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_tableBoundθAt_of_simD`). At the
 coupling's
 chances with every revealed length before the last round positive, each `δ_t` there is at most `2^{-128}`, the plain
@@ -391,7 +393,7 @@ the table's coin counts, so the simulator's live outcome has the record's reps a
 in scope, whose link points fit a live coin (`PlainStep`: `FlockDeploy.KS.plain_decides_record`,
 `FlockDeploy.KS.plain_mPts`, `FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`), and with the link
 coin's points it is the record's view (`FlockDeploy.KS.plainSimPts`, `FlockDeploy.KS.plainSimRun`); where it is
-rejected, the simulator's last message is empty, and the verdict at the draw refuses an outcome without proof files
+rejected, the simulator's last message is empty, and the verdict at the sample refuses an outcome without proof files
 (`FlockDeploy.KS.PlainSimAbortAt`, `FlockDeploy.KS.plainSimAbortAt`). So `PlainSimWD` holds from two parts of the
 concrete simulator: its live self-clashes give `P`'s accepting runs a raw clash, and its fork advantage is at most its
 simulated fork (`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`, `FlockDeploy.KS.PlainSimForkLe`,
@@ -452,17 +454,17 @@ KS at the deployed plain verifier's trimmed record holds with no hypothesis (`Pl
 `FlockDeploy.KS.plainAdv_leU`, `FlockDeploy.KS.plain_leafU`, `FlockDeploy.KS.plainSimWD_all`,
 `FlockDeploy.KS.plain_tableBoundθAt_all`, `FlockDeploy.KS.plain_KS`).
 
-Where `verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs`
+Where `verify --zk` sets its session up at a sample (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs`
 (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's
 (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
-draw to the statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which
-reads no draw in the record, with a writer that records the live session there (`ZkDrawJ`:
+sample to the statement's only up to key order, so the old discharge is read at the setup at the statement's sample, which
+reads no sample in the record, with a writer that records the live session there (`ZkDrawJ`:
 `FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
 `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
-(`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs` at
+(`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty sample the deployed `--zk` decoders are right at `zkTabs` at
 public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
-`FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a draw,
+`FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a sample,
 which every statement some run accepts carries (`FlockDeploy.KS.acc_draw_of_setup`; `ZkDecJ`:
 `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked session's bound
 reads its level-0 term only on runs that do not self-clash, a self-clash being in `ε_c⁻` already (`ZkSessionSC`:
@@ -492,7 +494,7 @@ masked reader's entries, and an accepted masked table's level-0 openings verify 
 `Claims.Flock.verified_opens₀Z`); so where `Zk.verifyRep` accepts both reps of a table, every accepted output of their
 results has its level-0 openings verifying at `width₀` below `2^d`, with positions and witness lanes its reps'
 `zkRepColsOf` entries (`FlockSoundness.Discharge.ZkExec.zk_table_opens₀Z`), and so does every accepted output of an
-outcome `verify --zk` accepts at the setup at the draw (`FlockSoundness.Discharge.Composed.OpensEntries`,
+outcome `verify --zk` accepts at the setup at the sample (`FlockSoundness.Discharge.Composed.OpensEntries`,
 `FlockSoundness.Discharge.Composed.runsAtZCJ_live_entries`,
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_entries`). There, where the deployed masked reader looks up no column
 of table `j` off `C`, table `j`'s accepted output opens no position off `C` on a witness lane without a self-clash
@@ -502,7 +504,7 @@ the deployed decoders are right at that verdict on those outcomes, at a masked s
 (`FlockDeploy.KS.OkOffWJ`, `FlockDeploy.KS.AccTxJ`, `FlockDeploy.KS.decodesTableW_zkTabs`,
 `FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). On an accepting deployed masked run, the
 event of no column of table `j` off `C` gives that verdict at the run's live outcome (`ZkEvent`:
-`FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`), with no premise on the record's draw, so a simulation of
+`FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`), with no premise on the record's sample, so a simulation of
 the deployed masked prover by a live prover on coins of uniform law gives the masked mixture's first bound at that
 verdict, and at the coins that merge each live coin with the rest of a deployed coin, a deployed event a live event
 implies bounds the mixture (`ZkFirst`: `FlockDeploy.KS.ZkSimRun`, `FlockDeploy.KS.ZkSim`, `FlockDeploy.KS.zkCoins`,
@@ -561,16 +563,16 @@ counted per round at full-width columns (`FlockDeploy.KS.zk_KS_trim_of_tableBoun
 holds from a live prover for each prover, with a finite tape and coins of uniform law, that sends its roots, simulates
 its accepting runs, whose self-clashes give its accepting runs with a collision and whose fork bounds hold (`ZkSimW`:
 `FlockDeploy.KS.zkRoot`, `FlockDeploy.KS.zkRoot_of_first`, `FlockDeploy.KS.ZkClashRun`, `FlockDeploy.KS.ZkSimWJ`,
-`FlockDeploy.KS.zkXferWJ_of_simWJ`), with no premise on the record's draw, so `Flock.KS` at the trimmed masked record
+`FlockDeploy.KS.zkXferWJ_of_simWJ`), with no premise on the record's sample, so `Flock.KS` at the trimmed masked record
 and table 0's bound counted per round follow from it (`FlockDeploy.KS.zk_KS_trim_of_simWJ`,
-`FlockDeploy.KS.zk_tableBoundθAccAtR_of_simWJ`). The recursion's chain at the abort law holds with the table bound
+`FlockDeploy.KS.zk_tableBoundθAccAtR_of_simWJ`). The recursion's chain at the abort distribution holds with the table bound
 counted per round once the escapes with the conflict fork are merged by round (`ZkAbortR`:
 `Claims.Recursion.TableBoundθOnAccR`, `Claims.Recursion.EscapesD.mergeR`,
 `Claims.Recursion.oneWaitAbort_of_tableBoundR`, `Claims.Recursion.KSAbort_of_tableBoundOnAccR`), so the masked record
 the claims read meets `Inner.KSAbort`, and the recursion's KS over it holds, from that bound and one table wherever
 some run accepts (`FlockDeploy.KS.zk_KSAbortR`, `FlockDeploy.KS.zk_KSFlockR`), so from a simulator of each prover
 (`FlockDeploy.KS.zk_KSAbort_of_simWJ`, `FlockDeploy.KS.zk_KSFlock_of_simWJ`). At every number of tables, with no
-premise of one table, one wait over draws holds at every table's positions (`ZkAbortJR`: `Claims.Recursion.oneWaitDJ`),
+premise of one table, one wait over samples holds at every table's positions (`ZkAbortJR`: `Claims.Recursion.oneWaitDJ`),
 so the chain holds from every table's bound counted per round (`Claims.Recursion.TableBoundJOnAccR`,
 `Claims.Recursion.oneWaitAbort_of_tableBoundJR`, `Claims.Recursion.KSAbort_of_tableBoundJOnAccR`), and the masked
 record the claims read meets `Inner.KSAbort`, and the recursion's KS over it holds, from that bound alone
@@ -583,7 +585,7 @@ position of some table, or a collision: each such column is a level-0 opening in
 and at most `1` there, a
 fork's slack weights before the last round fall geometrically past its round (`PlainSlackFit`:
 `Claims.Flock.sum_slackW_le`, `Claims.Flock.δN_le_inv`, `Claims.Flock.δN_le_one`). So each table's slack weights total
-at most its weight times `|IZW|·8ε` (Cauchy–Schwarz), and at C-Flock ZK's schedules, with at most `7` levels, level 1
+at most its weight times `|IZW|·8ε` (Cauchy–Schwarz), and at Flock ZK's schedules, with at most `7` levels, level 1
 a query and level 0's weight under `2^40`, the joined weights are at most `2^41` times the room and the slack fits it
 at chances at most `2^{-128}`, so at the coupling's chances where every revealed length before the last round is
 positive (`ZkSlackFit`: `Claims.Flock.sum_slackCW_le`, `Claims.Flock.sum_slackTW_le`, `Claims.Flock.slackFitW_of_le`,
@@ -631,7 +633,7 @@ accepting runs whose live outcomes decode to that collide in their logs (`FlockD
 pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). A masked rep
 meets each cap's slot after a count fixed by the statement and the schedule (`RepDistZ`:
 `FlockSoundness.Discharge.ZkLink.dist_lockRepZ`; `ZkSched`: `FlockDeploy.KS.dist_lockRepZ_zkCap`,
-`FlockDeploy.KS.zkRdAt_cap`), plain's past level 0's lane rounds and extra draws. A rep whose opening rejects skips
+`FlockDeploy.KS.zkRdAt_cap`), plain's past level 0's lane rounds and extra samples. A rep whose opening rejects skips
 Ligerito (`restZC`, `PendL.reject`), so rep 1 and the later tables start after fewer coins on that run, but
 `advRSZ`'s event reads the openings only on runs accepting every table up to the session's, and is `0` past a rejected
 one (`FlockDeploy.KS.ind_conflictAcc_dead`). So the slot is counted on the simulated strategy's schedule alone: the
@@ -676,3 +678,5 @@ its setup-dependent part is restated over one (`FlockDeploy.KS.Gen`), `deployZk`
 recursion's outer setup (`FlockDeploy.KS.SO`: the recursive setup, and the verdict's last refusals after the checks)
 the chain's instance is the outer verifier's record (`ZkOuter`: `FlockDeploy.KS.deployZk_SO`), so masked KS holds
 there with no premise (`FlockDeploy.KS.zk_KS_outer`). -/
+
+@[expose] public section

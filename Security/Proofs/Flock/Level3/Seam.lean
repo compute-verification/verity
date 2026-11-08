@@ -1,10 +1,15 @@
 /-
-The refinement seam with the soundness lane's `Arith F K` (PROTOCOL.md §17.4): the embedding `F ⊂ K` and `u` on the
+The refinement seam with the soundness package's `Arith F K` (`verity/ml/flock/verifier/README.md`): the embedding `F ⊂ K` and `u` on the
 executable's representation. An executable `F256` value `⟨c0, c1⟩` is `embed c0 + embed c1 · u` (`Arith.ofLimbs`), and `u`
 is a root of `Y^2 + Y + x⁻¹`.
 -/
-import Proofs.Flock.Level3.GF256
-import Mathlib.Tactic.LinearCombination
+module
+
+public import Proofs.Flock.Level3.GF256
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+
+@[expose] public section
 
 open Polynomial Flock
 
@@ -52,7 +57,7 @@ theorem toQ_u : toQ u = AdjoinRoot.root Q := by
 theorem ofLimbs (c0 c1 : F128) : GF256.of ⟨c0, c1⟩ = embed (GF128.of c0) + embed (GF128.of c1) * u :=
   toQ_injective (by rw [toQ_add, toQ_mul, toQ_embed, toQ_embed, toQ_u, toQ_of, phi_limbs])
 
-/-- `u^2 + u + x⁻¹ = 0` in K (§2.4). -/
+/-- `u^2 + u + x⁻¹ = 0` in K (`Flock.Field`). -/
 theorem u_root : u * u + u + embed xK = 0 := by
   apply toQ_injective
   rw [toQ_add, toQ_add, toQ_mul, toQ_u, toQ_embed, toQ_zero]

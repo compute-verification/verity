@@ -1,6 +1,28 @@
-import Proofs.Flock.Soundness.TmplUnitNet
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.ExecSetup
+public import Properties.Flock.Circuit.Keys
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplUnitNet
+import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
 # A templated file's nets fit their slots
@@ -16,6 +38,8 @@ bits, distinct port bits (`ofRowsAt_width`, `nets_widthPre`, `parseTmpl_net_widt
 after its first loop is at an input bit of a net slot (`deltaIn_inBitPre`, `parseTmpl_deltaIn`). They are facts of the committed nets the lincheck reads, whatever the
 audit's unit for a templated statement. No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

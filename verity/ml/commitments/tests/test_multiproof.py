@@ -8,7 +8,7 @@ import pytest
 
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
-from verity.ml.commitments.multiproof import multiproof, multiproof_cost, multiproof_from_paths, verify_multiproof
+from verity.ml.commitments.multiproof import multiproof, multiproof_cost, multiproof_from_paths, multiproof_root, verify_multiproof
 from verity.errors import ProtocolError
 
 
@@ -18,7 +18,7 @@ BASE = 10
 
 def tree_of(count: int) -> tuple[CommitmentDomain, MerkleTree, dict[int, bytes]]:
     domain = CommitmentDomain(
-        bytes([count % 251]) * 32, -1, RangeIndexedDomain(BASE, BASE + count)
+        bytes([count % 251]) * 32, -1, RangeIndexedDomain(BASE, BASE + count), hash="sha256"
     )
     values = {BASE + rank: bytes([rank & 0xFF, rank >> 8]) for rank in range(count)}
     return domain, MerkleTree(domain, values, lambda _position: SCHEMA), values
@@ -138,6 +138,8 @@ def test_a_corrupted_or_misshaped_proof_is_rejected() -> None:
     proof = multiproof(tree, ranks)
     leaves = leaves_of(domain, values, ranks)
     assert verify_multiproof(root, 16, domain.domain_id, leaves, proof)
+    assert multiproof_root(16, domain.domain_id, leaves, proof) == root
+    assert multiproof_root(16, domain.domain_id, leaves, proof[:-1]) is None
     for at in range(len(proof)):
         corrupted = list(proof)
         corrupted[at] = bytes(byte ^ 1 for byte in corrupted[at])
@@ -179,14 +181,12 @@ def test_provers_reject_ranks_outside_the_tree_and_inconsistent_paths() -> None:
 
 
 @pytest.mark.parametrize("hash", ["blake3", "blake3-s256"])
-def test_blake3_frames_are_refused(hash: str) -> None:
-    """Multiproofs are over the SHA frames only: a ``frame-b3`` or ``frame-b3s`` tree, or its hash named to the verifier,
+def test_other_hashes_are_refused(hash: str) -> None:
+    """Multiproofs are over the SHA frames only: no domain of another hash can be made, and its hash named to the verifier
     raises instead of folding nodes of another frame."""
-    domain = CommitmentDomain(bytes(32), -1, RangeIndexedDomain(BASE, BASE + 7), hash=hash)
-    values = {BASE + rank: bytes([rank]) for rank in range(7)}
-    tree = MerkleTree(domain, values, lambda _position: SCHEMA)
     with pytest.raises(ValueError, match="framing hash"):
-        multiproof(tree, [1, 4])
+        CommitmentDomain(bytes(32), -1, RangeIndexedDomain(BASE, BASE + 7), hash=hash)
+    domain, tree, values = tree_of(7)
     leaves = leaves_of(domain, values, (1, 4))
     paths = {rank: tree.open(BASE + rank).path for rank in (1, 4)}
     with pytest.raises(ValueError, match="framing hash"):

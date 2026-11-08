@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # The drawn-unit replay bundle proved (prove_bundle.py; M1): the bundle PB_BUNDLE (its .bin beside it) of the
-# window PB_WINDOW; without PB_WINDOW, the store's art:d0b6e81f (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
-# tampered twin and the H200 interfaces' bundle of four sampled proof blocks under the window's registered subset:4, a fixture's sample).
-# Each drawn member is proved by Flock `prove --zk` (CPU) behind the Lean ZK server, one outer proof at a time, and
+# window PB_WINDOW; without PB_WINDOW, the registered fixture tests/fixtures/bundle-window (BUNDLE_WINDOW: a W8A8 MLP's window
+# under a test key, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under the window's registered
+# subset:4, a fixture's sample), fetched by `research data fetch-fixtures`.
+# Each sampled member is proved by Flock `prove --zk` (CPU) behind the Lean ZK server, one outer proof at a time, and
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
-# member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall
-# and refused by Lean without it. PB_LIVE=1 requires the bundle's draw to be live, with its receipt.
+# member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the ZK server
+# and refused by Lean without it. PB_LIVE=1 requires the bundle's sample to be live, with its receipt.
 #   bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 #   (a job run from a clone of the tree)
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from
@@ -26,8 +27,8 @@ PY=$REPO/.venv/bin/python
 
 STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
-BUNDLE_WINDOW=art:d0b6e81fa20a0e2c9c6701ca4495e8092434ad8c9e7c08038d114ad42210980c
-FX=$W/bundle-window
+BUNDLE_WINDOW=benchmarks/one_stage/tests/fixtures/bundle-window
+FX=$REPO/$BUNDLE_WINDOW
 if [ -n "${PB_WINDOW:-}" ]; then
   BUNDLE=${PB_BUNDLE:?PB_WINDOW needs its PB_BUNDLE} WINDOW=$PB_WINDOW TAMPERED=${PB_TAMPERED:-}
 else
@@ -64,7 +65,7 @@ export RUST_MIN_STACK=$((64 << 20))
 if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path/run.sh's R
   PYTHONPATH=$REPO/benchmarks/proof_throughput "$PY" -c 'import os, sys
 from verity_proof_throughput.store import store_env
-os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' data fetch $BUNDLE_WINDOW --to "$FX" > "$O/fetch.log" 2>&1 \
+os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' data fetch-fixtures --repo "$REPO" "$BUNDLE_WINDOW" > "$O/fetch.log" 2>&1 \
     || { tail -20 "$O/fetch.log"; exit 8; }
 fi
 

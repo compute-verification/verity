@@ -1,7 +1,39 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.VBridge.AccChain
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # Row E: the running sums at a rep of the decision
@@ -22,6 +54,8 @@ chain (`UnitSums`), they read the verifier's coefficients (`CoefsAre`), the rep'
   establish: the `rec-open` copies' `acc_out` columns (`AccUnits.unitSum_of_cols`) and the algebra unit's `acc0`,
   `acc1` ports read at the chain's ends (`AccUnits.readsEnds_of_regBits`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

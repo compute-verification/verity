@@ -1,4 +1,9 @@
-import Definitions.Pouw.Fp8Atom.Atom
+module
+
+public import Definitions.Pouw.Fp8Atom.Atom
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # sm_120's block-scaled FP4 step (trusted definitions)
@@ -42,6 +47,8 @@ stands is not the adder. And `maxExp` skips zero terms, while a participating gr
 grid. So the step is defined directly; `Fp4Checks` checks `groupSumStep` against it on the vectors where no participating
 group cancels, and shows it differs on cancellation vectors.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Fp4
 

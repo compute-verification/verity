@@ -1,6 +1,9 @@
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.Basic.QTree
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Basic.Mat
+public import Definitions.Pouw.Basic.QTree
+public import Definitions.Hash.Basic
 
 /-!
 # The γ-gap game (trusted; problem statement §3.2–§3.5)
@@ -18,6 +21,8 @@ The game `G_γ(Π, 𝒜, T, q)` of §3.3, with probabilities over the oracle `H`
                 for every H and s. Preprocessing costs nothing. The online program reads the workload and
                 its activation input A.act (the units' own operands); it may commit other activations.
 5. Score.       K = correctSet; A wins if  T / (1 − γ) < ∑_{u ∈ K} W_ref(u).
+6. Break.       A breaks if two different inputs its run hashed with SHA-512 (CM.hashed) have one digest under the
+                model's SHA-512 (CM.sha). Every probability is of an event and no break.
 ~~~
 
 The cost model `CM` is a parameter fixed before the protocol and the workload: the adversary picks a program of
@@ -28,7 +33,14 @@ Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 * ideal commitments: the online phase outputs the committed values themselves (`Transcript`);
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
 * deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
+
+The break (step 6) is how the game uses SHA-512 without a collision-resistance assumption: a guarantee bounds the
+probability of its event together with no collision among the inputs the run itself hashed, so every collision it
+excludes is bounded by what the run carries. A model whose programs hash nothing (`CostModel.Hashless`, a named
+assumption in `Definitions.Assumptions.Pouw`, every model's default) never breaks, and there each statement reads as it did without the break.
 -/
+
+@[expose] public section
 
 namespace Pouw
 
@@ -98,12 +110,16 @@ abbrev Transcript : Type := ℕ → Option Commit
 
 /-- An abstract cost model for the online phase: its programs, what a program outputs, what it costs and how many
 oracle calls it makes, on oracle `H`, workload `U`, activation input `act` (unit `u`'s own operand is `act u`),
-state `σ` and salt `s`. The model fixes `cost` and `calls`; an adversary only chooses a program. -/
+state `σ` and salt `s`, and the SHA-512 its programs hash with (`sha`) and the inputs a run hashes with it (`hashed`).
+The model fixes `cost`, `calls` and `hashed`; an adversary only chooses a program. By default a model hashes
+nothing. -/
 structure CostModel (Q R S : Type) where
   Prog : Type
   run : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → Transcript
   cost : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℝ
   calls : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℕ
+  sha : Hash.Msg → Hash.Digest := fun _ => default
+  hashed : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → List Hash.Msg := fun _ _ _ _ _ _ => []
 
 /-- The model's programs reach `H` only through counted queries: on fixed inputs, a run is the result
 of an adaptive oracle program, and `calls` counts that program's queries. -/
@@ -195,6 +211,15 @@ def Adversary.transcript {CM : CostModel Q R S} (A : Adversary CM) (U : Workload
     Transcript :=
   CM.run A.online H U A.act (A.pre.eval H) s
 
+/-- The inputs the adversary's online run hashes with SHA-512 on oracle `H` and salt `s`. -/
+def Adversary.hashed {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) :
+    List Hash.Msg :=
+  CM.hashed A.online H U A.act (A.pre.eval H) s
+
+/-- **The run breaks SHA-512**: two different inputs it hashed have one digest. -/
+def Adversary.Breaks {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : Prop :=
+  Hash.CollisionIn CM.sha (A.hashed U H s)
+
 /-- The online phase costs at most `T`, and preprocessing and the online phase together make at most `q` oracle
 calls, for every oracle and salt (surely). -/
 def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (T : ℝ) (q : ℕ) : Prop :=
@@ -209,11 +234,13 @@ def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H :
   T / (1 - γ) < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
 
 /-- **The γ-gap property** `G_γ` with error `η(q, N)`, in §3.3's quantifier order after `Π`: for every in-domain
-workload, every budget `T ≥ 0`, every `q ≤ 2^64` and every adversary within `(T, q)`, `Pr_{H,s}[𝒜 wins] ≤ η`. -/
+workload, every budget `T ≥ 0`, every `q ≤ 2^64` and every adversary within `(T, q)`,
+`Pr_{H,s}[𝒜 wins ∧ 𝒜's run doesn't break SHA-512] ≤ η`. -/
 def Gγ [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
+    pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2 ∧ ¬ A.Breaks U x.1 x.2)
+      ≤ η q U.layout.N
 
 /-- **§3.3's requirement** at `(γ, η)`: `∃ Π` whose honest reference is complete and runs in the cost model at
 cost at most `W_ref` (so `W_ref` cannot be under-declared; `W_ref ≡ 0` would make `G_γ` trivial), such that `G_γ`
@@ -228,9 +255,26 @@ def Requirement [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
 `w u / ∑_v w v`. -/
 abbrev Ticket (w : ℕ → ℕ) (N : ℕ) : Type := Σ u : Fin N, Fin (w u)
 
-/-- The audit with `t` independent work-weighted samples accepts iff every sampled unit is in `K` (the verifier
-recomputes the sampled units and checks their checked values and useful output). -/
+/-- The audit with `t` independent work-weighted samples accepts iff every sampled proof block is in `K` (the verifier
+recomputes the sampled proof blocks and checks their checked values and useful output). -/
 def AuditAccepts {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
   ∀ i, ((c i).1 : ℕ) ∈ K
+
+/-- The number of the `t` samples that land in `O`, each sample counted once. -/
+def drawsIn {w : ℕ → ℕ} {N t : ℕ} (O : Finset ℕ) (c : Fin t → Ticket w N) : ℕ :=
+  (univ.filter fun i => ((c i).1 : ℕ) ∈ O).card
+
+/-- The tolerant audit accepts iff every sampled proof block is in `K`, checked and credited, or in `O`, accepted and credited
+nothing. -/
+def AuditAcceptsTol {w : ℕ → ℕ} {N t : ℕ} (K O : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
+  ∀ i, ((c i).1 : ℕ) ∈ K ∨ ((c i).1 : ℕ) ∈ O
+
+/-- **A miss bound for `t` work-weighted samples at `δ`**: whatever the set `S` of units, the table `u` at the number of
+samples in `S` falls below `S`'s share of the tickets with probability at most `δ`, the failure probability. `u` is
+the sampling tolerance read off the samples. Clopper–Pearson's one-sided upper bound at `δ` is one; `u 0 = ε_s` and
+`u x = 1` otherwise is the audit that accepts only checked units, at `δ = (1 − ε_s)^t`. -/
+def MissBound (t : ℕ) (u : ℕ → ℝ) (δ : ℝ) : Prop :=
+  ∀ (N : ℕ) (w : ℕ → ℕ) (S : Finset ℕ), S ⊆ range N →
+    pr (fun c : Fin t → Ticket w N => u (drawsIn S c) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ)) ≤ δ
 
 end Pouw

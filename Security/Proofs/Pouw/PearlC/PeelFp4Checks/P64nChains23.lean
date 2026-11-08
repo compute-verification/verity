@@ -1,6 +1,13 @@
-import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+module
+
+public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # `prod-64-nvfp4`: selected cells' `C̃` chains (`ch4`), rows 2 and 3 (`PeelFp4Checks`, which joins them) -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

@@ -1,8 +1,10 @@
-import Proofs.Pouw.PearlC.PeelExists
-import Proofs.Pouw.PearlC.PeelExists4
-import Proofs.Pouw.PearlC.TileCheck4Words
-import Proofs.Pouw.PearlC.CoreOps
-import Definitions.Pouw.Guarantees.PearlCTileCheck
+module
+
+public import Proofs.Pouw.PearlC.PeelExists
+public import Proofs.Pouw.PearlC.PeelExists4
+public import Proofs.Pouw.PearlC.TileCheck4Words
+public import Proofs.Pouw.PearlC.CoreOps
+public import Definitions.Pouw.Guarantees.PearlCTileCheck
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)
@@ -23,14 +25,17 @@ the tile's weight rows passes it too, since the check accepts only then (`TileCh
 `pc8`'s noise has no NaN code (`Noise8OK`) because the check refuses one (`tileCheck8`'s `anchorsOK`, as Python's
 `fp8_to_f32` does), so it is no hypothesis. What stays named: `Pc8OpsAgree` and `Pc4OpsAgree` (core's primitives), and,
 for `pc8`, `Pc8EntryOK` at each entry of a credited row (the peel's rows exist). `_pearlC` is each on the audit's tiles,
-and `_domain` on `D_dev`'s whole-tile layouts and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`),
-`D_dev`'s `k ≤ 2^16` and `Noise8OK` give `Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no
-hypothesis at an entry. `pc4` names none at an entry: the two rows' `Row4OK` and `k ≤ 2^16` give `Pc4EntryOK`
+and `_domain` on `D_dev`'s whole-tile layouts and on D₄. At a step `⟨[32], w, z⟩` of any width (`hopperE4m3K32`,
+`sm120E4m3`), `D_dev`'s `k ≤ 2^16` and `Noise8OK` give `Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_k32`
+names no hypothesis at an entry. `pc4` names none at an entry: the two rows' `Row4OK` and `k ≤ 2^16` give `Pc4EntryOK`
 (`PeelExists.pc4EntryOK_of_rows`), and D₄'s shapes have `k ≤ 2^16`.
 
 At core's instance `coreOps` both agreements follow from core's definitions (`CoreOps`), so
-`tileCheck8_computesWords_core` and `tileCheck4_computesWords_core` name no hypothesis.
+`tileCheck8_computesWords_core` and `tileCheck4_computesWords_core` name no hypothesis; at the H100's record `devH100`
+the first is `tileCheck8_computesWords_h100`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 
@@ -155,10 +160,11 @@ theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) 
     (fun _ hL u hu => shape8_of_pearlCDomainDev hL.1 hu (hL.2 u hu).1 (hL.2 u hu).2)
     fun H s U u act i j hD hu => hent H s U u act i j hD.1 hu
 
-/-- **L3's words for the plain `pc8` Program at a step `⟨[32], w, z⟩` with `w ≥ 24`** (`sm120E4m3` among them), on
-`D_dev`'s whole-tile layouts: `tileCheck8_computesWords_domain` with no hypothesis at an entry, since `D_dev`'s
-`k ≤ 2^16` and the accepted noise's `Noise8OK` give the peel's rows (`PeelExists.pc8EntryOK_of_wide`). -/
-theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w : ℕ} (hw : 24 ≤ w) (zf : ℤ)
+/-- **L3's words for the plain `pc8` Program at a step `⟨[32], w, z⟩` of any width** (`hopperE4m3K32` and
+`sm120E4m3` among them), on `D_dev`'s whole-tile layouts: `tileCheck8_computesWords_domain` with no hypothesis at an
+entry, since `D_dev`'s `k ≤ 2^16` and the accepted noise's `Noise8OK` give the peel's rows
+(`PeelExists.pc8EntryOK_of_noise`). -/
+theorem tileCheck8_computesWords_k32 {ops : RowOps} (hops : Pc8OpsAgree ops) {w : ℕ} (zf : ℤ)
     (pr : Prices) (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) :
     (tileCheck8 ops ⟨[32], w, zf⟩ noise).ComputesWords
@@ -166,7 +172,7 @@ theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w
       (pearlCTiles (pc8Sem ops ⟨[32], w, zf⟩ noise) c ρ) (fun L => pearlCDomainDev (devAt ⟨[32], w, zf⟩ 4 pr) L ∧
         ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
   tileCheck8_computesWords_domain hops _ pr c ρ noise fun _ _ _ u act i j hD hu hz _ =>
-    PeelExists.pc8EntryOK_of_wide hw zf (hD u hu).2.2.2.2.2 hz act _ i j
+    PeelExists.pc8EntryOK_of_noise zf (hD u hu).2.2.2.2.2 hz act _ i j
 
 /-! ## `pc4`'s tile check computes the words -/
 
@@ -240,17 +246,29 @@ theorem tileCheck4_computesWords_domain {ops : RowOps} (hops : Pc4OpsAgree ops) 
 
 /-! ## At core's instance -/
 
-/-- **L3's words for the plain `pc8` Program at core's instance** (`coreOps`), at a step `⟨[32], w, z⟩` with `w ≥ 24`
-(`sm120E4m3` among them), on `D_dev`'s whole-tile layouts and the audit's tiles: `tileCheck8_computesWords_wide` with
-`Pc8OpsAgree` from core's definitions (`CoreOps.pc8OpsAgree_coreOps`), so it names no hypothesis. -/
-theorem tileCheck8_computesWords_core {w : ℕ} (hw : 24 ≤ w) (zf : ℤ) (pr : Prices) (c : Costs) (ρ : ℚ)
+/-- **L3's words for the plain `pc8` Program at core's instance** (`coreOps`), at a step `⟨[32], w, z⟩` of any width
+(`hopperE4m3K32` and `sm120E4m3` among them), on `D_dev`'s whole-tile layouts and the audit's tiles:
+`tileCheck8_computesWords_k32` with `Pc8OpsAgree` from core's definitions (`CoreOps.pc8OpsAgree_coreOps`), so it names
+no hypothesis. -/
+theorem tileCheck8_computesWords_core {w : ℕ} (zf : ℤ) (pr : Prices) (c : Costs) (ρ : ℚ)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) :
     (tileCheck8 coreOps ⟨[32], w, zf⟩ noise).ComputesWords
       (pearlCProtocolDev (devAt ⟨[32], w, zf⟩ 4 pr) (pc8Sem coreOps ⟨[32], w, zf⟩ noise) ρ)
       (pearlCTiles (pc8Sem coreOps ⟨[32], w, zf⟩ noise) c ρ) (fun L => pearlCDomainDev (devAt ⟨[32], w, zf⟩ 4 pr) L ∧
         ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
-  tileCheck8_computesWords_wide CoreOps.pc8OpsAgree_coreOps hw zf pr c ρ noise
+  tileCheck8_computesWords_k32 CoreOps.pc8OpsAgree_coreOps zf pr c ρ noise
+
+/-- **L3's words for the plain `pc8` Program at the H100's record** (`devH100`, whose step `hopperE4m3K32` has width
+14): `tileCheck8_computesWords_core` there, since `devAt hopperE4m3K32 4 Prices.h100` is `devH100`. -/
+theorem tileCheck8_computesWords_h100 (c : Costs) (ρ : ℚ)
+    (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) :
+    (tileCheck8 coreOps hopperE4m3K32 noise).ComputesWords
+      (pearlCProtocolDev devH100 (pc8Sem coreOps hopperE4m3K32 noise) ρ)
+      (pearlCTiles (pc8Sem coreOps hopperE4m3K32 noise) c ρ) (fun L => pearlCDomainDev devH100 L ∧
+        ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
+  tileCheck8_computesWords_core (w := 14) (-139) Prices.h100 c ρ noise
 
 /-- **L3's words for the plain `pc4` Program at core's instance** (`coreOps`) on D₄ and the audit's tiles:
 `tileCheck4_computesWords_domain` with `Pc4OpsAgree` from core's definitions (`CoreOps.pc4OpsAgree_coreOps`), so it
@@ -265,10 +283,10 @@ theorem tileCheck4_computesWords_core (ρ : ℚ)
 end Pouw.PearlC.WholeCircuit
 
 theorem Pouw.SecurityProofs.PearlC.TileCheck8WordsCore : Pouw.Guarantees.PearlC.TileCheck8WordsCore := by
-  intro Q R S p pr c ρ noise U H s g cm X hacc hgr hw hU hg
+  intro Q R S p pr c ρ noise U H s g cm X hacc hgr _ hU hg
   obtain ⟨l, w, zf⟩ := p
   obtain rfl : l = [32] := hgr
-  exact (Pouw.PearlC.WholeCircuit.tileCheck8_computesWords_core hw zf pr c ρ noise U hU H s g hg cm X hacc).resolve_right id
+  exact (Pouw.PearlC.WholeCircuit.tileCheck8_computesWords_core zf pr c ρ noise U hU H s g hg cm X hacc).resolve_right id
 
 theorem Pouw.SecurityProofs.PearlC.TileCheck4WordsCore : Pouw.Guarantees.PearlC.TileCheck4WordsCore := by
   intro Q R S ρ lines U H s g cm X hacc hU hg

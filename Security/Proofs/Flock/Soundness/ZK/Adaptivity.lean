@@ -1,8 +1,7 @@
-import Mathlib.Data.Fintype.Pi
+module
+
+public import Mathlib.Data.Fintype.Pi
 import Mathlib.Basic.Finite.Prod
-import Mathlib.Data.Finset.Card
-import Mathlib.Logic.Function.Iterate
-import Mathlib.Algebra.Group.Basic
 import Mathlib.Tactic.Abel
 
 /-!
@@ -29,6 +28,8 @@ the proof uses them.
 Only exact equality lifts this way; a statistical gap at fixed coins does not, which is why the paper proof passes through
 ideal leaves first.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

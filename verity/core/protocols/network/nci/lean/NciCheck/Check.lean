@@ -1,11 +1,13 @@
-import Std.Data.HashSet
-import Flock.Program
+module
+
+public import Std.Data.HashSet
+public import Flock.Program
 
 /-!
 # The NCI policy's check of a declared division
 
-`Nci.Complies Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates divide
-into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
+`Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates
+divide into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
 `novelReads R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
 decides that it is a partition of the computed gates into IUs (`Verity.Partition`) and that every IU meets both bounds,
 and reports per IU its size and novel reads, and the first IU that fails, with the rule it fails.
@@ -14,7 +16,7 @@ and reports per IU its size and novel reads, and the first IU that fails, with t
 
 An instance is one JSON object:
 * `program`: the declaration's circuit `D`, a `verity-ir/descriptor/v1` Program as text (`verity/ml/circuits/PROTOCOL.md`),
-  read with C-Flock's decoder (`Flock.Program.decode`). Its canonical layout (§6) is `D`: gate `g` of the layout is
+  read with Flock's decoder (`Flock.Program.decode`). Its canonical layout (§6) is `D`: gate `g` of the layout is
   `Fin D.N` gate `g`, one primitive call returning one `Value<w>`, and `w g` is that `w`, in bits (`Circuit.w`, which
   the definition calls `verity.ir`'s `Value<w>`). The input gates are the input nodes, `Input<w>_v1` and
   `RegisteredInput<w>_v1` (§5). `reads g` is the set of gates `g`'s operands name (`Flock.Program.Prog.gate`: the
@@ -44,6 +46,8 @@ then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`,
 `check` writes a refusal as `{"error": code}`, with a `message` giving the fix where one is the declaration's to make
 (`fixOf`), or for a `program` refusal of a reinterpretation, where (`refusalOf`).
 -/
+
+@[expose] public section
 
 namespace NciCheck
 
@@ -188,7 +192,7 @@ def verdict (gates : Nat) (r : Array (Nat × Nat)) (f : Option (Nat × String)) 
       | none => Json.null
       | some (u, rule) => Json.arr #[toJson u, Json.str rule])]
 
-/-- The instance's Program as C-Flock's decoder reads it, refused (`program`) where the decoder refuses it, among them a
+/-- The instance's Program as Flock's decoder reads it, refused (`program`) where the decoder refuses it, among them a
 reference that reads a leaf at another width than it was committed with (`Flock.Program.Widths`, `E_REINTERPRET`;
 `refusalOf` gives its message). -/
 def decodeProgram (text : String) : Except String Flock.Program.Prog :=

@@ -1,7 +1,11 @@
 /-
 `NovelBasis`'s table `svC` of `s_i(β_i)`, apart from the checks of its entries so they build in parallel.
 -/
-import Flock.Ligerito
+module
+
+public import Flock.Field
+
+@[expose] public section
 
 open Flock
 

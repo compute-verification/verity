@@ -1,103 +1,114 @@
-import Flock.Field
-import Flock.Hash
-import Flock.Bytes
-import Flock.Canon
-import Flock.Norm
-import Flock.Schedule
-import Flock.Proof
-import Flock.Transcript
-import Flock.Record
-import Flock.Piop
-import Flock.Opening
-import Flock.Merkle
-import Flock.Hm96
-import Flock.Ligerito
-import Flock.Comp
-import Flock.Tags
-import Flock.Net
-import Flock.SplitNL
-import Flock.Lookup
-import Flock.Circuit
-import Flock.Public
-import Flock.RowLeaf
-import Flock.Blake3Row
-import Flock.Statement
-import Flock.Verify
-import Flock.ZkProof
-import Flock.ZkLigerito
-import Flock.Zk
-import Flock.With.Hashes
-import Flock.With.Transcript
-import Flock.With.Verify
-import Flock.With.Zk
-import Flock.With.Eq
-import Flock.With.ZkEq
-import Flock.With.Sim
-import Flock.With.SimWalk
-import Flock.With.SimVerify
-import Flock.With.SimZk
-import Flock.With.Log
-import Flock.With.VerifyE
-import Flock.Partition
-import Flock.HmNets
-import Flock.RecOpen
-import Flock.RecSparse
-import Flock.RecSparseCmd
-import Flock.RecAlgebra
-import Flock.RecResiduals
-import Flock.RecOpening
-import Flock.HmRow
-import Flock.Desc
-import Flock.RecVStar
-import Flock.ProvedScope
-import Flock.PortRoots
-import Flock.KsScope
-import Flock.Registered
-import Flock.WindowRecord
-import Flock.RegKnown
-import Flock.KnownRead
-import Flock.JsonKeys
-import Flock.RecordText
-import Flock.Keccak
-import Flock.RecCoins
-import Flock.RecSetup
-import Flock.RecBudget
-import Flock.RecCompose
-import Flock.RecLinks
-import Flock.RecLinkTree
-import Flock.TemplateQuery
-import Flock.Derive
-import Flock.DeriveAll
-import Flock.DeriveCheck
-import Flock.Rows
-import Flock.Qword
-import Flock.Program
-import Flock.Sigma
-import Flock.Extract
-import Flock.Qcall
-import Flock.Fuel
-import Flock.Firewall
-import Flock.Firewall.Contract
-import Flock.Firewall.Assumptions
-import Flock.Firewall.Released
-import Flock.Firewall.Coins
-import Flock.Firewall.Finish
-import Flock.Firewall.FinishProver
-import Flock.Firewall.Frame
-import Flock.Firewall.Frames
-import Flock.Firewall.Link
-import Flock.Firewall.Level0
-import Flock.Firewall.Hello
-import Flock.Firewall.Session
-import Flock.Firewall.Skeleton
-import Flock.Firewall.Drive
-import Flock.Witness
-import Flock.With.Returns
-import Flock.With.ReturnsWalk
-import Flock.With.Deployed
-import Flock.With.Setup
-import Flock.With.SetupEq
-import Flock.With.SimSetup
-import Flock.RecOpeningCmd
-import Flock.RecLinksCmd
-import Flock.RecRecord
+module
+
+public import Flock.Field
+public import Flock.Hash
+public import Flock.Bytes
+public import Flock.Canon
+public import Flock.Norm
+public import Flock.Schedule
+public import Flock.Proof
+public import Flock.Transcript
+public import Flock.Record
+public import Flock.Piop
+public import Flock.Opening
+public import Flock.Merkle
+public import Flock.Hm96
+public import Flock.Ligerito
+public import Flock.Comp
+public import Flock.Tags
+public import Flock.Net
+public import Flock.SplitNL
+public import Flock.Lookup
+public import Flock.Circuit
+public import Flock.Public
+public import Flock.RowLeaf
+public import Flock.Blake3Row
+public import Flock.Statement
+public import Flock.Verify
+public import Flock.ZkProof
+public import Flock.ZkLigerito
+public import Flock.Zk
+public import Flock.With.Hashes
+public import Flock.With.Transcript
+public import Flock.With.Verify
+public import Flock.With.Zk
+public import Flock.With.Eq
+public import Flock.With.ZkEq
+public import Flock.With.Sim
+public import Flock.With.SimWalk
+public import Flock.With.SimVerify
+public import Flock.With.SimZk
+public import Flock.With.Log
+public import Flock.With.VerifyE
+public import Flock.Partition
+public import Flock.HmNets
+public import Flock.RecOpen
+public import Flock.RecSparse
+public import Flock.RecSparseCmd
+public import Flock.RecAlgebra
+public import Flock.RecResiduals
+public import Flock.RecOpening
+public import Flock.HmRow
+public import Flock.Desc
+public import Flock.RecVStar
+public import Flock.ProvedScope
+public import Flock.PortRoots
+public import Flock.KsScope
+public import Flock.Registered
+public import Flock.WindowRecord
+public import Flock.RegKnown
+public import Flock.KnownRead
+public import Flock.JsonKeys
+public import Flock.RecordText
+public import Flock.Keccak
+public import Flock.RecCoins
+public import Flock.RecSetup
+public import Flock.RecBudget
+public import Flock.RecCompose
+public import Flock.RecLinks
+public import Flock.RecLinkTree
+public import Flock.RecLinkRef
+public import Flock.RecLinkPart
+public import Flock.TemplateQuery
+public import Flock.Derive
+public import Flock.DeriveAll
+public import Flock.DeriveCheck
+public import Flock.Rows
+public import Flock.Qword
+public import Flock.Program
+public import Flock.Gate
+public import Flock.Sigma
+public import Flock.Extract
+public import Flock.Evaluated
+public import Flock.Qcall
+public import Flock.Fuel
+public import Flock.Firewall
+public import Flock.Firewall.Honest
+public import Flock.Firewall.Contract
+public import Flock.Firewall.Assumptions
+public import Flock.Firewall.Released
+public import Flock.Firewall.Coins
+public import Flock.Firewall.Finish
+public import Flock.Firewall.FinishProver
+public import Flock.Firewall.Frame
+public import Flock.Firewall.Frames
+public import Flock.Firewall.Link
+public import Flock.Firewall.Level0
+public import Flock.Firewall.Hello
+public import Flock.Firewall.Session
+public import Flock.Firewall.Salts
+public import Flock.Firewall.Values
+public import Flock.Firewall.Skeleton
+public import Flock.Firewall.Drive
+public import Flock.Witness
+public import Flock.With.Returns
+public import Flock.With.ReturnsWalk
+public import Flock.With.Deployed
+public import Flock.With.Setup
+public import Flock.With.SetupEq
+public import Flock.With.SimSetup
+public import Flock.RecOpeningCmd
+public import Flock.RecLinksCmd
+public import Flock.RecRecord
+
+@[expose] public section

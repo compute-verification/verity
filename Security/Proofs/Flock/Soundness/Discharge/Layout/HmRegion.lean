@@ -1,5 +1,14 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Region
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Binding.Layout
+public import Proofs.Flock.Soundness.Discharge.Layout.Region
+public import Proofs.Flock.Soundness.ExecPlacement
+import all Init.Data.Array.Basic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.Bytes
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The `b ‖ c` that the statement pins at the `hm96` slots' outputs
@@ -11,6 +20,8 @@ byte string's 10 bit-index bits and the template instance's `log₂ g` bits, at 
 template instance `g`'s `hm96` output of port `p` are that digest (`bc_pinned`). The address is the `hm96` slot's
 (`bcAddr_eq_slotCol`), and setupH's statement's regions are `HmRow.regions` (`setupH_regions`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -53,6 +64,7 @@ theorem forall₂_mem {α β : Type} {R : α → β → Prop} : ∀ {L : List α
       · obtain ⟨e, he, hr⟩ := forall₂_mem hrest a h
         exact ⟨e, List.mem_cons_of_mem _ he, hr⟩
 
+-- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.regions` has region "digest p" for every input port `p`**, as `mkRegion` built it. -/
 theorem regions_digest {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)
@@ -225,6 +237,7 @@ theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
 
 /-! ### setupH's regions -/
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **setupH's statement's regions are `HmRow.regions` of its circuit and public file.** -/
 theorem setupH_regions {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}

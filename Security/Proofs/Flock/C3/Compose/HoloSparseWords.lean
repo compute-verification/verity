@@ -1,11 +1,29 @@
+module
+
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Sparse.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.HoloSparseRounds
-import Proofs.Flock.Level3.ArithFacts
 import Proofs.Flock.C3.VStarList.Range
 
 /-!
 # The map's coins word by word, where a stream round takes many history rounds
 
-`coinWordsEncoded_holoMap`: where a stream round takes `g` history rounds, each drawing a scalar (`holoSelWords`, the
+`coinWordsEncoded_holoMap`: where a stream round takes `g` history rounds, each sampling a scalar (`holoSelWords`, the
 map's full selector `selC` at rounds of form `none`: a sparse phase's round of `g` coins), the coin the map reads off
 the history's prefix is `g` words, the `w`-th of which, as a coin step of one word, is the coin of the `w`-th of those
 rounds (`CoinWordsEncoded`). `coinsEncoded_holoMap` is the case of one history round at any form; a sparse stage's coin
@@ -17,6 +35,8 @@ inside the phase's `sparseForms`, every one `none`. `repFormsAt_holoAt` is `hA` 
 checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`).
 -/
 
+@[expose] public section
+
 namespace FlockC3.Reps
 
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
@@ -24,7 +44,7 @@ open FlockSoundness.Discharge.PlaysCoin (coinArr)
 variable {r : ℕ} {CT : Fin r → Type}
 
 /-- **Hypothesis: the map's coins are the rounds' coordinates, word by word** (`CoinsEncoded` where a stream round
-takes `g` history rounds): where round `i` draws round `q` of stream `s` (`selC`), the coins the map reads there off
+takes `g` history rounds): where round `i` samples round `q` of stream `s` (`selC`), the coins the map reads there off
 the coins up to round `i` are `g ≤ i + 1` words, and the `w`-th of them, as a run's coin step of one word, is
 coordinate `i + 1 - g + w` of that round's coin. -/
 def CoinWordsEncoded (selC : ℕ → String → ℕ → Prop)
@@ -94,7 +114,7 @@ theorem coinAt_congr {r : ℕ} {CT : Fin r → Type} (cs : List ((k : Fin r) →
   subst hab
   rfl
 
-/-- **`holoMap`'s draws at rounds of scalars**: round `i` draws round `q` of the stream named `s` (`selC`), and each of
+/-- **`holoMap`'s samples at rounds of scalars**: round `i` samples round `q` of the stream named `s` (`selC`), and each of
 the `g` history rounds that stream round takes is of form `none` (`holoForms`, as `holoCTs_succ` reads it): a sparse
 phase's rounds. -/
 def holoSelWords (st : Flock.Stmt) (hp : HoloParams) (ish : RecVStar.Inner) (tbl : String) (i : ℕ) (s : String)

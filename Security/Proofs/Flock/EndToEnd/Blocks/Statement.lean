@@ -1,35 +1,52 @@
-import Proofs.Flock.EndToEnd.Period.Statement
+module
+
+public import Proofs.Flock.EndToEnd.Period.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The integrity audit per server-time block, and pooled over a monitoring period's blocks (trusted)
 
 A server's life is cut into server-time blocks by certified wipes. Over a monitoring period, its `--zk` sessions are
-numbered in serve order, session `t` a `SamplingBlock` `W t` with a fresh live subset draw, and block `b` is the
+numbered in serve order, session `t` a `SamplingBlock` `W t` with a fresh live subset sample, and block `b` is the
 sessions from `start b` up to `start (b + 1)` (`ServerBlocks`): a wipe separates block `b`'s last session from block
 `b + 1`'s first. One prover strategy plays every session of every block (`Period.game` over the monitoring period's
 sessions), adaptively, so a block's sessions may depend on everything the prover saw in the blocks before.
 
-* `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its wrong units total
-  at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, where each of block `b`'s draws covers at least a
+* `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its incorrect proof blocks total
+  at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, where each of block `b`'s samples covers at least a
   fraction `q` of its session's units. The block's bound holds inside the monitoring period, against the prover that
   played the blocks before it. It is a lemma: the listed guarantee of the per-block reading is `IntegrityBlockCarried`,
   which also covers carried state and is `IntegrityBlock` with no carried leaf.
-* `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` wrong units is at most
+* `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
   `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
-* `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the wrong units over the
+* `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the incorrect proof blocks over the
   horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading. It is a
   lemma: the listed guarantee of the pooled reading is `IntegrityHorizonCarried`, which also covers carried state.
 
 The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
-for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
+for each session's sample bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
 (`LinkCRZC`) at every strategy a session is played with on some run (`Period.Plays`). The proofs are
 `Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityHorizonBlocks`.
 
-A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
+An incorrect proof block is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
 statements say nothing of whether the value a session reads there is the one the block before committed;
 `IntegrityBlockCarried` and `IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) do.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -64,22 +81,22 @@ noncomputable def game : Game Unit := Period.game S.W S.T
 /-- The monitoring period's run at the prover strategy `s`: each session's record, in serve order. -/
 noncomputable def run (s : Strategy S.game) : Game (List WindowRec) := Period.run S.W S.T s
 
-/-- Block `b`'s wrong units in a run's records. -/
+/-- Block `b`'s incorrect proof blocks in a run's records. -/
 def blockWrong (b : ℕ) (l : List WindowRec) : ℕ := ((l.filter fun r => r.idx ∈ S.sessions b).map WindowRec.wrong).sum
 
-/-- **Block `b` escapes at `ln(1/δ)/q`**: every session of block `b` is accepted, and its wrong units total at least
+/-- **Block `b` escapes at `ln(1/δ)/q`**: every session of block `b` is accepted, and its incorrect proof blocks total at least
 `ln(1/δ)/q`. -/
 def BlockEscapes (q δ : ℝ) (b : ℕ) (l : List WindowRec) : Prop :=
   (∀ r ∈ l, r.idx ∈ S.sessions b → r.accepted) ∧ Real.log (1 / δ) / q ≤ (S.blockWrong b l : ℝ)
 
-/-- Block `b`'s knowledge and link terms, `Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. -/
+/-- Block `b`'s knowledge and binding errors, `Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. -/
 noncomputable def err (b : ℕ) : ℝ≥0∞ := ∑ t ∈ S.sessions b, ((S.W t).ks + (S.W t).link)
 
 end ServerBlocks
 
 /-- **The integrity audit of one server-time block.** In a monitoring period of server-time blocks as in
-`ServerBlocks`, played by one adaptive prover `s`, if each of block `b`'s draws covers at least a fraction `q > 0` of
-its session's units, the probability that every session of block `b` is accepted and its wrong units total at least
+`ServerBlocks`, played by one adaptive prover `s`, if each of block `b`'s samples covers at least a fraction `q > 0` of
+its session's units, the probability that every session of block `b` is accepted and its incorrect proof blocks total at least
 `ln(1/δ)/q` is at most
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityHorizon`'s, at block `b`'s sessions. -/
@@ -97,8 +114,8 @@ def IntegrityBlock : Prop :=
     value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
 /-- **The integrity audit per server-time block, over a monitoring period of `B` blocks.** In a monitoring period as in
-`IntegrityBlock` whose draws each cover at least a fraction `q > 0` of their session's units, the probability that some
-block is accepted with at least `ln(1/δ)/q` wrong units is at most
+`IntegrityBlock` whose samples each cover at least a fraction `q > 0` of their session's units, the probability that some
+block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
 $$\sum_{b < B} \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t})\Big).$$
 Its named assumptions are `IntegrityHorizon`'s. -/
 def IntegrityBlocks : Prop :=
@@ -116,7 +133,7 @@ def IntegrityBlocks : Prop :=
       ∑ b ∈ Finset.range S.B, (ENNReal.ofReal δ + S.err b)
 
 /-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** In a monitoring period as in
-`IntegrityBlocks`, the probability that every session of every block is accepted and the wrong units over the monitoring
+`IntegrityBlocks`, the probability that every session of every block is accepted and the incorrect proof blocks over the monitoring
 period total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityHorizon`'s. -/

@@ -1,12 +1,45 @@
-import Proofs.Flock.Claims.Recursion.VStarTrace
-import Proofs.Flock.Claims.Recursion.VStarLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTrace
+public import Proofs.Flock.Recursive.VStarCheck
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.Hm.Place
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
+import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # `TraceOk` at the deployed statements (`traceOk_deployed`)
@@ -21,8 +54,8 @@ circuit has three nets:
   `g · upv` slots, `nextPow2` row slots per VU, the unit `Net.ofRows`'s with 16-bit leaf ports, the `sha512x3` and
   `hm96` nets the verifier's), `ProvedScope.scopeOk` (one input group, `unitLog ≤ 32`, unsegmented `16 · words`-bit
   rows), V\*'s parse check (`checkParsed`: one unit per VU, no leaf cuts) and the setup's `kLog ≤ 27`;
-* `refs` from the stager's builders (`partIn_refs`): each of a level's, algebra part's or cap's ports has one ref per
-  opening, rep or top node.
+* `refs` from the stager's builders (`partIn_refs`): each of a level's, algebra part's, cap's or the link table's ports
+  has one ref per opening, rep, top node or table row.
 
 Two facts the checks don't give, the hypotheses here:
 
@@ -36,6 +69,8 @@ Two facts the checks don't give, the hypotheses here:
   rows the empty salt, `partIn` still succeeds, and `rows` fails. It is a fact of the honest inner prover and of
   V\*'s port widths (`vstarRows`), not of the verifier.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarTraceOk
 
@@ -177,6 +212,14 @@ theorem capIn_refs {src : Src} {level N : ℕ} {pin : PartIn} (h : capIn src lev
       rcases hx with rfl | rfl <;> simp [ownRows, hN, Flock.RecCoins.zeroRows]
     · cases h
 
+open _root_.VStar.In in
+/-- **The link table's port inputs**: one ref per table row in every port. -/
+theorem linkIn_refs {src : Src} {prog : String} {UB PB N : ℕ} :
+    0 < (linkIn src prog UB PB N).size ∧ ∀ x ∈ (linkIn src prog UB PB N).toList, x.2.refs.size = N := by
+  refine ⟨by simp [linkIn], fun x hx => ?_⟩
+  simp only [linkIn, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [ownRows]
+
 /-- **The stager's port inputs have one ref per instance in each port** (`TraceOk.refs`). -/
 theorem partIn_refs {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar.Stmt}
     {pin : _root_.VStar.In.PartIn} (h : _root_.VStar.In.partIn src prog st = .ok pin) :
@@ -187,6 +230,9 @@ theorem partIn_refs {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VSt
     · exact ⟨_, levelIn_refs h⟩
     · exact ⟨_, algebraIn_refs h⟩
     · exact ⟨_, capIn_refs h⟩
+    · simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      exact ⟨_, linkIn_refs⟩
     · cases h
   obtain ⟨N, hpos, hN⟩ := key
   have hc : _root_.VStar.Trace.count pin = N := by
@@ -236,7 +282,9 @@ theorem scope_ports (h : ProvedScope.scopeOk c = true) {q : ℕ} (hq : q < c.por
     c.ports[q].segs = none ∧ c.ports[q].bits = 16 * c.ports[q].words := by
   unfold ProvedScope.scopeOk ProvedScope.v1Ports ProvedScope.v1Rows at h
   rw [Bool.and_eq_true] at h
-  have := Array.all_eq_true.mp ((Bool.and_eq_true _ _).mp h.2).1 q hq
+  have h2 := h.2
+  rw [Bool.and_eq_true] at h2
+  have := Array.all_eq_true.mp h2.1 q hq
   simp only [Bool.and_eq_true, Bool.not_eq_true', Option.isNone_iff_eq_none, beq_iff_eq, decide_eq_true_eq] at this
   exact ⟨this.1.1.2, this.1.2⟩
 

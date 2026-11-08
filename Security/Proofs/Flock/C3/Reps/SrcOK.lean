@@ -1,5 +1,20 @@
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Reps.OpensRead
+module
+
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.OpensRead
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `SrcOK` at the reps' normalized tied source
@@ -12,6 +27,8 @@ outputs tied (`tiedSrc`). `srcOK_repsOfVals` is `srcOK_tied_norm` there: the rep
 `tiedSrc (repsOfVals stp sh rep vals)`: the committed rounds' read facts, the openings at R's stratum, `LigWhole`, and
 the shapes' types. The reps' tie carries over to the same source by `srcRepTie_norm`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

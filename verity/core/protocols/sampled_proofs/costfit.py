@@ -1,10 +1,10 @@
 """Flock's cost model, fitted from measurements, for the sampling planner (`optimize.CostModel`).
 
-Three regressions on a template's features (`FEATURES`: one, ands, ands staged, ands drawn), each a least squares in
+Three regressions on a template's features (`FEATURES`: one, ands, ands staged, ands sampled), each a least squares in
 relative error with non-negative coefficients over the observations that measure it:
 
-    prove   GPU-s a session      = f0 + f1 ands + f2 ands staged + b ands drawn
-    verify  CPU-s a statement    = v0 + v1 ands + v2 ands staged + v3 ands drawn
+    prove   GPU-s a session      = f0 + f1 ands + f2 ands staged + b ands sampled
+    verify  CPU-s a statement    = v0 + v1 ands + v2 ands staged + v3 ands sampled
     stage   CPU-s a statement    = s0 + s1 ands + s2 ands staged
 
 each on the features its caller gives.  `ands` is one proof block's in-circuit ANDs, its rows' openings included

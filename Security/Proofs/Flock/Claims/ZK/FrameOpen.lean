@@ -1,11 +1,45 @@
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRounds
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Level 0's masked rounds: the frame's release of the zero-pad rounds is the rounds at the pads
 
 The pads `h` enter the masked Ligerito (`FlockComplete.ligeritoPZk`) only at level 0, and only additively: its
 out-of-domain value `y + h[lgOod 0]`, its first `k_0` lane messages `maskMsg` (`lgMsg j 0 … 3`) and the pair's sums
-`e_i + ⟨h[lgE i 0], h[lgE i 1]⟩`. The firewall's opening (`openLive`) runs the same code at zero pads, so each of its
+`e_i + ⟨h[lgE i 0], h[lgE i 1]⟩`. The ZK server's opening (`openLive`) runs the same code at zero pads, so each of its
 masked rounds is the rep's round at `h` with every masked value's pad added back (characteristic 2), and the frame,
 which adds the rep's pads at those values' absorbed positions, releases it as the round at `h`:
 
@@ -14,7 +48,7 @@ which adds the rep's pads at those values' absorbed positions, releases it as th
 * **Value by value** (`oodFr_unmask`, `pairFr_unmask`): where the frame's pad at each value's position is the one the
   rep's round carries, the round at the pads with each pad added back is the round at zero pads (`add_pad_pad`).
 * **The frame's pads at level 0** (`l0_pad`, `l0_padAt`): at a masked level 0, each of its pads' absorbed positions
-  lies past the algebraic phase's, and the frame's pad there is the draws' (`padAt_ofDraws_absPos`). So a stopped rep
+  lies past the algebraic phase's, and the frame's pad there is the samples' (`padAt_ofDraws_absPos`). So a stopped rep
   masks them as a live one does (`maskFrames_ge`): `maskVal` zeroes only the algebraic phase's values.
 * **A level-0 round** (`L0Round`, `l0Round_ood`, `l0Round_msg`, `l0Round_e`): the zero-pad round, the round at the
   rep's pads, and the facts the frame's round reads; through the frame's masks the zero-pad round is the round at the
@@ -24,6 +58,8 @@ which adds the rep's pads at those values' absorbed positions, releases it as th
   for a stopped rep or not. That is `RoundHonest` at a live round and `RoundFrames` at a stand-in, the two forms
   `liveRoundEq_of_honest` and `fillRoundEq_of_frames` read, at each of level 0's masked rounds.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -118,7 +154,7 @@ theorem absPos_add (l : _root_.Flock.Zk.PadLayout) {q : ℕ} (hq : l.fa + 2 ≤ 
   omega
 
 /-- **Level 0's pads in the frame**: at a masked level 0 (`k_0 > 0`), each of its pads `q` (from `lgOod 0`, below
-`h_ab`) sits at an absorbed position past the algebraic phase's, where the frame's pad is the draws' pad `q`. -/
+`h_ab`) sits at an absorbed position past the algebraic phase's, where the frame's pad is the samples' pad `q`. -/
 theorem l0_pad (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {q : ℕ}
     (h1 : l.lgOod 0 ≤ q) (h2 : q < l.hab) :
     (Cfg.ofDraws l d mk).nPiop ≤ absPos l q ∧ padAt (Cfg.ofDraws l d mk) (absPos l q) = d.h[q]! := by
@@ -313,7 +349,7 @@ theorem roundHonest_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h 
     rfl⟩
   rw [List.nil_append, hR.unmask]
 
-/-- **A level-0 round in frames** (`RoundFrames`), for a stopped rep or not: the stand-in the firewall schedules is
+/-- **A level-0 round in frames** (`RoundFrames`), for a stopped rep or not: the stand-in the ZK server schedules is
 the zero-pad round, and through the frame's masks it is the session's round at the pads. -/
 theorem roundFrames_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
     {p n : ℕ} {G H : List Frame} (hR : L0Round (L.cfg x ρ h) p n G H) (k : UInt8) {m : Masker}

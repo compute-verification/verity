@@ -1,4 +1,4 @@
-"""Helpers shared by op rules: row iteration over leading axes, dtype checks."""
+"""Helpers shared by op rules: row iteration over leading axes, dtype and operand checks."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from verity.ml.circuits.refs import Coll, PartLog, array_of
 from verity.ml.circuits.types import Array
 from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_vllm.program.frontend.value_types import Alloc, shape_of
 
 
 def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) -> tuple[PartLog, PartLog]:
@@ -113,6 +113,37 @@ def dtype_is(ctx, a, *dts: torch.dtype) -> bool:
 
 def shape(ctx, a) -> tuple[int, ...] | None:
     return ctx.shape_of_node(a) if isinstance(a, torch.fx.Node) else None
+
+
+def row_value(ctx, a, name: str, dtype: torch.dtype = torch.bfloat16) -> str | None:
+    """Why operand `a` (`name` in the refusal) is not a value collection of `dtype` with rank >= 1, or None if it is or
+    is an allocation, which a rule may write."""
+    if not isinstance(a, torch.fx.Node):
+        return f"{name} is not a graph value"
+    v = ctx.val(a)
+    if isinstance(v, Alloc):
+        return None
+    if not isinstance(v, Coll):
+        return f"{name} is not a value collection ({type(v).__name__})"
+    if not dtype_is(ctx, a, dtype):
+        return f"numerics_unregistered: {name} has dtype {ctx.dtype_of(a)}; the profile's kinds are {dtype}"
+    if not shape(ctx, a):
+        return f"{name} is a scalar"
+    return None
+
+
+def and_mul_operands(node, ctx):
+    """An `act_and_mul` kernel's `(out!, x[.., 2I])`: x a bf16 row value, out an allocation (or value) of [.., I]."""
+    out, x = node.args[:2]
+    r = row_value(ctx, x, "x")
+    if r:
+        return r
+    if not isinstance(ctx.val(out), (Alloc, Coll)):
+        return "out is not an allocation/value"
+    xs, os_ = shape(ctx, x), shape(ctx, out)
+    if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
+        return f"out {os_} vs x {xs}"
+    return True
 
 
 def call_args(node) -> dict:

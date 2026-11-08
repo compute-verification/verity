@@ -1,7 +1,10 @@
-import Properties.Pouw.PeriodJ10R
-import Proofs.Accounting.ComposePeriod
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Properties.Pouw.PeriodJ10R
+public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # Proof of `H1J10RCheckedCreditPeriod`
@@ -14,6 +17,8 @@ monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks 
 `8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin (`pins_j10r`): the relation is
 `j10r_reference`'s at the unit's place, one description.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 
@@ -56,9 +61,9 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
   exact Finset.sum_congr rfl fun w _ =>
     if_congr (credited_iff σ k hk sT unitOf hKd ws opened rel right x w) rfl rfl
 
-/-- **Joint soundness at `Credit.window`'s run from the service's**: in each window, an accepted window with a drawn
+/-- **Joint soundness at `Credit.window`'s run from the service's**: in each window, an accepted window with a sampled
 tile whose opening fails its relation is one `Credit.window` credits with that tile's window unit among the units its
-draw demanded (`TileDrawIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
+sample demanded (`TileDrawIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
 theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (unitOf : Fin nB → ℕ) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)

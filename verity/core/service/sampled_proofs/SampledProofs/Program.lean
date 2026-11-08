@@ -1,10 +1,13 @@
 /-
-The verifier's own program, from its descriptor's bytes (`verity-ir/descriptor/v1`): C-Flock's decoding of the whole program
+The verifier's own program, from its descriptor's bytes (`verity-ir/descriptor/v1`): Flock's decoding of the whole program
 (`Flock.Program.Prog`), whose root Calls `Q_word` and `Q_call` cut, and the template queries' reading of it
 (`Flock.TemplateQuery.Desc.ofProg`). Bytes `Flock.Program.decode` refuses are refused.
 -/
-import Flock.Program
-import Flock.TemplateQuery
+module
+
+public import Flock.TemplateQuery
+
+@[expose] public section
 
 namespace SampledProofs
 

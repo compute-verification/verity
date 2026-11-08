@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.Dense
+module
+
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.Dense
 
 /-!
 # The band scheme and the dense chain scheme over the overwrite chain on `Π₂`
@@ -30,6 +32,8 @@ there are no coins. Decoding recomputes each block's key from its parents in the
 The definitions are total; the side conditions the proofs need are hypotheses of their theorems.
 -/
 
+@[expose] public section
+
 namespace Pous.Sponge
 
 open Pous Pous.Labelling Pous.Invertible
@@ -37,7 +41,7 @@ open scoped ENNReal
 
 /-! ## `SpongeDense.lean`: the ideal-permutation model, the domains and the dense chain scheme -/
 
-/-- **The ideal-permutation model** on `b`-bit states. Setup draws `Π` uniformly from every permutation of `Bits b`;
+/-- **The ideal-permutation model** on `b`-bit states. Setup samples `Π` uniformly from every permutation of `Bits b`;
 the encoder and the preprocessor see it whole. A query is `.inl x`, answered `Π x`, or `.inr y`, answered `Π⁻¹ y`. -/
 def idealPerm (b : ℕ) : IdealModel where
   Ω := Equiv.Perm (Bits b)

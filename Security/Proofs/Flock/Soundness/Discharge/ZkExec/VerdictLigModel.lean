@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+public import Proofs.Flock.Soundness.Refine.Ligerito
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # The model's masked level 0, with its values
@@ -8,6 +26,8 @@ lane coins (`foldRoundsZK_val`), `ρ` is its two coins (`drawKs_two`), level 0's
 (`queryAndBatchPadC_plays`), and `ligeritoPadZC_model` composes the masked level 0 from runs of its parts, as the non-ZK
 session's `ligeritoC_model`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

@@ -1,46 +1,61 @@
 #!/usr/bin/env bash
 # The stock control of served_verdicts.sh: its endpoint, engine and load with no protocol and no Commit, REPS times.
 # Each rep is one `verity-vllm serve-openai --no-commit` lifetime of served_verdicts.sh's model (REPO at REV, --precision PRECISION),
-# the bench row's check (--required-manifest ROW/manifest.json, which here only refuses a row declaring async scheduling),
+# the bench row's check (--required-manifest PRED/manifest.json, which here only refuses a row declaring async scheduling;
+# PRED is the row's Build of record, which `verity-vllm predict row` writes for ROW's name before the lease, as served_verdicts.sh's),
 # --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
-# SLOTS, under served_verdicts.sh's engine environment (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of
-# `examples/vllm/serve_load.py --varied` with served_verdicts.sh's REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a
-# release run of its own. The first load is the composed run's one load after its endpoint listens; later ones are warm.
+# SLOTS, and --window-steps WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
+# (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `examples/vllm/serve_load.py --varied` with served_verdicts.sh's
+# REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With FIXED (unset: the varied load) each
+# load is served_verdicts.sh's LOAD=fixed instead, `serve_load.py --fixed FIXED --prompt-range PROMPTS --window-steps
+# WINDOW_STEPS` with SEED: FIXED requests of PROMPTS tokens, each with ignore_eos and max_tokens WINDOW_STEPS, which FIXED
+# needs (REQUESTS, RATE and MAX_TOKENS unused). The first load is the composed run's one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
-# the weights registration before the load. $OUT/rep-<i>/ is that lifetime's --out: serve.json, advice_trace.jsonl (the
-# scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl, the client's record of load j, and
-# load-<j>.timings.json, its per-request send, first-token and done times (the composed run's is $OUT/timings/load.timings.json).
-# `served_overhead.py` reads them beside the composed run's $OUT/serve. WARM lifetimes (default 1) run first as $OUT/warm-<i>/,
-# so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
-# took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts
-# after it, so a control queued behind other leases never runs into a later window (V2's run of record, say).
+# the weights registration before the load. Each lifetime's --out is a serve dir on the node, SERVE_ROOT/runs/RUN/<lifetime>:
+# serve.json, advice_trace.jsonl (the scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl,
+# the client's record of load j, and load-<j>.timings.json, its per-request send, first-token and done times. The trace and
+# the load's records hold request values, so they stay there: once the endpoint stops, `served_overhead.py metrics` reads
+# them on the node. The aggregate holds the load's request and token counts, which are private too, so it also stays on the
+# node, as SERVE_ROOT/runs/RUN/<lifetime>/overhead.json, beside the full load lines (SERVE_ROOT/runs/RUN/stock.txt), and
+# `served_overhead.py table --stock --public` reads it there and publishes ratios alone. $OUT gets only status lines and
+# that directory's path (private.txt), which a reader of the control's run record
+# reads beside the composed run's $OUT/serve/overhead.json. WARM lifetimes (default 1) run first as warm-<i>,
+# so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them, and no rep times a cold first
+# step. With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts after it, so a control queued behind other leases
+# never runs into a later window.
 #   research run --on vy-dc-h200-2 --project verity --source TREE --cwd clone --timeout 90m -- \
 #     env ROW=... bash benchmarks/one_stage/served_stock.sh
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
 H=/workspace/research/vllm-composed-h200int8
-ROW=${ROW:-$H/r20261026-185144-3ccb/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
+ROW=${ROW:-$H/r20261030-210701-a20f/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager} ROW_ID=${ROW_ID:-${ROW##*/}}
 VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
+FIXED=${FIXED:-} WINDOW_STEPS=${WINDOW_STEPS:-}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
+export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
+PRIV=$ROOT/runs/${RESEARCH_RUN_ID:-local}; mkdir -p "$PRIV"; export PRIV
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 
 serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its LOADS loads, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-  local D=$OUT/$1 srv up=0 rc=0 j release
+  local D=$ROOT/runs/${RESEARCH_RUN_ID:-local}/$1 srv up=0 rc=0 j release ws=()
+  local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
+  [ -n "$FIXED" ] && load=(--fixed "$FIXED" --window-steps "$WINDOW_STEPS")
+  [ -n "$WINDOW_STEPS" ] && ws=(--window-steps "$WINDOW_STEPS")
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
   mkdir -p "$D"
   cd "$TREE/integrations/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
-    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$ROW/manifest.json" \
-    --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --max-num-batched-tokens "$MNBT" \
+    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \
+    --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --max-num-batched-tokens "$MNBT" "${ws[@]}" \
     > "$D/serve.log" 2>&1 &
   srv=$!
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
@@ -56,28 +71,45 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" \
-      --prompt-range "$PROMPTS" --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" \
-      > "$D/load-$j.log" 2>&1 || rc=$?
-    echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | cut -c1-300)" | tee -a "$OUT/stock.txt"
+    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+      --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" > "$D/load-$j.log" 2>&1 || rc=$?
+    echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | sed -E 's/, prompts .*//' | cut -c1-300)" \
+      >> "$PRIV/stock.txt"
+    echo "$1 LOAD $j: exit $rc" | tee -a "$OUT/stock.txt"
   done
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   echo "$1: stopped (exit $?)" | tee -a "$OUT/stock.txt"
+  # this lifetime's aggregate, whole, kept on the node; `table` reads it beside the composed run's whole one, its serve dir's
+  # private/out/serve/overhead.json on its node (its published $OUT/serve/overhead.json holds no load's counts, tokens or span)
+  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$D/overhead.json" 2> "$D/overhead.err" \
+    || { echo "$1: no aggregate" | tee -a "$OUT/stock.txt"; cut -c1-300 "$D/overhead.err" >> "$PRIV/stock.txt"; rm -f "$D/overhead.json"; rc=12; }
   return "$rc"
 }
 reps() {
   local i bad=0
-  for i in $(seq 1 "$WARM"); do serve "warm-$i" || return $?; done
+  for i in $(seq 1 "$WARM"); do serve "warm-$i" || { bad=$?; [ "$bad" = 12 ] || return "$bad"; bad=0; }; done
   for i in $(seq 1 "$REPS"); do serve "rep-$i" || bad=$?; [ "$bad" = 11 ] && break; done
   return "$bad"
 }
 
 if [ "${1:-}" = reps ]; then reps; exit $?; fi
+echo "$PRIV" > "$OUT/private.txt"
+for v in FIXED WINDOW_STEPS; do
+  [[ -z ${!v} || ${!v} =~ ^[1-9][0-9]*$ ]] || { echo "PREFLIGHT: $v is a positive integer or unset" | tee -a "$OUT/stock.txt"; exit 3; }
+done
+[ -z "$FIXED" ] || [ -n "$WINDOW_STEPS" ] \
+  || { echo "PREFLIGHT: FIXED needs WINDOW_STEPS, each request's max_tokens" | tee -a "$OUT/stock.txt"; exit 3; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } | tee "$OUT/machine.txt"
 for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
 command -v gpu-lease >/dev/null || { echo "PREFLIGHT: no gpu-lease on this node" | tee -a "$OUT/stock.txt"; exit 3; }
 mkdir -p "$ROOT/cache"
+(cd "$TREE/integrations/vllm" && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") \
+  > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
+rc=$?
+[ "$rc" = 0 ] && [ -f "$PRED/predicted.json" ] || {
+  echo "PREDICT-ROW $ROW_ID refused (exit $rc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)" \
+    | tee -a "$OUT/stock.txt"; exit 3; }
 export OUT
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-bench-31-stock} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${LEASE_MEM_GB:-64}" \
   -- bash "$TREE/benchmarks/one_stage/served_stock.sh" reps

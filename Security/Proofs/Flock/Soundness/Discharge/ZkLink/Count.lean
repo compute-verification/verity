@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
-import Proofs.Flock.Soundness.Binding.E2E
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+public import Proofs.Flock.Soundness.Binding.E2E
 
 /-!
 # The compiled `--zk` count curve
@@ -9,7 +11,7 @@ import Proofs.Flock.Soundness.Binding.E2E
 $$\Pr[\text{accept}\wedge\text{at least }K\text{ wrong units}]\le\mathrm{miss}(K)+\varepsilon_{\rm ks}+\delta_{\rm link}
 +\delta_{\rm tree},$$
 with
-* `miss(K)`: the law's count curve (`zk_flock_countC`), or `Law.stratified`'s at the live draw under A3
+* `miss(K)`: the sampling design's count curve (`zk_flock_countC`), or `Law.stratified`'s at the live sample under A3
   (`zk_flock_countC_execOS`);
 * `ε_ks = ksAvgZC` at a knowledge bound `a` with its joint inequality `hj : JointZC … a`, the named hypothesis this
   layer leaves open (the compiled `ε_ks`, the `--zk` counterpart of `joint_le_accBL` and `ksBoundAccB_le_strict`);
@@ -17,6 +19,8 @@ with
 * `δ_tree = TreeRewind.bound`, under A1 (`cr/sha-512`) for the serving roots' rewinding finder (`hT`), for an
   acceptance event `execAccept` the compiled session's acceptance does not imply.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -47,9 +51,10 @@ theorem zk_flock_countC {L : Law n} (hlow : LoweringSoundZK A P planZ tab decode
     (zc_knowledgeSound A Hs P planZ tab decode _ _ hlow hj)
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht) K σ
 
-/-- **The compiled `--zk` count curve at the live draw, with `δ_tree`.** With the units drawn by `Flock.Draw.drawOS`'s
-stratified law on a byte source that A3 makes uniform (`hA3`), and an acceptance event `execAccept` whose excess over
-the compiled session's acceptance a rewinding at the serving roots covers (`tr`, under A1 through `hT`):
+/-- **The compiled `--zk` count curve at the live sample, with `δ_tree`.** With the units sampled by
+`Flock.Draw.drawWith`'s stratified sampling design on a byte source that A3 makes uniform (`hA3`, the challenger's coins), and an
+acceptance event `execAccept` whose excess over the compiled session's acceptance a rewinding at the serving roots
+covers (`tr`, under A1 through `hT`):
 `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, `miss(K)` `Law.stratified`'s count
 curve. -/
 theorem zk_flock_countC_execOS (hlow : LoweringSoundZK A P planZ tab decode)

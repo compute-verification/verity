@@ -1,22 +1,27 @@
-import Proofs.Flock.Soundness.Audit.Law
-import Flock.Draw
+module
+
+public import Proofs.Flock.Soundness.Audit.Law
+public import Flock.Draw
+import all Init.Data.Array.QSort.Basic
 
 /-!
-# The executable draw escapes no more often than the model's
+# The executable sample escapes no more often than the model's
 
 `Flock.Draw.subset k n src` is the verifier's executable sampler (`backends/flock/verifier/lean/Flock/Draw.lean`): a
-partial Fisher–Yates over a `Std.HashMap` of swaps, each index drawn by `Flock.Draw.uniform`, an exact rejection sampler
+partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
 on big-endian words, and the `k` values sorted by `Array.qsort`. `Law.subset_exec_escape_le`: over a uniform stream of
-bytes, it returns a draw that misses `B` with probability at most `(Law.subset n k hk).escape B`, the model's uniform
+bytes, it returns a sample that misses `B` with probability at most `(Law.subset n k hk).escape B`, the model's uniform
 `k`-subset. A stream that runs out gives `none`, which only lowers the executable's escape.
 
 * `mem_qsort`: `Array.qsort` keeps its elements, through core's private `qsort.sort` and `qpartition.loop`.
 * `subset_eq`, `subset_misses`: the loop restated as a list recursion, and its `HashMap` read through a permutation `π`
-  with `sw.getD t t = π t`: the draw misses `B` only if `π` does on `[0, k)`.
+  with `sw.getD t t = π t`: the sample misses `B` only if `π` does on `[0, k)`.
 * `uniformL_le`: the rejection sampler. `uniform_streamOf` ties `Flock.Draw.uniform` and `beNat` at a position to it.
-* `loopL_le`: step `i` draws uniformly over the pool `π '' [i, n)`, which holds all of `B` while the earlier values miss
+* `loopL_le`: step `i` samples uniformly over the pool `π '' [i, n)`, which holds all of `B` while the earlier values miss
   it, so the loop escapes `B` with probability at most `C(n − i − |B|, c)/C(n − i, c)`.
 -/
+
+@[expose] public section
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
@@ -30,7 +35,7 @@ end FlockSoundness.Audit.Law
 
 namespace FlockSoundness.Audit.DrawExec
 
-theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
+private theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.toArray.Perm as.toArray := by
   intro d
@@ -63,7 +68,7 @@ theorem qpartition_perm {α : Type} {n : ℕ} (as : Vector α n) (lt : α → α
     · exact Array.Perm.refl _
   exact (h1 _ _ _ _ _ _).trans ((h1 _ _ _ _ _ _).trans (h1 _ _ _ _ _ _))
 
-theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
+private theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
     ∀ (d : ℕ) (as : Vector α n) (lo hi : ℕ) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       (Array.qsort.sort lt as lo hi w hlo hhi).toArray.Perm as.toArray := by
   intro d
@@ -87,6 +92,12 @@ theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
           ((ih (mid - lo) (by omega) _ _ _ _ _ _ rfl))).trans hp
     · exact Array.Perm.refl _
 
+theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
+  unfold Array.qsort
+  split
+  · exact ⟨List.Perm.refl _⟩
+  · exact sort_perm lt _ _ _ _ _ _ _ rfl
+
 theorem mem_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
   unfold Array.qsort
   split
@@ -109,7 +120,7 @@ def loopSw (n : ℕ) (src : ByteArray) : List ℕ → Std.HashMap ℕ ℕ → �
     | none => none
     | some (r, p) => loopSw n src is (swapAt sw i r) p
 
-/-- A `forIn` whose body draws with `uniform` and swaps, followed by a continuation that returns the early exit or
+/-- A `forIn` whose body samples with `uniform` and swaps, followed by a continuation that returns the early exit or
 finishes: the loop computes `loopSw`. -/
 theorem forIn_char (n : ℕ) (src : ByteArray) (G : Std.HashMap ℕ ℕ → Array ℕ)
     (F : ℕ → St → Id (ForInStep St)) (POST : St → Id (Option (Array ℕ)))
@@ -364,7 +375,7 @@ theorem width_pos (m : ℕ) : 0 < Flock.Draw.width m := by
 
 open Classical in
 /-- **The rejection sampler**: if every value `r < m` it can return is followed by an event of probability at most `q r`
-on the rest of the stream, the draw returns some `r` and then that event with probability at most the average of `q`. -/
+on the rest of the stream, the sample returns some `r` and then that event with probability at most the average of `q`. -/
 theorem uniformL_le (m : ℕ) (hm : 0 < m) (Q : ℕ → List UInt8 → Prop) (q : ℕ → ℝ≥0∞)
     (hQ : ∀ r < m, ∀ ℓ, prCoin (fun h : Fin ℓ → Fin 256 => Q r (bsOf h)) ≤ q r) :
     ∀ fuel ℓ, prCoin (fun g : Fin ℓ → Fin 256 => ∃ r rest, uniformL m fuel (bsOf g) = some (r, rest) ∧ Q r rest) ≤
@@ -682,9 +693,9 @@ namespace FlockSoundness.Audit.Law
 open Game Finset
 open scoped ENNReal
 
-/-- **The executable draw escapes no more often than the model's.** Its probability space is a uniform stream: that
-the verifier's bytes are uniform is A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`), which
-`drawOS_subset_escape_le` (`ExecDrawOS.lean`) takes for the live draw, reruns included. -/
+/-- **The executable sample escapes no more often than the model's.** Its probability space is a uniform stream: that
+the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`), which
+`drawOS_subset_escape_le` (`ExecDrawOS.lean`) takes for the live sample, reruns included. -/
 theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.subset k n (Law.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤

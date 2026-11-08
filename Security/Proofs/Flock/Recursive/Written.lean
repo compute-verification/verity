@@ -1,5 +1,19 @@
-import Proofs.Flock.Recursive.Stage
-import Proofs.Flock.Recursive.ForkRuns
+module
+
+public import Proofs.Flock.Recursive.Stage
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Recursion: every outcome of V*'s sessions is written
@@ -14,6 +28,8 @@ reaches does (`Leaves.outcome`). It passes through `bind`, `map`, `play` and `se
 `prob_recT_le` reads `leaves_sessions` at the outcomes the transported prover reaches, so the checked sessions' gate
 (`Flock.Guarantees.keepOwn`, a written, accepted transcript) holds where the event's does (`acceptsV_checked`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

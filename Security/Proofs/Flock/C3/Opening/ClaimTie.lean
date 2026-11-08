@@ -1,6 +1,19 @@
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.Soundness.Refine.Opening
-import Proofs.Flock.Level3.Fold
+module
+
+public import Proofs.Flock.C3.Opening.SrcOpening
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Level3.Assembly
 
 /-!
@@ -12,12 +25,14 @@ run's registered claim `i` (`ClaimRel`). `ClaimRel`'s sizes are `coinClaim`'s an
 the tie is two facts about the run's claims:
 
 * `PointTie`: claim `i`'s point is the one `coinClaim` builds it at, rep `i`'s sparse coins zero-padded to R's `m`
-  (`coinPt`). Those coins are the coin server's at the verifier's record, so this says the record's sparse coins are
+  (`coinPt`). Those coins are the challenger's live-coin part's at the verifier's record, so this says the record's sparse coins are
   the run's.
 * `ValueTie`: claim `i`'s value is the one w holds at `rec-claim`.
 
 `openingReadAt_src_ties` is `openingReadAt_src` with the two in place of the claim tie.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

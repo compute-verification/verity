@@ -1,5 +1,17 @@
-import Proofs.Flock.Soundness.ExtractAcc
-import Proofs.Flock.Soundness.Game.Seq
+module
+
+public import Definitions.Flock.Game.Seq
+public import Proofs.Flock.Soundness.ExtractAcc
+public import Proofs.Flock.Soundness.Game.Seq
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Game.Expect
+meta import Lean.Meta.Tactic.NormCast
 
 /-!
 # The expected-time extractor as an algorithm: waits of at most `R` runs
@@ -15,6 +27,8 @@ file is that algorithm's law and cost, the form a collision finder runs.
 * `expectN_waitCost`: a wait plays `geom ε R` runs in expectation, so after an accepted run the `k`
   waits play `k·geom ε R` runs, and `ε·k·geom ε R = k·(1 − (1 − ε)^R) ≤ k`, whatever `ε`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -1,7 +1,20 @@
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Reps.Maps
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.VBridge.Net
+module
+
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.Maps
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The values the reps' forms read at a stage, at L's decoder
@@ -18,6 +31,8 @@ values at two accepted outer proofs whose layers agree under stage `s`'s mask, f
 * Every other key reads `rep₀`'s `w` and `comb` only (`valOf_cons`), which stage `s` reads (`WCombRead`).
 * The history's `rounds` and `extras` enter no form.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

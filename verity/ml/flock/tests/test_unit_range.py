@@ -1,4 +1,4 @@
-"""`circuit.refuse_past_range`: a unit whose Definition alone needs more witness bits than C-Flock's proved range of
+"""`circuit.refuse_past_range`: a unit whose Definition alone needs more witness bits than Flock's proved range of
 2^`K_MAX` is refused by `UnitStager` before it is lowered, read off the Definition (`ir_lower.definition_ands`); one in
 range is staged as before. The count is held to the flat lowering's ANDs on staged units, and compose refuses what this
 refuses unless the lowering lays out fewer than half the witness bits counted."""
@@ -26,7 +26,7 @@ def wide(log: int):
 
 
 def test_a_unit_past_the_range_is_refused_before_it_is_lowered(monkeypatch):
-    """A unit of 2^27 - 1 ANDs needs a slot of 2^28 witness bits, past C-Flock's 2^27: `UnitStager` refuses it by name,
+    """A unit of 2^27 - 1 ANDs needs a slot of 2^28 witness bits, past Flock's 2^27: `UnitStager` refuses it by name,
     with the fix, and never lowers it (a flat unit of that size is about 80 GB of Python objects)."""
     def lowered(*_a, **_k):
         raise AssertionError("the unit was lowered before its range was checked")
@@ -71,6 +71,18 @@ def test_a_piece_lowered_only_on_a_constant_operand_is_counted_by_its_stated_and
     monkeypatch.setattr(IL, "_PIECE_ANDS", {})
     monkeypatch.setitem(IL.PIECES, "UnitRangeConstOnly_v1", traced)
     assert IL._piece_ands(SimpleNamespace(id="UnitRangeConstOnly_v1")) == 7
+
+
+def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
+    """The top-p keep word has no piece but counts its composition (`topp_word.ands`), so a unit holding it is sized off its
+    Definition: in range at V = 16, and at V = 256 refused by name, before anything lowers it."""
+    from verity.ml.definitions.registry import sampling as SM
+    from verity_flock import topp_word as TW
+
+    w = FC.unit_witness(SM.topp_mask_word(16))
+    assert w["ands"] == TW.ands(16) and w["k"] <= FC.K_MAX
+    with pytest.raises(ValueError, match=r"^unit/topp: the unit needs a slot of 2\^29 witness bits \(372,127,590 ANDs"):
+        FC.refuse_past_range(SM.topp_mask_word(256), "unit/topp")
 
 
 @pytest.mark.parametrize("which", list(STATEMENTS))

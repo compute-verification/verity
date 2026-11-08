@@ -1,6 +1,7 @@
-import Proofs.Flock.Claims.Complete.Prover.Ligerito
-import Proofs.Flock.Claims.Complete.Zk.Tape
-import Flock.With.Zk
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Flock.Zk
 
 /-!
 # The masked prover's Ligerito opening
@@ -14,7 +15,7 @@ reads it.
   reps share it.
 * **The lane phase** (`ligeritoPZk`): after `LABEL_OPEN`, the level-0 out-of-domain value and the first `k_0` sumcheck
   messages are sent masked (`lgOod`, `lgMsg`; `maskMsg`). After the last lane challenge, rep `r` sends its pair's sums
-  `e_i = ⟨W, R_{2r+i}⟩` masked (`lgE`), draws `ρ_0, ρ_1`, refuses dependent ones (as upstream does), and after
+  `e_i = ⟨W, R_{2r+i}⟩` masked (`lgE`), samples `ρ_0, ρ_1`, refuses dependent ones (as upstream does), and after
   `LABEL_CLOSE` sends the blinded claim `T' = ⟨W, y₁'⟩` for `y₁' = f + ρ_0 R_{2r} + ρ_1 R_{2r+1}` and the padding's
   combination `ybar = Σ_l eq(r̄)_l μ_l + ρ_0 μ_{L+2r} + ρ_1 μ_{L+2r+1}`; the opening goes on from `y₁'` as
   `ligeritoP` from the split table, the last level's last message upstream's plain fold message (the folded, unsplit
@@ -22,6 +23,8 @@ reads it.
 * It returns the proof, level 0's hiding messages, and the lane phase's record (`L0Rec`, the verifier's), from which
   the prover builds the lane phase's constraints (`Zk.ligeritoConstraints`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

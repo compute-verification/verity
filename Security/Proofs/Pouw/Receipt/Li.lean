@@ -1,6 +1,10 @@
-import Definitions.Pouw.Receipt.Li
+module
+
+public import Definitions.Pouw.Receipt.Li
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.Ring.RingNF
 import Proofs.Pouw.Receipt.Duo
-import Mathlib.Tactic.Ring
 
 /-!
 # li's words are bound in a checkpoint, at every width and length
@@ -13,6 +17,8 @@ or of `d₁` (any `a`) whose lowest set bit is `v` moves the half step's output 
 odd multiplier keeps the move; and XOR with the other chains' final states keeps it. A nonzero change has a lowest set
 bit, so the checkpoint is injective in each word.
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

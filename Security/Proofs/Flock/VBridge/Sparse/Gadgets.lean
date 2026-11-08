@@ -1,5 +1,27 @@
+module
+
+public import Flock.RecSparse
+public import Proofs.Flock.Soundness.Discharge.Hm.Word
+public import Proofs.Flock.VBridge.Karatsuba
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.VBridge.Verifier
-import Flock.RecSparse
+import VCVio.Prelude.Core
 
 /-!
 # The sparse-phase unit's gadgets
@@ -13,6 +35,8 @@ what the gadget computes is stated apart from the algebra:
 * `demuxLevel` splits each slot's vectors by one bit of the slot's type, `demux` level by level (`demuxVal`).
 * `RecOpen.xorL` and `xorAllL` are sums (`holds_xorL`, `sumVal`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

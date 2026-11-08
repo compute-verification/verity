@@ -1,0 +1,70 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "partition",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": true,
+ "source": "GLM-5.3's MoE cut per expert at its TP8 statics with each weight-row read fused into its GEMM (CIR-187): the router's slots, one output field a slot; each slot's w13 and w2 GEMM blocks MoeExpertFp8ReadGemm(W)_v1, which open the block's rows from a table registered one expert a row (READ = EmbeddingRead_v1{V=256, H=N K/2} at the leaf the router's committed slot index names) and multiply by them inside the one proof block, so no block outputs a weight row; each G-block's scale row read by its own EmbeddingRead_v1 unit and wired in. The router and scale-read strata are the per-expert card's (art:503a55396a39). Units a token are 75 layers x 8 slots on each of 8 ranks; ANDs as circuit-check reports them at those statics (each fused block's are its read's plus its GEMM's); k_log the block Flock's range rule stages each at (benchmarks/one_stage/m1_families.block, which gives every k_log of the per-expert card); output bits from each Definition's outputs (a fused block's N bf16 words and its read's verdict). The fused types are not yet measured by the proof_overhead card, so Figure 1 prices them by their k_log. Definitions built, circuit-checked at every SWAP x DOT tile and tested (in review); the cut is not yet proved or served, and the expert's binding is proved for the read's reference, not yet for its gates.",
+ "runs": [
+  "r20261107-204030-a9d4",
+  "r20261106-131055-0e29"
+ ],
+ "owner": "@circuits",
+ "value": {
+  "name": "per-expert-fused",
+  "label": "weight-row reads fused into their GEMMs: Definitions built and circuit-checked (in review); not yet measured, proved or served",
+  "replaces": [
+   "MoeExpertFp8Gemm_v1",
+   "MoeExpertFp8GemmW_v1",
+   "MoeRouterSigmoidBias_v1"
+  ],
+  "strata": [
+   {
+    "block": "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}",
+    "kind": "MoeRouterSigmoidBiasSlots_v2",
+    "per_token": 600,
+    "macs": 0,
+    "out_bits": 512,
+    "ands": 8324843,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=96}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 19200,
+    "macs": 0,
+    "out_bits": 1537,
+    "ands": 1829335,
+    "k_log": 23
+   },
+   {
+    "block": "MoeExpertFp8ReadGemm_v1{READ={\"fn\":\"EmbeddingRead_v1{V=256,H=3072}\"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v2\"}}",
+    "kind": "MoeExpertFp8ReadGemm_v1",
+    "per_token": 2457600,
+    "macs": 6144,
+    "out_bits": 17,
+    "ands": 7171028,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=4}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 230400,
+    "macs": 0,
+    "out_bits": 65,
+    "ands": 1768575,
+    "k_log": 23
+   },
+   {
+    "block": "MoeExpertFp8ReadGemmW_v1{READ={\"fn\":\"EmbeddingRead_v1{V=256,H=4096}\"},K=256,N=32,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v2\"}}",
+    "kind": "MoeExpertFp8ReadGemmW_v1",
+    "per_token": 921600,
+    "macs": 8192,
+    "out_bits": 513,
+    "ands": 8328537,
+    "k_log": 25
+   }
+  ]
+ },
+ "art": "art:2d327277e283621804f48ee35e21067a09ea3fa799d0f6e32e18ae8405c99a3e"
+}

@@ -1,16 +1,54 @@
-import Proofs.Flock.Soundness.ExecDrawOS
-import Definitions.Claims.Sampling
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Definitions.Claims.Sampling
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
-# `Flock.Guarantees.EndToEnd`'s draw against the claims' design
+# `Flock.Guarantees.EndToEnd`'s sample against the claims' design
 
-`EndToEnd` draws a uniform `kd`-subset of its `n` units from the verifier's operating-system bytes
-(`Law.execOS src (.subset kd) n`, A3 on `src`). The claims read a draw only through the statement's design (`Design.Pa`,
+`EndToEnd` samples a uniform `kd`-subset of its `n` units from the verifier's operating-system bytes
+(`Law.execOS src (.subset kd) n`, A3 on `src`). The claims read a sample only through the statement's design (`Design.Pa`,
 `Design.miss`, `missAt`). At a design of one class under `OneStage.subset kd` (`SubsetDesign`), over a partition of `n`
-proof blocks, the live draw escapes a set `B` no more often than the design's `P_a(B)` (`execOS_escape_le_Pa`), and its count curve, and `EndToEnd`'s sampling term
+proof blocks, the live sample escapes a set `B` no more often than the design's `P_a(B)` (`execOS_escape_le_Pa`), and its count curve, and `EndToEnd`'s sampling term
 `C(n − K₀, kd)/C(n, kd)`, are at most the design's miss at `K₀` (`execOS_miss_le_miss`, `choose_le_miss`) and the
 deployment's `missAt` (`choose_le_missAt`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.EndToEndDraw
 
@@ -56,8 +94,8 @@ theorem choose_div_ofReal (m kd : ℕ) (hkd : kd ≤ m) (a : ℕ) :
   rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast Nat.choose_pos hkd), ENNReal.ofReal_natCast,
     ENNReal.ofReal_natCast]
 
-/-- **`EndToEnd`'s draw escapes no more often than the design's `P_a`**: at every set `B` of units, the live subset
-draw on a uniform byte source (A3) misses `B` with probability at most `P_a(B)` of a `SubsetDesign` over `n` proof
+/-- **`EndToEnd`'s sample escapes no more often than the design's `P_a`**: at every set `B` of units, the live subset
+sample on a uniform byte source (A3) misses `B` with probability at most `P_a(B)` of a `SubsetDesign` over `n` proof
 blocks. -/
 theorem execOS_escape_le_Pa (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
@@ -87,7 +125,7 @@ theorem choose_le_miss (n kd : ℕ) (hkd : kd ≤ n) {d : Design} (hd : SubsetDe
       simp only [Finset.mem_range] at hv; omega,
     Finset.card_range, choose_div_ofReal n kd hkd]
 
-/-- **`EndToEnd`'s draw's count curve is at most the design's miss**, on a uniform byte source (A3). -/
+/-- **`EndToEnd`'s sample's count curve is at most the design's miss**, on a uniform byte source (A3). -/
 theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {d : Design} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))} (hP : P.classes = [c])

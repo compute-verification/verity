@@ -1,17 +1,21 @@
-import Definitions.Accounting.TS.J10R
+module
+
+public import Definitions.Accounting.TS.J10R
 
 /-!
 # Checks of J10-R's noise against the Python
 
 - `unit_row_is_call_row`, `unit_col_is_call_col`, `j10r_rows`, `j10r_cols`: at `unitBlocks`' bases a unit's row `i` and
   column `j` are the call-scale layout's row `R I + i` and column `C J + j`, for every seed, call, tile and `K`.
-- `callSeed_vec` … `keys_vec`: `J10R` against `verity/core/protocols/pouw/circuit/seeds.py` and `h1tile.py` (`call_seed`,
+- `callSeed_vec` … `keys_vec`: `J10R` against `verity/ml/protocols/pouw/circuit/seeds.py` and `h1tile.py` (`call_seed`,
   `receipt_seed`, `seed`, `noise_block`, `j10r_blocks`, `j10r_noise`, `fold_keys`) on unit (1, 2) of an 8 × 32 call at
   `K = 64`, the call at position 40 and the unit at 46, salt `0, 1, …, 63` and roots `(7i + 3) mod 256` (A) and
   `(5i + 1) mod 256` (B), evaluated by the kernel. `test_j10r_lean_vectors.py` recomputes each.
 - `layout_4096` … `prefill_k14336`: RB and CB, today's 612 compressions a unit at a warp and `K = 4096`, and J10-R's over a
   call at decode (32 × 4096: 41,506 over 128 units, 324.27 a unit) and prefill.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.J10RChecks
 
@@ -56,7 +60,7 @@ theorem receiptSeed_vec : (receiptSeed vSalt 46 vRootA vRootB).take 8 = [67, 165
 
 theorem seed_vec : (seed vSalt 46 vRootA vRootB).take 8 = [153, 133, 229, 243, 77, 209, 250, 249] := by decide +kernel
 
-theorem noiseBlock_vec : (noiseBlock (callSeed vSalt 40 vRootA vRootB) 24).take 8 = [230, 11, 151, 120, 76, 147, 166, 149] := by decide +kernel
+theorem noiseChunk_vec : (noiseChunk (callSeed vSalt 40 vRootA vRootB) 24).take 8 = [230, 11, 151, 120, 76, 147, 166, 149] := by decide +kernel
 
 theorem unitBlocks_vec : unitBlocks 8 64 4 8 1 2 = (4, 24) := by decide +kernel
 

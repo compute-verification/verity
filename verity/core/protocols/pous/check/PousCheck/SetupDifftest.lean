@@ -1,11 +1,13 @@
-import Difftest
-import PousCheck.Setup
+module
+
+public import Difftest
+public import PousCheck.Setup
 
 /-!
 # The setup difftest: `PousCheck`'s functions behind `Difftest.serve`
 
 `pous-setup-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
-(`tests/test_setup_difftest.py`) draws inputs and holds each function's output to `verity.core.protocols.pous`
+(`tests/test_setup_difftest.py`) samples inputs and holds each function's output to `verity.core.protocols.pous`
 (`schemes/p2.py`, `setup.py`) and `verity.ml.commitments.identity`. The functions:
 
 * `maps`: `P2.d`, `P2.sigma` and `P2.decodeValue` on canonical values (Python's `_Field.sq`, `sigma`);
@@ -21,6 +23,8 @@ import PousCheck.Setup
 
 The setup check itself is the protocol `pous-setup` serves (`SetupProtocol`), which the harness drives as a protocol.
 -/
+
+@[expose] public section
 
 namespace PousCheck.SetupDifftest
 

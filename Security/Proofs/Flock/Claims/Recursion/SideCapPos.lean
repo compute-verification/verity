@@ -1,10 +1,46 @@
-import Proofs.Flock.Claims.Recursion.SideCapUp
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.RowDLevels
-import Proofs.Flock.Claims.Recursion.NextRFits
+module
+
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.SideCapUp
+public import Proofs.Flock.Recursive.HoloRepCoins
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
-import Proofs.Flock.Recursive.HoloRepCoins
+import Proofs.Flock.Claims.Recursion.NextRFits
+import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.RowDLevels
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The opened positions' range (`PosCap0`, `PosCapUp`) at row D's pieces and `Rows.posAt`
@@ -12,7 +48,7 @@ import Proofs.Flock.Recursive.HoloRepCoins
 `sideCapR_deployed` gives `SideCapR` at the deployed layout from `ReadsAt` and two ranges: a level-`ℓ`
 piece's position, below its `HH` siblings, is one of its cap's nodes. Both hold at every decision, from its own checks:
 
-* `posAt` is the position the verifier rows draw (`verifierRows`) at the statement's own shape, its table's `fast100`
+* `posAt` is the position the verifier rows sample (`verifierRows`) at the statement's own shape, its table's `fast100`
   schedule. Those rows run at no empty round (`canonRounds_noEmpty`: each round reads its schedule's coin count, and
   `repRounds` counts none empty), at `m ≥ 22` and a schedule of the seams, so level `ℓ`'s positions are Flock's
   `positions` at that level (`FlockVBridge.Family.rows_pos`), each below `2^d` (`Lg.positions_lt_d`). Where the rows
@@ -25,6 +61,8 @@ piece's position, below its `HH` siblings, is one of its cap's nodes. Both hold 
 `sideCapR_rowD` is `SideCapR` at row D's pieces and `Rows.posAt`, at the deployed layout and bound record, from
 `ReadsAt` alone, and `sideCapR_leaf` is `recursiveKSAt_of_leaves`' `hCap` at its records.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 
@@ -96,7 +134,7 @@ theorem positions_getElem!_lt {lv : _root_.Flock.Level} (hl : FlockSoundness.Ref
     exact Nat.two_pow_pos _
 
 /-- **The position a piece reads is below `2^d`** of its level at its table's schedule: where the statement sets up
-and the table's `m` has a `fast100` schedule, the verifier rows draw level `ℓ`'s positions as Flock's `positions`
+and the table's `m` has a `fast100` schedule, the verifier rows sample level `ℓ`'s positions as Flock's `positions`
 (`rows_pos`, at no empty round, `m ≥ 22` and the seams), each below `2^d`; elsewhere `posAt` is 0. -/
 theorem posAt_lt {x : Msg} {cs : List Coin} {q : OpenPiece} {v}
     (hset : FlockDeploy.setupOf false x = some v) {sch : _root_.Flock.Schedule}

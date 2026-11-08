@@ -1,4 +1,4 @@
-"""`check.py --deferred STEP,...`, the post-landing run `research queue drive` launches on `main` (`train.sh --deferred`): only
+"""`check.py --deferred STEP,...`, the after-landing run `research queue drive` launches on `main` (`train.sh --deferred`): only
 those ci.toml jobs and what they need, inside a recorded run that is no check, so no gate reads it."""
 from __future__ import annotations
 
@@ -24,6 +24,11 @@ def _module(name: str, path: Path):
 CHECK = _module("repo_check_for_deferred", ROOT / "tools" / "verity" / "check" / "check.py")
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def _main(monkeypatch, tmp_path, argv):
     got = []
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261018-000000-abcd")
@@ -43,7 +48,7 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (ci.toml's `gate = false`): a recorded check (`--record`, the declared
+    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
     command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
@@ -76,6 +81,24 @@ def test_a_deferred_run_is_refused_with_a_part_or_a_step_ci_toml_doesnt_declare(
     assert "--shard 3/3: that shard holds none of those steps" in capsys.readouterr().err
 
 
+def test_the_lock_runs_bookkeeping_flag_reaches_its_lean_audit_and_nothing_else_takes_it(monkeypatch, tmp_path, capsys):
+    """`--bookkeeping-warn` (drive's lock run: `train.sh --deferred lean-audit --bookkeeping-warn`) reaches `run`, whose
+    lean-audit step then repairs bookkeeping (`lean_steps`); a check that isn't a deferred, unsharded run that regenerates
+    records refuses it, so a PR's own check and the after-landing run fail on bookkeeping as before."""
+    got = []
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261018-000000-abcd")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    monkeypatch.setattr(CHECK, "run", lambda *a, bookkeeping=False: got.append(bookkeeping) or (True, []))
+    assert CHECK.main(["--deferred", "lean-audit", "--keep-going", "--bookkeeping-warn"]) == 0 and got == [True]
+    assert CHECK.main(["--deferred", "lean-audit", "--keep-going"]) == 0 and got == [True, False]
+    for argv in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
+                 ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
+        assert CHECK.main(argv) == 2 and len(got) == 2, argv
+    assert "--bookkeeping-warn is drive's lock run" in capsys.readouterr().err
+
+
 def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkeypatch, tmp_path):
     """Drive's after-landing run as N runs at once (`after_landing_shards`): shard K runs the deferred steps' parts that ci.toml's
     plan with N shards puts in shard K, and is recorded as a deferred run naming its shard, so the N together cover each step."""
@@ -101,7 +124,7 @@ def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_th
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
-    """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
+    """An after-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
     its base's commit, above which ratchet-gate judges every merge."""
     real, launched, sent = subprocess.run, [], {}
 
@@ -122,7 +145,13 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
-    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n" and CHECK.RATCHET_BASE_FILE not in sent
+    launched.clear()
+    sent.clear()
+    assert CHECK.record(["--base", "HEAD^", "--ratchet-base", "HEAD", "--on", "vy-x", "--deferred", "ratchet-gate"]) == 0
+    [cmd] = launched
+    assert "--ratchet-base" not in cmd and "HEAD" not in cmd[cmd.index("--") + 1:]
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD^')}\n" and sent[CHECK.RATCHET_BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
 
 
 def _pack(tmp_path: Path, monkeypatch) -> Path:

@@ -14,18 +14,18 @@ batch, and the periods replay that one prefill. Both operands are committed befo
 (operand, layer, block), its rows hm96 rows (`OperandTree`), whose roots the registration carries. `prep --seeded`
 seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the checkpoint doesn't have.
 
-**A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
-the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
+**A period**, one execution block (`ExecutionBlocks.proto`): the registration (the operand roots, the operands' source,
+the period's shape, W_reg) is the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
 in one sequence. Block b's operand-root receipt is H(registration, b, block b-2's value-root receipt; the registration's
 digest for b < 2), and its seeds coin opens after it, so blocks 0 and 1's open with the session, before the wall starts. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
-seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
+seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's execution phase's salt, its operand-root receipt. Each
 call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding; `prep --served`: the served
 form, T_1 .. T_{S-1} and O = (A + d_A)(B + d_B)^T mod 2^32, its seeds still the filler's streams) under a frame-v3-sha512 root,
 its leaf pos salted prf_salt(Ks, off + pos) under the Prover's own Ks, off = c leaves for its c-th call (dither.salts);
 block b's value-root receipt is H(registration, b, its
 roots). Its check coin opens after that receipt, with block b+2's seeds coin in the same round trip, while block b+1 runs:
-the host enqueues each block behind the one before and never waits for the device between them. The coin draws
-Q W_b / W_reg proof blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its length, so each MAC is
+the host enqueues each block behind the one before and never waits for the device between them. The coin samples
+Q W_b / W_reg proof blocks of b (`picks`): a call by its MACs, an output cell uniformly, a segment by its length, so each MAC is
 equally likely. Each pick's tree paths come off the host copy of its call's tree before block b+2 overwrites it.
 
 **The verifier** (`verify_pick`), after the period: the prover's answer (`answer`: the opened rows recomputed from the
@@ -89,7 +89,7 @@ LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down",
 LAYERS = LINEARS
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, L = 512, 16384   # the noise period L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
+LP, L = 512, 16384   # the noise repeat length L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
 #: Dither's argument covers segments of at most T_MAX L' inner indices (a proof block's cost goes as c_t / t; v3.2 proves it
 #: for t <= 8), and v31's Fill takes L' <= LP_MAX, so a call takes a longer L' (`lp_of`), and a linear no L' covers runs as
 #: K-slices (`calls`)
@@ -347,7 +347,7 @@ def cmd_prep(a: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------------------------------------- the coins
 def call_seeds(coin: bytes, period: str, block: int, receipt: bytes, steps: int) -> list[bytes]:
     """The block's calls' seeds (384 bytes: dither's six streams, pad dA dB U V P), step-major, from its seeds coin: call
-    (s, layer)'s coin is the block coin's stream at it, and its seeds are dither.call_seeds under the block's window salt
+    (s, layer)'s coin is the block coin's stream at it, and its seeds are dither.call_seeds under the block's execution phase's salt
     (its operand-root receipt)."""
     key = derive(coin, "verity/pouw-accel/seeds/v1", {"period": period, "block": block, "receipt": receipt})
     return [v31.fill_seeds_bytes(v31.call_seeds(receipt, key.stream(("call", s, li), 64)))
@@ -365,8 +365,8 @@ class Pick:
 
 
 def picks(coin: bytes, period: str, block: int, receipt: bytes, steps: int, q: int, row: int) -> list[Pick]:
-    """q proof blocks of a block from its check coin, each MAC equally likely: a step uniformly, a layer by its N K, a
-    cell uniformly, then the inner index uniformly (so the segment by its length)."""
+    """q proof blocks of a block from its check coin, each MAC equally likely: a step uniformly, a layer by its N K, an
+    output cell uniformly, then the inner index uniformly (so the segment by its length)."""
     key = derive(coin, "verity/pouw-accel/check/v1", {"period": period, "block": block, "receipt": receipt})
     w = [n * k for _, n, k in LAYERS]
     out = []
@@ -398,7 +398,7 @@ def salt(key: tuple[bytes, int], pos: int) -> bytes:
 
 def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes], pos: int, skip: int | None = None) -> bytes:
     """Leaf `pos`'s row as the prover committed it, recomputed from block t's operands and the call's coins: T_s of its
-    ROW / 2 cells (a run of a tile's rows, every column), mod 2^16, or a served call's O of its ROW / 4 cells, mod 2^32,
+    ROW / 2 output cells (a run of a tile's rows, every column), mod 2^16, or a served call's O of its ROW / 4 output cells, mod 2^32,
     little-endian, in the tile's row-major order."""
     tile, r = divmod(pos, f.lpt)
     o = r >= f.W * f.row_w
@@ -408,7 +408,7 @@ def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes
     i0, j0 = tm * TILE + piece * nr, tn * TILE
     A = np.fromfile(afile, dtype=np.int8, count=nr * f.k, offset=(t * f.m + i0) * f.k).reshape(nr, f.k)
     B = np.fromfile(bfile, dtype=np.int8, count=TILE * f.k, offset=(t * f.n + j0) * f.k).reshape(TILE, f.k)
-    fm = v31.form(f, A, B, v31.Coins.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
+    fm = v31.form(f, A, B, v31.CallNoise.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
     if o:
         return (v31.imatmul(fm.Ad, fm.Bd) & 0xFFFFFFFF).astype("<u4").tobytes()
     X = fm.X
@@ -662,7 +662,7 @@ class RefDriver:
         self.roots: dict[int, bytes] = {}
         self.ready = ["ready", "ref"]
 
-    def block_of(self, step: int) -> int:
+    def layer_of(self, step: int) -> int:
         return step % NB
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
@@ -684,11 +684,11 @@ class RefDriver:
         for s in range(steps):
             for li, (_, n, k) in enumerate(LAYERS):
                 f = shape(n, k, self.row)
-                t = self.block_of(g0 + s)
+                t = self.layer_of(g0 + s)
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
                 T, O = v31.fill_values(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
-                                       v31.Coins.expand(f, sd), skip)
+                                       v31.CallNoise.expand(f, sd), skip)
                 key = (self.ks[li], self.calls[li] * f.leaves)
                 self.calls[li] += 1
                 cm = v31.fill_commit(f, v31.fill_buffer(f, T, O), *key)
@@ -715,7 +715,7 @@ class RefDriver:
 
 # --------------------------------------------------------------------------------------------------------- the period
 class Coins:
-    """One challenger session a period: a5_coins' Local (development, not of record) or Gate (vy-challenger-1)."""
+    """One challenger session a period: a5_coins' Local (development, not of record) or GateClient (vy-challenger-1)."""
 
     def __init__(self, how: str, main: Path, peer: str | None, key_record: str | None, gate_key: str | None) -> None:
         import a5_coins as A5
@@ -730,7 +730,7 @@ class Coins:
     def session(self):
         if self.how == "local":
             return self.A5.Local(Path(tempfile.mkdtemp(prefix="highutil-challenger-")), self.main)
-        return self.A5.Gate(self.how.removeprefix("gate:"), self.gate_key, self.peer, self.key_record, self.main)
+        return self.A5.GateClient(self.how.removeprefix("gate:"), self.gate_key, self.peer, self.key_record, self.main)
 
     def evidence(self, session, root: str, openings: list, dest: Path) -> dict:
         """The verifier's check of the session once it has ended: the auditor's ledger and the session's sealed files
@@ -766,7 +766,10 @@ class Plan:
     q: int        # proof blocks a period
 
 
-class Period:
+class ExecutionBlocks:
+    """Execution blocks back to back on one driver: `proto` one registration's sampling blocks under live coins, credited
+    all or nothing, and `plain` a baseline over as many steps; `g` numbers the steps on across them."""
+
     def __init__(self, drv: GpuDriver | RefDriver, coins: Coins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
                  source: dict, secret: bytes, work: Path, pool: ProcessPoolExecutor) -> None:
         self.drv, self.coins, self.trees, self.cfg, self.row = drv, coins, trees, cfg, row
@@ -967,7 +970,7 @@ def cmd_run(a: argparse.Namespace) -> int:
                   + " ".join(f"{k}{li}.{tb} {x.root.hex()[:16]}" for (k, li, tb), x in trees.items() if tb == 0), flush=True)
             drv = RefDriver(cfg, row) if a.lib == "ref" else GpuDriver(a.lib, cfg, row, plan.steps)
             print("driver " + " ".join(drv.ready), flush=True)
-            per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
+            per = ExecutionBlocks(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
             bases = baselines(a.plain)
             drv.block(0, 0, min(plan.steps, 50), f"plain-{bases[0]}", "none", work / "none", work / "none")
@@ -998,7 +1001,7 @@ def cmd_run(a: argparse.Namespace) -> int:
 
 def cmd_diag(a: argparse.Namespace) -> int:
     """One protocol step on the GPU (a block of the model other than the first) with seeds of its own (no coins), then
-    leaves of each layer's call against the reference: the GPU's own openings (v31_open, inside the call's window) against
+    leaves of each layer's call against the reference: the GPU's own openings (v31_open, inside the call's execution phase) against
     the rows the prover's answers recompute from the operand files and against the paths from the host copy of the tree,
     every one opening the call's root."""
     cfg, out = Path(a.cfg), Path(a.out)

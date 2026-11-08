@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.Recursion.LogWalk
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Claims.Recursion.LogWalk
+public import Flock.With.VerifyE
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Refine.Table
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The record decoder's SHA-512 calls
@@ -9,6 +46,8 @@ table's `root_B`), S6 (`root_F`), S7 (each table's public words, where they are 
 round's `H(ε)` size check and its retained bytes), S13 (each rep stream's `root_B`) and S14 (the exchange `lbOf`), and
 nothing else. With them, what S6, S10, S11 and S13 check of the session it returns.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -26,7 +65,7 @@ def roundLog (spec : SessionSpec) (rd : Round) : List ByteArray :=
 def streamLog (spec : SessionSpec) (s : StreamRec) : List ByteArray := s.rounds.toList.flatMap (roundLog spec)
 
 /-- S14's exchange: `root_F`, the tables' `root_B` in lexicographic table order, the link points and `y`. -/
-def lbOf (spec : SessionSpec) (sess : Session) : ByteArray :=
+def lbOf (spec : SessionSpec) (sess : RunRecord) : ByteArray :=
   sess.y.foldl F128.pushBytes (sess.points.foldl (fun lb p => p.foldl F128.pushBytes lb)
     (((spec.tables.zip sess.rootB).qsort (fun x1 x2 => decide (x1.1 < x2.1))).foldl (fun lb x => lb ++ x.2)
       sess.rootF))

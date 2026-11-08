@@ -1,4 +1,6 @@
-import Mathlib.Logic.Embedding.Basic
+module
+
+public import Mathlib.Logic.Embedding.Basic
 
 /-!
 # A deterministic schedule: the vocabulary (trusted)
@@ -18,9 +20,11 @@ are not its published schedule's (`Schedule.plan`) or whose schedule is over the
 schedule's bits.
 `Properties.RemoteAudit.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance, and
 `Properties.RemoteAudit.steered_of_scheduleDeterministic` derives `SteeredLayout` at `a + 1` bits from it
-(`Security/Proofs/Properties/RemoteAudit/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
+(`Security/Proofs/Properties/Accounting/Remote/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
 and not `ScheduleDeterministic` at any `a`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

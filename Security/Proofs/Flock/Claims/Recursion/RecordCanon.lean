@@ -1,5 +1,37 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Row B at the decision: what the record's decode gives
@@ -15,6 +47,8 @@ are what the verdict's decoder checks of every record it returns (`DecAt.decode`
 The fourth, `framed` (the rounds hold the rep's frames), is about the record's values, not its form: it holds where
 each round retained its chunk's bytes and counts its chunk's closing squeeze (`framedAt_of_rounds`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 
@@ -35,7 +69,7 @@ theorem check_round {n : ℕ} {coins : Array F128} {b c : Bool} {why : String} {
 
 set_option maxHeartbeats 1000000 in
 /-- **S12: every decoded round has at least one coin, and as many as its count.** -/
-theorem decodeJWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : Session}
+theorem decodeJWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ rd ∈ s.rounds.toList, 1 ≤ rd.n ∧ rd.coins.size = rd.n := by
   rw [Record.decodeJWith_eq_decodeJWithK] at h
@@ -73,7 +107,7 @@ theorem find_of_any {ss : Array StreamRec} {w : String} (h : ss.any (·.name == 
 
 set_option maxHeartbeats 1000000 in
 /-- **S11: the decoder finds a stream at each rep stream's name.** -/
-theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : Session}
+theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec j = .ok sess) :
     ∀ x ∈ spec.repStreams.toList, ∃ s, sess.streams.find? (·.name == x.2.2) = some s := by
   rw [Record.decodeJWith_eq_decodeJWithK] at h

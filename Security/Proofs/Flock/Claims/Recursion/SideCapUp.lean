@@ -1,4 +1,44 @@
-import Proofs.Flock.Claims.Recursion.SideCapRead
+module
+
+public import Proofs.Flock.Claims.Recursion.SideCapRead
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.CapPorts
+import Proofs.Flock.Claims.Recursion.RestFinal
+import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!
 # The reader's caps above level 0 (`SideCapUp`), at the deployed `finalR` and `DeployedR.layR`
@@ -21,6 +61,8 @@ deployed last message those rows are the rounds' openings (`openPieces`), so the
 `sideCapUp_of` gives `SideCapUp` at SHA-512, `layR elem` and the bound record at `finalR` from `ReadsAt` and
 the opened position's range (`PosCapUp`), and `sideCapR_deployed` puts it with level 0 (`sideCapR_of`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 
@@ -375,7 +417,7 @@ theorem topSize_cap {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVS
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     ∃ s : _root_.Flock.Schedule, _root_.Flock.fast100 r.shape.m = some s ∧ n = 2 ^ (s.levels[g + 1]!).cap := by
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, Lk, N, hK, hT, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hsz := topsListed_size hT hrs
   obtain ⟨hg', -⟩ := List.getElem?_eq_some_iff.1 hn
   have hg : g < K.size := by rw [hsz]; exact hg'

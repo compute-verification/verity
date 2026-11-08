@@ -1,9 +1,12 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Proofs.Pouw.PearlC.Forming
-import Proofs.Pouw.PearlC.Freeze
+module
+
+public import Proofs.Pouw.PearlC.Forming
+public import Proofs.Pouw.PearlC.Freeze
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
 /-!
 # P3: the atom-mix's `PairErr` (staging)
@@ -22,6 +25,8 @@ This file proves it on Pearl's flat pairs, at `ε = 1/64`.
 * **The instances without `PairErr`**: `atomMixChain_saltLive_flat` and `rhoD_atomMix_pi_flat`, modulo the noise floor
   and `FlatPairs`. `lineCode_err` bounds `E′` against `44β`, for computing the pair's `c`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.AtomErr
 

@@ -1,24 +1,62 @@
-import Proofs.Flock.Claims.KS.DecodeHidden
+module
+
+public import Proofs.Flock.Claims.KS.DecodeHidden
+public import Proofs.Flock.Claims.KS.DecodeDeploy
+public import Proofs.Flock.Claims.KS.PlainAcc
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Range
 
 /-!
 # The plain table bound at the deployed plain decoders
 
 `PlainLiveAccAt` asks for decoders right at `plainTab` and a mixture of live strategies whose verdict at them bounds
-the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders are right there, at public outputs
+the deployed runs. At a plain statement in scope with a sample, `wrP`'s decoders are right there, at public outputs
 (`plain_hdec`) and at hidden ones (`plain_hdecH`), so what is left is the mixture at them:
 
-* `checks_draw`, `acc_draw`: a statement some run accepts carries a draw, the checks after the verdict refusing a
+* `checks_draw`, `acc_draw`: a statement some run accepts carries a sample, the checks after the verdict refusing a
   session without one.
 * `plainVerdict`, `plainOpn`, `plainOpnH`, `plainDec`: `wrP`'s verdict, openings at public and at hidden outputs, and
-  decoder, at the draw and no drawn unit.
+  decoder, at the sample and no sampled proof block.
 * `PlainLiveWrPAt`: `PlainLiveAccAt` at `wrP`'s verdict and decoder and at openings whose decoders are right, and
   `plainLiveAccAt_of_wrP`, which gives it.
 * `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden
   under `hm96-sha512/v1` leaves, and `PlainLiveAccAt` itself where they are hidden under plain SHA-512 leaves, which the
   scope admits and the deployed decoders are not yet proved right at, at the statements in scope that set up at a
-  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and KS at the trimmed record
+  sample; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and KS at the trimmed record
   (`plain_KS_of_w`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -27,7 +65,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The checks after the verdict refuse a session without a draw** (`drawLaw zk tags false none`). -/
+/-- **The checks after the verdict refuse a session without a sample** (`drawLaw zk tags false none`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
@@ -47,7 +85,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The checks after the verdict refuse a session without a draw** (`drawLaw zk tags false none`). -/
+/-- **The checks after the verdict refuse a session without a sample** (`drawLaw zk tags false none`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d :=
@@ -81,7 +119,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
+/-- **A statement some run accepts at SHA-512 sets up at a sample.** -/
 theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
@@ -92,36 +130,36 @@ theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha5
 
 end Gen
 
-/-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
+/-- **A statement some run accepts at SHA-512 sets up at a sample.** -/
 theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
   Gen.acc_draw (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **`wrP`'s verdict at the draw `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no drawn
-unit, the outcome's root is `rootB₀`'s, and the deployed reader looks up no column off `C` in it. -/
+/-- **`wrP`'s verdict at the sample `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no sampled
+proof block, the outcome's root is `rootB₀`'s, and the deployed reader looks up no column off `C` in it. -/
 def plainVerdict (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray)
     (o : Tables.LiveOutJ 1 mPts) : Prop :=
   Exec.Accepts I (wrP I (fun _ : Finset (Fin 0) => d) (fun _ _ => 1) ∅ () o) ∧ o.rootB[0]! = rootB₀[0]! ∧
     TxNoOff I C (wrP I (fun _ : Finset (Fin 0) => d) (fun _ _ => 1) ∅ () o)
 
-/-- **`wrP`'s openings at the table `T` and the draw `d`**: `DecodeZL.opnAt` at no drawn unit. -/
+/-- **`wrP`'s openings at the table `T` and the sample `d`**: `DecodeZL.opnAt` at no sampled proof block. -/
 noncomputable def plainOpn {mPts : ℕ} (T : TabSpec mPts) (I : Exec.Inputs) (d : Json) (ps : Array ByteArray)
     (_ : Fin 1) : Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8) :=
   DecodeZL.opnAt (fun (_ : Finset (Fin 0)) (_ : Unit) => T) I (fun _ => d) ∅ () ps
 
-/-- **`wrP`'s openings at hidden outputs**: `HiddenDec.opnAtH` at no drawn unit. -/
+/-- **`wrP`'s openings at hidden outputs**: `HiddenDec.opnAtH` at no sampled proof block. -/
 noncomputable def plainOpnH {mPts : ℕ} (T : TabSpec mPts) (I : Exec.Inputs) (d : Json) (ps : Array ByteArray)
     (_ : Fin 1) : Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8) :=
   HiddenDec.opnAtH (fun (_ : Finset (Fin 0)) (_ : Unit) => T) I (fun _ => d) ∅ () ps
 
-/-- **`wrP`'s decoder at the table `T`**: `DecodeZL.decAt` at no drawn unit. -/
+/-- **`wrP`'s decoder at the table `T`**: `DecodeZL.decAt` at no sampled proof block. -/
 noncomputable def plainDec {mPts : ℕ} (T : TabSpec mPts) (_ : Fin 1) : ℕ → ByteArray → List Msg :=
   DecodeZL.decAt (fun (_ : Finset (Fin 0)) (_ : Unit) => T) DecodeZL.wOP DecodeZL.wLIG ∅ ()
 
 open Classical Discharge.Tables in
 /-- **The live sessions' bound at table 0, at the deployed plain decoders**: `PlainLiveAccAt` at full-width columns
-with `wrP`'s verdict and decoder at the statement's inputs `I` and draw `d` (`plainVerdict`, `plainDec`) and openings
+with `wrP`'s verdict and decoder at the statement's inputs `I` and sample `d` (`plainVerdict`, `plainDec`) and openings
 `opn` whose decoders are right at `plainTab` (`hdec`), so it asks for the mixture of live strategies and its bounds
 only. -/
 def PlainLiveWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
@@ -206,7 +244,7 @@ theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} 
     inferInstance, σL, hσ, htr, hadv, hsc⟩
 
 /-- **The live sessions' bound at a plain statement, at the deployed decoders**: at each statement in scope that sets
-up at a draw, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` where the outputs are public (`plain_hdec`) and
+up at a sample, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` where the outputs are public (`plain_hdec`) and
 `plainOpnH` where they are hidden under `hm96-sha512/v1` leaves (`plain_hdecH`); where they are hidden under any other
 leaf the scope admits (plain SHA-512 leaves), `PlainLiveAccAt` itself. -/
 def PlainLiveW (x : Claims.Msg) : Prop :=
@@ -229,7 +267,7 @@ def PlainLiveW (x : Claims.Msg) : Prop :=
       PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay)
 
 /-- **`PlainLiveW` gives `PlainLiveAcc`** where some run accepts: the statement parses in scope (`acc_inScope`) and sets
-up at a draw (`acc_draw`). -/
+up at a sample (`acc_draw`). -/
 theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) (hl : PlainLiveW x) :
     PlainLiveAcc x := by
   intro spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay

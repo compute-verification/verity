@@ -1,4 +1,23 @@
-import Proofs.Flock.Recursive.HoloExec
+module
+
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Recursive.ForkInner
+import Proofs.Flock.Recursive.ForkRuns
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Recursion: the inner fork with the last round's message unbound
@@ -14,8 +33,10 @@ commitment fixed before the coin. An inner verifier that ignores the last round'
   `finds_forkG_ref` with the last message free.
 * `InnerAtLeavesL`, `innerAtLeavesL_of_forkOn`: `InnerAtLeaves` with the decoded last message free, from
   `InnerSoundForkOn` at a verifier and a pick that ignore the last coin, unless the recursive prover has an inner fork.
-* `schedInner_lastFree`, `clashPickCL_lastFree`, `clashPickHL_lastFree`: the three for C-Flock's inner protocols.
+* `schedInner_lastFree`, `clashPickCL_lastFree`, `clashPickHL_lastFree`: the three for Flock's inner protocols.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

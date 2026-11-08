@@ -1,11 +1,16 @@
-import Definitions.Core.Guarantees.Game
-import Proofs.Core.Game.Basic
-import Proofs.Core.Game.Interleave
-import Proofs.Core.Game.Union
-import Proofs.Core.Game.Batch
-import Proofs.Core.Game.BatchInduced
+module
+
+public import Definitions.Core.Guarantees.Game
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Game.Interleave
+public import Proofs.Core.Game.Union
+public import Proofs.Core.Game.Batch
+public import Proofs.Core.Game.BatchInduced
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # Proofs that sound games compose (`Verity.Guarantees.Game`) -/
+
+@[expose] public section
 
 namespace Verity.SecurityProofs
 

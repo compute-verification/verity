@@ -1,13 +1,18 @@
-import Proofs.Pouw.PearlC.Cap.IntForm
+module
+
+public import Proofs.Pouw.PearlC.Cap.IntForm
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # `_cap_constants` at pinned shapes
 
 `capConstants` evaluated by the kernel at the circuit-check binding's shapes and at deployed 64 × 64 tiles, each on the
 device's own `g`, prices and cap; one shape `_cap_constants` refuses; and `creditInt` where `credit_of` is called.
-`verity/protocols/accounting/work/pouw/tests/test_cap_lean.py` reads these statements and checks each against `cap._cap_constants` and
+`verity/core/protocols/pouw/tests/test_cap_lean.py` reads these statements and checks each against `cap._cap_constants` and
 `PearlC(forming="v1").credit_of`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

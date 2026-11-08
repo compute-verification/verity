@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.Recursion.LastSharedR
+module
+
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+public import Proofs.Flock.Claims.Recursion.NextRHonest
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.PlainDrawJRun
 import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!
@@ -11,6 +46,8 @@ coins. And every rep of an accepted record is set up (`SchedOf (repCtx …)`, `s
 verdict and the link points the checks pin to the first coin.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 open Flock Transcript
@@ -19,7 +56,7 @@ open Lean (Json)
 
 /-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12) at a parsed record, at any `keep`. -/
 theorem decodeJWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
   unfold Record.decodeJWithK at h
   dsimp only at h

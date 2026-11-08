@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The reps' tie: each rep's steps are a rep unit V*'s layers check
@@ -20,6 +35,8 @@ source's runs are tied so at every accepted outer proof.
   part (`ProofOfVals`), the setup's and schedule's (`SetupOfVals`), the record's frames (`FramesOfVals`) and the
   source's rep steps (`StepsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

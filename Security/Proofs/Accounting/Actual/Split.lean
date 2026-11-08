@@ -1,4 +1,6 @@
-import Definitions.Accounting.Actual
+module
+
+public import Definitions.Accounting.Actual
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -10,6 +12,8 @@ of the region, which runs before `t'`, before its own tick, which `Forward X` re
 from outside itself, so it counts in `state X t`. The same holds of the reads in any set `G` of gates, with
 `stateIn X t G` in place of `state X t` (`width_into_region_inter_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

@@ -1,5 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.W1Stop
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.W1Stop
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
 /-!
@@ -45,6 +48,8 @@ the bound it is not a program (`tree_not_code`).
 "Tabulates" isn't defined in Lean, and this counting bound isn't proved. Whatever else a bounded program can do, such
 as compute the reference more cheaply than the honest program, is TT_OUT's own conjecture.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Tabulate
 

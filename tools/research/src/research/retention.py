@@ -565,7 +565,9 @@ def covers(man: Any, path: Path) -> str | None:
 def store_check(store_root: str | None = None) -> Callable[[str, Path], str | None]:
     """The default remote check, run just before a deletion: the artifact holds the path's files (`covers`), and
     `preserved.check` in head mode finds it PRESERVED (remote sizes, and the single-part ETag against the local blob's MD5 where
-    the blob is here, else a read-back; `LocalStore.verify` would read back every blob). None when both hold, else why not."""
+    the blob is here, else a read-back; `LocalStore.verify` would read back every blob). None when both hold, else why not.
+    Without a usable remote (a node holds no store key) it is `recorded` mode: the remote replica the store's catalog verified
+    when custody pushed it, which is what the store eviction trusts too (without it, a node skips every expired run)."""
     st = None
 
     def chk(art: str, path: Path) -> str | None:
@@ -577,7 +579,7 @@ def store_check(store_root: str | None = None) -> Callable[[str, Path], str | No
             st = st or LocalStore(store_root)
             if why := covers(st.get_manifest(art), path):
                 return why
-            rep = P.check(st, [art], mode="head")
+            rep = P.check(st, [art], mode="head" if st.remote is not None else "recorded")
         except Exception as e:  # noqa: BLE001  any failure is a failed check: the path stays
             return f"{type(e).__name__}: {e}"
         if rep["preserved"]:

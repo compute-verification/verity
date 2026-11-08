@@ -1,6 +1,46 @@
-import Proofs.Flock.Claims.KS.ZkLiveJ
-import Proofs.Flock.Claims.KS.Escapes
-import Proofs.Flock.Claims.KS.OnAcc
+module
+
+public import Proofs.Flock.Claims.Bridge.Returns
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
+public import Proofs.Flock.Claims.KS.ZkLiveJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Every masked table's bound with escapes on accepted runs
@@ -24,6 +64,8 @@ accepted runs (`zk_tableBoundJAccAt_of_liveJ`, through `zk_le_sessionsJ`). At th
 gives table 0's, `TableBoundθAccAt` with the same escapes (`TableBoundJAccAt.tableBoundθAccAt`), so the masked
 `plain_tableBoundθAccAt` follows from `ZkLiveAccJ` where some run accepts (`zk_tableBoundθAccAt`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -378,7 +420,7 @@ theorem zkLiveJ_of_acc {x : Claims.Msg} (hl : ZkLiveAccJ x) : ZkLiveJ x :=
 
 /-- **Every masked table's bound at a statement in scope, with escapes on accepted runs**: at tables of full-width
 columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAccAt_of_liveJ` at
-C-Flock ZK's padded tables (`zk_atTabs`). -/
+Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)

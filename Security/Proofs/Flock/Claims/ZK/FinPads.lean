@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.Round1Root
+module
+
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.Round1Root
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.InnerGo
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The pads' opened columns and salts read from the views are the session's (`repOpenRest_pads`)
@@ -9,7 +46,7 @@ rep (`repHE`) both return at one history `l'`, their inner proofs open the same 
 
 * `FlockComplete.RunPost`: what every returning run satisfies, with its `bind`, `ite` and `throw` rules.
 * `FlockComplete.repCut_padsAt`, `FlockComplete.repPZk_padsAt`: answered by `asksCut`, both reps open their pads
-  commitment at `padQs`, the last round's `Q` coins mod the commitment's size (`PadsAt`): the draw is the last thing
+  commitment at `padQs`, the last round's `Q` coins mod the commitment's size (`PadsAt`): the sample is the last thing
   `innerCut` and `innerP` do (`sampleVecP_asksCut`).
 * `Masked.colPAt_exe`, `Masked.srcV_pads`: at an opened position's tree position the views' columns and salt are the
   codes of `h ‖ pad_h` and `μ ‖ pad_μ` and the tape's pads salt fitted to 192 bytes, as in the session's commitment
@@ -19,6 +56,8 @@ rep (`repHE`) both return at one history `l'`, their inner proofs open the same 
   `innerOff 3`'s, whose coins are the table's `qP`. Each queried position is then opened (`coinedOf_sP_val`), and there
   the views' commitment (`fillP`) is the session's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -65,7 +104,7 @@ theorem mono {x : TMW PS β} {Q : β → Transcript → Array Claims.Msg → Pro
 
 end RunPost
 
-/-- **A draw of `m ≠ 0` coins answered by `asksCut`** returns the coin of its round, the last of its history. -/
+/-- **A sample of `m ≠ 0` coins answered by `asksCut`** returns the coin of its round, the last of its history. -/
 theorem sampleVecP_asksCut (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : m ≠ 0) :
     RunPost (sampleVecP (asksCut coin n) m) fun v _ l => v = (Array.range m).map (coin (l.size - 1)) := by
   intro s l v t l' e

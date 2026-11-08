@@ -1,4 +1,19 @@
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Registered
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G at V*'s family: the parts' row columns and the reads at them
@@ -20,6 +35,8 @@ what the part sessions' reads files and registered reads say there:
   name, read at the unit's position;
 * `rowColKeys_of`, `sameRow_of`: `RowColKeys` and `SameRow` from those and `HCover`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -46,7 +63,7 @@ def RowPort (p : ℕ) (j : Fin F.stmts.size) (q' : Fin (F.Vs j).c.ports.size) : 
     Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) = .msg q'.val (k' / 8) (k' % 8)
 
 /-- Obligation: discharged by the parse of the part's circuit (`parse_circuitFile` with `circuitFile`'s emit and parse
-round trip, the lane that proves `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Each row
+round trip, as for `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Each row
 column of a part is keyed by a row bit.** In the circuit of part `p`'s statement, the Δ key (`Aliased.srcKey`, copy 0)
 of every row column `rowColOf` of the unit is message bit `k'` of a port `q'`, within its row. V*'s `InnerRepCheck`
 circuit takes its row ports as its inputs from column 0 (`rowCol`), each a port of the statement under its name
@@ -57,7 +74,7 @@ def PartRowCols : Prop :=
       Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) = .msg q'.val (k' / 8) (k' % 8)
 
 /-- Obligation: discharged by the parse of the parts' circuits (`parse_circuitFile` with `circuitFile`'s emit and parse
-round trip, the lane that proves `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Two parts'
+round trip, as for `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Two parts'
 columns of one element's bit key one bit of rows of one name.** Where parts `p` and `p'` hold the same element `i` of
 `w` at positions `a` and `a'`, the keys of their columns of bit `e` are the same bit `b` of ports of one name. A part
 reads whole row ports (`wIdx`), each under its name (`rec_residuals.py:125`), so element `i` is bit
@@ -75,8 +92,8 @@ def PartRowBits : Prop :=
       b < Layout.portRowW (F.Vs j).c q → b' < Layout.portRowW (F.Vs j').c q' →
       b = b' ∧ (F.Vs j).c.ports[q].name = (F.Vs j').c.ports[q'].name
 
-/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
-hv). **Each part's reads file names its row ports.** At every accepted outer proof, the reads file `own` of part `p`'s
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind.
+**Each part's reads file names its row ports.** At every accepted outer proof, the reads file `own` of part `p`'s
 session names every row port of its circuit (`RowPort`). V* writes it with an entry per port of the part
 (`rec_vstage.py:356-363`; `rec_residuals.write` refuses reads of other ports, `rec_residuals.py:443`). -/
 def OwnNamesRows : Prop :=
@@ -85,8 +102,8 @@ def OwnNamesRows : Prop :=
       ∀ q' : Fin (F.Vs j).c.ports.size, F.RowPort p j q' →
         ∃ pt' ∈ (F.zs R ω t R₂ j).own, pt'.name = (F.Vs j).c.ports[q'].name
 
-/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
-hv). **Two parts' entries at a row port of one name are one entry.** At every accepted outer proof, an entry of part
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind.
+**Two parts' entries at a row port of one name are one entry.** At every accepted outer proof, an entry of part
 `p`'s reads file named as a row port `q` of its circuit and an entry of part `p'`s named as a row port `q'` of the same
 name are equal. V* writes both as the row's registration (or the verifier's own entry for it) with positions `[0, 1]`
 (`rec_vstage.py:356-357`, `rec_residuals.py:449`), and `acc0`, `acc1` as `rec-acc` at `rep_ends`, the same in every
@@ -105,7 +122,7 @@ def PartPortsOne : Prop :=
 record custody). **A part's registered read is at `own`'s entry of its port's name, at the position it gives the
 unit.** At every accepted outer proof, a registered read `(u, q)` of part `p`'s session (at a row port, `v` or `out`)
 has as its port an entry of `own` named as `q`, whose position for unit `u` is the read's. `ZkOuter.hown`
-(`OwnReads`) says it at the drawn outcomes, at the drawn statement's label of `u`, which is `u` at a part's units;
+(`OwnReads`) says it at the sampled outcomes, at the sampled statement's label of `u`, which is `u` at a part's units;
 acceptance of an arbitrary outcome does not give it, and `rd` is the family's field. -/
 def ReadsOwn : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
@@ -129,8 +146,8 @@ theorem un_val (hcov : F.HCover) {p : ℕ} (hp : p < (partsOf F.sh).size) (r : F
   have hsj : F.sess p = j := F.hsess p j ⟨nm, pt, hj⟩
   exact F.hun p r (by rw [hsj, F.nv_part hj]; exact r.isLt)
 
-/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
-hv), as `OwnNamesRows`. **Each part's reads file names each port once.** At every accepted outer proof, two entries
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind, as
+`OwnNamesRows`. **Each part's reads file names each port once.** At every accepted outer proof, two entries
 of part `p`'s reads file of one name are one entry. V* writes one entry per port of the part (`rec_vstage.py:356-363`);
 check 5 reads `find?`'s first entry of a name (`RecCoins.checkRows`), so it does not refuse a second. -/
 def OwnNamesOne : Prop :=

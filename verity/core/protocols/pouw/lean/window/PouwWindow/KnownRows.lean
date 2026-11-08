@@ -1,7 +1,9 @@
-import PouwWindow.Lanes
+module
+
+public import PouwWindow.Lanes
 
 /-!
-# A drawn H1 leaf's known rows
+# A sampled H1 leaf's known rows
 
 The rows the verifier registers itself at their known content (`Source.known`): lane `l`'s `pub` and `admit`, and every
 statement's `o0`, each one row of 16-bit words (`hm96-sha512/row/v2`) at the port that holds it (`lanePorts`,
@@ -23,6 +25,8 @@ halves, then `roots[1]`'s).
 `Accounting.TS.Lanes.knownOf` (`Security/Proofs/Accounting/TS/Session/Lanes/KnownOf.lean`), the known content
 `Accounting.Guarantees.TS.LeafLanesSound` hands each session.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 

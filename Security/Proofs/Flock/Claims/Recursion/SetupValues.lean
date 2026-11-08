@@ -1,19 +1,23 @@
-import Flock.With.SimSetup
+module
+
+public import Flock.With.Setup
 
 /-!
-# What the setup's parse, load and draw return, in any hash
+# What the setup's parse, load and sample return, in any hash
 
 `Stmt.setupHiddenWith`'s hash calls depend on the parsed circuit's ports, the loaded public file's shared-row counts
-and the drawn population (`SetupCount.setupHidden_cost`). Each is a function of the files alone, whatever the hash:
+and the sampled population (`SetupCount.setupHidden_cost`). Each is a function of the files alone, whatever the hash:
 
 * `hmOutParse_ports`: an untyped circuit's ports are `HmRow.rowPorts` of its META line (`metaOf`).
 * `loadPublic_counts`: a public file's shared-row counts are `HmRow.sharedRows` of its header (`headerOf`) at the
   circuit's ports (`sharedRows_ports`).
-* `drawn_facts`: a draw keeps the counts, and its population is its JSON's (`Draw.UnitDraw.ofJson`).
+* `drawn_facts`: a sample keeps the counts, and its population is its JSON's (`Draw.UnitDraw.ofJson`).
 
 So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `drawn_pop`), where the
 verifier's own checks bound them.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.SetupValues
 
@@ -148,7 +152,7 @@ def metaOf (bytes : ByteArray) : Option Json :=
     let lines0 := (text.splitOn "\n").toArray
     let lines := if lines0.back? == some "" then lines0.pop else lines0
     let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
-    (Json.parse (metaLine.drop 5).toString).toOption
+    (Flock.JsonParse.parse (metaLine.drop 5).toString).toOption
 
 set_option maxHeartbeats 4000000 in
 theorem parseWith_ports (h : ByteArray → ByteArray) (tags : Tags) (bytes : ByteArray)
@@ -231,7 +235,7 @@ def headerOf (f : ByteArray) : Option Json :=
   | none => none
   | some nl => match String.fromUTF8? (f.extract 0 nl) with
     | none => none
-    | some text => (Json.parse text).toOption.map Flock.norm
+    | some text => (Flock.JsonParse.parse text).toOption.map Flock.norm
 
 theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit) (f : ByteArray) (pop : Public)
     (hp : HmRow.loadPublicWith (M := V) (Hashes.ofSha512 h) tags c f = .ok pop) :
@@ -251,7 +255,7 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at hp
   simp (config := { zeta := false }) only [jpA] at hp
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at hp
-  cases hj : Json.parse text with
+  cases hj : Flock.JsonParse.parse text with
   | error e =>
     simp (config := { zeta := false }) only [hj] at hp
     obtain ⟨_, hte, -⟩ := except_bind_ok hp; cases hte
@@ -392,7 +396,7 @@ theorem counts_le {pop pop' : Public} {B : Nat} (he : pop.tables.map (·.counts)
     have he' : t.counts = t'.counts := Option.some.inj he
     exact hb t' ht' r (he' ▸ hr)
 
-/-- **A draw's population is its JSON's**, and it keeps the shared-row counts, at any hash. -/
+/-- **A sample's population is its JSON's**, and it keeps the shared-row counts, at any hash. -/
 theorem drawn_pop (h : ByteArray → ByteArray) {c : Circuit} {pi : HmIn.Ports} {pop pub : Public} {d : Json}
     (hp : HmIn.drawnWith (M := V) (Hashes.ofSha512 h) c pi pop d = .ok pub) :
     ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 = D.population ∧

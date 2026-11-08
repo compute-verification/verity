@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.Mixing
-import Proofs.Pouw.NCP.RelationWitness
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
+public import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # MinRank ≥ 2 for the shift by 24
@@ -10,6 +12,8 @@ import Proofs.Pouw.NCP.RelationWitness
 `y(b₀) ≠ 0`, the column `b` with `b / 8 = b₀ / 8` would all carry `y(b) ≠ 0`, while row `a₀` meets at most one of
 any 8 consecutive columns.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 
@@ -106,9 +110,5 @@ theorem minRank2_shift {k : ℕ} (hk : 1024 ≤ k) (h16 : 16 ∣ k) : MinRank2 k
   have e1 := hcol (8 * (b0 / 8)) (by omega) (hsib _ (by omega) (by omega))
   have e2 := hcol (8 * (b0 / 8) + 1) (by omega) (hsib _ (by omega) (by omega))
   omega
-
-/-- **MinRank ≥ 2's witness, jointly.** -/
-theorem minRank2Witness : MinRank2Witness := fun k hk h16 =>
-  ⟨shiftBy 24 k, shiftBy24_admissible hk h16, indep_of_fresh (fresh hk h16), minRank2_shift hk h16⟩
 
 end Pouw.Dimension

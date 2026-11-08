@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.Recursion.VStarTraceOk
-import Proofs.Flock.VBridge.Family.Names
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTraceOk
+public import Proofs.Flock.VBridge.Family.Names
+public import Std.Data.String.ToNat
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.List.SplitOn.Basic
 
 /-!
 # A staged part's circuit has three nets (`nets_three`)
@@ -19,6 +24,8 @@ a newline: the unit's name is the parsed unit's name, a token (`unit_name`, `tok
 line (`pyDumps_noNl`). No proof reads through `Lean.Json.parse`.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.VStarNets
 
 open _root_.Flock
@@ -34,7 +41,7 @@ open RecDeploy.VStarTraceOk (RowsOk)
 /-- Lines, each with its newline. -/
 def joinNl (L : List String) : String := String.join (L.map (· ++ "\n"))
 
-theorem joinNl_nil : joinNl [] = "" := rfl
+theorem joinNl_nil : joinNl [] = "" := (rfl)
 
 theorem joinNl_cons (a : String) (L : List String) : joinNl (a :: L) = a ++ "\n" ++ joinNl L := by
   simp [joinNl, String.join_cons, String.append_assoc]
@@ -96,8 +103,11 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
       (PUnit.unit, s ++ joinNl (secLs "unit" u.name l ++ secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++
         secLs VStar.HM_NET VStar.HM_NET (hmLaid ()))) := by
   unfold VStar.emitSections
-  generalize shaLaid () = ls
-  generalize hmLaid () = lh
+  -- An `Exists` eliminator's variables, not `generalize`'s: the elaborated term substitutes `generalize`'s back, and
+  -- the kernel's check of the `simp` below then evaluates the two nets.
+  obtain ⟨ls, hls⟩ : ∃ ls, shaLaid () = ls := ⟨_, rfl⟩
+  obtain ⟨lh, hlh⟩ : ∃ lh, hmLaid () = lh := ⟨_, rfl⟩
+  rw [hls, hlh]
   simp [List.forIn_cons, List.forIn_nil, StateT.run_bind, StateT.run_modify, emitNet_run, secLs, joinNl_cons,
     joinNl_append, String.append_assoc]
   refine Prod.ext rfl ?_
@@ -156,6 +166,16 @@ theorem unit_name {s : VStar.Stmt} {u : VStar.UnitC} (h : s.unit = .ok u) : u.na
   cases s with
   | recOpen _ L H _ => exact recOpenUnit_name h
   | inner _ nm pt => exact innerUnit_name h
+  | link UB PB _ =>
+    simp only [VStar.Stmt.unit] at h
+    unfold VStar.linkUnit at h
+    generalize VStar.linkSteps UB PB = S at h
+    cases hc : _root_.Flock.RecLinkTree.checkShape UB PB with
+    | error e => simp [hc, bind, Except.bind] at h
+    | ok _ =>
+      simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rfl
   | _ =>
     simp only [VStar.Stmt.unit, VStar.sparseUnit] at h
     simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h

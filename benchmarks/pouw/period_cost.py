@@ -11,7 +11,7 @@ at the lucks a = 0.218, b = 0.998, p = 7/8, p0 = ½, δ_s = 2^-40 and ε_♭ = 0
 period's admitted rows over its declared rows, so the first period at ε < 1% is n = ⌈Λ·ln(1/δ_s)/(u·(1% − ε_♭))⌉ windows.
 At small x, Λ ≈ b·r/((1 − p0)·K_d): what counts is the period's total draws n·K_d, and M past 18 buys nothing.
 A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j, so a prefix
-earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every drawn tile passes with
+earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every sampled tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
 **The served window** (served_h1 on an RTX PRO 6000 node): 18 rounds, 16 served steps and 2 empty, 64 rows a
@@ -32,7 +32,7 @@ circuit file and its teardown, and Lean's session check) plus a part a lane. `RA
 **Node-days** are memory-packed: a node runs ⌊node GB / process GB⌋ provers (prover and session verifier) or Lean checks
 at once, and a window's node-seconds are its prove seconds over the prove slots plus its Lean seconds over the Lean
 slots. Process-days are the same seconds unpacked (node-days). Windows certify in parallel on N nodes, but
-one stream serves the period (disjoint periods, one stream each), and a window's draw comes only once it is
+one stream serves the period (disjoint periods, one stream each), and a window's sample comes only once it is
 served, so the period takes max(serving, certifying its first n − 1 windows on N nodes) plus its last window's
 certification: its statements in parallel, but no sooner than one statement's prove and check.
 
@@ -57,9 +57,14 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity_machine_model.headline import row
+
 A, B, P, P0 = 0.218, 0.998, 7 / 8, 0.5
 DELTA_S_LOG2 = 40
-EPS_FLAT = 0.00571
+#: ε_♭ + ε_μ on sm_120's data sheet (H1 + fx1), the machine model's sheet row: ε_skip + ε_machine is Compose's ε_♭ and
+#: ε_mand its ε_μ (`epsFlat`, `epsMu`); the row's ε_luck is Λ's term here
+SHEET = row("sm_120", "sheet")
+EPS_FLAT = SHEET.skip + SHEET.machine + SHEET.mand
 TARGET = 0.01
 DAY = 86_400.0
 
@@ -222,7 +227,7 @@ def first_credit(c: Config) -> int:
 
 
 def all_skip_pays(c: Config) -> bool:
-    """Whether a window that skips every drawn tile whole passes (p0^K_d) more often than its credit is wrong (1 − b), so
+    """Whether a window that skips every sampled tile whole passes (p0^K_d) more often than its credit is wrong (1 − b), so
     that, credited without ε's discount, it out-earns an honest window (at K_d = 8, 1.95×)."""
     return P0 ** c.draws > 1 - B
 
@@ -451,7 +456,7 @@ def sensitivity() -> dict:
     base = Config("sensitivity", u=1.0)
     return dict(
         delta_s_log2={str(d): windows(replace(base, delta_s_log2=d)) for d in (20, 30, 40, 64, 80)},
-        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, 0.00571, 0.007, 0.008, 0.009)},
+        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, EPS_FLAT, 0.007, 0.008, 0.009)},
     )
 
 

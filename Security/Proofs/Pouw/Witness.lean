@@ -1,5 +1,11 @@
-import Proofs.Pouw.Milestone
-import Proofs.Pouw.QTree
+module
+
+public import Proofs.Pouw.M1
+public import Proofs.Pouw.Milestone
+public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
+public import Proofs.Pouw.Break
 
 /-!
 # Satisfiability witnesses and non-vacuity
@@ -9,42 +15,23 @@ import Proofs.Pouw.QTree
 * `gameCanBeLost`: the honest program at budget 0 (free model) or `W_mm` (witness model) wins with probability 1.
 -/
 
+@[expose] public section
+
 namespace Pouw.Proofs
 
 open Finset QTree
 
 variable {Q R S : Type}
 
-/-! ## The honest reference as an oracle program -/
+/-! ## The honest reference as an oracle program (`honestProg`, `Definitions.Pouw.Witness.Honest`) -/
 
 section Honest
 
 variable (P : D1.Params Q R S)
 
-/-- Unit `u`'s honest commitment on activations `A`, from the answers `a` to `qAct` and `b` to `qWt` (the formulas
-of `D1.Params.refChecked` and `refOut` with the oracle's answers as inputs). -/
-def commitAns (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
-  let sh := U.layout.shape u
-  let E := P.expAct sh a b
-  let F := P.expWt sh b
-  let act' : Mat := fun i l => wrap32 (A i l + mmW P.r E.1 E.2 i l)
-  let wt' : Mat := fun l j => wrap32 (U.weight (U.layout.wid u) l j + mmW P.r F.1 F.2 l j)
-  ⟨A, fun t => mmW (D1.blockEnd P.d sh.k t) act' wt',
-    fun i j => wrap32 (wrap32 (mmW sh.k act' wt' i j - mmW P.r (mmW sh.k A F.1) F.2 i j)
-      - mmW P.r E.1 (mmW sh.k E.2 wt') i j)⟩
-
 theorem commitAns_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
     commitAns P U u A ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s u (U.layout.wid u)).map H)
       = ⟨A, P.toProtocol.refChecked H s U u A, P.toProtocol.refOut H s U u A⟩ := rfl
-
-/-- Unit `u`'s honest program: query its noise, then commit. -/
-def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s u (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
-
-/-- The honest reference: every unit's honest program, in order. -/
-def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
-  upTo (unitProg P U act s) U.layout.N
 
 theorem eval_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
     (honestProg P U act s).eval H = honestTranscript P.toProtocol H s U act := by
@@ -69,6 +56,10 @@ theorem outputPriced_queries : (outputPriced Q R S).Queries :=
 
 theorem freeModel_queries : (freeModel Q R S).Queries :=
   fun prog U act σ s => ⟨prog U act σ s, fun _ => ⟨rfl, rfl⟩⟩
+
+theorem outputPriced_hashless : (outputPriced Q R S).Hashless := fun _ _ _ _ _ _ => rfl
+
+theorem freeModel_hashless : (freeModel Q R S).Hashless := fun _ _ _ _ _ _ => rfl
 
 theorem outputPriced_cost_le (prog : (outputPriced Q R S).Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat)
     (σ : State) (s : S) :
@@ -96,7 +87,7 @@ theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P :
   have h3 : T ≤ T / (1 - Params.γ0) := by
     rw [le_div_iff₀ (by unfold Params.γ0; norm_num)]
     unfold Params.γ0; nlinarith
-  exact absurd hx (not_lt.2 (h1.trans (h2.trans h3)))
+  exact absurd hx.1 (not_lt.2 (h1.trans (h2.trans h3)))
 
 /-- **Satisfiability witness for TT and `AdmitsRef`** in `outputPriced`, for `D1.m1` with `W_ref ≥ W_mm`. -/
 theorem ttWitness : Pinned.TTWitness := by
@@ -167,10 +158,6 @@ theorem salt_nonempty : Nonempty Salt := ⟨⟨0, Nat.two_pow_pos 128⟩⟩
 def freeHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (freeModel Q R Salt) :=
   ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
 
-/-- The honest reference as an adversary of the witness model. -/
-noncomputable def pricedHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (outputPriced Q R Salt) :=
-  ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
-
 theorem freeHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc : P.QueryBound c) (U : Workload) :
     (freeHonest P).Bounded U 0 (U.layout.N * c) := fun H s =>
   ⟨le_rfl, (Nat.zero_add _).le.trans (calls_honestProg P H U _ s hc)⟩
@@ -202,7 +189,7 @@ theorem lost_free {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty
   have := salt_nonempty
   have h := hG M1.sixteen M1.sixteen_inDomain 0 le_rfl (M1.sixteen.layout.N * c) hc64 (freeHonest P)
     (freeHonest_bounded P hc M1.sixteen)
-  refine le_of_eq_of_le (pr_eq_one fun x => ?_).symm h
+  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless freeModel_hashless _ _ _ _⟩).symm h
   rw [freeHonest_transcript]
   exact honest_wins_sixteen P hN hW x.1 x.2 (by rw [zero_div]; positivity)
 
@@ -217,7 +204,7 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
   rw [sum_Wmm_sixteen] at hB
   have h := hG M1.sixteen M1.sixteen_inDomain (16 * 2 ^ 44) (by positivity) (M1.sixteen.layout.N * c) hc64
     (pricedHonest P) hB
-  refine le_of_eq_of_le (pr_eq_one fun x => ?_).symm h
+  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless outputPriced_hashless _ _ _ _⟩).symm h
   rw [pricedHonest_transcript]
   refine honest_wins_sixteen P hN hW x.1 x.2 ?_
   have hΩ0 : 0 < Ω := by linarith

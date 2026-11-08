@@ -259,7 +259,7 @@ def test_an_end_after_its_periods_close_leaves_the_close_and_the_ledger_standing
 
 
 def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_window_past_the_cap(host, signer):
-    """`CircuitWorkPeriod` reads both, committed before window 0's first coin; a reserve
+    """`CircuitWorkMonitoringPeriod` reads both, committed before window 0's first coin; a reserve
     counts toward the cap from its entry on, opened or not."""
     opened = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 2 --circuit {'ab' * 64}"))
     assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "ab" * 64)
@@ -347,10 +347,31 @@ def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwis
     assert set(checked(host)) == {"p1", "k1"}
 
 
+def test_a_period_open_commits_a_lanes_form_ks_lane_and_combine_files_and_their_leaf_programs(host, signer):
+    """A K in credit's lanes form commits ``lane<K>`` and ``combine<K>`` in place of ``k<K>``, and ``leaf_programs``
+    their leaf Programs' descriptor digests (credit's `lanes_files`), beside other Ks' tile files and the live file."""
+    files = {"combine2048": "3c" * 64, "k64": "2b" * 64, "lane2048": "4d" * 64, "live": "1a" * 64,
+             "leaf_programs": {"combine2048": "5e" * 64, "lane2048": "6f" * 64}}
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 1 "
+                                  f"--circuit-files {shlex.quote(json.dumps(files))}", "hash"))
+    assert opened["body"]["circuit_files"] == files
+    assert [e["body"]["circuit_files"] for e in map(json.loads, A.read_ledger(host.ledger))] == [files]
+
+
+H, G = "2b" * 64, "1a" * 64
+
+
 @pytest.mark.parametrize("files", [
     "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
     '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}', '{"lives": "' + "2b" * 64 + '"}',
     '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
+    json.dumps({"lane64": H, "leaf_programs": {"lane64": G}}),
+    json.dumps({"lane64": H, "combine64": H}),
+    json.dumps({"lane64": H, "combine64": H, "k64": H, "leaf_programs": {"lane64": G, "combine64": G}}),
+    json.dumps({"lane64": H, "combine64": H, "leaf_programs": {"lane64": G}}),
+    json.dumps({"lane64": H, "combine64": H, "leaf_programs": {"lane64": G, "combine64": "1A" * 64}}),
+    json.dumps({"k64": H, "leaf_programs": {}}),
+    json.dumps({"lane064": H, "combine064": H, "leaf_programs": {"lane064": G, "combine064": G}}),
 ])
 def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
     rc, out = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --circuit-files {shlex.quote(files)}",

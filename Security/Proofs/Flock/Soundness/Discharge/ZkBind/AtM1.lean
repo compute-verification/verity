@@ -1,13 +1,30 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 
 /-!
-# The compiled `--zk` count curve at the `--zk` tables, at C-Flock ZK's parameters
+# The compiled `--zk` count curve at the `--zk` tables, at Flock ZK's parameters
 
 `zk_flock_countC_execOS_at` with its knowledge term in closed form (`ksAvgStrictZm1`): every table of the one-table
-plan `planZAt` is at C-Flock ZK's parameters (`planZAt_M1`, from `ZkLink.tableAtZK_M1`: what `verify --zk` checks at
+plan `planZAt` is at Flock ZK's parameters (`planZAt_M1`, from `ZkLink.tableAtZK_M1`: what `verify --zk` checks at
 setup), so `ksAvgStrictZ_le_m1` applies with no hypothesis on the tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 
@@ -21,7 +38,7 @@ variable {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ} (dj : F
   {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
 
 include ht in
-/-- **Every table of the `--zk` plan is at C-Flock ZK's parameters** (`tableAtZK_M1`). -/
+/-- **Every table of the `--zk` plan is at Flock ZK's parameters** (`tableAtZK_M1`). -/
 theorem planZAt_M1 :
     ∀ S (R : Reg) (j : Fin (planZAt (Reg := Reg) dj y₀ S R).length), ((planZAt dj y₀ S R).get j).M1 := by
   intro S R j
@@ -34,7 +51,7 @@ variable {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables
   (hU : Built c.unit) {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none) (hscope : Layout.scopeOk c = true)
 
-/-- **The compiled `--zk` count curve at the `--zk` tables, at C-Flock ZK's parameters**: `zk_flock_countC_execOS_at`
+/-- **The compiled `--zk` count curve at the `--zk` tables, at Flock ZK's parameters**: `zk_flock_countC_execOS_at`
 with the knowledge term `ksAvgStrictZm1` (`ksAvgStrictZ_le_m1` at `planZAt_M1`). -/
 theorem zk_flock_countC_execOS_at_m1 (Hs : Hashes 𝔽 Dig (List UInt8))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

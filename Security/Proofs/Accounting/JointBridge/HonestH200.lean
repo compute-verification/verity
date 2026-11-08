@@ -1,6 +1,77 @@
-import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
-import Proofs.Pouw.Period.Honest
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Accounting.Assumptions.CreditedWords
+public import Definitions.Accounting.JointBridge.H200
+public import Mathlib.CategoryTheory.Types.Basic
+public import Mathlib.RingTheory.WittVector.IsPoly
+public import Mathlib.Tactic.Polynomial.Basic
+public import Mathlib.Tactic.ReduceModChar
+public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.Prob
+import Definitions.Accounting.TS
+import Definitions.Claims
+import Definitions.Pouw.PearlC.DevicePrices
+import Definitions.Pouw.PearlC.DevicePricesLoop
+import Flock.Sizes
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import PouwCheck
+import PouwWindow
+import Proofs.Accounting.Compose.CircuitWork
+import Proofs.Accounting.Compose.ServiceBudget
+import Proofs.Accounting.Compose.ServiceCovers
+import Proofs.Accounting.Compose.SplitRateClosed
+import Proofs.Accounting.Compose.SplitRateExp
+import Proofs.Accounting.ComposePeriod
+import Proofs.Accounting.HMu
+import Proofs.Accounting.Headline.Luck
+import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+import Proofs.Accounting.TS
+import Proofs.Accounting.TS.ReceiptDuoCP
+import Proofs.Accounting.TS.ReceiptLi
+import Proofs.Accounting.TS.Stages
+import Proofs.Accounting.Tag.Basic
+import Proofs.Accounting.Tag.LittlewoodOfford
+import Proofs.Accounting.Tag.Signs
+import Proofs.Pouw.Period
+import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.Receipt
+import Proofs.Properties.Pouw.Check
+import Proofs.Properties.Pouw.Draw
+import Proofs.Properties.Pouw.Grid
+import Proofs.Properties.Accounting.Remote.Sort
+import SampledProofs.Record
 
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
@@ -30,6 +101,8 @@ The verifier that accepts everything (`acceptAll`) is the same period with every
 At no windows its device runs nothing, so a work certificate `W = 1` fails on every coin and PoUW's guarantee fails
 there at any error below one (`WorkOfH1CheckedCreditPeriodH200_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 
@@ -98,7 +171,7 @@ theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
   refine ⟨fun o => ?_, ?_, fun _ => ?_, ?_, ?_⟩ <;> simp [step, device]
 
 /-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
-window of H1's honest period on the coins `x`, each at its registration and the proof service's answer. -/
+window of H1's honest period on the coins `x`, each at its registration and the proof system's answer. -/
 def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
   ∀ w, Accepts HonestH1.prm ((HonestH1.windows n).reg x w) ((HonestH1.windows n).ev x w)
 

@@ -1,7 +1,39 @@
-import Proofs.Flock.Claims.ZK.FinishSwLig
-import Proofs.Flock.Claims.ZK.FrameOpenCut
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
-import Proofs.Flock.Claims.ZK.FinExe
+module
+
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+public import Proofs.Flock.Claims.ZK.FrameOpenCut
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Level 0's bodies pin the source's masked values
@@ -19,6 +51,8 @@ and the cut opening from a source sends the session's bodies at the pads that ma
 * **`repCut_cutL0`**: a rep from a source whose PIOP returns, cut in level 0's opening, stops having sent those bodies,
   at the PIOP's target and basis (`cutStop_of_eraseZ` carries it across level 0's erased rows and salts).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock
 

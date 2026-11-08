@@ -1,4 +1,8 @@
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # How sound games compose
@@ -16,6 +20,8 @@ built from others states its guarantee from theirs:
   in it;
 * `SoundBind`: a game that continues, after anything, with a game sound with error `δ` is sound with error `δ`.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

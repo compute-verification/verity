@@ -1,5 +1,39 @@
-import Proofs.Flock.Claims.ZK.SplitInner
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.SentE
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The cut's `Y` is the session's (`Masked.InnerY`)
@@ -15,6 +49,8 @@ source sends `Y` (`repSrcCut`'s `y`) as the session's `InZ.y` at the honest pads
   `h ‖ pad_h` and `μ ‖ pad_μ` entry by entry (`pads_exe`, as `SimCommit`'s `exeOf_pads` reads the pads columns), so
   `Y` is `InZ.y`'s array, entry `i` being `(h ‖ pad_h)[i] + β·(μ ‖ pad_μ)[i]`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

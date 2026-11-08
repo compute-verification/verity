@@ -1,3 +1,11 @@
+module
+
+public import Definitions.Flock.Game.Interleave
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
@@ -6,12 +14,14 @@ import Proofs.Flock.Soundness.Game.Interleave
 Candidate 3's table runs its two reps concurrently and then each rep's sparse phase on that rep's outputs, rep 0's
 first. `value_interleave_bind_le` is `value_interleave_le` with those continuations: the probability that both
 continued interactions end in their events is at most the product of the two continued values, since each
-continuation reads only its own interaction's output and draws its own coins.
+continuation reads only its own interaction's output and flips its own coins.
 
 It goes through `valueF`, the value of a game whose outcome `a` pays `u a` (`value p` is `valueF` at `p`'s
 indicator): `value p (g.bind f)` is `valueF` at the continuations' values (`value_bind_valueF`), and the repetition
 theorem holds for products of payoffs (`valueF_interleave_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

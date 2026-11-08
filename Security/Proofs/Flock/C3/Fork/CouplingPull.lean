@@ -1,5 +1,11 @@
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.C3.Fork.CouplingGame
+module
+
+public import Proofs.Flock.C3.Fork.CouplingGame
+public import Proofs.Flock.Soundness.CompiledLock
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import VCVio.Prelude.Core
 
 /-!
 # a1l, step 2: R's compiled stream is rep 0's, read at index 2
@@ -8,6 +14,8 @@ R's compiled Ligerito reads its openings at rep index `2` (`ligeritoC A 2`), and
 `1`. Rep `r`'s stream reads the openings only through `o r`, so it is rep 0's stream on the openings pulled from index
 `r` (`pullO r o = fun _ => o r`): `ligeritoC_pull`. On those, `RecRel 0` is `RecRel 2` (`RecRel.pull`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

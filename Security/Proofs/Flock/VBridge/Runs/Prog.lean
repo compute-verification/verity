@@ -1,5 +1,24 @@
-import Proofs.Flock.VBridge.Runs.ZcLc
-import Proofs.Flock.VBridge.Runs.Rs
+module
+
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Runs.Rs
+public import Proofs.Flock.VBridge.Runs.ZcLc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A rep's program from its algebra
@@ -10,6 +29,8 @@ returns, which are the stream's coins (`rows_coins`). What is left are facts abo
 holds: each round's coin count and the bytes it answers, the proof's messages (`ZcProofOf`, `LcProofOf`, the ring
 switches), the comb port, the extras' shapes, and Ligerito's run from the round after ring switching's.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 

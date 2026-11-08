@@ -1,8 +1,7 @@
-import Mathlib.LinearAlgebra.Matrix.Rank
-import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Order.Interval.Finset.Defs
-import Mathlib.Data.Int.Interval
+module
+
+public import Mathlib.LinearAlgebra.Matrix.Rank
+public import Mathlib.Data.Int.Interval
 
 /-!
 # Lifting MinRank: grid density (L3) and slices (L2)
@@ -16,6 +15,8 @@ Two self-contained lemmas of `Lift_MinRank` (`internal/pouw/new-crypto/lifting/R
   is constant on a set of grid points, that set has at most `64 ^ (|ι| − finrank W)` points. For a fixed `F₁`, `W`
   is the image `Ψ_f(C)`, so the slice `Z_f` has at most `64 ^ (m·k − rank Ψ_f)` points.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Lifting
 

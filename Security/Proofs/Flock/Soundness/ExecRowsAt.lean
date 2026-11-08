@@ -1,6 +1,13 @@
-import Proofs.Flock.Soundness.ExecRows
+module
+
+public import Flock.NetAt
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.ExecParse
-import Flock.NetAt
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # A net committed at a position map holds exactly when its logical net does
@@ -12,6 +19,8 @@ is logical row `x` with every reference `v` read as `pos[v]`, and every other ro
 rows are the audit's `Rows.ofNet` (`ofRowsAt_rowsSat`), and what the soundness path proves of `Rows.ofNet` holds of the
 committed net read through `pos`. No verifier path reads `ofRowsAt` yet.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

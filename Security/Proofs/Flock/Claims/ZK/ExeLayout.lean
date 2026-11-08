@@ -1,4 +1,37 @@
-import Proofs.Flock.Claims.ZK.Round0
+module
+
+public import Proofs.Flock.Claims.ZK.Round0
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The masked session's tape at the executable's indices
@@ -9,7 +42,7 @@ pads `h_x, h_y` sit at `n_E + 1, n_E + 2` of the pads layout (`padsOf`, `Compose
 from cells at the executable's own indices, and each statement reads its tables' coordinates at the indices its
 sizes give.
 
-* `ExeCell`: one table's cell, each `TapeZk` field the table draws as an array at its indices up to the live tables'
+* `ExeCell`: one table's cell, each `TapeZk` field the table samples as an array at its indices up to the live tables'
   largest sizes (`zMax`, `schMax`): the mask slot's words, the lane paddings by lane (`2^lanes + 4` lanes), the extra
   lanes, each rep's pads `h`, `μ` and their padding, level 0's salts by tree position, the pads trees' and `τ`'s salts,
   and each rep's levels ≥ 1 salts by level and position; besides them, the coordinates the honest prover never reads
@@ -25,6 +58,8 @@ sizes give.
 * `Flock.zk_deployZk_masked_exe_gap`: `Flock.zk_deployZk_masked_layout_gap` at this layout, round `0` discharged.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims FlockSoundness.Merkle FlockSoundness.ZK
@@ -32,7 +67,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -59,7 +94,7 @@ namespace Masked
 
 /-! ## The cell -/
 
-/-- **A table's base draws at the executable's indices**: the mask slot's `2^35` words; the lane paddings by lane
+/-- **A table's base samples at the executable's indices**: the mask slot's `2^35` words; the lane paddings by lane
 (`schMax + 4` lanes of `schMax` coefficients) and the extra lanes; each rep's pads `h` by layout index; each rep's
 `pad_h`, `pad_μ`, and `μ` by layout index; the revealed salts (level 0's, the pads trees', `y_τ`); each rep's levels ≥ 1
 salts by level and position, and the leftover ones. -/
@@ -72,7 +107,7 @@ abbrev ExeBase : Type :=
       ((Fin schMax → ZkView.Salt) × (Fin 2 → Fin _root_.Flock.Zk.Q → ZkView.Salt) × (Fin 2 → ZkView.Salt) ×
         (Fin 2 → (Fin (schMax + 1) × Fin schMax → ZkView.Salt) × (Fin schMax → ZkView.Salt))))
 
-/-- **A table's cell**: its base draws; level 0's salts by tree position, each rep's pads tree's salts by position and
+/-- **A table's cell**: its base samples; level 0's salts by tree position, each rep's pads tree's salts by position and
 `τ`'s salt; the ideal seeds. -/
 abbrev ExeCell : Type :=
   ExeBase × ((Fin (schMax + schMax) → ZkView.Salt) × (Fin 2 → Fin (_root_.Flock.Zk.Q + 2 ^ 64) → ZkView.Salt) ×
@@ -354,6 +389,27 @@ noncomputable def exeTape (t : Fin Claims.Flock.zkTableCap → ExeCell) : FlockC
   extra i e c := ext4 (fun r i' => fAt 0 ((cellAt t i).1.2.1.2 r i') c) 0 e
   lanePad i l k := fAt 0 (fun l => fAt 0 ((cellAt t i).1.2.1.1 l) k) l
   mask _ _ := 0
+
+/-! ## What the workers see -/
+
+/-- **What the workers see of a cell**: the mask slot's words, the lanes' paddings with the extra lanes (whose
+paddings are among them), and level 0's salts by tree position, which the device's level-0 commitment reads; never the
+pads, `pad_h`, `pad_μ`, `μ`, the pads trees', `τ`'s or levels ≥ 1's salts, or the ideal seeds. -/
+abbrev ExeSeen : Type :=
+  (Fin (2 ^ 35) → Fin 128 → ZMod 2) × ((Fin (schMax + 4) → Fin schMax → 𝔽) × (Fin 2 → Fin 2 → Fin schMax → 𝔽)) ×
+    (Fin (schMax + schMax) → ZkView.Salt)
+
+/-- A cell's part the workers see. -/
+def exeSeen (c : ExeCell) : ExeSeen := (c.1.1, c.1.2.1, c.2.1.1)
+
+/-- **What the workers see of the nonce and the tape**: the nonce and each cell's `exeSeen`. -/
+def seenOf {N : Type} (ρ : N × (Fin Claims.Flock.zkTableCap → ExeCell)) :
+    N × (Fin Claims.Flock.zkTableCap → ExeSeen) :=
+  (ρ.1, fun i => exeSeen (ρ.2 i))
+
+theorem seenOf_surjective {N : Type} : Function.Surjective (seenOf (N := N)) := fun s =>
+  ⟨(s.1, fun i => (((s.2 i).1, (s.2 i).2.1, Classical.arbitrary _), ((s.2 i).2.2, Classical.arbitrary _),
+    Classical.arbitrary _)), rfl⟩
 
 /-! ## Round `0` at the executable's layout -/
 

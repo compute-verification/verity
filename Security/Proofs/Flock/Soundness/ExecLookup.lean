@@ -1,7 +1,13 @@
-import Proofs.Flock.Soundness.ExecPlacement
+module
+
+public import Proofs.Flock.Soundness.ExecPlacement
 -- level3 already realizes `Lookup.row`'s and `Lookup.decode`'s equation lemmas, so this file reuses them rather than
 -- declaring them a second time, which the audit's kernel replay refuses
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # What `Lookup.build` builds
@@ -10,6 +16,8 @@ A lookup slot's expanded circuit (`Flock.Lookup.build`): one input word whose po
 the last row, reading itself in `A` and in `B`, and the product rows (whose `B` side the fold reads from the table)
 before it.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

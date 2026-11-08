@@ -1,4 +1,6 @@
-import Definitions.Pous.Claims.StreamedWipeDisk
+module
+
+public import Definitions.Pous.Claims.StreamedWipeDisk
 
 /-!
 # The streamed-label wipe with a server's disks in the fill
@@ -22,6 +24,8 @@ filesystem needs no premise of its own: it is in `R`. **What it covers:** the se
 only one the verdict accepts.
 -/
 
+@[expose] public section
+
 namespace Pous.Guarantees
 
 /-- **A server keeps at most `B + E` bits of its prior content through a wipe that fills its disks too.** A server
@@ -29,7 +33,7 @@ whose tiers besides its disks hold `n` labels of the fill in `M` bits (`512·n �
 the fill doesn't reach counted), and whose disks hold `D` bytes of which the fill covers `f` labels of 64 bytes
 (`64·f ≤ D`: their free space, written raw or as fill files), is wiped in one session of `n + f` labels on its assumed
 memory capacity `M_s = M + 8·D`. Then the memory challenger reads `k` labels, one at a time and timed, at a ratio
-`r ≥ 1` with `(r − 1)^k · 2^129 ≤ r^k`, drawn over all `n + f`. A server that keeps at least
+`r ≥ 1` with `(r − 1)^k · 2^129 ≤ r^k`, sampled over all `n + f`. A server that keeps at least
 `B = serverBound (n + f) r k ((M − 512·n) + (8·D − 512·f))` bits plus its egress `E` of uniform prior content through
 the reads is accepted with probability at most `2^-128` plus the PRF's advantage against
 `StreamedWipe.wipeDistinguisher P`. `B` is the fill's share over the whole session plus every bit outside the fill:

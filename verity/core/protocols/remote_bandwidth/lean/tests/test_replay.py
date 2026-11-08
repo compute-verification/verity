@@ -163,7 +163,7 @@ def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name)
                                            ("few-shared", "few")])
 def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
                                                                                             outcome) -> None:
-    """Drawn g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each sample closes at its last window
+    """Sampled g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each sample closes at its last window
     under W + ⌈W/g⌉ coins and draws as many receipts as its windows' shares recorded: an honest session, even and
     uneven, replays every sample, and a sample with a window short of its passes is rejected `few` at that window."""
     r = run(name)
@@ -182,7 +182,7 @@ def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_record
 
 
 def test_a_verifier_json_drawn_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:
-    """At one window in flight no property covers a session drawn g > 1 windows a coin, and the driver refuses one:
+    """At one window in flight no property covers a session sampled g > 1 windows a coin, and the driver refuses one:
     a record of one has no verdict to replay."""
     v = verifier_json(run("honest-shared-4"))
     v["sessions"][0]["pace"] = {"k": 2, "window_ns": 10, "in_flight": 1}
@@ -238,7 +238,7 @@ def test_a_registration_from_before_layout_and_rows_replays_without_its_digest(s
 
 
 def test_a_session_from_before_the_stated_window_replays_under_its_shortest(server, tmp_path) -> None:
-    """A window shorter than the record's `window_ns` is a boundary today's `Session` refuses, so the next window's
+    """A window shorter than the record's `window_ns` is a boundary today's `AuditRun` refuses, so the next window's
     challenge never leaves and its first root fails `order`; the case states the session's shortest window instead."""
     v = verifier_json(run("honest"))
     s = v["sessions"][0]

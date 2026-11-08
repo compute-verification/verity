@@ -81,7 +81,7 @@ def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_wo
 
 
 def test_a_guest_cpu_job_on_node_2_claims_whole_cores_of_its_share_at_nice_0():
-    """Every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice orders nothing between their
+    """Every queued run had all of 48-95 at nice 19, 34 at once at load 1000, and nice orders nothing between their
     scopes: the placement names the share and the CPUs to claim of it (`research cpu-hold` on the machine), and the wrapper,
     named on the share, gets the claimed cores in its place."""
     out = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
@@ -125,7 +125,7 @@ def test_a_pinned_node_is_the_only_one_tried():
 
 
 def test_once_node_1_has_stopped_verity_jobs_go_to_its_share_on_node_2():
-    """nebius-after-n1.toml, staged for node 1's retirement (INF-57): what the router does once it replaces nebius.toml."""
+    """nebius-after-n1.toml, staged for node 1's retirement: what the router does once it replaces nebius.toml."""
     c = model.load(Path(NEBIUS).with_name("nebius-after-n1.toml"))
     assert model.validate(c) == [] and set(c.nodes) == {"vy-nebius-2"} and c.workstreams == ()
     cpu = submit.resolve(c, _job(cpus=4, memory_gib=16), "r1", T)
@@ -152,7 +152,7 @@ def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_
 
 def test_node_1_refuses_a_lease_that_isnt_preemptible_beyond_the_provers_own_quota():
     """n1_lease.py borrows past `provers`' nominal quota only for preemptible waiters, so a larger non-preemptible lease would wait
-    in gpu-lease forever (circuits' 8-GPU load-time run, 7 Oct)."""
+    in gpu-lease forever (circuits' 8-GPU load-time run)."""
     c = model.load(NEBIUS)
     own = c.workstream(submit.N1_POOL_QUEUE, "vy-nebius-1").gpus
     with pytest.raises(submit.Refused, match=f"isn't --preemptible at most provers' own quota, {own} GPUs"):
@@ -192,7 +192,7 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
 
 
 def test_the_cli_places_with_the_stop_each_node_reports_and_the_refusal_names_where_the_stop_came_from(capsys):
-    """INF-113: a node renewed on the machine (its /etc/research/deadline) but not in this tree's description places with the stop
+    """A node renewed on the machine (its /etc/research/deadline) but not in this tree's description places with the stop
     the caller read from the node (`--stop`); without one the description's stop stands, and the refusal says which it was."""
     stop = model.load(NEBIUS).nodes["vy-nebius-2"].stops_at
     base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(stop - 3600), "--project", "verity", "--submitter", "lane-x",

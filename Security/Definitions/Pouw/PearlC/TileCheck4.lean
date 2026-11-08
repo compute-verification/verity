@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.WholeCircuit4
-import Definitions.Pouw.PearlC.TileCheck
-import Definitions.Pouw.PearlC.RowSem
+module
+
+public import Definitions.Pouw.PearlC.WholeCircuit4
+public import Definitions.Pouw.PearlC.TileCheck
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # `pc4`'s tile check (definitions only)
@@ -24,6 +26,8 @@ units', with
 The Program needs whole tiles and `64 ∣ k` (`pc4.Shape.check`); at another shape the table is still defined, and L3 is
 stated on whole-tile layouts.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

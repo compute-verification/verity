@@ -14,8 +14,12 @@ A holo shape (`Shape.holo`, hidden unit circuits) has `h`'s round as a row port 
 operands read (`RecAlgebra.atomOp`). A part's name does not say whether its shape is holo; the statement does, in META
 (`HOLO_KEY`, absent meaning plain), and `check` builds the one net it selects.
 -/
-import Flock.RecOpen
-import Flock.RecAlgebra
+module
+
+public import Flock.RecOpen
+public import Flock.RecAlgebra
+
+@[expose] public section
 
 namespace Flock
 namespace RecResiduals

@@ -1,8 +1,10 @@
-import Definitions.NetworkCertifier.Grid
-import Definitions.NetworkCertifier.Run
-import Definitions.NetworkCertifier.Ingress
-import Definitions.NetworkCertifier.Schedule
-import Definitions.NetworkCertifier.Premises
+module
+
+public import Definitions.NetworkCertifier.Grid
+public import Definitions.NetworkCertifier.Run
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Schedule
+public import Definitions.NetworkCertifier.Premises
 
 /-!
 # The network certifier's protocol: grids, the interaction, the Program and acceptance
@@ -15,10 +17,12 @@ premise a property of the network certifier takes, that the certifier device run
 `SampledAudit`, which the root `Definitions` imports rather than this module, so the protocol's own importers don't take
 sampling's vocabulary: what an accepted sampled audit of the computation's program says about its egress, `Accepted` by
 the circuit's Program at `δ`, on `Definitions.Claims.Sampling`; its guarantee's statement is `Guarantees/SampledAudit`.
-`SampledCharge`, imported the same way: what the faulty units add to the leak under a sampled audit, their committed
-bits and the choice of faulty set; its guarantee's statement is `Guarantees/SampledCharge`.
+`SampledCharge`, imported the same way: what the incorrect proof blocks add to the leak under a sampled audit, their committed
+bits and the choice of incorrect set; its guarantee's statement is `Guarantees/SampledCharge`.
 
 This module, `Assumptions` and `Guarantees` are the trusted text: they import only one another, the claims' definitions
 (`Definitions.Claims`) and Mathlib, so their diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
 for meaning.
 -/
+
+@[expose] public section

@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.ZK.FrameOuter
-import Proofs.Flock.Claims.ZK.FramePoints
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FramePoints
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)
@@ -16,7 +20,12 @@ answered them, after the earlier rep's claim points. Along the loop's requests f
   answered before the opening's label.
 * **`Ranked.ownReqs_rank`**: so where a rep's requests up to an inner proof's round (`ownReqs`) run on into the inner
   proof, the rank check held at the rounds' coins, after the earlier rep's claim points (`run_prior_eq`).
+* `Ranked.label_pcs_of_rank`, **`Ranked.label_pcs_of_answered`**: the release refuses the coins where they leave the
+  mask slot short of full rank (`LeanRelease.rankStop`), so wherever the frame takes the coins the opening's label
+  passes its rank check.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -58,11 +67,6 @@ theorem good_of_same {c : Cfg} {s s' : Masker} (hg : Good c s) (h : Same s s') :
     exact b ms hms
 
 theorem same_refl (s : Masker) : Same s s := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
-
-theorem same_trans {s s' s'' : Masker} (h : Same s s') (h' : Same s' s'') : Same s s'' := by
-  obtain ⟨a1, a2, a3, a4, a5, a6⟩ := h
-  obtain ⟨b1, b2, b3, b4, b5, b6⟩ := h'
-  exact ⟨b1.trans a1, b2.trans a2, b3.trans a3, b4.trans a4, b5.trans a5, b6.trans a6⟩
 
 theorem eq_of_isLabel {l : ByteArray} {L : String} (h : isLabel l L = true) : l = L.toUTF8 := by
   unfold isLabel at h
@@ -106,6 +110,46 @@ theorem rankHeld_of {c : Cfg} {s s' : Masker} (h : RankHeld c s) (hc : s'.coins 
   intro ms hms
   rw [hc, hp]
   exact h ms hms
+
+/-- **Where the rank stop passes, the opening's label passes its rank check**: in the algebraic phase at its last
+position, with the coins its claim points read (`claimPoints`), the opening's label takes a state the rank stop passed
+(`LeanRelease.rankFails`). -/
+theorem label_pcs_of_rank {c : Cfg} {s : Masker} (hon : s.on = true) (hd : s.done = false) (hl : s.l0 = false)
+    (hp : s.pos = c.nPiop) (hc : ∀ ms, c.mask = some ms → ∃ P, claimPoints c.lay s.coins = .ok P)
+    (hr : LeanRelease.rankFails c s = false) : ∃ q, s.label c LABEL_PCS.toUTF8 = .ok q := by
+  cases hq : s.label c LABEL_PCS.toUTF8 with
+  | ok q => exact ⟨q, rfl⟩
+  | error e =>
+    exfalso
+    obtain ⟨p1, p2, p3, p4⟩ := pcs_other
+    cases hm : c.mask with
+    | none =>
+      simp [Masker.label, hon, hm, isLabel_self, p1, p2, p3, p4, hp] at hq
+      cases hq
+    | some ms =>
+      obtain ⟨P, hP⟩ := hc ms hm
+      have hk : maskRank (s.prior ++ P) ms (c.lay.nLc + K_SKIP) = 128 * (s.prior ++ P).size := by
+        simpa [LeanRelease.rankFails, hon, hd, hl, hp, hm, hP] using hr
+      simp [Masker.label, hon, hm, isLabel_self, p1, p2, p3, p4, hp, hP] at hq
+      rw [show ∀ f : Array (Array F128) → V (Masker × ByteArray), (Except.ok P >>= f) = f P from
+        fun _ => rfl] at hq
+      split at hq
+      · cases hq
+      · rename_i hne
+        exact hne (by simpa [Array.size_append] using hk)
+
+/-- **The opening's label passes its rank check wherever the frame takes the coins**: where the frame takes the coins
+after `h` (`answered`) for a later round of the same rep, at a state in the algebraic phase at its last position with
+the coins its claim points read, the opening's label takes that state, at any `stopped` (`LeanRelease.answered_rank`,
+`label_pcs_of_rank`). So the release's coin refusal (`refusesCoins`) holds every coin-decided stop of the label's
+round, and a completeness premise over the histories whose coins the frame takes asks nothing of the rank. -/
+theorem label_pcs_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
+    {m : Masker} (hA : L.answered x ρ h = .ok m) (hn : 3 ≤ h.length) (hs : L.rep x h.length = L.rep x (h.length - 1))
+    (hon : m.on = true) (hd : m.done = false) (hl : m.l0 = false) (hp : m.pos = (L.cfg x ρ h).nPiop)
+    (hc : ∀ ms, (L.cfg x ρ h).mask = some ms → ∃ P, claimPoints (L.cfg x ρ h).lay m.coins = .ok P) (st : Bool) :
+    ∃ q, { m with stopped := st }.label (L.cfg x ρ h) LABEL_PCS.toUTF8 = .ok q := by
+  have hr := LeanRelease.answered_rank hA hn hs
+  exact label_pcs_of_rank (s := { m with stopped := st }) hon hd hl hp hc hr
 
 /-- **A label keeps the frame's phase and rank**, its coins and earlier reps' points. -/
 theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (hg : Good c s)

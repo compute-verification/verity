@@ -1,6 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Fintype.Sigma
-import Mathlib.Basic.Real.Basic
+module
+
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # The remote bandwidth audit's node, its parameters and the γ terms (trusted)
@@ -32,6 +33,8 @@ Identity there is no undeclared device of any kind, so μ_link is reported besid
 μ_link and μ_out, for the weaker statement that allows memory-only helpers and outside work. Every term but `muHost` is
 relative to `C`; `muHost` converts `C` into `C_true`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote
 

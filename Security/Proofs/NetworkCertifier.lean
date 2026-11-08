@@ -1,31 +1,65 @@
-import Definitions.NetworkCertifier.Guarantees
-import Definitions.NetworkCertifier.Guarantees.Pooled
-import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.Guarantees.PooledLeak
-import Proofs.NetworkCertifier.Lemmas
-import Proofs.NetworkCertifier.Occupancy
-import Proofs.NetworkCertifier.Counting
-import Proofs.NetworkCertifier.Advice
-import Proofs.NetworkCertifier.Ingress
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.NetworkCertifier.SampledAuditInstance
-import Proofs.NetworkCertifier.SampledCharge
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledLeakReg
-import Proofs.NetworkCertifier.SampledLeakRegPlain
-import Proofs.NetworkCertifier.PeriodSum
-import Proofs.NetworkCertifier.Pooled
-import Proofs.NetworkCertifier.TapRows
-import Proofs.NetworkCertifier.Period
-import Proofs.NetworkCertifier.PooledLeak
-import Proofs.NetworkCertifier.Schedule
-import Proofs.NetworkCertifier.PerWindow
-import Proofs.NetworkCertifier.Sanity
-import Proofs.NetworkCertifier.Code
-import Proofs.NetworkCertifier.Accepted
-import Proofs.NetworkCertifier.Tap
-import Proofs.NetworkCertifier.RecordRows
-import Proofs.NetworkCertifier.Witnesses
+module
+
+public import Definitions.NetworkCertifier.Guarantees
+public import Definitions.NetworkCertifier.Guarantees.Pooled
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Proofs.NetworkCertifier.Lemmas
+public import Proofs.NetworkCertifier.Occupancy
+public import Proofs.NetworkCertifier.Counting
+public import Proofs.NetworkCertifier.Advice
+public import Proofs.NetworkCertifier.Ingress
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.NetworkCertifier.SampledAuditInstance
+public import Proofs.NetworkCertifier.SampledCharge
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.SampledLeakReg
+public import Proofs.NetworkCertifier.SampledLeakRegPlain
+public import Proofs.NetworkCertifier.PeriodSum
+public import Proofs.NetworkCertifier.Pooled
+public import Proofs.NetworkCertifier.TapRows
+public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.PooledLeak
+public import Proofs.NetworkCertifier.Schedule
+public import Proofs.NetworkCertifier.PerWindow
+public import Proofs.NetworkCertifier.Sanity
+public import Proofs.NetworkCertifier.Code
+public import Proofs.NetworkCertifier.Accepted
+public import Proofs.NetworkCertifier.Tap
+public import Proofs.NetworkCertifier.RecordRows
+public import Proofs.NetworkCertifier.Witnesses
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -33,9 +67,10 @@ import Proofs.NetworkCertifier.Witnesses
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
 `Schedule` (Theorem 3 for the constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over
-whole windows) or `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge), and every lemma
-behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis until
-PRF-144 proves it (`NetTiming.sampledLeak`), and `SampledLeakReg` moves its count to the registration's values
+whole windows) or `SampledCharge` (the leak bound under a sampled audit: the incorrect proof blocks' charge), and every lemma
+behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis
+(`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
+registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
 nontrivial lemmas. `Code` proves the certifier's program
@@ -45,9 +80,11 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
 `TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
-trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the
+trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it.
 -/
+
+@[expose] public section
 
 namespace NetTiming.SecurityProofs
 

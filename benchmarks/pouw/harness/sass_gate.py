@@ -15,8 +15,10 @@ or no numeric run, and nothing is exempt:
   moves between them and the way an immediate is loaded aside): ``__cuda_sm20_rcp_rn_f32_slowpath``,
   ``__cuda_sm20_sqrt_rn_f32_slowpath``, ``__cuda_sm3x_div_rn_noftz_f32_slowpath``, ``__cuda_sm20_div_u16`` (two at 13.0:
   ptxas specializes it to its call sites), ``__cuda_sm20_div_u64``, ``__cuda_sm20_rem_s64``. ptxas folds a constant
-  numerator into a function's copy of the div slow path when it is the function's only division: a body that loads it from
-  a kernel parameter's slot is pinned like any other (the call passes that slot), one with an immediate isn't;
+  numerator into a function's copy of the div slow path when every division of the function has it: a body that loads it
+  from a kernel parameter's slot is pinned like any other (the call passes that slot), and one with an immediate (which
+  may still take the numerator's register as well) is pinned for that constant alone, the toolkit's ``numerators``: a call
+  into it passes only from a fast path dividing that constant, and need not pass it;
 - rcp.rn's and sqrt.rn's fast path around a call into a pinned body (`FAST`): the range check, the branch, the call and the
   four-instruction fast block;
 - div.rn's fast path (`DIV`): MUFU.RCP b, its five FFMAs and FCHK, and the branch around a call into a pinned body; a
@@ -38,9 +40,12 @@ rsqrt has no entry: at default flags ptxas builds __frsqrt_rn from bare MUFU.RSQ
 Every operand of a matched sequence is the one definition that reaches it on every path (a sequence may straddle blocks, as
 when ptxas hoists a loop's next range check and seed above the last iteration's tail), inputs unchanged between their
 readers on every path, and every value the sequence computes other than its result is read only by the sequence until
-overwritten, on every path through branches (whose predicates it follows), calls (into the subroutine's body) and returns
-(to every call site) (`readers`). A read outside the sequence that another write of the register also reaches passes as a
-merge the gate can't rule out, such as a read on a path it can't show infeasible, and is listed (``merged_reads``). The
+overwritten, on every path through branches (whose predicates it follows), calls (into the body of the subroutine or
+__noinline__ device function called) and returns (to every call site) (`readers`). Each instruction reads and may write
+the registers its operands span: a warpgroup MMA's accumulator is the registers its shape gives a thread, an mbarrier
+wait's operands one register each (`_widths`). A read outside the sequence that another write of the register also
+reaches passes as a merge the gate can't rule out, such as a read on a path it can't show infeasible, and is listed
+(``merged_reads``). The
 numeric evidence that each sequence is exact on subnormal inputs and outputs, as each pinned ptxas builds it, is
 `ieee_pin.cu`, run by `ieee_pin.py`, whose run each toolkit's ``numeric`` names; its builds are where the pins come from.
 
@@ -57,6 +62,10 @@ cubin), as does a PTX entry with an .ftz or .approx instruction or div.full. Pas
 file's, the pins' and the tools' versions (``POUW_SASS_GATE_CACHE``, default ``~/.cache/pouw-harness/sass-gate``; ``none``
 disables).
 
+The file also holds the build gate every kernel family's build.sh runs on ptxas's report and its cubin's SASS (`mma_gate`):
+the kernels the family wants, compiled for its arch with no ptxas warning, serialization, spill or local memory, and no
+tensor-core form but the ones it allows. Each family's own sass_gate.py keeps its WANT table, its SASS pins and its CLI.
+
   python sass_gate.py BINARY... [--json OUT]     # exit 0: every binary passes; 7: one fails (named, with its instructions)
   python sass_gate.py --pin CUBIN...             # each cubin's tool notes and subroutine signatures
   python sass_gate.py --pin CUBIN... --toolkit NAME   # pin them in sass_pins.json as NAME (its numeric run kept while the
@@ -66,6 +75,7 @@ disables).
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -76,6 +86,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 VERSION = "sass-gate/v4"
@@ -149,11 +160,20 @@ _PREDS = tuple(f"P{i}" for i in range(7))
 def _widths(op: list[str]) -> tuple[int, int]:
     """(the registers a destination spans, at least; the registers a source may span, at most)."""
     o, sfx = op[0], op[1:]
+    if o.endswith("GMMA"):
+        # A warpgroup MMA's m64nNk accumulator is N/2 registers a thread at a 32-bit type (N/4 at F16), a register A 4;
+        # any other shape or type, up to 128.
+        d = next((s for s in sfx if s in ("F32", "S32", "F16")), None)
+        n = next((int(m.group(1)) for s in sfx if (m := re.fullmatch(r"64x(\d+)x\d+", s))), None)
+        return 1, max(4, n // (4 if d == "F16" else 2)) if n and d else 128
     if o.endswith("MMA"):
-        # A warp MMA fragment spans at most 4 registers (16 for FP64); a warpgroup accumulator up to 128.
+        # A warp MMA fragment spans at most 4 registers (16 for FP64).
         d = next((s for s in sfx if s in ("F32", "S32", "F16", "BF16")), None)
-        shaped = not o.endswith("GMMA") and any(s.isdigit() and len(s) >= 4 for s in sfx)
-        return (4 if d in ("F32", "S32") else 2) if shaped and d else 1, 128 if o.endswith("GMMA") else 16 if o == "DMMA" else 4
+        shaped = any(s.isdigit() and len(s) >= 4 for s in sfx)
+        return (4 if d in ("F32", "S32") else 2) if shaped and d else 1, 16 if o == "DMMA" else 4
+    if o == "SYNCS" and "PHASECHK" in sfx:
+        # an mbarrier wait: its 32-bit shared address and phase parity
+        return 1, 1
     if o.startswith(("UTMA", "UBLK", "UTC", "SYNCS")):
         return 1, 8
     if "128" in sfx:
@@ -290,7 +310,9 @@ class Insn:
 
 
 class Function:
-    """One .text section of `parse_nvdisasm`: its instructions, labels, ``.size`` ends and subroutine regions."""
+    """One .text section of `parse_nvdisasm`: its instructions, labels, ``.size`` ends and subroutine regions: ptxas's
+    (``subroutines``, which pins name) and, in ``regions`` besides them, each __noinline__ device function's, named by its
+    label."""
 
     def __init__(self, fn: dict):
         self.name = fn["name"]
@@ -298,12 +320,15 @@ class Function:
         self.labels: dict[str, int] = fn["labels"]
         self.label_at = frozenset(self.labels.values())
         self.subroutines: dict[str, tuple[str, int, int]] = {}
+        self.regions: dict[str, tuple[str, int, int]] = {}
         for lab, i in self.labels.items():
             m = _SUBROUTINE.fullmatch(lab)
             end = fn["sizes"].get(lab)
-            if m and end in self.labels and self.labels[end] > i:
-                self.subroutines[lab] = (m.group(1), i, self.labels[end])
-        self.sub_starts = frozenset(s for _, s, _ in self.subroutines.values())
+            if lab != self.name and end in self.labels and self.labels[end] > i:
+                self.regions[lab] = (m.group(1) if m else lab, i, self.labels[end])
+                if m:
+                    self.subroutines[lab] = self.regions[lab]
+        self.sub_starts = frozenset(s for _, s, _ in self.regions.values())
         self._effects: dict[tuple[str, str], tuple[bool, bool] | None] = {}
         self._preds: dict[int, list[int]] | None = None
         self._preds_built = False
@@ -409,21 +434,21 @@ class Function:
 
     def callee_effect(self, k: int, reg: str) -> tuple[bool, bool] | None:
         """For the subroutine CALL k enters: (whether it may read `reg` before writing it, whether it writes `reg` on every
-        path to its return); None when k enters no subroutine of this section, or the subroutine may leave it other than by
-        its return."""
+        path to its return); None when k enters no region of this section (`regions`), or the region may leave it other
+        than by its return."""
         lab = self.insns[k].targets[0] if self.insns[k].targets else None
         if (lab, reg) not in self._effects:
-            sub = self.subroutines.get(lab)
+            sub = self.regions.get(lab)
             t = None if sub is None else self._trace([sub[1]], reg, sub)
             self._effects[lab, reg] = None if t is None else (bool(t[0]), not t[1])
         return self._effects[lab, reg]
 
     def preserves(self, k: int, reg: str) -> bool:
-        """The CALL at k returns with `reg` unchanged: it enters a subroutine of this section that may leave only by its
+        """The CALL at k returns with `reg` unchanged: it enters a region of this section that may leave only by its
         return, and none of whose instructions may write `reg`."""
-        sub = self.subroutines.get(self.insns[k].targets[0] if self.insns[k].targets else None)
-        return sub is not None and self.callee_effect(k, reg) is not None \
-            and not any(reg in self.insns[t].maydef for t in range(sub[1], sub[2]))
+        sub = self.regions.get(self.insns[k].targets[0] if self.insns[k].targets else None)
+        return sub is not None and not any(reg in self.insns[t].maydef for t in range(sub[1], sub[2])) \
+            and self.callee_effect(k, reg) is not None
 
     def defined_elsewhere(self, u: int, reg: str, d: int) -> bool:
         """Whether a write of `reg` besides d reaches u, so that u reads a merge of d's value and another: an unguarded
@@ -444,7 +469,7 @@ class Function:
 
     def return_sites(self, i: int) -> list[int]:
         """Where a return at i may continue: after every CALL into the subroutine that contains i ([] when none does)."""
-        lab = next((lab for lab, (_, lo, hi) in self.subroutines.items() if lo <= i < hi), None)
+        lab = next((lab for lab, (_, lo, hi) in self.regions.items() if lo <= i < hi), None)
         return [k + 1 for k, ins in enumerate(self.insns) if lab and ins.op[0] == "CALL" and ins.targets[:1] == [lab]]
 
     def must_write(self, k: int, reg: str) -> bool:
@@ -879,11 +904,12 @@ def _sources(fn: Function, lo: int, hi: int, k: int, reg: str) -> frozenset | No
     return get(state[k], reg)
 
 
-def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
+def _passes(fn: Function, c: int, want: list[tuple], folded: bool = False) -> str | None:
     """None when the slow path the CALL at c enters reads exactly the operands `want` (`value` keys), each in its role: the
     registers its body may read before writing them, the constant-bank slots it loads, and the return address (the
     instruction after c). `want` is [x] (rcp, sqrt) or [a, b] (div): the div body's divisor is the one input its MUFU.RCP's
-    operand may derive from (`_sources`), and its numerator the other."""
+    operand may derive from (`_sources`), and its numerator the other, or, in a body `folded` (pinned for its constant
+    numerator alone, which the caller checks), no input at all."""
     lo, hi = fn.subroutines[fn.insns[c].targets[0]][1:]
     inputs, slots = [], set()
     for t in range(lo, hi):
@@ -903,23 +929,27 @@ def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
         return "the slow path isn't passed its return address"
     inputs.remove(next(p for p in inputs if p[1] == back))
     inputs += [(("const", s), ("const", s)) for s in sorted(slots)]
+    if folded and len(want) == 2 and len(inputs) == 1:
+        want = want[1:]
     if len(inputs) != len(want):
         return "the slow path isn't passed the fast path's operands"
-    if len(want) == 2:
+    if folded or len(want) == 2:
         rcp = [t for t in range(lo, hi) if fn.insns[t].name == "MUFU.RCP" and len(fn.insns[t].args) == 2]
         d = _sources(fn, lo, hi, rcp[0], fn.insns[rcp[0]].args[1]) if len(rcp) == 1 else None
         roles = [o for o, _ in inputs]
         if d is None or len(d & set(roles)) != 1:
             return "the slow path's MUFU.RCP doesn't take exactly one of its inputs as the divisor"
-        if roles[0] in d:
+        if len(inputs) == 2 and roles[0] in d:
             inputs.reverse()
     if not all(same(fn, x, y) for (_, x), y in zip(inputs, want)):
         return "the slow path isn't passed the fast path's operands" + (" in their roles" if len(want) == 2 else "")
     return None
 
 
-def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
-    """div.rn's fast path from its seed MUFU.RCP at k0, around a call into one of `bodies`."""
+def _div_call(fn: Function, k0: int, bodies: frozenset[str]) -> tuple | str:
+    """div.rn's fast path from its seed MUFU.RCP at k0 up to its call into one of `bodies`: (env, its matched instructions
+    (index -> pattern), the definitions among them, the numerator and the divisor (`value` keys), the branch, and
+    `_call_block`'s setup, call, copies and the index after them)."""
     env = unify(DIV["seed"][0], fn.insns[k0], {})
     if env is None:
         return "not MUFU.RCP"
@@ -968,13 +998,28 @@ def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
     cb = _call_block(fn, g, DIV["slowpath"], bodies)
     if isinstance(cb, str):
         return cb
-    setup, c, copies, after = cb
+    return env, pats, defs, a, b, g, cb
+
+
+def match_div(fn: Function, k0: int, bodies: frozenset[str], numerators: dict[str, frozenset[int]] | None = None) \
+        -> Match | str:
+    """div.rn's fast path from its seed MUFU.RCP at k0, around a call into one of `bodies`; a body `numerators` names is
+    pinned for those constant numerators alone, and the fast path's must be one of them."""
+    r = _div_call(fn, k0, bodies)
+    if isinstance(r, str):
+        return r
+    env, pats, defs, a, b, g, (setup, c, copies, after) = r
     if fn.target(g) != after:
         return "the branch doesn't skip exactly the call block"
     res = _returned(fn, c, copies, env["z"])
     if res is None:
         return "the slow path doesn't return its result in $z on every path"
-    if (e := _passes(fn, c, [a, b])) is not None:
+    only = (numerators or {}).get(fn.insns[c].targets[0])
+    if only is not None and (a[0] != "imm" or a[1] not in only):
+        pinned = " or ".join(f"0x{x:08x}" for x in sorted(only)) or "none"
+        return (f"the {DIV['slowpath']} it calls is pinned for the constant numerator {pinned} alone, and this one's is "
+                f"{f'0x{a[1]:08x}' if a[0] == 'imm' else 'not a constant'}")
+    if (e := _passes(fn, c, [a, b], only is not None)) is not None:
         return e
     inner = [(t, env[_defines(p)]) for t, p in pats.items() if _defines(p) not in ("z", "P")]
     m = Match("div-fast-path", {g, c, *setup, *copies, *pats}, inner)
@@ -1057,7 +1102,7 @@ def signature(fn: Function, start: int, end: int) -> list[list[str]]:
     starts = sorted({start} | {t for k in body for lab in fn.insns[k].targets
                                if (t := fn.labels.get(lab)) is not None and start <= t <= body[-1]}
                     | {k + 1 for k in body if fn.insns[k].op[0] in ("BRA", "RET", "EXIT") and k + 1 <= body[-1]})
-    block_of = {k: sum(s <= k for s in starts) - 1 for k in body}
+    basic_block_of = {k: sum(s <= k for s in starts) - 1 for k in body}
     out = []
     for bi, s in enumerate(starts):
         e = starts[bi + 1] if bi + 1 < len(starts) else body[-1] + 1
@@ -1079,7 +1124,7 @@ def signature(fn: Function, start: int, end: int) -> list[list[str]]:
                 i = fn.labels.get(lab)
                 if ins.op[0] == "RET":
                     return "`(caller)"
-                return f"`(B{block_of[i] - bi:+d})" if i in block_of else "`(END)"
+                return f"`(B{basic_block_of[i] - bi:+d})" if i in basic_block_of else "`(END)"
 
             items.append(_CLASS.sub(lambda m: m.group(1), _TARGET.sub(tgt, t)))
         out.append(sorted(items))
@@ -1132,6 +1177,10 @@ def parse_pins(data: bytes | str, where: str) -> dict:
                                      f"{', '.join(EXCEPTABLE)}): add it there with the one form its numeric run measured")
             if not exc.get("definition") or not (exc.get("numeric") or {}).get("runs"):
                 raise SassGateFailed(f"{where}: {tk}'s exception for {insn} names no definition or no numeric runs")
+        for sid, xs in rec.get("numerators", {}).items():
+            if sid not in rec["subroutines"].get(DIV["slowpath"], []) or not all(re.fullmatch(r"0x[0-9a-f]{8}", x) for x in xs):
+                raise SassGateFailed(f"{where}: {tk}'s numerators name {sid}, which isn't a pinned {DIV['slowpath']} body, or "
+                                     f"a numerator that isn't an FP32 constant's bits (0x and 8 hex digits)")
     return pins
 
 
@@ -1167,6 +1216,8 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
     tk, why = toolkit_of(notes, pins) if any(f.insns for f in fns) else (None, None)
     pinned = pins["toolkits"][tk]["subroutines"] if tk else {}
     excepted = pins["toolkits"][tk].get("exceptions", {}) if tk else {}
+    folded = {sid: frozenset(int(x, 16) for x in xs) for sid, xs in pins["toolkits"][tk].get("numerators", {}).items()} \
+        if tk else {}
     flagged_at, covered, hints, misses, merged = [], {}, {}, [], []
     fp64 = 0
     for fi, fn in enumerate(fns):
@@ -1177,11 +1228,13 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
                 fp64 += 1
         if tk is None:
             continue
-        good = set()
+        good, only = set(), {}
         for lab, (name, s, e) in fn.subroutines.items():
             if name in pinned:
                 sid = signature_id(signature(fn, s, e))
                 good |= {lab} if sid in pinned[name] else set()
+                if sid in folded:
+                    only[lab] = folded[sid]
                 for k in range(s, e):
                     if sid in pinned[name]:
                         covered[(fi, k)] = name
@@ -1199,7 +1252,7 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
                         else:
                             found.append(r)
             elif ins.name == "MUFU.RCP" and not ins.guard:
-                d = match_div(fn, k, bodies)
+                d = match_div(fn, k, bodies, only)
                 r = d if isinstance(d, Match) else match_int_seed(fn, k)
                 if isinstance(r, str):
                     hints.setdefault((fi, k), f"div: {d}; int seed: {r}")
@@ -1507,7 +1560,7 @@ def posix_semaphore(path: str) -> str | None:
     return "a POSIX semaphore (one page, no ELF or fatbin), not a library"
 
 
-class Gate:
+class SassChecker:
     """The run's gate: every binary it has checked, and the mapped ones it didn't scan (NVIDIA's). `check` raises
     SassGateFailed naming the first failing binary, its function and instruction; `report` goes into the run's JSON."""
 
@@ -1567,25 +1620,37 @@ class Gate:
 
 
 def pin_record(paths: list[Path], tools: dict) -> list[dict]:
-    """Each cubin's tool notes and each subroutine's signature: what a `sass_pins.json` entry is made from."""
+    """Each cubin's tool notes, each subroutine's signature, and what numerator each div.rn fast path (`_div_call`) passes
+    the div body it calls, by the body's signature (a constant's bits, or ``any``): what a `sass_pins.json` entry is made
+    from."""
     out = []
     for p in paths:
         cubins, _ = device_code(p.read_bytes(), str(p))
         for i, (funcs, notes) in enumerate(_disassemble(cubins, tools)):
             subs: dict[str, dict] = {}
+            nums: dict[str, set[str]] = {}
             for f in map(Function, funcs):
-                for name, s, e in f.subroutines.values():
+                sids = {}
+                for lab, (name, s, e) in f.subroutines.items():
                     blocks = signature(f, s, e)
-                    subs.setdefault(name, {})[signature_id(blocks)] = blocks
-            out.append({"path": str(p), "cubin": i, "tool_notes": notes, "subroutines": subs})
+                    sids[lab] = signature_id(blocks)
+                    subs.setdefault(name, {})[sids[lab]] = blocks
+                for k, ins in enumerate(f.insns):
+                    if ins.name == "MUFU.RCP" and not ins.guard and not isinstance(r := _div_call(f, k, frozenset(sids)), str):
+                        a, c = r[3], r[6][1]
+                        nums.setdefault(sids[f.insns[c].targets[0]], set()).add(f"0x{a[1]:08x}" if a[0] == "imm" else "any")
+            out.append({"path": str(p), "cubin": i, "tool_notes": notes, "subroutines": subs,
+                        "numerators": {sid: sorted(v) for sid, v in sorted(nums.items())}})
     return out
 
 
 def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
     """Pin `toolkit` from `pin_record`s of its builds: the one ptxas version and build their notes name, the arguments
-    (-v aside), and every signature of each subroutine with a flagged instruction (ptxas specializes a body to its
-    callers, so one name may have several). Its numeric run is kept while those signatures are unchanged, and its
-    exceptions while the ptxas is."""
+    (-v aside), every signature of each subroutine with a flagged instruction (ptxas specializes a body to its callers,
+    so one name may have several), and, as ``numerators``, each div body no call in the builds passes a variable
+    numerator, with the constants they pass: ptxas folds a constant numerator into the body, so the builds exercised it
+    for those alone. Its numeric run is kept while those signatures and numerators are unchanged, and its exceptions
+    while the ptxas is."""
     notes = [n for r in records for n in r["tool_notes"] if n["tool"] == "ptxas"]
     builds = {(n["version"], n["branch"]) for n in notes}
     if len(builds) != 1:
@@ -1600,6 +1665,11 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
                     subs.setdefault(name, set()).add(sid)
                     blocks[sid] = b
     pinned = {name: sorted(s) for name, s in sorted(subs.items())}
+    passed: dict[str, set[str]] = {}
+    for r in records:
+        for sid, xs in r.get("numerators", {}).items():
+            passed.setdefault(sid, set()).update(xs)
+    folded = {sid: sorted(passed.get(sid, ())) for sid in pinned.get(DIV["slowpath"], []) if "any" not in passed.get(sid, ())}
     pins = load_pins(path) if path.exists() else {"version": "sass-pins/v2", "toolkits": {}, "signatures": {}}
     old = pins["toolkits"].get(toolkit, {})
     pins["version"] = "sass-pins/v2"
@@ -1607,13 +1677,107 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
         "version": version, "branch": branch,
         "args": sorted({" ".join(a for a in n["args"].split() if a != "-v") for n in notes}),
         "subroutines": pinned,
-        "numeric": old.get("numeric") if old.get("subroutines") == pinned else None,
+        **({"numerators": folded} if folded else {}),
+        "numeric": old.get("numeric") if (old.get("subroutines"), old.get("numerators", {})) == (pinned, folded) else None,
         **({"exceptions": old["exceptions"]} if old.get("exceptions") and (old["version"], old["branch"]) == (version, branch)
            else {})}
     live = {sid for t in pins["toolkits"].values() for sids in t["subroutines"].values() for sid in sids}
     pins["signatures"] = {sid: b for sid, b in sorted({**pins["signatures"], **blocks}.items()) if sid in live}
     path.write_text(json.dumps(pins, indent=1) + "\n")
     return pins["toolkits"][toolkit]
+
+
+# ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
+# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/, torch_gpu's s8_linear/ and attn_bf16/) states the
+# kernels it wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
+# torch_gpu's units/ reads the build through `ptxas_report` and `sass_functions`.
+
+MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
+#: a ptxas line that refuses the build: a warning, an error or a serialized wgmma (C751x)
+PTXAS_REFUSED = re.compile(r"warning|error|C751\d|serializ", re.I)
+_ENTRY = re.compile(r"Compiling entry function '(\w+)' for '(\w+)'(.*?)(?=Compiling entry function|\Z)", re.S)
+_FRAME = re.compile(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads")
+
+
+def ptxas_report(ptxas: str, arch: str, smem: bool = False) -> tuple[dict[str, dict], list[str]]:
+    """ptxas -v's report: each entry function's registers, stack frame and spills (None where the report gives none) and,
+    with `smem`, its static shared memory; and what it refuses: a `PTXAS_REFUSED` line and an entry compiled for another
+    arch."""
+    problems = [line for line in ptxas.splitlines() if PTXAS_REFUSED.search(line)]
+    funcs: dict[str, dict] = {}
+    for m in _ENTRY.finditer(ptxas):
+        if m.group(2) != arch:
+            problems.append(f"{m.group(1)}: compiled for {m.group(2)}, want {arch}")
+        regs, frame = re.search(r"Used (\d+) registers", m.group(3)), _FRAME.search(m.group(3))
+        r = funcs[m.group(1)] = {"regs": int(regs.group(1)) if regs else None}
+        r.update(zip(("stack", "spill_stores", "spill_loads"), map(int, frame.groups()) if frame else (None,) * 3))
+        if smem:
+            s = re.search(r"(\d+) bytes smem", m.group(3))
+            r["static_smem"] = int(s.group(1)) if s else 0
+    return funcs, problems
+
+
+def sass_functions(sass: str) -> dict[str, list[str]]:
+    """cuobjdump -sass's listing: each function's lines after its `Function :` header, in the listing's order (a header
+    seen again starts that function's lines over)."""
+    out: dict[str, list[str]] = {}
+    cur = None
+    for line in sass.splitlines():
+        fm = re.search(r"Function : (\w+)", line)
+        if fm:
+            cur = fm.group(1)
+            out[cur] = []
+        elif cur is not None:
+            out[cur].append(line)
+    return out
+
+
+def mma_gate(ptxas: str, sass: str, want, *, arch: str, record: dict, counts: dict[str, str],
+             atom: Callable[[str, str, dict], bool], allowed: Callable[[str], str], line: Callable[[dict, str], None] | None = None,
+             check: Callable[[str, dict], list[str]] | None = None, local_ok: dict[str, int] | None = None,
+             smem: bool = False, unreported: bool = False) -> tuple[dict, list[str]]:
+    """A kernel family's build gate: `ptxas_report`'s records and refusals, then each SASS function's `record` (a fresh copy)
+    with `counts`' patterns counted over its lines, `line` run on each, and each MMA form `atom` counts into it (an MMA it
+    doesn't is the function's ``other_mma``). Refused: an entry with no ptxas resource line (with `unreported`, also a SASS
+    function ptxas didn't report); local memory, a stack frame or a spill (up to `local_ok`'s bytes for a kernel it names,
+    and then LDL and STL too); an MMA form other than `allowed`'s; what `check` says of it; and a kernel of `want` missing
+    from the build."""
+    funcs, problems = ptxas_report(ptxas, arch, smem)
+    for name, lines in sass_functions(sass).items():
+        r = funcs.setdefault(name, {})
+        r.update(copy.deepcopy(record))
+        for text in lines:
+            for key, pat in counts.items():
+                r[key] += len(re.findall(pat, text))
+            if line:
+                line(r, text)
+            for mm in MMA.finditer(text):
+                if not atom(name, mm.group(0), r):
+                    r["other_mma"].append(mm.group(0))
+    for name, r in funcs.items():
+        if ("regs" in r or unreported) and (r.get("regs") is None or r.get("stack") is None):
+            problems.append(f"{name}: no ptxas resource line")
+        bound = (local_ok or {}).get(name, 0)
+        if max(r.get(k) or 0 for k in ("stack", "spill_stores", "spill_loads")) > bound or \
+                (not bound and (r.get("LDL") or r.get("STL"))):
+            problems.append(f"{name}: local memory {r}")
+        if r.get("other_mma"):
+            problems.append(f"{name}: MMA forms other than {allowed(name)}: {sorted(set(r['other_mma']))}")
+        problems += check(name, r) if check else []
+    missing = sorted(set(want) - set(funcs))
+    if missing:
+        problems.append(f"kernels missing from the cubin: {missing}")
+    return funcs, problems
+
+
+def write_verdict(out: str, doc: dict, problems: list[str], passed: Callable[[], str], refused: str = "REFUSED") -> int:
+    """A build gate's CLI ending: `doc` as OUT_JSON, then exit 1 with the problems on stderr, or 0 with `passed()`'s line."""
+    Path(out).write_text(json.dumps(doc, indent=1))
+    if problems:
+        print(f"{refused}: " + "; ".join(problems), file=sys.stderr)
+        return 1
+    print(passed())
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1631,7 +1795,7 @@ def main(argv: list[str] | None = None) -> int:
         text = json.dumps(rec, indent=1)
         (args.json.write_text(text) if args.json else print(text))
         return 0
-    g = Gate(log=lambda s: print(s, file=sys.stderr))
+    g = SassChecker(log=lambda s: print(s, file=sys.stderr))
     code, error = 0, None
     for b in args.binaries:
         try:

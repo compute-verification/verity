@@ -5,26 +5,28 @@ Every row of the inner population is committed under its own salt, so no two com
 and which unit reads which is private. A link says that input row ``port`` of unit ``reader`` holds, word for word, output
 row ``out`` of unit ``writer``. The table holds one link a row of `ROW_BYTES` bytes (`KIND_LINK`, ``reader``, ``port``,
 ``writer``, ``out``, each a u32 little-endian, then zeros), the links first, then all-zero filler rows, ``grid(L)`` rows in
-all (`table`; `verity.ml.circuits.partition_v2.grid` at `GRID_BITS`). `register` commits them as advice before any coin
-(`verity.ml.commitments.advice`: ``hm96-sha512/row/v2`` hiding leaves in one ``frame-v3-sha512`` tree under `BINDING`), so
-what is public of the table is ``grid(L)`` and the root.
+all (`table`; `verity.ml.circuits.partition_v2.grid` at `GRID_BITS`). `register` commits them before any coin as V*'s
+registered value `VALUE` at the link part's program (`one_stage.registered`: each row its 64 u16 words, `words`, under a
+fresh salt, ``hm96-sha512/row/v1`` hiding leaves in one ``frame-v3-sha512`` tree), the value the part's ``trow`` reads
+(`rec_vstage.stage_links`, `Flock.RecLinkPart.checkTable`), so what is public of the table is ``grid(L)`` and the root
+(``--rec-links ROOT:N``). `entries` reads the links from the inner statement's own (`class_statement.link_triples`).
 
 `check` is the Lean check's mirror, refusal for refusal: it raises `Refused` with the Lean's code, in the Lean's order
 (`CODES`). `vectors` writes the cases ``flock-rec-links`` holds the two to.
 """
 from __future__ import annotations
 
-import hashlib
 import struct
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from verity.ml.circuits.partition_v2 import grid as _grid
-from verity.ml.commitments import advice
 
 FORMAT = "verity/rec-links/v1"
-BINDING = hashlib.sha512(FORMAT.encode()).digest()
+#: the registered value the link part's ``trow`` reads (`Flock.RecLinkPart.LINKS_VALUE`)
+VALUE = "rec-links"
 ROW_BYTES = 128
+ROW_WORDS = ROW_BYTES // 2
 GRID_BITS = 4
 KIND_LINK = 1
 FIELD_BYTES = 20
@@ -79,9 +81,32 @@ def table(links: Sequence[LinkEntry]) -> list[bytes]:
     return [encode(link) for link in links] + [bytes(ROW_BYTES)] * (grid(len(links)) - len(links))
 
 
-def register(links: Sequence[LinkEntry], salts: Sequence[bytes] | None = None) -> advice.Registration:
-    """The table committed as advice; its root and row count are what goes public."""
-    return advice.register(table(links), 8 * ROW_BYTES, BINDING, salts)
+def words(row: bytes) -> list[int]:
+    """A table row as its registered row: its bytes as u16 words, little-endian, in byte-string order."""
+    if len(row) != ROW_BYTES:
+        raise ValueError(f"a table row is {ROW_BYTES} bytes, not {len(row)}")
+    return [int.from_bytes(row[i:i + 2], "little") for i in range(0, ROW_BYTES, 2)]
+
+
+def register(program: str, links: Sequence[LinkEntry], salts: Sequence[bytes] | None = None):
+    """The table registered as `VALUE` at the link part's program SHA-512 ``program`` (`one_stage.registered.Registered`;
+    ``salts``, one a row, default fresh); its root and row count are what goes public."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+
+    return RG.Registered.commit(program, VALUE, [words(r) for r in table(links)], salts)
+
+
+def entries(ports: Sequence[str], links: Sequence[Sequence]) -> list[LinkEntry]:
+    """The table's links from the inner statement's own, each ``(reader instance, link port, writer instance)``
+    (`class_statement.link_triples`, the ``links`` of `class_statement.links_file`), over its row ports ``ports`` in META's
+    order: a link's ``port`` is its link port's index there, and its ``out`` 0, a linked statement's one output row."""
+    at = {p: i for i, p in enumerate(ports)}
+    out = []
+    for reader, port, writer in links:
+        if port not in at:
+            raise ValueError(f"link port {port!r} is not a row port of the statement ({list(ports)})")
+        out.append(LinkEntry(int(reader), at[port], int(writer), 0))
+    return out
 
 
 def decode(row: bytes) -> LinkEntry | None:

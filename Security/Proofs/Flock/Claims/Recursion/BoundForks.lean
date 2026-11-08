@@ -1,4 +1,38 @@
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The recursion's KS where the inner rounds' forks bind
@@ -14,6 +48,8 @@ This file is the chain with `ForksBind` in place of `CallsOpenPlayed` (`Pr_bad_l
 `bad_rej_le_binds`, `innerKS_of_KSAbort_binds`, `KS_of_flockKS_binds`), at the same bound.
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims
@@ -22,7 +58,7 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The inner rounds' forks bind**: at every draw of `Be`'s fork at round `j` where `E_O` gives witnesses on both
+/-- **The inner rounds' forks bind**: at every sample of `Be`'s fork at round `j` where `E_O` gives witnesses on both
 runs and the inner views read off them differ at message `j`, `Be` finds a collision there. -/
 def ForksBind (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (j : ℕ)
@@ -40,7 +76,7 @@ theorem ForksBind.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
     (h : ForksBind H D I DO) (x : Msg) : ForksBindAt H D I DO x :=
   fun decO => h decO x
 
-/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
+/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
 theorem Pr_bad_le_fork_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -71,7 +107,7 @@ theorem sum_forkColl_inner_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     rw [hS]
     exact mul_nonneg (Nat.cast_nonneg _) (PrBe_nonneg H D I DO decO P x)
 
-/-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
+/-- **A sample is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
 theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
@@ -81,7 +117,7 @@ theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
   exact (Pr_bad_le_fork_binds hFk decO x P).trans
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_forkColl_inner_le hR decO x P) (Nat.cast_nonneg _)))
 
-/-- **Bad reruns and a rejecting judged draw together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
+/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
 `ForksBind`. -/
 theorem bad_rej_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO)

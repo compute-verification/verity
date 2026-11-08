@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Delta
+module
+
+public import Proofs.Flock.Soundness.Discharge.Zero.Delta
 
 /-!
 # A VU's stacked inputs that read the zero (`hZero`, e2e, untyped statements)
@@ -16,6 +18,8 @@ copy `x / W`'s input at slot offset `x % W`, with `W = inWords · WORD` the unit
 - `withZero`: a wiring of the units' stacked inputs that puts exactly the `ZeroIn` inputs on the zero gate
   (`withZero_eq_zer`), the zero clause of the program's input wiring.
 -/
+
+@[expose] public section
 
 open Flock
 
@@ -68,13 +72,5 @@ theorem withZero_eq_zer (c : Circuit) {n m k : ℕ} {zer : Fin k} {rest : Fin n 
   split
   · exact iff_of_true rfl ‹_›
   · exact iff_of_false (hrest u x) ‹_›
-
-/-- No input is on a gate `one` that is not `zer` and `rest` keeps off. -/
-theorem withZero_ne (c : Circuit) {n m k : ℕ} {zer one : Fin k} {rest : Fin n → Fin m → Fin k} (hz1 : zer ≠ one)
-    (hrest : ∀ u x, rest u x ≠ one) (u : Fin n) (x : Fin m) : withZero c zer rest u x ≠ one := by
-  unfold withZero
-  split
-  · exact hz1
-  · exact hrest u x
 
 end FlockSoundness.Discharge.Zero

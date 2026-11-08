@@ -4,8 +4,8 @@
 # ?a?a?a?a?a?a?a, a 7-byte candidate, and for -m 1710 the self-test salt's 12 bytes, so one SHA-512 block a candidate) runs
 # -m 1700 and -m 1710 each with its optimized kernel (-O, what `hashcat -b` runs by default) and its pure one, at -w 3
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
-# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sx's default under
-# -DSHA_SX (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
+# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sx's default built
+# with -DSHA_SX, each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
 # honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
 # 8 CTAs of 256 an SM, 3 resident, a partial last wave).
@@ -93,9 +93,8 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   probe() { "$W/hashcat_forms" time 5 2>/dev/null | python3 -c "import sys, json; print(int(min(json.loads(l)[\"mhz\"] for l in sys.stdin)))"; }
   sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" > "$O/lock.txt" 2>&1; echo "lock rc $?" >> "$O/rc.txt"
   trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1; nvidia-smi -i $U -q -d CLOCK > $O/clock-after.txt 2>&1" EXIT
-  # a lock this card resolves below LOCK (an H200 puts -lgc 1980,1980 at 1830 under load): unlocked, if the
-  # boost holds LOCK under load, else the lock as it resolves. Within 1% is held: on the RTX PRO 6000 NVML reads the lock
-  # 0.4% low (-lgc 2085,2085 at 2077).
+  # a lock this card resolves below LOCK under load (an H200 does): unlocked, if the boost holds LOCK under load,
+  # else the lock as it resolves. Within 1% is held: NVML can read a held lock slightly low (the RTX PRO 6000 does).
   locked=$(probe) free=n/a mode=locked
   if [ "${locked:-0}" -lt $((LOCK * 99 / 100)) ]; then
     sudo -n nvidia-smi -i "$U" -rgc >> "$O/lock.txt" 2>&1

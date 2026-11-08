@@ -1,5 +1,25 @@
-import Proofs.Flock.VBridge.Unit
-import VStar.Unit
+module
+
+public import Proofs.Flock.VBridge.Unit
+public import VStar.Unit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # The bridge over V*'s circuits as core code
@@ -15,10 +35,12 @@ This file proves that its builders are the ones this bridge reasons about, and r
 * The unit. `VStar.recOpenUnit` takes one input of all the ports' words and cuts it into the five ports; it is
   `recOpenNet` at `ports LANES H` (`recOpenUnit_ok`). Its layout, ports of 16 bits, has `recOpenLaid`'s rows, constant and
   output columns (`laidRows_recOpenUnit`, `outStart_recOpenUnit`): `layout` reads the input ports only through their total.
-* The theorems. `sound_residualForms`, `sound_climbRow`, `sound_recOpen` (rows hold, so the outputs are the verifier of
-  record's), `laid_recOpenUnit` (the laid-out unit's rows hold, so its output columns are) and `unit_recOpenUnit` (a copy
+* The theorems. `sound_residualForms`, `sound_climbRow`, `sound_recOpen` (rows hold, so the outputs are the
+  verifier's), `laid_recOpenUnit` (the laid-out unit's rows hold, so its output columns are) and `unit_recOpenUnit` (a copy
   of the unit in a unit of any partition), each over `VStar`'s definitions.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 
@@ -354,7 +376,7 @@ theorem outStart_recOpenUnit {LANES H : ℕ} {U : VStar.UnitC} (hU : VStar.recOp
 
 /-- **V*'s laid-out `RecOpen` unit computes the climb and the consistency term** (`laid_recOpen`): whenever its rows hold
 at `v`, if its input columns hold the row, `acc`, the coefficients, the siblings and the position's bits, its output
-columns hold the verifier of record's climb and 64 zero bytes, then the consistency term at `k = 0, 1` and the rest of
+columns hold the verifier's climb and 64 zero bytes, then the consistency term at `k = 0, 1` and the rest of
 `acc`. -/
 theorem laid_recOpenUnit (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) {LANES H : ℕ}
     {U : VStar.UnitC} (hU : VStar.recOpenUnit LANES H = .ok U) {l : Laid} (hl : U.laid = .ok l) (v : ℕ → Bool)

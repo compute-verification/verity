@@ -1,15 +1,17 @@
-import Properties.Pous.Period
-import Proofs.Pous.EndToEnd
-import Proofs.Properties.Pous.Run
-import Proofs.Accounting.Prob
-import Proofs.Accounting.Capacity
-import Proofs.Accounting.PerRunJoint
+module
+
+public import Properties.Pous.Period
+public import Proofs.Pous.EndToEnd
+public import Proofs.Properties.Pous.Run
+public import Proofs.Accounting.Prob
+public import Proofs.Accounting.Capacity
+public import Proofs.Accounting.PerRunJoint
 
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee
 
 **The extractor passes** (`extractPasses`). On a certified capacity coin, `Instantiates` gives the memory challenger's
-draw and the strategy's answers in the ring model, the challenged blocks of `C`; the certificate's `AnsweredOnTime`
+sample and the strategy's answers in the ring model, the challenged blocks of `C`; the certificate's `AnsweredOnTime`
 is on time within `Δ + RTT` (`onTime_of`), so `DeviceModel` bounds each round's program by `(D, Q, L)`, and where the
 account holds at most `B` bits at every tick, each round's state by `B + S_chip + c < S₀` bits. A state of fewer than
 `S₀` bits survives `StateBits.pack` (`unpack_pack`), and a program within the budget runs unclipped (`clip_run`), so
@@ -23,6 +25,8 @@ held fewer than `S · len`, so at most `B`, bits at every tick of the window (`A
 pass by `δ + ε_max`. With `S · len ≤ 0` the event is empty. A run whose capacity verdict is that acceptance outside a
 break then has `CapacitySoundPerRun`, and with it `CapacitySound` (`Accounting.Run.capacitySound_of_perRun`).
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 
@@ -78,26 +82,26 @@ theorem unpack_pack {n : ℕ} (l : List Bool) (hl : l.length < n) : StateBits.un
     rw [dite_eq_left h2]
 
 theorem clip_run {B w p : ℕ} [NeZero p] {α β : Type} (g : α → β) (d : β)
-    (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Prog (ringRO B w p) α) :
-    ∀ D Q L, P.mulDepth f ≤ D → P.keyWork f ≤ Q → P.ringWork f ≤ L → (Prog.clip g d D Q L P).run f = g (P.run f) := by
+    (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : OracleAlgorithm (ringRO B w p) α) :
+    ∀ D Q L, P.mulDepth f ≤ D → P.keyWork f ≤ Q → P.ringWork f ≤ L → (OracleAlgorithm.clip g d D Q L P).run f = g (P.run f) := by
   induction P with
   | ret a => intro D Q L _ _ _; rfl
   | round qs k ih =>
     intro D Q L h1 h2 h3
-    simp only [Prog.mulDepth, Prog.keyWork, Prog.ringWork] at h1 h2 h3
+    simp only [OracleAlgorithm.mulDepth, OracleAlgorithm.keyWork, OracleAlgorithm.ringWork] at h1 h2 h3
     have h : (if qs.any RingQry.isMul then 1 else 0) ≤ D ∧ qs.countP RingQry.isKey ≤ Q ∧
         qs.countP (fun q => !q.isKey) ≤ L := ⟨by omega, by omega, by omega⟩
-    rw [Prog.clip, ite_eq_left h]
+    rw [OracleAlgorithm.clip, ite_eq_left h]
     exact ih (qs.map f) _ _ _ (by omega) (by omega) (by omega)
 
 /-- **The packed, clipped strategy answers as the strategy does**, on rounds whose states have fewer than `S` bits and
 whose programs stay within `(D, Q, L)`. -/
 theorem seqAnswers_clip {B w p : ℕ} [NeZero p] {S D Q L ℓ Bn : ℕ} (f : (ringRO B w p).Qry → (ringRO B w p).Ans)
-    (d : Bits ℓ × Bits S) (step : ℕ → List Bool → Fin Bn → Prog (ringRO B w p) (Bits ℓ × List Bool)) :
+    (d : Bits ℓ × Bits S) (step : ℕ → List Bool → Fin Bn → OracleAlgorithm (ringRO B w p) (Bits ℓ × List Bool)) :
     ∀ (is : List (Fin Bn)) (j : ℕ) (s : List Bool),
       (∀ e ∈ seqRounds f step j is s,
         e.1.length < S ∧ e.2.mulDepth f ≤ D ∧ e.2.keyWork f ≤ Q ∧ e.2.ringWork f ≤ L) →
-      seqAnswers f (fun j σ i => Prog.clip (fun out => (out.1, StateBits.pack out.2)) d D Q L
+      seqAnswers f (fun j σ i => OracleAlgorithm.clip (fun out => (out.1, StateBits.pack out.2)) d D Q L
           (step j (StateBits.unpack σ) i)) j is (StateBits.pack s) =
         (seqRounds f step j is s).map fun e => (e.2.run f).1
   | [], _, _, _ => rfl

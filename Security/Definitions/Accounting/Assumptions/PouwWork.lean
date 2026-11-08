@@ -1,4 +1,7 @@
-import Definitions.Accounting.PouwWork
+module
+
+public import Definitions.Accounting.PouwWork
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # PoUW's named premises on one node (trusted)
@@ -10,13 +13,15 @@ vocabulary on the actual circuit. Each is a `Prop` about one strategy `S` and th
 `Definitions.Accounting.Assumptions.PouwFloor`.
 -/
 
+@[expose] public section
+
 namespace Accounting.Assumptions
 
 open Accounting.PouwWork
 
 variable {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Verdict Ω L)
 
-/-- **A2 Detection** (the live-coin draw; `Pouw.Guarantees.WorkWeightedSampling` for a ticket audit): the verifier
+/-- **A2 Detection** (the live-coin sample; `Pouw.Guarantees.WorkWeightedSampling` for a ticket audit): the verifier
 accepts with fewer than `Nmin` blocks right at the coin with probability at most `δ`. For one exact live-coin opening it
 is a theorem in the converged model (`detection_exact`, at `δ = (Nmin − 1)/N`), not yet ported. -/
 def PouwDetection (Nmin : ℕ) (δ : ℝ) : Prop :=

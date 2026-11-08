@@ -1,5 +1,8 @@
-import Definitions.Pouw.Assumptions.Pinned
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+public import Definitions.Pouw.Witness.Honest
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Facts about the named instance `D1.m1`
@@ -7,6 +10,8 @@ import Proofs.Pouw.Prob
 Its parameters and sharing, noise range, query bound and unit-specific `E_L` queries, a 16-unit workload in its
 domain, and the bound on its explicit `W_ref`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 
@@ -104,9 +109,6 @@ theorem elQ_unique (s s' : Salt) (u u' : ℕ) (A A' : Mat) (w w' : ℕ) (hu : u 
     exact this.symm
   · simp at h
   · simp at h
-
-/-- Sixteen milestone-shape units on one zero weight: one full group of `2^16` rows, the least the domain allows. -/
-def sixteen : Workload := ⟨⟨16, fun _ => milestoneShape, fun _ => 0⟩, fun _ => 0⟩
 
 theorem milestone_m1Shape : M1Shape milestoneShape := by
   unfold M1Shape milestoneShape; norm_num

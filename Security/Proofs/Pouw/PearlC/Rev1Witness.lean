@@ -1,4 +1,12 @@
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Proofs.Pouw.PearlC.TileGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGamma
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Proofs.Pouw.Prob
 
 /-!
 # rev1's H100 rows are satisfiable
@@ -11,6 +19,8 @@ fits rev1's `W_ref` (unit by unit, or tile by tile), on an in-domain workload (`
 whose unit, or first tile, is within the cap and has positive rev1 credit. The cost models are `witnessCM` and `witnessTileCM` at rev1's protocol and tiles; they show
 satisfiability only.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

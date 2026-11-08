@@ -1,10 +1,46 @@
-import Proofs.Flock.Claims.ZK.FramePlan
+module
+
+public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.FrameSched
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The rep's own table against the placeholder's
 
 The session loop keeps a rep's table as `Finish.tabOfLevel0` of a level 0 that `Level0.ofDraws` drew (`Finish`'s
-`level0` request, `level0Of`), and the placeholder is the same at zero draws. So the rep's own table is of the
+`level0` request, `level0Of`), and the placeholder is the same at zero samples. So the rep's own table is of the
 placeholder's shape.
 
 * `RealTabs`: the tables `real` answers are table `k / 2`'s `tabOfLevel0` at a level 0 `ofDraws` drew at its `m`.
@@ -12,6 +48,8 @@ placeholder's shape.
 * `ofDraws_gsize`: `ofDraws` takes a packed witness of exactly level 0's size.
 * `real_tabAlike`: at `RealTabs`, the rep's own table is `TabAlike` the placeholder's (`Sched.tabOfLevel0_alike`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

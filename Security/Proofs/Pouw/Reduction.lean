@@ -1,12 +1,14 @@
-import Definitions.Pouw.Assumptions.Pinned
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.NormNum
 
 /-!
 # (a) `G_γ` from TT, and the overhead budget
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 
@@ -57,8 +59,8 @@ theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (�
 theorem gammaFromTT : Pinned.GammaFromTT := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
-  rintro ⟨H, s⟩ hwin
-  exact wins_imp_tt P U H s _ hΩ (hW U hU) hwin
+  rintro ⟨H, s⟩ ⟨hwin, hb⟩
+  exact ⟨wins_imp_tt P U H s _ hΩ (hW U hU) hwin, hb⟩
 
 /-- **The overhead budget**: `γ ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
 theorem gammaBudget : Pinned.GammaBudget := by

@@ -14,14 +14,19 @@
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
 # twin exits 75 (check.py's own exit 75), none of them ran: rerun the train.
 #
-# `--deferred STEP,...`: drive's after-landing run and its Lean checks in place of the check: only those ci.toml jobs and what
+# `--deferred STEP,...`: drive's after-landing run and its lock run in place of the check: only those ci.toml jobs and what
 # they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so no gate
 # reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build (a run of `main` has no
 # change to send it for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
 # `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
-# after-landing run (`after_landing_no_cache`), where nothing commits regenerated records. `--base REF` (with --deferred alone)
+# after-landing run, of a commit whose records drive's lock run regenerated and drive committed. `--base REF` (with --deferred alone)
 # is the run's base (`check.py --record --base`), above which ratchet-gate judges every landing: drive sends the last verified
-# `main`, below the tip it checks, since against origin/main a run of `main`'s tip would judge nothing.
+# `main`, below the tip it checks, since against origin/main a run of `main`'s tip would judge nothing. `--ratchet-base REF` (with
+# --deferred alone) is ratchet-gate's base in place of it (`check.py --record --ratchet-base`): drive sends the tip of its last
+# run whose ratchet-gate gave a verdict, so a step red elsewhere doesn't make each run re-judge every landing since.
+# `--bookkeeping-warn` (with --deferred, unsharded, without --no-regenerate: drive's lock run) has lean-audit repair a lock's
+# bookkeeping and the caps it breaks and warn, rather than fail (`check.py --bookkeeping-warn`); on a COMMIT whose check.py
+# predates it, the run goes without it.
 #
 # `--shard K/N`: shard K of ci.toml's plan with N shards (`check.py --shard`): with `--deferred`, only those steps' parts in
 # it (drive's `after_landing_shards`, one launch per shard); alone, a shard Attempt of the check, which `check.py --record
@@ -38,15 +43,16 @@
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
 # origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= shard= below= records= recfrom= plan=
+pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
     --no-cache) nocache=1 ;;
     --circuit-cache) ccache=1 ;;
     --no-regenerate) noregen=1 ;;
+    --bookkeeping-warn) bookkeep=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
     --shard) [[ $# -ge 2 && $2 =~ ^(auto:)?[1-9][0-9]*/[1-9][0-9]*$ ]] || { echo "train: --shard needs K/N or auto:K/N" >&2; exit 2; }
@@ -55,10 +61,12 @@ while [ $# -gt 0 ]; do
       plan=$2; shift ;;
     --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
       below=$2; shift ;;
+    --ratchet-base) [ $# -ge 2 ] || { echo "train: --ratchet-base needs REF" >&2; exit 2; }
+      rbelow=$2; shift ;;
     --cc-records) records=1 ;;
     --cc-records-from) [[ $# -ge 2 && $2 =~ ^art:[0-9a-f]+@[0-9a-f]{64}$ ]] || { echo "train: --cc-records-from needs ART@SHA256" >&2; exit 2; }
       recfrom=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN and --cc-records[-from] alone" >&2; exit 2 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn and --cc-records[-from] alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -67,10 +75,14 @@ done
 [ -z "$ccache" ] || [ -n "$nocache" ] \
   || { echo "train: --circuit-cache refused without --no-cache: it keeps circuit-check's reuse on under --no-cache" >&2; exit 2; }
 [ -z "$noregen" ] || [ -n "$deferred" ] \
-  || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
+  || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates stale lock records" >&2; exit 2; }
+[ -z "$bookkeep" ] || { [ -n "$deferred" ] && [ -z "$noregen$shard" ]; } \
+  || { echo "train: --bookkeeping-warn refused but with --deferred, unsharded and without --no-regenerate: drive's lock run" >&2; exit 2; }
 [ -z "$below" ] || [ -n "$deferred" ] \
   || { echo "train: --base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
-[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$recfrom${pass[*]+x}" ] \
+[ -z "$rbelow" ] || [ -n "$deferred" ] \
+  || { echo "train: --ratchet-base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
+[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom${pass[*]+x}" ] \
   || { echo "train: --cc-records refused with another flag: it builds circuit-check's records alone" >&2; exit 2; }
 [ -z "$recfrom" ] || [ -n "$shard" ] \
   || { echo "train: --cc-records-from refused without --shard: only a shard's circuit-check takes the records" >&2; exit 2; }
@@ -122,6 +134,10 @@ if [ -n "$below" ]; then
   b=$(git -C "$root" rev-parse -q --verify "$below^{commit}") || die "--base $below: no such commit"
   pass+=(--base "$b")
 fi
+if [ -n "$rbelow" ]; then
+  b=$(git -C "$root" rev-parse -q --verify "$rbelow^{commit}") || die "--ratchet-base $rbelow: no such commit"
+  pass+=(--ratchet-base "$b")
+fi
 if git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main; then
   base=$(git -C "$root" rev-parse -q --verify "$sha^1" || true)
 else
@@ -143,6 +159,10 @@ git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git wor
 exec 9>&-
 log="$tree.log"
 cd "$tree"
+if [ -n "$bookkeep" ]; then
+  if grep -q -- "--bookkeeping-warn" tools/verity/check/check.py; then pass+=(--bookkeeping-warn)
+  else echo "train: ${sha:0:12}'s check.py predates --bookkeeping-warn: its lock run fails on bookkeeping"; fi
+fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
 setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \

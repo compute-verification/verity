@@ -28,23 +28,25 @@ import ast
 from test_repository import ROOT, _tracked
 
 SEEDS = {
-    "verity/core/protocols/pouw/circuit/seeds.py::_coin_salt": "PoUW's seed: (salt, position) to the unit's seed, under compile's checks",
+    "verity/ml/protocols/pouw/circuit/seeds.py::_coin_salt": "PoUW's seed: (salt, position) to the unit's seed, under compile's checks",
 }
 UNITS = {
-    "verity/core/protocols/pouw/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
-    "verity/core/protocols/pouw/circuit/h1zy.py::_unit_ports":
+    "verity/ml/protocols/pouw/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
+    "verity/ml/protocols/pouw/circuit/h1zy.py::_unit_ports":
         "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
-    "verity/core/protocols/pouw/circuit/h1zy.py::_lane_ports":
+    "verity/ml/protocols/pouw/circuit/h1zy.py::_lane_ports":
         "a lane of an H1 leaf: the leaf's position beside its ok sink (its partial's check), a unit",
     "verity/core/protocols/pouw/tests/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
         "the lane's stand-in statement template, a position beside its ok sink",
-    "verity/core/protocols/pouw/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
+    "verity/ml/protocols/pouw/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
     "verity/core/protocols/pouw/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
-    "verity/core/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
+    "verity/ml/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
     "verity/core/protocols/pouw/tests/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
     "integrations/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
+    "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
+        "vllm's drawn-statements tests' stand-in J10-R tile, a position beside its receipt sink",
     "verity/ml/circuits/population.py::_instance_ports":
         "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",
     "verity/ml/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
@@ -81,6 +83,8 @@ TESTS = {
     "verity/ml/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
     "verity/ml/circuits/tests/test_population_ports.py::Seed":
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
+    "verity/ml/circuits/tests/test_population_values.py::Unit":
+        "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 
@@ -151,7 +155,7 @@ def test_only_pouw_mints_a_seed() -> None:
     assert not offenders, (
         "a position port outside PoUW's seeds.py: a Definition with a coin port and a position port and no sink is a seed, "
         "whose noise no port rule follows, so only PoUW's compile pass may build one. Mint seeds in "
-        "verity/core/protocols/pouw/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
+        "verity/ml/protocols/pouw/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
         "with no coin port beside it (KEY_COUNTS), or name a test that builds one in TESTS with its reason:\n"
         + "\n".join(offenders))
     assert not set(ALLOWED) - used, f"ALLOWED entries that match nothing any more: {sorted(set(ALLOWED) - used)}"

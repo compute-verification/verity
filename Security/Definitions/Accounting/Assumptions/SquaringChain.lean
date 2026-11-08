@@ -1,5 +1,7 @@
-import Mathlib.Data.Int.ModEq
-import Definitions.Accounting.Gates.Codec
+module
+
+public import Mathlib.Data.Int.ModEq
+public import Definitions.Accounting.Gates.Codec
 
 /-!
 # The encode bound's conjectures in nonlinear units: a floor per squaring, and a chain costs its sum (trusted)
@@ -34,6 +36,8 @@ which they don't.
 `2^−20`. Both moved up from the repriced model's thin-lane units (`e = 119`, `E = 364,497`), where a product of two
 data bytes was free: the `2L − 1` products are new.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 
@@ -81,7 +85,7 @@ def SquaringFloor (F : Field) (e εnum εden : ℕ) : Prop :=
 /-- **`chain-sum`: chained squarings cost their sum.** If one squaring mod `p` costs `e` nonlinear units
 (`SquaringFloor F e ε`), then computing words of the masked `k`-round codec over `F` costs `k · S · e` nonlinear units
 a word, `S = Field.squarings F`: every restricted circuit (`Restricted B`) with the codec's inputs that computes `q`
-distinct words (each below `p`), byte for byte less their parity, on more than `ε` of the draws has
+distinct words (each below `p`), byte for byte less their parity, on more than `ε` of the samples has
 `q · k · S · e · (n − 1) ≤ nonlinear C · (n − 1) + runBits C · k · S · e` (`Gates.EncodeBound`). Each word costs its
 `k · S` squarings, or its `n − 1` bits as run input.
 

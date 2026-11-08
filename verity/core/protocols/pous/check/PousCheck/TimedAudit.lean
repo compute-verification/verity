@@ -1,8 +1,6 @@
-import Flock.Canon
-import PousCheck.Merkle
-import PousCheck.Challenge
-import PousCheck.Certificate
-import PousCheck.Prim.PyJson
+module
+
+public import PousCheck.Certificate
 
 /-!
 # The timed audit's verdict on its record
@@ -33,6 +31,8 @@ the record when it has an audit and every audit is; and the audit of record (the
 StorageProfile (`Certificate.profileJson`). Without `k` (a refusal recorded before refusals recorded it), `k` is the
 certificate's, else `audit.CHALLENGES`.
 -/
+
+@[expose] public section
 
 namespace PousCheck.TimedAudit
 

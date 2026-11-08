@@ -1,6 +1,7 @@
-import Flock.Witness
-import Flock.ProvedScope
-import Flock.Desc
+module
+
+public import Flock.Witness
+public import Flock.Desc
 
 /-!
 # The deployed session's files parse
@@ -11,6 +12,8 @@ computation on a 97 MB circuit file, which the kernel can't run, so it is one na
 own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by running the verifier on them.
 -/
 
+@[expose] public section
+
 namespace Flock.Bridge.Assumptions
 
 open Flock
@@ -19,7 +22,7 @@ open Flock
 honest case of the one-stage audit's `--zk` fixture `art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5`
 (`benchmarks/one_stage/forged_proofs.sh`'s files with their sessions regenerated at the 2^9 coin schedule: one A8
 unit, `LlBf16DotprodDot_v1` at K = 128, staged by `UnitStager` bound to a template query's partition, four instances,
-every unit drawn): `stage/circuit.txt`, 97,364,260 bytes, and `honest/pub-4.bin`, 3,194 bytes, a per-instance public file
+every unit sampled): `stage/circuit.txt`, 97,364,260 bytes, and `honest/pub-4.bin`, 3,194 bytes, a per-instance public file
 (no `shared_rows`), such that, under the tags `verify --zk --statement verity/flock-circuit` sets one session up with
 (`Witness.zkTags` at the inputs `⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no session tables, and no
 partition or program, which the tags don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in

@@ -1,5 +1,20 @@
-import Proofs.Flock.C3.Sparse.SrcTape
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
+public import Proofs.Flock.C3.Sparse.SrcTape
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The read fact from the source's sparse phases
@@ -10,6 +25,8 @@ some claim. `sparseReadAt_of_ok`: then `SparseReadAt` holds on the run's own ste
 `ExecHolo` types them), and on `runSteps u` the reps' sparse stages sit right past the reps' steps (`sps_prefix`), so
 no decode of the steps is needed.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

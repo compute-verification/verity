@@ -14,7 +14,7 @@ import test_service_sessions as T
 from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _round, _stream
 
 
-def _open(stream: S.Stream, n: int = 6) -> S.Registration:
+def _open(stream: S.Stream, n: int = 6) -> S.WindowCommitmentRecord:
     """A registration the stream receives and leaves open."""
     previous = R.digest(stream._entries[-1].registration.record) if stream._entries else None
     return stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
@@ -45,7 +45,7 @@ def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
     assert b._entries[0].outcome.verdict.detail == {"halted": cause} and b._entries[0].outcome.profile is None
     assert _refused(lambda: b.outcome(db, _lean(), {"statement": "stub"})) == ("halted",)
     for s, d in ((a, da), (b, db)):
-        for call in (s.ready, s.salt, lambda: _open(s), lambda: s.select(d.registration), lambda: s.session([d]),
+        for call in (s.ready, lambda: s.salt_released(b"\x01", 0.0), lambda: _open(s), lambda: s.select(d.registration), lambda: s.session([d]),
                      lambda: s.deliver(d, [SESSION]), lambda: s.outcome(d, _lean(), {})):
             assert _refused(call) == ("halted",)
     assert _refused(lambda: fleet.attach(_stream(), "o")) == ("halted",)
@@ -55,7 +55,7 @@ def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
 
 def test_a_budget_above_one_tolerates_one_failure_fewer():
     """b = 3: a stream's two failures, and another's one, halt nothing: both keep accepting. The halt comes at the third
-    failure of one stream, and ends the other's registration, not yet drawn, as `halted`."""
+    failure of one stream, and ends the other's registration, not yet sampled, as `halted`."""
     fleet, (a, b) = _fleet("o", "o", budget=3)
     assert not _round(a, accepted=False).accepted and not _round(a, accepted=False).accepted
     assert not _round(b, accepted=False).accepted
