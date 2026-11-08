@@ -15,11 +15,13 @@ opening at gate `g`, of the witness's bit at the wire's column, under the roots 
 
 * has as row and salt row `q` of unit `n` of table `j` as the witness holds it (`InnerRows.rowBytes`,
   `InnerRows.salt`);
-* is checked either at the registered read `reg` that the table's port `q` is named like (at `reg`'s root and the
-  position the session header gives for the row, among ports whose first with that root is `reg`, through the path the
-  header gives for it), or, at a one-table session, at a port `P` of port `q`'s published tree over the session's
-  population (`pubPort`'s root, leaf count, domain and schema): at `P`'s root and the row of the unit the sample drew as
-  `n`, among ports whose first with that root is `P`, through the path from that row (`pubPath`).
+* is checked either at a port `P` with the root, leaf count, domain and schema of the registered read `reg` that the
+  table's port `q` is named like (at `P`'s root and the position the session header gives for the row, among ports
+  whose first with that root is `P`, through the path the header gives for it), or, at a one-table session, at a port
+  `P` of port `q`'s published tree over the session's population (`pubPort`'s root, leaf count, domain and schema): at
+  `P`'s root and the row of the unit the sample drew as `n`, among ports whose first with that root is `P`, through the
+  path from that row (`pubPath`). Either port is the frame's own, read off the roots, so it need agree with `reg` or
+  `pubPort` only on the four fields a registered read reads.
 
 `frameRows_of_frameIs`: `FrameIs` gives `FrameRows`. Such an opening passes the deployed check wherever its row's
 `b ‖ c` opens the port it is checked at there (`opens_frame`; a port is read only through its root, leaf count, domain
@@ -68,9 +70,9 @@ setup, for each gate `g` the unit's correctness reads, the layout's wire for `g`
 unit's block `β`, and the reveal holds an opening at `g` of the witness's bit there, under the roots `Reveals` names,
 whose row and salt are row `q` of a unit `n` of the table as the witness holds it, and which the frame checks either
 
-* at the registered read `reg` of the session's registered ports `own` that the table's port `q` is named like: at
-  `reg`'s root and the position the session header gives for the row, among ports whose first with that root is `reg`,
-  through the path the header gives for it; or
+* at a port `P` with the root, leaf count, domain and schema of the registered read `reg` of the session's registered
+  ports `own` that the table's port `q` is named like: at `P`'s root and the position the session header gives for the
+  row, among ports whose first with that root is `P`, through the path the header gives for it; or
 * at a one-table session, at a port `P` with the root, leaf count, domain and schema of port `q`'s published tree over
   the session's population (`pubPort`): at `P`'s root and the row of the unit the sample drew as `n`, among ports whose
   first with that root is `P`, through the path from that row (`pubPath`).
@@ -97,11 +99,13 @@ def FrameIs (L : Layout) : Prop :=
           (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
           ∀ t positions paths, sts[j].pub.tables = some t →
             _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) →
-            h.frame.at_ o.1 g =
-              some (bs reg.root, positions.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) 0) ∧
-            (h.frame.ownAt o.1 g).find? (fun P => decide (bs P.root = bs reg.root)) = some reg ∧
-            bytes (h.frame.π o.2) =
-              paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) ∨
+            ∃ P : _root_.Flock.Registered.Port, P.root = reg.root ∧ P.leaves = reg.leaves ∧
+              P.domain = reg.domain ∧ P.schema = reg.schema ∧
+              h.frame.at_ o.1 g =
+                some (bs P.root, positions.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) 0) ∧
+              (h.frame.ownAt o.1 g).find? (fun P' => decide (bs P'.root = bs P.root)) = some P ∧
+              bytes (h.frame.π o.2) =
+                paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) ∨
         (ins.read.I.count ≤ 1 ∧ q < sts[j].c.ports.size ∧ ∀ pop,
           _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
           ∃ P : _root_.Flock.Registered.Port, P.root = (pubPort sts[j].c pop q).root ∧
@@ -123,9 +127,11 @@ theorem frameRows_of_frameIs (L : Layout) (hF : FrameIs h L) : FrameRows h L := 
   have hb : ∀ B : ByteArray, bytes B.data.toList = B := fun B => bytes_bs B
   rcases hchk with ⟨own, reg, hown, hreg, hq, hread⟩ | ⟨hc1, hq, hrooted⟩
   · refine Or.inl ⟨own, reg, hown, hreg, hq, fun t positions paths ht hent hop => ?_⟩
-    obtain ⟨hat, hfind, hπ⟩ := hread t positions paths ht hent
+    obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind, hπ⟩ := hread t positions paths ht hent
     refine opens_frame h hat hfind ?_
     rw [hrow, hsalt, _root_.Flock.InnerRows.commitString_data, hb, hπ]
+    unfold _root_.Flock.Registered.opens _root_.Flock.Registered.opensLeaf at hop ⊢
+    rw [hPr, hPl, hPd, hPs]
     exact hop
   · refine Or.inr ⟨hc1, hq, fun pop hpop hop => ?_⟩
     obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind, hπ⟩ := hrooted pop hpop
