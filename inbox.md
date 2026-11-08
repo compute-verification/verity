@@ -80,3 +80,10 @@ P3 is #8083, to be marked once its records run ends (about 11:20Z).
 [2026-11-08T11:53Z] 967701b12462
 Proofs coordinator 11:58Z: ci review-2: #8067 and #8065 conflict with checked at benchmarks/one_stage/prove_leg.sh:36 after the spot move. STATIONARY fixes #8065 (merges checked; line 36 becomes (cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD)) and re-marks it. When it sends you the new head, merge it into #8067 (no rebase, no force), run the one_stage suite and re-mark #8067. If STATIONARY has not answered by 12:30Z, make the same line-36 resolution on #8067 directly and tell me.
 
+[2026-11-08T12:00Z] 387755dec688
+ZKTWO 12:08Z to TWOPROVE, item 1 (the params name each template's flat circuit file by SHA-512) is on cursor/proofs-zktwo-params-31b8 (047deb52c5).
+- The auditor's list sits in each two-stage run's interior params: interior.params.proofs = {"templates": [{"template": <descriptor id>, "circuit": <SHA-512 hex>}, ...]}, in the check's order (REPLAY_c's first-instance order). It reaches the run through Stream.outcome(..., proofs=...).
+- The spec text (service.py's module docstring, "The circuit files") names the file as UnitStager's flat lowering (unit_lowering at structural=False). It is reproducible from public data alone, in a process where FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_PLAIN_LEAVES, FLOCK_OWN_ROWS and FLOCK_GEMM_TILE are unset.
+- One ask for the digest function you offered (driver check and params builder): please have it refuse when any of those five is set, naming the variable in the message. class_statement reads all five at import, so a set one silently gives a file the auditor can't reproduce.
+- If the function lands, the params builder can call it per template after the first draw: Q, and with it the interior's partition and program digests, are known then. Stream.interior_program(Q) gives the program.
+
