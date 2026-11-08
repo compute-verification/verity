@@ -68,6 +68,14 @@ benchmarks = [
 ]
 
 [private]
+# PoUW's tests and difftest vectors that run the clear audit (`benchmarks/pouw/clear`, a reference tool), H1's lanes
+# (`benchmarks/pouw/h1_lanes`) or the network certifier
+pouw_tests = [
+    "verity/core/protocols/pouw/tests/test_pouw_{audit,epoch_coins,pearl_c,pearl_c4,pearl_c_sm120,pearl_c_work,pearl_kw}.py",
+    "verity/core/protocols/pouw/tests/{epoch_coins_vectors,test_pouw_salt}.py",
+    "verity/core/protocols/pouw/lean/commit/tests/{difftest_vectors,test_pouw_commit_lean_difftest}.py",
+    "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
+]
 protocols = [
     "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
     "verity/ml/protocols/{pous,certifier}",
