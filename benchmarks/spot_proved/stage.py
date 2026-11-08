@@ -36,8 +36,9 @@ top-k inputs (`long_rows`).
   split's K/V rows, a token's slots past its keys and the rows no staged split reads cost nothing. A split's K/V row is
   wired by its page-table slot (`Wires.gathered`) to the step's cache write that put it there, else to the window's
   carried cache (`HISTORY_PORT`, counted as history bits), and stays a gap only where neither is established. Where the
-  capture records the top-k's conversion to slots (`CONVERT`), a row is wired by its request and position instead, as the
-  Program reads it, and no page-table entry is read (`Wires.by_position`). A token past
+  capture records the top-k's conversion to slots (`CONVERT`) and its rank root commits the batch (`batch_sha512`), a row
+  is wired by its request and position instead, as the Program reads it, and no page-table entry is read
+  (`Wires.by_position`). A token past
   the top-k's keys adds its selection's settings (selection bits). A MoE pair's
   expert is the router's output (`ROUTERS`), never the align's schedule. An instance that reads anything else is not staged, and its reason names the fix.
   Staging checks the wiring against the committed capture; a11 proves the staged units alone and doesn't read it.
@@ -109,8 +110,16 @@ def load_roles(params: dict) -> dict:
     return roles
 
 
+def batch_sha512(req_ids, scheduled) -> str:
+    """SHA-512 over a step's batch as `capture.py` commits it under the rank root: its request ids in batch order and each
+    request's scheduled tokens."""
+    doc = json.dumps({"req_ids": req_ids, "scheduled": scheduled}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha512(f"verity/spot/batch\0{doc}".encode()).hexdigest()
+
+
 class Capture:
-    """One step of a capture directory, its commitment checked on load."""
+    """One step of a capture directory, its commitment checked on load: a rank root over ``ops.jsonl``, ``params.json`` and,
+    where ``meta.json`` names one, the batch (`batch_sha512`)."""
 
     def __init__(self, d: Path, step: int) -> None:
         self.d, self.step = d, step
@@ -118,6 +127,8 @@ class Capture:
         if not self.ranks:
             raise SystemExit(f"{d}: no rank recorded step {step}")
         self.meta, self.commit, self.events, self.params = {}, {}, {}, {}
+        #: each rank's request ids in batch order where its rank root commits them (`batch_sha512`), else None
+        self.req_ids: dict[int, list[str] | None] = {}
         for r in self.ranks:
             sd = d / f"rank{r}" / f"step{step}"
             ops = (sd / "ops.jsonl").read_bytes()
@@ -126,9 +137,13 @@ class Capture:
             ops_sha, params_sha = hashlib.sha512(ops).hexdigest(), hashlib.sha512(pj).hexdigest()
             if (ops_sha, params_sha) != (meta["ops_sha512"], meta["params_sha512"]):
                 raise SystemExit(f"rank {r}: ops.jsonl or params.json is not what meta.json committed")
-            root = hashlib.sha512(f"verity/spot/rank-root\0{ops_sha}\0{params_sha}".encode()).hexdigest()
-            if root != meta["rank_root"]:
+            batch = meta.get("batch_sha512")
+            if batch is not None and batch != batch_sha512(meta.get("req_ids"), meta.get("scheduled")):
+                raise SystemExit(f"rank {r}: meta.json's req_ids or scheduled counts are not the batch it committed")
+            if hashlib.sha512("\0".join(["verity/spot/rank-root", ops_sha, params_sha, *([batch] if batch else [])]).encode()
+                              ).hexdigest() != meta["rank_root"]:
                 raise SystemExit(f"rank {r}: rank root {meta['rank_root'][:16]} is not SHA-512 of its files")
+            self.req_ids[r] = list(meta["req_ids"]) if batch else None
             self.meta[r], self.commit[r] = meta, json.loads((sd / "commit.json").read_text())
             self.events[r] = [json.loads(x) for x in ops.decode().splitlines() if x]
             self.params[r] = json.loads(pj)
@@ -906,8 +921,8 @@ GAPS = {("fa3_sparse_mla", "kv_gathered"): (
     "the cache by shape only, so a row is a gap until it is wired to its write or to the window's carried cache"),
         ("fa3_sparse_mla", "block_table"): (
     "the global slot each gathered K/V row is read from, which vLLM computes from the indexer's top-k through the request's "
-    "page table (`CONVERT`), read only where the capture doesn't record that call: with it recorded each row is wired by its "
-    "request and position, as the Program reads it, and no entry is read. Once a row's write and its read are both computed "
+    "page table (`CONVERT`), read only where the capture doesn't record that call and commit its batch: with both, each row is "
+    "wired by its request and position, as the Program reads it, and no entry is read. Once a row's write and its read are both computed "
     "from one page table, its physical blocks reach no value; a prefix-cache hit, the one choice in it that does, is the "
     "schedule's advice")}
 #: inputs a population reads that nothing computes (a free choice: the schedule, a prefix-cache hit, an allocator's choice),
@@ -1056,15 +1071,15 @@ class Wires:
     element of them once (`cover`: an ``out=`` buffer a later call reads whole, or one several calls wrote in parts, a source
     each); an output read is its own call's. Anything else is `Unwired`."""
 
-    def __init__(self, cap: Capture) -> None:
-        self.cap = cap
+    def __init__(self, capture: Capture) -> None:
+        self.capture = capture
         self.at: dict[int, tuple[int, int, str, str]] = {}
         self.made: dict[tuple[int, str], list[tuple[int, str]]] = {}
         self.outs: dict[int, list[tuple[int, str, dict]]] = {}
         self.found: dict[int, dict | list[dict] | Unwired] = {}
-        self.by_seq = {r: {e["seq"]: e for e in cap.events[r]} for r in cap.ranks}
-        for r in cap.ranks:
-            for e in cap.events[r]:
+        self.by_seq = {r: {e["seq"]: e for e in capture.events[r]} for r in capture.ranks}
+        for r in capture.ranks:
+            for e in capture.events[r]:
                 for side in ("in", "out"):
                     for name, ref in _refs(e.get(side) or {}):
                         self.at[id(ref)] = (r, e["seq"], side, name)
@@ -1112,15 +1127,16 @@ class Wires:
         schedules only it (`single_tokens`) writes only its own position this step, so of a row reading every key of it (fewer
         than the top-k) the rows that can't hold that position (`own_rows`) are history. With the write's positions recorded, a
         token past the top-k's keys reads its rows through `DsaWaksmanRows_v1`, whose settings are free (``selection``, once
-        per token and top-k); without them such a token's rows stay gaps. With the step's `CONVERT` call recorded as well, each
-        row is wired by its request and position instead (`by_position`), and no page-table entry is read."""
-        cap, tap = self.cap, self.by_seq[r][adv["seq"]]
+        per token and top-k); without them such a token's rows stay gaps. With the step's `CONVERT` call recorded and its batch
+        committed as well, each row is wired by its request and position instead (`by_position`), and no page-table entry is
+        read."""
+        rec, tap = self.capture, self.by_seq[r][adv["seq"]]
         table, used = tap["in"].get("block_table"), tap["in"].get("seqused_k")
-        if not all(isinstance(x, dict) and cap.kept(r, x) for x in (table, used)):
+        if not all(isinstance(x, dict) and rec.kept(r, x) for x in (table, used)):
             return [{**adv, "parts": parts, "bits": _read_bits(adv["width"], adv["shape"], parts)}]
         from verity.ml.definitions.registry.dsa_topk import waksman_switches
         kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
-        page, used = cap.tensor(r, table), cap.tensor(r, used).astype(np.int64)
+        page, used = rec.tensor(r, table), rec.tensor(r, used).astype(np.int64)
         topk, width = page.shape[1], adv["shape"][-1]
         write = self.cache_write(r, tap)
         conv = self.conversion(r, tap) if write is not None and write[2] is not None else None
@@ -1149,7 +1165,7 @@ class Wires:
                     else:
                         ev, tw = write[0], write[1][s]
                         if read is None:
-                            read = cap.tensor(r, ref)
+                            read = rec.tensor(r, ref)
                         if not np.array_equal(read[i, j], write[3][tw]):
                             raise Unwired(f"rank {r} {tap['op']} (seq {tap['seq']}) reads {adv['in']}[{i}] row {j} at slot {s}, "
                                           f"which {ev['op']} (seq {ev['seq']}) wrote from its row {tw}, but not those bytes")
@@ -1185,14 +1201,19 @@ class Wires:
         return out + list(picks.values())
 
     def conversion(self, r: int, tap: dict) -> tuple[np.ndarray, list] | None:
-        """From the recorded `CONVERT` call whose outputs the tap reads as its page table and valid counts, each token's request
-        (an index into the step's requests, ``meta.json``'s ``req_ids``) and the top-k positions its row keeps, in order
-        (`convert_rows`); None where no such call is recorded with its inputs kept. Refuses one whose outputs aren't
-        `convert_rows` of its inputs, or whose counts aren't the tap's ``seqused_k``."""
-        rec, table, used = self.cap, tap["in"]["block_table"], tap["in"]["seqused_k"]
+        """From the recorded `CONVERT` call whose outputs the tap reads as its page table and valid counts: the request of each
+        of the step's tokens, an index into the committed batch's request ids (`Capture.req_ids`) laid out by their scheduled
+        counts in that order, as vLLM lays out ``req_id_per_token``; and the top-k positions each token's row keeps, in order
+        (`convert_rows`). None where no such call is recorded with its inputs kept, or the rank root doesn't commit the batch.
+        Refuses a call that takes one of the batch's tokens as another request than that layout does (the attention call's
+        tokens lead the step; any past the batch's are padding, which `by_position` wires no row of), whose outputs aren't
+        `convert_rows` of its inputs, or whose counts aren't the tap's ``seqused_k``, and a batch whose request ids aren't its
+        scheduled requests, each once."""
+        rec, table, used = self.capture, tap["in"]["block_table"], tap["in"]["seqused_k"]
         ev = next((self.by_seq[r][s] for s, o in reversed(self.made.get((r, table.get("sha512")), []))
                    if s < tap["seq"] and o == "r0" and self.by_seq[r][s]["op"] == CONVERT), None)
-        if ev is None:
+        ids = rec.req_ids.get(r)
+        if ev is None or ids is None:
             return None
         a = ev["in"]
         if not all(isinstance(a.get(k), dict) and rec.kept(r, a[k]) for k in ("req_id", "block_table", "token_indices")):
@@ -1204,28 +1225,36 @@ class Wires:
             raise Unwired(f"{where} maps prefill tokens to a workspace, which convert_rows doesn't model")
         block = int(a.get("BLOCK_SIZE") or KV_BLOCK)
         stride = int(a.get("BLOCK_STRIDE_ROWS") or block)
+        sched = rec.meta[r]["scheduled"]
+        if len(set(ids)) != len(ids) or set(ids) != set(sched):
+            raise Unwired(f"rank {r}: the committed batch's request ids aren't its scheduled requests, each once")
+        layout = np.repeat(np.arange(len(ids)), [int(sched[x]) for x in ids])
         req = rec.tensor(r, a["req_id"]).reshape(-1).astype(np.int64)
+        if (t := next((t for t in range(min(len(req), len(layout))) if req[t] != layout[t]), None)) is not None:
+            raise Unwired(f"{where} takes token {t} as request {int(req[t])}, but the committed batch puts it at request "
+                          f"{int(layout[t])} ({ids[int(layout[t])]})")
         kept, slots, counts = convert_rows(rec.tensor(r, a["token_indices"]), req, rec.tensor(r, a["block_table"]), block, stride)
         if not (np.array_equal(slots, rec.tensor(r, table)) and np.array_equal(counts, rec.tensor(r, used).reshape(-1))):
             raise Unwired(f"{where} output slots or counts that its inputs don't give (convert_rows)")
-        return req, kept
+        return layout, kept
 
     def by_position(self, r: int, adv: dict, ref: dict, parts: list, tap: dict, conv: tuple, write: tuple) -> list[dict]:
-        """`gathered` where the step records its `CONVERT` call and its cache write's positions. Each row a token reads is the
-        position its top-k row keeps there, of its own request, which is how the Program reads it. That position is wired to
-        the step's write of it (its bytes checked), or, below the request's first position this step, to the carried cache
-        (``history``, naming each token's request and positions). No page-table entry is read. The served slot of each row is
-        held to that wiring: the write's slot for a position this step wrote, else no slot this step wrote. Refuses a valid
-        count other than min(the token's keys, the top-k), a row at most the top-k's keys long that doesn't read its keys in
-        order (the Program's public map), a longer one that isn't a selection of its keys (which `DsaWaksmanRows_v1`'s
-        settings, charged once per token, choose), and a position the step computes whose write isn't recorded."""
+        """`gathered` where the step records its `CONVERT` call, its cache write's positions and its committed batch. Each row a
+        token reads is the position its top-k row keeps there, of its own request (`conversion`'s layout of the batch), which
+        is how the Program reads it. That position is wired to the step's write of it (its bytes checked), or, below the
+        request's first position this step, to the carried cache (``history``, naming each token's request and positions). No
+        page-table entry is read. The served slot of each row is held to that wiring: the write's slot for a position this
+        step wrote, else no slot this step wrote. Refuses a token past the batch's (padding), a valid count other than min(the
+        token's keys, the top-k), a row at most the top-k's keys long that doesn't read its keys in order (the Program's
+        public map), a longer one that isn't a selection of its keys (which `DsaWaksmanRows_v1`'s settings, charged once per
+        token, choose), and a position the step computes whose write isn't recorded."""
         from verity.ml.definitions.registry.dsa_topk import waksman_switches
-        rec, (req, rows) = self.cap, conv
+        rec, (req, rows) = self.capture, conv
         wev, slots, keys, made = write
         page, used = rec.tensor(r, tap["in"]["block_table"]), rec.tensor(r, tap["in"]["seqused_k"]).reshape(-1)
         topk, width = page.shape[1], adv["shape"][-1]
         kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
-        names = rec.meta[r].get("req_ids") or []
+        names = rec.req_ids[r]
         where = f"rank {r} {tap['op']} (seq {tap['seq']})"
         slot_of = {tw: s for s, tw in slots.items()}
         mine = {(int(req[tw]), int(keys[tw]) - 1): tw for tw in slot_of if tw < len(req)}
@@ -1240,6 +1269,8 @@ class Wires:
             (i0, i1), (lo, hi) = p if len(p) == 2 else (p[0], [0, adv["shape"][1]])
             for i in range(i0, i1):
                 t = kept[i]
+                if t >= len(req):
+                    raise Unwired(f"{where}: token {t} is past the committed batch's {len(req)} tokens, so it has no request")
                 n, q, ps = int(keys[t]), int(req[t]), rows[t]
                 if int(used[t]) != min(n, topk):
                     raise Unwired(f"{where}: token {t} at position {n - 1} has {int(used[t])} valid keys, not min({n}, {topk})")
@@ -1275,7 +1306,7 @@ class Wires:
                                       f"which {wev['op']} (seq {wev['seq']}) filled this step")
                     else:
                         history.append((i, j))
-                        at.setdefault(i, (names[q] if q < len(names) else q, []))[1].append(x)
+                        at.setdefault(i, (names[q], []))[1].append(x)
         out = []
         if wrote:
             out.append({**self.call(r, wev["seq"], "+".join(CACHE_WRITE[2])),
@@ -1295,34 +1326,34 @@ class Wires:
         wrote and the row it wrote it from, each row's keys (its position plus one) when its positions are recorded, and the
         cache rows it wrote; None when the step's record has no such call with its slot map and rows."""
         op, slot_name, outs = CACHE_WRITE
-        ev = next((e for e in reversed(self.cap.events[r]) if e["seq"] < tap["seq"] and e["op"] == op
+        ev = next((e for e in reversed(self.capture.events[r]) if e["seq"] < tap["seq"] and e["op"] == op
                    and e.get("layer") == tap.get("layer")), None)
-        if ev is None or not all(self.cap.kept(r, x) for x in [ev["in"].get(slot_name) or {}, *(ev["out"].get(o) or {} for o in outs)]):
+        if ev is None or not all(self.capture.kept(r, x) for x in [ev["in"].get(slot_name) or {}, *(ev["out"].get(o) or {} for o in outs)]):
             return None
         slots: dict[int, int] = {}
-        for t, s in enumerate(self.cap.tensor(r, ev["in"][slot_name]).reshape(-1).tolist()):
+        for t, s in enumerate(self.capture.tensor(r, ev["in"][slot_name]).reshape(-1).tolist()):
             if s >= 0:
                 if s in slots:
                     raise Unwired(f"rank {r} {op} (seq {ev['seq']}) writes slot {s} from rows {slots[s]} and {t}")
                 slots[int(s)] = t
         pos = ev["in"].get("positions")
-        keys = self.cap.tensor(r, pos).reshape(-1).astype(np.int64) + 1 if isinstance(pos, dict) and self.cap.kept(r, pos) else None
-        made = [self.cap.tensor(r, ev["out"][o]) for o in outs]
+        keys = self.capture.tensor(r, pos).reshape(-1).astype(np.int64) + 1 if isinstance(pos, dict) and self.capture.kept(r, pos) else None
+        made = [self.capture.tensor(r, ev["out"][o]) for o in outs]
         return ev, slots, keys, np.concatenate([x.reshape(x.shape[0], -1) for x in made], axis=1)
 
     def single_tokens(self, r: int, tap: dict) -> set[int]:
         """The step's tokens whose request schedules only them: the decode rows of the indexer's top-k, which lead the batch
         (`long_rows`), when exactly that many of the step's requests schedule one token; else none."""
-        dec = next((e for e in reversed(self.cap.events[r]) if e["seq"] < tap["seq"] and e["op"] == "_C::cooperative_topk"), None)
+        dec = next((e for e in reversed(self.capture.events[r]) if e["seq"] < tap["seq"] and e["op"] == "_C::cooperative_topk"), None)
         if dec is None:
             return set()
-        n, counts = int(dec["in"]["lengths"]["shape"][0]), list(self.cap.meta[r]["scheduled"].values())
-        return set(range(n)) if counts.count(1) == n and sum(counts) == self.cap.tokens(r) else set()
+        n, counts = int(dec["in"]["lengths"]["shape"][0]), list(self.capture.meta[r]["scheduled"].values())
+        return set(range(n)) if counts.count(1) == n and sum(counts) == self.capture.tokens(r) else set()
 
     def topk_seq(self, r: int, tap: dict) -> int:
         """The indexer top-k whose output the tap's page table converts: the latest before it (layers that share a top-k read
         the last one computed), else the tap itself."""
-        return next((e["seq"] for e in reversed(self.cap.events[r]) if e["seq"] < tap["seq"] and e["op"] in TOPK_OPS), tap["seq"])
+        return next((e["seq"] for e in reversed(self.capture.events[r]) if e["seq"] < tap["seq"] and e["op"] in TOPK_OPS), tap["seq"])
 
     def source(self, r: int, ref: dict) -> dict | list[dict]:
         """``ref``'s source, found once per recorded reference (instances of one call read the same ones): a list, one per call,
@@ -1342,7 +1373,7 @@ class Wires:
     def _source(self, r: int, ref: dict) -> dict | list[dict]:
         if "param" in ref:
             return {"kind": "registered", "rank": r, "param": ref["param"],
-                    "sha512": self.cap.params[r].get(ref["param"], {}).get("sha512")}
+                    "sha512": self.capture.params[r].get(ref["param"], {}).get("sha512")}
         if id(ref) not in self.at:
             raise Unwired(f"rank {r}: a {ref.get('dtype')} {ref.get('shape')} read that is no recorded call's argument")
         r, seq, side, name = self.at[id(ref)]
@@ -1383,9 +1414,9 @@ class Wires:
         """The latest earlier output on rank ``r`` that ``ref`` is a strided view of, by its recorded strides, from the offset
         where every one of a few probed elements and then the whole view agree, with ``{"view": {offset, stride}}``."""
         stride, shape = ref.get("stride"), ref.get("shape")
-        if not self.cap.kept(r, ref) or not stride or not shape or min(stride) < 0 or not all(shape):
+        if not self.capture.kept(r, ref) or not stride or not shape or min(stride) < 0 or not all(shape):
             return None
-        x = self.cap.tensor(r, ref)
+        x = self.capture.tensor(r, ref)
         flat = x.reshape(-1)
         reach = sum((d - 1) * s for d, s in zip(shape, stride))
         probes = np.unique(np.linspace(0, flat.size - 1, num=min(16, flat.size)).astype(np.int64))
@@ -1394,12 +1425,12 @@ class Wires:
         for s, o, out in reversed(self.outs.get(r, [])):
             if s >= seq or s in skip or out.get("dtype") != ref.get("dtype") or out["sha512"] == ref["sha512"]:
                 continue
-            if int(np.prod(out["shape"], dtype=np.int64)) <= reach or not self.cap.kept(r, out):
+            if int(np.prod(out["shape"], dtype=np.int64)) <= reach or not self.capture.kept(r, out):
                 continue
             tried += 1
             if tried > VIEW_CANDIDATES:
                 break
-            y = self.cap.tensor(r, out).reshape(-1)
+            y = self.capture.tensor(r, out).reshape(-1)
             offs = np.flatnonzero(y[:y.size - reach] == flat[0])
             for p, a in zip(probes[1:], at[1:]):
                 offs = offs[y[offs + a] == flat[p]]
@@ -1421,7 +1452,7 @@ class Wires:
         shape = ref.get("shape")
         if not shape or not all(shape) or ref.get("stride") != [int(np.prod(shape[i + 1:])) for i in range(len(shape))]:
             return None
-        real, row = self.cap.real_rows(r, shape[0]), int(np.prod(shape[1:]))
+        real, row = self.capture.real_rows(r, shape[0]), int(np.prod(shape[1:]))
         size, x, tried, done, pieces = real * row, None, 0, 0, []
         if not size:
             return None
@@ -1434,13 +1465,13 @@ class Wires:
             reach = sum((d - 1) * st for d, st in zip(out["shape"], stride))
             mark = np.zeros(reach + 1, bool)
             np.lib.stride_tricks.as_strided(mark, shape=out["shape"], strides=stride)[...] = True
-            if reach >= size or int(mark.sum()) != n or not self.cap.kept(r, out) or not self.cap.kept(r, ref):
+            if reach >= size or int(mark.sum()) != n or not self.capture.kept(r, out) or not self.capture.kept(r, ref):
                 continue
             tried += 1
             if tried > VIEW_CANDIDATES:
                 break
-            x = self.cap.tensor(r, ref).reshape(-1)[:size] if x is None else x
-            y = self.cap.tensor(r, out)
+            x = self.capture.tensor(r, ref).reshape(-1)[:size] if x is None else x
+            y = self.capture.tensor(r, out)
             first = np.unravel_index(np.arange(y.size)[::max(1, y.size // 16)], out["shape"])
             at = sum(i * st for i, st in zip(first, stride))
             offs = np.arange(0, size - reach, row)
