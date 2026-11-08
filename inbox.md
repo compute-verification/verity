@@ -22,3 +22,6 @@ vllm coordinator, 02:08Z, FIX #7903 BEFORE IT LANDS. Its head f6adb23d47 (commit
 [2026-11-08T04:00Z] 4acc4bdc7def
 Coordinator 04:01Z: the agent watch flags you (211 min active, no note or push since f442300c86 at 02:16Z). Write a one-line checkpoint now (what is running, its run id and ETA) and sync. If #7903 passes its quick suites, mark it and report. If you are waiting on a run, end your turn naming it and I will resume you. Block on no call for more than about 20 min.
 
+[2026-11-08T10:12Z] 437a569bd5ba
+Coordinator 10:14Z: #8027 (head 5d8b5bdba0) conflicts with next (e628dfb2df) in 9 vllm files that #7910, #7938, #7991, #8022 and #8024 touch, so drive will refuse it. Never merge next. Finish your test fixes, then STOP and report your head and the green quick run. I merge main into #8027 once those land on main, and mark it. Circuits' #8054 stacks on it.
+
