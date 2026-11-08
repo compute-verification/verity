@@ -367,7 +367,8 @@ set_option maxHeartbeats 4000000 in
 templated file's committed unit net): its nets are `pre`'s, then the file's own, each `Net.parse`'s or a lookup slot,
 and its unit is the first named `unit`. -/
 theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
     ParseFactsPre tags pre c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∧
       c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
@@ -662,7 +663,8 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
 /-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net): its nets are `pre`'s,
 then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
 theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    {from_ : ℕ} {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2)
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
     ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∧
       c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
@@ -673,7 +675,8 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
 /-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
 the first named `unit`. -/
 theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    {from_ : ℕ} {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2)
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
     ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
       (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET :=
   let ⟨P, ⟨more, hm, _⟩, hu, hs, hh⟩ := parse_facts_nets hpre h

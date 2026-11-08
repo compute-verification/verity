@@ -157,7 +157,8 @@ theorem outShape_of_check {tags : Tags} {c : Flock.Circuit} (ht : c.typed = none
 in an untyped circuit whose unit `n` returns the outputs, `OutShape` is what `HmRow.check` checked, when `n`'s output
 groups are what `Net.ofRows` checks (`built_out`'s conclusion). -/
 theorem outShape_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {n : Net}
-    {c : Flock.Circuit} (h : HmRow.parse tags bytes tables (pre := #[("unit", n)]) = .ok c)
+    {from_ : ℕ} {c : Flock.Circuit}
+    (h : HmRow.parse tags bytes tables (pre := #[("unit", n)]) (from_ := from_) = .ok c)
     (hout : n.outGroups.size ≠ 0 ∧
       ∀ g ∈ n.outGroups.toList, isPow2 g.words = true ∧ g.bits.foldl (· + ·) 0 ≤ g.words * WORD)
     (ho : c.outNet = c.unitNet) : OutShape c := by

@@ -264,7 +264,8 @@ def CutsFromRows : Prop := ∀ w ∈ c.wires.toList, w.dst.1 ≠ c.unitNet
 /-- **A unit with only its leaf group has no wire into it**, in a circuit `HmRow.parse` accepted with nets `pre` first:
 `HmRow.check` refuses a wire into a leaf port, and that group's ports are all the unit's. -/
 theorem cutsFromRows_of_singlePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
+    {pre : Array (String × Net)} {from_ : ℕ}
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c)
     (h1 : c.unit.inGroups.size = 1) : CutsFromRows c := by
   have P := (parse_factsPre_nets h).1
   obtain ⟨ls, hls⟩ := P.check
@@ -292,7 +293,8 @@ theorem cutsFromRows_of_single {tags : Tags} {bytes : ByteArray} {tables : List 
 /-- **Every port-bit input of a unit slot has a row key**, in an untyped circuit `HmRow.parse` accepted with nets `pre`
 first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`. -/
 theorem rowKey_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
+    {pre : Array (String × Net)} {from_ : ℕ}
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) (hcr : CutsFromRows c)
     (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ} (hm : x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups)
     (hu : x / (c.unit.inWords * WORD) < c.upv) : RowKey c (portRowW c) x := by
   obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_factsPre_nets h
@@ -408,7 +410,8 @@ accepted with nets `pre` first, with no wire into its unit (`CutsFromRows`), at 
 input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is a port bit
 (`PortReads`). -/
 theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
+    {pre : Array (String × Net)} {from_ : ℕ}
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) (hcr : CutsFromRows c)
     (hpr : PortReads c hU) : KeysRow c hU (portRowW c) :=
   keysRow_of_rowKey hpr fun _ hm hu => rowKey_of_cutsPre h hcr (Aliased.portBits_nodup hU) hm hu
 
@@ -423,7 +426,8 @@ theorem keysRow_of_cuts {tags : Tags} {bytes : ByteArray} {tables : List (String
 unit has only its leaf group, at the row widths `16 · words`, every input a computed row reads has the zero or a row bit
 as its key, when every input a unit row reads is a port bit (`PortReads`). -/
 theorem keysRow_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
+    {pre : Array (String × Net)} {from_ : ℕ}
+    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c)
     (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU) : KeysRow c hU (portRowW c) :=
   keysRow_of_cutsPre h (cutsFromRows_of_singlePre h h1) hpr
 

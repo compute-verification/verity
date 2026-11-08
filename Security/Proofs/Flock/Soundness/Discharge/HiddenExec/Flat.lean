@@ -188,8 +188,8 @@ theorem unitRowsFlat_unpin (ht : tags.typed = false)
 file's (`pre`: a templated file's read unit) and `HmOut.checkRows` passes, all `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port,
 `Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row of one output port. -/
 theorem rowsFit_of_rowsPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {c : Circuit}
-    (hp : HmRow.parse tags cf tables (pre := pre) = .ok c) (hc : HmOut.checkRows c = .ok ())
+    {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
+    (hp : HmRow.parse tags cf tables (pre := pre) (from_ := from_) = .ok c) (hc : HmOut.checkRows c = .ok ())
     (h : (Layout.v1Ports c || Layout.bitRows c) = true) : Hidden.Any.RowsFitS c := by
   have P := (parse_factsPre_nets hp).1
   rcases Layout.rowsH_spec h with h1 | ⟨h2, hr, ho⟩
