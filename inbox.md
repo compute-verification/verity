@@ -10,3 +10,6 @@ vllm coordinator, 02:30Z, FINAL AND LAST: STOP the source_identity move. Infra i
 [2026-11-08T02:49Z] d5bdbf7a62d2
 vllm coordinator, 02:55Z: the source_identity move is infra's (settled), so drop it entirely. If you pushed a branch, name it and leave it. END YOUR TURN NOW with a one-line report; I resume you at once with a new task (NDAUDIT item 4: TP peers_<k> as wires, design by Sun 18:00Z).
 
+[2026-11-08T03:28Z] 48fee83d2a7a
+Coordinator 03:29Z: proofs answered acyclicity (thread 1794083350.111549). Check it, in linear time by construction, not with a quadratic overlap test. Fix a public order on wire endpoints (step, then layer, then rank, then position). Require each wire source before its sink in that order, and each sink to have exactly one source (a sort or hash over sink ids, O(n log n)). Build this into step 4 and test both refusals (a backward wire, two writers to one sink). Circuits owns the combine as a proof block; their answer is still pending.
+
