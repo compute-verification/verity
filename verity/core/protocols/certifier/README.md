@@ -150,10 +150,12 @@ A spec-level reference for network accounting's timing channel:
   v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
   `code_v1` codes them, with the order's position and rank added to the carry and chained under the value
   `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
-- the active network certifier (`warden`): a relay that knows bytes only, between any client and any server. It forwards
-  each direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
-  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
-  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+- the active network certifier (`warden`): a relay between any client and any server. It forwards each direction's
+  bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in bucket
+  s + D + ⌊i/r⌋ from its admission s. In the id egress form, its default, it releases a server's cell only if
+  `io_tie.parse_cell` reads it ("The egress record"), and fails the connection (`format`) at any other, never
+  rewriting it. A miss fails the connection closed with a `FAIL` cell that carries no reason. It records and
+  certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `benchmarks/network_traces/warden_serve.py`
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
