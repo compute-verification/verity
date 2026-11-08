@@ -1,21 +1,25 @@
 """verity_vllm.program.predict.reads: the compiler reads of the advice and of a certified body only the fields `READS` declares,
 each a checked circuit output, certified or committed advice, and reads the advice through the gate that refuses any other by
-name; and a step's structure (its plan, launches and Programs) reads only the outputs of earlier steps, x and committed advice:
-a window cut after any step plans and compiles those steps as the whole does, and a request's length moves only the unit fields
-`READS` declares it read ahead, `T` on a batch-invariant target and `edge` in class G."""
+name; and prefix stability, changing y at or after a step changing nothing the circuit computes before it. A window cut after
+any step plans and compiles those steps as the whole does, and another length for a request in flight moves only the unit
+fields `READS` declares its length read ahead for: `T` on a batch-invariant target, which sizes only its Program's later
+decodes, and `edge` in class G, what the window's close returns, for which the Program also computes its indexer's keys and
+scales for the rows it ran, the one read ahead that isn't prefix stable (accounted only as the advice it is)."""
 from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from dataclasses import fields, replace
 
 import pytest
 
+from verity.ml.circuits.types import Array, field_types
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.predict.steps import Registered, RequestUnit, compile_steps, plan_steps
-from tests.program.predict.test_dsa_long_rows import TOPK, _canonical, _short, _step
+from verity_vllm.program.predict.steps import Registered, RequestUnit, compile_steps, plan_steps, request_program
+from tests.program.predict.test_dsa_long_rows import I32, TOPK, _canonical, _short, _step
 from tests.program.predict.test_steps import (
     A_BODY,
     A_CHUNKED,
@@ -148,10 +152,11 @@ def _lengths(cut: WA.Advice, ingress: dict) -> list[tuple[int, int, str]]:
     return out
 
 
-def _causal(reg: Registered, advice, ingress: dict) -> set[str]:
-    """Hold ``advice``'s plan causal at every step: cut after it, the window plans each step to there as the whole does (its live
-    and discarded rows, and each unit, but for how far a request the cut leaves reaches: its launch a prefix of the whole's);
-    and each length a request the cut leaves could have moves only unit fields `READS` declares read ahead. Returns those moved."""
+def _prefix_stable(reg: Registered, advice, ingress: dict) -> set[str]:
+    """Hold ``advice``'s plan prefix stable at every step s. Cut after s, the window plans each step to there as the whole does:
+    its live and discarded rows, and each unit but for how far a request the cut leaves reaches, its launch a prefix of the
+    whole's. And under each other length a request the cut leaves could have (y changed after s), the cut plans the same rows,
+    its units differing only in fields `READS` declares that length read ahead for. Returns the fields some length moved."""
     advice = _window(advice)
     whole = plan_steps(reg, advice, ingress)
     moved: set[str] = set()
@@ -176,32 +181,50 @@ def _causal(reg: Registered, advice, ingress: dict) -> set[str]:
     return moved
 
 
-def test_a_batch_invariant_step_reads_only_earlier_outputs_but_its_requests_lengths():
-    """Batch-invariant: a request's Program is its whole request's in every window, so its length shapes its T ahead of its stop,
-    and nothing else does; at every cut each request compiles to the Program it has whole."""
+def _calls(program) -> list[str]:
+    return [n.fn.id for n in program.fn.body.nodes]
+
+
+def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
+    """Batch-invariant: a request's Program is its whole request's in every window, so its length sets its T ahead of its stop,
+    and nothing else in the plan moves."""
     reg = _registered()
     for session in (_mixed(), _hit(16), (A_WHOLE, A_BODY)):
-        assert _causal(reg, *session) == {"T"}
+        assert _prefix_stable(reg, *session) == {"T"}
+
+
+@pytest.mark.slow
+def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
+    """At every cut each request compiles to the Program it has whole, and its Programs at each length its body allows are,
+    call for call, prefixes of one another, returning its token ids alone, ``Array(L, I32)``: its length sizes only its later
+    decodes (about 6 s)."""
+    reg = _registered()
     advice, ingress = _mixed()
     whole = compile_steps(reg, advice, ingress)
     for s in range(len(advice.steps) - 1):
         cut = _cut(_window(advice), s)
         c = compile_steps(reg, cut, _bodies(cut, ingress))
         assert [u.digest for u in c.requests] == [u.digest for u in whole.requests[:len(c.requests)]], s
+    for u in whole.requests[:2]:
+        m = ingress[u.id]["max_tokens"]
+        built = [request_program(reg, replace(u, T=L - 1)).program for L in range(1, m + 1)]
+        assert [p.fn.signature()[1] for p in built] == [Array(L, I32) for L in range(1, m + 1)]
+        assert all(_calls(p) == _calls(built[-1])[:len(_calls(p))] for p in built), u.id
 
 
-def test_a_class_g_step_reads_only_earlier_outputs_and_its_launches(tmp_path):
+def test_a_class_g_window_is_prefix_stable_at_every_step(tmp_path):
     """Class G: a request's Program is its rows in the window, at the launches they ran in; cut after any step, each unit is the
     whole's up to there, and no length moves a unit while INDEX_TOPK (2,048 keys) is past every row: the B8 row's window, a
     cache hit with a chunked prefill, and a request prefilled in chunks, whole and carried in mid-prefill."""
     reg = _class_g(tmp_path, engine=CACHE_ON)
     for session in (_b8_window()[:2], _hit_chunked(), (A_CHUNKED, A_BODY), (A_MID_IN, A_BODY)):
-        assert _causal(reg, *session) == set()
+        assert _prefix_stable(reg, *session) == set()
 
 
 def _past_topk(tmp_path) -> tuple[Registered, WA.Advice, dict]:
-    """Class G at INDEX_TOPK 4 (GLM-5.3 cut to its first 4 layers, `TOPK`): a (3 prompt tokens, 5 outputs, its rows past INDEX_TOPK from
-    position 4) and b (2 and 3, stopping before its cap of 5, within INDEX_TOPK unless it runs on) in one window."""
+    """Class G at INDEX_TOPK 4 (GLM-5.3 cut to its first 4 layers, `TOPK`): a (3 prompt tokens, 5 outputs, its rows past
+    INDEX_TOPK from position 4) and b (2 and 3, stopping before its cap of 5, within INDEX_TOPK unless it runs on) in one
+    window."""
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
     reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
@@ -212,33 +235,46 @@ def _past_topk(tmp_path) -> tuple[Registered, WA.Advice, dict]:
     return reg, advice, {"a": {**GREEDY, "max_tokens": 5, "prompt": [1, 2, 3]}, "b": {**GREEDY, "max_tokens": 5, "prompt": [4, 5]}}
 
 
-def test_a_class_g_request_past_index_topk_reads_its_length_ahead_for_its_edge_alone(tmp_path):
-    """At INDEX_TOPK 4, a window leaving a request with outputs to keep carries its indexer's keys and scales on its edge when its
-    last row reads past INDEX_TOPK keys: its length, read ahead of its stop, shapes its edge and nothing else."""
+def _running_on(cut: WA.Advice, r: int, L: int) -> WA.Advice:
+    return replace(cut, requests=tuple(replace(q, output_len=L) if i == r else q for i, q in enumerate(cut.requests)))
+
+
+def test_a_class_g_length_past_index_topk_sizes_only_what_the_windows_close_returns(tmp_path):
+    """At INDEX_TOPK 4, a window's close returns a request it leaves with outputs to keep with its indexer's keys and scales on
+    its edge where its last row reads past INDEX_TOPK keys: its length, read ahead of its stop, sets its edge and nothing else."""
     reg, advice, ingress = _past_topk(tmp_path)
-    assert _causal(reg, advice, ingress) == {"edge"}
+    assert _prefix_stable(reg, advice, ingress) == {"edge"}
     cut = _cut(advice, 1)
     assert [u.edge for u in plan_steps(reg, cut, ingress).requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
-    b = replace(cut.requests[1], output_len=4)
-    assert plan_steps(reg, replace(cut, requests=(cut.requests[0], b)), ingress).requests[1].edge == ("prefix", "prefix_ik", "prefix_iks")
+    assert plan_steps(reg, _running_on(cut, 1, 4), ingress).requests[1].edge == ("prefix", "prefix_ik", "prefix_iks")
 
 
 @pytest.mark.slow
-def test_a_class_g_program_at_every_cut_is_its_whole_programs_calls_to_there(tmp_path):
-    """Class G at INDEX_TOPK 4 on GLM-5.3's first four layers (about 25 s): A (3 prompt tokens, 4 outputs, prefilled in chunks
+def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_indexer_history(tmp_path):
+    """Class G at INDEX_TOPK 4 on GLM-5.3's first four layers (about 35 s). A (3 prompt tokens, 4 outputs, prefilled in chunks
     of 2 and 1, its rows at positions 4 and 5 past INDEX_TOPK) compiled in a window cut after each step is, call for call, its
     whole Program up to there, and its edge carries its indexer's history from the first cut on, before any row has read past
-    INDEX_TOPK. What no cheaper test can: that the Programs built from the units are causal at every step, a request's Program at
-    a step making the calls it makes whole whatever the window holds after it; the split tests hold one cut a session, and the
-    plan-level tests the units, not the Programs built from them."""
-    reg, _, _ = _past_topk(tmp_path)
+    INDEX_TOPK. But b, left after two outputs, computes its indexer's keys for the 3 rows it ran (a key row and its projection
+    in each of the 3 indexer layers) only where it runs on to 4 outputs, so that the close returns them, its calls stopping at
+    3 a subsequence of those: the one read of y ahead that isn't prefix stable, accounted as the advice ``output_len`` is.
+    What no cheaper test can: that the Programs built from the units are prefix stable but there, a request's Program at a step
+    making the calls it makes whole whatever y holds after it; the split tests hold one cut a session, and the plan-level tests
+    the units, not the Programs built from them."""
+    reg, advice, ingress = _past_topk(tmp_path)
     calls, edges = [], []
     for s in range(len(A_CHUNKED.steps)):
-        advice = A_CHUNKED if s == len(A_CHUNKED.steps) - 1 else _cut(A_CHUNKED, s)
-        c = compile_steps(reg, advice, A_BODY)
+        c = compile_steps(reg, A_CHUNKED if s == len(A_CHUNKED.steps) - 1 else _cut(A_CHUNKED, s), A_BODY)
         (p,) = c.programs.values()
         assert c.batch_rule is None
-        calls.append([n.fn.id for n in p.fn.body.nodes])
+        calls.append(_calls(p))
         edges.append(c.requests[0].edge)
     assert all(cut == calls[-1][:len(cut)] for cut in calls) and len({len(cut) for cut in calls}) == len(calls)
     assert edges == [("prefix", "prefix_ik", "prefix_iks")] * (len(calls) - 1) + [()]
+    cut = _cut(advice, 1)
+    stops, runs = (request_program(reg, plan_steps(reg, a, ingress).requests[1]).program for a in (cut, _running_on(cut, 1, 4)))
+    left = iter(_calls(runs))
+    assert all(f in left for f in _calls(stops))
+    assert Counter(_calls(runs)) - Counter(_calls(stops)) == Counter(
+        {"CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}": 9, "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}": 9})
+    ret = [field_types(p.fn.signature()[1]) for p in (stops, runs)]
+    assert ret[1][:len(ret[0])] == ret[0] and len(ret[1]) == len(ret[0]) + 2

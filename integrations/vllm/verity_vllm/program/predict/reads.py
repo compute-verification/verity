@@ -3,7 +3,7 @@ each with how the output accounting takes it (`READS`), and the gate the compile
 a field `READS` doesn't declare by name (`UndeclaredRead`). The table is the code path: `advice_of` returns the gated advice, and
 `policy_of` and `request_of` take a body's parameters by their roles here.
 
-The output accounting bounds what the compiled structure can carry of the served output y, given the certified inputs x and the
+The output accounting bounds what the compiled circuit can carry of the served output y, given the certified inputs x and the
 registration, by the advice's length and the wrong blocks' bits. That holds where each field the compiler reads is one of
 `ACCOUNTS`:
 - ``output``: a checked circuit output, one a request Program returns and the audit holds to y;
@@ -11,28 +11,32 @@ registration, by the advice's length and the wrong blocks' bits. That holds wher
 - ``advice``: a field of the committed advice, charged in its length, whether or not y fixes it.
 
 A field is read ``ahead`` where it shapes a request's unit (`steps.RequestUnit`, the fields named) before the step that outputs
-the part of y the field fixes. Such a field must be advice: a step's structure (its plan, launches and Programs) reads only the
-outputs of earlier steps, x and committed advice, since no circuit has checked an output when the structure that computes it is
-fixed. y's parts:
+the part of y it fixes. Such a field is advice, its bits charged whatever the circuit does with it. Read from y instead, as a
+checked output, it would need prefix stability: changing y at or after a step changes nothing the circuit computes before it
+(the plan's rows and launches up to there, and its Programs' calls). `test_reads` holds the plan prefix stable at every step of
+its windows, and the Programs too but in one read: a batch-invariant Program's length sizes only its later decodes, but in
+class G a request's Program computes its indexer's keys and scales for the rows it runs before the window's close only where
+the close returns them, where its last row, after the close, reads past INDEX_TOPK keys. y's parts:
 - its token ids: each kept output is a token select's sampled id in its request's Program (`steps.EGRESS`), an output the
   compiler never reads;
 - which response a token belongs to: the request's id, certified (the body it names is the request's, by its `user`);
 - each response's length, where its terminator goes: ``output_len``, advice, read ahead twice: on a batch-invariant target a
-  request's Program is its whole request's (T = ``output_len`` − 1) in every window, and in class G a window leaving a request
-  with outputs to keep carries its indexer's keys and scales on its edge where its last row reads past INDEX_TOPK keys
-  (`segment.edge_groups`);
+  request's Program is its whole request's (T = ``output_len`` − 1) in every window; and in class G a window's close returns a
+  request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
+  INDEX_TOPK keys (`segment.edge_groups`);
 - each response's finish reason: ``finish``, advice, read only to refuse a record its body contradicts (`steps.request_of`);
 - the outputs a request kept before the window opened: its carried ``kept``, advice, held to the last window's close
   (`window_advice.follows`);
 - when each output was released: ``release``, never read; the gate refuses it.
 
 **y as the request Programs return it.** A request Program returns its kept outputs' token ids first, ``Array(n, I32)`` in
-output order, n the outputs its rows keep in the window (``output_len`` for a request whole in one); then, for its rows past
-INDEX_TOPK keys, the bits that their top-k orders are the canonical ones; then, for a request the window leaves with outputs to
-keep, its edge (`build.build_program`'s ``edge``). It returns no terminator and no finish reason: its ids end where its shape
-does, at ``output_len``, and its finish reason is the advice's. A record of y that ends each response with a terminator holding
-its finish reason is those ids with the terminator after the last, its position and reason advice until a request Program
-checks the stop rule (no stop token before the last output, which is a stop token or the cap's).
+output order, n the outputs its rows keep in the window (``output_len`` for a request whole in one), and on a batch-invariant
+target nothing else; in class G then, for its rows past INDEX_TOPK keys, the bits that their top-k orders are the canonical
+ones, and for a request the window leaves with outputs to keep, its edge (`build.build_program`'s ``edge``). It returns no
+terminator and no finish reason: its ids end where its shape does, at ``output_len``, advice until a request Program checks
+the stop rule (no stop token before the last output, which is a stop token or the cap's); a finish reason is the advice's
+(eos or length follows from the ids and the cap once the stop rule is checked, and abort is the client's). A record of y that
+holds each response's ids and then a terminator is those ids with the terminator after the n-th.
 """
 from __future__ import annotations
 
@@ -97,7 +101,7 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
     """Each field of ``table`` the output accounting can't take, by name and why: declared twice; of an account other than
     `ACCOUNTS`; of no record the compiler receives; an advice record's field its encoding doesn't carry (neither committed nor
     held to x); an advice or body field declared a circuit output; a body field off a role, or with inert values off the inert
-    role; or one read ahead that isn't advice."""
+    role; or a field read ahead that isn't advice."""
     out, seen = [], set()
     for f in table:
         at = f"{f.record}.{f.name}"
@@ -122,7 +126,7 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
                        f"Program's outputs, account output)")
         if f.ahead and f.account != "advice":
             out.append(f"{at}: read ahead of the step that outputs it (it shapes {', '.join(f.ahead)}), so it must be committed "
-                       f"advice: no circuit has checked that output when the structure computing it is fixed")
+                       f"advice: the circuit before that step may depend on it (class G's edge does)")
     return out
 
 
