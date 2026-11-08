@@ -5,6 +5,7 @@ family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``
 an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots)."""
 from __future__ import annotations
 
+import importlib
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -125,11 +126,12 @@ def template(t: str) -> Template:
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.commitments.gates import embedding  # noqa: F401  (registers EmbeddingRead_v1, a read's and a READ static's, which BB.load does not)
     from verity.ml.definitions import boolean as BB
     from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
+    importlib.import_module("verity.ml.commitments.gates.embedding")
     errors = BB.load()
     try:
         fn = specialization(spec_base(t), spec_statics(t))
