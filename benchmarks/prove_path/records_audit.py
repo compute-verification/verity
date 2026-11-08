@@ -151,6 +151,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+import a5_memo as AM  # noqa: E402
 from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
@@ -775,9 +776,11 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
+@AM.memoized
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
-    each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
+    each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed.
+    Under a5's memo, as `a5.main` runs: the coins negatives' streams reuse the honest registration's checks and sample."""
     import a5 as A5
     import a5_coins as AC
 
