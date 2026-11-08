@@ -234,10 +234,10 @@ def paramsParsed (j : Json) : V Params := do
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
     pure (registered, ← Registered.params program.desc (getD j "parameters"))
+  let given := [field? j "supplied", field? j "pinned", field? j "outputs"]
   let pool ← match getD j "pool" with
     | .null => pure none
-    | pj => some <$> poolOf pj registered [field? j "supplied", field? j "pinned", field? j "outputs"]
-        (field? j "row_schemas")
+    | pj => some <$> poolOf pj registered given (field? j "row_schemas")
   let (suppliedJ, outputsJ, schemasJ) := poolValues pool (Flock.hexOf program.sha512) log (field? j "supplied")
     (field? j "outputs") (field? j "row_schemas")
   let supplied ← match suppliedJ with

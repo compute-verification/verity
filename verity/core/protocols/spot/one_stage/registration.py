@@ -576,33 +576,35 @@ def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any,
 def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program, values: Mapping[str, int],
               schemas: Mapping[str, str] | None, window: str | None, fixed: Sequence[str],
               supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
-              binding: Mapping[str, str] | None) -> tuple[str, str] | None:
+              binding: Mapping[str, str] | None) -> tuple[str, str] | str:
     """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
     last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the domain
     the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
-    (`registered.supplied_root`); None where there is none (`Registration.poolOpen`)."""
+    (`registered.supplied_root`); where there is none, why (`Registration.poolOpen`, none there)."""
     if pool_chains(pool, log, program):
         es = log[-1].get("registered")
         hits = [e for e in es if isinstance(e, Mapping) and e.get("value") == pool["pout"]] if isinstance(es, list) else []
         d, r = (hits[-1].get("domain"), hits[-1].get("root")) if hits else (None, None)
-        return (d, r) if isinstance(d, str) and isinstance(r, str) else None
+        if isinstance(d, str) and isinstance(r, str):
+            return d, r
+        return f"the previous record registers no {pool['pout']!r} with a domain and root"
     try:
         want = G.registered_entries(program, values, schemas, window, fixed).get(pool["pin"])
         if want is None:
-            return None
+            return f"the verifier gives {pool['pin']!r} no entry"
         return want["domain"], G.supplied_root(program, pool["pin"], [[("bytes", pool["genesis"])]], rec, want,
                                                sorted(supplied), log, None, binding)
-    except ValueError:
-        return None
+    except ValueError as e:
+        return f"the empty pool fills no {pool['pin']!r}: {e}"
 
 
-def _pool_chain(c: _Collect, rec: Mapping[str, Any], pool: Mapping[str, Any], want: tuple[str, str] | None) -> None:
+def _pool_chain(c: _Collect, rec: Mapping[str, Any], pool: Mapping[str, Any], want: tuple[str, str] | str) -> None:
     """R7's pool chain: the record's entry for `pin` (its last naming it) has the domain and root of the pool its window
-    opens (`want`, `pool_open`), else `R7-pool-chain`."""
+    opens (`want`, `pool_open`, or why there is none), else `R7-pool-chain`."""
     got = rec["registered"]
     hits = [e for e in got if isinstance(e, Mapping) and e.get("value") == pool["pin"]] if isinstance(got, list) else []
     mine = (hits[-1].get("domain"), hits[-1].get("root")) if hits else None
-    if want is None or mine != want:
+    if mine != want:
         c.fail("R7-pool-chain", {"value": pool["pin"], "registered": mine, "verifier": want})
 
 
