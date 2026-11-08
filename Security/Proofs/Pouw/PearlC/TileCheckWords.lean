@@ -14,7 +14,7 @@ whole-tile shapes (`Shape8`, `Shape4`), an accepted tile's ticket and useful wor
 credited row, with `Collides` never used. Each composes its table's accepted entry (`entry8_accepts`, `entry4_accepts`)
 with the rows' statistics from the rules. A credited row passes `RowOK` (the tile rules' `rowOK`, `hrow`), and each of
 the tile's weight rows passes it too, since the check accepts only then (`TileCheck.Accepts`, the protocol's
-`weightOK`). By magnitudes (`RowStats`) these give
+`fixedOK`). By magnitudes (`RowStats`) these give
 
 * `pc8`: `Row8OK` (`row8OK_of_floor`), since `pc8Sem`'s floor is at least `1` only where `ρ`'s word is finite and
   `φ ≥ 0` (`stats8OK_of_rho`);
@@ -100,7 +100,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
     (hrow : ∀ (sh : Shape) (act : Codes) (i : ℕ), TR.rowOK sh act i → (pc8Sem ops p noise).RowOK sh.m sh.k act i)
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
       (j : Fin (U.layout.shape u).n), D U.layout → u < U.layout.N → Noise8OK (noise H s U u act) →
-        TR.rowOK (U.layout.shape u) act i → Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
+        TR.rowOK (U.layout.shape u) act i → Pc8EntryOK ops p (noise H s U u act) act (U.fixed (U.layout.fixedId u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ) TR D := by
   intro U hU H s g hg c X ⟨hcone, hpub, hnoise, hreg, hwt⟩
   left
@@ -108,7 +108,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
   obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2 g hg
-  have hW : (pc8Sem ops p noise).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
+  have hW : (pc8Sem ops p noise).RowOK _ _ (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hR := hrow _ c.act i hok
   obtain ⟨w1, w2⟩ := entry8_accepts hops p pr hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
@@ -136,7 +136,7 @@ theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) 
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
       (j : Fin (U.layout.shape u).n), D U.layout → u < U.layout.N → Noise8OK (noise H s U u act) →
         (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-        Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
+        Pc8EntryOK ops p (noise H s U u act) act (U.fixed (U.layout.fixedId u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
       (pearlCTiles (pc8Sem ops p noise) c ρ) D :=
   tileCheck8_computesWords hops p pr ρ noise _ D
@@ -152,7 +152,7 @@ theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) 
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
       (j : Fin (U.layout.shape u).n), pearlCDomainDev (devAt p 4 pr) U.layout → u < U.layout.N →
         Noise8OK (noise H s U u act) → (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-        Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
+        Pc8EntryOK ops p (noise H s U u act) act (U.fixed (U.layout.fixedId u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
       (pearlCTiles (pc8Sem ops p noise) c ρ) (fun L => pearlCDomainDev (devAt p 4 pr) L ∧
         ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
@@ -197,7 +197,7 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
   obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2 g hg
-  have hW : (pc4Sem ops lines).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
+  have hW : (pc4Sem ops lines).RowOK _ _ (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hR := hrow _ c.act i hok
   have hRa := row4OK_of_admit hops lines him hR.1 (hR.2 him)
   have hRb := row4OK_of_admit hops lines hjn hW.1 (hW.2 hjn)

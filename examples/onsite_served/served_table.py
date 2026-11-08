@@ -264,7 +264,7 @@ def _certifier_piece(cfg, params, bound):
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
-              "requests, every closed window sealed and the audited window picked; then sampled proofs' records audit "
+              "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(C-Flock --zk behind the Lean firewall, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece

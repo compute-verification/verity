@@ -38,9 +38,20 @@ __device__ __forceinline__ void s512_pad_block(uint64_t st[8], uint64_t len) {
     s512_compress(st, w);
 }
 
-// leaf_size % 128 == 0: a warp owns 32 consecutive leaves and, per 128-byte chunk (one SHA-512 block), stages the chunk of
+// the last block of a message of `len` bytes whose 0x80 left no room for the length (len % 128 > 111)
+__device__ __forceinline__ void s512_len_block(uint64_t st[8], uint64_t len) {
+    uint64_t w[16];
+#pragma unroll
+    for (int j = 0; j < 16; j++) w[j] = 0;
+    w[15] = len * 8;
+    s512_compress(st, w);
+}
+
+// leaf_size % 16 == 0: a warp owns 32 consecutive leaves and, per 128-byte chunk (one SHA-512 block), stages the chunk of
 // each of its leaves into shared memory with coalesced 16-byte loads (33-word stride: conflict-free), then lane l
-// compresses its own leaf's block. The padding block is a constant.
+// compresses its own leaf's block. A tail of r = leaf_size % 128 bytes is staged the same way, zero past r, and its block
+// takes the padding: 0x80 opens word r/8, and the bit length is word 15 (r <= 111) or a last block of its own. With no
+// tail the padding block is a constant.
 __global__ void sha512_staged_merkle_leaves(const uint8_t* __restrict__ data, uint8_t* tree, long long num_leaves, int leaf_size) {
     extern __shared__ uint32_t sw512[];
     int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
@@ -50,15 +61,17 @@ __global__ void sha512_staged_merkle_leaves(const uint8_t* __restrict__ data, ui
     long long myleaf = warp0 + lane;
     uint64_t st[8];
     s512_iv(st);
-    int nchunks = leaf_size >> 7;
-    for (int c = 0; c < nchunks; c++) {
+    int nchunks = leaf_size >> 7, r = leaf_size & 127;
+    for (int c = 0; c < nchunks + (r != 0); c++) {
+        const int bytes = c < nchunks ? 128 : r, pad = c < nchunks ? 16 : r >> 3;
 #pragma unroll
         for (int it = 0; it < 8; it++) {
             int idx = it * 32 + lane;
             int piece = idx >> 3, off = idx & 7;
             long long leaf = warp0 + piece;
             uint4 v = make_uint4(0, 0, 0, 0);
-            if (leaf < num_leaves) v = *(const uint4*)(data + leaf * (long long)leaf_size + (long long)c * 128 + off * 16);
+            if (leaf < num_leaves && off * 16 < bytes)
+                v = *(const uint4*)(data + leaf * (long long)leaf_size + (long long)c * 128 + off * 16);
             uint32_t* d = s + piece * 33 + off * 4;
             d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = v.w;
         }
@@ -66,13 +79,16 @@ __global__ void sha512_staged_merkle_leaves(const uint8_t* __restrict__ data, ui
         if (myleaf < num_leaves) {
             uint64_t w[16];
 #pragma unroll
-            for (int j = 0; j < 16; j++) w[j] = s512_be(s[lane * 33 + 2 * j], s[lane * 33 + 2 * j + 1]);
+            for (int j = 0; j < 16; j++)
+                w[j] = j == pad ? 0x8000000000000000ull : s512_be(s[lane * 33 + 2 * j], s[lane * 33 + 2 * j + 1]);
+            if (c == nchunks && r <= 111) w[15] = (uint64_t)leaf_size * 8;
             s512_compress(st, w);
         }
         __syncwarp();
     }
     if (myleaf >= num_leaves) return;
-    s512_pad_block(st, (uint64_t)leaf_size);
+    if (r == 0) s512_pad_block(st, (uint64_t)leaf_size);
+    if (r > 111) s512_len_block(st, (uint64_t)leaf_size);
     s512_out(st, tree + myleaf * 64);
 }
 
@@ -123,12 +139,14 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
 // ---- hm96-sha512/v1 leaves (verity.ml.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
 //   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
 //   leaf = SHA-512(leaf_prefix || b || c). Salts are the host's (zk_hooks::LeafSalts, read from the OS): the tree callback hands
-//   tree k's salts (192 bytes per leaf, in host memory until the proof ends); the device reads them HM96_CHUNK leaves at a time
-//   where it finishes the leaves, and an opening's are copied from the host's.
+//   tree k's salts (192 bytes per leaf, in host memory until the proof ends); a salted tree's leaves are hashed and finished
+//   HM96_CHUNK at a time, each piece's salts copied on a stream of their own into the next of HM96_RING device buffers beside
+//   the previous piece's leaves, and an opening's are copied from the host's.
 
 typedef const uint8_t* (*Hm96TreeCb)(void* ctx, int tree, long long leaves);
 
-static const long long HM96_CHUNK = 1 << 18;   // leaves per upload of a tree's salts (48 MiB on the device)
+static const long long HM96_CHUNK = 1 << 18;   // leaves per piece of a salted tree (48 MiB of salts on the device)
+static const int HM96_RING = 2;                 // device buffers of a piece's salts: one copied while the other's piece runs
 
 struct Hm96Ctx {
     Hm96TreeCb tree_cb = nullptr;
@@ -137,7 +155,10 @@ struct Hm96Ctx {
     long long level0_leaves = 0;
     uint64_t* d_tables = nullptr;   // [192][256][8]: per salt byte and value, the XOR of its set bits' columns
     uint64_t* d_mid = nullptr;      // SHA-512 states after the salt prefix block, then after the leaf prefix block
-    uint8_t* d_salts = nullptr;     // HM96_CHUNK leaves' salts, zeroed when the proof ends
+    uint8_t* d_salts = nullptr;     // HM96_RING buffers of HM96_CHUNK leaves' salts, zeroed when the proof ends
+    cudaStream_t copy = nullptr;    // the salts' copies (non-blocking: beside the kernels on the default stream)
+    cudaEvent_t copied[HM96_RING] = {};   // buffer r's piece is on the device
+    cudaEvent_t done[HM96_RING] = {};     // buffer r's piece is finished, so the buffer can take the next
     std::map<const uint8_t*, std::pair<const uint8_t*, long long>> salts;   // device tree -> its host salts and leaves
 };
 static Hm96Ctx g_hm96;
@@ -233,6 +254,17 @@ inline const uint8_t* hm96_tree_salts(int k, long long num_leaves) {
     return h;
 }
 
+// the salts' copy stream and its events, destroyed: each piece's salts are then copied on the default stream
+inline void hm96_drop_copy_stream() {
+    for (int r = 0; r < HM96_RING; r++) {
+        if (g_hm96.copied[r]) cudaEventDestroy(g_hm96.copied[r]);
+        if (g_hm96.done[r]) cudaEventDestroy(g_hm96.done[r]);
+        g_hm96.copied[r] = g_hm96.done[r] = nullptr;
+    }
+    if (g_hm96.copy) cudaStreamDestroy(g_hm96.copy);
+    g_hm96.copy = nullptr;
+}
+
 // One proof's hm96 context (a null tree callback leaves the build unsalted); the device's copy of the salts is zeroed when it
 // ends. The context is process-global: a second install while one is live is refused (two proofs would share a tree counter and
 // level 0).
@@ -243,7 +275,15 @@ struct Hm96Guard {
         if (g_hm96.tree_cb) { fprintf(stderr, "hm96: a salt context is already installed (one proof at a time per process)\n"); abort(); }
         mine = true;
         g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = level0_leaves;
-        cudaMalloc(&g_hm96.d_salts, (size_t)HM96_CHUNK * 192);
+        cudaMalloc(&g_hm96.d_salts, (size_t)HM96_RING * HM96_CHUNK * 192);
+        bool ok = cudaStreamCreateWithFlags(&g_hm96.copy, cudaStreamNonBlocking) == cudaSuccess;
+        for (int r = 0; r < HM96_RING; r++)
+            ok = ok && cudaEventCreateWithFlags(&g_hm96.copied[r], cudaEventDisableTiming) == cudaSuccess
+                    && cudaEventCreateWithFlags(&g_hm96.done[r], cudaEventDisableTiming) == cudaSuccess;
+        if (!ok) {
+            cudaGetLastError();
+            hm96_drop_copy_stream();
+        }
         size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
         cudaMalloc(&g_hm96.d_tables, tb);
         cudaMemcpy(g_hm96.d_tables, tables, tb, cudaMemcpyHostToDevice);
@@ -259,31 +299,51 @@ struct Hm96Guard {
         if (!mine) return;
         if (g_hm96.d_tables) cudaFree(g_hm96.d_tables);
         if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
-        if (g_hm96.d_salts) { cudaMemset(g_hm96.d_salts, 0, (size_t)HM96_CHUNK * 192); cudaFree(g_hm96.d_salts); }
+        if (g_hm96.copy) cudaStreamSynchronize(g_hm96.copy);
+        hm96_drop_copy_stream();
+        if (g_hm96.d_salts) { cudaMemset(g_hm96.d_salts, 0, (size_t)HM96_RING * HM96_CHUNK * 192); cudaFree(g_hm96.d_salts); }
         g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr; g_hm96.d_salts = nullptr;
         g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = 0;
     }
 };
 
 inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long num_leaves, int leaf_size, int tpb = 256) {
-    if (leaf_size % 128 == 0 && ((uintptr_t)d_data & 15) == 0) {
-        int wpb = tpb >> 5;
-        long long warps = (num_leaves + 31) / 32;
-        long long blocks = (warps + wpb - 1) / wpb;
-        size_t smem = (size_t)wpb * 32 * 33 * sizeof(uint32_t);
-        sha512_staged_merkle_leaves<<<(unsigned)blocks, tpb, smem>>>(d_data, d_tree, num_leaves, leaf_size);
+    // leaves [at, at + n): each a function of its own bytes, so a tree hashed in pieces has the same leaves
+    auto leaves = [&](long long at, long long n) {
+        const uint8_t* data = d_data + at * (long long)leaf_size;
+        if (leaf_size % 16 == 0 && ((uintptr_t)d_data & 15) == 0) {
+            int wpb = tpb >> 5;
+            long long warps = (n + 31) / 32;
+            long long blocks = (warps + wpb - 1) / wpb;
+            size_t smem = (size_t)wpb * 32 * 33 * sizeof(uint32_t);
+            sha512_staged_merkle_leaves<<<(unsigned)blocks, tpb, smem>>>(data, d_tree + at * 64, n, leaf_size);
+        } else {
+            long long blocks = (n + tpb - 1) / tpb;
+            sha512_merkle_leaves_bytes<<<(unsigned)blocks, tpb>>>(data, d_tree + at * 64, n, leaf_size);
+        }
+    };
+    if (!g_hm96.tree_cb) {
+        leaves(0, num_leaves);
     } else {
-        long long blocks = (num_leaves + tpb - 1) / tpb;
-        sha512_merkle_leaves_bytes<<<(unsigned)blocks, tpb>>>(d_data, d_tree, num_leaves, leaf_size);
-    }
-    if (g_hm96.tree_cb) {
         const uint8_t* h = hm96_tree_salts(g_hm96.trees++, num_leaves);
-        // each piece's copy waits for the previous piece's kernel (one stream), so one device buffer serves the tree
-        for (long long at = 0; at < num_leaves; at += HM96_CHUNK) {
+        // piece j's salts go into buffer j % HM96_RING once that buffer's last piece is finished, and are copied beside piece
+        // j - 1's leaves and finishing and piece j's leaves; the default stream finishes piece j once they are on the device
+        for (long long at = 0, j = 0; at < num_leaves; at += HM96_CHUNK, j++) {
             const long long n = num_leaves - at < HM96_CHUNK ? num_leaves - at : HM96_CHUNK;
-            cudaMemcpy(g_hm96.d_salts, h + 192 * at, (size_t)n * 192, cudaMemcpyHostToDevice);
-            hm96_finish_leaves<<<(unsigned)((n + tpb - 1) / tpb), tpb>>>(d_tree, (const uint32_t*)g_hm96.d_salts, at, at + n,
+            const int r = (int)(j % HM96_RING);
+            uint8_t* d_s = g_hm96.d_salts + (size_t)r * HM96_CHUNK * 192;
+            if (g_hm96.copy) {
+                cudaStreamWaitEvent(g_hm96.copy, g_hm96.done[r], 0);
+                cudaMemcpyAsync(d_s, h + 192 * at, (size_t)n * 192, cudaMemcpyHostToDevice, g_hm96.copy);
+                cudaEventRecord(g_hm96.copied[r], g_hm96.copy);
+            } else {
+                cudaMemcpy(d_s, h + 192 * at, (size_t)n * 192, cudaMemcpyHostToDevice);
+            }
+            leaves(at, n);
+            if (g_hm96.copy) cudaStreamWaitEvent(0, g_hm96.copied[r], 0);
+            hm96_finish_leaves<<<(unsigned)((n + tpb - 1) / tpb), tpb>>>(d_tree, (const uint32_t*)d_s, at, at + n,
                                                                          g_hm96.d_tables, g_hm96.d_mid);
+            if (g_hm96.copy) cudaEventRecord(g_hm96.done[r], 0);
         }
         g_hm96.salts[d_tree] = {h, num_leaves};
     }

@@ -427,7 +427,9 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
 
     conn = aiohttp.TCPConnector(limit=0)
     timeout = aiohttp.ClientTimeout(total=None, sock_read=None, sock_connect=60)
-    async with aiohttp.ClientSession(connector=conn, timeout=timeout) as session:
+    # The first streamed line carries the prompt's token ids (return_token_ids); aiohttp refuses a line over twice
+    # read_bufsize (LineTooLong), which its default 256 KiB puts at about 115k prompt tokens.
+    async with aiohttp.ClientSession(connector=conn, timeout=timeout, read_bufsize=2 ** 22) as session:
         mark = asyncio.create_task(watermark(session)) if cert is not None else None
         tasks = [asyncio.create_task(one(session, r, at, rid)) for r, at, rid in zip(requests, arrivals, ids)]
         done, pending = await asyncio.wait(tasks, timeout=max(arrivals) + drain_s)

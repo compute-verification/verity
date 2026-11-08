@@ -45,7 +45,7 @@ MANY = ("references", "partition")
 PANELS = ("exfiltration", "infiltration", "skipped_work")
 CUTS = ("tokens", "kv", "layer_of_token", "every_block")
 #: the server configurations that pay a serve tax of their own (`total_cost.CONFIGURATIONS`)
-CONFIGURATIONS = ("tokens", "layer_of_token", "every_block")
+CONFIGURATIONS = ("tokens", "tokens_bi", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 NUM = (int, float)
 

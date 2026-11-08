@@ -588,7 +588,7 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Sampled/Defs.lean::FlockSampled.Trace":
-        "homonym, the sampled proofs' committed units, each one's type and values: rename (proofs)",
+        "homonym, SPOT's committed units, each one's type and values: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout.Opening":
@@ -834,7 +834,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
-    "verity/core/protocols/pous/challenger_party.py::Challenger":
+    "verity/core/devices/memory_challenger/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",

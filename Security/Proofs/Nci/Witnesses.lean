@@ -382,11 +382,11 @@ theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1
 
 theorem dampener_T0_fails :
     ¬ (efficiency 1 1 2 0 ≤
-        unmonitoredShare 2 0 +
+        unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) := by
   rw [bound_T0, show (T0 D).reuse = 0 from rfl]
-  norm_num [efficiency, unmonitoredShare, residualShare, memoryCap, declaredShare, rhoT]
+  norm_num [efficiency, unregisteredShare, residualShare, memoryCap, declaredShare, rhoT]
 
 theorem DampenerThreaded_honest : Guarantees.DampenerThreaded_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
@@ -496,7 +496,7 @@ theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
   · norm_num at h
   · rintro - ⟨h1, -⟩
     rw [bound_T0] at h1
-    norm_num [efficiency, unmonitoredShare, residualShare, lagShare, declaredShare, rhoT] at h1
+    norm_num [efficiency, unregisteredShare, residualShare, lagShare, declaredShare, rhoT] at h1
 
 end Nci.SecurityProofs
 

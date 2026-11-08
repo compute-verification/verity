@@ -2,6 +2,7 @@
 `app/util.py` to `app/core/util.py` and renames the module `app.util` to `app.core.util`."""
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -471,3 +472,29 @@ def test_dropping_a_scratch_worktree_changes_no_file_outside_it(repo, tmp_path):
     RS.drop_worktree(str(wt), str(repo))
     assert not wt.exists()
     assert {f.name: f.stat().st_mode & 0o777 for f in (linked, hard)} == {"linked": 0o600, "hard": 0o600}
+
+
+def test_a_scratch_worktree_is_added_and_forgotten_holding_the_clones_worktree_lock_and_filled_without_it(repo, monkeypatch):
+    """`git worktree add` writes a placeholder HEAD before the real one, and a fetch in the clone reads every worktree's HEAD
+    (drive's sync failed on one: `bad object worktrees/restack-…/HEAD`). So a scratch worktree is added, with no checkout,
+    and forgotten holding the clone's worktree lock alone, which every fetch the queue runs holds shared, and its checkout
+    fills it after the lock goes."""
+    lock, seen, real = repo / ".git" / RS.WORKTREES_LOCK, [], RS.git
+
+    def probed(*args, **kw):
+        if args[0] in ("worktree", "reset"):
+            with open(lock, "a") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    seen.append((*args[:2], "free"))
+                except BlockingIOError:
+                    seen.append((*args[:2], "held"))
+        return real(*args, **kw)
+
+    monkeypatch.setattr(RS, "git", probed)
+    wt = repo.parent / "scratch"
+    RS.add_worktree(str(wt), "main", str(repo))
+    assert (wt / "README.md").read_text() == "readme\n"
+    RS.drop_worktree(str(wt), str(repo))
+    assert seen == [("worktree", "add", "held"), ("reset", "--hard", "free"), ("worktree", "prune", "held")]
+    assert not wt.exists() and str(wt) not in git(repo, "worktree", "list")

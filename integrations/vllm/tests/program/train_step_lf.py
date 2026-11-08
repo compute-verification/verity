@@ -1,7 +1,11 @@
-"""The `lf` model of the training-efficiency ladder (`benchmarks/covert_witness/model.py` on the te-ref-optim branch), for
-the training-step frontend's tests and its census tool: a Llama-style decoder (RMSNorm, SwiGLU, RoPE, no biases, tied input
-and output embeddings) over the GPT-2 vocabulary padded to 50,304, its loss the next-token cross-entropy, and the plain AdamW
-the step is derived with (the ladder trains its matrices with Muon instead)."""
+"""The `lf` model of the training-efficiency ladder (the `model.py` of training's slowdown code), for
+the training-step frontend's tests and the grader's (`benchmarks/training_slowdown/grader`): a Llama-style decoder (RMSNorm,
+SwiGLU, RoPE, no biases, tied input and output embeddings) over the GPT-2 vocabulary padded to 50,304, its loss the next-token
+cross-entropy, and the plain AdamW the step is derived with (the ladder trains its matrices with Muon instead).
+
+The ladder runs the forward under CUDA bf16 autocast, which for this model casts each linear's two operands to bf16 and leaves
+every other op as it is (attention's operands are bf16 already). `LM(..., matmul_dtype=torch.bfloat16)` writes those casts out;
+a trace of the step under CPU autocast fails in scaled-dot-product attention's backward. Without it the model is f32."""
 from __future__ import annotations
 
 import math
@@ -28,14 +32,20 @@ class Size:
 SIZES = {s.name: s for s in (Size("s", 512, 6, 8, 1408), Size("tiny", 64, 2, 2, 192))}
 
 
+def linear(x: torch.Tensor, w: torch.Tensor, dtype: torch.dtype | None) -> torch.Tensor:
+    """`F.linear(x, w)`, both operands cast to `dtype` first when one is given."""
+    return F.linear(x, w) if dtype is None else F.linear(x.to(dtype), w.to(dtype))
+
+
 class Linear(nn.Module):
-    def __init__(self, d_in: int, d_out: int, std: float):
+    def __init__(self, d_in: int, d_out: int, std: float, matmul_dtype: torch.dtype | None = None):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(d_out, d_in))
         nn.init.normal_(self.weight, std=std)
+        self.matmul_dtype = matmul_dtype
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.linear(x, self.weight)
+        return linear(x, self.weight, self.matmul_dtype)
 
 
 def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
@@ -44,16 +54,16 @@ def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
 
 
 class Block(nn.Module):
-    def __init__(self, size: Size, std: float, out_std: float):
+    def __init__(self, size: Size, std: float, out_std: float, matmul_dtype: torch.dtype | None = None):
         super().__init__()
-        d = size.d_model
+        d, dt = size.d_model, matmul_dtype
         self.n_head = size.n_head
         self.attn_norm = nn.Parameter(torch.ones(d))
         self.mlp_norm = nn.Parameter(torch.ones(d))
-        self.wq, self.wk, self.wv = Linear(d, d, std), Linear(d, d, std), Linear(d, d, std)
-        self.wo = Linear(d, d, out_std)
-        self.w_gate, self.w_up = Linear(d, size.d_ff, std), Linear(d, size.d_ff, std)
-        self.w_down = Linear(size.d_ff, d, out_std)
+        self.wq, self.wk, self.wv = Linear(d, d, std, dt), Linear(d, d, std, dt), Linear(d, d, std, dt)
+        self.wo = Linear(d, d, out_std, dt)
+        self.w_gate, self.w_up = Linear(d, size.d_ff, std, dt), Linear(d, size.d_ff, std, dt)
+        self.w_down = Linear(size.d_ff, d, out_std, dt)
 
     def forward(self, x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
         b, t, d = x.shape
@@ -67,12 +77,13 @@ class Block(nn.Module):
 
 
 class LM(nn.Module):
-    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB):
+    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB, matmul_dtype: torch.dtype | None = None):
         super().__init__()
         std, out_std = 0.02, 0.02 / math.sqrt(2 * size.n_layer)
+        self.matmul_dtype = matmul_dtype
         self.embed = nn.Parameter(torch.empty(vocab, size.d_model))
         nn.init.normal_(self.embed, std=std)
-        self.blocks = nn.ModuleList(Block(size, std, out_std) for _ in range(size.n_layer))
+        self.blocks = nn.ModuleList(Block(size, std, out_std, matmul_dtype) for _ in range(size.n_layer))
         self.norm = nn.Parameter(torch.ones(size.d_model))
         hd = size.d_model // size.n_head
         freqs = 1.0 / (ROPE_THETA ** (torch.arange(0, hd, 2, dtype=torch.float32) / hd))
@@ -86,12 +97,11 @@ class LM(nn.Module):
         cos, sin = self.cos[:t], self.sin[:t]
         for b in self.blocks:
             x = b(x, cos, sin)
-        return F.linear(F.rms_norm(x, (x.shape[-1],), self.norm), self.embed)
+        return linear(F.rms_norm(x, (x.shape[-1],), self.norm), self.embed, self.matmul_dtype)
 
 
 def loss_fn(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
-    """Next-token cross-entropy of a batch of token rows: the model reads each row's first T tokens and predicts the next.
-    The ladder runs the forward under CUDA bf16 autocast; this is its f32 form, which is what a trace on CPU or meta gives."""
+    """Next-token cross-entropy of a batch of token rows: the model reads each row's first T tokens and predicts the next."""
     logits = model(x[:, :-1])
     return F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
 
@@ -105,8 +115,9 @@ def square_loss(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
 ADAMW = {"lr": 6e-3, "betas": (0.9, 0.95), "eps": 1e-10, "weight_decay": 0.01}
 
 
-def meta_step(size: str = "s", batch: int = 2, ctx: int = CTX, vocab: int = VOCAB) -> tuple[LM, torch.Tensor]:
+def meta_step(size: str = "s", batch: int = 2, ctx: int = CTX, vocab: int = VOCAB,
+              matmul_dtype: torch.dtype | None = None) -> tuple[LM, torch.Tensor]:
     """The model at `size` and a batch of `batch` rows of `ctx + 1` tokens, on the meta device (shapes only)."""
     with torch.device("meta"):
-        model = LM(SIZES[size], ctx=ctx, vocab=vocab)
+        model = LM(SIZES[size], ctx=ctx, vocab=vocab, matmul_dtype=matmul_dtype)
     return model, torch.empty(batch, ctx + 1, dtype=torch.long, device="meta")
