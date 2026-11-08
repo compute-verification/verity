@@ -1,5 +1,42 @@
 # To the proofs coordinator
 
+## 15:25Z from VERIFYFAST-B: #8136 is open; the structural session is 0.91×, 0.73× and 0.26× flat's on N1024, N6144 and K2048; v1 needs one more commit; marking by Mon 12:00Z
+
+- **[#8136](https://github.com/compute-verification/verity/pull/8136)** is open, not marked, at 743392ec92 and linked
+  to PRF-464. It sits on `main`, doesn't need #8052, and merges cleanly onto `main` d9cd4dd596.
+- **The session phase, flat against structural in the same run** (vy-nebius-cpu-11):
+
+  | Statement | Before | After |
+  |---|---|---|
+  | RMSNorm v3 N1024 | 32.9 vs 152.5 s (4.64×) | 20.9 vs 19.1 s (**0.91×**) |
+  | RMSNorm v3 N6144 | 114.7 vs 276.1 s (2.41×) | 114.4 vs 83.3 s (**0.73×**) |
+  | FlashInfer K2048 | 109.9 vs 1,265.3 s (11.5×) | 102.2 vs 26.3 s (**0.26×**) |
+  | RMSNorm v1 N6144 | 108.9 vs 451.2 s (4.14×) | running |
+
+  - Before is r20261108-111630-c9dc, at e667cee502: kernels' 2a324796c7 with #8052's head merged.
+  - After is r20261108-125238-793e, at 9901b8e11d: e667cee502 plus this branch's four files, without the
+    specialization commit.
+- **The whole verify:**
+  - On K2048 it is now below flat: 149.2 s against 354.3 s (0.42×), at 27.4 GB against 99.2 GB.
+  - On RMSNorm v3 it is still above (N6144 1.18×, N1024 4.0×), all of it in the inputs phase. #8096 and #8101 cut that
+    phase, and no file of mine touches it.
+- **v1 N6144 isn't there yet.**
+  - Its template has one Definition of 9.7M explicit rows averaging 19 references each. The fold alone is only 3.5×
+    faster: 200.3 s to 56.6 s.
+  - The fold-window profile (r20261108-150747-4b04, vy-nebius-cpu-7):
+    - `F128.mulW` 21%;
+    - HashMap updates from `Tab.flushK` 12.5%;
+    - `flushK`'s 64-slot loops 8%;
+    - allocation and refcounting 19%.
+  - **The next commit:** one 64-slot accumulator per walk in the shared-copies branch. A row's run sums, and a narrow
+    row's references directly, add into an array instead of the HashMap. The array is flushed into the table once per
+    row chunk and column chunk. Its proof follows `refsK_tabExp`'s pending-value pattern.
+- **Runs open:**
+  - r20261108-125238-793e (vy-nebius-cpu-11): v1, structural then flat, ETA about 16:15Z.
+  - r20261108-141025-b924 (vy-nebius-cpu-11): the head's code, with the specialization, on all four statements, ETA
+    about 18:00Z.
+- **Date:** marked once all four statements hold, by Mon 9 Nov 12:00Z.
+
 ## 14:51Z from OVERHEADDEF: c343's whole block replaying cross-machine on vy-glm53-h8 (d459); 72b6's queued behind it (751b); ebb0 cancelled
 
 - **Access.** My VM reaches vy-glm53-h8; there was no `publickey` refusal. The code is shipped from the pushed branch `cursor/proofs-overheaddef-h8a1` (head ca5291d032) with `--source`.
