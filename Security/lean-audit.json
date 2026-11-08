@@ -23743,6 +23743,69 @@
    "type_hash": "112a8c90c018aebd4028397748512fca09566c34295f1a1479fc82c38fe3c058",
    "unfolded_hash": "165a939c6b260746860be36163d893e78c46c0979985edc6600f24c407bd1a93"
   },
+  "Verity.SecurityProofs.FingerprintCollision": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.FingerprintCollision : Verity.Guarantees.FingerprintCollision"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "03fbd0ee7cd5b877c5d84676b2f0497f62fb636229b5f6924f8678a0f35e39a7",
+   "unfolded_hash": "22bf0351270b9cc1da64fcf22014f8df8be7449276efd5566d71a2e61e565f4c"
+  },
+  "Verity.SecurityProofs.FingerprintCollision_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.FingerprintCollision_honest :",
+    "  And",
+    "    (Eq",
+    "      (Verity.Game.prCoin fun c =>",
+    "        Eq (Verity.MemCheck.fingerprint c.fst c.snd (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 0)))",
+    "          (Verity.MemCheck.fingerprint c.fst c.snd (Multiset.instInsert.insert 0 (Multiset.instSingleton.singleton 1))))",
+    "      1)",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun c =>",
+    "        And",
+    "          (Ne (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 0))",
+    "            (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 1)))",
+    "          (Eq",
+    "            (Verity.MemCheck.fingerprint c.fst c.snd",
+    "              (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 0)))",
+    "            (Verity.MemCheck.fingerprint c.fst c.snd",
+    "              (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 1)))))",
+    "      (instHDiv.hDiv 2 (instHPow.hPow 2 128)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1cc5015e4d679b4d48464370e57828cd2f5720f4909fcb807f8ffc8043a3c139"
+  },
+  "Verity.SecurityProofs.FingerprintCollision_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.FingerprintCollision_nontrivial :",
+    "  Not",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun x =>",
+    "        And (Ne (Multiset.instSingleton.singleton 1) (Multiset.instSingleton.singleton 0)) True)",
+    "      (instHDiv.hDiv 1 (instHPow.hPow 2 128)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "aad6afec144fe54eca35aaa52cd3d7fc2e53e00b13846080043bfcda61bb4f49"
+  },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperStepComplete : Verity.Guarantees.HopperStepComplete"],
@@ -23898,6 +23961,64 @@
    },
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0",
    "unfolded_hash": "9b357ce37eb093da3677870f727c259fd78f42903c5202ea171ece2e46d09a7c"
+  },
+  "Verity.SecurityProofs.PrintCollision": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.PrintCollision : Verity.Guarantees.PrintCollision"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "46098b395d65c8a249f2c6128700a6414eb2614f42b199257ea1fb0aeac06b98",
+   "unfolded_hash": "29cd76a5e2c1958160974772e5c6d4724653d83f10db4a99eb4c39cb12d675fd"
+  },
+  "Verity.SecurityProofs.PrintCollision_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.PrintCollision_honest :",
+    "  ENNReal.instLE.le",
+    "    (Verity.Game.prCoin fun δ =>",
+    "      Exists fun k =>",
+    "        And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k)",
+    "          (Exists fun k' =>",
+    "            And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k')",
+    "              (And (Ne k k') (Eq (Verity.MemCheck.element δ k) (Verity.MemCheck.element δ k')))))",
+    "    (instHDiv.hDiv 3 (instHPow.hPow 2 128))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d937a42351495bf98a1287a5c9a238729032692472535c8e38b9d417f93c6cb0"
+  },
+  "Verity.SecurityProofs.PrintCollision_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.PrintCollision_nontrivial :",
+    "  Not",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun x =>",
+    "        Exists fun k =>",
+    "          And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k)",
+    "            (Exists fun k' =>",
+    "              And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k')",
+    "                (And (Ne k k') True)))",
+    "      (instHDiv.hDiv 1 (instHPow.hPow 2 128)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "949b5136173ef2c9e5ee6616a6b82a94c93a4453af6d94e8644bfda844da02c2"
   },
   "Verity.SecurityProofs.PrivateFitsOfLocal": {
    "owner": "@proofs",
@@ -24529,24 +24650,6 @@
    },
    "type_hash": "8e5244a0e2b442ec2d7f535eb5774ec55c7f866c873684cdbd9e4a6342420620",
    "unfolded_hash": "12187ab64b5baaa5cfccda4088790402e0e8a6c614379af8cbe8d5adb9e4fc61"
-  },
-  "Verity.SecurityProofs.FingerprintCollision": {
-   "owner": "@proofs"
-  },
-  "Verity.SecurityProofs.FingerprintCollision_honest": {
-   "owner": "@proofs"
-  },
-  "Verity.SecurityProofs.FingerprintCollision_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Verity.SecurityProofs.PrintCollision": {
-   "owner": "@proofs"
-  },
-  "Verity.SecurityProofs.PrintCollision_honest": {
-   "owner": "@proofs"
-  },
-  "Verity.SecurityProofs.PrintCollision_nontrivial": {
-   "owner": "@proofs"
   }
  },
  "shape": {
@@ -32223,6 +32326,13 @@
     "Verity.Guarantees.SoundMono": "fa86a98c87341208789aaed40edf38ef88f68a7c4e2c23a1a19738acbc0771df"
    }
   },
+  "Definitions.Core.Guarantees.MemCheck": {
+   "digest": "20566d150f68bccb4c315d8d2f55dd2fc06c2a849840df7c93f6758a22b8371e",
+   "definitions": {
+    "Verity.Guarantees.FingerprintCollision": "971e7f16cf9698753186838ebb18480de9c996eb4e108db6cb73b777d7297ce0",
+    "Verity.Guarantees.PrintCollision": "b9be6144e6f8626b6d4a817d79dfb1a2a2d0046ebfe548f64b5774fc2d2e9c87"
+   }
+  },
   "Definitions.Core.Guarantees.NaiveStrassen": {
    "digest": "0f2986f521d2f0ef964691ab822e09c526f44c454c4216fe1ae5ce6a8e7e302a",
    "definitions": {
@@ -32420,6 +32530,14 @@
     "Claims.stepWith": "374305791ab13eaaec5223a60da8c58fb4ef3536404c9677f4b67a5d2489f824",
     "Claims.trustedBase": "556bfbde87e5628245b3360e3dbeff759b0c0fffb82449a439504593c2d293b6",
     "Claims.waitAcc": "ba5c834bc3a282d673e62ffdb2c2953269b0e707b8865c7bab96f72bc68afbe2"
+   }
+  },
+  "Definitions.Core.MemCheck": {
+   "digest": "8c70559dc666c382b05a6f4b3018135d2ebf3ea92581aaf064c8928f7bfe736d",
+   "definitions": {
+    "Verity.MemCheck.element": "a1cc316768cfdc593c2dcb6a33922233bf940f28c8dbf708a1d9d5dca86a719e",
+    "Verity.MemCheck.fingerprint": "582656bb3d8964c1e98f7c8610f5d541e37b4bd6b6564238d8105be48e508f84",
+    "Verity.MemCheck.gf128Fintype": "95d4397c4d5a249b1e88fa145b2872f004a6daef6a709e993711783df83ac78d"
    }
   },
   "Definitions.Core.NaiveStrassen": {
