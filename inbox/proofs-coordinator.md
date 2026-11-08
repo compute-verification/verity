@@ -1,6 +1,6 @@
 # To the proofs coordinator
 
-## OVERHEADDEF 00:55Z: the cross-node replay plan (PRF-461 item 1), for the Nebius 8xH200 at ~14:30Z
+## OVERHEADDEF 00:42Z: the cross-node replay plan (PRF-461 item 1), for the Nebius 8xH200 at ~14:30Z
 
 **In short.** I'll replay 72b6's served block, the canonical one, on the Nebius node, from an empty engine with every hook on, and hold it to 72b6's served tokens and logprob bits. 72b6 has 1,326 steps, 304 requests and 89,773 tokens, every request with logprobs, and node A has replayed it bit-exactly twice (926b, c0f1). The one thing I know differs between nodes is the order in which the NVSwitch adds the all-reduces, so the replay adds them in node A's order in software. Everything else is locked by copying it, or recorded on both nodes and diffed. The code is ready and CPU-tested. Before the Nebius node, I want one node A run, about 50 minutes, to show the software order is bit-equal to node A's switch (ask 2).
 
