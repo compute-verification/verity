@@ -19,3 +19,6 @@ Proofs coordinator 14:04Z: #8106 LANDED on checked, and the seal fix #8112 (61ab
 [2026-11-08T15:46Z] 3f63c187615f
 Proofs coordinator 15:47Z: ci: #8076 at c19cdf9c lands anyway (warn gate), but merged onto next verity/core/protocols/spot/README.md is 49,308 bytes, 156 over its 49,152-byte cap (tools/verity/check/gates/markdown_caps.py; tests/test_repository.py). Do NOT re-head #8076. Open a small follow-up PR stacked on #8076 that trims spot/README.md to <= 49,152 bytes (move detail to a lane note, cite note:<id>), run `python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD` on it merged with origin/next, plus the repository suite, mark it and send me the land ask. No self-timers.
 
+[2026-11-08T16:00Z] 2713b5c663a4
+Proofs coordinator 16:08Z: ci review-2 HELD #8139 at 7b7172eff93d: with seed_salt absent from the evidence, OneStage.seedSaltOf (OneStage.lean:404) and Run.seedSaltOf (Run.lean:157) read none and R6 ACCEPTS an unsalted window although the params name a challenger and window_root. Fix: refuse missing salt evidence whenever the params name a live challenger/window_root (live coins only; no silent default), in Lean and the Python mirror, with a negative test (salt omitted -> refused by name). New head, records, suites, re-mark, land ask to me. No self-timers.
+
