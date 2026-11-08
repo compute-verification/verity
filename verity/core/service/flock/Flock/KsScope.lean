@@ -1,31 +1,32 @@
 /-
-The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV4`) takes
-none of `SampledKSLiveV3`'s file preconditions as a hypothesis: no form goes ahead of its proof. Under `--zk` every session
-of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
+The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV3`)
+takes none of `Flock.Bridge.SampledKSLiveRoots`' file preconditions as a hypothesis: no form goes ahead of its proof.
+Under `--zk` every session of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
 
 * `tagsWhy tags`: a typed statement, one with public outputs, one without retained rounds, or one whose leaves are not
-  `hm96-sha512/v1` (V3's `I.tags.typed = false` and `TagsOkZHJ`).
+  `hm96-sha512/v1` (`SampledKSLiveRoots`' `I.tags.typed = false` and `TagsOkZHJ`).
 * `filesWhy tags c pub publicFile`: a circuit outside `ProvedScope.scopeOkH` (the unit reads one input group and returns
-  the outputs, V3's `scopeOkH`; `ProvedScope.check` holds a hidden-output circuit only to the weaker `scopeOkI`), and a
-  shared-row public file (header `shared_rows`) outside the form `Flock.Guarantees.SampledKSLiveV5` covers
+  the outputs, `SampledKSLiveRoots`' `scopeOkH`; `ProvedScope.check` holds a hidden-output circuit only to the weaker
+  `scopeOkI`), and a shared-row public file (header `shared_rows`) outside the form `Flock.Guarantees.SampledKSLiveV5` covers
   (`sharedWhy`): the circuit's public input ports parse (`HmIn.parse`), the file loads over them (`HmIn.loadPublic`),
   and no two ports' roots over its tables are one root under different domains (`collidesT`, V5's `RootFixesDomainL` at
   the file's leaf map). A file without shared rows is V3's form (`pub.tables = none`).
 * `drawWhy count draw`: at more than one table, a session whose record holds no sample that parses, or whose subset sample's
-  `k` the tables don't divide (V3's `kd % nTab = 0`).
+  `k` the tables don't divide (`SampledKSLiveRoots`' `kd % nTab = 0`).
 
 `checkOf parsed tags publicFile count draw` runs them on the circuit `parsed` it is handed and the public file as
 `HmOut.loadPublic` loads it over that circuit. `check` runs `checkOf` on the circuit `HmOut.parse` reads, a flat file's,
-and `check_ok` says what passing `check` establishes: V4's file preconditions, or V5's at a shared-row file. V3's sixth,
-that the unit is a built net, follows
-from the parse of an untyped statement. A V* session (`--rec-inner`) is the recursion's, whose guarantee is its own, so
-`verify` doesn't run the check on it. `flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python
-mirror (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
+and `check_ok` says what passing `check` establishes: `SampledKSLiveRoots`' file preconditions, or V5's at a shared-row
+file. Their sixth, that the unit is a built net, follows from the parse of an untyped statement. A V* session
+(`--rec-inner`) is the recursion's, whose guarantee is its own, so `verify` doesn't run the check on it.
+`flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
+(`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
 
-`verify --zk` hands `checkOf` the circuit `ProvedScope.circuitOf` reads, which for a templated statement (`Tags.isTmpl`)
-carries its template: that circuit is held to the unit's form on the template's description (`unitWhy`:
-`ProvedScope.scopeOkT` at `count` tables), never on the rows the template unrolls to, and its statement circuit, the flat
-circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says what passing establishes at any circuit.
+`verify --zk` hands `checkOf` the circuit `ProvedScope.circuitOf` reads: at a templated statement (`Tags.isTmpl`) the
+template's parse (`HmOut.parseTmpl`), which carries its template, never `HmOut.parse`'s, which refuses its tags; at a
+flat one, `HmOut.parse`'s. A templated circuit is held to the unit's form on the template's description (`unitWhy`:
+`ProvedScope.scopeOkT` at `count` tables), never on the rows the template unrolls to, and its statement circuit, the
+flat circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says what passing establishes at any circuit.
 -/
 module
 
@@ -232,7 +233,7 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
       next => cases h
 
 /-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
-public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V4's form) or is
+public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V3's form) or is
 in V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
 theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
     {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())
