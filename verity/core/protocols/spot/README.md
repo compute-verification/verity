@@ -9,7 +9,7 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
+`verity/core/protocols/remote/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
 policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
@@ -123,7 +123,7 @@ soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a cl
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
 stratum `s`, so a subcircuit that is incorrect in every proof block is never missed. Under the work sampling design, incorrect proof blocks
-doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
+doing a fraction `ε` of the credited work have miss probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
 
 **Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
@@ -148,7 +148,7 @@ registers a stand-in, a fresh commitment to values captured from serving, and sa
 served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are
-`served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred window becomes
+`served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred execution phase becomes
 `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves.
 
 ## Where things are
@@ -220,7 +220,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     before it has them, so the strategy run on a replica reads none of its own coins, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
-    certifier, and a window's coins leave it only on the peer's certifier coin link, which the gate refuses to open
+    certifier, and an execution phase's coins leave it only on the peer's certifier coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
   - `OneClock`, an assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
@@ -281,7 +281,7 @@ from verity.core.protocols.spot.costfit import fit
   holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the population programs `population_program` and `mixed_population_program` (`verity.ml.circuits.population`'s,
-  which an integration builds its window's program with).
+  which an integration builds its execution phase's program with).
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
@@ -367,11 +367,11 @@ A program's weights, constants and tables are values: committed once, under hidi
   an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the
   earlier record's port or entry (`outputs`). `Stream.register` and `register_interiors` take `outputs`, keep the record
   each one names in the log R7 reads, and pass them to the run of record: this is how a record reads the state an
-  earlier one left, such as a request carried across a Commit period's edge.
-- **Per-window values.** Given the window's open root R, from the challenger's signed open of the window, every value's
-  domain binds R, except the ones the verifier holds across windows (`held`, and its pinned, supplied and output values).
-  So a window's values are held to no earlier window's roots. A verifier that names no R refuses its own inputs when a
-  value it doesn't hold across windows would be held to an earlier window's root (`unwindowed`).
+  earlier one left, such as a request carried across an execution phase's edge.
+- **Per-phase values.** Given the execution phase's open root R, from the challenger's signed open of it, every
+  value's domain binds R, except the ones the verifier holds across phases (`held`, and its pinned, supplied and output
+  values). So a phase's values are held to no earlier phase's roots. A verifier that names no R refuses its own inputs
+  when a value it doesn't hold across phases would be held to an earlier phase's root (`unwindowed`).
 - **Supplied values.** These are values the verifier fills itself, from the record's roots, positions after the log's,
   its window salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
@@ -437,7 +437,7 @@ Pinned by `tests/test_one_stage.py`'s checks of each sampling design's text, obj
 
 ### What a proof block's work may count
 
-The work sampling design's bound on acceptance probability holds over the work the table credits; what the table may
+The work sampling design's bound on miss probability holds over the work the table credits; what the table may
 credit is a rule of its own, documented with `draw.work_table`:
 
 - A proof block's work is counted on the rows the Program declares, never on rows a kernel pads it with.
@@ -555,7 +555,7 @@ sampled once. The record is each `Segment` (family, first index, `after` and the
 are exactly those released after the commitment, every one read; the stream's digest says `"coins": "challenger"`.
 `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
 session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
-registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
+registration's execution phase (`register`'s `window_root`, never one the evidence names), run from a commit the host's
 pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
 session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
 salt or path before it closed) and the bytes the sample read are those coins, after the registration's digest. Missing evidence and a registration without its

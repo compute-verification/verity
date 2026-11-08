@@ -188,7 +188,7 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 @pytest.mark.parametrize("rank", [0, 7])
 def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
-    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the row:
+    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row:
     the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
     sqrtsoftplus routers, the Marlin experts aligned in pair-index order.  About 25 s a rank, nearly all of it encoding the mHC
     Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order

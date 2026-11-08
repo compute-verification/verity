@@ -31,14 +31,9 @@ open Finset
 
 variable {Ω : Type}
 
-theorem prob_mono [Fintype Ω] {μ : Ω → ℝ} (hμ : ∀ c, 0 ≤ μ c) {N : ℕ} {E E' : (Fin N → Ω) → Prop}
-    (h : ∀ cs, E cs → E' cs) : prob μ N E ≤ prob μ N E' := by
-  unfold prob
-  refine ex_mono hμ fun cs => ?_
-  by_cases h1 : E cs
-  · simp [h1, h cs h1]
-  · simp only [h1, ↓reduceIte]
-    split_ifs <;> norm_num
+theorem prob_mono [Fintype Ω] {μ : PMF Ω} {N : ℕ} {E E' : (Fin N → Ω) → Prop}
+    (h : ∀ cs, E cs → E' cs) : prob μ N E ≤ prob μ N E' :=
+  Verity.Game.prPMFReal_mono _ h
 
 theorem cumUpTo_zero [DecidableEq Ω] (A : Strategy Ω) (n : ℕ) (h : List Ω) (cs : Fin n → Ω) :
     A.cumUpTo n 0 h cs = 0 := by
@@ -103,23 +98,23 @@ theorem cumLag_le [DecidableEq Ω] {A : Strategy Ω} {ℓ : ℝ} (hL : LeakBound
 /-- **Harm through the halt**: under detection pressure `κ`, with every window leaking at most `ℓ` and the halt `Δ`
 windows after the first caught window's commitment, what leaves through the halt reaches `x` with probability at most
 `exp (-κ (x - (1 + Δ) ℓ))`, for every adaptive strategy and every horizon. -/
-theorem tail_cumLag [Fintype Ω] [DecidableEq Ω] {μ : Ω → ℝ} (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 ≤ κ)
+theorem tail_cumLag [Fintype Ω] [DecidableEq Ω] {μ : PMF Ω} {κ ℓ : ℝ} (hκ : 0 ≤ κ)
     {A : Strategy Ω} (hP : DetectionPressure μ κ A) (hL : LeakBounded ℓ A) (Δ n : ℕ) (h : List Ω) (x : ℝ) :
     prob μ n (fun cs => x ≤ A.cumLag Δ n h cs) ≤ Real.exp (-(κ * (x - (1 + Δ) * ℓ))) := by
   calc prob μ n (fun cs => x ≤ A.cumLag Δ n h cs) ≤ prob μ n (fun cs => x - Δ * ℓ ≤ A.cum n h cs) :=
-        prob_mono hμ.1 fun cs hx => by linarith [cumLag_le hL Δ n h cs]
-    _ ≤ Real.exp (-(κ * (x - Δ * ℓ - ℓ))) := tail_cum hμ hκ hP hL n h _
+        prob_mono fun cs hx => by linarith [cumLag_le hL Δ n h cs]
+    _ ≤ Real.exp (-(κ * (x - Δ * ℓ - ℓ))) := tail_cum hκ hP hL n h _
     _ = Real.exp (-(κ * (x - (1 + Δ) * ℓ))) := by rw [show x - Δ * ℓ - ℓ = x - (1 + Δ) * ℓ by ring]
 
 /-- **The rate form with the lag**: through the halt the `j`-th detection triggers, `Δ` windows after it, at most
 `j (ℓ + 1/κ) + Δ ℓ` leaves on average. -/
-theorem ex_cumUpToLag [Fintype Ω] [DecidableEq Ω] {μ : Ω → ℝ} (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ)
+theorem ex_cumUpToLag [Fintype Ω] [DecidableEq Ω] {μ : PMF Ω} {κ ℓ : ℝ} (hκ : 0 < κ)
     {A : Strategy Ω} (hP : DetectionPressure μ κ A) (hL : LeakBounded ℓ A) (Δ n j : ℕ) (h : List Ω) :
     ex μ n (A.cumUpToLag Δ n j h) ≤ j * (ℓ + 1 / κ) + Δ * ℓ := by
   calc ex μ n (A.cumUpToLag Δ n j h) ≤ ex μ n (fun cs => Δ * ℓ + A.cumUpTo n j h cs) :=
-        ex_mono hμ.1 fun cs => by linarith [cumUpToLag_le hL Δ n j h cs]
-    _ = Δ * ℓ + ex μ n (A.cumUpTo n j h) := ex_add_const hμ _ _
-    _ ≤ j * (ℓ + 1 / κ) + Δ * ℓ := by linarith [ex_cumUpTo hμ hκ hP hL n j h]
+        ex_mono fun cs => by linarith [cumUpToLag_le hL Δ n j h cs]
+    _ = Δ * ℓ + ex μ n (A.cumUpTo n j h) := ex_add_const μ _ _
+    _ ≤ j * (ℓ + 1 / κ) + Δ * ℓ := by linarith [ex_cumUpTo hκ hP hL n j h]
 
 /-- **The cheating pool under the deployed sample**: `0 < k ≤ n`, each window as in `samplePressure` and leaking at most
 `ℓ`, and the halt `Δ` windows after the first caught window's commitment. With probability at least `1 - δ` the harm
@@ -129,16 +124,16 @@ theorem sample_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strateg
     (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
     (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ}
     (hL : LeakBounded ℓ A) {δ : ℝ} (hδ : 0 < δ) (Δ N : ℕ) (h : List (Verity.Draw.Subset n k)) :
-    1 - δ ≤ prob (uniformSample n k) N (fun cs => A.cumLag Δ N h cs < (1 + Δ) * ℓ + n / k * Real.log (1 / δ)) := by
-  have hμ := uniformSample_isDist hkn
+    1 - δ ≤
+      prob (uniformSample n k hkn) N (fun cs => A.cumLag Δ N h cs < (1 + Δ) * ℓ + n / k * Real.log (1 / δ)) := by
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk
   have hnR : (0 : ℝ) < n := by exact_mod_cast hk.trans_le hkn
   set x := (1 + (Δ : ℝ)) * ℓ + n / k * Real.log (1 / δ)
-  have ht := tail_cumLag hμ (by positivity) (samplePressure B w hw hesc hleak) hL Δ N h x
+  have ht := tail_cumLag (by positivity) (samplePressure hkn B w hw hesc hleak) hL Δ N h x
   have e : Real.exp (-((k : ℝ) / n * (x - (1 + Δ) * ℓ))) = δ := by
     rw [show (k : ℝ) / n * (x - (1 + Δ) * ℓ) = Real.log (1 / δ) by simp only [x]; field_simp; ring, one_div,
       Real.log_inv, neg_neg, Real.exp_log hδ]
-  rw [prob_congr (E' := fun cs => ¬x ≤ A.cumLag Δ N h cs) fun cs => not_le.symm, prob_not hμ]
+  rw [prob_congr (E' := fun cs => ¬x ≤ A.cumLag Δ N h cs) fun cs => not_le.symm, prob_not]
   linarith
 
 /-- **The rate form under the deployed sample**: through the halt the `j`-th detection triggers, `Δ` windows after it, at
@@ -147,11 +142,10 @@ theorem sample_ex_cumUpToLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strat
     (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
     (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ}
     (hL : LeakBounded ℓ A) (Δ N j : ℕ) (h : List (Verity.Draw.Subset n k)) :
-    ex (uniformSample n k) N (A.cumUpToLag Δ N j h) ≤ j * (ℓ + n / k) + Δ * ℓ := by
+    ex (uniformSample n k hkn) N (A.cumUpToLag Δ N j h) ≤ j * (ℓ + n / k) + Δ * ℓ := by
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk
   have hnR : (0 : ℝ) < n := by exact_mod_cast hk.trans_le hkn
-  have := ex_cumUpToLag (uniformSample_isDist hkn) (by positivity : (0 : ℝ) < k / n) (samplePressure B w hw hesc hleak)
-    hL Δ N j h
+  have := ex_cumUpToLag (by positivity : (0 : ℝ) < k / n) (samplePressure hkn B w hw hesc hleak) hL Δ N j h
   rwa [one_div_div] at this
 
 end Population.Exfil

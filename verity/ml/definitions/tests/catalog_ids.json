@@ -830,6 +830,7 @@
 "InductorSiluMul_v2",
 "IngressPrompt_v1",
 "IngressPrompt_v2",
+"IngressSampled_v1",
 "Int8AttnOut_v1",
 "Int8AttnOut_v2",
 "Int8AttnScale_v1",
