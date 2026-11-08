@@ -937,7 +937,9 @@ def every_call(cap: Capture, pops: dict, a, unstaged: dict | None = None) -> dic
                                    agree=sum(g["agree"] is True for g in gs), disagree=sum(g["agree"] is False for g in gs),
                                    errors=sum(g["agree"] is None for g in gs) - len(not_kept), not_kept=len(not_kept),
                                    failures=bad[:8] + not_kept[:2])
-    rep["gated_ops"], rep["not_gated_ops"], schedule = op_coverage(cap, unstaged)
+    # read_ops: what a population reads, not what this run gated (--types, the deadline or an unbound Definition can
+    # leave some ungated); the per-type counts above say what was
+    rep["read_ops"], rep["not_gated_ops"], schedule = op_coverage(cap, unstaged)
     rep["schedule_ops"] = {op: {"calls": n, "why": SCHEDULE_OPS[op]} for op, n in schedule.items()}
     return rep
 
