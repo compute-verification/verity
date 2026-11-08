@@ -260,11 +260,13 @@ def test_the_verifier_of_record_draws_both_stages():
 
 
 def test_the_second_stage_samples_k_in_each_cell():
-    """One stratum per cell, template by template and in each by sampled replay block, tiling the interior in order;
-    a cell smaller than the rule's count is proved whole, and counts proving every cell whole are refused."""
+    """One stratum per cell, template by template and in each by sampled replay block, tiling the interior in order,
+    each of the work law's floor its count (cells' counts aren't in proportion to their sizes, as the stratified law's
+    are); a cell smaller than the rule's count is proved whole, and counts proving every cell whole are refused."""
     law = S.second_law([1, 3], (4,), (2,))
-    assert law == {"law": "stratified", "k": 4, "strata": [{"template": "1/0", "units": [[0, 4]], "k": 2},
-                                                          {"template": "3/0", "units": [[4, 8]], "k": 2}]}
+    assert law == {"law": "work", "k": 1,
+                   "strata": [{"template": "1/0", "units": [[0, 4]], "work": 1, "floor": 2, "k": 2},
+                              {"template": "3/0", "units": [[4, 8]], "work": 1, "floor": 2, "k": 2}]}
     assert D.strata_problem(law, 8) is None
     obj = S.select_second([1, 3], (4,), (2,), random.Random(5).randbytes)
     assert obj["population"] == 8 and len(obj["units"]) == 4
@@ -272,9 +274,17 @@ def test_the_second_stage_samples_k_in_each_cell():
     law = S.second_law([1, 3], (3, 1), (2, 1))
     assert [(s["template"], s["units"], s["k"]) for s in law["strata"]] == [
         ("1/0", [[0, 3]], 2), ("3/0", [[3, 6]], 2), ("1/1", [[6, 7]], 1), ("3/1", [[7, 8]], 1)]
-    assert law["k"] == 6 and D.strata_problem(law, 8) is None
+    assert D.strata_problem(law, 8) is None
     obj = S.select_second([1, 3], (3, 1), (2, 1), random.Random(6).randbytes)
     assert obj["population"] == 8 and {6, 7} <= set(obj["units"]) and len(obj["units"]) == 6
+    for ns, ks in (((10, 1), (1, 1)), ((1, 9, 2), (1, 3, 2)), ((5, 5), (1, 4))):
+        law = S.second_law([0, 2, 5], ns, ks)
+        assert D.strata_problem(law, 3 * sum(ns)) is None
+        stratified = {"law": "stratified", "k": 3 * sum(ks),
+                      "strata": [{v: s[v] for v in ("template", "units", "k")} for s in law["strata"]]}
+        assert "k is not the rule's" in D.strata_problem(stratified, 3 * sum(ns))
+        obj = S.select_second([0, 2, 5], ns, ks, random.Random(7).randbytes)
+        assert len(obj["units"]) == 3 * sum(ks)
     assert S.second_counts(2, ["a", "b"], (3, 1)) == (2, 1) and S.second_counts({"b": 1, "a": 3}, ["a", "b"], (3, 2)) == (3, 1)
     with pytest.raises(ValueError, match="name each"):
         S.second_counts({"a": 1}, ["a", "b"], (3, 2))

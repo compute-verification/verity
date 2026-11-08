@@ -92,7 +92,10 @@ def Counts.ofJson? (j : Json) : Option Counts :=
   | some k, _ => if k == 0 then none else some (.each k)
   | none, .obj _ =>
     if (entries j).isEmpty then none
-    else ((entries j).mapM fun (t, v) => (nat? v).bind fun k => if k == 0 then none else some (t, k)).map .per
+    else
+      let ks : Option (Array (String × Nat)) := (entries j).mapM fun (t, v) =>
+        (nat? v).bind fun k => if k == 0 then none else some (t, k)
+      ks.map .per
   | none, _ => none
 
 /-- `service.second_counts`: the count in each cell of template `ids[t]`, `n_t = ns[t]` proof blocks: `k` (or the
@@ -188,19 +191,21 @@ def replayCells (p : Program) (query : Json) : V (Array Nat) := do
     throw s!"the check's templates {ids} are not the replay block's, each once, in the order of its first instance in it ({first})"
   return ids.map fun t => rs.foldl (fun s r => if r.template == t then s + r.count else s) 0
 
-/-- The cell of `n` proof blocks from `o + i·n` of template `t` in sampled replay block `r` sampling `k`: a stratum of
-`secondLaw`, named `r/t`. -/
+/-- The cell of `n` proof blocks from `o + i·n` of template `t` in sampled replay block `r` sampling `k`: a work stratum of
+`secondLaw`, named `r/t`, of unit work and floor `k`. -/
 def cellObj (o n k i r t : Nat) : Json :=
   Json.mkObj [("template", Json.str s!"{r}/{t}"), ("units", Json.arr #[natsJson #[o + i * n, o + (i + 1) * n]]),
-    ("k", Lean.toJson k)]
+    ("work", Lean.toJson (1 : Nat)), ("floor", Lean.toJson k), ("k", Lean.toJson k)]
 
 /-- `service.second_law`: the second stage's law over the interior's `sample.size · Σ n_t` proof blocks, template-major:
 template `t`'s from `off_t = sample.size · Σ_{t'<t} n_t'`, the `i`-th sampled replay block's (replay block `sample[i]`
 of the registration) instances of it `[off_t + i·n_t, off_t + (i+1)·n_t)`, one cell. One stratum per cell, template by
-template and in each by sampled replay block, `ks[t]` of its `ns[t]` proof blocks in each (`cellObj`): the strata tile
-`[0, sample.size · Σ n_t)` in order. -/
+template and in each by sampled replay block, `ks[t]` of its `ns[t]` proof blocks in each (`cellObj`); the strata tile
+`[0, sample.size · Σ n_t)` in order. The stratified law sizes each stratum's count in proportion to its size, which
+cells of several templates' sizes don't follow, so the law is the work law at `k = 1` and unit work: its rule
+(`Flock.Draw.workK`) gives each stratum `max floor 1` capped at its size, and each cell's floor is its count. -/
 def secondLaw (sample : Array Nat) (ns ks : Array Nat) : Json :=
-  Json.mkObj [("law", "stratified"), ("k", Lean.toJson (sample.size * ks.toList.sum)),
+  Json.mkObj [("law", "work"), ("k", Lean.toJson (1 : Nat)),
     ("strata", Json.arr ((List.range ns.size).flatMap fun t => (List.range sample.size).map fun i =>
       cellObj (sample.size * (ns.toList.take t).sum) (ns.getD t 0) (ks.getD t 0) i (sample.getD i 0) t).toArray)]
 
@@ -213,7 +218,7 @@ or a sample the coins don't end. -/
 def selectSecond (sample : Array Nat) (ns ks : Array Nat) (src : ByteArray) : V (Json × Nat) := do
   if sample.isEmpty || !(sample.toList.zip sample.toList.tail).all (fun (a, b) => a < b) then
     throw "a replay sample is one or more replay blocks, ascending, each once"
-  if ns.isEmpty || ks.size != ns.size || ns.any (· == 0) then
+  if ns.isEmpty || ks.size != ns.size || ns.toList.any (· == 0) then
     throw "a replay block's cells are one or more templates', each of at least one proof block, with a count each"
   if ns.toList.sum < 2 then
     throw s!"a replay block of {ns.toList.sum} proof blocks is a proof block: its rule is {pyRepr "law"}"

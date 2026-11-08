@@ -775,11 +775,14 @@ def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> d
     t's being [off_t, off_t + Q·n_t), off_t = Q·Σ_{t'<t} n_t', and sampled replay block `sample[i]`'s instances of it
     [off_t + i·n_t, off_t + (i+1)·n_t), one cell. One stratum per cell, template by template and in each by sampled
     replay block, named `r/t` (replay block r of the registration, template t of the check's), `ks[t]` of the cell's
-    `ns[t]` proof blocks in each. The strata tile [0, Q·Σ n_t) in order. The Lean verifier's `Select.secondLaw` is
-    this."""
+    `ns[t]` proof blocks in each; the strata tile [0, Q·Σ n_t) in order. The stratified law sizes each stratum's count
+    in proportion to its size, which cells of several templates' sizes don't follow, so the law is the work law at
+    k = 1 and unit work: its rule (`draw.work_k`) gives each stratum max(floor, 1) capped at its size, and each cell's
+    floor is its count. The Lean verifier's `Select.secondLaw` is this."""
     q, off = len(sample), _offsets(len(sample), ns)
-    return {"law": "stratified", "k": q * sum(ks),
-            "strata": [{"template": f"{r}/{t}", "units": [[off[t] + i * n, off[t] + (i + 1) * n]], "k": ks[t]}
+    return {"law": "work", "k": 1,
+            "strata": [{"template": f"{r}/{t}", "units": [[off[t] + i * n, off[t] + (i + 1) * n]], "work": 1,
+                        "floor": ks[t], "k": ks[t]}
                        for t, n in enumerate(ns) for i, r in enumerate(sample)]}
 
 
