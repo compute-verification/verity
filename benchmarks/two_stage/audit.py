@@ -107,6 +107,36 @@ def own_reads_only(record: dict, window: T.CS.Binding) -> bool:
     return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == own_ports(window)
 
 
+def statements(audit_dir: Path, window: T.CS.Binding) -> list[dict]:
+    """Each member session's statement as round 2 takes it (``{"template", "header", "draw", "registered"}``): its
+    template, its public file's header, its session record's ``unit_draw`` and the reads it was verified against. A
+    member the second stage drew nothing of has no session and no statement."""
+    import a0
+
+    out = []
+    for k, m in enumerate(window.members):
+        st, rec = audit_dir / f"m{k}", next((audit_dir / f"session-m{k}" / "sessions").glob("*/session.json"), None)
+        if rec is None:
+            continue
+        reads = st / "registered.json"
+        out.append({"template": m.template, "header": a0.public_header(st, m.n),
+                    "draw": json.loads(rec.read_text()).get("unit_draw"),
+                    "registered": json.loads(reads.read_text()) if reads.exists() else None})
+    return out
+
+
+def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, drawn: list[int], stmts: list[dict]):
+    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed), where the tree has it."""
+    try:
+        from verity.core.protocols.sampled_proofs import second_stage as SS
+    except ImportError:
+        return None
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    strata = [(tid, [[lo, lo + n]]) for tid, lo, n in P.ranges(window.program, window.query)]
+    return SS.check(True, SS.Own(tuple(sample), SS.parts(len(sample), strata), irec, brec, tuple(drawn)), stmts).to_json()
+
+
 def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding) -> bool:
     """Honest: every check before the sample passed, every Lean verdict accepted, the sessions' registered reads the
     verifier's own, every negative refused, and the record accepted or refusing only the reads of the interior's own
@@ -179,6 +209,10 @@ def main(argv=None) -> int:
     record = json.loads((out / "audit" / "audit.json").read_text()) if (out / "audit" / "audit.json").exists() else {}
     summary["record"] = {"failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok")),
                          "own_reads_only": own_reads_only(record, it.window)}
+    if s.get("draw") is not None:
+        stmts = statements(out / "audit", it.window)
+        (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
+        summary["round_two"] = round_two(sample, it.window, irec, brec, s["draw"], stmts)
     summary["as_expected"] = expected(a, s, ok, record, it.window)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     print("TWO " + json.dumps({x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")}, default=str))
