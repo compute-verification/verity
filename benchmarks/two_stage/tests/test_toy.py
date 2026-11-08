@@ -1,8 +1,9 @@
 """The two-stage toy before anything is lowered or proved (`audit.py` proves it, on a node): each template and the replay
 block are their numpy models; the replay block is its templates' instances; the interior is template-major and wired as
 the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
-its salts, and open its root there, and every other port's rows open the interior record's at their own leaves, as the
-verifier's own reads (from the two records and S alone) name them; both registrations pass the verifier's check; and a link
+its salts, and open its root there, at the boundary port the design's links name, and every other port's rows open the
+interior record's at their own leaves, as the verifier's own reads (from the two records and S alone) name them; both
+registrations pass the verifier's check; and a link
 row one bit off, a read of another leaf and a broken wire are refused."""
 
 from __future__ import annotations
@@ -84,6 +85,8 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
     reads = T.reads(brec, run["irec"], win, SAMPLE)
     roots = {r["port"]: r for r in brec["roots"]}
     head = json.loads((run["tmp"] / "interior" / "window.json").read_text())
+    links = {(x["template"], x["port"]): x["value"] for x in T.links(win)}
+    assert len(links) == len(T.LINKS)
     for t, (p, b) in T.LINKS.items():
         m = win.members[t]
         port, value = it.ports[m.key], names[b]
@@ -91,7 +94,7 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         file = reads[m.key]
         assert file["format"] == REG.READS_V1 and list(file["ports"]) == [x for x, _ in m.all_rows]
         e = file["ports"][p]
-        assert e["value"] == value and e["reads"] == list(SAMPLE) and e[REG.READS_FROM] == m.base
+        assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[REG.READS_FROM] == m.base
         assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
         assert e["words"] == dict(m.all_rows)[p] == port.words
         header = T.CS.registered_header(head, t)[p]

@@ -133,24 +133,29 @@ def statements(audit_dir: Path, window: T.CS.Binding) -> list[dict]:
     return out
 
 
-def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, drawn: list[int], stmts: list[dict]):
-    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed), where the tree has it."""
+def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, drawn: list[int], stmts: list[dict],
+              record: dict, links: list[dict]):
+    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed), where the tree has it: over the
+    design's ``links`` and the reads the audit record's verdicts of record report."""
     try:
         from verity.core.protocols.sampled_proofs import second_stage as SS
     except ImportError:
         return None
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import audit as A, partition as P
 
-    parts = SS.parts(len(sample), P.strata(window.program, window.query))
-    return SS.check(True, SS.Own(tuple(sample), parts, irec, brec, tuple(drawn)), stmts).to_json()
+    own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
+                 SS.links_of(links), A.session_registered(record.get("verdicts") or {}))
+    return SS.check(True, own, stmts).to_json()
 
 
 def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window_dir: Path, source, brec: dict, irec: dict,
-                 sample: list[int], reads: dict[str, dict], out: Path, provenance: dict) -> tuple[dict, bool, dict, dict]:
+                 sample: list[int], reads: dict[str, dict], links: list[dict], out: Path,
+                 provenance: dict) -> tuple[dict, bool, dict, dict]:
     """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
     the boundary registration ``brec`` and its replay sample: `a5.audit` on its own Lean sample, each member's session
     verified against ``reads`` (by member key, the verifier's own ``--registered`` files), the audit record, and each
-    session's statement held to round 2. -> (a5's summary, its acceptance, the audit record, what the run reports)."""
+    session's statement held to round 2 under the design's ``links`` (``{"template", "port", "value"}``). -> (a5's
+    summary, its acceptance, the audit record, what the run reports)."""
     import a5
     import records_audit as RA
 
@@ -166,26 +171,27 @@ def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window
     if s.get("draw") is not None:
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
-        got["round_two"] = round_two(sample, window, irec, brec, s["draw"], stmts)
+        got["round_two"] = round_two(sample, window, irec, brec, s["draw"], stmts, record, links)
     return s, ok, record, got
 
 
-def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding) -> bool:
+def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None) -> bool:
     """Honest: every check before the sample passed, every Lean verdict accepted, the sessions' registered reads the
-    verifier's own, every negative refused, and the record accepted or refusing only the reads of the interior's own
-    ports (`own_reads_only`). ``--altered``: every check before the sample passed, and Lean's verify refused both link
-    members (m0, m3) by `ALTERED` and accepted the fold and flips."""
+    verifier's own, every negative refused, the record accepted or refusing only the reads of the interior's own
+    ports (`own_reads_only`), and round 2 ``r2`` accepting the statements where the tree has it. ``--altered``: every
+    check before the sample passed, Lean's verify refused both link members (m0, m3) by `ALTERED` and accepted the fold
+    and flips, and round 2 refuses the statements where the tree has it."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
     before = all((s.get("checks_before_draw") or {}).values())
     if not a.altered:
         refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
         return (before and audit.get("complete") is True and audit.get("registered_reads") is True
                 and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
-                and (ok or own_reads_only(record, window, s.get("draw") or [])))
+                and (ok or own_reads_only(record, window, s.get("draw") or [])) and (r2 is None or r2.get("ok") is True))
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
     return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
-            and all((audit.get("verdicts") or {}).get(x) is True for x in rest))
+            and all((audit.get("verdicts") or {}).get(x) is True for x in rest) and (r2 is None or r2.get("ok") is False))
 
 
 def main(argv=None) -> int:
@@ -226,16 +232,18 @@ def main(argv=None) -> int:
                    registered=it.registered)
     sets = {m.template: (composer(t, m, "two-stage-toy"), t) for m, t in zip(it.window.members, T.TEMPLATES)}
     s, ok, record, got = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec, irec,
-                                      sample, T.reads(brec, irec, it.window, sample), out,
+                                      sample, T.reads(brec, irec, it.window, sample), T.links(it.window), out,
                                       {"toy": "two-stage interior", "altered": a.altered})
     summary.update(interior={"population": it.window.population, "law": it.window.law, "run": it.window.run,
-                             "members": [{"key": m.key, "n": m.n, "base": m.base, "links": T.LINKS.get(t)}
-                                         for t, m in enumerate(it.window.members)]},
+                             "members": [{"key": m.key, "n": m.n, "base": m.base} for m in it.window.members],
+                             "links": T.links(it.window)},
                    sample=sample, **got)
     summary["record"]["own_reads_only"] = own_reads_only(record, it.window, s.get("draw") or [])
-    summary["as_expected"] = expected(a, s, ok, record, it.window)
+    summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"))
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    print("TWO " + json.dumps({x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")}, default=str))
+    r2 = summary.get("round_two")
+    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")},
+                               "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")}}, default=str))
     return 0 if summary["as_expected"] else 1
 
 

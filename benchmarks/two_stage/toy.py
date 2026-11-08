@@ -136,6 +136,13 @@ def boundary_ports(window: CS.Binding) -> dict[str, str]:
     return {p: m.port(p) for p, _ in BOUNDARY_ROWS + BOUNDARY_OUTS}
 
 
+def links(window: CS.Binding) -> list[dict[str, str]]:
+    """The design's links as the verifier takes them: each link template of the interior ``window``, its session port that
+    reads the boundary record, and the boundary port it reads (``{"template", "port", "value"}``)."""
+    names = boundary_ports(boundary_window(1, 1))
+    return [{"template": window.members[t].template, "port": p, "value": names[b]} for t, (p, b) in LINKS.items()]
+
+
 def boundary(u: np.ndarray, q: int, *, salt_key: bytes | None = None) -> CS.Committed:
     """Serving's commitment of the spans ``u``: each span's ingress and egress under fresh salts (``salt_key``: tests only)."""
     win = boundary_window(len(u), q)
