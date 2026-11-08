@@ -1,14 +1,17 @@
-"""Per-type levers for the repriced break-even: the statement cache, K provers overlapped on one GPU, a faster GPU
-prover, the dense types' host witness, Flock without --zk, and the 128k workload over vLLM's 128k serve plan.
+"""Per-type levers for the repriced break-even: the fused per-expert block's price, the statement cache, K provers
+overlapped on one GPU, a faster GPU prover, the dense types' host witness, Flock without --zk, the Lean verifier's CPU
+priced in GPU-seconds, and the 128k workload over vLLM's 128k serve plan.
 
 Every factor multiplies the card's end-to-end prices (fixed seconds a statement, seconds a block, blocks a statement).
-`LABELS` says which are measured, modeled or assumed.
+Each table's comment says whether its values are measured, modeled or assumed.
 """
 import json
 import math
+import re
+import statistics
 from dataclasses import replace
 
-from common import SCOPES, c, f1
+from common import SCOPES, c, f1, tc
 
 #: The statement cache on the H200: (fixed after over before, host share of after) by block prefix, five types priced
 #: from their H200 splits and two (quant K1536, combine N5) from their CPU shares.
@@ -28,17 +31,18 @@ FAMILY = (("AllReduce", "AllReduceMultimem_v1{"), ("RmsNormMnnvl", "AllReduceMul
 DEFAULT = (0.1, 0.9)
 #: the fused and per-expert GEMMs, K6144 (w13) and K256 (w2): the cache alone at one prover, end to end (fixed after
 #: over before), and with verify-ahead and four provers on one GPU (MPS for w2): fixed a statement, seconds a block;
-#: each prover's device arena then holds a quarter of a full statement
+#: four provers fit one H200 at a quarter of a full statement each, or at full statements once each prover's peak is
+#: about 33 GiB (`full`)
 EXPERT = {"w13": {"cache": 0.56 / 5.73, "fixed": 0.045, "marginal": 0.58},
           "w2": {"cache": 0.67 / 5.54, "fixed": 0.043, "marginal": 0.54}}
 PROVERS = 4
 #: four provers with the cache and verify-ahead against the cache alone at one, on w13, taken for every other type
 #: (assumed): fixed a statement, seconds a block
 OVERLAP_OTHER = {"fixed": 0.25 / 0.56, "marginal": 0.58}
-#: Flock without --zk: the share of a session --zk costs on CPU, by prefix; the fused blocks' from their parts (the
-#: read 11%, w2 18%, w13 0%); every other type none
+#: Flock without --zk: the share of a session --zk costs, by prefix: the fused blocks' measured on one H200 at 1024
+#: blocks, the rest on CPU; every other type none
 PLAIN = {"AllReduceMultimem_v1{": 0.35, "AllReduceResidualMnnvl": 0.35, "AllReduceMnnvl": 0.35, "RmsNormMnnvl": 0.35,
-         "Fused[EmbeddingRead_v1{V=256,H=4096}": 0.15, "Fused[EmbeddingRead_v1{V=256,H=3072}": 0.05,
+         "Fused[EmbeddingRead_v1{V=256,H=4096}": 0.235, "Fused[EmbeddingRead_v1{V=256,H=3072}": 0.208,
          "Fp8GroupQuantUe8m0_v1{K=1536,": 0.11, "Fp8GroupQuantUe8m0_v1{K=2048,": 0.08, "SparseMlaCombine_v1{": 0.08}
 #: the dense types whose host witness dominates their fixed cost after the cache
 DENSE = ("Fp8GroupQuantUe8m0_v1", "FlashInferFp8Linear_v1")
@@ -49,6 +53,44 @@ INDEXER = "DsaMqaLogits_v3"
 #: the DSA indexer's MACs a decode token at 131,072 keys over the linears'
 INDEXER_AT_MAX = 2.2
 MAX_KEYS = 131072
+#: the fused per-expert blocks staged as one type each (`MoeExpertFp8ReadGemm(W)_v1`), at this k_log
+FUSED_K_LOG = 25
+#: their end-to-end seconds over the unfused pair's (the GEMM block and the read block of one row), measured on CPU
+#: at 16 blocks a statement with the cache on; taken for the fixed and the marginal parts alike
+FUSED_CPU = {"w13": 0.75, "w2": 0.59}
+#: their prices measured on one H200 with the statement cache, (fixed seconds a statement, seconds a block): one
+#: prover end to end at 512 and 1024 blocks a statement, and four provers with verify-ahead at 128 and 256 blocks,
+#: from their throughput (the GPU's seconds a statement)
+FUSED_H200 = {"w13": {"one": (0.7374, 2.8488e-3), "four": (128 / 219 - 128 * (256 / 329 - 128 / 219) / 128,
+                                                           (256 / 329 - 128 / 219) / 128)},
+              "w2": {"one": (0.6792, 2.9751e-3), "four": (128 / 217 - 128 * (256 / 307 - 128 / 217) / 128,
+                                                          (256 / 307 - 128 / 217) / 128)}}
+
+#: the Lean verifier (`verify --zk --partition --program`), one core, one statement, setup included: seconds by block
+#: prefix, measured on today's flat statement
+VERIFY = {"FlashInferFp8Linear_v1{K=2048,": 2474.0, "Fp8GroupQuantUe8m0_v1{K=6144,": 2100.0,
+          "SparseMlaCombine_v1{NSPLIT=12,": 1634.0, "RMSNormFusedCudaVector8_v1{N=6144,": 769.0,
+          "Fp8GroupQuantUe8m0_v1{K=2048,": 681.0, "Fp8GroupQuantUe8m0_v1{K=1536,": 508.0,
+          "SparseMlaCombine_v1{NSPLIT=2,": 324.0, "AllReduceMultimem_v1{": 314.0, "MoeExpertFp8GemmW_v1{": 15.0}
+#: its fixed part; the rest grows with the unit's matrix entries
+VERIFY_FIXED = 10.0
+#: (types, measured member, size parameter, the member's size): a family's other types scale linearly in the size
+#: above VERIFY_FIXED, or take the member's seconds when the size is None (assumed)
+VERIFY_FAMILY = ((("Fp8GroupQuantUe8m0_v1",), "Fp8GroupQuantUe8m0_v1{K=2048,", "K", 2048),
+                 (("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1"), "FlashInferFp8Linear_v1{K=2048,", "K",
+                  2048),
+                 (("RMSNormCudaVector8_v1", "DsaRMSNorm_v1", "ResidualAdd_v1"), "RMSNormFusedCudaVector8_v1{N=6144,",
+                  "N", 6144),
+                 (("AllReduce", "RmsNormMnnvl_v1"), "AllReduceMultimem_v1{", None, None),
+                 (("MoeExpertFp8", "Fused["), "MoeExpertFp8GemmW_v1{", None, None))
+#: any other type: the measured types' median (assumed)
+VERIFY_DEFAULT = statistics.median(VERIFY.values())
+#: the templated, served verifier's estimate on quant K6144 (125 s) over today's, taken for every type (assumed)
+VERIFY_TEMPLATED = 125.0 / 2100.0
+#: core-seconds that cost one GPU-second, from Nebius AI Cloud's on-demand list prices
+#: (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa
+#: core, two vCPUs at $0.015 a vCPU-hour, with its 8 GiB at $0.0045 a GiB-hour
+CORE_PER_GPU = 5.40 / (2 * 0.015 + 8 * 0.0045)
 
 
 def expert(x) -> str | None:
@@ -76,11 +118,55 @@ def share(table, x) -> float:
     return next((v for p, v in table.items() if x["block"].startswith(p)), 0.0)
 
 
-def apply(strata, cache=False, overlap="", prover=1.0, arena=False, host=1.0, plain=False):
+def verifier_seconds(x) -> tuple[float, str]:
+    """The Lean verifier's core-seconds a statement of `x`'s type, and how they are known."""
+    b = x["block"]
+    for p, t in VERIFY.items():
+        if b.startswith(p):
+            return t, "measured"
+    if m := re.match(r"SparseMlaCombine_v1\{NSPLIT=(\d+),", b):
+        lo, hi = VERIFY["SparseMlaCombine_v1{NSPLIT=2,"], VERIFY["SparseMlaCombine_v1{NSPLIT=12,"]
+        return lo + (int(m[1]) - 2) * (hi - lo) / 10, "interpolated"
+    for types, member, size, at in VERIFY_FAMILY:
+        if b.startswith(types):
+            m = size and re.search(rf"[{{,]{size}=(\d+)", b)
+            if not m:
+                return VERIFY[member], "family"
+            return VERIFY_FIXED + (VERIFY[member] - VERIFY_FIXED) * int(m[1]) / at, "family"
+    return VERIFY_DEFAULT, "assumed"
+
+
+def price_fused(strata, how="h200"):
+    """The fused per-expert blocks at their staged k_log, priced from the unfused pair's summed fixed and marginal
+    seconds (`levers.fuse_reads(fixed="sum")`) times the end-to-end ratio measured on CPU (`"cpu"`), or at their
+    H200 prices (`"h200"`): one prover's with the cache, its fixed seconds over the cache's factor before it, and four
+    provers' kept for the overlap (`"four"`)."""
+    assert how in ("cpu", "h200"), how
+    out = []
+    for x in strata:
+        e = expert(x) if x.get("kind") == "fused" else None
+        if e:
+            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG)}
+            if how == "cpu":
+                r = FUSED_CPU[e]
+                x |= {"fixed_seconds": x["fixed_seconds"] * r, "seconds_per_block": x["seconds_per_block"] * r,
+                      "priced": "CPU ratio"}
+            else:
+                (f, m), four = FUSED_H200[e]["one"], FUSED_H200[e]["four"]
+                x |= {"fixed_seconds": f / EXPERT[e]["cache"], "seconds_per_block": m, "four": four,
+                      "priced": "measured (H200)"}
+        out.append(x)
+    return out
+
+
+def apply(strata, cache=False, overlap="", prover=1.0, full=False, host=1.0, plain=False, verify=0.0,
+          verify_expert=None, verify_other=None):
     """The strata with each lever applied in turn: the cache's fixed seconds (with its host part kept apart), K provers
     overlapped on the expert types (`overlap="experts"`) or every type (`"all"`), a GPU prover `prover` times faster on
-    device parts, full statements under K provers (`arena`), the dense types' host witness `host` times lower, and
-    Flock without --zk."""
+    device parts, full statements under K provers (`full`: four provers an H200 at about 33 GiB each), the dense types'
+    host witness `host` times lower, Flock without --zk, and the Lean verifier's core-seconds a statement times
+    `verify`, in GPU-seconds at CORE_PER_GPU (the expert types' at `verify_expert` core-seconds and the assumed types'
+    at `verify_other` when given)."""
     assert not overlap or cache, "the overlap is measured with the cache on"
     out = []
     for x in strata:
@@ -95,12 +181,14 @@ def apply(strata, cache=False, overlap="", prover=1.0, arena=False, host=1.0, pl
                 fixed *= f
                 host_s = hs * fixed
         if overlap and (e or overlap == "all"):
-            if e:
+            if e and "four" in x:
+                fixed, marginal = x["four"]
+            elif e:
                 fixed, marginal = x["fixed_seconds"] * EXPERT[e]["fixed"], marginal * EXPERT[e]["marginal"]
             else:
                 fixed, host_s = fixed * OVERLAP_OTHER["fixed"], host_s * OVERLAP_OTHER["fixed"]
                 marginal *= OVERLAP_OTHER["marginal"]
-            if not arena:
+            if not full:
                 cap = max(1, cap // PROVERS)
         if host != 1.0 and x["block"].startswith(DENSE):
             fixed, host_s = fixed - host_s * (1 - 1 / host), host_s / host
@@ -109,6 +197,13 @@ def apply(strata, cache=False, overlap="", prover=1.0, arena=False, host=1.0, pl
         if plain:
             p = 1 - share(PLAIN, x)
             fixed, marginal = fixed * p, marginal * p
+        if verify:
+            v, how = verifier_seconds(x)
+            if e and verify_expert is not None:
+                v = verify_expert
+            elif how == "assumed" and verify_other is not None:
+                v = verify_other
+            fixed += verify * v / CORE_PER_GPU
         out.append(x | {"fixed_seconds": fixed, "seconds_per_block": marginal, "statement_blocks": int(cap)})
     return out
 
