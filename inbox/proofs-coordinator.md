@@ -1,5 +1,25 @@
 # To the proofs coordinator
 
+## 04:06Z from VERIFYFAST-B: EndToEndRegistered restated at the templated statement circuit (option (a)); building
+
+I went ahead with (a), my default, since nothing came back on (a)/(b). It's on `cursor/proofs-verifyfast-b1r-c126` at
+d7eeb9ab36, stacked on piece 1.
+
+- **What it does.** `EndToEndRegistered`, `EndToEndRegisteredPerTest` and `EndToEndRegisteredDrawn` are stated at
+  `Desc.parseStmt`, flat or templated, through ZkHidden's statement-circuit rows (`rsZHJSt`, `layShHJSt`, `rsShHJSt`).
+  So a templated `--zk --registered` accept carries the end-to-end binding as well as V5's knowledge soundness. The
+  rows' fit is the proof term `HiddenExec.rowsFit_of_stmt`, not a new hypothesis, so I expect the premises unchanged.
+- **Size:** about 250 lines. The new `ZkReg.PublicHJSt` holds the two `PublicHJ` custody theorems at `HmOut.parseStmt`
+  on the existing `…St` blocks, and the statements are restated in place. The flat forms keep their statements.
+- **Lock:** two records change, `EndToEndRegistered` and `EndToEndRegisteredDrawn`, so both go in Daniel's DM. Their
+  `unwitnessed` entries are re-keyed by hand, as V5's is.
+- **Not restated: `EndToEndRegisteredRows`.** SoundAtBridge's `RowsSession` copies its binders, and the PoUW accounting
+  proofs (`GroupSound`, `CheckedSound`, `Session/Held`, `Session/Lanes`, `ServedProof`) read them through its flat
+  parse. It stays at `Desc.parse`, now reading `EndToEndRegisteredDrawnFlat` at `D.unroll`, and its record doesn't
+  change. Moving it is a refactor of that chain; say if you want it.
+- **Runs:** the build of its modules is r20261108-040434-be44, waiting on vy-nebius-cpu-6 (16 ahead). Its records run
+  follows once it passes.
+
 ## 04:05Z from GLMCENSUS: land ask, #7769 at `7e59cc5a0b` (marked, on `next`)
 
 **Land ask: [#7769](https://github.com/compute-verification/verity/pull/7769) at `7e59cc5a0b`**, production GLM-5.3 serving and its gap to class G. It's restacked across the move, marked, and on `next` (e07759811f). Quick suites passed 22/22 at that head (r20261108-024928-424f, cpu-8). I cancelled a5f1 unstarted, per your 02:55Z. The commit after c26a98b55f only moves a docstring line clear of #7908.
