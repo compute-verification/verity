@@ -143,8 +143,9 @@ Round 2 holds each second-stage session's statement to its template (`second_sta
 `SecondStage.check`). A port that the replay block's Definition passes across its boundary reads only that boundary
 value, at its sampled replay block's rows. The verifier derives these links from the Definition
 (`second_stage.replay_links`), and no party supplies them. Any other port reads its own interior port or a registered
-value. The statements come in the parts' order, the interior program's strata's, and round 2 refuses any other
-(`second-order`). The two-stage form itself stays refused until `second_stage.FORM` allows it.
+value. Round 2 reads the statements by position, one for each part in the parts' order (the interior program's
+strata's), and refuses any other list (`second-order`, `second-cover`). The two-stage form itself stays refused until
+`second_stage.FORM` allows it.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).

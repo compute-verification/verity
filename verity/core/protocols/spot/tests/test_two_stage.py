@@ -265,7 +265,7 @@ def _frame(key: str, f):
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
     cell's replay block, and its own `out` reading each slot's own rows or not (the form's refusal their one failure),
-    and refuses: none (`second-statements`), none for a template the second stage drew in (`second-cover`), a template
+    and refuses: none (`second-statements`), none for a part's template (`second-cover`), a template
     twice or one of no part (`second-template`), one that isn't a statement (`second-statement`, and `second-reported`
     when its session's reads are reported, since no statement makes them), and one that isn't the
     run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
@@ -561,9 +561,9 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
 
 
 def test_round_two_refuses_statements_out_of_the_parts_order():
-    """Round 2 reads the statements in the parts' order, the interior program's strata's (PAIR's, then TRIPLE's): the
-    honest statements swapped are refused by name (`second-order`), at the first statement out of it, and the run of
-    record refuses them alike."""
+    """Round 2 reads the statements by position, one for each part in the parts' order, the interior program's strata's
+    (PAIR's, then TRIPLE's): the honest statements swapped are refused by name (`second-order`), at the first statement
+    not its position's part's, and the run of record refuses them alike."""
     stream = _window_stream()
     second = _window_stages(stream)
     statements = stream.statements(second)[::-1]
@@ -571,7 +571,7 @@ def test_round_two_refuses_statements_out_of_the_parts_order():
                          session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == ["second-order"] and "run" not in checks, checks
-    assert checks["statements"]["detail"]["second-order"] == {"statement": 1, "template": codec.descriptor_id(PAIR)}
+    assert checks["statements"]["detail"]["second-order"] == {"statement": 0, "template": codec.descriptor_id(TRIPLE)}
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():

@@ -407,20 +407,15 @@ def statement_reads(ss: Sequence[Any]) -> dict[str, Any]:
     return out
 
 
-def _part_at(ps: Sequence[Part], j: Any) -> int | None:
-    """`SecondStage.partAt`: the index of the part of `ps` statement `j` is for, None when it is no statement or for no
-    part."""
-    s = _stmt(j)
-    return None if s is None else next((k for k, p in enumerate(ps) if p.template == s.template), None)
-
-
 def _order_failures(ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
-    """`SecondStage.orderFailures`: ``second-order`` for each statement for a part before an earlier statement's, round
-    2 reading the statements in the parts' order, the interior program's strata's."""
-    at, found = [_part_at(ps, j) for j in ss], []
-    for j, (s, l) in enumerate(zip(map(_stmt, ss), at)):
-        if s is not None and l is not None and any(k is not None and k > l for k in at[:j]):
-            found.append(("second-order", {"statement": j, "template": s.template}))
+    """`SecondStage.orderFailures`: ``second-order`` for each statement for a part, no earlier statement's, other than
+    the part at its position, round 2 reading the statements by position, the i-th the i-th part's (the parts' order,
+    the interior program's strata's)."""
+    found = []
+    for i, s in enumerate(map(_stmt, ss)):
+        if (s is not None and any(p.template == s.template for p in ps) and s.template not in _templates(ss[:i])
+                and (i >= len(ps) or ps[i].template != s.template)):
+            found.append(("second-order", {"statement": i, "template": s.template}))
     return found
 
 
@@ -429,7 +424,7 @@ def _same_dict(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
 
 
 def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
-    named, q = _by_template(own.interior), len(own.sample)
+    named = _by_template(own.interior)
     found: list[tuple[str, Any]] = []
     for i, j in enumerate(ss):
         s = _stmt(j)
@@ -444,8 +439,7 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
             found += [(c, detail) for c in _stmt_codes(own, named, p, s)]
     found += _order_failures(ps, ss)
     covered = _templates(ss)
-    found += [("second-cover", {"template": p.template}) for p in ps
-              if p.template not in covered and any(p.holds(q, u) for u in own.drawn)]
+    found += [("second-cover", {"template": p.template}) for p in ps if p.template not in covered]
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
     return found if found or allow else [("two-stage-form", FORM_WHY)]
