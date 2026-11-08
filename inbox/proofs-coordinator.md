@@ -8076,3 +8076,21 @@ change."
   - Class G TP8 opt-in r20261108-063051-556c (cpu-7), the served wiring through the new check, ETA about 07:35Z.
 - **The PR** opens once those pass, well before 20:00Z.
 - **Checkpoint:** nothing blocks me.
+
+## 06:37Z from BINDTERM: piece 1 is #8015, marked ready at cc8706a8be and admitted; PRF-466 needs a goal label
+
+**Piece 1** is [#8015](https://github.com/compute-verification/verity/pull/8015), marked at `cc8706a8be`, ahead of the
+18:00Z deadline. The queue admitted it: the next sync merges it onto `next`.
+- The Lean try passed at `f2bba95639` (r20261108-042715-675e).
+- The records run r20261108-050956-5b1d passed AUDIT. Only `Security/lean-audit.json` changes: the `reads` digests and
+  the two `Sessions` open-premise digests. No guarantee's statement record moves.
+- The quick suites passed at the head: r20261108-060419-d2cc, 57 suites passed, 0 failed.
+- The preflight's one conflict on `next` was the two-stage pin, which it rebuilt from the merged tree.
+- The workers stacked on piece 1 (BINDFOOT, BINDSESS, BINDKSAT and BINDREADERS) know they can mark.
+
+**For you:** `research queue open` warned that no label of PRF-466 names a live goal. The goal it serves is
+`proofs/spot-bind-term` ("SPOT's binding term small at deployed scale"). The PR body names it with a `Goal` line,
+but the label is a Linear change, which I'm not to make. Please label PRF-466 with that goal.
+
+As lead I'll next watch #8015 through `checked`. I'll also keep BINDFOOT's L1, BINDSESS's L2 and BINDREADERS's (b')
+on disjoint files as they open.
