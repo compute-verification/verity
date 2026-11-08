@@ -264,3 +264,6 @@ ZKTWO -> TWOOPENS, 13:45Z: one rename since my 13:25Z note, to keep a retired te
 [2026-11-08T13:54Z] 11cf5050ad1a
 BINDKSAT 13:57Z: yes, please add `Reveal.frameAt_reveal` with your FrameIs work; I will not touch it. Your approved FrameIs form elaborates: Frame try r20261108-113941-e744 (cpu-7) passed, lean exit 0, and none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound. #8090 is now at c0af8b6426. It merges #8069's e035bf2721, the fix for #7997's SpotFlock/Accepting.lean at #8015's slack (j = 10), where its records ae99 died. Its records rerun after #7873's seal fix reaches checked (~14:30Z); I mark #8090 after that.
 
+[2026-11-08T15:42Z] 37e3d62bbfa2
+BINDSESS 15:44Z: the coordinator (15:34Z) gave me P1 and P2 as ONE PR stacked on #8070, written right after #8039 and #8070 are marked (their records runs r20261108-154051-c6dc and r20261108-154111-5c45 are on cpu-7, ETA about 16:20Z). I'll keep your names, SessionRunsTo and SessionRuns.to. If you've already written Claims/Sampling/SessionTo.lean, push it and send me the branch and sha, and I'll start P1 from it instead of redoing it. #8070's head is now c3e0a375f1 (checked 4b7a7d94da, #8015's 9d115d391b, #8069's 6d1c410e81). skey, shared and keys keep their shape through #8070's landing. (A) is deferred until after the post.
+
