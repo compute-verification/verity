@@ -171,7 +171,7 @@ class BooleanRows:
     def peak_bytes(self, vu: dict) -> int:
         """A bound on the bytes one pick's evaluation (`__call__`) allocates, times `PEAK_MARGIN`: the bits of every argument, with
         each conversion's element-width list and one run's temporaries (`to_bits`), the bit-sliced evaluation (`bits.peak_bytes`), and
-        the output's words (`to_words`).  Its operands are views of the weights or a few committed words, and are not counted; a row
+        the output's words (`to_words`), a batch's members' words held besides.  Its operands are views of the weights or a few committed words, and are not counted; a row
         with no Boolean version is declined before it allocates (0)."""
         from verity.ml.circuits.evaluation.bits import peak_bytes
 
@@ -188,8 +188,9 @@ class BooleanRows:
         args = [port(t) for t in types]
         e, n, k, w = port(out)
         convert = max((16 * e_ + 8 * k_ * (1 + 2 * w_) for e_, _, k_, w_ in args), default=0)
-        words = n + 8 * n + 24 * e + 8 * k * (w + 1) + (16 * nd.out.leaves if nd.form == "batch" else 0)
-        return int(PEAK_MARGIN * (sum(a[1] for a in args) + max(peak_bytes(b, 1), convert, words)))
+        words = n + 8 * n + 24 * e + 8 * k * (w + 1)
+        held = 16 * nd.out.leaves if nd.form == "batch" else 0
+        return int(PEAK_MARGIN * (sum(a[1] for a in args) + max(peak_bytes(b, 1), convert, words) + held))
 
     def prewarm(self, picked: list[dict]) -> dict[str, str]:
         """Each picked spec's Boolean version compiled in the parent, before the replay forks (`driver._prewarm_evaluators`)."""

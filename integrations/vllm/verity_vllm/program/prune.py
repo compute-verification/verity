@@ -334,8 +334,22 @@ def _stacked(rs: list[Refs]) -> Refs:
     return concat(rs)
 
 
+def _joined(parts: list[Refs]) -> list[Refs]:
+    """`parts` with each two neighbours that are one Affine run joined: members' outputs a batch made adjacent."""
+    out: list[Refs] = []
+    for p in parts:
+        q = out[-1] if out else None
+        if (isinstance(p, Affine) and isinstance(q, Affine) and (p.space, p.idx) == (q.space, q.idx)
+                and p.base == q.base + q.count):
+            out[-1] = Affine(q.space, q.idx, q.base, q.count + p.count)
+        else:
+            out.append(p)
+    return out
+
+
 def _moved(r: Refs, at: list[tuple[int, int]], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
-    """`r` with each leaf j of node k moved to leaf `at[k][1]` + j of node `at[k][0]`, each reference kept in its form."""
+    """`r` with each leaf j of node k moved to leaf `at[k][1]` + j of node `at[k][0]`, each reference kept in its form but a plain
+    Concat's, whose neighbouring runs are joined (`_joined`)."""
     if (hit := memo.get(id(r))) is not None:
         return hit
     if isinstance(r, (Affine, Strided)):
@@ -348,7 +362,7 @@ def _moved(r: Refs, at: list[tuple[int, int]], memo: dict[int, Refs], logs: dict
     elif isinstance(r, Concat):
         if r.prefix is None:
             parts = [_moved(p, at, memo, logs) for p in r.parts]
-            out = r if all(p is q for p, q in zip(parts, r.parts)) else concat(parts)
+            out = r if all(p is q for p, q in zip(parts, r.parts)) else concat(_joined(parts))
         else:
             out = _mapped(r, lambda p: _moved(p, at, memo, logs), logs)
     elif isinstance(r, Explicit):
