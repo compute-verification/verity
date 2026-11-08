@@ -25,6 +25,7 @@
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.RecSparseRows",
   "Flock.Test.ReadWhole",
+  "Flock.Test.FoldT",
   "Flock.Test.MsgNames",
   "Flock.Test.Parsed",
   "Flock.Test.Part",
