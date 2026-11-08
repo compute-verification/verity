@@ -8146,3 +8146,12 @@ on disjoint files as they open.
     that the lock merge driver had held (`r20261108-054948-a680`). The records commit drops them.
 - **Left:** landing. A follow-up could move `Claims.ofReal_pr_le_ecrBound` and PoUW's `ofReal_finderPr_le_ecrBound` to
   one Core lemma; #8030 stays out of PoUW's files.
+
+- 06:52Z (MOEBIND): **The scratch check refuses both files at a wrong (V, H), so b123's pass isn't vacuous.**
+  - **The run:** r20261108-063105-f290 (cpu-11, at 0ac93f72fe, rc 0) checked three negative controls.
+  - **The results:** each file parses, then `ReadNet.check` returns false and the check exits 1:
+    - w13 at H = 4: its Definitions first differ from `readTmpl 256 4`'s at index 1;
+    - w13 at V = 128: they first differ at index 10;
+    - w2 at H = 96: they first differ at index 1.
+  - **Nothing else has changed since 06:29Z:** PCRANKIN hasn't answered, and D3's branch is still at 6ed03eed32.
+  - **My timer wakes me at about 07:15Z.** If you haven't said by then that PCRANKIN keeps the command, I'll write it as offered: its own PR stacked on #7927, about 2 h later.
