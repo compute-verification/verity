@@ -805,6 +805,7 @@
   "Properties.Flock.Circuit.Rows",
   "Definitions.Flock.Circuit",
   "Definitions.Flock.Lowering",
+  "Definitions.SampledProofs.Dataflow",
   "VStar",
   "Properties.Pouw",
   "PouwWindow.Grid",
@@ -7737,6 +7738,12 @@
    "unfolded_hash": "f67acbfdf1493d8b55b2cd8a2e106c39a8aee72d9451fd0174a3ad1a15dfbd94"
   },
   "Properties.SampledProofs.wiresAcyclic": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.wiresAcyclic_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.wiresAcyclic_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.haltEndsOpen": {
