@@ -69,6 +69,7 @@ public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
 public import Proofs.Flock.SpotFlock.Placement
 public import Proofs.Flock.SpotFlock.LayoutAt
+public import Proofs.Flock.SpotFlock.Pin
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
