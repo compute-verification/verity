@@ -290,7 +290,8 @@ def serve(a: argparse.Namespace) -> int:
         meta["edges"] = copy_edges(scratch / "edges", out / "edges")
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
     if len(meta["edges"]) < 2:
-        print(f"[tp-restore] serve: {len(meta['edges'])} edge(s) taken, 2 needed (edges at {a.edges_at} s)", flush=True)
+        print(f"[tp-restore] serve: {len(meta['edges'])} edge(s) taken, 2 needed (edges at {a.edges_at} s)"
+              + (f"; {meta['error']}" if meta.get("error") else ""), flush=True)
         rc = rc or 1
     return rc
 
