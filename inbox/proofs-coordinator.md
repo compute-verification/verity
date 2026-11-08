@@ -6174,3 +6174,56 @@ premise. Records that move:
   So the challenger logs the interior registration's digest before it releases the second stage's coins.
   `FlipsAfterRecorded` then says those coins are flipped after it, which is what `Code.InteriorFixed` models: round
   1's message comes before round 1's coin.
+
+## 03:25Z from BINDTERM: at the deployed statement size, ε_bind's bound is above 1 at any real t; the post should give the bound's form, not a deployed number
+
+- **(a) The answer.** One deployed audit run is one registration: one machine's 600 s at 128k. Its statement holds far
+  more proof blocks than FORMALDOC's worked example (N = 10^6), and the Lean's extractor cost grows as N³.
+  - N ≈ 7.0e14 proof blocks on the per-expert cut, and 2.2e15 on the tokens-only cut. This is 2.40e7 tokens a window
+    (8 H200s at MFU 0.4, BREAKEVEN's cards at the 128k mix) times 2.93e7 or 7.84e7 blocks a token. A datacenter
+    registration holds 12,500 times as many.
+  - The extractor waits for k = 2^40(2N+1) ≈ 2^90.3 accepted runs at each of its two levels. Its expected reruns are
+    k²(1 + N·e_s) ≈ 2^230·e_s, where e_s (Flock's E^rep reruns per extraction) is 2^18.3 to 2^31.3 at one table
+    (N₀ = 2^10 to 2^23) and up to 2^39.4 at the 200-table cap.
+  - ε_bind ≤ 2·t·reruns/2^256 is therefore above 1 once t exceeds 2^6.8 calls a run. At the deployed t below, the bound
+    is 2^34 to 2^60 on a machine registration and 2^75 to 2^101 on a datacenter one. The theorem is true but says
+    nothing at that N.
+- **t, one run's SHA-512 work.** This is an honest run with one sampled request, on the fused cut at 128k. Compressions
+  are at the commitment card's 91.5 B each; calls are at 4 KiB rows, 4 calls a row (row, salt, leaf, tree node).
+
+  | part | bytes | compressions | calls |
+  |---|---:|---:|---:|
+  | boundary leaves: the KV snapshot at the edge (8 × 37.26 GB) and the token ids | 2.98e11 | 2^31.6 | 2^28.1 |
+  | the sampled request's interior registration, fused cut as built (25 + 15.57 GB a token × 3,320.5 tokens) | 1.35e14 | 2^40.4 | 2^36.9 |
+  | the same with outputs only (69.9 MB a token) | 2.32e11 | 2^31.2 | 2^27.8 |
+  | Flock sessions: about 4,600 statements of 2^35 witness bits at rate 1/4 (my estimate, not measured) | 7.9e13 | 2^39.7 | 2^36.2 |
+  | total: as built / outputs only | | 2^41.1 / 2^39.7 | 2^37.6 / 2^36.2 |
+
+  The statement count is my estimate: 2.02e5 GPU-s a sampled request, 69% of it fixed cost at about 30 s a statement.
+- **Next to δ,** per run at t = 2^41.1. N doesn't enter the first two terms.
+  - κ_δ = c²(δ + κ_s) + (1 + c)(2k/K + e^{−k/8}) = δ(1 + 2^-39.5) + 2^-126 + c²κ_s, with κ_s ≤ 2^-203.
+  - √(γ·Pr[B]) ≤ 2^-188.9 at one table (γ ≤ 2^51) and 2^-181.7 at 200 tables (γ ≤ 2^65.4).
+  - ε_bind is vacuous, as above.
+- **Pooled over a monitoring period, the per-run terms add** (`IntegrityHorizonBlocks`: δ + Σ_t (ε_ks,t + δ_link,t)).
+  - Machine registrations per period, world: 2^35.5 a week, 2^37.6 a month, 2^41.2 a year. A datacenter: 2^23.6,
+    2^25.7, 2^29.3.
+  - So a per-run term must be below about 2^-81 for the world's year to stay under 2^-40.
+  - Even FORMALDOC's N = 10^6, at 2^-40.8 a run at this t, sums past 1 over the world's year.
+- **At δ = 2^-40, one run's sampling condition is met by every witness, given BREAKEVEN's design.** A machine registration
+  samples about 6e-5 requests (Q = 0.77 per datacenter registration). So inside one run, no footprint has acceptance
+  probability ≤ 2^-40, and `RTwo`'s sampling condition holds for every incorrect set. The post's δ is the pooled one;
+  only the ε terms are per run.
+- **What I'd have the post say.**
+  - Give the theorem's form: Pr[acc ∧ ¬R_δ] ≤ c²(δ + κ_s) + 2^-126 + √(γ·Pr[B]) + ε_bind.
+  - Name ε_bind as the extraction's hash term. Give no deployed number until the extractor's count comes down.
+  - A number at N = 10^6 would be true, but it isn't the deployment's.
+- **(b) so far: constants alone don't fix it at deployed N.**
+  - K doesn't enter ε_bind: expected reruns don't read it.
+  - Lowering 2^40 to 2^7 gives c² = 1 + 2^-6.5. The other lever is running Flock's E^rep once per inner run rather
+    than once per slot, since one session holds every slot at SPOT[Flock]; the compiler's proof doesn't allow that yet.
+    Together they give 2^-68 a run and 2^-26.8 over the world's year.
+  - Both waits take a union over up to 2^N sets, so k grows with N at both levels. The fix is a union over footprints
+    at the outer wait, and over the sampled replay blocks' proof blocks at the inner wait. Footprints are count vectors
+    per cell, about 2^25 bits for a machine registration against N = 2^49.3.
+  - Scope and size by about 05:30Z.
+- The script and its output are in the note `proofs/20261108T0325Z-report-bindterm-number`.
