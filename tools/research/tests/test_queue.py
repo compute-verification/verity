@@ -4112,6 +4112,29 @@ def test_the_records_gate_vouches_for_none_and_says_why_when_it_cant_read_the_st
     assert f"so the records gate vouches for none: {RECORDS_AFTER_LANDING}\n" in err
 
 
+def test_a_head_stacked_on_a_landed_pr_that_merged_main_is_judged_by_its_own_change_not_one_merge_base(world, capsys, monkeypatch):
+    """A head stacked on a PR since landed on `checked`, which then merged `main`, has two merge bases with `checked`: the
+    stacked-on PR's head and that `main`.  Measured from the first (git's pick when it is the newer), every lock `main` changed
+    since counts as the head's, and the gate warned for records runs of locks it never touched.  A file is the head's change only
+    where it differs from both."""
+    world.with_store_remote()
+    base = _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "1000000000 +0000")
+    moved = _move_main(world, {LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    below = world.change({"a.txt": "stacked on\n"}, base=base)
+    _git(world.dev, "checkout", "-q", "--detach", moved)
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", below)
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/checked")
+    head = _merge_main(world, world.change({"x.txt": "x\n"}, base=below))
+    bare = LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")
+    capsys.readouterr()
+    assert _mark(world, 1, head, store=bare) == 0, capsys.readouterr().err
+    own = world.change({LOCK: _lock(A="2", B="3")}, base=head)
+    assert _mark(world, 2, own) == 1
+    assert f"warning: #2 at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
+
+
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
 # it knows "--changed"

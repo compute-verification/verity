@@ -5041,14 +5041,19 @@ class RecordsGate:
     def _locks(self, pr: PR) -> dict[str, str]:
         """{package: its lock's path} for each lock the head's change against the landing branch (`self.into`) touches and the
         head still has, the auditor's fixtures (`LEAN_FIXTURES`) aside: no records run reads one (`lean_changed.py --records`
-        matches no package there), and the controls write their records."""
+        matches no package there), and the controls write their records. A head stacked on a PR since landed there, which also
+        merged `main`, has several merge bases with it, and from the stacked-on PR's head everything that merge brought counts
+        as the head's own: so a file is the head's change only where it differs from every merge base."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/records/main",
              f"+refs/pull/{pr.number}/head:refs/queue/records/pr")
         self.into = into_at(self.repo, "refs/queue/records/main")
         _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{self.into}:refs/queue/records/base")
         if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
-        files = _out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/base...{pr.head}").splitlines()
+        bases = _out(self.repo, "merge-base", "--all", "refs/queue/records/base", pr.head).split()
+        files = set.intersection(*(set(_out(self.repo, "diff", "--name-only", "--no-renames", b, pr.head).splitlines())
+                                   for b in bases)) if bases else \
+            set(_out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/base...{pr.head}").splitlines())
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
                 and not f.startswith(LEAN_FIXTURES) and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
