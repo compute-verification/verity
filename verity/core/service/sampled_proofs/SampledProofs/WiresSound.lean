@@ -40,7 +40,7 @@ theorem firstWire_eq_none {c : Wiring} {f : Wire → Option Code} :
       simp [h w hw]
     rw [this]; rfl
 
-theorem orderCode_eq_none {c : Wiring} {f : List (String × Nat) → Wire → Bool} :
+theorem orderCode_eq_none {c : Wiring} {f : List Block → Wire → Bool} :
     orderCode c f = none ↔ ∃ o, orderOf c = .ok o ∧ ∀ w ∈ c.wires, f o w = true := by
   unfold orderCode
   split
@@ -186,7 +186,7 @@ theorem check_sound {c : Wiring} {S : Summary} (h : check c = .ok S) :
           have hd := distinctRows_of hw (by simpa using hov)
           have hord' : orderCode c orderedWireRef = none := by
             obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
-            exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => orderedWire_ref (hw w hw').1 (hw w hw').2 (hin w hw')⟩
+            exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => orderedWire_eq_ref o w ▸ hin w hw'⟩
           refine ⟨rfl, ?_⟩
           unfold checkRef
           simp [hcut, hf', hd, hord']
@@ -207,29 +207,75 @@ theorem checkRef_order {c : Wiring} {es : List Entry} (h : checkRef c = .ok es) 
         · rename_i hord
           exact orderCode_eq_none.1 hord
 
+theorem check_wireCode {c : Wiring} {S : Summary} (h : check c = .ok S) : ∀ w ∈ c.wires, wireCode c w = none := by
+  unfold check at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hf
+      exact firstWire_eq_none.1 hf
+
+theorem shape_lookup {c : Wiring} {w : Wire} {rt wt : Template} (h : shape c w = .ok (rt, wt)) :
+    c.templates.lookup w.reader = some rt ∧ c.templates.lookup w.writer = some wt := by
+  unfold shape at h
+  split at h
+  · rename_i rt' wt' hr hw
+    split at h
+    · dsimp only at h
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · cases h
+          exact ⟨hr, hw⟩
+    · cases h
+  · cases h
+
+theorem wireCode_shape {c : Wiring} {w : Wire} (h : wireCode c w = none) :
+    ∃ rt wt, c.templates.lookup w.reader = some rt ∧ c.templates.lookup w.writer = some wt ∧ 1 ≤ w.cuts ∧
+      w.units % w.cuts = 0 ∧ boundsOk w rt wt = true := by
+  unfold wireCode at h
+  split at h
+  · cases h
+  · rename_i rt wt hs
+    split at h
+    · rename_i hb
+      exact ⟨rt, wt, (shape_lookup hs).1, (shape_lookup hs).2, (shape_cut hs).1, (shape_cut hs).2, hb⟩
+    · cases h
+
 /-- Writer unit `x` writes a row that reader unit `y` reads, through one of the wires: an edge of the dataflow between
 units the expanded rows give, each unit `(template, unit)`. -/
 def Wiring.Reads (c : Wiring) (x y : String × Int) : Prop :=
   ∃ w ∈ c.wires, ∃ e ∈ w.entries, x = (e.2.1, e.2.2.1) ∧ y = (e.1.1, (e.1.2.1 : Int))
 
 /-- **The wires `check` accepts are acyclic**: no unit reads itself through a chain of wires, since along every wire the
-order's rank of the reader unit's block exceeds the writer's. -/
+rank of the reader unit's block in the order exceeds the writer's. -/
 theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : String × Int) :
     ¬ Relation.TransGen c.Reads x x := by
-  obtain ⟨o, -, ho⟩ := checkRef_order (check_sound h).2
+  obtain ⟨o, ho, hin⟩ := checkRef_order (check_sound h).2
+  have hok := orderOf_ok ho
   let ρ : String × Int → Nat := fun x => (blockOf o x.1 x.2.toNat).getD 0
   have step : ∀ x y, c.Reads x y → ρ x < ρ y := by
-    rintro x y ⟨w, hw, ⟨⟨r, u, p, q⟩, ⟨wr, v, out⟩⟩, he, rfl, rfl⟩
-    have hin := ho w hw
-    simp only [orderedWireRef, List.all_eq_true] at hin
-    have := hin _ he
-    dsimp only at this
-    split at this
-    · rename_i a a0 b h1 h2 h3
-      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at this
-      simp only [ρ, Int.toNat_natCast, h1, h3, Option.getD_some]
-      exact this.2
-    · simp at this
+    rintro x y ⟨w, hw, e, he, rfl, rfl⟩
+    obtain ⟨rt, wt, hr, hwt, hc, hd, hb⟩ := wireCode_shape (check_wireCode h w hw)
+    simp only [boundsOk, Bool.and_eq_true, decide_eq_true_eq] at hb
+    simp only [Wire.entries, List.mem_map, List.mem_range] at he
+    obtain ⟨i, hi, rfl⟩ := he
+    simp only [Wire.readerAt]
+    have hu := readerUnit_lt hc hd hi
+    have hs := w.writerAt_mem_span i hi
+    have hcl : orderedWire o w = true := (orderedWire_eq_ref o w).symm ▸ hin w hw
+    simp only [orderedWire, List.all_eq_true, decide_eq_true_eq] at hcl
+    have hq : i / w.cuts < w.readerUnits := hu
+    generalize i / w.cuts = q at hq ⊢
+    obtain ⟨a, ha, ham⟩ := blockOf_some hok hr (u := w.start + q) (by omega)
+    obtain ⟨b, hb', hbm⟩ := blockOf_some hok hwt (u := (w.writerAt i).toNat) (by omega)
+    have hl := Int.toNat_le_toNat hs.1
+    have hh := Int.toNat_le_toNat hs.2
+    have := hcl b (mem_ranksIn_iff.2 ⟨_, hl, by omega, hbm⟩) a (mem_ranksIn_iff.2 ⟨_, by omega, by omega, ham⟩)
+    simp only [ρ, Int.toNat_natCast, ha, hb', Option.getD_some]
+    exact this
   have chain : ∀ a b, Relation.TransGen c.Reads a b → ρ a < ρ b := by
     intro a b hab
     induction hab with

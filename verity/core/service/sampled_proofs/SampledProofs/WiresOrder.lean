@@ -2,10 +2,10 @@ module
 
 public import SampledProofs.WiresSpan
 
-/-! **The order's closed form against its entries** (`Wires` "The order"). An order's blocks rank each template's units
-monotonically (`blockOf_mono`), so a wire whose first and last reader units lie in one block has every reader unit in it,
-and a wire whose greatest writer's block ranks lower has every writer's block lower: `orderedWire` implies
-`orderedWireRef` (`orderedWire_ref`). The converse is `orderedWire_of_ref`'s, beside `check_complete`. -/
+/-! **The order's closed form against its units** (`Wires` "The order"). A block meets a range of units exactly when it
+holds one of them (`mem_ranksIn_iff`), so a wire's closed form, every block meeting its span below every block meeting
+its reader units, is its check unit by unit (`orderedWire_eq_ref`). A well-formed order's blocks of a template tile its
+units, so each of its units lies in a block (`ranksIn_ne_nil`). -/
 
 @[expose] public section
 
@@ -17,66 +17,93 @@ theorem readerUnit_lt {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0)
   have h2 : w.units / w.cuts * w.cuts = w.units := Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hd)
   exact (Nat.div_lt_iff_lt_mul (by omega)).2 (by rw [h2]; exact hi)
 
-theorem blockOf_go_ge {t : String} {u : Nat} : ∀ {o : List (String × Nat)} {k off b : Nat},
-    blockOf.go t u o k off = some b → k ≤ b
-  | [], _, _, _, h => by simp [blockOf.go] at h
-  | (s, n) :: rest, k, off, b, h => by
-    simp only [blockOf.go] at h
-    split at h
-    · split at h
-      · cases h; exact Nat.le_refl _
-      · exact Nat.le_of_succ_le (blockOf_go_ge h)
-    · exact Nat.le_of_succ_le (blockOf_go_ge h)
+theorem mem_ranksIn {o : List Block} {t : String} {lo hi k : Nat} :
+    k ∈ ranksIn o t lo hi ↔ ∃ p0 n, o[k]? = some (t, p0, n) ∧ max p0 lo < min (p0 + n) hi := by
+  simp only [ranksIn, List.mem_map, List.mem_filter, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+  constructor
+  · rintro ⟨⟨⟨s, p0, n⟩, k'⟩, ⟨hm, rfl, h⟩, rfl⟩
+    exact ⟨p0, n, List.mem_zipIdx_iff_getElem?.1 hm, h⟩
+  · rintro ⟨p0, n, hk, h⟩
+    exact ⟨((t, p0, n), k), ⟨List.mem_zipIdx_iff_getElem?.2 hk, rfl, h⟩, rfl⟩
 
-theorem blockOf_go_mono {t : String} {x y : Nat} (hxy : x ≤ y) : ∀ {o : List (String × Nat)} {k off b : Nat},
-    blockOf.go t y o k off = some b → ∃ a, blockOf.go t x o k off = some a ∧ a ≤ b
-  | [], _, _, _, h => by simp [blockOf.go] at h
-  | (s, n) :: rest, k, off, b, h => by
-    simp only [blockOf.go] at h ⊢
-    split at h
-    · rename_i hs
-      simp only [hs, ↓reduceIte]
-      split at h
-      · cases h
-        exact ⟨k, by simp only [show x < off + n by omega, ↓reduceIte], Nat.le_refl _⟩
-      · by_cases hx : x < off + n
-        · exact ⟨k, by simp only [hx, ↓reduceIte], Nat.le_of_succ_le (blockOf_go_ge h)⟩
-        · simp only [hx, ↓reduceIte]
-          exact blockOf_go_mono hxy h
-    · rename_i hs
-      simp only [hs, Bool.false_eq_true, ↓reduceIte]
-      exact blockOf_go_mono hxy h
+/-- **A block meets a range exactly when it holds one of its units.** -/
+theorem mem_ranksIn_iff {o : List Block} {t : String} {lo hi k : Nat} :
+    k ∈ ranksIn o t lo hi ↔ ∃ u, lo ≤ u ∧ u < hi ∧ k ∈ ranksIn o t u (u + 1) := by
+  simp only [mem_ranksIn]
+  constructor
+  · rintro ⟨p0, n, hk, h⟩
+    exact ⟨max p0 lo, by omega, by omega, p0, n, hk, by omega⟩
+  · rintro ⟨u, h1, h2, p0, n, hk, h⟩
+    exact ⟨p0, n, hk, by omega⟩
 
-/-- **A template's blocks rank in unit order**: a unit below one in block `b` lies in a block of rank at most `b`. -/
-theorem blockOf_mono {o : List (String × Nat)} {t : String} {x y b : Nat} (hxy : x ≤ y) (h : blockOf o t y = some b) :
-    ∃ a, blockOf o t x = some a ∧ a ≤ b :=
-  blockOf_go_mono hxy h
+/-- **The closed form is the check unit by unit.** -/
+theorem orderedWire_eq_ref (o : List Block) (w : Wire) : orderedWire o w = orderedWireRef o w := by
+  rw [Bool.eq_iff_iff]
+  simp only [orderedWire, orderedWireRef, List.all_eq_true, List.mem_range'_1, decide_eq_true_eq]
+  constructor
+  · intro h u hu v hv b hb a ha
+    exact h b (mem_ranksIn_iff.2 ⟨v, by omega, by omega, hb⟩) a (mem_ranksIn_iff.2 ⟨u, hu.1, hu.2, ha⟩)
+  · intro h b hb a ha
+    obtain ⟨v, hv1, hv2, hb'⟩ := mem_ranksIn_iff.1 hb
+    obtain ⟨u, hu1, hu2, ha'⟩ := mem_ranksIn_iff.1 ha
+    exact h u ⟨hu1, hu2⟩ v ⟨hv1, by omega⟩ b hb' a ha'
 
-/-- **The closed form implies the entries**: a wire in order by its first and last reader units and its greatest writer
-has each reader unit in the first one's block and each writer's block lower. -/
-theorem orderedWire_ref {o : List (String × Nat)} {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0)
-    (h : orderedWire o w = true) : orderedWireRef o w = true := by
-  unfold orderedWire at h
-  split at h
-  · rename_i a a' b ha ha' hb
-    simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
-    obtain ⟨rfl, hba⟩ := h
-    simp only [orderedWireRef, Wire.entries, List.all_map, List.all_eq_true, List.mem_range, Function.comp_apply,
-      Wire.readerAt]
-    intro i hi
-    have hu := readerUnit_lt hc hd hi
-    have hs := w.writerAt_mem_span i hi
-    have hq : w.start + i / w.cuts ≤ w.start + w.readerUnits - 1 := by
-      generalize i / w.cuts = q at hu ⊢
-      omega
-    obtain ⟨au, hau, hle⟩ := blockOf_mono hq ha'
-    obtain ⟨as, has, hle'⟩ := blockOf_mono (Nat.le_add_right w.start (i / w.cuts)) hau
-    rw [ha] at has
-    cases has
-    obtain ⟨bv, hbv, hle''⟩ := blockOf_mono (Int.toNat_le_toNat hs.2) hb
-    rw [hau, ha, hbv]
-    simp only [beq_iff_eq, Bool.and_eq_true, decide_eq_true_eq]
+theorem tiles_cover : ∀ {bs : List (Nat × Nat)} {cur units u : Nat}, tiles bs cur units = true → cur ≤ u → u < units →
+    ∃ p ∈ bs, p.1 ≤ u ∧ u < p.1 + p.2
+  | [], cur, units, u, h, h1, h2 => by
+    simp only [tiles, beq_iff_eq] at h
     omega
-  · simp at h
+  | (p0, n) :: bs, cur, units, u, h, h1, h2 => by
+    simp only [tiles, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    obtain ⟨⟨rfl, hn⟩, hr⟩ := h
+    by_cases hu : u < p0 + n
+    · exact ⟨(p0, n), List.mem_cons_self .., h1, hu⟩
+    · obtain ⟨p, hp, hp'⟩ := tiles_cover hr (by omega) h2
+      exact ⟨p, List.mem_cons_of_mem _ hp, hp'⟩
+
+theorem lookup_mem {β : Type} {a : String} {b : β} : ∀ {l : List (String × β)}, l.lookup a = some b → (a, b) ∈ l
+  | [], h => by simp [List.lookup] at h
+  | (k, v) :: l, h => by
+    simp only [List.lookup] at h
+    split at h
+    · rename_i hk
+      cases h
+      rw [beq_iff_eq.1 hk]
+      exact List.mem_cons_self ..
+    · exact List.mem_cons_of_mem _ (lookup_mem h)
+
+/-- **A well-formed order covers every unit**: each unit of a template lies in one of its blocks. -/
+theorem ranksIn_ne_nil {c : Wiring} {o : List Block} (h : orderOk c o = true) {t : String} {tt : Template}
+    (ht : c.templates.lookup t = some tt) {u : Nat} (hu : u < tt.units) : ranksIn o t u (u + 1) ≠ [] := by
+  simp only [orderOk, Bool.and_eq_true, List.all_eq_true] at h
+  have hti := h.2 (t, tt) (lookup_mem ht)
+  obtain ⟨p, hp, hp1, hp2⟩ := tiles_cover hti (Nat.zero_le u) hu
+  rw [List.mem_mergeSort, List.mem_map] at hp
+  obtain ⟨⟨s, p0, n⟩, hm, rfl⟩ := hp
+  rw [List.mem_filter, beq_iff_eq] at hm
+  obtain ⟨hm, rfl⟩ := hm
+  obtain ⟨k, hk⟩ := List.mem_iff_getElem?.1 hm
+  intro hnil
+  have : k ∈ ranksIn o s u (u + 1) := mem_ranksIn.2 ⟨p0, n, hk, by simp at hp1 hp2; omega⟩
+  rw [hnil] at this
+  exact List.not_mem_nil this
+
+/-- Each unit of a template has a block in a well-formed order, one meeting it. -/
+theorem blockOf_some {c : Wiring} {o : List Block} (h : orderOk c o = true) {t : String} {tt : Template}
+    (ht : c.templates.lookup t = some tt) {u : Nat} (hu : u < tt.units) :
+    ∃ k, blockOf o t u = some k ∧ k ∈ ranksIn o t u (u + 1) := by
+  unfold blockOf
+  cases hl : ranksIn o t u (u + 1) with
+  | nil => exact absurd hl (ranksIn_ne_nil h ht hu)
+  | cons k l => exact ⟨k, rfl, List.mem_cons_self ..⟩
+
+theorem orderOf_ok {c : Wiring} {o : List Block} (h : orderOf c = .ok o) : orderOk c o = true := by
+  unfold orderOf at h
+  split at h
+  · split at h
+    · cases h
+      assumption
+    · cases h
+  · cases h
 
 end SampledProofs.Wires

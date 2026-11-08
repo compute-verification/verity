@@ -4,9 +4,9 @@ public import SampledProofs.WiresSound
 
 /-! **`check` is complete against its unrolled reference** (`check_complete`): whatever `checkRef` accepts, `check`
 accepts, for wires whose radices are 1 or more (as every wire `Wire.ofJson` reads is). With `check_sound` the two decide
-the same circuits: the span is attained (a reader index reaches the least writer and one the greatest), two wires
-of one port whose rectangles meet wire a reader row twice, and a wire's first and last reader units and greatest writer
-are among its entries (`orderedWire_of_ref`). -/
+the same circuits: the span is attained (a reader index reaches the least writer and one the greatest), and two wires
+of one port whose rectangles meet wire a reader row twice; the order's closed form is its check unit by unit
+(`orderedWire_eq_ref`). -/
 
 @[expose] public section
 
@@ -153,49 +153,6 @@ theorem prodR_pos : ∀ ps : List (Nat × Int), (∀ p ∈ ps, 1 ≤ p.1) → 1 
     show 1 ≤ r * prodR ps
     exact Nat.mul_le_mul h1 this
 
-/-- **The entries imply the closed form**: a wire whose every reader unit lies in its first one's block, each writer's
-block lower, has its last reader unit in that block too, and its greatest writer, which some index reads, lower. -/
-theorem orderedWire_of_ref {o : List (String × Nat)} {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0)
-    (hr : ∀ r ∈ w.radix, 1 ≤ r) (h : orderedWireRef o w = true) : orderedWire o w = true := by
-  simp only [orderedWireRef, Wire.entries, List.all_map, List.all_eq_true, List.mem_range, Function.comp_apply,
-    Wire.readerAt] at h
-  have hu1 : 1 ≤ w.units := prodR_pos _ (w.pairs_pos hr)
-  obtain ⟨-, ⟨j, hj, hhi⟩⟩ := w.span_attained hr
-  have h5 : w.units / w.cuts * w.cuts = w.units := Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hd)
-  have hlast : (w.units - 1) / w.cuts = w.readerUnits - 1 := by
-    have hlt := readerUnit_lt hc hd (show w.units - 1 < w.units by omega)
-    have hge : w.readerUnits - 1 ≤ (w.units - 1) / w.cuts := by
-      refine (Nat.le_div_iff_mul_le (by omega)).2 ?_
-      rw [Nat.sub_mul, Nat.one_mul]
-      unfold Wire.readerUnits
-      omega
-    omega
-  have e0 := h 0 (by omega)
-  have e1 := h (w.units - 1) (by omega)
-  have ej := h j hj
-  rw [Nat.zero_div, Nat.add_zero] at e0
-  rw [hlast] at e1
-  rw [hhi] at ej
-  unfold orderedWire
-  split at e0
-  · rename_i a a0 b0 ha ha0 hb0
-    split at ej
-    · rename_i aj aj0 bj haj haj0 hbj
-      split at e1
-      · rename_i a1 a10 b1 ha1 ha10 hb1
-        rw [ha0] at ha10 haj0
-        rw [show w.start + (w.readerUnits - 1) = w.start + w.readerUnits - 1 by
-          have := readerUnits_pos hd hu1; omega] at ha1
-        cases ha10
-        cases haj0
-        simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at e1 ej
-        rw [ha0, ha1, hbj]
-        simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
-        omega
-      · simp at e1
-    · simp at ej
-  · simp at e0
-
 /-- **`check` is complete against the unrolled reference**: what `checkRef` accepts, `check` accepts, for wires whose
 radices are 1 or more. -/
 theorem check_complete {c : Wiring} {es : List Entry} (hr : ∀ w ∈ c.wires, ∀ r ∈ w.radix, 1 ≤ r)
@@ -228,8 +185,7 @@ theorem check_complete {c : Wiring} {es : List Entry} (hr : ∀ w ∈ c.wires, �
           exact disjoint_of_entries (hw a ha).1 (hw a ha).2.1 (hw a ha).2.2 (hw b hb).1 (hw b hb).2.1 (hw b hb).2.2 hab
         have hord' : orderCode c orderedWire = none := by
           obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
-          exact orderCode_eq_none.2 ⟨o, ho, fun w hw' =>
-            orderedWire_of_ref (hw w hw').1 (hw w hw').2.1 (hr w hw') (hin w hw')⟩
+          exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => (orderedWire_eq_ref o w).symm ▸ hin w hw'⟩
         unfold check
         simp [hcut, hf', hd, hord']
 
