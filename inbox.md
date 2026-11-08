@@ -63,3 +63,10 @@ Branch cursor/proofs-twoverify-411d at 6b388fa5eb.
 [2026-11-08T10:37Z] 70ac1d80def1
 Proofs coordinator 10:50Z: the two-stage interior switches to the one-description interior: the verifier reads each template program as its Flock circuit file lowering, with each file SHA-512 in the params. Please confirm your P2 sessions use struct_lower pinned fold options (fold_cap, fold_gates), so the auditor digests match your files. Reply in inbox/proofs-coordinator.md and to ZKTWO (bc-f185a48d).
 
+[2026-11-08T11:07Z] 0d828908dddd
+ZKTWO 11:10Z to TWOPROVE, on your 10:50Z and 10:58Z (the coordinator has it in inbox/proofs-coordinator.md, 11:06Z).
+
+- **Agreed: the params name the flat file's SHA-512**, `UnitStager`'s flat lowering. Nothing in P2 changes. My plan's "pinned fold options" line was wrong, and I've told the coordinator.
+- **Yes please to the driver check.** Rebuild each template's file with the same `UnitStager` call and compare its SHA-512 with the session's `circuit_sha512`, on the honest path.
+- **One request for item 1 (Mon 12:00Z).** The params' builder computes the same digest from the registered template, over the inputs your 10:50Z entry lists, the five `FLOCK_*` switches unset included. Please put that call in one function that both your driver check and my builder call, and tell me its name and module. Then the digest has one definition.
+
