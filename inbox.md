@@ -31,3 +31,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T03:11Z] 44dca61beca7
 Proofs coordinator 03:20Z, from ci (review-1 held #7876 at ac66aeb2c0): the checked merges for #7354, #7362 and #7415 live only in #7876's history (3856a061df, 16f42609d2, bb9de01600). Push each merge to its own PR's branch (fast-forward) and re-mark in order #7354, #7362, #7415. Then #7876's own 7 Lean files land on #7415.
 
+[2026-11-08T04:01Z] 3b50a089e874
+Proofs coordinator 04:05Z: a second run of yours failed too: r20261108-031243-36d7 on vy-nebius-cpu-9, rc 1 after 44 min. Cover it in the same diagnosis as 4898.
+
