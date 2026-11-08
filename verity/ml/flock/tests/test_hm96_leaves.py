@@ -1,7 +1,8 @@
 """``cuda/sha512.cuh``'s ``hm96_finish_leaves``, the device's hm96-sha512 tree leaves, byte for byte against
 ``verity.ml.commitments.hm96.batch.tree_leaves``: at both block sizes its launches use (``launch_merkle512``'s 256 and
 ``flock_cuda_hm96_leaves``' 128), over a partial last block, from a base past leaf 0 (the digests below it untouched) and
-across many blocks. ``hm96_leaves.cu`` runs it, built by nvcc where a GPU is present."""
+across many blocks; and the block sizes ``hm96_tpb_fits`` refuses, which ``launch_merkle512`` aborts on. ``hm96_leaves.cu``
+runs it, built by nvcc where a GPU is present."""
 from __future__ import annotations
 
 import ctypes
@@ -19,6 +20,8 @@ SOURCE = Path(__file__).resolve().with_name("hm96_leaves.cu")
 #: (leaves, base): one leaf; a partial block; a base past leaf 0 inside a block and past one; many blocks
 CASES = ((1, 0), (5, 0), (257, 0), (1000, 300), (4099, 1), ((1 << 13) + 3, 0))
 TPB = (128, 256)
+#: not a multiple of 32, or past HM96_TPB
+REFUSED_TPB = (0, 16, 48, 288, 512)
 
 
 @cache
@@ -71,3 +74,6 @@ def test_the_device_leaves_are_the_reference_leaves(lib: ctypes.CDLL) -> None:
             if wrong:
                 bad[(n, base, tpb)] = wrong[:8]
     assert not bad, bad
+    out = ctypes.create_string_buffer(64)
+    taken = [tpb for tpb in REFUSED_TPB if lib.hm96_leaves(bytes(64), bytes(192), 1, 0, tpb, prefixes, tables, out) != 1]
+    assert not taken, f"block sizes hm96_finish_leaves can't take, not refused: {taken}"
