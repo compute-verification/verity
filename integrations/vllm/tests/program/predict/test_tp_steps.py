@@ -84,7 +84,9 @@ def test_class_g_composes_its_eight_ranks_with_stable_digests_and_wires_every_pe
     workload digest and window. The window of both requests, the two-token request's embedding all-reduce over both its
     rows among them, wires every bit of every rank's partial from its producer units, into its combine units (embedding,
     attention and MoE all-reduces) or the logits' readers (the all-gather); each rank's sent partial is its own segment at
-    every site's slice; every wire runs forward in the public order. `at_rank` of the registration is each rank's own, so
+    every site's slice; every wire runs forward in the public order; the only reads of a combine's output left free are the
+    MoE row's new residual, a 6144-word row, into the next attention all-reduce's coordinate combines, a word a unit (a grain
+    boundary). `at_rank` of the registration is each rank's own, so
     each rank's digest is `compile_steps`' there. What no cheaper test can: the binding of eight ranks of a served model's
     compiled Programs at their producers' grain, each rank's place among the others read from its Programs, and their
     digests' stability across processes; it compiles GLM-5.3 eight times in each of two processes."""
@@ -103,6 +105,9 @@ def test_class_g_composes_its_eight_ranks_with_stable_digests_and_wires_every_pe
     assert len(set(g["ranks"])) == 8 and g["sites"][0] < g["sites"][1] and g["peer_bits"] == g["parts_bits"] <= g["count"]["wired"]
     assert g["sent"] and g["backward"] is None
     assert {c.split("{")[0] for c in g["combines"]} >= {"AllReduceRmsNormMnnvl_v1", "AllGather_v1"}
+    assert g["unwired"] and all(re.fullmatch(r"class-g: \(AllReduceRmsNormMnnvl_v1\{[^)]*\}\) res reads leaves \[\.\.\): 6144-word "
+                                             r"rows of AllReduceRmsNormMnnvl_v1\{.*\} into a word a "
+                                             r"AllReduceResidualMnnvlCoordinate_v1\{WORLD=8,SHOT=\d\} unit", u) for u in g["unwired"])
     reg = _class_g(tmp_path / "phi")
     assert all(at_rank(reg, r) == _class_g(tmp_path / "phi", rank=r) for r in range(8))
     print(json.dumps(g))
