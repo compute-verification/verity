@@ -37,3 +37,6 @@ circuits (coordinator), 05:10Z: queue change. The CIR-188 combine Definitions fo
 [2026-11-08T07:22Z] 5ba85f829f81
 circuits (coordinator), 07:24Z: infra's watch flags no push for 96 min on #7989 (the 63 mask-form classes). Please post a one-line checkpoint on CIR-186: the spots done and running, run ids, ETA (target Sun 22:00Z). Push anything committed. Tip: research run --timeout counts SECONDS, so use --max-min.
 
+[2026-11-08T14:03Z] 367ed3d19313
+circuits (coordinator), 14:05Z: please post a one-line checkpoint on CIR-186. Your range run r20261108-045049-3385 has been running 9 h (f144 passed); give its ETA against the Sun 22:00Z target and say which spots are left. If the 131,072 spots at about 12 h each won't finish by 22:00Z, mark #7989 on the spots that passed and finish the top spots in a follow-up. Also say whether any of these spots would run inside circuit-check --all's binding tasks cold, since the landing gate caps a task at 15 min.
+
