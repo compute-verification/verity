@@ -39,7 +39,8 @@ def test_the_pool_is_vllm_s_over_a_whole_trace(name) -> None:
     (the same hashes cached with their blocks held by the same slots, the same free-queue order, the same hashless
     count), each eviction removing the blocks vLLM evicts. Beside each call, a made-up eviction, a wrong threshold,
     returns a block either side and a hit or an evictable count a step either side are refused, and so is the hit a
-    cache that never evicts would give, wherever eviction shortened vLLM's. One copy an entry is enough."""
+    cache that never evicts would give, wherever eviction shortened vLLM's. One copy an entry is enough. The crush
+    trace's preempted requests resume on blocks their preemption returned, taking them back from the free queue."""
     inp = V.replay_input(V.FIXTURES / name)
     c = V.drive(inp, V.statics_for(inp, D=4)).counts
     assert c["steps"] == len(inp.rows) and c["checks"] > 1000
@@ -53,6 +54,8 @@ def test_the_pool_is_vllm_s_over_a_whole_trace(name) -> None:
     if name == "async-crush.json.gz":
         assert c["refused the threshold one copy older"] >= 100 and c["refused the evictable count less one"] >= 100
         assert c["refused the hit of a cache that never evicts"] == c["hits shortened by eviction"] >= 500
+        assert c["resumes taking the blocks their preemption returned"] >= 10
+        assert c["returned blocks a resume took from the free queue"] >= 100
 
 
 EDGES = ("allocations a full pool refuses", "preempted frees keeping shared blocks",
@@ -115,7 +118,8 @@ def test_the_pool_is_vllm_s_on_a_served_sync_trace(tmp_path, arrivals) -> None:
     assert not inp.engine.async_scheduling and inp.engine.num_gpu_blocks == 100
     c = V.drive(inp, V.statics_for(inp, R=inp.engine.max_num_seqs, D=4), arrivals=arrivals).counts
     assert c["steps"] == len(inp.rows) and c["preempted frees"] >= 2
-    assert c["resumes taking the blocks their preemption returned"] >= 1
+    assert c["resumes taking the blocks their preemption returned"] >= 2
+    assert c["returned blocks a resume took from the free queue"] >= 50
     assert c["evicting computes"] >= 200 and c["allocations a full pool refuses"] >= 100
     assert c["hits past the first eviction"] >= 100 and c["evictions splitting one free's blocks"] >= 100
     assert c["refused the hit of a cache that never evicts"] == c["hits shortened by eviction"] >= 100
