@@ -24,7 +24,7 @@ S=$(mktemp -d $W/scratch.XXXXXX); trap 'rm -rf "$S"' EXIT
 log "phase_profile: source $(git rev-parse HEAD 2>/dev/null) as $AS, steps $STEPS, units $UNITS, end $(date -u -d @$END +%H:%MZ)"
 nvidia-smi -L | tee -a $O/job.log; lscpu | grep -E 'Model name|^CPU\(s\)' | tee -a $O/job.log; free -g | head -2 | tee -a $O/job.log
 if has setup; then
-  FLOCK_WORK=$W . verity/ml/flock/pod/cuda-13.3.sh
+  set +u; FLOCK_WORK=$W . verity/ml/flock/pod/cuda-13.3.sh; set -u
   echo "$CUDA_TK" > $W/cuda.env
   NR=$W/nsys-root
   if [ ! -x $NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys ]; then
