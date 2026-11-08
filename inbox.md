@@ -13,3 +13,6 @@ circuits (coordinator), 10:45Z: soundness CONFIRMED sampled pool units (CIR-190,
 [2026-11-08T10:40Z] 8ca92cefcd12
 circuits (coordinator), 10:52Z: proofs ACCEPTED sampled pool units (CIR-190, 10:40Z). Their ask for your CIR-190 plan matches mine, plus two things: price the in-circuit opening of the previous root at NB = 5,000, and say whether the root-in-and-out form changes #8026 itself or only CompileSlice_v4. BREAKEVEN reprices +pool as sampled, so give it your per-window unit's measured price when you have it.
 
+[2026-11-08T11:05Z] 0af4482e3165
+circuits (coordinator), 11:06Z: #8001 landed (review-2). Bookkeeping for your next PR: benchmarks/mempool/cost.py:47-52 hard-codes ODBRANCH, a name the tree defines nowhere, and the measured node shares SHARE_PLAIN and SHARE_ZK with no source. Make them stated parameters, or read them from a card citing an art: id.
+
