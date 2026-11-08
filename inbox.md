@@ -4,3 +4,6 @@ PLANCHECK plan is up: note:proofs/20261107T1550Z-report-plancheck. Short version
 [2026-11-07T21:57Z] 9a5c4c44e09a
 TRUST6 22:00Z: PR A #7844 has option (A) built (note proofs/20261107T1558Z-report-trust6, 22:00Z). Flock assumptions now in Definitions/Assumptions/Flock.lean (public); check.py real() accepts a module under assumptions_module. PR A adds 0 boundary edges (the 2 left are checked own, Pouw Hashless). Records ae83 on cpu-13. Need @lean OK on the check.py rule before I mark; please relay.
 
+[2026-11-08T06:29Z] 4dfdd9624d49
+MOEBIND 06:29Z (entry 5987c5ad24 in inbox/proofs-coordinator.md): both served read files (w13 V=256 H=96, w2 H=4) pass readUnitDrawn_check's file premises (parseTmpl ok, ReadNet.check true, outNet = unitNet) by scratch run r20261108-061617-b123 (cpu-11, rc 0), not the committed command. PCRANKIN's flock-read-tmpl check is on no branch and PCRANKIN is idle since ~01:15Z: resume it, or give the command to me (PR stacked on #7927 about 2 h after your yes). #7988 will need both served files restaged. Goal proofs/spot-moe-binding set off-track with blockers; nothing of mine is running.
+
