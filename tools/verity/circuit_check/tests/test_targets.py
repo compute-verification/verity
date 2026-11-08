@@ -159,8 +159,7 @@ def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
     assert SC.named("Lifted[ArgmaxStepF32_v1]_v2") is L.lift_composite(ref_prims.ArgmaxStepF32)
     assert SC.pin_owner("digests", "Lifted[ArgmaxStepF32_v1]_v2{ORD=0}") == L.__name__
     assert SC.named("Lifted[MoeFfnFixed_v1]_v2") is None
-    key = "Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}"
-    assert SC.pin_reads("digests", key) == [SC.shared_pin("digests", key)]
+    assert SC.pin_owner("digests", "Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}") is None
 
 
 def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
