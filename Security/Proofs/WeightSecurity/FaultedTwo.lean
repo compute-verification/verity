@@ -36,7 +36,7 @@ theorem TheftFaultedTwo {Ω R Θ Q Θ' F : Type} [Fintype Ω] [Fintype R] [Finty
     (Af : Set (Outsider R ((Q × Adv) × F) (O → V) Θ')) (p lam : ℝ)
     (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (s : Θ → R → Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
-    (hφ₀ : size φ₀ = 0)
+    (hφ₀ : NoFault size φ₀)
     (hhon : HonestUseHard C gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T Aset p)
     (hfh : FaultedUseHard C Cf size gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T (T * (K - 1) + 1) Aset Af lam)
     (hsim : Simulable Af (Ou.withFaults φ₀)
