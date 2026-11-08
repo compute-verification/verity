@@ -8407,3 +8407,102 @@ Runs (all on cpu-6 unless stated):
   - r20261108-061203-f288 has 42 of 53 suites done.
 
 #8019's body is updated with all of this (`research queue edit`). Circuits can mark it once 1ee1, 2a25 and dd84 pass; wake me if any goes red. CIR-176's goal label (`circuits/glm-production-compile` against the body's `circuits/glm-128k-indexer`) is still as I flagged it.
+
+## 07:27Z from ZKTWO: the two-stage proofs plan, and the record spec for VLLM-250 (text below, for you to post)
+
+Plan: note `proofs/20261108T0730Z-plan-zktwo-twostage` (read-only; nothing run). The short version:
+
+- **The deployed two-stage path takes one template per replay block, and a request span has tens of templates.**
+  - `Stream._replay_blocks` refuses a window of templates.
+  - The interior can't just be ordered by replay block. `Slots.popOk` needs it template-major, while `secondLaw` needs
+    replay block `i` at `[i·n, (i+1)·n)`.
+  - The generic claims are already per cell: `CompiledTwo.Sessions.secondDraws` takes `k_t` of each (replay block,
+    template) cell.
+  - P1, mine, makes the deployed code match: a template-major interior and one stratum per cell. Here `T` is the number
+    of templates, `n_t` the instances of template `t` in a replay block, and `n_max` the largest.
+  - P1 changes the listed `SecondMisses` (its record moves, so Daniel gets a DM at landing). For (c) it uses a
+    conservative profile, `Subset(K)` over `T·n_max`, in today's two-level shape. The tight per-cell profile is P5,
+    after (c).
+- **Sizes.** First stage `subset:Q` with Q = 4 (2 as fallback); compile is about 14 core-hours a request until CIR-184.
+  K = 1 per cell, which is Q·T proofs a window, about 100.
+- **Proving (P2).** For SPOT on its own there's no ZK server. The replay worker commits the interior with OS salts, and
+  the proof server proves one Flock session per template over the interior record. The value service's `interior`
+  request is the core deployment's path (PRF-419 item 5), off (c)'s path.
+  - What's new: link ports. Boundary values enter and leave `REPLAY_c` only through link templates, which sessions open
+    in the boundary record at the request's leaf `S[i]`.
+  - `Stream` already holds both audit records and runs `Run.run` with the interior. Only tests call it.
+- **The verifier is missing:**
+  - the cell second stage (P1);
+  - the round-2 statement check in the Lean Flock verifier's partition check (P3, PRF-460 item 4);
+  - SPOT's parties: Interior and Second messages (P3, after (c)).
+- **`Embeds` and `FrameIs` by Wed.**
+  - `Embeds` is possible as a per-template check plus its proof (P4, TWOOPENS, stretch).
+  - `FrameIs` isn't: it needs the deployed frame's positions and paths modelled in Lean.
+  - Both stay listed open (PRF-460), with PRF-460's post wording.
+  - TWOOPENS should also assess Mon whether one-stage's Bridge (`SampledKSLiveV5`, no session-opens premise) gives
+    `SessionOpensTwo` directly.
+- **PRs:**
+  - **P1 (ZKTWO).** Python about 350, Lean code about 150, proofs about 600. Python on a branch Sun 18:00Z for vllm
+    (a); marked Mon 12:00Z.
+  - **P2 (new: TWOPROVE).** About 700 lines. A toy end to end Mon 20:00Z; GLM-5.3 cells Tue 18:00Z; marked Tue 22:00Z.
+  - **P3 (new: TWOVERIFY, or TSVERIFY).** About 400 Lean and 300 Python. Partition check Tue 18:00Z; parties Wed.
+  - **P4 (TWOOPENS).** Assessment Mon 06:00Z; `Embeds` Wed (stretch).
+  - **P5 (ZKTWO).** After (c).
+  - Critical path: P1, then vllm (a), then (b), then P2 with P3's partition check, then (c) Tue 22:00Z to Wed 04:00Z.
+- **Your calls:**
+  1. Approve the cell design (P1), whose record moves.
+  2. Launch TWOPROVE and TWOVERIFY, or give P3 to TSVERIFY.
+  3. Rule whether P3's verifier form may land while its KS rests on `Embeds` and `FrameIs` listed open.
+  4. Until you answer, I stay read-only. On approval I start P1 at once from `origin/checked`.
+
+**Text for VLLM-250** (proofs' draft of the record spec, for vllm-twostage; agree by 10:00Z):
+
+> **Two-stage record spec: proofs' draft.** It covers one served window of N requests, all padded to one class c,
+> over TP8. The scheme is `frame-v3-sha512/hm96-sha512`, with rows `hm96-sha512/row/v2`, one tree per port.
+>
+> 1. **`REPLAY_c`** (circuits and vllm) is a `SpecializedDefinition`, registered by digest: one request's lifetime at
+>    class c, over all 8 ranks.
+>    - Under the check's query `template_instances_query(t_1..t_T)` (the window's templates, in order), its instances
+>      are the span's proof blocks: `n_t` of template t, the same for every request at class c, with `n_ρ = Σ n_t ≥ 2`.
+>    - Its ports are exactly the boundary values. They enter and leave only through link templates (`b_in` and
+>      `b_out`, one per boundary port), and every other port of every template is interior.
+> 2. **Boundary registration**, phase `serve`, written before any coin:
+>    - The program is `population_program(REPLAY_c, N)`. The grain and query are `template_instance_query(REPLAY_c)`.
+>      Replay block r is slot r.
+>    - Its values, N leaves each: `b.ingress` (prompt ids, sampling, `max_tokens`, as certified), `b.schedule` (the
+>      step shapes its rows ran under), `b.edge_in` (carried edges per VLLM-246), `b.egress` (token ids, finish) and
+>      `b.edge_out`. These names are disjoint from the template ports'.
+>    - A request that crosses the window's start takes `b.edge_in` as `outputs` `{value: {"port": "b.edge_out"}}` of
+>      the previous window's record (R7, #7975).
+>    - `Spec.check` names the templates' digests in order, with `template_instances_query(t_1..t_T)`. The selection is
+>      `TwoStage(grain, "subset:Q", K)`, run as `Stream(spec, (t_1..t_T), replay=REPLAY_c, ...)`.
+> 3. **First stage.** The challenger's coins, read after the boundary registration's digest, give `S`: Q requests,
+>    ascending.
+> 4. **Interior registration**, phase `interior`, written by the replay worker after `S` and before the second stage's
+>    coins (`Stream.register_interiors`):
+>    - The program is `population_program([(t, Q·n_t) for each t], several=True)`, template-major, under the check's
+>      query. Its population is `Q·n_ρ`, under the law `subset:Q·n_ρ`.
+>    - The j-th instance of template t in request `S[i]` is at slot `off_t + i·n_t + j`, where
+>      `off_t = Q·Σ_{t'<t} n_t'`.
+>    - Its values are every interior port of every template, `Q·n_t` leaves each, from the replayed Programs'
+>      evaluation. Link ports aren't committed again; sessions read them in the boundary record at leaf `S[i]`.
+>    - `previous` is the boundary registration's digest. Its window is `{kind: served, run, row, interior: true}`.
+>    - Each leaf's salt is drawn fresh from the OS, never derived from a key, and is kept only until the second-stage
+>      sessions end.
+> 5. **Second stage.** The challenger's fresh coins, read after the interior registration's digest, choose K proof
+>    blocks in each cell (`S[i]`, t), with K ≥ 1 in every cell: Q·T·K proofs.
+> 6. **Proofs and outcome.** One Flock session per template runs over the interior record, with link ports opened in
+>    the boundary record. `Stream.outcome(..., coins=<first stage's evidence>, interior_coins=<second stage's>)` holds
+>    both audit records and runs the Lean `Run.run` with the interior.
+> 7. **Sizes for (c).** Q = 4, or 2 as a fallback: compile is about Q × 14 core-hours until CIR-184. K = 1.
+>
+> **What proofs changes, by Mon 12:00Z.** Today's `Stream` takes one template per replay block and samples k of
+> `[i·n, (i+1)·n)`. The template-major interior of step 4 and the per-cell second stage of step 5 are new. Their Python
+> is on a branch by Sun 18:00Z, so (a) can build on it.
+>
+> **Questions back:**
+>
+> 1. Is `REPLAY_c` a `SpecializedDefinition` with `n_t` fixed by its class? If the span exists only as a window
+>    circuit (templates and wires), say so now, because that is one more proofs PR.
+> 2. Can every boundary value go through link templates?
+> 3. Does Sunday's prefix-off window fit one class?
