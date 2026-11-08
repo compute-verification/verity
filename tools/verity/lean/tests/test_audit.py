@@ -1196,6 +1196,58 @@ def test_facts_from_applies_the_reflexive_witness_exemption_as_the_full_audit_do
     assert [f.entry for f in sb["failures"] if (f.code or "").startswith("witnesses")] == ["Control.same"]
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_only_writes_the_document_facts_from_judges_under_its_build_s_key(tmp_path):
+    """Stage A (`--facts-only`, `audit(facts_cache=)`) writes the package's facts document under its content address
+    (`facts_key`), so `--facts-from` judges from it with no build and gives the full audit's verdict. The key names the
+    build the facts were read from: a second read of the same `.olean` files writes the identical document under the same
+    key, and a change to the lock slice `Facts.lean` reads moves it. A lock failure does not fail stage A, which has
+    still written the document for `--facts-from` to judge."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+    recorded = A.load(pkg)
+
+    cache = tmp_path / "facts-cache"
+    a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    key = a["facts_key"]
+    doc = cache / f"{key}.json.gz"
+    assert a["failures"] == [] and a["facts_document"] == str(doc) and doc.is_file(), a["failures"]
+    body = json.loads(gzip.decompress(doc.read_bytes()))
+    assert body["schema"] == A.FACTS_SCHEMA and "oleans" not in body["facts"] and "proved_keys" not in body["facts"]
+
+    assert A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)["failures"] == [], "stage B on stage A's document"
+    assert A.main([str(pkg), "--facts-from", str(doc), "--out", str(tmp_path / "cli")]) == 0
+
+    # the key names the build: a second read of the same .olean files is the identical document under the same key
+    b = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert b["facts_key"] == key and (cache / f"{key}.json.gz").read_bytes() == doc.read_bytes()
+    assert [p.name for p in cache.iterdir()] == [f"{key}.json.gz"], "one document, not one per read"
+
+    # a change to the lock slice Facts.lean reads (a guarantee name) moves the key to a different address
+    grown = json.loads(json.dumps(recorded))
+    grown["guarantees"]["Control.unused"] = {"owner": "@lean"}
+    A.dump(pkg, grown)
+    c = A.audit(pkg, tmp_path / "c", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert c["facts_key"] != key
+    A.dump(pkg, recorded)
+
+    # stage A writes the document even when the lock fails; the CLI passes, and --facts-from reports the failure the
+    # full audit does, from that very document
+    bad = json.loads(json.dumps(recorded))
+    bad["guarantees"]["Control.main_thm"]["type_hash"] = "0" * 64
+    A.dump(pkg, bad)
+    fresh = tmp_path / "fresh-cache"
+    assert A.main([str(pkg), "--facts-only", str(fresh), "--out", str(tmp_path / "fo")]) == 0, \
+        "stage A passes once it has written the document, whatever the lock says"
+    (stored,) = list(fresh.glob("*.json.gz"))
+    sb = A.audit_from_facts(pkg, tmp_path / "sbx", stored, log=noop)["failures"]
+    fb = A.audit(pkg, tmp_path / "fb", build=False, replay=False, runs=False, log=noop)["failures"]
+    assert sb and list(map(str, sb)) == list(map(str, fb)), "stage B on the stored document is the full audit's verdict"
+
+
 def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
     """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
     kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
