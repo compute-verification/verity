@@ -37,9 +37,10 @@ revision, a policy entry such as a layer's field or a `compile_time` digest) mer
 one both sides changed differently is theirs', and one a side removed while the other changed it is the changed one
 (`one`). A `shape.inline` entry is one premise of a guarantee, so two sides that each add or drop premises of one
 guarantee merge premise by premise (`DEEPER`). A `shape.inline` premise one side dropped while the other has it as the
-base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on an older tree
-drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one whose premise
-no longer offends, which the next `--update` drops. An `unwitnessed` or `witnesses` entry merges the same way (`JUDGED`),
+base had it goes, as in any three-way merge, unless that other side restated its guarantee, otherwise than the dropping
+side, and the merged record lists it (`held`): a side whose `--update` ran on an older tree drops a text the other
+side's restated statement still prints, and the Lean check fails on a missing entry but not on one whose premise no
+longer offends, which the next `--update` drops. An `unwitnessed` or `witnesses` entry merges the same way (`JUDGED`),
 named as a record: its value follows the statement as each side's tree builds it (a type hash, the witnesses a form
 needs), so the incoming side's, the newer tree's when drive stacks a PR, stands as a candidate, which the Lean check of
 the merged commit judges.
@@ -508,13 +509,16 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
 
 def held(base: dict, ours: dict, theirs: dict, out: dict, candidate: list[str]) -> None:
     """Put back into the merged record ``out`` each `shape.inline` premise of a guarantee ``out`` lists that one side dropped
-    while the other has it with the base's reason, each named in ``candidate`` as `shape[inline][G][P] (kept)`.  A side whose
-    `--update` ran on an older tree drops a text the other side's tree still prints (a renamed definition's old and new texts
-    are both listed until no tree prints the old one), and the lock doesn't say which side's tree the merged tree prints
-    like.  The Lean check fails on an offending premise of a listed guarantee that `shape.inline` doesn't list, and
-    `--update` adds none, while an entry whose premise no longer offends fails nothing and the next `--update` drops it
-    (`check.py`'s `inline_failures`), so the premise stays.  A guarantee ``out`` doesn't list gets nothing back: `--update`
-    keeps an unlisted guarantee's entries until the lock lists it."""
+    while the other has it with the base's reason and states the guarantee otherwise than both the base and the dropping
+    side (`restated`), each named in ``candidate`` as `shape[inline][G][P] (kept)`; any other such premise goes, as a
+    three-way merge drops it.  A side whose `--update` ran on an older tree drops a text the other side's restated statement
+    still prints (a renamed definition's new text, which the base already listed beside the old one), and the Lean check
+    fails on an offending premise of a listed guarantee that `shape.inline` doesn't list, while `--update` adds none
+    (`check.py`'s `inline_failures`).  A side that states the guarantee as the base or the dropping side does prints it,
+    in the merged tree, as the dropping side's tree does, where that side's `--update` found the premise no longer offends:
+    kept, the entry would be residue (a renamed premise's old text beside its new one), which fails nothing but counts
+    against `INLINE` until an `--update` drops it.  A guarantee ``out`` doesn't list gets nothing back: `--update` keeps an
+    unlisted guarantee's entries until the lock lists it."""
     def inline(s: dict) -> dict:
         spec = s.get("shape")
         v = spec.get("inline") if isinstance(spec, dict) else None
@@ -523,6 +527,29 @@ def held(base: dict, ours: dict, theirs: dict, out: dict, candidate: list[str]) 
     def premises(s: dict, g: str) -> dict | None:
         v = s.get(g, {})
         return v if isinstance(v, dict) else None
+
+    sides = (base, ours, theirs)
+
+    @functools.cache
+    def hashes(i: int) -> dict:
+        r = sides[i].get("reads")
+        return {d: h for grp in (r.values() if isinstance(r, dict) else ()) if isinstance(grp, dict)
+                for d, h in A.definitions(grp).items()}
+
+    def record(i: int, g: str):
+        r = sides[i].get("guarantees")
+        r = r.get(g) if isinstance(r, dict) else None
+        return {k: v for k, v in r.items() if k != "owner"} if isinstance(r, dict) else r
+
+    def restated(i: int, j: int, g: str) -> bool:
+        """Whether side ``j`` (`sides`' index) states ``g`` otherwise than side ``i``: its record, its owner aside, or the
+        hash of a definition either's signature names where both read it (the queue's `dropped_entries` tells a restated
+        guarantee so)."""
+        recs = record(i, g), record(j, g)
+        names = {n for r in recs if isinstance(r, dict) for s in r.get("signature") or [] if isinstance(s, str)
+                 for n in A.NAMES.findall(s)}
+        x, y = hashes(i), hashes(j)
+        return recs[0] != recs[1] or any(x[n] != y[n] for n in names if n in x and n in y)
     spec, listed = out.get("shape"), out.get("guarantees")
     if not isinstance(spec, dict) or not isinstance(listed, dict) or not isinstance(spec.get("inline", {}), dict):
         return
@@ -531,7 +558,14 @@ def held(base: dict, ours: dict, theirs: dict, out: dict, candidate: list[str]) 
         x, y, z, m = premises(o, g), premises(a, g), premises(b, g), premises(merged, g)
         if g not in listed or None in (x, y, z, m):
             continue
-        if keep := {p: w for p, w in x.items() if (p in y) != (p in z) and (y if p in y else z)[p] == w}:
+        keep = {}
+        for p, w in x.items():
+            if (p in y) == (p in z) or (y if p in y else z)[p] != w:
+                continue
+            k, d = (1, 2) if p in y else (2, 1)
+            if restated(0, k, g) and restated(d, k, g):
+                keep[p] = w
+        if keep:
             merged[g] = m | keep
             candidate.extend(f"shape[inline][{g}][{p}] (kept)" for p in keep)
     if merged != spec.get("inline", {}):
@@ -1184,8 +1218,8 @@ def main(argv: list[str]) -> int:
         print(f"merge.py: {path}: {w}", file=sys.stderr)
     for c in dict.fromkeys(candidate):
         print(f"merge.py: {path}: {c}: " + (
-            "a shape.inline premise one side dropped and the other has as the base had it, kept; `check.py --update` drops "
-            "it where the merged tree's premise no longer offends" if c.endswith(" (kept)") else
+            "a shape.inline premise one side dropped and the other, restating its guarantee, has as the base had it, kept; "
+            "`check.py --update` drops it where the merged tree's premise no longer offends" if c.endswith(" (kept)") else
             "taken without regenerating it; the lock run after landing regenerates it"), file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
