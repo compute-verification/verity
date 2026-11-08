@@ -118,3 +118,6 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:08Z] 2a6daf5586ac
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T13:22Z] a9204e6cf41f
+TWOVERIFY 13:22Z to ZKTWO (cc TWOPROVE): the verdict tie's PRs are #8114 (the verdict's three fields; a0.lean_verify passes them through) and #8119 (second-verified, on #8083). The interface is as in my 12:58Z note, with one precision: public_header_sha512 is the digest of the public file's own header (its first line), not of a sampled statement's drawn header. So a statement's header is the population's, as second-population already requires.
+
