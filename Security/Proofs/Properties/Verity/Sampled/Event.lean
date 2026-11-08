@@ -189,15 +189,18 @@ theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.find? _root_.SampledPr
 /-! ## What acceptance gives -/
 
 /-- **What V3's and V5's events read of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
-population `n`: `verify --zk` accepts the transcript (`AcceptsZK`), the files' ports and roots (`PortRoots.check`) and
-their form at the record's sample (`KsScope.check`); the program's proof blocks under the verifier's query are `n`
-units in order (`Slots.popOk`); and every public file the session's file loads to has `n` proof blocks. -/
+population `n`: `verify --zk` accepts the transcript (`AcceptsZK`) at a statement with hidden outputs that is not
+templated; the files' ports and roots (`PortRoots.checkOf`) and their form at the record's sample (`KsScope.checkOf`)
+pass on the circuit `verify` reads (`ProvedScope.circuitOf`); the program's proof blocks under the verifier's query are
+`n` units in order (`Slots.popOk`); and every public file the session's file loads to has `n` proof blocks. -/
 structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.SampledProofs.Registration.Verifier) (n : ℕ) :
     Prop where
   accepts : ZkExec.AcceptsZK I t
-  ports : Flock.PortRoots.check (ZkExec.zkTags I) I.circuitFile I.publicFile I.tables = .ok ()
-  form : Flock.KsScope.check (ZkExec.zkTags I) I.circuitFile I.publicFile I.tables I.count
-    (Exec.recordDraw t.record) = .ok ()
+  flat : (ZkExec.zkTags I).hiddenOutputs = true ∧ (ZkExec.zkTags I).isTmpl = false
+  ports : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables)
+    (ZkExec.zkTags I) I.publicFile = .ok ()
+  form : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables)
+    (ZkExec.zkTags I) I.publicFile I.count (Exec.recordDraw t.record) = .ok ()
   pop : _root_.SampledProofs.Slots.popOk v.program v.query n = true
   loads : ∀ {tags : Flock.Tags} {c : Flock.Circuit} {pub : Flock.Public},
     Flock.HmOut.loadPublic tags c I.publicFile = .ok pub → pub.n = n
@@ -229,23 +232,11 @@ theorem checkBlobsAt_event {p : _root_.SampledProofs.OneStageZk.Params} {c : _ro
   have hpf := sessionProofs_of hv2
   obtain ⟨sts, hset, hshape, rfl⟩ := setupAt_setupOfP hst
   let W := _root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs
-  have hz := statement_zkTags ht (Flock.Zk.maskLogOf circuitB) 1
-  have hcp : Flock.ProvedScope.circuitOf (Flock.Witness.zkTags W) circuitB (_root_.SampledProofs.OneStageZk.tablesOf bs)
-      = Flock.HmOut.parse (Flock.Witness.zkTags W) circuitB (_root_.SampledProofs.OneStageZk.tablesOf bs) :=
-    circuitOf_parse hz.1 hz.2 _ _
-  refine ⟨tags0, circuitB, pubB, record, proofs, n, ht, hc, hp, hrec', hpf, hn,
-    (ZkHidden.acceptsZKP_none _ _).1 ⟨spec, sts, hset, hshape, hv⟩, ?_, ?_, hpop,
-    fun hl => population_held hph (Hidden.loadPublic_nil hl) hn⟩
-  · show Flock.PortRoots.checkOf
-      (Flock.HmOut.parse (Flock.Witness.zkTags W) circuitB (_root_.SampledProofs.OneStageZk.tablesOf bs))
-      (Flock.Witness.zkTags W) pubB = .ok ()
-    rw [← hcp]
-    exact hk
-  · show Flock.KsScope.checkOf
-      (Flock.HmOut.parse (Flock.Witness.zkTags W) circuitB (_root_.SampledProofs.OneStageZk.tablesOf bs))
-      (Flock.Witness.zkTags W) pubB 1 (Flock.Witness.recordDraw record) = .ok ()
-    rw [← hcp]
-    exact hks
+  have hz : (Flock.Witness.zkTags W).hiddenOutputs = true ∧ (Flock.Witness.zkTags W).isTmpl = false :=
+    statement_zkTags ht (Flock.Zk.maskLogOf circuitB) 1
+  exact ⟨tags0, circuitB, pubB, record, proofs, n, ht, hc, hp, hrec', hpf, hn,
+    ⟨(ZkHidden.acceptsZKP_none _ _).1 ⟨spec, sts, hset, hshape, hv⟩, hz, hk, hks, hpop,
+      fun hl => population_held hph (Hidden.loadPublic_nil hl) hn⟩⟩
 
 /-- **Where v2's check accepts, its one session is `Accepted`** (`checkBlobsAt_event` at the coins it read). -/
 theorem checkBlobs_event {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
@@ -268,16 +259,35 @@ theorem checkBlobs_event {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
 
 variable {I : Exec.Inputs} {t : Exec.Transcript} {v : _root_.SampledProofs.Registration.Verifier} {n : ℕ}
 
+/-- **`Accepted`'s ports and roots pass on `HmOut.parse`'s circuit** (`PortRoots.check`), the one `verify` reads at
+its flat statement. -/
+theorem Accepted.portsCheck (h : Accepted I t v n) :
+    Flock.PortRoots.check (ZkExec.zkTags I) I.circuitFile I.publicFile I.tables = .ok () := by
+  show Flock.PortRoots.checkOf (Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables) (ZkExec.zkTags I)
+    I.publicFile = .ok ()
+  rw [← circuitOf_parse h.flat.1 h.flat.2]
+  exact h.ports
+
+/-- **`Accepted`'s form passes on `HmOut.parse`'s circuit** (`KsScope.check`), the one `verify` reads at its flat
+statement. -/
+theorem Accepted.formCheck (h : Accepted I t v n) :
+    Flock.KsScope.check (ZkExec.zkTags I) I.circuitFile I.publicFile I.tables I.count
+      (Exec.recordDraw t.record) = .ok () := by
+  show Flock.KsScope.checkOf (Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables) (ZkExec.zkTags I)
+    I.publicFile I.count (Exec.recordDraw t.record) = .ok ()
+  rw [← circuitOf_parse h.flat.1 h.flat.2]
+  exact h.form
+
 /-- **`Accepted` is in V3's acceptance event** at every outcome whose transcript is the session's. -/
 theorem Accepted.liveAcceptsScoped (h : Accepted I t v n) {m : ℕ} {Reg : Type} (R : Reg) (S : Finset (Fin m)) :
     Flock.Bridge.LiveAcceptsScoped I (R, S, t) :=
-  ⟨⟨h.accepts, h.ports⟩, h.form⟩
+  ⟨⟨h.accepts, h.portsCheck⟩, h.formCheck⟩
 
 /-- **`Accepted` is in V5's acceptance event without public inputs** at every outcome whose transcript is the
 session's. -/
 theorem Accepted.liveAcceptsKSP (h : Accepted I t v n) {m : ℕ} {Reg : Type} (R : Reg) (S : Finset (Fin m)) :
     Flock.Bridge.LiveAcceptsKSP I none (R, S, t) :=
-  ⟨h.accepts, h.ports, _, _, h.form⟩
+  ⟨h.accepts, h.portsCheck, _, _, h.formCheck⟩
 
 /-- **`Accepted` passes the run's population check** at a descriptor that parses to the verifier's program. -/
 theorem Accepted.runPopOk (h : Accepted I t v n) {desc : Claims.Msg}
