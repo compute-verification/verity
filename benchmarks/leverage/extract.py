@@ -242,6 +242,7 @@ def part_rows(lm: LM, tok, a) -> dict:
     width = {"mlph": lm.spec.ff, "attnh": lm.spec.heads * lm.spec.head_dim, "resid": d}[site]
     reads = [int(r * d) for r in a.read_over_d]
     out = []
+    t_start = time.time()
     pre, last, t0 = prefix(lm, tok, PROMPTS[0])
     taps0 = {(site, l): None for l in layers}
     lm.forward(last, pre.expand(1), taps=taps0)
@@ -253,6 +254,8 @@ def part_rows(lm: LM, tok, a) -> dict:
             taps = {("final", lm.spec.layers): None}
             z = faulted_logits(lm, pre, last, t0, [(site, l, j, v) for j in units], taps=taps)
             h = taps[("final", lm.spec.layers)][:, 0].float()
+            print(f"rows {site} layer {l} value {v_spec}: {int((~torch.isfinite(z)).sum())} non-finite logits, "
+                  f"{time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
             for prec in a.precisions:
                 zs = z.float().to(torch.bfloat16).float() if prec == "bf16" else z.float()
                 for bi, j in enumerate(units):
