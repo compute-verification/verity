@@ -12,9 +12,10 @@ sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary`
 do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` or `mv` is instead
 F.linear's GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step
 the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); a vector norm or a sum of a
-whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); and the conversions to bf16 and to and from f16 and a
-`kthvalue` are its own (`rules.training_masks`). A training op with no Definition to lower it to is refused with the Definition it
-needs (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
+whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32 embedding's gradient is its kernels'
+(`EmbeddingDenseBackward`); and the conversions to bf16 and to and from f16 and a `kthvalue` are its own (`rules.training_masks`).
+A training op with no Definition to lower it to is refused with the Definition it needs (`_log_softmax`: a correctly-rounded f32
+log, `F32LogRn`).
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
@@ -36,6 +37,7 @@ from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
+from verity.ml.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _batch, _bits, _call, _const, _ew, _flat, _iota,
                                                               _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows, _shape,
@@ -494,11 +496,16 @@ class NllLossBackward(_TrainRule):
 
 
 class EmbeddingDenseBackward(_TrainRule):
-    """`embedding_dense_backward(g[..., H], ids, V, -1, False)`: row v of the weight's gradient is the sum, in token order from +0, of
-    the gradient rows of the tokens with id v (torch CPU's per-row `add_`): per token one `SelectF32_v1` of its gradient row into
-    the rows whose id matches (a one-hot of `I32Eq_v1`) and one `F32Add_v1` into the accumulator, V x H words each."""
+    """`embedding_dense_backward(g[..., H], ids, V, -1, False)`: row v of the weight's gradient is the sum of the gradient rows of the
+    tokens with id v. Without a `cc` it is torch CPU's per-row `add_` in token order from +0: per token one `SelectF32_v1` of its
+    gradient row into the rows whose id matches (a one-hot of `I32Eq_v1`) and one `F32Add_v1` into the accumulator, V x H words
+    each. At a compute capability `cc` it is the CUDA kernels' (`torch_embedding_f32.EmbeddingGradF32_v1`): the rows sorted by
+    id, each id's tokens summed in its kernel's order and each sum routed to its id's row."""
     info = _info("EmbeddingDenseBackward", "aten.embedding_dense_backward, padding_idx -1, no scale_grad_by_freq",
                  "g is an f32 value, ids an integer value", "an out-of-range id adds nothing")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
         return {aten.embedding_dense_backward.default}
@@ -512,6 +519,11 @@ class EmbeddingDenseBackward(_TrainRule):
             return "the ids are not an integer value"
         if pad != -1 or freq:
             return "numerics_unregistered: padding_idx or scale_grad_by_freq"
+        if self.cc:
+            try:
+                bind(TEF.EmbeddingGradF32, M=ctx.val(ids).type.leaves, V=V, H=_shape(ctx, g)[-1])
+            except ValueError as e:
+                return f"numerics_unregistered: {e}"
         return True
 
     def emit(self, node, ctx):
@@ -520,6 +532,11 @@ class EmbeddingDenseBackward(_TrainRule):
         H = _shape(ctx, g)[-1]
         t = _tokens(ctx, node, ids)
         M = t.type.leaves
+        if self.cc:
+            fn = bind(TEF.EmbeddingGradF32, M=M, V=V, H=H)
+            ctx.define(node, _call(ctx, node, fn, t, gc.reshape(Array(M, Array(H, F32)))).reshape(_tensor_type([V, H], 32)))
+            ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"{fn.id} x1")
+            return
         hot = _one_hot(ctx, node, t, M, V)
         gr = gc.refs
         if not isinstance(gr, Affine):
@@ -544,7 +561,8 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes them (`Matmul`),
     every add, sub, mul and div as its kernels do (`Binary`) and the conversions to bf16 and to and from f16 as its kernels do
     (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel`
-    does (`FullReduce`, before `Reduce`) and `kthvalue` as its radix select does (`KthValue`), in the rule set
+    does (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`) and
+    `kthvalue` as its radix select does (`KthValue`), in the rule set
     ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs, which `Matmul` refuses (``training-cc<major>.<minor>-tf32``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
@@ -552,7 +570,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
     last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), IntSum(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(),
-                                         NllLossBackward(), EmbeddingDenseBackward(), Compare(), Logic(), Where(), Clamp(cc),
+                                         NllLossBackward(), EmbeddingDenseBackward(cc), Compare(), Logic(), Where(), Clamp(cc),
                                          Index(), KthValue(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
