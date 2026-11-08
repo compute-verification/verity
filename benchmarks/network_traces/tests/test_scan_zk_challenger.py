@@ -3,7 +3,8 @@
 challenger session on the group's root (`a5_coins.start`, its serve.py under live_challenger's stub of the Lean
 verifier's coins), and the round's `service.Stream` registering and sampling the round on its coins. Only the proofs
 are stubbed (`a8.session`, `a0.lean_verify`): proving needs Flock's and the Lean's binaries, which a node's run of
-``scan_zk.sh`` builds."""
+``scan_zk.sh`` builds. Of the altered coins' evidence only the evidence for another window is replayed
+(`a5_coins.negatives`' are a5_coins' tests')."""
 from __future__ import annotations
 
 import importlib.util
@@ -39,8 +40,9 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing.
 
-    Runs about a minute (lowering the scan's three templates at the test class), and catches what the stream's own
-    window tests can't: that the scan's registered Program is the one the challenger's stream rebuilds."""
+    Runs a few minutes (lowering the scan's three templates at the test class, and the Lean's checks of each stream's
+    registration, sample and run), and catches what the stream's own window tests can't: that the scan's registered
+    Program is the one the challenger's stream rebuilds."""
     setup, k = sz.TEST, 4
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)
     at = h.at
@@ -65,6 +67,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     monkeypatch.setattr(M.a8, "session", session)
     monkeypatch.setattr(M.a0, "lean_verify", lambda *a, **kw: {"accepted": False, "why": "not proved here"})
     monkeypatch.setattr(sz.WZ, "firewall", lambda M, m: {})
+    monkeypatch.setattr(AC, "negatives", lambda ev, pre: {})
 
     a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None)
     av = SimpleNamespace(bin=None, lean=None, lease=[], gpu=False, delta=2.0 ** -20)
