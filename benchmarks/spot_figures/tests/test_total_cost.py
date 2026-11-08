@@ -109,6 +109,30 @@ def test_every_line_prices_its_blocks_one_way():
         t.priced(c | {"partition": f1.InputCard(stray, "", "measured", "one unstaged block")}, po)
 
 
+def test_the_kept_priced_taxes_are_the_generators():
+    """While a configuration's tax is priced, the kept card's is what `priced_card` prices from the kept cards."""
+    kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))
+    fresh = t.taxes(t.priced_card("GLM-5.3"))
+    priced = [n for n, e in kept.items() if e["status"] == "priced"]
+    for name in priced:
+        assert [p["part"] for p in kept[name]["parts"]] == [p["part"] for p in fresh[name]["parts"]], name
+        for k in ("tax", "low", "high"):
+            assert kept[name][k] == pytest.approx(fresh[name][k], rel=1e-12), (name, k)
+    assert kept["every_block"]["lower_bound"] and not kept["tokens"]["lower_bound"]
+    assert kept["tokens"]["tax"] < kept["layer_of_token"]["tax"] < kept["every_block"]["tax"]
+
+
+def test_a_card_without_every_configuration_is_refused():
+    card = t.priced_card("GLM-5.3")
+    card["value"]["configurations"] = card["value"]["configurations"][:-1]
+    with pytest.raises(ValueError, match="no tax for \\['every_block'\\]"):
+        t.taxes(card)
+    with pytest.raises(ValueError, match="low <= tax <= high"):
+        cards.check(t.priced_card("GLM-5.3") | {"value": {"baseline": "x", "configurations": [
+            {"config": "tokens", "status": "priced", "tax": .1, "low": .2, "high": .3, "lower_bound": False,
+             "parts": []}]}})
+
+
 def test_each_statement_pays_its_verify_at_the_cards_ratio():
     """A statement's verify is its type's measured core-seconds, its family's line (through two members, or through the
     fixed seconds and one), else the measured median, at the card's core-seconds a GPU-second, added to the
@@ -136,30 +160,6 @@ def test_each_statement_pays_its_verify_at_the_cards_ratio():
     bad = v | {"families": [{"types": ["X"], "size": None, "members": ["Unmeasured_v1{"]}]}
     with pytest.raises(ValueError, match="none of the measured"):
         cards.check(vc | {"value": bad})
-
-
-def test_the_kept_priced_taxes_are_the_generators():
-    """While a configuration's tax is priced, the kept card's is what `priced_card` prices from the kept cards."""
-    kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))
-    fresh = t.taxes(t.priced_card("GLM-5.3"))
-    priced = [n for n, e in kept.items() if e["status"] == "priced"]
-    for name in priced:
-        assert [p["part"] for p in kept[name]["parts"]] == [p["part"] for p in fresh[name]["parts"]], name
-        for k in ("tax", "low", "high"):
-            assert kept[name][k] == pytest.approx(fresh[name][k], rel=1e-12), (name, k)
-    assert kept["every_block"]["lower_bound"] and not kept["tokens"]["lower_bound"]
-    assert kept["tokens"]["tax"] < kept["layer_of_token"]["tax"] < kept["every_block"]["tax"]
-
-
-def test_a_card_without_every_configuration_is_refused():
-    card = t.priced_card("GLM-5.3")
-    card["value"]["configurations"] = card["value"]["configurations"][:-1]
-    with pytest.raises(ValueError, match="no tax for \\['every_block'\\]"):
-        t.taxes(card)
-    with pytest.raises(ValueError, match="low <= tax <= high"):
-        cards.check(t.priced_card("GLM-5.3") | {"value": {"baseline": "x", "configurations": [
-            {"config": "tokens", "status": "priced", "tax": .1, "low": .2, "high": .3, "lower_bound": False,
-             "parts": []}]}})
 
 
 def most_written(cells, k, q, replay_blocks, delta, footprint):
