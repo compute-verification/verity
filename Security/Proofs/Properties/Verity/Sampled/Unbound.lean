@@ -99,7 +99,7 @@ files' circuit, under openings `op` of the files that hold wherever the commitme
 files' constants, are within `F`, when on `C` the units unbound under any openings that hold at `κ` and wherever `val`
 opens a value are (`hgame`), and every value `val` opens passes `Cm` under `roots` (`hval`). -/
 theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bridge.Parsed} (ho : o = some r)
-    {C : FlockSoundness.Audit.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
+    {C : Verity.Boolean.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
     {P : FlockSoundness.Audit.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
     {κ₀ : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Option Bool} {κ : Fin C.N → Option Bool} (hκ : HEq κ₀ κ)
     (hcon : ∀ g, Verity.parsedConsts (some r) g = κ₀ g)

@@ -9,6 +9,7 @@ public import Definitions.Core.PrivatePartition
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Boolean
 public import Definitions.Core.Game
+public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive

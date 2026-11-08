@@ -138,20 +138,6 @@ def _part_key(p: Refs) -> tuple:
     return ("e", p.items)
 
 
-def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
-    """`_flat_parts(r)` and their `_part_key`s. A `Concat` cut from a `PartLog` reuses the keys of the log's parts."""
-    if r.prefix is not None:
-        log, j = r.prefix
-        tail = r.parts[j:]
-        if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
-            memo = log.memo.setdefault("codec.part_keys", [])
-            if len(memo) < j:
-                memo.extend(_part_key(p) for p in log.parts[len(memo):j])
-            return r.parts, tuple(memo[:j]) + tuple(_part_key(p) for p in tail)
-    parts = _flat_parts(r)
-    return parts, tuple(_part_key(p) for p in parts)
-
-
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
     (PROTOCOL.md §4.5): the whole reference sequence of every encoded node argument is remembered, and a later
@@ -163,7 +149,9 @@ class _BodyEncoder:
     def __init__(self, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> None:
         self.schema = schema
         self.tables = tables
-        self.seqs: dict[tuple, tuple[int, int]] = {}
+        self.seqs: dict[int, tuple[int, int]] = {}   # a recorded part list's id -> the first argument (k, a) it was
+        self.trie: dict[tuple[int, tuple], int] = {}  # (a part list's id, a part's `_part_key`) -> the id of the list one longer
+        self.token = object()                         # this encoder's entry in a `PartLog`'s memo
         if schema != SCHEMA_V0 and tables is None:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
@@ -173,21 +161,52 @@ class _BodyEncoder:
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
 
+    def _longer(self, i: int, p: Refs) -> int:
+        key = (i, _part_key(p))
+        hit = self.trie.get(key)
+        if hit is None:
+            hit = self.trie[key] = len(self.trie) + 1
+        return hit
+
+    def _prefixes(self, r: Concat) -> tuple[list[Refs], list[int], int]:
+        """(`_flat_parts(r)`, ids, j): ids[m], for m <= j, is the id of the part list parts[:m], 0 the empty one's. Two part lists
+        have one id exactly when their `_part_key`s are equal. A `Concat` cut from a `PartLog` reads its log's ids, kept in the log
+        and extended to the longest cut seen, so a key sequence one row longer than the call before costs O(1)."""
+        if r.prefix is not None:
+            log, j = r.prefix
+            tail = r.parts[j:]
+            if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
+                owner, ids = log.memo.get("codec.prefix_ids", (None, None))
+                if owner is not self.token:
+                    ids = [0]
+                    log.memo["codec.prefix_ids"] = (self.token, ids)
+                for p in log.parts[len(ids) - 1:j]:
+                    ids.append(self._longer(ids[-1], p))
+                return r.parts, ids, j
+        return _flat_parts(r), [0], 0
+
     def refs(self, r: Refs, at: tuple[int, int] | None = None) -> Any:
         if self.schema == SCHEMA_V0 or not isinstance(r, Concat):
             return r.to_json()
-        parts, keys = _flat_keys(r)
-        n = len(keys)
+        parts, ids, j = self._prefixes(r)
+        n = len(parts)
+        more = [ids[j]]
+        for p in parts[j:]:
+            more.append(self._longer(more[-1], p))
+
+        def of(m: int) -> int:
+            return ids[m] if m <= j else more[m - j]
+
         out: list | None = None
         for m in range(n, max(1, n - ALIAS_WINDOW - 1), -1):  # m >= 2, suffix <= ALIAS_WINDOW parts
-            hit = self.seqs.get(keys[:m])
+            hit = self.seqs.get(of(m))
             if hit is not None and (at is None or hit[0] < at[0]):
                 out = [{"alias": list(hit)}] + [p.to_json() for p in parts[m:]]
                 break
         if out is None:
             out = [p.to_json() for p in parts]
         if at is not None and n > 1:
-            self.seqs.setdefault(keys, at)
+            self.seqs.setdefault(of(n), at)
         return out[0] if len(out) == 1 else {"concat": out}
 
 

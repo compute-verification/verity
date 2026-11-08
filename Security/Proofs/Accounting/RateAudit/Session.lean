@@ -40,6 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RateAudit.Chain
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The pooled sample: windows and sessions, the proof
@@ -76,7 +77,7 @@ namespace Horizon
 theorem pr_sample' {α : Type} [Fintype α] (G : Finset α) (d : ℕ) :
     pr (fun I : Fin d → α => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / Fintype.card α) ^ d := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have hG : Finset.univ.filter (fun I : Fin d → α => ∀ t, I t ∈ G) = Fintype.piFinset (fun _ => G) := by
     ext I
     simp [Fintype.mem_piFinset]
