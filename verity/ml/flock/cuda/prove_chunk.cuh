@@ -12,6 +12,7 @@
 
 #include <chrono>
 #include "pure_sha256.cuh"
+#include "ring_switch.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
@@ -86,79 +87,6 @@ __global__ void chunk_ring_fold_rows(const F128* __restrict__ witness, const F12
     }
 }
 
-// A 2^d eq table's entry x from its halves: eq[x] = lo[x mod 2^k] * hi[x >> k] (build_eq_device over the first k challenges and
-// the rest), the same field element as the doubling's
-__device__ __forceinline__ F128 chunk_eq_split(const F128* __restrict__ lo, const F128* __restrict__ hi, int k, long long x) {
-    return ghash_mul_karatsuba(lo[x & ((1LL << k) - 1)], hi[x >> k]);
-}
-
-// chunk_ring_fold_rows with its suffix as eq halves (no 2^d table): a warp takes 32 rows at a time, each lane one row's witness
-// word and eq entry, and folds all 32 through shuffles
-__global__ void chunk_ring_fold_rows_split(const F128* __restrict__ witness, const F128* __restrict__ lo, const F128* __restrict__ hi,
-                                           int k, long long len, int chunks, F128* __restrict__ partials) {
-    __shared__ F128 red[8][128];   // launched at 256 threads
-    const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5, nw = blockDim.x >> 5, sh = 4 * (lane & 15);
-    const long long per = (len + chunks - 1) / chunks, r0 = (long long)blockIdx.x * per, r1 = min(len, r0 + per);
-    F128 acc[4] = {};
-    for (long long base = r0 + 32LL * wid; base < r1; base += 32LL * nw) {
-        const long long i = base + lane;
-        F128 w{0, 0}, s{0, 0};
-        if (i < r1) { w = witness[i]; s = chunk_eq_split(lo, hi, k, i); }
-#pragma unroll 4
-        for (int j = 0; j < 32; j++) {
-            const u64 wl = __shfl_sync(0xffffffffu, w.lo, j), wh = __shfl_sync(0xffffffffu, w.hi, j);
-            const u64 sl = __shfl_sync(0xffffffffu, s.lo, j), shi = __shfl_sync(0xffffffffu, s.hi, j);
-            const unsigned nib = (unsigned)(((lane < 16 ? wl : wh) >> sh) & 15);
-#pragma unroll
-            for (int b = 0; b < 4; b++) {
-                const u64 m = 0ull - (u64)((nib >> b) & 1);
-                acc[b].lo ^= sl & m;
-                acc[b].hi ^= shi & m;
-            }
-        }
-    }
-#pragma unroll
-    for (int b = 0; b < 4; b++) red[wid][4 * lane + b] = acc[b];
-    __syncthreads();
-    for (int t = threadIdx.x; t < 128; t += blockDim.x) {
-        F128 x{0, 0};
-        for (int q = 0; q < nw; q++) { x.lo ^= red[q][t].lo; x.hi ^= red[q][t].hi; }
-        partials[(long long)t * chunks + blockIdx.x] = x;
-    }
-}
-
-// ring_switch_combine_basis's sums, the same XORs, with both suffixes as eq halves: each claim's 128 weights as 32 tables of their
-// nibbles' sums in shared memory, so a row is 64 lookups rather than a walk over its set bits
-__global__ void chunk_ring_combine_basis_split(const F128* __restrict__ ab_lo, const F128* __restrict__ ab_hi,
-                                               const F128* __restrict__ c_lo, const F128* __restrict__ c_hi, int k,
-                                               const F128* __restrict__ weights_ab, const F128* __restrict__ weights_c, long long len,
-                                               F128* __restrict__ combined) {
-    __shared__ F128 tab[2][32][16];
-    for (int e = threadIdx.x; e < 2 * 32 * 16; e += blockDim.x) {
-        const int c = e >> 9, p = (e >> 4) & 31, v = e & 15;
-        const F128* w = c ? weights_c : weights_ab;
-        F128 x{0, 0};
-        for (int b = 0; b < 4; b++)
-            if ((v >> b) & 1) { x.lo ^= w[4 * p + b].lo; x.hi ^= w[4 * p + b].hi; }
-        tab[c][p][v] = x;
-    }
-    __syncthreads();
-    for (long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x; i < len; i += (long long)gridDim.x * blockDim.x) {
-        const F128 s[2] = {chunk_eq_split(ab_lo, ab_hi, k, i), chunk_eq_split(c_lo, c_hi, k, i)};
-        F128 acc{0, 0};
-#pragma unroll
-        for (int c = 0; c < 2; c++) {
-#pragma unroll
-            for (int p = 0; p < 32; p++) {
-                const F128 x = tab[c][p][((p < 16 ? s[c].lo : s[c].hi) >> (4 * (p & 15))) & 15];
-                acc.lo ^= x.lo;
-                acc.hi ^= x.hi;
-            }
-        }
-        combined[i] = acc;
-    }
-}
-
 // build_quirky_eq_device's table, the same elements: the eq over the rest's challenges once (a doubling, 2^d_rest entries), then
 // each entry one product with its Lagrange weight (build_quirky_equality_table takes d_rest products an entry)
 __global__ void chunk_quirky_expand(int k_skip, long long n, const F128* __restrict__ rest, F128* __restrict__ out) {
@@ -185,6 +113,18 @@ static int chunk_quirky_eq_device(F128* d_out, F128 z_skip, const std::vector<F1
 static bool chunk_ring_grouped() {
     static const bool v = [] { const char* e = std::getenv("FC_RING_GROUPED"); return e && e[0] == '1'; }();
     return v;
+}
+
+// The combine on the tensor cores (chunk_ring_combine_basis_bmma) on sm_90, where its b1 MMAs run at full rate, once a 16-row MMA
+// tile shares its eq high half (k >= 4); FC_RING_SPLIT=1 keeps chunk_ring_combine_basis_split, for a same-job control
+static bool chunk_ring_bmma(int k) {
+    static const bool v = [] {
+        const char* e = std::getenv("FC_RING_SPLIT");
+        int dev = 0, major = 0;
+        return !(e && e[0] == '1') && cudaGetDevice(&dev) == cudaSuccess &&
+               cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev) == cudaSuccess && major == 9;
+    }();
+    return v && k >= 4;
 }
 
 __global__ void chunk_comb_expand(const F128* __restrict__ comb_sub, const F128* __restrict__ ratio, int sub_log,
@@ -1368,6 +1308,9 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         for (int j = 0; j < 128; j++) { w[j] = MUL(gam[0], eq_rd[0][j]); w[128 + j] = MUL(gam[1], eq_rd[1][j]); }
         CK(cudaMemcpy(d_w, w.data(), 256 * sizeof(F128), cudaMemcpyHostToDevice));
         if (chunk_ring_grouped()) ring_switch_combine_basis<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
+        else if (chunk_ring_bmma(sfx_k) && len == 1LL << sfx_d)
+            chunk_ring_combine_basis_bmma<<<(unsigned)std::min<long long>(len >> sfx_k, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo, d_sc_hi,
+                sfx_k, d_w, d_w + 128, len >> sfx_k, dcb);
         else chunk_ring_combine_basis_split<<<(unsigned)std::min<long long>((len + 255) / 256, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo,
             d_sc_hi, sfx_k, d_w, d_w + 128, len, dcb);
         CK(cudaGetLastError());
