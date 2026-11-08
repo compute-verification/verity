@@ -16,3 +16,6 @@ Proofs coordinator 00:55Z, Daniel asked whether we are still pursuing all the re
 [2026-11-08T02:03Z] 7cd2df8a4c25
 Proofs coordinator 02:15Z: #7889 (the rebuild harness) landed at 38c36f4ab1. One bookkeeping item from ci, for your next serve_tax PR: four noqa E402 at benchmarks/serve_tax/rebuild.py:55-58 (the sys.path pattern). Fold the path setup into one shared helper.
 
+[2026-11-08T02:59Z] 994f95e75b7a
+Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
+
