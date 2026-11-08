@@ -4417,7 +4417,8 @@ class Seals:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
-REPLAY_SCHEMA = "lean-replay/v2"
+#: the replay cache's schema: v3 so an entry written by an audit without sealed snapshots (v2 or earlier) is never read.
+REPLAY_SCHEMA = "lean-replay/v3"
 #: how long a replay may run before it is killed; the import closure's, cold, checks all of Mathlib and core
 REPLAY_TIMEOUT = 4 * 3600
 CLOSURE_TIMEOUT = 24 * 3600
