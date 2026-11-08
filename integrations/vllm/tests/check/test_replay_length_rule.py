@@ -16,11 +16,15 @@ from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.replay import checks as CK, index as IX
 from verity_vllm.check.replay.index import SAMPLER_OP
+from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import request_manifest
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
+RES = {"program": {"digest": "d" * 64, "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}}}
 
 
 class Sampled:
@@ -66,13 +70,18 @@ def test_the_replay_evaluates_the_length_rule_from_the_committed_ids(tmp_path, f
 
 def test_the_length_rule_closes_the_last_step(tmp_path):
     """The rule's row is in step 2, the request's last: three steps, not a fourth; executed through step 1 only, it is not evaluated;
-    and the Match's instance sequence has no instance of it."""
+    the manifest requires no capture of it (the runtime never runs it) and lists it unreturned in step 2; and the Match's instance
+    sequence has no instance of it."""
     d = _build(tmp_path, "eos")
     inst = read_instances(str(d / "instances.json.gz"), expand=False)
     pi = IX.ProgramIndex(inst, program_dir=str(d))
     (_what, i, _lo, _hi), = CK.check_rows(pi)
     assert (pi.n_steps, pi.step_of(i), i) == (3, 2, len(inst["rows"]) - 1)
     assert (lambda r: (r["accepted"], r["not_executed"]))(_checks(d, [11, 12, 255], n_exec=2)) == (0, 1)
+    P = from_instances(read_instances(str(d / "instances.json.gz")))
+    m = request_manifest(P, Correspondence.of(P, None), RES, request_id="r0").manifest
+    assert m["steps"] == [0, 1, 2] and not any(r.get("spec", "").startswith("StopRule") for r in m["identities"])
+    assert [(r["spec"], r["step"]) for r in m["unreturned"]] == [("StopRule_v1", 2)]
     with gzip.open(d / "descriptor.json.gz", "rt") as f:
         desc = json.load(f)
     for compact in (False, True):

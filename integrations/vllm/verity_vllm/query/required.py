@@ -62,7 +62,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
+from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES, is_output_check
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
 from verity.ml.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
@@ -400,8 +400,10 @@ class Population:
         return CallMember(port, member, width, dtype, "tp_rank_partials")
 
     def step_of(self, cid: int) -> int:
-        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends)."""
-        return bisect.bisect_left(self.events, cid)
+        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends).  An output check
+        after the last event (`is_output_check`) closes the last step, as `fmt.segment_steps` has it."""
+        s = bisect.bisect_left(self.events, cid)
+        return s - 1 if s == len(self.events) and is_output_check(self.P.call(cid).family) else s
 
     def program_path(self, cid: int) -> str:
         """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, `<module>/<fx
