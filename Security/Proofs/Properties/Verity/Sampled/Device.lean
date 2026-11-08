@@ -6,6 +6,7 @@ public import Proofs.Properties.NetworkCertifier.Check.LinkWindow
 public import Proofs.Core.Game.Tape
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import Proofs.Flock.Claims.CanonOk
 
 /-!
 # The device's history at a play: the run that printed the play's log
@@ -113,14 +114,14 @@ theorem sortedKeys_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwi
 def Printed (d : Json) : Prop := sortedKeys d = true ∧ ∃ t, Flock.canon d = .ok t
 
 theorem printed_str (s : String) : Printed (.str s) :=
-  ⟨by unfold sortedKeys; rfl, Properties.NetworkCertifier.canon_str s⟩
+  ⟨by unfold sortedKeys; rfl, FlockDeploy.canon_str s⟩
 
 theorem printed_nat (n : ℕ) : Printed (Lean.toJson n) :=
-  ⟨by unfold sortedKeys; rfl, Properties.NetworkCertifier.canon_nat n⟩
+  ⟨by unfold sortedKeys; rfl, FlockDeploy.canon_nat n⟩
 
 theorem printed_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwise (· < ·))
     (hv : ∀ p ∈ l, Printed p.2) : Printed (Json.mkObj l) :=
-  ⟨sortedKeys_mkObj hl fun p hp => (hv p hp).1, Properties.NetworkCertifier.canon_mkObj fun p hp => (hv p hp).2⟩
+  ⟨sortedKeys_mkObj hl fun p hp => (hv p hp).1, FlockDeploy.canon_mkObj fun p hp => (hv p hp).2⟩
 
 theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
   refine printed_mkObj (by simp only [List.map_cons, List.map_nil]; decide) fun p hp => ?_
@@ -130,7 +131,7 @@ theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
   · exact printed_nat _
   · exact printed_str _
   · refine ⟨Properties.Challenger.CanonRead.sortedKeys_arr.2 fun x hx => ?_,
-      Properties.NetworkCertifier.canon_arr fun x hx => ?_⟩ <;>
+      FlockDeploy.canon_arr fun x hx => ?_⟩ <;>
     · obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
       first | exact (printed_str s).1 | exact (printed_str s).2
 

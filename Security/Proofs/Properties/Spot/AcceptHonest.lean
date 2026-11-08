@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Properties.Spot
+import Proofs.Flock.Claims.CanonOk
 import Proofs.Pouw.Period.Sort
-import Proofs.Properties.NetworkCertifier.Check.LinkWindow
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Range.Basic
 import all Init.Data.Ord.String
@@ -36,7 +36,7 @@ open Spot
 namespace Properties.Spot.Honest
 
 open Properties.Pouw.Period.SecurityProofs.Sort (qsort_of_sorted qsort_eq_of_perm)
-open Properties.NetworkCertifier (canon_str canon_nat canon_mkObj)
+open FlockDeploy (canon_str canon_nat canon_mkObj)
 
 instance : DecidableEq Flock.TemplateQuery.TRange := fun a b =>
   decidable_of_iff ((a.node, a.template, a.first, a.count) = (b.node, b.template, b.first, b.count)) (by
