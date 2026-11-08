@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The certified tick's network certifier side: warden_serve.py rehearse --watermark on this host, in front of vllm's
-# GLM-5.3 endpoint (serve-openai --admit tick, τ_b 100 ms, the recorder) on the serving node's loopback, reached through an
+# GLM-5.3 endpoint (serve-openai --admit tick, τ_b equal to BUCKET_MS, the recorder) on the serving node's loopback, reached through an
 # ssh local forward. A `research run` job from the shipped tree's root (--cwd source); tick-sunday/launch.sh launches it:
 #   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [RATE=1.67] [REQUESTS=3000] [SEED=0] [REACH_ONLY=1 | FAKE=1] bash tick-sunday/job.sh
 # 1. Reach, in under a minute, before anything is sent: KEY readable, the tunnel up (ssh -N -L 127.0.0.1:LOCAL to the peer's
@@ -18,23 +18,24 @@
 # SCHEDULE, for GLM-5.3 at TP8 eager under the tick and the recorder, through a tunnel of up to about 150 ms round trip
 # (reach.json times it):
 # - B = 256, r = 1: r·P = 247 bytes a bucket each way. A streamed /v1/completions token is about 200-280 bytes (its
-#   event and chunk framing), so egress drains about 10 tokens a second, under the slowest per-request stream expected
-#   there; the server is read eagerly, so this pacing never slows it, and what it streams faster waits in the buffer.
-# - D = 150 buckets (15 s) from admission: ingress of the largest request (about 5 KB, 21 buckets at r·P), the release's
+#   event and chunk framing), so at BUCKET_MS 250 egress drains about 4 tokens a second, under the 4.5 GLM-5.3 streams
+#   under this load (at 100 ms it asked 10, and streams fell late); the server is read eagerly, so this pacing never slows it, and what it streams faster waits in the buffer.
+# - D = 150 buckets (37.5 s at 250 ms) from admission: ingress of the largest request (about 5 KB, 21 buckets at r·P), the release's
 #   bucket close, the tunnel's one-way trip, the tick gate's wait for the watermark line, a queued prefill, the first P
 #   bytes back. What the server streams before D is a head start that covers a slower stretch later.
-# - lanes 256, queue 256: a connection lives D plus its response's cells, about 40 s on average and 2 min at most
-#   (1,024 tokens), so about 70 are open at once at 1.67 a second (Poisson, so rarely past 110); 256 never refuses.
+# - LANES 512, queue 256: a connection lives D plus its response's cells, about 2.5 min on average and 6 min at most
+#   (1,024 tokens at 4 a second), so about 240 are open at once at 1.67 a second; 512 lanes keep bursts from queueing.
 # - ingress 96 cells within 100 buckets, egress 4096 cells: above the largest request (21) and response (about 1,200).
-# - tail 300 s: the last arrival's D and longest response (1,024 tokens at about 4.5 tok/s is about 226 s); windows of 600 buckets (60 s).
+# - tail 360 s: the last arrival's D and longest response (about 1,200 cells at 4 a second is about 300 s); windows of 600
+#   buckets (150 s at 250 ms).
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; mkdir -p "$OUT"
 SRC=$PWD
 RATE=${RATE:-1.67}; REQUESTS=${REQUESTS:-3000}; SEED=${SEED:-0}
-SCHEDULE=(--cell-bytes 256 --slots 1 --bucket-ms 100 --delay 150 --lanes 256 --queue 256 --window 600
+SCHEDULE=(--cell-bytes 256 --slots 1 --bucket-ms "${BUCKET_MS:-250}" --delay 150 --lanes "${LANES:-512}" --queue 256 --window 600
           --ingress-cells 96 --ingress-buckets 100 --egress-cells 4096 --every 1)
 TRAFFIC=(--rate "$RATE" --requests "$REQUESTS" --seed "$SEED" --temperature 0 --prompt-max 1024 --max-tokens 1024
-         --tail "${TAIL:-300}")
+         --tail "${TAIL:-360}")
 W=$(mktemp -d); export TMPDIR=$W
 TUN=
 cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; rm -rf "$W"; }
