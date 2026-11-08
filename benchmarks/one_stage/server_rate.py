@@ -7,9 +7,12 @@
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
   sampled replay block at the full statement.
 * **Load**: ``--warm`` sessions a prover, all finished before any timed one is submitted (a prover and its verifier load
-  the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones with K (ahead + 2) outstanding.
-* **Measured**, for each type and K: statements a second over the steady window, from the K-th timed session's records to
-  the last but K's, each prover's sessions in it (``idle_provers``: those with none); the device's busy share (`nvidia-smi` utilization.gpu every 200 ms, its mean over the window) and its
+  the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones (at least 8 K) with K (ahead + 2)
+  outstanding.
+* **Measured**, for each type and K: statements a second over the steady window, from the K-th timed session's filing by
+  its verifier to the last but K's (the clock is the verifier's: a prover reports a session only once it collects its
+  verdict, ``verify_ahead`` sessions later), each prover's sessions in it (``idle_provers``: those with none); the device's
+  busy share (`nvidia-smi` utilization.gpu every 200 ms, its mean over the window) and its
   memory peak; host memory (each process's RSS every 0.5 s: each prover's peak, the provers' summed peak, the
   verifiers'); the provers' CPU seconds a statement and the node's load over the window; each window session's prover
   timings (``e2e_s`` from Register to the last proof, ``prove_total_s`` its device phases, ``front_s`` the difference).
@@ -174,14 +177,17 @@ def one(a, dev: str, t: str, K: int) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     lean = Lean(a.lean, d, out) if a.lean and K == 1 and a.lean_sessions else None
     draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
-    total, window = K * a.warm + a.sessions, K * (a.ahead + 2)
+    timed_n = max(a.sessions, 8 * K)
+    total, window = K * a.warm + timed_n, K * (a.ahead + 2)
     room, lock, done = threading.Semaphore(window), threading.Lock(), []
     gpu, t_start, cpu0 = Device(dev), time.monotonic(), throttled()
+    wall = time.time() - t_start
     rec: dict = {"type": t, "provers": K, "n": n, "pin": st.pin, "verify_ahead": a.ahead, "warm": a.warm,
-                 "sessions": a.sessions, "device": dev, "stage": json.loads((d / "stage.json").read_text())}
+                 "sessions": timed_n, "device": dev, "stage": json.loads((d / "stage.json").read_text())}
     ps = ProofServer(a.bin, out, devices=[dev], provers=K, verify_ahead=a.ahead, verdicts=1,
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
+    provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
 
     def wait(s, i: int) -> None:
         try:
@@ -189,10 +195,8 @@ def one(a, dev: str, t: str, K: int) -> dict:
             err = None
         except Exception as e:  # noqa: BLE001 -- recorded with the session, the rest go on
             err = str(e)[:600]
-        c, gone = cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))
         with lock:
-            done.append({"t": time.monotonic(), "i": i, "s": s, "error": err, "cpu": c, "cpu_gone": gone,
-                         "load1": os.getloadavg()[0]})
+            done.append({"t": time.monotonic(), "i": i, "s": s, "error": err, "load1": os.getloadavg()[0]})
         room.release()
 
     waits, judged = [], []
@@ -214,10 +218,14 @@ def one(a, dev: str, t: str, K: int) -> dict:
         for w in waits:
             w.join()
         rec["ready_s"] = round(time.monotonic() - t_start, 1)
+        cpu_ready, _ = provers_cpu()
         for i in range(K * a.warm, total):
             go(i)
         for w in waits:
             w.join()
+        cpu_end, gone = provers_cpu()
+        rec["prover_cpu_s_per_statement"] = round((cpu_end - cpu_ready) / timed_n, 2)
+        rec["cpu_gone"] = gone
     finally:
         rec["exits"] = ps.close()
         rec["host"] = host.stop()
@@ -229,18 +237,22 @@ def one(a, dev: str, t: str, K: int) -> dict:
     rec["accepted"] = len(done) - len(bad)
     rec["refused"] = [{"label": r["s"].label, "error": r["error"], "why": (r["s"].live or {}).get("why")} for r in bad][:8]
     rec["warm_per_prover"] = dict(Counter(r["s"].prover for r in done if r["i"] < K * a.warm))
-    timed = [r for r in done if r["i"] >= K * a.warm]
+    # the clock is each session's filing by its verifier (its record directory's mtime): a prover reports a session
+    # only once it collects its verdict, ``verify_ahead`` sessions later, and its last ones all at once
+    for r in done:
+        r["filed"] = r["s"].dir.stat().st_mtime - wall if r["s"].dir is not None and r["s"].dir.exists() else None
+    timed = sorted((r for r in done if r["i"] >= K * a.warm and r["filed"] is not None), key=lambda r: r["filed"])
+    rec["unfiled"] = sum(1 for r in done if r["filed"] is None)
     i0, i1 = K - 1, len(timed) - 1 - K
     if i1 - i0 < 2:
         i0, i1 = 0, len(timed) - 1
     w0, w1 = timed[i0], timed[i1]
-    span = w1["t"] - w0["t"]
+    span = w1["filed"] - w0["filed"]
     win = [r for r in timed[i0 + 1:i1 + 1] if r["s"].live]
     med = lambda k: round(statistics.median(v), 4) if (v := [r["s"].live.get(k) for r in win  # noqa: E731
                                                              if isinstance(r["s"].live.get(k), (int, float))]) else None
     rec |= {"statements_per_s": round((i1 - i0) / span, 4) if span > 0 else None, "window_s": round(span, 2),
-            "window_sessions": i1 - i0, "busy": gpu.busy(w0["t"], w1["t"]), "device_peak_mib": gpu.peak_mib(),
-            "prover_cpu_s_per_statement": round((w1["cpu"] - w0["cpu"]) / (i1 - i0), 2) if i1 > i0 else None,
+            "window_sessions": i1 - i0, "busy": gpu.busy(w0["filed"], w1["filed"]), "device_peak_mib": gpu.peak_mib(),
             "load1": [round(w0["load1"], 1), round(w1["load1"], 1)],
             "throttled": {k: throttled().get(k, 0) - cpu0.get(k, 0) for k in ("nr_throttled", "throttled_usec")},
             "median": {k: med(k) for k in ("e2e_s", "prove_total_s", "witness_s", "wait_s", "verdict_wait_s", "tp_s")},
@@ -259,8 +271,11 @@ def one(a, dev: str, t: str, K: int) -> dict:
     with open(out / "sessions.jsonl", "w") as f:
         for r in done:
             live = {k: v for k, v in (r["s"].live or {}).items() if k not in ("verdict", "buckets", "roots", "unit_draw", "identity")}
-            f.write(json.dumps({"i": r["i"], "t": round(r["t"] - t_start, 3), "prover": r["s"].prover, "error": r["error"],
-                                "live": live}, default=str) + "\n")
+            f.write(json.dumps({"i": r["i"], "t": round(r["t"] - t_start, 3),
+                                "filed": None if r["filed"] is None else round(r["filed"] - t_start, 3),
+                                "prover": r["s"].prover, "error": r["error"], "live": live}, default=str) + "\n")
+    with open(out / "device.tsv", "w") as f:
+        f.writelines(f"{x - t_start:.3f}\t{u:g}\t{m:g}\n" for x, u, m in gpu.samples)
     return rec
 
 
@@ -272,7 +287,7 @@ def main() -> int:
     ap.add_argument("--provers", default="1,2,4")
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", required=True, help="the GPU's index (gpu-lease's CUDA_VISIBLE_DEVICES)")
-    ap.add_argument("--sessions", type=int, default=24, help="timed sessions a K")
+    ap.add_argument("--sessions", type=int, default=24, help="timed sessions a K (at least 8 K)")
     ap.add_argument("--warm", type=int, default=2, help="warm sessions a prover")
     ap.add_argument("--ahead", type=int, default=2)
     ap.add_argument("--lean", default=None)
