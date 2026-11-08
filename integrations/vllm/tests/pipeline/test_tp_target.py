@@ -14,6 +14,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import cli
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -28,7 +29,7 @@ RUN = {"wall_s": 0.5, "iterations": 2, "step_wall_s": [0.2, 0.3], "generated_tok
 SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": False, "VLLM_DISABLE_SHARED_EXPERTS_STREAM": True,
           "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_USE_V2_MODEL_RUNNER": True, "NCCL_P2P_DISABLE": None, "disable_custom_all_reduce": False,
           "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE", "attention_backend": None, "flash_attn_version": None,
-          "moe_backend": "triton"}
+          "moe_backend": "triton", **{k: SV.DEFAULTS[k] for k in SV.COLLECTIVE_SWITCHES if k not in ("disable_custom_all_reduce", "NCCL_P2P_DISABLE")}}
 
 
 class _LLM:

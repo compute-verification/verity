@@ -125,7 +125,7 @@ STUBS = {
                        "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
-PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
+PROTOCOL_NAMES = {"integrity": "SPOT", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
 PERIODS = block_record.PERIODS
 #: retired words, and the old names of the six subprotocols; a code span (a field or a quoted verdict line) is exempt
@@ -155,7 +155,7 @@ RECORD: dict[str, str] = {
     "RECORD_RUN": "run",
     "BLOCK_SERVER": "server",
     "BLOCK_STEPS": "server_time's steps [lo, hi)",
-    "DEMO_A_VERDICT": "sampled proofs', PoUW's and the network certifier's answer.verdict on the block's server",
+    "DEMO_A_VERDICT": "SPOT's, PoUW's and the network certifier's answer.verdict on the block's server",
     "DRAWN_UNITS": "`integrity` › quantity.drawn",
     "UNITS_TOTAL": "`integrity` › quantity.of",
     "LEAN_VERDICT": "`integrity` › answer.verdict (the Lean verifier's audit)",
@@ -714,7 +714,7 @@ def vocabulary(text: str) -> None:
     for n, line in enumerate(text.splitlines(), 1):
         if m := BANNED.search(CODE_SPAN.sub("", line)):
             raise ValueError(f"the report says {m[0]!r} (line {n}: {line.strip()!r}): name each of the six "
-                             f"subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, "
+                             f"subprotocols (SPOT, PoUW, PoUS, the bandwidth audit, the network certifier, "
                              f"the wipe), and say 'proof block', 'sampling block', 'server-time block' and 'subcircuit'")
 
 

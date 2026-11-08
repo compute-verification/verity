@@ -350,7 +350,7 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 
 ## Modelling choices a reader of the statements checks
 
-1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
+1. **Steps are buckets across all of ∂X.** The note states its bounds per execution phase of a link. The guarantees count steps, and
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
    schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,

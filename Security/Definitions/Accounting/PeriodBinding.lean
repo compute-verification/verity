@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.ComposeMonitoringPeriod
 public import Definitions.Accounting.TS.Hashed
 
 /-!

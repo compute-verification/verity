@@ -1,9 +1,9 @@
 # E2E demo interfaces
 
-The interfaces between the six subprotocols of the one-H200 E2E demo: the drawn-unit replay bundle and the block record.
+The interfaces between the six subprotocols of the one-H200 E2E demo: the replay bundle of sampled proof blocks and the block record.
 Not a package: run the modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it).
 
-## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
+## The replay bundle of sampled proof blocks (`verity/drawn-unit-bundle/v2`)
 
 `verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json`. What the prover
 behind the ZK server reads to prove a window's sampled proof blocks: per unit its coordinates (block, step, slot, layer, op, unit),
@@ -30,7 +30,9 @@ prover can't pick it), a subset sample of other than its k units, and a `draw.re
 bundle's units under that sampling design over the registered population (Lean's `flock-verify draw --registration F`
 refuses to sample one).
 
-    python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration tests/fixtures/drawn-unit-registration.json]
+~~~sh
+python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration tests/fixtures/drawn-unit-registration.json]
+~~~
 
 `build` writes a bundle from a window and the prover's step records, given where each port's row is in the step layout
 (`locate`), a unit's coordinates (`coords`) and its registered reads (`reads`). The fixture,
@@ -82,7 +84,7 @@ sampled proofs at δ = 1/100 and the wipe on the same server, the other subproto
 price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling_plan/demo_a.py --spans week`), filled
 together with `PLANNER`. A measurements file with `sections` or `proved` renders the H200 report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is the
-drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every sampled
+sampled-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every sampled
 H200 proof block is proved in Flock and accepted by Lean. Per-call noise's serving overhead is one line,
 `serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
 `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the

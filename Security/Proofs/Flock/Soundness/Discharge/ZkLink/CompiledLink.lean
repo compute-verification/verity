@@ -653,7 +653,7 @@ theorem zk_linkSoundC_at
     (hj : JointZC A Hs planZ k a)
     (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val) :
     (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (errBoundZC A Hs P planZ tab vb Xv k Rw ρ) := by
   intro R τ tgt
   unfold errBoundZC
@@ -739,7 +739,7 @@ theorem zk_linkSoundC
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
   intro R τ tgt
   unfold linkBoundZC

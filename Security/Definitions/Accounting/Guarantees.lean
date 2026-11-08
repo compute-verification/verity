@@ -13,7 +13,7 @@ public import Definitions.Accounting.Guarantees.Bridges
 public import Definitions.Accounting.Guarantees.Capacity
 public import Definitions.Accounting.Guarantees.CoinFlow
 public import Definitions.Accounting.Guarantees.Compose
-public import Definitions.Accounting.Guarantees.ComposePeriod
+public import Definitions.Accounting.Guarantees.ComposeMonitoringPeriod
 public import Definitions.Accounting.Guarantees.Confidence
 public import Definitions.Accounting.Guarantees.FillerLuck
 public import Definitions.Accounting.Guarantees.FpG1
