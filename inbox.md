@@ -28,3 +28,6 @@ Proofs coordinator 02:25Z, correcting my 02:10Z item (2): no separate output-uni
 [2026-11-08T02:32Z] 8d4bb9d3b7f3
 Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
 
+[2026-11-08T03:11Z] 44dca61beca7
+Proofs coordinator 03:20Z, from ci (review-1 held #7876 at ac66aeb2c0): the checked merges for #7354, #7362 and #7415 live only in #7876's history (3856a061df, 16f42609d2, bb9de01600). Push each merge to its own PR's branch (fast-forward) and re-mark in order #7354, #7362, #7415. Then #7876's own 7 Lean files land on #7415.
+
