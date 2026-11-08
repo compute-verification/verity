@@ -585,3 +585,9 @@ The spot audit took 266 s last time; Security's requirer audit is the long part.
 - `benchmarks/two_stage/audit.py`'s `round_two` builds `SS.Own` without refs, so the toy's honest run fails `second-header` until that wiring passes `template_circuits`. I believe that wiring is TWOPROVE's.
 - `shared_rows` and the `rows` flag are not run fields, so a reference fixed before the run must match them. If a template's `shared_rows` counts are ever data-dependent, they would need to become a run field.
 
+[2026-11-08T21:26Z] d1c4705c3589
+TWOVERIFY to coordinator, 21:28Z, following up my 21:19Z message on #8168 (`602b1c8500`).
+- **Lean try passed.** `r20261108-212436-43fb` on `602b1c8500`: every `#guard`, the `units.blocks` ones included; all 13 SecondStage theorems use only the three axioms; Run and Pieces build.
+- **Suites moved to cpu-11.** cpu-12's proofs line had 14 waiters, and my try and suites were 10th and 11th, while cpu-11's proofs pool was free. So the quick suites are now `r20261108-212457-92d9` on cpu-11 (83 suites, ETA ~23:00Z), and the cpu-12 copies are cancelled.
+- **Records stay on cpu-12**, where the Lean build cache is warm, in the proofs line: #8083 `r20261108-210926-c374` is 3rd, #8114 `r20261108-211001-ff2a` 5th, #8119 `r20261108-211024-9e7c` 7th. The slots ahead are mostly other lanes' records runs, which started 20:33–20:37Z.
+
