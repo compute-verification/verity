@@ -23634,7 +23634,7 @@
    }
   },
   "SampledProofs.Draw": {
-   "digest": "83171ac42bb107150d5faa31e072021c5e1280d88e0d6358c3cdd6fbe484da5e",
+   "digest": "e9a6fb746a2d6412f2583c44085162f4a9e6e343f2d9bb1222dc913967b26c58",
    "definitions": {
     "SampledProofs.Draw.BERNOULLI": "e2c9adff20ef4d107fc4a91b10ad53dc1ffe2ba8c4407255086a717517db7ba4",
     "SampledProofs.Draw.bernoulli": "276ec3f2c4a63b0c5e760cc6ac4e51500d165a6af7b8fc1d8e46a93f5a9e3348",
@@ -23645,7 +23645,7 @@
     "SampledProofs.Draw.deriveLaw": "037f17a61be7d0c0db3be8df7550dc58de6fc692ba9556f7ba2643d59962e01b",
     "SampledProofs.Draw.drawFirstRead": "4f1b24e7b1eebe61ca78e82a4516e74d3224129d0cfc1dffb16f756f6c4cd11c",
     "SampledProofs.Draw.drawUnits": "9acd484c97afa785cb08b2f96e3f16f652133691588bf90ca9a0b22fe17ba3f2",
-    "SampledProofs.Draw.flockLaw": "5f2426561c22794e41fe091662543ddb6ec8e231d6515e81f98c2c51005c2d82",
+    "SampledProofs.Draw.flockLaw": "cf85fedf4b8faf6c165a923dbfed68d43b532fb0fb8dd77eed74f40a26ad9335",
     "SampledProofs.Draw.lawOf": "5e9f1cd98e9e3edae16e0e2bc0580a246fb14292f58970ddbe7acf485e2269c9",
     "SampledProofs.Draw.probability?": "218ab03fa02c33a5101ee45ece031299e9aa51f16ca54744eceaf1029bbc2d51",
     "SampledProofs.Draw.proved": "0760af8118a5c2ae8bb3112dbb5b528d6e527f930a3bd879737cb5d60f743e2e",
