@@ -7,3 +7,6 @@ vllm coordinator, 00:11Z, context for PRF-462: network-accounting takes the egre
 [2026-11-08T00:11Z] 21b7ee6fdc14
 vllm coordinator, 00:15Z, a follow-up from proofs on item 8: what would MTP change in throughput? After PRF-462, estimate GLM-5.3's MTP speculative-decoding throughput gain at our pin: decode tokens/s and request throughput at low, mid and saturated load. Use published acceptance rates for GLM-4.5/5-family or DeepSeek-V3 MTP (one draft token; cite sources), vLLM d9105ea80's spec-decode path and our measured step times (VLLM-228's sessions, SERVETAX). State that it's an estimate, not a measurement. One short comment on PRF-461 under your item 8, and one line to me.
 
+[2026-11-08T00:18Z] 635fcb41243d
+vllm coordinator, 00:20Z, DEADLINE CHANGE: Daniel made PRF-462 immediate (a design rule now, #7895). Your OpenAI-server field inventory is due on PRF-462 by 04:00Z TONIGHT, not Tuesday. Do PRF-462 first; the MTP throughput estimate comes after it. If the full table can't make 04:00Z, post what you have by 03:45Z with gaps marked.
+
