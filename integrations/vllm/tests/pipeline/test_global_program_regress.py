@@ -18,7 +18,7 @@ codec as derive_step's request wrappers, as in `tests/program/test_workload_prog
      parameter (XREQ), never refuse on the node count, and resolve each weights node's reads at its RecordType-global offset (the
      Projection must carry `input_base`).
   6. S READS NO ACTIVITY — GM-01 G6's `sampler_geometry_check` holds every launch to the registered
-     S = SplitsFor_v1(1, num_SMs) the served engine pins, whatever the live batch; G6 alone pins the record's rows to the Program's
+     S = registered_splits(num_SMs) the served engine pins, whatever the live batch; G6 alone pins the record's rows to the Program's
      activity — request r live at t iff arrive_r <= t <= arrive_r + n_r - 1 with n_r = committed tokens up to and including the first
      declared EOS, capped — in both directions (a missing row: 'declared schedule not exercised'; a row after the EOS: 'execution past
      EOS').  The tests pin that on a real passing record and on the async-scheduling placeholder row, and that
@@ -402,15 +402,6 @@ def test_chronology_follows_arrivals_not_manifest_order_and_programs_every_step_
     assert ch["within_step"]["declared_order"] is None                         # nothing is sequenced inside an engine step
 
 
-def test_declared_live_counts_are_a_function_of_the_declaration_only():
-    """GP-01's declared chronology live count per engine step (the input of the stochastic `S` schedule, LIFTING-SPEC [D4]'s
-    transitional form) is computed from (arrive_step, cap) alone — every request to its cap; no served length enters."""
-    reqs = [{"arrive_step": 0, "cap": 3}, {"arrive_step": 1, "cap": 1}, {"arrive_step": 1, "cap": 2}]
-    assert gp.declared_live_counts(reqs) == [1, 3, 2]
-    assert gp.declared_live_counts([]) == []
-    assert gp.declared_live_counts([{"arrive_step": 4, "cap": 1}]) == [0, 0, 0, 0, 1]
-
-
 # ================================================================================================= 5. batch_decomp: many weights Input nodes
 
 
@@ -602,8 +593,10 @@ NSM = 4   # a num_SMs at which vLLM's own S discriminates 1 vs 2 live rows: spli
 S_REG = registered_splits(NSM)   # 4: the split count the pinned engine launches at every batch
 
 # this section regresses GM-01's derived-S unit: on a tree without it there is nothing to regress -- named skip
-_needs_derived_s = pytest.mark.skipif(not hasattr(SG, "sampler_geometry_check"),
-                                      reason="GM-01 without sampler_geometry_check")
+def _declared_to_cap(gpd: dict) -> list[int]:
+    """The live count per engine step of the schedule that serves every request to its cap: (arrive_step, cap) alone."""
+    reqs = [(int(g["arrive_step"]), int(g["max_tokens"])) for g in gpd["requests"]]
+    return [sum(a <= t < a + c for a, c in reqs) for t in range(max((a + c for a, c in reqs), default=0))]
 
 
 def _program_activity(gpd: dict, transcripts: dict[str, list[int]], eos_ids: set[int], lag: int = 0) -> dict[int, int]:
@@ -669,13 +662,12 @@ def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: st
     return TGM._StubFold([f"GumbelTopPTokenSelect_v1{{V=64,S={S}}}" for S in s_list]), es
 
 
-@_needs_derived_s
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_activity(memory, tmp_path, form):
     """On a record GM-01 PASSES, the record's row count at every engine step equals the Program's activity (declared arrival x committed
     tokens, truncated at the verified EOS) -- not the declared-to-cap schedule: r1 (cap 4) stops on EOS at event 1, so steps 2 and 3 of
     its declared schedule are NOT live, and step 3 is not a step of the record at all.  S reads none of it: the registered
-    S = SplitsFor_v1(1, 4 SMs) = 4 passes at 2 live rows as at 1, and vLLM's own batch-derived S (2 live -> S=2) is refused by name."""
+    S = registered_splits(4 SMs) = 4 passes at 2 live rows as at 1, and vLLM's own batch-derived S (2 live -> S=2) is refused by name."""
     gpd, oracle = TGM.assemble([TGM.R0, TGM.R1_EOS], tmp_path)
     res = gm.check(gpd, oracle)
     assert res["verdict"] == "PASS", res["reasons"]
@@ -685,7 +677,7 @@ def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_a
     observed = {s: len(rec["steps"][s]["logits_rows"]) for s in rec["steps"]}
     assert activity == observed == {0: 2, 1: 2, 2: 1}
     # every request to its cap: the schedule GP-01 declares beside the Program (builder-side rows carry `cap`)
-    declared = gp.declared_live_counts([{"arrive_step": g["arrive_step"], "cap": g["max_tokens"]} for g in gpd["requests"]])
+    declared = _declared_to_cap(gpd)
     assert declared == [2, 2, 2, 1] and declared[2] == 2 != activity[2] == 1 and 3 not in observed and declared[3] == 1
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
     ok_fold, ok_es = _topp_fold_for(observed, {s: S_REG for s in observed}, form)
@@ -701,7 +693,6 @@ def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_a
 R1_PLACEHOLDER = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11, 504], "cap": 4}   # EOS at event 1, then vLLM async scheduling's placeholder row
 
 
-@_needs_derived_s
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fails_g6_and_s_alone_would_not_see_it(memory, tmp_path, form):
     """With async scheduling vLLM computes ONE more step for a request after its EOS and
@@ -741,7 +732,6 @@ _needs_lag_rule = pytest.mark.skipif(not (hasattr(TGM, "_set_async_scheduling") 
                                      reason="GM-01 without the G6 EOS lag rule")
 
 
-@_needs_derived_s
 @_needs_lag_rule
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activity(memory, tmp_path, form):
@@ -786,5 +776,5 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name" in p for p in TGM._check(res_n, "G6")["problems"])
     assert TGM._check(res_n, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_n["lag"]["record_attests"] is None
     # the S the declared-to-cap schedule would prescribe never enters: at step 3 (declared live 1) there is no row to check
-    declared = gp.declared_live_counts([{"arrive_step": g["arrive_step"], "cap": g["max_tokens"]} for g in gpd["requests"]])
+    declared = _declared_to_cap(gpd)
     assert declared == [2, 2, 2, 1] and 3 not in observed

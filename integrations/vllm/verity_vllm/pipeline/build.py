@@ -130,7 +130,8 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
 
 def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
     """The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported` dict) when the policy has no
-    Definition.  On success `sampling["splits"]` is the registered split count S and `sampling["geometry"]` records it with its rule:
+    Definition, or a split count the session declares that isn't the registered one.  On success `sampling["splits"]` is the registered
+    split count S and `sampling["geometry"]` records it with its rule:
     nothing of the workload's batch, so every component of every workload on the target declares the same (GP-01 agreement by
     construction).
 
@@ -170,6 +171,10 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
                       reason="sampler_geometry")
     nsm = int(target.num_sms)
     S = int(registered_splits(nsm))
+    if sampling.get("splits", S) != S or type(sampling.get("splits", S)) is not int:
+        return refuse(f"unregistered split count: the session declares top-p split count {sampling['splits']!r}, not the registered one, "
+                      f"registered_splits({nsm}) = {S}: serving runs every launch at it (engine.topp_pin), and the Program carries it "
+                      f"as Const32[{S}]", reason="sampler_geometry")
     sampling["splits"] = S
     sampling["geometry"] = {"num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "registered", "splits": S,
                             "rule": "S = registered_splits(num_SMs) at every sampling event, whatever the live "
