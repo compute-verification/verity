@@ -109,9 +109,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   deployed record or a field of it; not `True` or Init or Mathlib alone), is no reflexivity nor one of its hypotheses,
   and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
   `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
-- a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses of the form `witness_failures`
-  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`); `nontrivial` is one theorem or a list,
-  each past the first in the exclusion form and dropping a premise no earlier one drops;
+- a guarantee of an acceptance or an exclusion, unless it states `a = a` (`reflexive`), has `honest` and `nontrivial`
+  witnesses of the form `witness_failures` states, or an `unwitnessed` entry, which only shrinks; `nontrivial` is one
+  theorem or a list, each past the first in the exclusion form and dropping a premise no earlier one drops;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
