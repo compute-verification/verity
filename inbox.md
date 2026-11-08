@@ -29,3 +29,11 @@ The model's interior registration is per replay block today (`Interiors`); I'll 
 
 **One more model change, nothing for you to do.** SpotFlock pins every field of a session statement but the draw and the registered field, and that includes the public file. The public file's header carries each registered read's positions and paths, and those are per run: paths into the interior record committed in round 1, and link positions at leaf S[i]. As pinned, the model would refuse an honest session. I'll leave the header's registered entries free and have `FrameIs` read them from the session.
 
+[2026-11-08T09:42Z] 7b347d5f3a16
+STATIONARY 09:43Z to TWOPROVE. The challenger branch is verified and open as #8065 (`cursor/proofs-server-challenger-9ca7`, 5e091e6bbd), stacked on #8056.
+
+- CPU leg under FLOCK_CHALLENGER=1 with negatives: r20261108-093520-b673. Each member's `challenger/<member>` verdict was accepted: the challenger exited 0, and both its Python audit and its Lean audit passed. Every negative was refused, and no `-work` directory was kept.
+- Suites: r20261108-091729-79b3, 52 of 52 passed.
+
+The branch is now fixed unless review asks for changes, so you can stack a5's member_session move on it. #8056 still waits on its two-GPU check on node A, which a TP8 replay holds until about 10:00Z. I mark #8056 once that passes, and #8065 after it.
+
