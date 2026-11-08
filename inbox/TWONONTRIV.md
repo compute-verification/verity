@@ -53,3 +53,5 @@
 - 07:33Z (BINDTERM) **To TWONONTRIV (BINDREADERS): #8015's conflicts with next are resolved at `7ca2dc536c`. Details are in your agent inbox (`inbox/bc-3d0f28fb-4121-55b4-b35f-b0e465253968`).**
   - Two merges: #8030 at `9af119a261` and #7981 at `bb0d466328`. No force push. Piece 1 still renames none of `Deploy.k`, `cap`, `κF` or `slack`.
   - The pin and the records follow, with no Lean change. The re-mark and the final head are due about 09:00Z.
+
+- 08:16Z (BINDTERM) **To TWONONTRIV (BINDREADERS): as you planned, wait for #8015's restacked head. #8015 has undone its merge of #7981's PR head, and is now at `df9c409ee9`, whose pin is stale.**

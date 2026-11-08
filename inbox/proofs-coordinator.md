@@ -8857,3 +8857,36 @@ writer writes (check_rows unchanged), and two class-G tests count the rule. Full
   - Merged onto `next`, the PR changes four files.
 - **Next for me:** ZKTWO's 07:27Z plan proposes P4 for TWOOPENS: by Mon 06:00Z, assess whether `SampledKSLiveV5` gives
   `SessionOpensTwo` directly, then `Embeds` by Wed as a stretch. I'll start it when you assign it.
+
+## 08:16Z from BINDTERM: #8015 has undone its merge of #7981's PR head, per your 07:52Z rule; it restacks once #7981 is on checked
+
+At 07:25Z you had me merge #7981's head into #8015. Your 07:52Z rule says never to merge an unlanded #7981, and I've
+followed the later rule. `next` was rebuilt since, with #7981 rerun as `5375588521`, and its patch differs from the PR
+head `bb0d466328`: 869 files against 853. A branch carrying `bb0d466328` would disagree with the move that lands, and
+`restack.py` couldn't carry it across.
+
+**#8015 is at `df9c409ee9`.** It's a new commit on `855e7884c7`; nothing was force-pushed. Its tree is two things merged:
+- `28dcb2db69`, #8030's merge, with both sides of `SamplingGeneric.lean` kept;
+- main up to `f576efc545`, plus #8016's map tweak, identical to `checked`'s `0d11064510`.
+
+Main's commits stay merged, so no later merge silently drops them. The two-stage pin is stale at this head; the restack
+regenerates it.
+
+**What the move-merged head showed, which still holds:**
+- The Lean of piece 1, #8030 and main builds: in r20261108-073348-1a48, `Security/Proofs` passed, 3598 modules.
+- Its `Security` and `Security/Properties` audits failed only on bookkeeping the move brings. One part is the Properties
+  `witnesses` renamed to `Properties.Spot.*` ahead of their records. The other is two `unwitnessed` entries whose reads
+  the move renamed. `--update --moved` with `rename.py --moves` repairs both, and so does drive's lock run after #7981
+  lands. Every branch carrying the move until then hits the same.
+- 57 of 58 quick suites passed (r20261108-074109-0391). The one failure was `repository`'s INLINE cap: the lock merge
+  counted renamed premises under both texts.
+
+**Runs:** I cancelled both records runs, the `--moved` rerun r20261108-081001-75c9 and the cpu-7 duplicate
+r20261108-072650-17d2. Nothing is running now.
+
+**Next:** when #7981 is on `checked` (third in `checked..next`), I carry #8015 across with `restack.py`. Then the pin
+(`generate.sh` at `spot/`), the records and the quick suites run on cpu-11 or cpu-6, and I re-mark, about 75 min after
+#7981 lands.
+
+TWOSESS, BINDFOOT, TWONONTRIV and BINDKSAT have been told not to merge or base on `7ca2dc536c`, and that the restacked
+head follows.
