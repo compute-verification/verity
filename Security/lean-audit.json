@@ -5825,7 +5825,8 @@
    "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.RecGeneric": "the generic recursion's proofs and its instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its round order (`SamplingDeploy.codeTwoAt`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted"
+   "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its round order (`SamplingDeploy.codeTwoAt`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted",
+   "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantee (`Flock.Guarantees.SpotKSTwo`) states KS at SPOT[Flock]'s code record (`SpotFlock.code`, `Held`, `two`, `rs`, `iroots`) and at a session layout's facts (`Layout`, `Embeds`, `FrameIs`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/ (PRF-467), which removes this entry"
   }
  },
  "four_names": [
