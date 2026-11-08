@@ -218,7 +218,7 @@ __global__ void __launch_bounds__(256) chunk_ring_fold_rows_bmma(const F128* __r
                                                                  const F128* __restrict__ hi, int k, long long nb,
                                                                  F128* __restrict__ partials) {
     __shared__ uint32_t lot[128 * (RING_FOLD_ROWS / 32)];
-    __shared__ uint32_t wt[128][9];   // this step's witness rows transposed: row t's word G holds bit t of rows 32G..32G+31
+    __shared__ uint32_t wt[2][128][9];   // a step's witness rows transposed: row t's word G holds bit t of rows 32G..32G+31
     const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5, g = lane >> 2, q = lane & 3;
     const int rows = min(1 << k, RING_FOLD_ROWS), n_ar = (1 << k) / rows, steps = rows / 256;
     const int a0 = (blockIdx.x % n_ar) * rows, n_bg = gridDim.x / n_ar;
@@ -232,7 +232,7 @@ __global__ void __launch_bounds__(256) chunk_ring_fold_rows_bmma(const F128* __r
     uint32_t acc[16][4] = {};
     F128 y_acc{0, 0};   // lanes q < 2: Σ_b hi[b]·Y_b[16·wid + g + 8q]
     long long b = blockIdx.x / n_ar;
-    int s = 0;
+    int s = 0, n_step = 0;
     F128 v = b < nb ? witness[(b << k) + a0 + threadIdx.x] : F128{0, 0};
     while (b < nb) {
         const long long bn = s + 1 < steps ? b : b + n_bg;
@@ -242,12 +242,13 @@ __global__ void __launch_bounds__(256) chunk_ring_fold_rows_bmma(const F128* __r
         ring_words(v, vw);
 #pragma unroll
         for (int h = 0; h < 4; h++) tw[h] = ring_transpose32(vw[h], lane);
-        __syncthreads();   // every warp has read the previous step's rows
+        // alternating buffers: every read of the one written here came before the last step's barrier
+        uint32_t (*cur)[9] = wt[n_step & 1];
 #pragma unroll
-        for (int h = 0; h < 4; h++) wt[32 * h + lane][wid] = tw[h];
+        for (int h = 0; h < 4; h++) cur[32 * h + lane][wid] = tw[h];
         __syncthreads();
         const int t0 = 16 * wid + g;
-        const uint32_t fa0 = wt[t0][q], fa1 = wt[t0 + 8][q], fa2 = wt[t0][4 + q], fa3 = wt[t0 + 8][4 + q];
+        const uint32_t fa0 = cur[t0][q], fa1 = cur[t0 + 8][q], fa2 = cur[t0][4 + q], fa3 = cur[t0 + 8][4 + q];
 #pragma unroll
         for (int n = 0; n < 16; n++) {
             const int u = 32 * (g >> 1) + 2 * n + (g & 1);
@@ -279,6 +280,7 @@ __global__ void __launch_bounds__(256) chunk_ring_fold_rows_bmma(const F128* __r
         b = bn;
         s = sn;
         v = vn;
+        n_step++;
     }
     if (q < 2) partials[(long long)(16 * wid + g + 8 * q) * gridDim.x + blockIdx.x] = y_acc;
 }
