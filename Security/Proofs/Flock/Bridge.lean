@@ -53,7 +53,7 @@ Bits' key program lays out a circuit file's and its units, so the bridge's progr
 Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_bitsKeyProg`). `BitsRowMap`:
 Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
 returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). `UnitRows`: each copy
-of a correct unit of the parsed file holds the unit net's rows on the transcript's bits (`Flock.Bridge.rows_of_correct`).
+of a unit of the parsed file holds the unit net's rows at the unit's local evaluation (`Flock.Bridge.rows_localEval`).
 -/
 
 @[expose] public section

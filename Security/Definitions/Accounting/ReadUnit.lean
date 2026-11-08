@@ -56,15 +56,18 @@ the row the read returns and its verdict bit. The read's template fixes its tabl
 
 What a table read's soundness takes of a read unit `u` at a transcript `X`:
 
-* `GatesRefine`: `u`'s gates compute its reference. It is a fact about the circuit's gates, which the circuit alone
-  decides, and not a cryptographic assumption.
+* `GatesRefine`: `u`'s gates compute its reference, in `u`'s local evaluation (`Verity.Partition.localEval`), with the
+  gates of its root, domain id and verdict committed where they lie in `u`. It is a fact about the circuit's gates,
+  which the circuit alone decides, and not a cryptographic assumption.
 * `RegisteredRows`: `u`'s registered rows hold in `X`: its root and domain id are its table's, its verdict bit is 1, and
   the registered constants among its inputs and outputs hold. A unit bound in `X` under the deployed openings (outside
   `Accounting.unbound`) has them wherever the openings pin those gates.
 
-`Binds` is what follows: the row `u` returns is its table's row at its index, for every opening of that leaf the
-table's root accepts, or SHA-512 collides on what the two checks hashed. `Reads` collects a circuit's table reads, each
-in its unit with its table, and `Reads.finder` is the collision finder their binding reads `Claims.ExpectedCR` at.
+`Binds` is what follows, in `u`'s local evaluation: the row `u` returns is its table's row at its index, for every
+opening of that leaf the table's root accepts, or SHA-512 collides on what the two checks hashed. The local evaluation
+is the row `u`'s own gates consume, and where the row's gates are committed and `u` is correct it is the transcript's.
+`Reads` collects a circuit's table reads, each in its unit with its table, and `Reads.finder` is the collision finder
+their binding reads `Claims.ExpectedCR` at.
 -/
 
 @[expose] public section
@@ -138,25 +141,39 @@ def domainAt (id : Verity.Digest) : Hash.Tree.Domain := ⟨id, q.count, q.positi
 def verifier (key : Hash.Msg) (id : Verity.Digest) : Hash.RowLeaf.Verifier :=
   Hash.EmbeddingRead.verifier (q.domainAt id) key
 
+/-- **The read's ports hold its reference** in `Y`, under the hashes `H` and `G` and the hm96 key `key`: the row the
+read returns is `Hash.EmbeddingRead.h`'s on its ports' values, and its verdict bit is set only where
+`Hash.EmbeddingRead.ok` holds of them, in its table's domain under the domain id its port holds. -/
+def Computes (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (Y : C.Transcript) : Prop :=
+  q.hOf Y = Hash.EmbeddingRead.h q.count q.words (q.tokOf Y) (q.opening Y) ∧
+    (q.okOf Y = true →
+      Hash.EmbeddingRead.ok H G (q.domainAt (q.domainOf Y)) key (q.rootOf Y) q.count (q.tokOf Y) (q.opening Y))
+
 end Ports
 
 /-- **The read's gates compute its reference** (`Hash.EmbeddingRead`), under the hashes `H` and `G`, the hm96 key `key`
 and the circuit's registered constants `consts`: at every transcript `X` where unit `u` of `P` is correct and the
-registered constants among `u`'s inputs and outputs hold, the row `u` returns is `Hash.EmbeddingRead.h`'s on its ports'
-values, and its verdict bit is set only where `Hash.EmbeddingRead.ok` holds of them, in its table's domain under the
-domain id its port holds.
+registered constants among `u`'s inputs and outputs hold, the read's ports hold its reference (`Ports.Computes`) in
+`u`'s local evaluation (`Verity.Partition.localEval`: `u`'s gates recomputed from what they read outside `u`), and the
+gates of its root, domain id and verdict that lie in `u` are committed.
+
+The row is bound where `u`'s gates compute it, whether or not its gates are committed: a block that reads a table row
+and consumes it inside itself, as a read fused into the product that reads its row does, binds the row its product reads
+as a block that commits the row does. The root, domain id and verdict are what the registered rows hold in the
+transcript, so those of their gates in `u` are committed, where a correct unit's transcript holds its evaluation.
 
 This is a fact about the circuit's gates, which the circuit alone decides, and not a cryptographic assumption: it names
 no adversary and no probability, and holds or fails of the registered circuit whatever a prover does. What proves it is a
 proof about the read's gates against the reference (the select, the row's segment digest, the hm96 leaf, the frame-v3
 path and the SHA-512 compressions under them), or an instance of a lowering-correctness theorem for the template the unit
 instantiates. -/
-def GatesRefine (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (consts : Fin C.N → Option Bool) {n : ℕ}
-    (P : Verity.Partition C n) (u : Fin n) (q : Ports C) : Prop :=
-  ∀ X : C.Transcript, P.Correct X u → (∀ g ∈ P.io u, ∀ b, consts g = some b → bit X g = b) →
-    q.hOf X = Hash.EmbeddingRead.h q.count q.words (q.tokOf X) (q.opening X) ∧
-      (q.okOf X = true →
-        Hash.EmbeddingRead.ok H G (q.domainAt (q.domainOf X)) key (q.rootOf X) q.count (q.tokOf X) (q.opening X))
+structure GatesRefine (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (consts : Fin C.N → Option Bool) {n : ℕ}
+    (P : Verity.Partition C n) (u : Fin n) (q : Ports C) : Prop where
+  computes : ∀ X : C.Transcript, P.Correct X u → (∀ g ∈ P.io u, ∀ b, consts g = some b → bit X g = b) →
+    q.Computes H G key (P.localEval X u)
+  root_committed : ∀ i, P.unit (q.root i) = some u → q.root i ∈ P.committed
+  domain_committed : ∀ i, P.unit (q.domain i) = some u → q.domain i ∈ P.committed
+  ok_committed : P.unit q.ok = some u → q.ok ∈ P.committed
 
 /-- **The read's registered rows hold** in `X`, for the table under the root `r` and the domain id `d`: its root's and
 domain id's gates hold them, its verdict bit is held to 1, and the registered constants `consts` among its inputs and
@@ -213,21 +230,22 @@ def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.T
       Hash.RowLeaf.innerHashed H ((R.port i).verifier key (R.domain i)) (R.table i (R.index i X)))
 
 open Classical in
-/-- **What the drawn reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is drawn, in the
-transcript `X ω`. -/
-noncomputable def drawnHashed {Ω : Type} (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n))
-    (X : Ω → C.Transcript) (ω : Ω) : List Hash.Msg :=
-  (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (X ω)
+/-- **What the drawn reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is drawn, in its unit's
+local evaluation of the transcript `X ω` under the partition `P`. -/
+noncomputable def drawnHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
+    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (ω : Ω) : List Hash.Msg :=
+  (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
 
 open Classical in
 /-- **The table reads' collision finder**: on the outcome `ω`, two messages the drawn reads hashed that `H` maps to one
 digest, if there are two, at the cost `cost ω`: the SHA-512 calls of reaching `ω`'s transcript and hashing what its
 drawn reads hashed. -/
-noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
-    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (cost : Ω → ℕ) : Claims.Finder where
+noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Verity.Partition C n)
+    (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript)
+    (cost : Ω → ℕ) : Claims.Finder where
   S := Ω
   out ω :=
-    if h : ∃ x ∈ R.drawnHashed H key drawn X ω, ∃ y ∈ R.drawnHashed H key drawn X ω,
+    if h : ∃ x ∈ R.drawnHashed P H key drawn X ω, ∃ y ∈ R.drawnHashed P H key drawn X ω,
         Hash.Collision (fun m => (H m).bytes) x y then
       some (h.choose, h.choose_spec.2.choose)
     else none

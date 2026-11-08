@@ -7,14 +7,14 @@ import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 /-!
-# A correct unit of the parsed file holds its template's rows
+# A unit of the parsed file holds its template's rows at its local evaluation
 
 Unit `u` of the key program is an instance of the circuit's template instance rows, `units_per_vu` stacked copies of the
 unit net's (`unitInst`), wired as the program wires it (`Const.Prog.rowsWireC`, the wiring `Layout.outsOf` reads;
-`unitInst_wire`). In core's view of the parsed file (`circuitOf`, `partsOf`), copy `j` of a correct unit holds the unit
-net's rows (`Rows.ofNet`) on the transcript's bits (`rows_of_correct`): at column values that are the transcript's bits
-at every input column and every committed column (`copyGate`), with the constant the transcript's bit at the stack's
-constant (`constGate`). The values are the unit's local evaluation; the converse direction is `correct_of_progCorrect`.
+`unitInst_wire`). In core's view of the parsed file (`circuitOf`, `partsOf`), copy `j` of every unit holds the unit
+net's rows (`Rows.ofNet`) at the unit's local evaluation (`rows_localEval`): at column values that are the evaluation's
+bits at every column of the copy (`copyGate`), with the constant the transcript's bit at the stack's constant
+(`constGate`), a gate outside the unit. A correct unit's committed gates hold that evaluation (`Partition.Correct`).
 No verifier path reads this file.
 -/
 
@@ -56,9 +56,22 @@ noncomputable def copyGate (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c : Fi
 noncomputable def constGate (u : Fin n) : Fin (circuitOf D hU n).N :=
   (unitInst D hU n u).wire (Placed.circuitRows D.unroll hU).one
 
-/-- `partsOf`'s correct units are the key program's, on the transcript's bits. -/
-theorem correct_bits {u : Fin n} {tr : (circuitOf D hU n).Transcript} (hX : (partsOf D hU n).Correct tr u) :
-    (keyPartition D hU n).Correct (fun g => (tr g).getLsbD 0) u := by
+/-- **A copy's input column is a gate outside its unit.** -/
+theorem copyGate_input (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c : Fin (Rows.ofNet hU).w)
+    (hc : c.val < (Rows.ofNet hU).nIn) : (partsOf D hU n).unit (copyGate D hU n u hj c) ≠ some u := by
+  have hlt : ((Rows.ofNet hU).stackCol D.unroll.upv hj c).val < D.unroll.upv * (Rows.ofNet hU).nIn := by
+    rw [Rows.stackCol, dite_eq_left hc]
+    exact Rows.mul_add_lt hj hc
+  have hn : (Placed.circuitRows D.unroll hU).nIn = D.unroll.upv * (Rows.ofNet hU).nIn := rfl
+  exact (unitInst D hU n u).outside _ fun i h => by
+    have h2 : ((Rows.ofNet hU).stackCol D.unroll.upv hj c).val = (Placed.circuitRows D.unroll hU).nIn + i.val :=
+      congrArg Fin.val h
+    omega
+
+/-- `partsOf`'s local evaluation is the key program's, on the transcript's bits. -/
+theorem localEval_bits (tr : (circuitOf D hU n).Transcript) (u : Fin n) (g : Fin (circuitOf D hU n).N) :
+    ((partsOf D hU n).localEval tr u g).getLsbD 0 =
+      (keyPartition D hU n).localEval (fun g => (tr g).getLsbD 0) u g := by
   have hXs : tr = Verity.Circuit.ofBits (fun g => (tr g).getLsbD 0) := by
     funext g
     apply BitVec.eq_of_getLsbD_eq
@@ -67,37 +80,30 @@ theorem correct_bits {u : Fin n} {tr : (circuitOf D hU n).Transcript} (hX : (par
     show (tr g).getLsbD 0 = (BitVec.ofBool ((tr g).getLsbD 0)).getLsbD 0
     generalize (tr g).getLsbD 0 = b
     cases b <;> rfl
-  have h1 : u ∉ (partsOf D hU n).wrong tr := by
-    rw [Verity.Partition.mem_wrong]
-    exact not_not.mpr hX
-  rw [hXs, partsOf_wrong, FlockSoundness.Audit.Partition.mem_wrong] at h1
-  exact not_not.mp h1
+  show ((Verity.Partition.ofAudit (keyPartition D hU n)).localEval tr u g).getLsbD 0 = _
+  conv_lhs => rw [hXs]
+  rw [Verity.Partition.localEval_ofAudit]
+  simp
 
-/-- **A correct unit's copy holds the unit net's rows on the transcript's bits.** At unit `u` of `partsOf`, core's
-view of the parsed file, a transcript `tr` on which `u` is correct gives, for each copy `j < units_per_vu` of the
-unit's stack, column values `z` that satisfy the unit net's rows (`Rows.ofNet`), whose constant is `tr`'s bit at the
-unit's constant gate, and which are `tr`'s bits at every input column of the copy and at every column whose gate is
-committed. (`X` is a token here: ArkLib's global `notation3 "X"` comes in through `CircuitOf`'s imports.) -/
-theorem rows_of_correct {u : Fin n} {tr : (circuitOf D hU n).Transcript} (hX : (partsOf D hU n).Correct tr u)
-    {j : ℕ} (hj : j < D.unroll.upv) :
+/-- **A unit's copy holds the unit net's rows at the unit's local evaluation.** At unit `u` of `partsOf`, core's view
+of the parsed file, every transcript `tr` gives, for each copy `j < units_per_vu` of the unit's stack, column values
+`z` that satisfy the unit net's rows (`Rows.ofNet`), whose constant is `tr`'s bit at the unit's constant gate, and
+which are the bits of `u`'s local evaluation of `tr` at every column of the copy. (`X` is a token here: ArkLib's global
+`notation3 "X"` comes in through `CircuitOf`'s imports.) -/
+theorem rows_localEval (tr : (circuitOf D hU n).Transcript) (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) :
     ∃ z : ℕ → Bool, (Rows.ofNet hU).Sat (fun c => z c.val) ∧
       z (Rows.ofNet hU).one.val = (tr (constGate D hU n u)).getLsbD 0 ∧
-      ∀ c : Fin (Rows.ofNet hU).w,
-        (c.val < (Rows.ofNet hU).nIn ∨ copyGate D hU n u hj c ∈ (partsOf D hU n).committed) →
-          z c.val = (tr (copyGate D hU n u hj c)).getLsbD 0 := by
-  have hc := correct_bits D hU n hX
+      ∀ c : Fin (Rows.ofNet hU).w, z c.val = ((partsOf D hU n).localEval tr u (copyGate D hU n u hj c)).getLsbD 0 := by
   obtain ⟨hs, hone⟩ := FlockVBridge.sat_copy (R := Rows.ofNet hU) (k := D.unroll.upv) (unitInst D hU n u)
     (fun g => (tr g).getLsbD 0) hj
   refine ⟨FlockVBridge.copyVal (R := Rows.ofNet hU) (k := D.unroll.upv) (unitInst D hU n u)
-    (fun g => (tr g).getLsbD 0) hj, ?_, ?_, fun c hcm => ?_⟩
+    (fun g => (tr g).getLsbD 0) hj, ?_, ?_, fun c => ?_⟩
   · intro i
     simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
     exact hs i
   · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
     exact hone
-  · rcases hcm with hin | hm
-    · exact FlockVBridge.copyVal_input (R := Rows.ofNet hU) (k := D.unroll.upv) (unitInst D hU n u) _ hj hin
-    · exact FlockVBridge.copyVal_committed (R := Rows.ofNet hU) (k := D.unroll.upv) (unitInst D hU n u) hc hj c
-        ((Verity.Partition.mem_committed_ofAudit _ _).1 hm)
+  · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
+    exact (localEval_bits D hU n tr u _).symm
 
 end Flock.Bridge
