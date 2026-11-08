@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.ReadUnit
+public import Proofs.Core.Circuit
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Hash.EmbeddingRead
 import Mathlib.Algebra.Order.Floor.Extended

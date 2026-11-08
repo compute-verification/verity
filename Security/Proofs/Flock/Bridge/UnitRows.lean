@@ -68,23 +68,6 @@ theorem copyGate_input (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c : Fin (R
       congrArg Fin.val h
     omega
 
-/-- `partsOf`'s local evaluation is the key program's, on the transcript's bits. -/
-theorem localEval_bits (tr : (circuitOf D hU n).Transcript) (u : Fin n) (g : Fin (circuitOf D hU n).N) :
-    ((partsOf D hU n).localEval tr u g).getLsbD 0 =
-      (keyPartition D hU n).localEval (fun g => (tr g).getLsbD 0) u g := by
-  have hXs : tr = Verity.Circuit.ofBits (fun g => (tr g).getLsbD 0) := by
-    funext g
-    apply BitVec.eq_of_getLsbD_eq
-    intro i hi
-    obtain rfl : i = 0 := by change i < 1 at hi; omega
-    show (tr g).getLsbD 0 = (BitVec.ofBool ((tr g).getLsbD 0)).getLsbD 0
-    generalize (tr g).getLsbD 0 = b
-    cases b <;> rfl
-  show ((Verity.Partition.ofAudit (keyPartition D hU n)).localEval tr u g).getLsbD 0 = _
-  conv_lhs => rw [hXs]
-  rw [Verity.Partition.localEval_ofAudit]
-  simp
-
 /-- **A unit's copy holds the unit net's rows at the unit's local evaluation.** At unit `u` of `partsOf`, core's view
 of the parsed file, every transcript `tr` gives, for each copy `j < units_per_vu` of the unit's stack, column values
 `z` that satisfy the unit net's rows (`Rows.ofNet`), whose constant is `tr`'s bit at the unit's constant gate, and
@@ -104,6 +87,6 @@ theorem rows_localEval (tr : (circuitOf D hU n).Transcript) (u : Fin n) {j : ℕ
   · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
     exact hone
   · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
-    exact (localEval_bits D hU n tr u _).symm
+    exact (Verity.Partition.localEval_ofAudit_bit (keyPartition D hU n) tr u _).symm
 
 end Flock.Bridge

@@ -75,27 +75,6 @@ theorem sat_localEval {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSou
   rw [P.localEval_of_mem tr (I.mem i), I.op i]
   simp only [FlockSoundness.Audit.Op.apply, FlockSoundness.Audit.xorSum_map, Function.comp_def]
 
-theorem ofBits_bit {C : FlockSoundness.Audit.Circuit} (tr : (Verity.Circuit.ofAudit C).Transcript) :
-    Verity.Circuit.ofBits (fun g => ReadUnit.bit tr g) = tr := by
-  funext g
-  apply BitVec.eq_of_getLsbD_eq
-  intro i hi
-  have hi0 : i = 0 := by
-    have : i < 1 := hi
-    omega
-  subst hi0
-  simp [Verity.Circuit.ofBits, ReadUnit.bit]
-
-/-- A unit's local evaluation in core's view of a game partition is the game's, at the transcript's bits. -/
-theorem bit_localEval {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
-    (tr : (Verity.Circuit.ofAudit C).Transcript) (u : Fin n) (g : Fin C.N) :
-    ReadUnit.bit ((Verity.Partition.ofAudit P).localEval tr u) g = P.localEval (fun g => ReadUnit.bit tr g) u g := by
-  have e := Verity.Partition.localEval_ofAudit P (fun g => ReadUnit.bit tr g) u g
-  rw [ofBits_bit] at e
-  show ((Verity.Partition.ofAudit P).localEval tr u g).getLsbD 0 = _
-  rw [e]
-  simp
-
 /-! ## The read's program -/
 
 /-- The read's input bits, in `EmbeddingRead_v1`'s port order: the token's 32, the root's and the domain id's 512 each,
@@ -401,7 +380,7 @@ theorem gatesRefine_of_run (key : Hash.Msg) {V H : ℕ} {C : FlockSoundness.Audi
   let xs : Fin C.N → Bool := fun g => ReadUnit.bit tr g
   let z : Fin R.w → Bool := fun c => P.localEval xs u (I.wire c)
   have hz : ∀ c, z c = ReadUnit.bit ((Verity.Partition.ofAudit P).localEval tr u) (I.wire c) := fun c =>
-    (bit_localEval P tr u (I.wire c)).symm
+    (Verity.Partition.localEval_ofAudit_bit P tr u (I.wire c)).symm
   have hz1 : z R.one = true := by
     have e : z R.one = xs (I.wire R.one) := P.localEval_of_not_mem xs (hout R.one (Or.inr rfl))
     rw [e]
