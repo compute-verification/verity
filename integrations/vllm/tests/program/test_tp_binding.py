@@ -1,4 +1,4 @@
-"""`program.tp_binding`, a tensor-parallel request's binding derived from its rank Programs, and `workload.TpWorkload`, the
+"""`program.tp_binding`, a tensor-parallel request's binding derived from its rank Programs, and `tp_workload.TpWorkload`, the
 composition of the rank workloads with it.
 
 The dense toy compiles at TP1 and TP2 only, so the toy at TP2 (`test_steps`' TINY, `_mixed`'s requests) is a compiled request,
@@ -12,7 +12,7 @@ from tests.program.predict.test_steps import _mixed, _registered
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.steps import compile_steps
-from verity_vllm.program.workload import TP_WORKLOAD_TAG, TpWorkload
+from verity_vllm.program.tp_workload import TP_WORKLOAD_TAG, TpWorkload
 
 from verity.ml.circuits.defs import Builder, bind
 from verity.ml.circuits.ops import gemm as G

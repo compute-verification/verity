@@ -1,5 +1,5 @@
 """The tensor-parallel compile: a node's advice compiled at every rank of φ.tp's world and composed into one TP workload
-(`workload.TpWorkload`).
+(`tp_workload.TpWorkload`).
 
 `compile_steps` compiles one rank, the one φ.tp names. The advice is the node's, the same at every rank, so `compile_tp` compiles
 it at each rank in turn (`at_rank`) and keeps of each only what the composition reads: its workload's digest, its rows and, per
@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from verity_vllm.program import tp_binding as TB
-from verity_vllm.program.workload import TpWorkload
+from verity_vllm.program.tp_workload import TpWorkload
 
 from .phi import Phi
 from .steps import Registered, compile_steps
