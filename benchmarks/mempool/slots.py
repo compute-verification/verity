@@ -389,11 +389,12 @@ def main() -> None:
         key = f"{kind}{'' if caching else ' (no caching)'}"
         report["slots"][key] = row
         print(key, row)
-        ok = res["vectors"] and all(v == 0 for k, v in res.items() if k not in ("vectors",))
-        if not ok:
-            raise SystemExit(f"{key}: the slot leaves the reference: {dict(res)}")
+        if not res["vectors"] or any(v for k, v in res.items() if k != "vectors"):
+            report.setdefault("failures", []).append(key)
     if a.json:
         a.json.write_text(json.dumps(report, indent=1))
+    if report.get("failures"):
+        raise SystemExit(f"slots that leave the reference: {report['failures']}")
 
 
 if __name__ == "__main__":
