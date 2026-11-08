@@ -90,7 +90,7 @@ F1_STATEMENTS = (("rec-open/l64-h8", 436), ("rec-open/l16-h7", 212), ("rec-open/
 #: the gate's level statements and the recorded level 3 were staged before a level registered its opened rows and their
 #: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup until the gate is
 #: re-recorded and the recorded level restaged
-UNREGISTERED_ROWS = pytest.mark.skip(reason="PRF-421: the reads file names no row port (staged before levels registered "
+UNREGISTERED_ROWS = pytest.mark.skip(reason="the reads file names no row port (staged before levels registered "
                                      "row and aux), so Registered.checkComplete refuses it before the checks this test reads")
 _STALE = ("L0", "L1", "L2", "L3")
 #: a standalone program of one call, to evaluate the inner unit's Definition with the IR oracle

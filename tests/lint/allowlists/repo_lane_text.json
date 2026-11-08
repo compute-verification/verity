@@ -3,7 +3,6 @@
   "entries": [
     {"file": "benchmarks/datacenter/datacenter/examples.py", "count": 1},
     {"file": "benchmarks/prove_path/e2e_chains/README.md", "count": 8},
-    {"file": "examples/README.md", "count": 1},
     {"file": "infra/control/agent_watch.sh", "count": 1},
     {"file": "infra/control/top_watch.py", "count": 5},
     {"file": "infra/cursor/launch_coordinator.py", "count": 2},
@@ -14,7 +13,6 @@
     {"file": "verity/core/claims/__init__.py", "count": 1},
     {"file": "verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "count": 1},
     {"file": "verity/core/protocols/pous/schemes/p2.py", "count": 2},
-    {"file": "infra/cursor/README.md", "count": 1},
-    {"file": "verity/core/primitives/evaluate/lakefile.toml", "count": 1}
+    {"file": "infra/cursor/README.md", "count": 1}
   ]
 }
