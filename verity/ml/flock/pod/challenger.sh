@@ -24,7 +24,7 @@
 CHALLENGER_REPO=${CHALLENGER_REPO:-$PWD}
 CHALLENGER_PY=${CHALLENGER_PY:-python3}
 CHALLENGER_WORK=${CHALLENGER_WORK:-$(mktemp -d)}
-CHALLENGER_SP=$CHALLENGER_REPO/verity/core/service/sampled_proofs
+CHALLENGER_SP=$CHALLENGER_REPO/verity/core/service/spot
 
 challenger_build() {
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
@@ -84,7 +84,7 @@ _challenger_trees() {
   "$CHALLENGER_PY" - "$CHALLENGER_SP/.lake/build/bin/sampled-proofs-difftest" "$@" <<'EOF'
 import copy, json, subprocess, sys
 from pathlib import Path
-from verity.core.protocols.sampled_proofs import challenger as C, remote as R
+from verity.core.protocols.spot import challenger as C, remote as R
 
 difftest, mode, ch, *rest = sys.argv[1:]
 log = R.log_lines(Path(ch) / R.RELEASES)

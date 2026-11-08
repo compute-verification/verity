@@ -737,7 +737,7 @@ def statement(sh: Shape, n: int):
     import time
     from types import SimpleNamespace
 
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     from . import circuit as FC
 
@@ -759,7 +759,7 @@ def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]
     """The prover's registered values of the row ports, from `session_rows`' instances: each port as ``rec-sparse-<port>``, row r
     rep r's, but ``tau``, the session's one row, and ``claim``, ``rec-claim`` (`rec_outer.CLAIM_VALUE`, which the registered
     opening reads too). ``salts``: per port, its rows' salts (default fresh)."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
     from .rec_outer import CLAIM_VALUE
 
     sh = _shape(sh)
