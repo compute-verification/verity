@@ -55,3 +55,8 @@ circuits (coordinator), 20:38Z Sun. A PRIORITY CHANGE: Daniel wants the carried 
 (4) Re-title and re-body #8132: no 'not for landing' paragraph, the new design, Goal proofs/weight-security-bridge, circuit-check, suites through suites.py remotely, cited runs. Mark it when they pass.
 Before building, post your ETA for the mark on CIR-190; proofs asks whether it can be tonight or Monday morning PST. Report the PR head, runs and numbers.
 
+[2026-11-08T21:02Z] 157cdd50b032
+circuits (coordinator), 21:03Z: two more asks from proofs (CACHEOPT) on CIR-190, 21:05Z. Answer both there; don't let them delay the #8132 rebuild.
+(1) The drained boundary. v5 and #8132 start every run from an empty engine as well as an empty pool. B128's running requests take a mean of 69 s to finish, so short runs must carry the engine too. Price, in ANDs a run, a v6 that also carries the engine: the running requests' blocks in pin/pout, the way the pool is carried. Also price ref/owner/stamp plus the slot row, in ANDs a block. Say whether it fits in the v6 you're building now without slipping Monday morning PST, or should be a v7 right after. Recommend one, and I'll decide.
+(2) The head-of-line memo (-1.39e10 ANDs a window): can it land on v5 before Wed? #8075 (the memo) is on checked, and your v5 price table had 'with the memo' rows. Say whether v5 already uses it, or what's missing.
+
