@@ -135,12 +135,17 @@ def test_a_chained_window_hits_the_carried_pool(synth):
 
 def test_a_forged_root_or_a_wrong_opening_is_refused(synth):
     """The second window's input root forged (the empty pool's, its output root, zero, or one bit off) with the true
-    row under it is refused by the open bit alone (0x5). The row one bit off at each field's first and last bit is
-    refused by the open bit under the true root, and under its own root by the stream's check or the close: the opened
-    row is the memory check's initial values, so a different one disagrees with the stream's witness, all but a bit of
-    no first copy's mlast, which nothing reads and a valid close leaves 0. The window's witness from the empty pool
-    under the carried root, and the carried window's witness under the empty pool's root and row, are refused by the
-    stream's check."""
+    row under it is refused by the open bit alone (0x5), and the row one bit off at each field's first, middle and last
+    bit under the true root by the open bit.
+
+    Under its own root a row is another pool, which the unit runs the window from: the true pool's witness is refused
+    wherever the window's run from that pool differs from it (by the stream's check or the close), and accepted exactly
+    where it doesn't, which is where the window reads no bit that differs. Here that is 4 of the 24 bits: the queue's
+    tail's 3, which the window's allocations drain before any block returns to it, and one of the mlast of a block that
+    is no key's first copy, which a valid close leaves 0. The 18 of those pools the reference compiles the window from
+    each have their own run accepted. So a window's pool is the root's opening and nothing else; binding the root to the
+    previous window's is the chain's. The window's witness from the empty pool under the carried root, and the carried
+    window's witness under the empty pool's root and row, are refused by the stream's check."""
     x = synth
     S, honest = x.S, x.a2
     forged = [RG.digest_bits(V5.genesis(S)), honest["pout"], [0] * 512]
@@ -148,25 +153,25 @@ def test_a_forged_root_or_a_wrong_opening_is_refused(synth):
     got = V5.run_pool(x.st, [{**honest, "pin": p} for p in forged])
     assert got == [V5.POOL_ACCEPT & ~OPEN] * len(forged)
 
-    ofs = _offsets(V5.row_fields(S))
-    heads = {b for b in range(1, S.NB) if x.w1.next.key[b - 1] != V5.NOKEY and not x.w1.next.cprev[b - 1]}
-    flips, unread = [], set()
-    for name, (at, n, w) in ofs.items():
-        for j in (at, at + n * w - 1):
-            flips.append(j)
-            if name == "mlast" and (j - at) // w + 1 not in heads:
-                unread.add(j)
+    flips = sorted({j for at, n, w in _offsets(V5.row_fields(S)).values() for j in (at, at + n * w // 2, at + n * w - 1)})
     wrong = [_flip(honest, "prow", j) for j in flips]
     own = [{**a, "pin": _root_bits(a["prow"])} for a in wrong]
+    runs = [(V5.reference(S, x.sl, V5.decode_row(S, a["prow"])), V5.arguments(S, x.sl, V5.decode_row(S, a["prow"])))
+            for a in wrong]
+    same = [all(r[k] == honest[k] for k in ("calls", "chk", "nrow")) for _ref, r in runs]
+    theirs = [(r, V5.POOL_ACCEPT if ref.next is not None else V5.POOL_ACCEPT & ~CLOSE) for ref, r in runs if ref]
     empty = V5.arguments(S, x.sl)
     other = [{**honest, "chk": empty["chk"], "calls": empty["calls"]},
              {**honest, "pin": empty["pin"], "prow": empty["prow"]}]
-    got = V5.run_pool(x.st, wrong + own + other)
-    under_true, under_own, under_other = got[:len(flips)], got[len(flips):2 * len(flips)], got[2 * len(flips):]
-    assert all(g & OPEN == 0 for g in under_true), [hex(g) for g in under_true]
-    for j, g in zip(flips, under_own):
-        assert g == V5.POOL_ACCEPT if j in unread else (g & OPEN and g & (POOL | CLOSE) != POOL | CLOSE), (j, hex(g))
-    assert unread and all(g & POOL == 0 and g & OPEN for g in under_other), [hex(g) for g in under_other]
+    got = V5.run_pool(x.st, wrong + own + other + [r for r, _w in theirs])
+    n = len(flips)
+    under_true, under_own, under_other = got[:n], got[n:2 * n], got[2 * n:2 * n + 2]
+    assert n == 24 and all(g & OPEN == 0 for g in under_true), [hex(g) for g in under_true]
+    assert sum(same) == 4
+    for j, g, s in zip(flips, under_own, same):
+        assert g == V5.POOL_ACCEPT if s else (g != V5.POOL_ACCEPT and g & OPEN), (j, hex(g))
+    assert all(g & POOL == 0 and g & OPEN for g in under_other), [hex(g) for g in under_other]
+    assert got[2 * n + 2:] == [w for _r, w in theirs] == [V5.POOL_ACCEPT] * 18
 
 
 def test_the_m_run_lists_every_carried_key(synth):
@@ -269,8 +274,13 @@ def test_random_chains(request, which):
 
 
 def test_size(synth, asynth):
-    """What each unit costs at the demos' classes: the compile slice is CompileWindow and the calls row's check, the pool
-    window CompileSlice_v4's stream, bus and keys with the two rows' digests, their keys' prints and the open and close
-    steps (`compile_slice_v5.size`)."""
-    assert V5.size(**synth.st) == {}
-    assert V5.size(**asynth.st) == {}
+    """What each unit costs at the demos' classes (`compile_slice_v5.size`). The compile slice is CompileWindow and the
+    calls row's check, 12,121 and 12,974 ANDs. The pool window is CompileSlice_v4's stream, bus and keys (4,117,521 at
+    the synchronous demo's class with NM = 8) with 8 more M entries, the two rows' digests (four compressions each at
+    2,641 bits), their ten keys' prints, five open and five close steps and 16 copy steps."""
+    common = {"adv_bits": 8, "ing_bits": 27, "srv_bits": 160, "res_bits": 208, "pin_bits": 512, "pout_bits": 512,
+              "coin_bits": 384, "prow_bits": 2641, "nrow_bits": 2641, "compile_free_bits": 8, "pool_free_bits": 0}
+    assert V5.size(**synth.st) == {**common, "compile_ands": 12121, "pool_ands": 4800587, "req_bits": 208,
+                                   "cout_bits": 160, "calls_bits": 1984, "chk_bits": 37664}
+    assert V5.size(**asynth.st) == {**common, "compile_ands": 12974, "pool_ands": 3918271, "req_bits": 224,
+                                    "cout_bits": 176, "calls_bits": 2208, "chk_bits": 28064}

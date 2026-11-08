@@ -404,6 +404,14 @@ def encode_row(S, row: PoolRow) -> list[int]:
     return out + [b for k in row.key for b in RG.digest_bits(k)]
 
 
+def decode_row(S, bits: Sequence[int]) -> PoolRow:
+    """The row whose bits (`encode_row`) are ``bits``."""
+    f = RC._split(list(bits), row_fields(S))
+    val = [CS._int(e) for e in f["head"] + f["tail"]]
+    return PoolRow(*val, *(tuple(CS._int(e) for e in f[k]) for k in LINKS + ("mlast",)),
+                   tuple(RG.digest_bytes(e) for e in f["key"]))
+
+
 def root(S, row: PoolRow) -> bytes:
     """The row's root: its unsalted `Sha512RowSeg_v1` digest."""
     return RL.sha512_row_seg_digest(*RL.bit_row((encode_row(S, row), 1)))
@@ -422,12 +430,14 @@ def _heads(S, row: PoolRow, delta: int) -> dict[int, int]:
 
 def opened(S, row: PoolRow, sl: CS.Slice, delta: int) -> V3S.Stream:
     """CacheStep_v3's stream from the pool `row`, its keys printed under δ and RK's the window's (`PoolWindow_v1`'s
-    opening)."""
+    opening). A link past the blocks reads as a block of value 0, outside the touched list, which `reference` refuses."""
     S3 = V4.shape(S).S3
     rk, m = V4.rk_keys(S, sl, delta), _heads(S, row, delta)
     prints = [BK.key_print(k, delta) for k in row.key]
 
     def initial(tag: int, addr: int) -> int:
+        if tag in (T3["B"], T3["K"]) and not 1 <= addr < S.NB:
+            return 0
         if tag == T3["B"]:
             return V3S.bput(S3, {f: getattr(row, f)[addr - 1] for f in LINKS})
         if tag == T3["K"]:
