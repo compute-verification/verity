@@ -15,7 +15,6 @@ lane phase's hiding step in the F256 ladder (verity/ml/flock/cuda/ligerito_zk.cu
 section of the proof stream (fc_write_zk).
 """
 import pathlib
-import shutil
 
 here = pathlib.Path(__file__).resolve().parent
 src = (here / "cuda" / "prove_chunk.cuh").read_text()
@@ -67,9 +66,9 @@ body = put(body, "    std::vector<MHash> l0_cap;\n    {\n        int k_code = (l
            "    std::vector<MHash> l0_cap;\n    F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;\n    if (N->zk_on) {\n"
            "        CKI(fc_commit_l0_zk(P, N, log_n, df, &d_zk_pads, &d_zk_extra, &d_cw0, &d_tree0, &l0_bl, &l0_ni, l0_cap));\n"
            "    } else {\n        int k_code = (log_n - P->initial_k) + P->log_inv_rates[0];")
-body = put(body, "        CK(cudaMemcpy(lc_zpart.data(), cZ, 64 * sizeof(F128), cudaMemcpyDeviceToHost));\n",
-           "        CK(cudaMemcpy(lc_zpart.data(), cZ, 64 * sizeof(F128), cudaMemcpyDeviceToHost));\n"
-           "        if (N->zk_on) CK(cudaMemcpy(fc_zk_comb.data(), cC, 64 * sizeof(F128), cudaMemcpyDeviceToHost));\n")
+body = put(body, "        CK(hc_get(lc_zpart.data(), cZ, 64 * sizeof(F128)));\n",
+           "        CK(hc_get(lc_zpart.data(), cZ, 64 * sizeof(F128)));\n"
+           "        if (N->zk_on) CK(hc_get(fc_zk_comb.data(), cC, 64 * sizeof(F128)));\n")
 body = put(body, "    LigF256Proof lig;\n",
            "    LigF256Proof lig;\n    LigZk fc_zk;\n"
            "    if (N->zk_on) { fc_zk.rep = N->zk_rep; fc_zk.t_pad = N->zk_t_pad; fc_zk.tamper = N->zk_tamper; fc_zk.lanes = 1 << P->initial_k;\n"
