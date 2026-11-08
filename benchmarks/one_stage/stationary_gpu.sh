@@ -7,6 +7,7 @@
 # Run from the verity tree on a GPU node:
 #   bash benchmarks/one_stage/stationary_gpu.sh ST_UNITS="st-w13:M=1 st-w13:M=8" ST_GPU=0
 # env: ST_UNITS (stage.py's type specs, each with its own counts as SPEC@C1,C2)  ST_COUNTS=half,full  ST_RUNS=2  ST_ARMS=dev
+#      ST_ARMS1 (the arms at one prover; unset: ST_ARMS', e.g. dev,plaindev)  ST_VERIFY_AHEAD=N (FC_VERIFY_AHEAD=N at K > 1)
 #      ST_GPU=0 (the device)  ST_WORK=/dev/shm (the staged statements' scratch)  ST_EXEC_WORK=/workspace/tmp (the builds'
 #      and the venv's, on a mount that executes)
 #      ST_PROVE_CPUS=0-31 (the prover's and the build's cores; the stagers take the rest)
@@ -100,11 +101,14 @@ if [ "${ST_MPS:-0}" = 1 ] && [ $GPU = 1 ]; then
 fi
 CPUFLAG=(); [ $GPU = 1 ] || CPUFLAG=(--cpu)
 
-# zk P [ARGS]: plan point P's warm process (zk_cost.py prove), its ZKCOST lines into job.log
+# zk P K [ARGS]: plan point P's warm process (zk_cost.py prove) by K provers, its ZKCOST lines into job.log: ST_ARMS1's arms
+# at one prover, ST_ARMS' and FC_VERIFY_AHEAD=ST_VERIFY_AHEAD at more
 zk() {
-  local p=$1; shift
-  taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
-    --runs "${ST_RUNS:-2}" --points "$p" --out "$Z" "${CPUFLAG[@]}" "$@" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST | tee -a "$O/job.log"
+  local p=$1 k=$2 arms=${ST_ARMS1:-${ST_ARMS:-dev}} ahead=; shift 2
+  [ "$k" = 1 ] || { arms=${ST_ARMS:-dev}; ahead=${ST_VERIFY_AHEAD:-}; }
+  FC_VERIFY_AHEAD=$ahead taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "$arms" --cold 0 \
+    --warm 1 --runs "${ST_RUNS:-2}" --points "$p" --out "$Z" --provers "$k" "${CPUFLAG[@]}" "$@" 2>&1 | tee -a "$O/zk.log" \
+    | grep ZKCOST | tee -a "$O/job.log"
   return "${PIPESTATUS[0]}"
 }
 
@@ -117,7 +121,7 @@ prove() {
   [ "${ST_CACHE:-0}" = only ] && ons=(--stmt-cache)
   [ "${ST_CACHE:-0}" = both ] && ons=("" --stmt-cache)
   if [ -z "${ST_OVERLAP:-}" ]; then
-    for on in "${ons[@]}"; do zk "$p" $on || rcs=1; done
+    for on in "${ons[@]}"; do zk "$p" 1 $on || rcs=1; done
     return $rcs
   fi
   read -r c full < <("$PY" -c 'import json, sys; pl = json.load(open(sys.argv[1])); q = pl[int(sys.argv[2])]
@@ -126,7 +130,7 @@ print(q["c"], max(x["c"] for x in pl if x["tag"] == q["tag"]))' "$Z/plan.json" "
     [ $((c * k)) = "$full" ] || [ $((2 * c * k)) = "$full" ] || continue
     for on in "${ons[@]}"; do
       if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, $k at once $on: past the deadline"; continue; fi
-      zk "$p" --provers "$k" $on || rcs=1
+      zk "$p" "$k" $on || rcs=1
     done
   done
   return $rcs
@@ -139,7 +143,7 @@ cache() {
   local rcs=0 p k
   while read -r p k; do
     if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, cache, $k at once: past the deadline"; continue; fi
-    zk "$p" --provers "$k" --stmt-cache || rcs=1
+    zk "$p" "$k" --stmt-cache || rcs=1
   done < <("$PY" - "$Z/records/prove.jsonl" "$Z/plan.json" "$@" <<'EOF2'
 import json, sys
 plan, pts = json.load(open(sys.argv[2])), [int(x) for x in sys.argv[3:]]
@@ -171,10 +175,10 @@ while :; do
     [ -e "$sd/staged" ] || { pending=1; continue; }
     DONE[$t]=1
     if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "$u: staged after the deadline, not proved"; continue; fi
-    pts=$("$PY" - "$Z" "$u" "$t" "$sd" "${ST_ARMS:-dev}" 2>> "$O/job.log" <<'EOF'
+    pts=$("$PY" - "$Z" "$u" "$t" "$sd" "${ST_ARMS:-dev},${ST_ARMS1:-}" 2>> "$O/job.log" <<'EOF'
 import json, sys
 from pathlib import Path
-z, u, t, sd, arms = Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4]), sys.argv[5].split(",")
+z, u, t, sd, arms = Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4]), list(dict.fromkeys(filter(None, sys.argv[5].split(","))))
 plan, pts = json.loads((z / "plan.json").read_text()), []
 for st_file in sorted(sd.glob("c*/stage/stage.json"), key=lambda f: -json.loads(f.read_text())["n"]):
     st, d = json.loads(st_file.read_text()), st_file.parent.parent
