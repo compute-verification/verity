@@ -93,6 +93,7 @@ theorem step_event {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
   dsimp only at h
   split at h
   · rename_i record hrec
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨⟨proofs, spec, tabs, rest, hf, hst, hv⟩, hk, hs, hp⟩ := verdictOf_event (push_ok h hall)
     rw [hst] at hf
     exact ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv, hk, hs, hp⟩
@@ -125,6 +126,7 @@ theorem run_event {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.R
     obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨circuitB, hc, h⟩ := ebind_ok h
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨rd, hrd, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
     have e : r' = r := by
