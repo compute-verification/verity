@@ -40,7 +40,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
@@ -1052,7 +1052,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_law({LAW!r}), None)
