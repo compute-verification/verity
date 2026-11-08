@@ -23,7 +23,6 @@ verity_vllm/ops/pod_norm_tap.sh
 verity_vllm/ops/pod_router_tap.sh
 verity_vllm/ops/stoch_negatives.sh
 **/*_negatives.sh
-**/*_negative_*.sh
 
 # --- pod runtime and acquisition gates
 verity_vllm/ops/pod_bootstrap.sh
