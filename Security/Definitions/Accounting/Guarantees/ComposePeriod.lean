@@ -192,7 +192,7 @@ and a period picked from `N` windows after the fact would pay `ln C(N, n)` in pl
 priced at one prover budget `T` (`BindingOfECR`): `|L|·2^-88` a window at `T = 2^80` and `|L|·2^-64` at `2^128`, `|L|`
 from `2^20` to `2^30`. At `n = 82,403` (`2^16.3`) the binding term is `2^-51.7` to `2^-41.7` at `T = 2^80`, so
 `δ_s + n·δ_bind` is `2^-40.0` to `2^-39.6`; at `T = 2^128` it is `2^-27.7` to `2^-17.7`, set by binding, not by `δ_s`
-(`2^-30.9` to `2^-20.9` at 8,513). `δ_ks` has no number (`WindowEps`'s `max_c κ_c + coll` is unstated), and
+(`2^-30.9` to `2^-20.9` at 8,513). `δ_ks` has no number (`WindowDelta`'s `max_c κ_c + coll` is unstated), and
 `n·δ_ks` stays under `2^-40` at 82,403 windows only if `δ_ks ≤ 2^-56.3` a window.
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of
