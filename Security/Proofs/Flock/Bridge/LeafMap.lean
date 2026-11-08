@@ -207,7 +207,7 @@ theorem commitDepL_v2 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Opt
 def LayoutIsL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (L : LeafMap)
     (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
   RowsV2 c ∧ cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf L.d ∧ cd.salt = saltOf ∧
-    cd.π = pathOfL C rows L ∧ cd.own = portsOfL c L roots
+    cd.π = pathOfL C rows L ∧ cd.own = portsOfL c L roots ∧ cd.ownAt = fun _ _ => cd.own
 
 theorem layoutIsL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (cd : SamplingDeploy.Code) :

@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity.core.protocols.spot.one_stage`) end to end: serving's committed values through registration, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
@@ -10,7 +10,7 @@ Figure 1 prices); and the challenger's live coins, its signed log and the Lean v
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
 `--firewall` on `a5.py`, its variants and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
 certifier, where a run has one (`a5_warden.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
-input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README.md`.
+input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`).
@@ -172,6 +172,17 @@ input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README
   `ZK_SERVER=1` stopped by the ZK server as well). `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
   source, so M3's reserved window doesn't spend time on the build.
+- `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
+  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit drawn) is proved by
+  `ProofServer(provers=K)` at each K of `--provers`, K streaming provers on the one device. Every prover finishes its
+  warm sessions before any timed one starts. Each K's row (`rate.json`) gives the statements a second over the steady
+  window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
+  verdict, `verify_ahead` sessions later. It also gives the device's busy share (nvidia-smi's utilization over that window) and memory
+  peak, each prover's and verifier's peak RSS, the provers' CPU seconds a statement, the median phase times (the front is
+  `e2e_s − prove_total_s`), and the cgroup's throttling and load. With `--lean`, the last sessions at
+  K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
+  verdict is the `NO_PROGRAM` refusal, as in `served_units`. A row with a refused session, a server process that exited
+  nonzero, or a prover out of device memory is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
@@ -207,7 +218,9 @@ input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
-  a gap with the reason), and per proof-block Definition its count in the prefill step and the decode steps, output bits
+  a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
+  width of least leakage-weighted proving cost, `width_pick`),
+  and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
   `benchmarks/sampling_plan/glm53.py`).

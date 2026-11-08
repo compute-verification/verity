@@ -56,7 +56,7 @@ def _blocks(r: tuple[int, int]) -> list[tuple[int, str]]:
     return L.check_blocks(lay.params, lay.prefix, j0, _rows(j0, n), L.payloads(lay, _JOB["src"], _JOB["read"], j0, n))
 
 
-def check_decode(args, lay: L.StoreLayout, src: L.Weights) -> dict:
+def check_decode(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights) -> dict:
     if args.encoded is not None:
         r = lay.blocks(args.layer)
         first, done, of = r.start, len(r), len(r)
@@ -94,7 +94,7 @@ def sample_blocks(tensors: list[L.Tensor], per_tensor: int, seed: int) -> list[i
     return sorted(out)
 
 
-def check_sampled(args, lay: L.StoreLayout, src: L.Weights) -> dict:
+def check_sampled(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights) -> dict:
     """`--sample` blocks of every tensor of the store (`sample_blocks`) against P2's reference, as `check_decode`."""
     tensors = list(lay.tensors)
     blocks = sample_blocks(tensors, args.sample, args.seed)
@@ -124,7 +124,7 @@ def check_gemm(out: Path) -> dict:
     return res
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--layout", type=Path, required=True)
     ap.add_argument("--weights", type=Path, required=True)

@@ -93,6 +93,7 @@ def _capture(tmp: Path, monkeypatch, fused_op, norm_out_given: bool):
         out = torch.empty_like(x) if norm_out_given else None
         with capture.Recorder():
             fused_op(x, rs, g, EPS, W, True, True, 42, 1, out)
+        capture._drain()
         sd = tmp / f"rank{r}" / f"step{STEP}"
         sd.mkdir(parents=True, exist_ok=True)
         ops = "".join(json.dumps(e, sort_keys=True, separators=(",", ":")) + "\n" for e in S.events).encode()

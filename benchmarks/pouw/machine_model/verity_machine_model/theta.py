@@ -24,8 +24,8 @@ value, and the sheet's where no run has one, which the result lists as filled).
   writers left out (`measured only`).
 - `folds`: for each honest profile `honest` lists (duo's and LI's), its lane instructions a committed word, r_H,
   against the fold's own, r_min, and the slack r_H − r_min in tensor MAC-times a MAC over the cheapest adding route's
-  exchange rate: the ε that slack would buy if ε were slack over exchange. A measured profile also gives γ, its
-  SMSP-cycles a MMA over the lone INT8 MMA's at the measured rate.
+  exchange rate: the ε that slack would buy if ε were slack over exchange. A measured profile also gives its honest
+  overhead γ, its SMSP-cycles a MMA over the lone INT8 MMA's at the measured rate, less 1.
 - `units`: every arithmetic or reduction unit a card has (`UNITS`), each with its verdict: a priced rate, an adding
   route d reads, bounded outside the model (its most work a SM-clock over the rate it stands in for, summed by `free`),
   open (with the run that would settle it), none, a clock or bandwidth scale, or absent.
@@ -497,7 +497,7 @@ class Fold:
 
     @property
     def gamma(self) -> float | None:
-        return None if self.measured is None else self.measured / self.lone
+        return None if self.measured is None else self.measured / self.lone - 1
 
     def eps(self, reading: str) -> float:
         """Slack over exchange: 0 when Strassen frees no tensor time to trade for."""

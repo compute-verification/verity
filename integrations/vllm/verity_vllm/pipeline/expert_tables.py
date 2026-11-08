@@ -13,7 +13,10 @@ A stack's tables are its e4m3 weight's blocks of ``blocks[proj]`` rows (n, a pow
 the partition's read templates read them: a block of rows of ``H = n K / 2`` words, a scale row of ``H = 2 K / G``.  Without a Build,
 a capture's served parameters name the weights (`served_fields`) and each composed weight is held to its served SHA-512, so the
 registered rows are the served bytes; with one, that the registered rows are the checkpoint's is the committer's own check, as for
-its weights (`window_weights`)."""
+its weights (`window_weights`).
+
+Outside the integration, this module is the per-expert cut's tables: with the registration, it exports the table layout
+(`table_param`, `table_words`), the record (`ExpertTables`) and a window committer's registration (`committer`)."""
 from __future__ import annotations
 
 import hashlib
@@ -30,12 +33,12 @@ import numpy as np
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.expert_rows import table_param, table_words
+from verity_vllm.pipeline.expert_rows import committer, table_param, table_words
 from verity_vllm.records import expert_tables as XT
-from verity_vllm.records.expert_tables import SCHEMA
+from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
 
-__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "entries", "key_of", "mint_key", "nonces", "program", "register", "served_fields",
-           "tables_of"]
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "entries", "key_of", "mint_key", "nonces", "program",
+           "register", "served_fields", "table_param", "table_words", "tables_of"]
 
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
@@ -135,7 +138,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
             nonce: Mapping[str, int]) -> dict[str, dict[str, Any]]:
     """The registered entries of one field's ``tables`` (`tables_of`), its words ``words`` of ``shape`` as composed for the rank,
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
     E, N, K = (int(x) for x in shape)

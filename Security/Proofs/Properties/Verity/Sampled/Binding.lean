@@ -70,7 +70,7 @@ collision, or the forger outputs a forgery of the device's LMS signature.
 namespace Verity.Sampled.Binding
 
 open Lean (Json)
-open Properties.Challenger SampledProofs.Challenger
+open Properties.Challenger Spot.Challenger
 open Verity.Sampled.Trees (ok_bind)
 open scoped ENNReal
 
@@ -163,7 +163,7 @@ under parameters naming a challenger and a window, what its coins are read under
 evidence carries. -/
 def record? (n : Core.Composition.Named) (x : Core.Composition.Case) : Option (Draws × Json) :=
   match Core.canonicalJson n.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson,
-      SampledProofs.OneStage.commitmentOf x.commitment, VStar.Recursive.Sampled.evidenceOf x.evidence with
+      Spot.OneStage.commitmentOf x.commitment, VStar.Recursive.Sampled.evidenceOf x.evidence with
   | .ok (.inl p), .ok c, .ok (.inl e) => (oneStageZkSource p c).map fun d => (d, e.base.coins)
   | _, _, _ => none
 
@@ -244,7 +244,7 @@ theorem find_eq {β : Type} {q : β → Bool} : ∀ {l : List β} {a : β}, a �
       · exact h
 
 /-- The challenger's key is the key of the samples v2's coins are read under. -/
-theorem key_of_source {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment} {d : Draws}
+theorem key_of_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws}
     (h : oneStageZkSource p c = some d) : p.base.challenger.map (·.1) = some d.key := by
   unfold oneStageZkSource oneStageSource at h
   rcases hch : p.base.challenger with _ | ⟨key, label⟩ <;> rcases hw : p.base.verifier.windowRoot with _ | w <;>
@@ -258,13 +258,13 @@ and a window its parameters name (`oneStageZkSource`); its record is one of the 
 the parameters' challenger key (`keyOf`), v2's coins are what `drawCoins` reads from it, and v2 read the challenger's
 coin trees from it and held its sessions' records to them (`treesOf`, `treesHeld`). -/
 theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : Sent}
-    {p : SampledProofs.OneStageZk.Params} (hp : ParamsAt s.params p) (hs : SameAccepts k s)
+    {p : Spot.OneStageZk.Params} (hp : ParamsAt s.params p) (hs : SameAccepts k s)
     (ha : ComponentAccepts k .sampled s) :
     ∃ c e d ξ, caseOf s = .ok (p, c, e) ∧ oneStageZkSource p c = some d ∧ (d, e.base.coins) ∈ records s ∧
-      keyOf s.params = some d.key ∧ SampledProofs.OneStageZk.coinsOf p c e = .ok ξ ∧
+      keyOf s.params = some d.key ∧ Spot.OneStageZk.coinsOf p c e = .ok ξ ∧
       drawCoins d.key d.window d.label d.after e.base.coins = .ok ξ ∧
-      ∃ ts, SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
-        SampledProofs.OneStageZk.treesHeld p.own ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok () := by
+      ∃ ts, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
+        Spot.OneStageZk.treesHeld p.own ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok () := by
   obtain ⟨P, hP, ps, b, ev, ⟨hps, -, hev⟩, x, hx, hx1, hacc⟩ := ha
   obtain rfl : P = VStar.Recursive.Sampled.protocol := Option.some.inj (hP.symm.trans hk)
   obtain ⟨ps', b', ev', ⟨hps', -, hev'⟩, -, -, ⟨⟨⟨hpi, hei, -, -⟩, -, -⟩, -⟩, -⟩ := hs
@@ -295,12 +295,12 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
   rcases e' with e | e
   swap
   · cases hch
-  have hc' : SampledProofs.OneStage.commitmentOf x.2.2.commitment = .ok c := hc
+  have hc' : Spot.OneStage.commitmentOf x.2.2.commitment = .ok c := hc
   have he' : VStar.Recursive.Sampled.evidenceOf x.2.2.evidence = .ok (Sum.inl e) := he
-  have hch' : SampledProofs.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := hch
-  cases hξ : SampledProofs.OneStageZk.coinsOf p c e with
+  have hch' : Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := hch
+  cases hξ : Spot.OneStageZk.coinsOf p c e with
   | error r =>
-    unfold SampledProofs.OneStageZk.checkBlobs at hch'
+    unfold Spot.OneStageZk.checkBlobs at hch'
     rw [hξ] at hch'
     cases hch'
   | ok ξ =>
@@ -337,8 +337,8 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
 /-! ## An accepted read is a run's log -/
 
 /-- v2's case names v2's parameters in the parameters sent. -/
-theorem caseOf_params {s : Sent} {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStageZk.Evidence} (h : caseOf s = .ok (p, c, e)) : ParamsAt s.params p := by
+theorem caseOf_params {s : Sent} {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} (h : caseOf s = .ok (p, c, e)) : ParamsAt s.params p := by
   unfold caseOf at h
   cases hps : (_root_.Core.canonicalJson s.params >>= Core.Composition.decodeParams) with
   | error _ => rw [hps] at h; cases h
@@ -364,7 +364,7 @@ theorem caseOf_params {s : Sent} {p : SampledProofs.OneStageZk.Params} {c : Samp
             rw [hnp, ok_bind] at h
             rcases q with p' | q
             · dsimp only at h
-              cases hc : SampledProofs.OneStage.commitmentOf y.commitment with
+              cases hc : Spot.OneStage.commitmentOf y.commitment with
               | error _ => rw [hc] at h; cases h
               | ok c' =>
                 rw [hc, ok_bind] at h
@@ -387,8 +387,8 @@ theorem mapM_map_str {f : Json → Flock.V String} (hf : ∀ x, f (.str x) = .ok
     rfl
 
 /-- v2's evidence's log, read as lines (`Verity.Sampled.linesOf`), is the lines the session's log holds. -/
-theorem linesOf_eq {e : SampledProofs.OneStageZk.Evidence} {ls : Array Json} {l : List String}
-    (h : _root_.SampledProofs.getD (_root_.SampledProofs.getD e.base.coins "session") "log" = .arr ls)
+theorem linesOf_eq {e : Spot.OneStageZk.Evidence} {ls : Array Json} {l : List String}
+    (h : _root_.Spot.getD (_root_.Spot.getD e.base.coins "session") "log" = .arr ls)
     (hl : ls.toList = l.map Json.str) : Verity.Sampled.linesOf e = .ok l := by
   unfold Verity.Sampled.linesOf
   rw [h]
@@ -409,12 +409,12 @@ theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : 
 
 /-- **v2's coin trees are the log's**: where v2 reads the challenger's trees from its evidence (`treesOf`) and the
 session's log is the lines `l`, they are what `coinTreesOf` reads from `l`. -/
-theorem trees_of {p : SampledProofs.OneStageZk.Params} {e : SampledProofs.OneStageZk.Evidence}
+theorem trees_of {p : Spot.OneStageZk.Params} {e : Spot.OneStageZk.Evidence}
     {ts : Array LoggedTree} {ls : Array Json} {l : List String}
-    (h : SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts)
-    (hlog : _root_.SampledProofs.getD (_root_.SampledProofs.getD e.base.coins "session") "log" = .arr ls)
+    (h : Spot.OneStageZk.treesOf p.base e.base = .ok ts)
+    (hlog : _root_.Spot.getD (_root_.Spot.getD e.base.coins "session") "log" = .arr ls)
     (hls : ls.toList = l.map Json.str) : coinTreesOf l = .ok ts := by
-  unfold SampledProofs.OneStageZk.treesOf at h
+  unfold Spot.OneStageZk.treesOf at h
   split at h
   case h_2 => cases h
   have ht := mapError_ok h
@@ -457,9 +457,9 @@ theorem mapM_mem {β γ : Type} {f : β → Option γ} :
 
 /-- **The records v2's check read pass the trees it held them to**: each record `recordsOn` reads from the blobs sent
 is one `sessionTreeReason` accepts, at some tables, against trees `treesHeld` accepts the evidence's sessions at. -/
-theorem records_of {s : Sent} {p : SampledProofs.OneStageZk.Own} {e : SampledProofs.OneStageZk.Evidence}
+theorem records_of {s : Sent} {p : Spot.OneStageZk.Own} {e : Spot.OneStageZk.Evidence}
     {ts : Array LoggedTree} {recs : List Json}
-    (h : SampledProofs.OneStageZk.treesHeld p ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok ())
+    (h : Spot.OneStageZk.treesHeld p ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok ())
     (hr : Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs) :
     ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none := by
   intro rec hrec
@@ -480,7 +480,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
     (hs : SameAccepts k s) (ha : ComponentAccepts k .sampled s) {l : List Release}
     (hl : Verity.Sampled.coinsRead s = some l) :
     (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ Break dev x.1.key x.1.label x.2) ∨
-      ∃ (d : Draws) (e : SampledProofs.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
+      ∃ (d : Draws) (e : Spot.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
         OpensOn dev d.key.pub d.window r.id ∧
         (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
@@ -495,7 +495,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
     | none => simp [hcase, hch, Except.toOption] at hl
     | some kl =>
       obtain ⟨kk, label⟩ := kl
-      cases hξ : SampledProofs.OneStageZk.coinsOf p c e with
+      cases hξ : Spot.OneStageZk.coinsOf p c e with
       | error _ => simp [hcase, hch, hξ, Except.toOption] at hl
       | ok ξ =>
         cases hlines : Verity.Sampled.linesOf e with
@@ -544,9 +544,9 @@ def breakCalls (dev : History) (s : Sent) : ℕ :=
 /-! ## v2's records are read at the deployed key, within `LIMITS` -/
 
 /-- The sampled component's one-stage parameters are `OneStageZk.paramsOfJson`'s, at what it reads past the form. -/
-theorem dispatch_params {j : Json} {p : SampledProofs.OneStageZk.Params}
+theorem dispatch_params {j : Json} {p : Spot.OneStageZk.Params}
     (h : VStar.Recursive.Sampled.paramsOfJson j = .ok (.inl p)) :
-    ∃ rest, SampledProofs.OneStageZk.paramsOfJson rest = .ok p := by
+    ∃ rest, Spot.OneStageZk.paramsOfJson rest = .ok p := by
   unfold VStar.Recursive.Sampled.paramsOfJson at h
   simp only [bind, Except.bind] at h
   repeat' split at h
@@ -555,9 +555,9 @@ theorem dispatch_params {j : Json} {p : SampledProofs.OneStageZk.Params}
     | (cases h; exact ⟨_, by assumption⟩)
 
 /-- The sampled component's one-stage evidence is `OneStageZk.evidenceOf`'s, at the bytes it reads past the form. -/
-theorem dispatch_evidence {b : ByteArray} {e : SampledProofs.OneStageZk.Evidence}
+theorem dispatch_evidence {b : ByteArray} {e : Spot.OneStageZk.Evidence}
     (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl e)) :
-    ∃ b', SampledProofs.OneStageZk.evidenceOf b' = .ok e := by
+    ∃ b', Spot.OneStageZk.evidenceOf b' = .ok e := by
   unfold VStar.Recursive.Sampled.evidenceOf at h
   simp only [bind, Except.bind] at h
   repeat' split at h
@@ -567,7 +567,7 @@ theorem dispatch_evidence {b : ByteArray} {e : SampledProofs.OneStageZk.Evidence
 
 /-- **The challenger key the sampled component's one-stage parameters name is at `Lms.deployed`**
 (`Limits.paramsOfJson_deployed`). -/
-theorem dispatch_deployed {a : ByteArray} {p : SampledProofs.OneStageZk.Params}
+theorem dispatch_deployed {a : ByteArray} {p : Spot.OneStageZk.Params}
     (h : (Core.canonicalJson a >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p)) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
   cases hj : Core.canonicalJson a with

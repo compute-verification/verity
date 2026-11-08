@@ -1,7 +1,7 @@
 # spot_figures
 
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
-(`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
+(`verity.core.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series. Lean checks every one-stage and request-level design the figures plot (`plancheck`, which builds
 `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point plots what Lean certifies,
@@ -13,12 +13,14 @@ uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # f
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
+uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P]  # Figure 5, from break-even surfaces
+uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -47,10 +49,16 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
   of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
+
+  A `verifier_cost` card gives the verifier's core-seconds a statement by proof-block type (and its peak memory where
+  measured), how a family's other types scale, and the core-seconds that cost one GPU-second.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
-  of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the sampled
-  proof blocks); skipped work is a figure of its own.
+  of serving compute, the serve tax plus β (the share spent on replays, interior commitments, proofs of the sampled
+  proof blocks and their verification); skipped work is a figure of its own.
+  - Each statement's verify (`verified`) is its type's core-seconds on the `verifier_cost` card at its core-seconds a
+    GPU-second, added to the statement's fixed seconds; without the card, β counts proving only and the caption says
+    so.
   - Every line prices a proof block one way (`priced`): at its type's seconds on the `proof_overhead` card, a block's
     and its statement's fixed ones, with its statement's cap, the type being the card's block of the same name, else
     of the same Definition and K; a type the card doesn't measure is computed from its staged witness bits (the
@@ -96,7 +104,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   a curve per share of compute spent on replays, interior commitments and proofs.
   - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
-    (`wipe_monitoring.PERIODS`).
+    (`reporting.PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
     MFU (`total_cost.batch`: a machine's replay block, an engine step's batch at one layer, or one request),
     proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the H200's dense FP8 peak
@@ -115,7 +123,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
     its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
     an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
-    layer (`verity/core/protocols/sampled_proofs/README.md`).
+    layer (`verity/core/protocols/spot/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
@@ -140,8 +148,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   - The vertical line is the `proof_overhead` card's `model_overhead`, the marginal: a token's per-block proving
     seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference
     (its reference model's, SparseLoCo's syncs scaled to the served model's parameters), the model's checkpoint and
-    every `references` card. A line at 0 is named in the caption, lines that coincide are plotted once, and one far
-    above the headline curves is named at the axis's top. A MAC's AND gates, read from the FP8 MoE coordinate's
+    every `references` card. A line at 0 runs along the axis's floor and is named in the caption, lines that coincide
+    are plotted once, and one far above the headline curves is named at the axis's top. Each line's label wraps to stay inside its axis, beside its
+    line where it overlaps the fewest others. A MAC's AND gates, read from the FP8 MoE coordinate's
     circuit-check pin, state each scope's compute and the skipped work in AND gates.
 - **Figure 2** (`figure2.py`): proof overhead per proof-block type, the `proof_overhead` card's blocks joined to the
   `workload` card's strata, beside each type's share of a token's proof blocks and MACs. A type without a measurement
@@ -154,8 +163,24 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   δ = 2^-40, against a proof block's output bits. It is sampled in the simple form q = b ln(1/δ)/T and in the planner's
   exact one-stage form, which adds location bits, over the headline and stretch scopes. Beside it is the rate a 10%
   total cost buys at each line's marginal proof overhead, counting proving alone.
-- The headline scope (`figure1.PRIMARY`, a datacenter year) gets the bare file names. Its exfiltration panel also
-  plots (A) over the stretch scope (`figure1.SECONDARY`, a world year).
+- **Figure 5** (`figure5.py`), where 10% comes from: the break-even total cost at the FP4 weights (serve tax plus
+  the β at which the bound reaches them) over the headline scope, along a path of levers from today's measured system.
+  Each step adds one lever to the ones before it. Beside it is the bound at a 10% total cost. It reads break-even
+  surfaces (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured,
+  modeled or assumed) and the surface case that prices it. A step no surface prices is shown as pending. A lever off
+  the path (`off`) is plotted in grey with its owner. A term no step's total includes (`unpriced`) is shown as a named
+  line or an arrow, and a `charged` one is stated in the caption as the condition every total holds under.
+- **Figure 6** (`figure6.py`), the certified tick's trade-off:
+  - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
+    buckets as its own layer;
+  - (b) latency and throughput against the tick period, beside each load's no-tick point, from the sweep's
+    `point.json` files, pending without them; a tick point named by `--old-rule` took τ_sat from the no-tick step at
+    its own load and is plotted hollow, off its load's line, with its queue growth in the caption;
+  - (c) the advice's term, a machine window's bits times the scope's windows, with and without the tick, against the
+    FP4 weights. It reads an advice file (`machine_windows`, and `arms` of `label`, `tick` and `bits`, with a
+    `pending` reason where the arm's figure isn't a result yet, hatched).
+- The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
+  (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
 
