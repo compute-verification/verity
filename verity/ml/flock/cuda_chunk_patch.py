@@ -63,6 +63,22 @@ if first_fit in s:
 """, 1)
     print("prove_ffi.cu: the arena's small blocks from the top")
 assert "const bool top = aligned < ((size_t)64 << 20);" in s, "DeviceArena::allocate changed upstream"
+# the device arena zeroes, when a prove call finishes, every byte the call allocated (up to its high-water mark since begin()),
+# so no value outlives the call in device memory; the next call, or the regrow that frees it, finds zeros
+if "    size_t high_ = 0;\n" not in s:
+    for a, b in (("        free_.clear();\n        free_.emplace(0, capacity_);\n",
+                  "        free_.clear();\n        free_.emplace(0, capacity_);\n        high_ = 0;\n"),
+                 ("        *ptr = base_ + offset;\n",
+                  "        *ptr = base_ + offset;\n        if (offset + aligned > high_) high_ = offset + aligned;\n"),
+                 ("        active_ = false;\n        return live_.empty() ? cudaSuccess : cudaErrorInvalidValue;\n",
+                  "        active_ = false;\n        if (!live_.empty()) return cudaErrorInvalidValue;\n"
+                  "        const size_t used = high_;\n        high_ = 0;\n        if (!used) return cudaSuccess;\n"
+                  "        cudaError_t err = cudaMemsetAsync(base_, 0, used);\n"
+                  "        return err != cudaSuccess ? err : cudaStreamSynchronize(0);\n"),
+                 ("    bool active_ = false;\n", "    bool active_ = false;\n    size_t high_ = 0;\n")):
+        assert s.count(a) == 1, f"prove_ffi.cu's DeviceArena changed: {a!r}"
+        s = s.replace(a, b)
+    print("prove_ffi.cu: the device arena zeroes what each prove call used")
 pf.write_text(s)
 
 # Round 1 folds each lane's eight k's as Σ_k x^k·(a_k·b_k) in GF(2^8) (AES polynomial), reduced once. Under clmad the eight
