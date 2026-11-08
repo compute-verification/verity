@@ -69,8 +69,8 @@ incorrect set of the trace the extractor recovers.
    - Real: SHA-512 collision resistance (`Vocab.FinderCR`) and LMS unforgeability (`Hash.Assumptions.LmsUnforgeable`),
      read in the error.
    - Open: the targets (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-     `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until its subprotocol's
-     proof discharges it.
+     `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until proved
+     (PoUW's: `verity/core/protocols/pouw/`).
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes

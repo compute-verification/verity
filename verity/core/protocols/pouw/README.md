@@ -10,6 +10,30 @@ It carries no policy parameter: it surfaces the ε at δ its sample established.
 least half of the honest developer's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
 every product, is a reference, not an answer.
 
+## Start here
+
+- **The verifier** is Lean (What runs, below): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the subprotocol
+  the onsite and the remote protocol compose. It decides each execution phase by `PouwCheck.check` and credits a closed
+  credit period by `PouwCheck.Credit`; its executable is `pouw-check`, and the Python modules of the same names mirror it.
+- **The top-level guarantees**, stated under `Security/Definitions/` and proved as `SecurityProofs.G` under
+  `Security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
+  miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 units, a layout in the
+  domain D, int7 weight entries) under the Ω_max bound (each unit's reference work at most Ω_max times its matrix
+  products'), with at most 2^64 oracle calls:
+  1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
+     scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
+     (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
+  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
+     as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
+     `Accounting.BudgetAbort`.
+  3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): a credit period's openings
+     fail to bind with probability at most |L|·√(q/2^256 + κ). Assumes `Claims.ExpectedCR`; κ is not yet bounded.
+  4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
+     a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
+     e^{−D/4}. No premise.
+
+  The rest of what is proved, what is open and every named assumption: Security assumptions and guarantees, below.
+
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
