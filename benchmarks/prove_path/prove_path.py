@@ -76,8 +76,9 @@ Two kinds of committed run:
   (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample over a window of
   one member, no registered reads or shared rows, Lean `verify --coins tree --stratified K`, no ZK server), and the summary
   names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
-  (``charge``, `charge_terms`): ``advice_bits``, ``delta``, ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ)
-  and ``exfiltration_bound`` (β_δ + λ_δ).
+  (``charge``, `charge_terms`): ``advice_bits``; ``c``, the advice's bits where the window's leak count
+  (`records_audit.leak_count`: ``other_inputs`` and ``bound``, beside it) is within the charge, else None; ``delta``,
+  ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ) and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
   the tree's code (`source_identity.code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
@@ -175,7 +176,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.spot.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
@@ -1109,9 +1110,14 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
     return {m.template: P._template_bits(SRW.template(m.template).fn if m.schemas else sets[m.template][1]) for m in mine.members}
 
 
-def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
+def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float,
+                 count: Mapping[str, Any]) -> dict[str, Any] | None:
     """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
-    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are incorrect
+    (``advice_bits``), only where the window's leak count (``count``: `records_audit.leak_count` over its members, none of
+    which declares a registered read or ingress) leaves no input past the advice's charge. ``c`` is None where its ``bound`` is
+    ``vacuous``, a window that leaves inputs free (a stand-in partition's units' inputs, or a partial window's port whose
+    writer's template it lacks, so its wire is not made), and the count's ``other_inputs`` and ``bound`` stand beside it:
+    no figure states the bound there. δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are incorrect
     (``location_bits``, `consumers.location_bits`); β_δ, the incorrect proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the sampling design's strata aren't the
     templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
@@ -1123,7 +1129,9 @@ def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits
     weights: float | dict[str, float] = max(bits.values())
     if law is not None and {s.name for s in law.strata} <= set(bits):
         weights = {s.name: float(bits[s.name]) for s in law.strata}
-    return {"advice_bits": advice_bits, "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
+    within = count["bound"] == "within the charge"
+    return {"advice_bits": advice_bits, "c": advice_bits if within else None, "other_inputs": count["other_inputs"],
+            "bound": count["bound"], "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
             "location_bits": location_bits(p), "harm_bound": p.harm_bound(weights), "exfiltration_bound": exfiltration_bound(p, weights)}
 
 
@@ -1159,7 +1167,8 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
                       **({"serve": sv} if sv else {})}, more, rank=r)
     record = json.loads((out / "audit.json").read_text()) if (out / "audit.json").is_file() else {}
     row = {"ok": ok, "seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "per_unit": per_unit(s),
-           "charge": charge_terms(record, template_bits(mine, sets), bound["advice"]["bits"], a.delta),
+           "charge": charge_terms(record, template_bits(mine, sets), bound["advice"]["bits"], a.delta,
+                                  leak_count(mine.members, (), bound["advice"]["bits"])),
            **({"serve": sv} if sv else {}), **({"plain": s["plain"]} if "plain" in s else {}),
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
@@ -1237,7 +1246,8 @@ def audit(a: argparse.Namespace) -> int:
              | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
              | ({"forged": s["forged"]} if a.forged else {"accepted": (s.get("audit") or {}).get("accepted"),
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
-             | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("location_bits", "harm_bound", "exfiltration_bound")}
+             | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("c", "bound", "location_bits", "harm_bound",
+                                                                      "exfiltration_bound")}
                 | {"wrong_units_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
              for r, s in summary["ranks"].items()}
     print("PROVE-PATH " + json.dumps({"run_root" if single(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],

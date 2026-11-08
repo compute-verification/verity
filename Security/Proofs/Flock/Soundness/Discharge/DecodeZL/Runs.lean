@@ -21,12 +21,12 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 
 /-!
-# A rep's run, from its rounds' frames (R11b)
+# A rep's run, from its rounds' frames (`DecodesOn`'s message half)
 
-plays-coin's `DecodesOnOfRuns` asks each rep for a `RepRun`: a run on its rounds' coins whose messages, cut at the spine's
+`Discharge/PlaysCoin`'s `DecodesOnOfRuns` asks each rep for a `RepRun`: a run on its rounds' coins whose messages, cut at the spine's
 coins, are the decoder's groups of the rounds. This file gives it from the executable's side:
 
-* `coinPat_eq`: `Carries`' coin pattern is plays-coin's, so `cutOfPat` cuts a `Carries` back into its rounds.
+* `coinPat_eq`: `Carries`' coin pattern is `Discharge/PlaysCoin`'s, so `cutOfPat` cuts a `Carries` back into its rounds.
 * `roundGroups_eq`: on rounds that retained the encodings of `F`'s chunks, the decoder `decOf W`'s groups are
   `rdChunks W F`.
 * `repRun_at`: at a table whose statement, schedule and link layout are `stmtOf`'s, `fast100`'s and `PT_LOCAL`, the rep

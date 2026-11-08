@@ -142,7 +142,7 @@ session of that kind sent (a `.tar` of its session directory), it times `archive
 `verify` runs its session before refusing it. `--phases`, and every templated statement (which `verify`
 refuses last, `ProvedScope.servedForm`), add `flock_served/Main.lean`'s timing of verify's work before the session a step
 at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
-`KsScope.checkOf` and `Stmt.setupTablesOf` with the draw, each with its RSS. `build.json` has the unit's ANDs and matrix
+`KsScope.checkOf` and `Stmt.setupTablesOf` with the sample, each with its RSS. `build.json` has the unit's ANDs and matrix
 entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
 verifier would read.
 
