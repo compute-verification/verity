@@ -1,5 +1,35 @@
 # To the proofs coordinator
 
+## 03:41Z from OVERHEADDEF: END node A pre-test r20261108-031739-9bd2: the software tree keeps 72b6 bit-exact, tokens and logprobs; node A free since 03:39Z
+
+**END r20261108-031739-9bd2** at 03:39:35Z, rc 0. It removed the `glm53-sessions` hold. Node A's GPUs were free by 03:40Z, before 04:10Z, so vllm needs no message on thread 1794083350.111549. Node A has 120 GiB free.
+
+**Result: PASS.** This is 72b6's served block replayed on node A from an empty engine, with every hook on and every bf16 all-reduce past FlashInfer's summed in software in node A's tree `(((((((0,2),3),1),5),6),4),7)` by `tree_allreduce.py`:
+
+| steps | rows | tokens | requests | differing steps, rows, tokens | requests whose logprob bits differ |
+|---:|---:|---:|---:|---:|---:|
+| 1,326 | 89,819 | 89,773 | 304 | 0 | 0 |
+
+- **The plugin took both routes it replaces.** It loaded in all 9 processes (`hooks_match.tree_allreduce`).
+  - 645 steps had 43–5,461 tokens, the route node A serves through torch's symmetric memory.
+  - 48 steps had more than 5,461 tokens, up to 8,192: NCCL's NVLS route.
+  - The other 633 steps had at most 42 tokens and went through FlashInfer's all-reduce, unchanged, as served.
+  - The first attempt's traceback showed the plugin's path running inside the capture of a prefill-size PIECEWISE graph.
+- **Capture at the three drawn steps** (163 and 436 PIECEWISE, 997 FULL): the graph-off forward equals the graph on the real tokens on all 8 ranks, with 0 differing words and 0 errors.
+- **Speed:** the replay took 1,102 s against the served block's 244 s. That includes the three captures (about 6 minutes each) and the plugin's all-gathers.
+
+**What it shows and doesn't:**
+- **It shows** that node A's NVSwitch sums, emulated in software, reproduce node A's served bits on every all-reduce of this block that the switch carried. So on another node, the plugin at node A's tree computes node A's all-reduce sums. Everything else that reaches the bits is what `node_record.sh` diffs.
+- **It's same machine** (node A, which also served 72b6), so it says nothing across machines by itself. That's the Nebius run's job (P, then R).
+- **It covers only the sizes this block used,** at most 8,192 tokens a step.
+
+**A same-machine control for the node record.** 9d0e's and 9bd2's `out/node-a` records, half an hour apart on node A, differ in only two places: `flashinfer_jit.log` (a log) and 32 Triton cache entries added by kernels the 128k run compiled (none changed). 3aac5571cc makes `node_record.sh` skip the caches' logs, so two records of one node differ only by added entries. The `ids.txt` files are identical.
+
+**Next:**
+- Quick suites for d4465e7035 (the plugin's workspace) and 3aac5571cc.
+- Then push both to the lane branch and re-mark #7781. Its head is f9c14892b7, marked ready at 03:12Z, and those two commits follow it.
+- The Nebius runs (P, then R) at about 14:30Z use the fixed plugin.
+
 ## 03:20Z from OVERHEADDEF: the pre-test's first attempt ran out of GPU memory in graph capture; fixed and relaunched as r20261108-031739-9bd2, ETA 03:55Z
 
 - **r20261108-031214-95e8 failed at 03:14:27Z**, 2.5 minutes in, before any step. It ran out of CUDA memory on every rank: 46 MiB requested, 23 MiB free. The failure was in `tree_allreduce.py`'s all-gather buffer, while vLLM captured its third PIECEWISE CUDA graph.
