@@ -49,7 +49,7 @@ class _Blobs:
                 "stride": stride or [int(np.prod(a.shape[i + 1:])) for i in range(a.ndim)], "sha512": h}
 
 
-def _commit(d: Path, events: list[dict], params: dict, scheduled: dict | None = None) -> None:
+def _commit(d: Path, events: list[dict], params: dict, scheduled: dict | None = None, req_ids: list | None = None) -> None:
     sd = d / "rank0" / "step0"
     sd.mkdir(parents=True, exist_ok=True)
     ops = "".join(json.dumps(e, sort_keys=True) + "\n" for e in events).encode()
@@ -58,7 +58,7 @@ def _commit(d: Path, events: list[dict], params: dict, scheduled: dict | None = 
     (sd / "params.json").write_bytes(pj)
     root = _sha(f"verity/spot/rank-root\0{_sha(ops)}\0{_sha(pj)}".encode())
     (sd / "meta.json").write_text(json.dumps({"scheduled": scheduled or {"req": 4}, "ops_sha512": _sha(ops), "params_sha512": _sha(pj),
-                                              "rank_root": root, "check": {}}))
+                                              "rank_root": root, "check": {}, **({"req_ids": req_ids} if req_ids else {})}))
     (sd / "commit.json").write_text(json.dumps({"root": _sha(f"verity/spot/step-root\0{root}".encode()), "coins": "00" * 64,
                                                 "rank_roots": [root], "layers": {"dense": [0]}, "opened": {}}))
 
@@ -264,25 +264,38 @@ def _slot(req: str, p: int) -> int:
 def gather(tmp_path, monkeypatch):
     """A step whose tap gathers tokens 0, 1 and 3's K/V rows through its page table (top-k positions to slots), and the
     capture of it: with the step's cache write (``write``) and its positions (``positions``) recorded or not, a gathered row's
-    bytes changed (``corrupt``: token 1's row 5, its own position), and the requests' scheduled counts."""
+    bytes changed (``corrupt``: token 1's row 5, its own position), and the requests' scheduled counts. With ``convert`` the
+    step records the call that converts the top-k to slots (`stage.CONVERT`), and these change what is served: a request's
+    page-table blocks (``blocks``), a token's top-k (``picked``), the slot the write puts a token's row at (``moved``), an
+    entry of the slots the call outputs and the tap reads (``page``, which its inputs don't give) and the tap's valid counts
+    (``used``)."""
     stage = _stage(monkeypatch)
     monkeypatch.setattr(stage, "KV_BLOCK", 4)
+    made = iter(range(100))
 
-    def make(write=True, positions=True, corrupt=False, scheduled=None):
-        d = tmp_path / f"w{int(write)}p{int(positions)}c{int(corrupt)}{len(scheduled or ())}"
+    def make(write=True, positions=True, corrupt=False, scheduled=None, convert=False, blocks=None, picked=None, moved=None,
+             page=None, used=None):
+        d = tmp_path / f"s{next(made)}"
+        blocks, picked = {**BLOCKS, **(blocks or {})}, {**PICKED, **(picked or {})}
         rng = np.random.default_rng(5)
         cache = {s: rng.integers(0, 2 ** 16, KV_W, dtype=np.uint16) for s in range(28)}
         kv_c, k_pe = (rng.integers(0, 2 ** 16, (len(TOKENS), w), dtype=np.uint16) for w in (4, 2))
         slots = np.array([_slot(q, p) for q, p in TOKENS], np.int64)
+        for t, s in (moved or {}).items():
+            slots[t] = s
         for t, s in enumerate(slots.tolist()):
-            cache[s] = np.concatenate([kv_c[t], k_pe[t]])
-        page = np.full((len(TOKENS), TOPK), -1, np.int32)
-        for t, ps in PICKED.items():
-            page[t, :len(ps)] = [_slot(TOKENS[t][0], p) for p in ps]
+            if s >= 0:
+                cache[s] = np.concatenate([kv_c[t], k_pe[t]])
+        table = np.full((len(TOKENS), TOPK), -1, np.int32)
+        for t, ps in picked.items():
+            table[t, :len(ps)] = [blocks[TOKENS[t][0]][p // 4] * 4 + p % 4 for p in ps]
+        served = table.copy()
+        for (t, j), s in (page or {}).items():
+            served[t, j] = s
         kept = [0, 1, 3]
         kv = np.zeros((len(kept), TOPK, KV_W), np.uint16)
         for i, t in enumerate(kept):
-            for j, s in enumerate(page[t].tolist()):
+            for j, s in enumerate(served[t].tolist()):
                 if s >= 0:
                     kv[i, j] = cache[s]
         if corrupt:
@@ -292,10 +305,23 @@ def gather(tmp_path, monkeypatch):
         if write:
             ins = {"slot_mapping": b.ref(slots), **({"positions": b.ref(np.array([p for _, p in TOKENS]))} if positions else {})}
             events.append(_ev(1, "fused_norm_rope", ins, {"kv_c_out": b.ref(kv_c), "k_pe_out": b.ref(k_pe.reshape(-1, 1, 2))}))
-        used = np.array([len(PICKED[t]) for t in range(len(TOKENS))], np.int32)
-        events.append(_ev(2, "fa3_sparse_mla", {"block_table": b.ref(page), "seqused_k": b.ref(used), "kv_gathered": b.ref(kv),
-                                                "kv_gathered_rows": kept, "kv_gathered_tokens": len(kept)}, {}))
-        _commit(d, events, {}, scheduled or {"a": 1, "b": 1, "c": 2})
+        counts = np.array([len(picked[t]) for t in range(len(TOKENS))], np.int32)
+        if convert:
+            reqs = list(blocks)
+            req = np.array([reqs.index(q) for q, _ in TOKENS], np.int32)
+            bt = np.zeros((len(reqs), 3), np.int32)
+            for k, q in enumerate(reqs):
+                bt[k, :len(blocks[q])] = blocks[q]
+            topk = np.full((len(TOKENS), TOPK), -1, np.int32)
+            for t, ps in picked.items():
+                topk[t, :len(ps)] = ps
+            events.append(_ev(2, stage.CONVERT, {"req_id": b.ref(req), "block_table": b.ref(bt), "token_indices": b.ref(topk),
+                                                  "BLOCK_SIZE": 4, "BLOCK_STRIDE_ROWS": 4, "NUM_TOPK_TOKENS": TOPK,
+                                                  "return_valid_counts": True}, {"r0": b.ref(served), "r1": b.ref(counts)}))
+        tap = {"block_table": b.ref(served), "seqused_k": b.ref(counts if used is None else np.array(used, np.int32)),
+               "kv_gathered": b.ref(kv), "kv_gathered_rows": kept, "kv_gathered_tokens": len(kept)}
+        events.append(_ev(len(events) + int(not write), "fa3_sparse_mla", tap, {}))
+        _commit(d, events, {}, scheduled or {"a": 1, "b": 1, "c": 2}, ["req-a", "req-b", "req-c"] if convert else None)
         cap = stage.Capture(d, 0)
         wires = stage.Wires(cap)
         kv_ref = cap.events[0][-1]["in"]["kv_gathered"]
@@ -358,3 +384,46 @@ def test_own_rows_reads_the_paged_layout_in_any_order_and_refuses_a_row_that_bre
     assert stage.own_rows(row([4, 5, 6, 7, 0, 1, 2, 3, -1]), 8, 4) == {3, 7}, "whole blocks: each block's last residue"
     for bad, n in (([1, 2, -1], 2), ([0, 4, -1], 2), ([0, 1, 7], 2), ([0, 0, -1], 2), ([0, 1, 2, 3, 5, 6], 6)):
         assert stage.own_rows(row(bad), n, 4) is None, bad
+
+
+def test_with_the_conversion_recorded_a_row_is_wired_by_request_and_position_and_no_page_table_entry_is_read(gather) -> None:
+    stage, make = gather
+    got = make(convert=True)((0, slice(4, 8)), (1, slice(2, 6)), (2, slice(0, 2)))
+    assert [s["kind"] for s in got] == ["call", "history", "selection"], "no block_table source"
+    write, history, pick = got
+    assert (write["seq"], write["out"]) == (1, "kv_c_out+k_pe_out")
+    assert write["rows"] == [[0, 7, 0], [1, 5, 1], [2, 0, 2], [2, 1, 3]], "each decode's own position, and the prefill's two"
+    assert (history["port"], history["parts"]) == (stage.HISTORY_PORT, [[[0, 1], [4, 7]], [[1, 2], [2, 5]]])
+    assert history["at"] == [[0, "req-a", [[5, 6], [7, 9]]], [1, "req-b", [[2, 5]]]], "each history row's request and position"
+    assert pick["via"] == "DsaWaksmanRows_v1{N=10,K=8,W=6,E=16}" and pick["seq"] == 0
+    w = stage.wiring({"S": {"gate": [{"key": [0, 3, 0], "sources": got}]}})
+    from verity.ml.definitions.registry.dsa_topk import waksman_switches
+    assert (w["advice_bits"], w["gap_bits"], w["history_bits"], w["selection_bits"]) == (
+        0, 0, 6 * KV_W * 16, waksman_switches(10, TOPK)), "the page-table entries leave the accounting"
+
+
+def test_convert_rows_is_the_served_conversion_and_a_capture_without_it_keeps_the_slot_path(gather) -> None:
+    stage, make = gather
+    topk = np.array([[0, 5, -1, 9, 4], [-1, -1, 1, 0, -1]])
+    kept, slots, counts = stage.convert_rows(topk, np.array([0, 1]), np.array([[3, 1], [2, 0]], np.int32), 4, 6)
+    assert [k.tolist() for k in kept] == [[0, 5, 4], [1, 0]], "an entry past the request's blocks is dropped, as -1 is"
+    assert slots.tolist() == [[18, 7, 6, -1, -1], [13, 12, -1, -1, -1]] and counts.tolist() == [3, 2]
+    assert [s["kind"] for s in make(convert=True, positions=False)((1, slice(2, 6)))] == ["call", "history", "gap"], (
+        "without the write's positions a row isn't wired by position")
+    assert [s["kind"] for s in make(convert=True, write=False)((1, slice(2, 6)))][-1] == "gap"
+
+
+@pytest.mark.parametrize(("change", "message"), [
+    ({"page": {(1, 3): 4}}, r"output slots or counts that its inputs don't give"),
+    ({"used": [8, 5, 1, 2]}, r"reads its slots but not its valid counts as seqused_k"),
+    ({"picked": {1: [0, 1, 2, 3, 4]}}, r"token 1 at position 5 has 5 valid keys, not min\(6, 8\)"),
+    ({"picked": {1: [1, 0, 2, 3, 4, 5]}}, r"token 1's top-k row doesn't read its 6 keys in order"),
+    ({"picked": {0: [0, 1, 2, 4, 5, 7, 8, 10]}}, r"token 0's top-k row isn't a selection of its 10 keys"),
+    ({"moved": {1: 22}}, r"token 1 reads position 5 of its request at slot 21, but fused_norm_rope \(seq 1\) wrote it at slot 22"),
+    ({"moved": {1: -1}}, r"token 1 reads position 5 of its request, which the step computes, but .* records no write"),
+    ({"blocks": {"b": [2, 5]}}, r"token 1 reads position 0 of its request, an earlier step's, at slot 8, which .* filled"),
+])
+def test_a_conversion_or_a_read_the_wiring_by_position_does_not_hold_is_unwired(gather, change, message) -> None:
+    stage, make = gather
+    with pytest.raises(stage.Unwired, match=message):
+        make(convert=True, **change)((0, slice(0, 8)), (1, slice(0, 6)))
