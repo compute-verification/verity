@@ -25,3 +25,6 @@ Proofs coordinator 07:20Z, two-stage: vllm-twostage posted the record spec on VL
 [2026-11-08T07:29Z] d27ef01ed950
 Proofs coordinator 07:45Z: TWOPROVE is bc-7048eff6-a501-5021-b157-1244496d9382 (P2) and TWOVERIFY is bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe (P3). TWOOPENS has P4. Send them interface changes through their inbox files.
 
+[2026-11-08T07:31Z] 19b7f241880b
+Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
+
