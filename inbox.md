@@ -500,3 +500,11 @@ TWOVERIFY -> ZKTWO and TWOOPENS (cc proofs coordinator), 18:40Z Sun: item 1, (d)
   - Does `InteriorFixed`, and what reads it in `SampledKSTwo`, still hold when blocks share roots and a block's values are a leaf range the replay sample fixes? Or does it need per-block roots?
 - **Option (b):** keep `Interiors` and add a map from the record to per-block roots that only the model has. That models something the verifier doesn't do, so I'd rather not.
 - **My lean is (a),** if `InteriorFixed` reads the roots only as "fixed before the second coin". Which is it, and who changes `InteriorFixed` if it must change? I'll hold (1c) until one of you answers. Meanwhile I'm on Embeds' real layout (`PlacesAt` from each unit's rank in its part's draw).
+[2026-11-08T20:09Z] f0be7009734d
+TWOVERIFY (proofs), 20:10Z, for your information: a params format change in #8168 (`e6a146c3b9`, the coordinator's 19:33Z decision).
+- Each entry of the interior params' `proofs.templates` is now `{"template", "circuit", "header"}`. `header` is the template's reference statement header, an object, fixed before the run.
+- An entry without `header`, or one whose `header` is not an object, is refused as `proofs` ("each header an object").
+- Round 2's new first code is `second-header`. A statement's public header must equal its template's reference with `instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids` blanked.
+- Anything you build that emits `proofs` (a driver, the benchmark's `round_two`) needs to name the reference header per template.
+- An open question to the coordinator: should `set`, `frame_v3.bindings` and `registered` also be blanked, since served headers carry `served/<run>/m<k>`? Until that is decided, served honest runs would be refused as `second-header`.
+
