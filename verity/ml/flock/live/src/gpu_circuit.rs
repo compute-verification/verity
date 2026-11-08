@@ -296,6 +296,27 @@ pub fn device_leaves(x: &[u8], salts: &[u8]) -> Vec<u8> {
 /// A slot whose witness the host computed: its absolute F128 word offset and its z, a, b words.
 pub type HostSlot = (usize, Vec<F128>, Vec<F128>, Vec<F128>);
 
+/// `parts` back to back, copied in parallel
+pub fn concat(parts: &[&[F128]]) -> Vec<F128> {
+    let n = parts.iter().map(|p| p.len()).sum();
+    let mut out: Vec<F128> = Vec::with_capacity(n);
+    let mut rest = &mut out.spare_capacity_mut()[..n];
+    let mut dst = Vec::with_capacity(parts.len());
+    for p in parts {
+        let (a, b) = std::mem::take(&mut rest).split_at_mut(p.len());
+        dst.push(a);
+        rest = b;
+    }
+    dst.into_par_iter().zip(parts.par_iter()).for_each(|(d, s)| {
+        for (d, &x) in d.iter_mut().zip(s.iter()) {
+            d.write(x);
+        }
+    });
+    // SAFETY: the parts cover the first n words, and each was written above
+    unsafe { out.set_len(n) };
+    out
+}
+
 /// u64 words the host packs for the device: page-locked and mapped (the device reads them directly, beside the compression
 /// witness), or a heap `Vec` (three pageable copies per slot). Mapped buffers go back to a pool when dropped: pinning a
 /// witness's host slots costs more than a rep's upload saves, so a process pins its largest few once.
@@ -489,9 +510,14 @@ impl HostSlots {
         }
         // SAFETY: an F128 is two u64 words (lo, hi)
         let rw: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
+        let t = Instant::now();
         if let Some(mut b) = HostBuf::mapped(rw.len()) {
-            b.copy_from_slice(rw);
+            b.par_chunks_mut(1 << 16).zip(rw.par_chunks(1 << 16)).for_each(|(d, s)| d.copy_from_slice(s));
             self.pinned_rows = Some(b);
+        }
+        if crate::circuit::unit_profile() {
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "pin_rows", "rows_bytes": 8 * rw.len(), "pinned": self.pinned_rows.is_some(),
+                "wall_s": t.elapsed().as_secs_f64()}));
         }
     }
 
@@ -1060,6 +1086,14 @@ mod tests {
             }
         }
         want
+    }
+
+    #[test]
+    fn concat_is_the_parts_in_order() {
+        let parts: Vec<Vec<F128>> = (0..300u64).map(|k| (0..k % 7).map(|i| F128::new(k, i)).collect()).collect();
+        let slices: Vec<&[F128]> = parts.iter().map(Vec::as_slice).collect();
+        assert!(concat(&slices) == parts.concat());
+        assert!(concat(&[]).is_empty());
     }
 
     #[test]
