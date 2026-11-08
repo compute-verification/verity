@@ -3957,3 +3957,17 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
 - **Wiring:**
   - `breakeven(lean=True)` is the default, and `figures.py --no-lean` skips it. That is one line in PLANCHECK's driver, posted to him.
   - `breakeven/certify.py` takes any `breakeven_surface.json`. It's offered to BREAKEVEN on `cursor/proofs-pcfactor-db87-surface`, since their directory has ruff errors that would redden #7886. I'll certify their 01:30Z surface once they name its run.
+
+## TWOOPENS 00:15Z: the format's Lean interface is #7892, marked; Reveals needs two more lemmas and TWOSESS's commitment change
+
+- **#7892 is open and marked at `4a2a85656f`, stacked on #7878** (still admitted at `91585fdc45`, awaiting a land verdict). It adds one module, `Proofs.Flock.SpotFlock.Format`, and changes no guarantee, premise or lock record.
+  - `Layout` names the Flock block holding each checked unit (`blockOf`) and, for each program gate, the gate of the session circuit `C` holding its value for that unit (`wire`). `decOf L` is the decoder it gives: `C`'s value at that gate, as `Claims.Flock.RelS` evaluates `C`.
+  - `Embeds h L` says `C` computes each checked unit's gates at the layout's wires, at every hidden-value list. It reads no witness, so it is a property of the registration. `evaluates_of_embeds` gives `Evaluates h (decOf L)` from it, and `sessionOpensTwo_of_embeds` gives `SessionOpensTwo` from `Embeds` and `Reveals h (decOf L)`.
+  - `decOf_input` and `decOf_output` give a decoded value as the hidden or public value at the wire's input or output source, which is what the reveal opens.
+  - Checks at `4a2a85656f`: records r20261107-235413-cf6a (AUDIT PASS, lock unchanged), suites r20261107-235420-99bf (57 passed), try r20261107-235115-e2a6 (7 theorems clean). The queue warned that PRF-460 has no goal label; please add it, or tell me the goal's id.
+- **The commitment side (TWOSESS) fits this shape.** `opens_atPorts` is proved at SHA-512 on `cursor/proofs-twosess-roots-a3c1`. Adopting `ownAt` in `SamplingDeploy.Code` is TSVERIFY's call and is the blocker there.
+- **What `Reveals` still needs, beyond that adoption.** Neither lemma is proved for one stage either, as far as I can find.
+  - The circuit's (`Rows h L`): `C`'s outputs for each needed value's row are hm96's `b ‖ c` of the row's bits and salt. It reads no witness, like `Embeds`. I'm writing it next on #7892's branch.
+  - The parse's: at `parse xS = some S`, the sources of those outputs are the bits of the table row that Flock's registered read opens. I've asked TWOSESS whether it's needed for `FrameIs h` anyway.
+- **Sunday's 20:00Z deadline.** `SessionOpensTwo` from `Embeds`, `Rows` and `FrameIs` at the adopted commitment can make it, if the adoption lands. An unconditional `SessionOpensTwo` can't, as I said at 23:15Z: it needs an honest registration whose session circuit is built in this format, and building that needs your or Daniel's yes on the prover cost.
+- **Item 1, the listing:** still my recommendation (c), to list once the commitment change and the format are in. I'm waiting for your word.
