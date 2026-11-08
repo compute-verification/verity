@@ -536,27 +536,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Audits.Certified": {
-   "owner": "@memory-accounting",
-   "digest": "4da8f2178342cde3571dbf23c427e688fce47637a942f800ee8d51f81e8e2518",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Audits.OnTime": {
-   "owner": "@memory-accounting",
-   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.DeviceModel": {
    "owner": "@memory-accounting",
    "digest": "45d6c052858f94610e56504a19b1dbc39f0f58b64e01e73f0e3144a741f6b81d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Drawn": {
-   "owner": "@memory-accounting",
-   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -13289,7 +13271,7 @@
    }
   },
   "Definitions.Core.Blocks": {
-   "digest": "60a63b0f017fbedf02434c9d9888a4fc587f1dd286f3c3777d43d2c737f0158c",
+   "digest": "4414066f3b2dc0e6fc1bf1e657956dd364791f14f3c45e1a12fe0d9da3e829cd",
    "definitions": {
     "Verity.Block": "ac647c1b42deae35468cb0531bc2925fe228eb55c6a306078eaf695ede59f223",
     "Verity.Block.gates": "69e3f9952544c184ee133a01985437ca45d8beb2c9ced5ee4cda402f0cc3e544",
@@ -13301,8 +13283,6 @@
     "Verity.Blocks.carried": "1bd248ec320f7aa1c8902398b64ea1f0cd8e135b88887614302a34afba90cc24",
     "Verity.Blocks.since": "0f5dc1f0e458820235d86229818f1e1b5ed18d0b956777173b0c882cb74a75bf",
     "Verity.Device.State": "e8389d84bac78baa6d5ad2ea9a9e4666273452967a5aca4b40a11231b4ef2a52",
-    "Verity.Device.State.chip": "cf82a603de19e5919b9e77afa7f68d5e6c64bd1cbea36e72dd7e351403817681",
-    "Verity.Device.State.store": "c21160a9dd8df20bdca34fe021cfd0b62802b5fe8fa97753fca0f8caf3af119c",
     "Verity.Wipe": "cb9fe1d306caeda4371e7748356746baa950d3d298fcecea07855c145b674168",
     "Verity.Wipe.OfRun": "0329033188b44ad722cf035e5ddeb2ba6b96a4249bda4d8ac0bfcbe4a50385b1",
     "Verity.Wipe.OfRun.Kept": "6c33f78861c6009ef90fed6f5ddb80163f5f50bf82925ee4cc6c2ef56063157f",
@@ -21410,18 +21390,14 @@
    }
   },
   "Properties.NetworkPeriod": {
-   "digest": "b2eb6ee4a1e71ab43f8117db5e0b80f3741ae74e023725a60c3f62195e3dfdd8",
+   "digest": "9954db429a552dd0163e0be5bd901fd4c7338bb8ac5511f6ed3e9d4e76ceee9b",
    "definitions": {
     "Properties.NetworkPeriod.ClockKBoundsCount": "8cdb92caa40b67dd32763dd0bd4b5c1a316280f88dc25339058d7a54a38df555",
     "Properties.NetworkPeriod.DrawnWhole": "2d24b64e16d720f78b94f256d4ec5cb462fa5e8501260cfa00e27b83b408b85b",
     "Properties.NetworkPeriod.RowsKBoundsCount": "9debf917e441e422d7f1f83f095a76f95446cefb0aee8d4f9c3087aff889fec0",
     "Properties.NetworkPeriod.RowsProgWired": "dfd6a1cdef917073758db19f152b1e00ae5209f6231696bcf807d712a84613a1",
-    "Properties.NetworkPeriod.RowsProgWiredOf": "7a3df066815cece0e8412881dc77b2181ffec686cbda145a0017563572f5a6c3",
     "Properties.NetworkPeriod.RowsStateTied": "32be863030cabe1a8460cb831de38c92982af46c80e5155ae889b4952d5f4604",
-    "Properties.NetworkPeriod.RowsStateTiedOf": "7582324c6c0b8685e0f9f7f9bfb1de72830704cf85eb68c4f8d2d6e675df653e",
-    "Properties.NetworkPeriod.RowsTiedDrawn": "ce63a2c39b597e3e07f545f7775463528b27d2bb211c6637478ef109710b66cb",
-    "Properties.NetworkPeriod.RowsTiedDrawnOf": "f0d6e1c6cff219536e5a67c6bbda372fe4ba3730e4ed07cb20cf090edfb17c2a",
-    "Properties.NetworkPeriod.acceptAllRows": "3e110665f6b5369d7c6ea189ff03615c368f7b6394d0b84d7cf9cc4c4a7897f2"
+    "Properties.NetworkPeriod.RowsTiedDrawn": "ce63a2c39b597e3e07f545f7775463528b27d2bb211c6637478ef109710b66cb"
    }
   },
   "Properties.Pous": {
@@ -21454,7 +21430,7 @@
    }
   },
   "Properties.Pous.EndToEnd": {
-   "digest": "c522c58deddaae9032af045cf86531f832b732eea0b590725aa91a9117568af6",
+   "digest": "ab99e0dd2ebc45efbc7185b63a14fcef0dbf190f3cfb7c45119320b024c9bef9",
    "definitions": {
     "Pous.EndToEnd.Accepted": "34ad773960a6aed4288eae974e60f4f4f87df7ca1da93c15470a42fe9dc2a58c",
     "Pous.EndToEnd.AnsweredOnTime": "c2870b618539d7df4b0ed74c56d7a427ea19457463d0c6ec11753c881fc1bdf8",
@@ -21463,10 +21439,7 @@
     "Pous.EndToEnd.DrawExact": "5716557793355b6e4cabb514d914e4325abb236dbd92568b421bd184076e23be",
     "Pous.EndToEnd.EndToEndRing": "39024d067ec9b2061b8752f60853cc81652ab1c29a2affb0f165f4cb97060a34",
     "Pous.EndToEnd.EndToEndRingDeployed": "c15b006b249cb130623e59bdd6539c7907cedfe965135c327d76fc326eef137e",
-    "Pous.EndToEnd.FULL": "d6d58a4b6fef14c6a7da026ead94ffdf7194838c4e02d5681b0e41068b6d74f0",
     "Pous.EndToEnd.HmCoins": "9cc2b3d73fb1a88f92eb44225361d5e138cea7c92b48db4656c899cb48beb066",
-    "Pous.EndToEnd.HonestPassesAccepts": "a11053b253a40ba0f87be185f5214c6f9cc2ac19775130020067b8179cc9683b",
-    "Pous.EndToEnd.HonestPassesRing": "d6f5298462246fa10e32727eeeb0061e070b573004c315fccfa8b6361aa0d75f",
     "Pous.EndToEnd.LIMIT_NS": "11584def18b720ba5bccd123f38bd2d93fa3a595b1853297f494f79dd7f99af8",
     "Pous.EndToEnd.Passes": "13e9ddd0b6b6312c4120640d8a774562cd954aa3d8c78d12013c45cac9689cf2",
     "Pous.EndToEnd.RunBreak": "846d14a3dcea3c2b918da948d516d19c63df4a4dfbdbbe0a260c252dc448a7e9",
@@ -21611,22 +21584,12 @@
    }
   },
   "Properties.Pous.PeriodDeployed": {
-   "digest": "ef99bae0b7b9bc837517ae5a30081f298cb03b8eb35a60df71b4372d5ba39b9d",
+   "digest": "f7edf296a185599f9b4f7ccd9a4c8c61e5007e146260d9c518bd9d812b4fdf89",
    "definitions": {
-    "Pous.Period.DEADLINE_ROUNDS": "db41832c059e907d102b2e46526017111601e06fc7de7475887d195584a40079",
-    "Pous.Period.HONEST_S": "22dc505be2778bbb4336673b9bf0b2d0da423653cde0cb6c5e3436d7f6c5b4c7",
     "Pous.Period.PeriodHeldDeployed": "c8f5ba2bcbfcac21e02c9ad94cd8d99b8798738aa397d6fe7e65e281baa04338",
-    "Pous.Period.PeriodHeldHonest": "5a70912abdcd49c6aaa143fb93164a2842d14a4254312d26501b40106d9236f0",
-    "Pous.Period.PeriodHeldNontrivial": "861bebf2ac45801c6ffabb248ae5c605a33cd539a601371208a29602a521fdff",
     "Pous.Period.RING_D": "101d503b569916472765f890caadf78747a89f262aad45f7128cb77d91ff36bf",
     "Pous.Period.RING_L": "dcedeec302e0fbc98d9a30bed8993c655cc0a92a5597d08868706b7add1c3fe5",
-    "Pous.Period.RING_Q": "0a482eec597a719e035053e7117b43dd6a18315fbdfbcf4aeda2d0ddbbc1b12b",
-    "Pous.Period.ROUND_NS": "c32f23bb92a90b7b29b59f229057cc5e13879bd3feaf0942568a6aba08da08eb",
-    "Pous.Period.emptyRun": "070c415332d211e43b44d069132092a9753b7a87dc82d057cccdbdfd52bfd89d",
-    "Pous.Period.honestDevice": "9ff3e891f714c520e5ebd9131ea1161391e92a497587a03641b779a05f0108f1",
-    "Pous.Period.honestRun": "c874db43085529141973df8e9b49e8650ec2058518d648b64a73611e286b7816",
-    "Pous.Period.honestStrategy": "010724fe6a950db5e05ecc15b44625f30f7a938fad31a357698c8538047a58fa",
-    "Pous.Period.periodRun": "103aff8365fa8961ebbe7c0133aa4339a221d9b1672c506113118b1c8b54771d"
+    "Pous.Period.RING_Q": "0a482eec597a719e035053e7117b43dd6a18315fbdfbcf4aeda2d0ddbbc1b12b"
    }
   },
   "Properties.Pous.TimedAudit": {
@@ -21645,17 +21608,9 @@
    }
   },
   "Properties.Pous.Wipe": {
-   "digest": "75946ee988820c14aa3fda1af35e960e80e05746be542bad83629e9d72be68b5",
+   "digest": "674edaf0f552011dc4fbdc1077082849fcf1ff88def7fd34b76ad7866ef72932",
    "definitions": {
-    "MemoryChallenger.Properties.WipeSurvivorBound": "6bfa373338c284a4817a6403813eb9b2789de372dd9bd4ec4bd60d3cf54b5217",
-    "MemoryChallenger.Properties.WipeSurvivorBoundHonest": "b4ee7d08abfe1c1ae23740573ac5fd95988a24c5556f28a35b0821b8dfa7bbb6",
-    "MemoryChallenger.Properties.WipeSurvivorBoundNontrivial": "1abe28b37c4feadede6bdc04fa2c6e8b4c802be9a7db864fa4efe2ca81e7bc8b",
-    "MemoryChallenger.Properties.cheat": "54d4200684592fb6abb3c58def9a8dbc43bbcb82cf446077e23be56b873dccfb",
-    "MemoryChallenger.Properties.honest": "f1a0aa2ef440014fa97d0ce75b546bc090bd811a57e65d9030b4d94006b497b4",
-    "MemoryChallenger.Properties.honestFill": "99577470180f12201dc1fe979b6cd981613fe5e715fff314bd25c664391ba688",
-    "MemoryChallenger.Properties.honestRead": "1c1614200e60801a11cde904a1e5385dba1798e2d8cca5eab5737734cb97cb18",
-    "MemoryChallenger.Properties.segmentDevice": "579fcda7b55887f28086f08a2b0cb0fec17c1ddc5065c0f8012406482ee727cb",
-    "MemoryChallenger.Properties.segmentParams": "076d7292bf2140a9d7f55ad495342af07974a29a49713b8096f8ecf9b11464cb"
+    "MemoryChallenger.Properties.WipeSurvivorBound": "6bfa373338c284a4817a6403813eb9b2789de372dd9bd4ec4bd60d3cf54b5217"
    }
   },
   "Properties.Pous.WipeSigned": {
