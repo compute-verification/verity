@@ -1,6 +1,6 @@
-"""The training rules' random draws (`rules.training_draws`): each draw a field of the Program's `run` input beside the generator's
-seed and offset, in graph order; the Program run on what torch CPU drew against torch's arithmetic on the same draws, with and
-without a compute capability; each draw form; a graph without draws has no `run` input; and the draws the rules leave refused."""
+"""The training rules' random samples (`rules.training_draws`): each sample a field of the Program's `run` input beside the generator's
+seed and offset, in graph order; the Program run on what torch CPU drew against torch's arithmetic on the same samples, with and
+without a compute capability; each sample form; a graph without samples has no `run` input; and the samples the rules leave refused."""
 from __future__ import annotations
 
 import pytest
@@ -29,7 +29,7 @@ def _step(x, draws):
 
 
 def _drawn(x, g):
-    """What `_traced` draws, from the generator g."""
+    """What `_traced` samples, from the generator g."""
     return (torch.randn(x.shape, generator=g), torch.rand(x.shape, generator=g),
             torch.empty(4, 16).normal_(0.0, 0.5, generator=g), torch.randint(0, 7, (16,), generator=g),
             torch.randperm(16, generator=g))
@@ -42,8 +42,8 @@ def _traced(x):
 
 @BOTH
 def test_a_draw_is_an_input_committed_with_its_seed(rules) -> None:
-    """Five draws, each a field of `run` in graph order with the generator's (seed, offset) after it; the Program on torch's draws
-    and arbitrary seed words is torch's arithmetic on the same draws."""
+    """Five samples, each a field of `run` in graph order with the generator's (seed, offset) after it; the Program on torch's samples
+    and arbitrary seed words is torch's arithmetic on the same samples."""
     rep = _derive(_traced, X, rules=rules)
     assert rep.program is not None, rep.unsupported
     run = rep.provenance["run_inputs"]
@@ -90,6 +90,6 @@ def test_a_step_without_draws_has_no_run_input() -> None:
     (lambda x: (x + torch.normal(x, 1.0),), GPU),
 ], ids=["default-rules", "bernoulli-of-a-value", "normal-of-a-value"])
 def test_draws_left_refused(f, rules) -> None:
-    """The default rules (serving) keep refusing a draw, and the training rules a draw whose distribution reads a value."""
+    """The default rules (serving) keep refusing a sample, and the training rules a sample whose distribution reads a value."""
     u = _derive(f, X, rules=rules).unsupported
     assert isinstance(u, Unsupported) and u.reason == "side_input" and "random" in u.hint, u
