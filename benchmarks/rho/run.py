@@ -166,8 +166,8 @@ def operating_md(points: list[operating.Point]) -> list[str]:
 
 def incorrect_md(reg: Registry, inc: operating.Row) -> list[str]:
     if math.isinf(inc.capacity):
-        return ["Incorrect outputs: no sampled proofs, so nothing detects them.", ""]
-    drawn = "every unit proved" if inc.q >= 1 else f"steps the sampled proofs draw at q = {fmt(inc.q)} a step"
+        return ["Incorrect outputs: no SPOT, so nothing detects them.", ""]
+    drawn = "every unit proved" if inc.q >= 1 else f"steps SPOT samples at q = {fmt(inc.q)} a step"
     head = (f"Incorrect outputs ({drawn}): {fmt(inc.capacity)} bits before the first detection, except with chance "
             f"δ = {fmt(inc.delta)}.")
     out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]

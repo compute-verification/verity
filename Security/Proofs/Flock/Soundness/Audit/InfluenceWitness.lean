@@ -18,10 +18,10 @@ met, together. `W.lemma47`'s conclusion is also not trivial; the others show onl
 * `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and law, with the exits as
   separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
 * `A.influence`, `A.accepts`: a sampling design that samples nothing, a session that always accepts and the honest committed
-  transcript meet `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
+  transcript meet `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
   accepts with probability `1`.
 * `Two.influence`, `Two.accepts`: the same for the two-stage audit. `W`'s partition refines itself, both stages sample
-  nothing, and `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound₂ 0` hold, so `twoStage_influence` applies, and the
+  nothing, and `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound₂ 0` hold, so `twoStage_influence` applies, and the
   audit accepts with probability `1`.
 * `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
   exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
@@ -210,7 +210,7 @@ theorem hks : (P.analysis Xc ext).KnowledgeSound 0 := by
   rintro ok ⟨_, u, _, hu, _⟩
   exact notMem_empty u hu
 
-theorem hlink : (P.analysis Xc ext).LinkSound 0 := by
+theorem hlink : (P.analysis Xc ext).BindSound 0 := by
   intro R τ tgt
   refine (avg_mono fun ω => ?_).trans (avg_const (0 : ℝ≥0∞)).le
   refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
@@ -275,7 +275,7 @@ theorem hks : (r.analysis₂ X Yint ext).KnowledgeSound 0 := by
   rw [fine_empty] at hv
   exact notMem_empty v hv
 
-theorem hlink : (r.analysis₂ X Yint ext).LinkSound 0 := by
+theorem hlink : (r.analysis₂ X Yint ext).BindSound 0 := by
   intro R c tgt
   refine (avg_mono fun ω₁ => (avg_mono fun ω₂ => ?_).trans (avg_const (0 : ℝ≥0∞)).le).trans
     (avg_const (0 : ℝ≥0∞)).le

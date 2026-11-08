@@ -6,10 +6,15 @@ and the training rules placed first claim only what the defaults lower per row o
 Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for it
 (true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
 `fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels
-sum in blocks). A training op with no Definition to lower it to is refused with the Definition it needs (`_log_softmax`: a
-correctly-rounded f32 log, `F32LogRn`).
+sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary` also take bf16 values: a product is
+`LinearRef_v1{DT=bf16}` (operands widened, the f32 dot, its result rounded), and an element-wise op widens its bf16 operands to f32
+(`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
+do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
+GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
+core's dot (`HopperBF16WgmmaDot16_v1`). A training op with no Definition to lower it to is refused with the Definition it needs
+(`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
-    training_rules(min_view_leaves) -> RuleSet         the training rule set
+    training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s; a survey of what the rules refuse is `rules.training_survey`'s.
 """
@@ -21,11 +26,13 @@ import math
 import numpy as np
 import torch
 
+from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
+from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.derive import refuse
@@ -37,13 +44,13 @@ from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
-F32, BIT = Value(32), Value(1)
+F32, BF16, BIT = Value(32), Value(16), Value(1)
+_DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 
 
 # ---------------------------------------------------------------------------------------------------------
 # emitting
 # ---------------------------------------------------------------------------------------------------------
-
 
 
 def _bits(x: float) -> int:
@@ -110,12 +117,9 @@ def _shape(ctx, a) -> tuple[int, ...]:
     raise TypeError(a)
 
 
-def _is_f32(ctx, a) -> bool:
-    return isinstance(a, torch.fx.Node) and ctx.dtype_of(a) == torch.float32
-
-
-def _operand_ok(ctx, a) -> str | None:
-    """None if `a` is an f32 element-wise operand (a value, a static float tensor or a Python number), else why not."""
+def _operand_ok(ctx, a, dtypes=(torch.float32,)) -> str | None:
+    """None if `a` is an element-wise operand (a value of one of `dtypes`, a static float tensor or a Python number), else why
+    not."""
     if isinstance(a, bool):
         return "a bool operand"
     if isinstance(a, (int, float)):
@@ -127,13 +131,38 @@ def _operand_ok(ctx, a) -> str | None:
         return None
     if not isinstance(v, Coll):
         return f"{a.name} is not a value ({type(v).__name__})"
-    if not _is_f32(ctx, a):
-        return f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)} (the training rules lower f32)"
+    if ctx.dtype_of(a) not in dtypes:
+        return (f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)} (this rule lowers "
+                f"{' and '.join(_DT[d] for d in dtypes)})")
     return None
 
 
+def _bf16_held(ctx, a) -> bool:
+    """Whether a Python number or static float operand is a bf16 value (its f32 word survives rounding to bf16)."""
+    t = torch.as_tensor(a if isinstance(a, (int, float)) else ctx.val(a).tensor, dtype=torch.float32)
+    return torch.equal(t.to(torch.bfloat16).to(torch.float32).view(torch.int32), t.view(torch.int32))
+
+
+def _widened(ctx, node, x: Coll) -> Coll:
+    """A bf16 value's words widened to f32 (`Bf16ToF32_v1`, exact), in its shape."""
+    S = shape_of(x.type)[0]
+    if x.type.leaves == 1:
+        return Coll(_tensor_type(S, 32), _call(ctx, node, P.Bf16ToF32, Coll(BF16, x.refs)).refs)
+    return _batch(ctx, node, P.Bf16ToF32, x.reshape(Array(math.prod(S), BF16)), axes=(0,)).reshape(_tensor_type(S, 32))
+
+
+def _rounded(ctx, node, y: Coll, S: tuple[int, ...]) -> Coll:
+    """An f32 result `y` of shape `S` in the node's dtype: `y` for f32, each word rounded to bf16 (`F32ToBf16Rn_v1`) for bf16."""
+    if ctx.dtype_of(node) != torch.bfloat16:
+        return y
+    if not S:
+        return _call(ctx, node, P.F32ToBf16Rn, Coll(F32, y.refs))
+    return _batch(ctx, node, P.F32ToBf16Rn, y.reshape(Array(math.prod(S), F32)), axes=(0,)).reshape(_tensor_type(S, 16))
+
+
 def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
-    """(collection, batch axis) of an element-wise operand broadcast to the output shape `S`: a shared word, or `S`'s elements."""
+    """(collection, batch axis) of an element-wise operand broadcast to the output shape `S`: a shared word, or `S`'s elements;
+    f32 words, a bf16 value's widened."""
     n = math.prod(S)
     if isinstance(a, (int, float)):
         return _const(ctx, node, _bits(a)), None
@@ -143,6 +172,8 @@ def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
             return _const(ctx, node, _bits(v.tensor.reshape(()).item())), None
         return _static_coll(ctx, node, v.tensor.broadcast_to(S)), 0
     x = ctx.coll(a)
+    if ctx.dtype_of(a) == torch.bfloat16:
+        x = _widened(ctx, node, x)
     sx = tuple(shape_of(x.type)[0])
     if x.type.leaves == 1:
         return Coll(F32, x.refs), None
@@ -215,16 +246,44 @@ class _TrainRule(OpRule):
     modes = frozenset({"reference"})
 
 
-
 # ---------------------------------------------------------------------------------------------------------
 # matmul
 # ---------------------------------------------------------------------------------------------------------
 
 
+#: F.linear's GEMM at x (M, K), W (N, K) by its mm's operand layouts (`_layout`) as autograd lays them out: x @ W^T, dY @ W, dY^T @ X
+_ROLES = {("row", "col"): "fwd", ("row", "row"): "dX", ("col", "row"): "dW"}
+#: F.linear's (M, K, N) from its role's mm(a[Mm, Km], b[Km, Nm])
+_LINEAR_DIMS = {"fwd": lambda Mm, Km, Nm: (Mm, Km, Nm), "dX": lambda Mm, Km, Nm: (Mm, Nm, Km), "dW": lambda Mm, Km, Nm: (Km, Nm, Mm)}
+
+
+def _layout(t) -> str | None:
+    """A dense matrix's layout in memory: "row" (row-major), "col" (column-major: a row-major one transposed), else None."""
+    if t is None or t.dim() != 2 or t.storage_offset() != 0:
+        return None
+    rows, cols = t.shape
+    return {(cols, 1): "row", (1, rows): "col"}.get(tuple(t.stride()))
+
+
 class Matmul(_TrainRule):
-    """`mm(a[M,K], b[K,N])` / `bmm(a[B,M,K], b[B,K,N])` of f32 values -> one `batch` of `LinearRef_v1{K,N,f32}` over the rows of `a`
-    (per batch index for `bmm`), with `b` transposed by reference."""
-    info = _info("Matmul", "aten.mm / aten.bmm of f32 values", "both operands are f32 values", "one batch of LinearRef rows per matrix")
+    """`mm(a[M,K], b[K,N])` / `bmm(a[B,M,K], b[B,K,N])` of f32 or bf16 values -> one `batch` of `LinearRef_v1{K,N,DT}` over the rows
+    of `a` (per batch index for `bmm`), with `b` transposed by reference.  At a compute capability ``cc`` whose cuBLAS routes are
+    captured (`cublas_bf16.TRAIN_CC`), a bf16 `mm` is one batch of F.linear's row GEMM as its cuBLAS computes it instead: its role
+    read off the operands' layouts (`_ROLES`), its route the capture's (`cublas_bf16.train_route`) and its Definition the route's on
+    words.  The rule still claims a bf16 product it can't lower that way (a `bmm`, a layout no role has, a shape the capture doesn't
+    cover, a route with no Definition on words) and refuses it, so that no other rule lowers it with torch CPU's arithmetic."""
+    info = _info("Matmul", "aten.mm / aten.bmm of f32 or bf16 values", "both operands are values of one dtype, f32 or bf16",
+                 "one batch of LinearRef rows per matrix")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        if cc is not None and tuple(cc) != CB.TRAIN_CC:
+            raise ValueError(f"Matmul: cc {tuple(cc)} has no captured cuBLAS routes (cublas_bf16.TRAIN_CC is {CB.TRAIN_CC})")
+        self.cc = None if cc is None else f"cc{cc[0]}.{cc[1]}"
+        if cc is not None:
+            self.info = _info(f"Matmul_{self.cc}", "aten.mm / aten.bmm of f32 or bf16 values",
+                              "both operands are values of one dtype, f32 or bf16",
+                              f"a bf16 mm: one of F.linear's GEMMs, at a shape and route {self.cc}'s capture covers",
+                              "one batch of rows per matrix: the cuBLAS route's GEMM for a bf16 mm, else LinearRef")
 
     def targets(self):
         return {aten.mm.default, aten.bmm.default}
@@ -233,24 +292,53 @@ class Matmul(_TrainRule):
         for a in node.args[:2]:
             if not isinstance(a, torch.fx.Node) or not isinstance(ctx.val(a), Coll):
                 return "an operand is not a value"
-            if ctx.dtype_of(a) != torch.float32:
-                return f"numerics_unregistered: dtype {ctx.dtype_of(a)}"
+        dts = {ctx.dtype_of(a) for a in node.args[:2]}
+        if len(dts) != 1 or not dts <= set(_DT):
+            return f"numerics_unregistered: dtypes {sorted(map(str, dts))}"
         return True
 
     def emit(self, node, ctx):
+        if self.cc is not None and ctx.dtype_of(node.args[0]) == torch.bfloat16:
+            return self._emit_gpu(node, ctx)
         a, b = ctx.coll(node.args[0]), ctx.coll(node.args[1])
         sa, sb = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])
         nb = sa[0] if len(sa) == 3 else 1
         M, K, N = sa[-2], sa[-1], sb[-1]
-        fn = ctx.kind("linear", node, K=K, N=N, DT="f32", BIAS=False)
-        a3 = a.reshape(Array(nb, Array(M, Array(K, F32))))
-        b3 = b.reshape(Array(nb, Array(K, Array(N, F32))))
+        dt = ctx.dtype_of(node.args[0])
+        E = BF16 if dt == torch.bfloat16 else F32
+        fn = ctx.kind("linear", node, K=K, N=N, DT=_DT[dt], BIAS=False)
+        a3 = a.reshape(Array(nb, Array(M, Array(K, E))))
+        b3 = b.reshape(Array(nb, Array(K, Array(N, E))))
         outs = []
         for i in range(nb):
             bT = _view_permute(b3[i], (1, 0), node.name)
             outs.append(_batch(ctx, node, fn, a3[i], bT, axes=(0, None)))
-        ctx.define(node, Coll(_tensor_type(list(sa[:-1]) + [N], 32), concat([o.refs for o in outs])))
+        ctx.define(node, Coll(_tensor_type(list(sa[:-1]) + [N], E.w), concat([o.refs for o in outs])))
         ctx.record(self, node, {"batch": nb, "M": M, "K": K, "N": N}, emitted=f"{fn.id} x{nb * M}")
+
+    def _emit_gpu(self, node, ctx):
+        def no(why: str):
+            refuse("numerics_unregistered", node, ctx.module_path(node), f"a bf16 {node.target} on {self.cc}: {why}")
+
+        if node.target is not aten.mm.default:
+            no("only F.linear's GEMMs have captured routes (cublas_bf16.TRAIN_CAPTURE); without a cc it is torch CPU's")
+        layouts = tuple(_layout(ctx.tensor_meta(a)) for a in node.args[:2])
+        if layouts not in _ROLES:
+            no(f"operand layouts {layouts}, none of F.linear's GEMMs' "
+               f"({', '.join(f'{r} {a} x {b}' for (a, b), r in _ROLES.items())})")
+        role = _ROLES[layouts]
+        (Mm, Km), Nm = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])[1]
+        M, K, N = _LINEAR_DIMS[role](Mm, Km, Nm)
+        try:
+            route = CB.train_route(role, M, K, N)
+            fn = word_of(CB.route_gemm(route, *CB.TRAIN_LINEAR_ROLES[role][2](M, K, N)))
+        except (ValueError, KeyError) as e:
+            no(f"F.linear's {role} GEMM at x ({M}, {K}), W ({N}, {K}): {e.args[0]}")
+        a = ctx.coll(node.args[0]).reshape(Array(Mm, Array(Km, BF16)))
+        bT = _view_permute(ctx.coll(node.args[1]).reshape(Array(Km, Array(Nm, BF16))), (1, 0), node.name)
+        out = _batch(ctx, node, fn, a, bT, axes=(0, None))
+        ctx.define(node, Coll(_tensor_type([Mm, Nm], 16), out.refs))
+        ctx.record(self, node, {"role": role, "M": M, "K": K, "N": N, "route": route}, emitted=f"{fn.id} x{Mm}")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -262,57 +350,69 @@ _BINARY = {aten.add.Tensor: P.F32Add, aten.add.Scalar: P.F32Add, aten.sub.Tensor
 
 
 class Binary(_TrainRule):
-    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32 values, static float tensors and Python numbers, broadcast:
-    `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1` (true division) element by element; a number is its f32 word."""
-    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32", "operands are f32 values, static float "
-                 "tensors or Python numbers", "alpha == 1, no rounding_mode", "one batch over the output's elements")
+    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32 or bf16 values, static float tensors and Python numbers,
+    broadcast: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1` (true division) element by element; a number is its f32 word, a
+    bf16 operand is widened and a bf16 result rounded. A bf16 result's numbers are bf16 values: torch rounds a number to bf16
+    for `add` and `sub` and keeps its f32 value for `mul` and `div`, which agree only then."""
+    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32 or bf16 values, "
+                 "static float tensors or Python numbers", "a bf16 result's numbers and static operands are bf16 values",
+                 "alpha == 1, no rounding_mode", "one batch over the output's elements")
 
     def targets(self):
         return set(_BINARY)
 
     def applies(self, node, ctx):
-        if ctx.dtype_of(node) != torch.float32:
+        if ctx.dtype_of(node) not in _DT:
             return f"numerics_unregistered: result dtype {ctx.dtype_of(node)}"
         if node.kwargs.get("alpha", 1) != 1 or node.kwargs.get("rounding_mode") is not None:
             return "numerics_unregistered: alpha != 1 or a rounding mode"
-        whys = [w for w in (_operand_ok(ctx, a) for a in node.args[:2]) if w]
+        whys = [w for w in (_operand_ok(ctx, a, tuple(_DT)) for a in node.args[:2]) if w]
         if whys:
             return whys[0]
-        if not any(isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll) for a in node.args[:2]):
+        statics = [a for a in node.args[:2] if not (isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll))]
+        if len(statics) == 2:
             return "no operand is a value (a static result: StaticFloats)"
+        if ctx.dtype_of(node) == torch.bfloat16 and not all(_bf16_held(ctx, a) for a in statics):
+            return "numerics_unregistered: a bf16 op with a number that bf16 doesn't hold"
         return True
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
         fn = _BINARY[node.target]
         out = _ew(ctx, node, fn, [_operand(ctx, node, a, S) for a in node.args[:2]], S)
-        ctx.define(node, out)
-        ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
+        ctx.define(node, _rounded(ctx, node, out, S))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"{fn.id} x{math.prod(S)}")
 
 
 class Unary(_TrainRule):
-    """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 value, as torch's CPU kernels compute
-    them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2 reciprocals,
-    1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is IEEE's
-    (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some CPUs."""
-    info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32", "the operand is an f32 value",
-                 "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)", "one batch per step over the elements")
+    """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 or bf16 value, as torch's CPU kernels
+    compute them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2
+    reciprocals, 1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is
+    IEEE's (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some CPUs. A bf16
+    operand is widened and the result rounded to bf16, except where torch's bf16 kernel rounds in between, which is refused: `pow`
+    3 and -2 round the square, and `rsqrt` (and `pow` -0.5) the square root in its scalar loop."""
+    info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32 or bf16", "the operand is an f32 or "
+                 "bf16 value", "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)",
+                 "bf16: not rsqrt, nor pow 3, -2 or -0.5", "one batch per step over the elements")
 
     def targets(self):
         return {aten.neg.default, aten.sqrt.default, aten.rsqrt.default, aten.reciprocal.default, aten.exp.default,
                 aten.sigmoid.default, aten.pow.Tensor_Scalar}
 
     def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0])
+        why = _operand_ok(ctx, node.args[0], tuple(_DT))
         if why or not isinstance(ctx.val(node.args[0]), Coll):
             return why or "the operand is not a value"
-        if node.target is aten.pow.Tensor_Scalar and node.args[1] not in (0, 0.5, 1, 2, 3, -0.5, -1, -2):
-            return f"numerics_unregistered: pow with exponent {node.args[1]} needs an f32 pow Definition"
+        e = node.args[1] if node.target is aten.pow.Tensor_Scalar else None
+        if node.target is aten.pow.Tensor_Scalar and e not in (0, 0.5, 1, 2, 3, -0.5, -1, -2):
+            return f"numerics_unregistered: pow with exponent {e} needs an f32 pow Definition"
+        if ctx.dtype_of(node) == torch.bfloat16 and (e in (3, -2, -0.5) or node.target is aten.rsqrt.default):
+            return ("numerics_unregistered: torch's bf16 kernel rounds in between (pow 3 and -2 the square, rsqrt's scalar loop "
+                    "the square root)")
         return True
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
-        x = _flat(ctx.coll(node.args[0]), S)
         one = (_const(ctx, node, _bits(1.0)), None)
 
         def ew(fn, *ops):
@@ -324,6 +424,8 @@ class Unary(_TrainRule):
             ctx.define(node, ctx.coll(node.args[0]))
             ctx.record(self, node, {"exponent": e}, emitted="identity (torch copies the operand)")
             return
+        x = ctx.coll(node.args[0])
+        x = _flat(_widened(ctx, node, x) if ctx.dtype_of(node.args[0]) == torch.bfloat16 else x, S)
         if t is aten.neg.default:
             y = ew(SC.F32Neg, x)
         elif t is aten.sqrt.default or e == 0.5:
@@ -344,8 +446,8 @@ class Unary(_TrainRule):
             y = ew(P.F32Div, one, ew(P.F32Mul, x, x))
         else:
             y = ew(P.F32Add, one, (_const(ctx, node, 0), None))
-        ctx.define(node, y[0].reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"op": str(t), "exponent": e}, emitted=f"x{math.prod(S)}")
+        ctx.define(node, _rounded(ctx, node, y[0].reshape(_tensor_type(S, 32)), S))
+        ctx.record(self, node, {"op": str(t), "exponent": e, "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"x{math.prod(S)}")
 
 
 class Lerp(_TrainRule):
@@ -679,17 +781,19 @@ class EmbeddingDenseBackward(_TrainRule):
         ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
 
 
-def training_rules(min_view_leaves: int = 0) -> RuleSet:
+def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
     `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
-    leaves, which the root's replay then substitutes as one reference part per leaf."""
+    leaves, which the root's replay then substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as
+    that GPU's cuBLAS computes them (`Matmul`), in the rule set ``training-cc<major>.<minor>``."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
-    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul()]
+    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)]
     last = [Binary(), Unary(), Lerp(), Addcmul(), Reduce(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(),
             NllLossForward(), NllLossBackward(), EmbeddingDenseBackward()]
-    return RuleSet("training", first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
+    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
+    return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Reduce", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax",

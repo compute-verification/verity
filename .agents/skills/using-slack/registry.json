@@ -104,7 +104,7 @@
       "lineage": [
         "bc-8f4b652b"
       ],
-      "remit": "C-Flock, its guarantees (recursion's knowledge soundness, the ZK server's zero knowledge), sampled proofs, red team, proof-system sweeps.",
+      "remit": "C-Flock, its guarantees (recursion's knowledge soundness, the ZK server's zero knowledge), SPOT, red team, proof-system sweeps.",
       "charter": "PRF-282 and proofs' goals on the Goals page: proofs/recursion-knowledge-sound, proofs/zero-knowledge, proofs/zero-knowledge-any-worker",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
@@ -658,6 +658,7 @@
       "linear": "HASH",
       "owns": [
         "benchmarks/hash/",
+        "benchmarks/moe_align/",
         "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [

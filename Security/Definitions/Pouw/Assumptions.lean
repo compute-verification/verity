@@ -26,7 +26,7 @@ public import Definitions.Pouw.Assumptions.Dimension.RouteU
 public import Definitions.Pouw.Assumptions.Dither
 public import Definitions.Pouw.Assumptions.DitherInstance
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
-public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.GameStatements
