@@ -760,6 +760,11 @@ def coinTreeCmd (path : String) : IO UInt32 := do
     IO.println s!"COINTREE {line.compress}"
   return (if all then 0 else 1)
 
+/-- `verify`'s refusal of upstream's plain proof files (`--upstream-plain`), which `agree` reports for a session no other
+refusal meets. -/
+def UPSTREAM_PLAIN : String :=
+  "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; flock-verify agree compares the verifier's checks on them with upstream's verdicts"
+
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
 statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`); `--comp` is the row leaf's
@@ -849,27 +854,48 @@ none is on a seed's coins (the live build reads no `FC_COINS` under `--zk`), so 
 `--coins tree`: plain sessions on that tree (`flock-circuit` under `FC_COINS=tree`), whose `Hello` names it, whose record
 opens it (R7, `CoinTree.checkHello`, `CoinTree.checkRecord`) and whose session key is fresh in the run
 (`CoinTree.checkFresh`); without `--coins`, seed coins, refused last (`ProvedScope.servedForm`).
-`--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
-deployed prover writes after the pair (`Tags.upstreamPlain`, `Flock.Proof`), so each rep is decoded from the file then
-the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
-refused where the other is pinned. Not with `--zk`.
+`--upstream-plain`, upstream's plain proof files (without the zk patch's `zk_level0 = None` tag that every deployed
+prover writes after the pair: `Tags.upstreamPlain`, `Flock.Proof`), is refused, every session with `UPSTREAM_PLAIN`
+before any file is read: no soundness theorem covers that form (`flock_verify_sound`'s model reads `Flock.verify`, the
+deployed form), and only `agree` reads it.
 `--plain-tables`: the plain path past one table (`ProvedScope.checkP`, `Flock.ProvedScope`): a plain session of public or hidden
 outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABLES` tables, at a subset sample, with the
 verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
-public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
-def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+public file is refused. Without it a plain session has at most one table. Not with `--zk`.
+With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts. -/
+def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 := do
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
-  if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then
-    for dir in (args.dropWhile (· != "--session")).drop 1 do
-      let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool false), ("why", Lean.Json.str why)]
+  -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
+  -- whether the checks pass exactly when upstream accepted, and never an acceptance
+  let emit : String → Except String (Except String Unit) → List (String × Lean.Json) → IO Bool := fun dir outcome extra => do
+    match upstream with
+    | none =>
+      let (ok, why) := match outcome with | .ok (.ok ()) => (true, "") | .ok (.error e) | .error e => (false, e)
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++ extra)
       IO.println s!"VERDICT {line.compress}"
-    return 1
+      return ok
+    | some up =>
+      let theirs := (up.getObjValAs? Bool dir).toOption
+      let agrees := theirs == some outcome.isOk
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("agree", Lean.Json.bool agrees),
+        ("upstream", (theirs.map Lean.Json.bool).getD Lean.Json.null),
+        ("check", Lean.Json.str (match outcome with | .error e => e | .ok _ => "")),
+        ("refusal", Lean.Json.str (match outcome with | .ok (.error e) => e | _ => ""))] ++ extra)
+      IO.println s!"AGREEMENT {line.compress}"
+      return agrees
+  let refuseAll (why : String) : IO UInt32 := do
+    let mut all := true
+    for dir in (args.dropWhile (· != "--session")).drop 1 do
+      all := (← emit dir (.error why) []) && all
+    return (if all && upstream.isSome then 0 else 1)
+  if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then return (← refuseAll why)
+  if upstream.isNone && args.contains "--upstream-plain" then return (← refuseAll UPSTREAM_PLAIN)
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
-  let tags := if args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
+  let tags := if upstream.isSome && args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
@@ -883,8 +909,6 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.eprintln "verify --zk: --plain-tables is the plain path's (without --zk)"; return 2
   if zk && (argOf args "--coins").isSome then
     IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
-  if zk && tags.upstreamPlain then
-    IO.eprintln "verify --zk: a --zk session's files are the zk patch's, so --upstream-plain (upstream's plain files) does not apply"; return 2
   if zk && tags.plainLeaves then
     IO.eprintln s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves"
     return 2
@@ -1040,22 +1064,25 @@ def verifyCmd (args : List String) : IO UInt32 := do
         else (Flock.JsonParse.parse r).toOption.bind fun j =>
           (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
       | _, _ => none
-    let verdict := do
+    let checked : Except String (String × Array Setup) := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs
       else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
       else verify spec tabs record proofs
-      -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
-      -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
-      -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
-      -- the program,
-      -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
-      -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
-      -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
-      -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`)
+      pure (record, tabs)
+    -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
+    -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
+    -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
+    -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
+    -- the program,
+    -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
+    -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
+    -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
+    -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`), then under `agree` upstream's
+    -- plain files, which `verify` refuses whatever else holds
+    let refusals : String × Array Setup → Except String Unit := fun (record, tabs) => do
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -1068,12 +1095,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
       ProvedScope.servedForm stmtTags coins
+      if stmtTags.upstreamPlain then throw UPSTREAM_PLAIN
     if let some k := coinKey then coinKeys := coinKeys.push k
-    let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
-    all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
-    let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
+    let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
       (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
@@ -1090,9 +1116,32 @@ def verifyCmd (args : List String) : IO UInt32 := do
         | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
           (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])
         | none => []))
-    IO.println s!"VERDICT {line.compress}"
+    all := all && ok
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
+
+/-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
+(`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
+refusals, in `verify`'s order, on plain sessions whose proof files are upstream's form (the file then the zk patch's
+`None` tag, `verifyFiles (plainBytes true)`; `Tags.upstreamPlain`), which `verify` refuses. For each session it prints one
+line, `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}`, with `verify`'s findings and no `accepted`:
+`check` is the first check's failure (`""` when every check passes; a refusal before any check runs counts, such as a
+legacy statement's or a sample law's at setup), `refusal` the first refusal once every check has passed (`UPSTREAM_PLAIN`
+when no other refuses, so no session passes), `upstream` the session's verdict in `F` (a JSON object from each session
+directory, as given to `--session`, to upstream's verdict, `true` for accepted; `null` where `F` has none), and `agree`
+whether the checks pass exactly when upstream accepted. Exit 0 iff every session agrees. Not with `--zk`: a `--zk`
+session's verdict is `verify --zk`'s, on the deployed form. -/
+def agreeCmd (args : List String) : IO UInt32 := do
+  let usage := "usage: flock-verify agree --upstream-plain --upstream-verdicts F [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--tables DIR] [--partition F] [--program F] [--registered F] [--stratified K] [--coins tree] [--session-tables J] [--plain-tables] --session DIR..."
+  let some path := argOf args "--upstream-verdicts" | IO.eprintln usage; return 2
+  if !args.contains "--upstream-plain" then
+    IO.eprintln "agree: it reads upstream's plain proof files alone, so --upstream-plain is required"; return 2
+  if args.contains "--zk" then
+    IO.eprintln "agree: a --zk session's verdict is verify --zk's, on the deployed form; agree reads plain sessions"; return 2
+  let verdicts ← match Flock.JsonParse.parse (← IO.FS.readFile path) with
+    | .ok j => pure j
+    | .error e => IO.eprintln s!"agree: --upstream-verdicts {path}: {e}"; return 2
+  verifyCmd args (some verdicts)
 
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
 (`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample, as one
@@ -1805,6 +1854,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "agree" :: rest => agreeCmd rest
   | "ks-form" :: rest => ksFormCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest

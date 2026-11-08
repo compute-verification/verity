@@ -222,6 +222,33 @@ def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
+    """No soundness theorem covers upstream's plain proof files, so `verify --upstream-plain` refuses every session before
+    it reads a file. Only `agree` reads them, with the flag and upstream's verdicts and never under `--zk`, and it prints no
+    verdict: each line says whether the checks pass exactly when upstream accepted (a legacy statement's sessions fail
+    before any check runs)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    files = [str(LEAN / ".lake/build/bin/flock-verify"), "--circuit", str(tmp_path / "none"), "--public", str(tmp_path / "none")]
+    p = subprocess.run([files[0], "verify", *files[1:], "--upstream-plain", "--session", "a", "b"], capture_output=True, text=True)
+    got = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+    assert p.returncode == 1 and [(v["session"], v["accepted"]) for v in got] == [("a", False), ("b", False)], p
+    assert all(v["why"].startswith("refused: upstream's plain proof files (--upstream-plain): ") for v in got), got
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({"a": False, "b": True}))
+    for extra, err in ((["--upstream-plain"], "usage: flock-verify agree"),
+                       (["--upstream-verdicts", str(upstream)], "--upstream-plain is required"),
+                       (["--upstream-plain", "--upstream-verdicts", str(upstream), "--zk"], "verify --zk's")):
+        p = subprocess.run([files[0], "agree", *files[1:], *extra, "--session", "a"], capture_output=True, text=True)
+        assert p.returncode == 2 and not p.stdout and err in p.stderr, (extra, p)
+    p = subprocess.run([files[0], "agree", "--statement", "verity/flock-pure-block/v2", *files[1:], "--upstream-plain",
+                        "--upstream-verdicts", str(upstream), "--session", "a", "b", "c"], capture_output=True, text=True)
+    got = [json.loads(ln[10:]) for ln in p.stdout.splitlines() if ln.startswith("AGREEMENT ")]
+    assert p.returncode == 1 and not any("accepted" in v or v["refusal"] for v in got), p
+    assert [(v["session"], v["upstream"], v["agree"]) for v in got] == [("a", False, True), ("b", True, False), ("c", None, False)]
+    assert all("a legacy statement" in v["check"] for v in got), got
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_unit_draw_check(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     d = {"law": "subset", "population": 100, "k": 3, "units": [4, 17, 90]}
