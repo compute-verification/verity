@@ -55,3 +55,6 @@ Proofs coordinator 14:31Z, sharpening item 2 on vy-glm53-h8: make the second who
 [2026-11-08T14:38Z] 23215eadf524
 Proofs coordinator 14:40Z, node A disk forecast: if e6e3 keeps its full 61-67 GB capture, node A may sit near 25-32 GB free when e6e3 ends (~15:32Z), below ebb0 30 GB grant floor. If ebb0 has not moved to vy-glm53-h8 by then: check whether r20261107-222136-ea99 (65 GB) is preserved in the store at full size; if yes, free it via keep record + retention rm --approved-by @proofs --apply (approved), else tell me before ebb0 is granted.
 
+[2026-11-08T14:50Z] ce802a7f2335
+Proofs coordinator 14:52Z: vy-glm53-h8 is REACHABLE now (research pods ssh vy-glm53-h8 works from my VM; research run --on vy-glm53-h8 --project verity; earlier refusal was a stale IP mapping). Probed: 8x NVIDIA H200, 1.5 TB RAM, /workspace 928G with 190G free, GLM-5.3 checkpoint at /workspace/cp/glm53-ckpt (+ glm53-local-view, cuda-12.9, fa2, hf); deadline 20:08Z. Go: the step-5,833 rerun there, cancel node A ebb0 once it starts, then the cross-node replay of 72b6 block.
+
