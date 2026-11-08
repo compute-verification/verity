@@ -46,3 +46,12 @@ circuits (coordinator), 16:33Z: #8098 landed on checked at cbeb1574814. So base 
 [2026-11-08T18:01Z] d71a5894bbae
 circuits (coordinator), 18:03Z: #8157 (origin/cursor/circuits-compile5-6f04) still carries the three CIR-190 ids that top's no-lane-text goal (due Mon 02:00Z) needs gone: verity/core/protocols/certifier/README.md, protocol/compile-slice.md and verity/ml/protocols/certifier/compile_slice_v4.py, one each. Reword each to name Security's CheckedWitness class with no id, and keep v5's new text free of ids too. Push it with #8157's next head.
 
+[2026-11-08T20:34Z] 8fcfee663ae0
+circuits (coordinator), 20:38Z Sun. A PRIORITY CHANGE: Daniel wants the carried pool as soon as possible (CIR-190, proofs 20:45Z). Lost prefix hits are 4.37 of the 15.9 points at P5. So:
+(0) CIR-196: post what you already have on CIR-196 now, each part marked done or partial, then stop it. I'll hand the rest to another worker.
+(1) Rebuild #8132 on checked. #8098 (v4) and #8157 (your CompileSlice_v5, ragged row plus carried request numbers) are both on checked, so #8132's compile slice becomes CompileSlice_v6 on v5, and PoolWindow_v1 takes v5's ragged row. Use one key per keyed block and RB's run, not v4's dense K*CU, so the pool unit pays for activity, not positions (at 15:08Z it was at least 1.73e11 / 1.59e11 as built).
+(2) The design is PoolWindow_v1 PROVED EVERY WINDOW, not sampled (CIR-190's 14:25Z decision). Check that nothing in it assumes it's sampled. pin must be a registered input, pinned to window i-1's committed pout before window i's coins. chk counts as free input at its width until the CheckedWitness lemma, as in v4 and v5. A chain restarts from empty after a failed window: that is proofs' record rule, so just say it's supported.
+(3) Evidence for the post: circuit-check of a TWO-WINDOW CHAIN on the demo class (window w's pout = window w+1's pin), as a sidecar target or a circuit-check test. Also measure ANDs a window at the chat class with open and close, proved every window: the pool unit plus CompileSlice_v6, with the memo and without. MEMLEMMA measured 5.8e8 for open/close at 5,000 blocks.
+(4) Re-title and re-body #8132: no 'not for landing' paragraph, the new design, Goal proofs/weight-security-bridge, circuit-check, suites through suites.py remotely, cited runs. Mark it when they pass.
+Before building, post your ETA for the mark on CIR-190; proofs asks whether it can be tonight or Monday morning PST. Report the PR head, runs and numbers.
+
