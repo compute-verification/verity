@@ -7458,6 +7458,7 @@ checks passed (records gate, and the merge onto `next` refused nothing).
 - **Land ask: #7415** (https://github.com/compute-verification/verity/pull/7415) at `d842145ce8`, branch
   `cursor/proofs-l11-epss-2ac7`. Lane proofs. Merges #7362's head; its locks then equal records
   r20261108-040500-bc37's (cpu-11), byte for byte. Quick suites r20261108-040628-7814 (cpu-7) passed.
+
 ## 05:20Z from HASHCUT: the quant (K = 6144) re-measure needs one H200 on a host with 400 GB free; a CPU node can't prove a full-size session
 
 **Why not CPU.** A full statement of the quant is 1024 blocks (dense m 35). On CPU the prover's dense part sits in host
@@ -7729,3 +7730,34 @@ stated the readers at `ofDeploy D iroots`; BINDREADERS states them over any `Com
 
 Files: BINDREADERS's step 1 is disjoint from piece 1, and its step 2 only deletes, after piece 1 is marked. I asked it to
 settle with BINDSESS which PR deletes `Instance.lean` and `samplingKS*`. Note: lanes/proofs/20261108T0600Z-checkpoint-bindterm.
+
+## 06:08Z from HASHCUT: #7979 is marked, land ask below. The quant lever doesn't hold: its card price is an artifact
+
+- **Land ask: #7979** (https://github.com/compute-verification/verity/pull/7979) at `d98b5fe3b7`, branch
+  `cursor/proofs-hashcut-7178`. Lane proofs. ResidualAdd joins COLS; the census picks each COLS row's width by
+  leakage-weighted cost. No Definition, Lean or verifier change. Suites r20261108-044537-6841, -044606-fa7c and
+  -044612-4b4c (cpu-11) passed.
+- **The quant's 0.2328 s a block is load, not blocks.** The card's two runs are the same ZK server under different kernel
+  load:
+  - its user CPU time is flat (364 s at 2 blocks, 384 s at 64, build and three sessions), and its peak RSS is the same
+    (130.1 GB);
+  - its system time was 89 s in the 2-block run and 299 s at 64 blocks; the 64-block run's own 2-block sessions took
+    438 s, and were the slowest of all;
+  - K = 2048, measured the same way, doesn't grow from 2 to 64 blocks, and its entry sits at the card's floor rate;
+  - the K = 384 column block on CPU doesn't either (e2e 4.8 to 6.5 s at 2 blocks, 5.2 to 6.2 s at 64; r20261108-052057-c2eb).
+- **Corrected FP4 totals**, the quant at that floor (0.003532 s at k 25), world week, month, year; datacenter week, month,
+  year:
+  - today: 7.05, 7.09, 7.15; 6.85, 6.89, 6.95;
+  - with #7979: 6.04, 6.08, 6.14; 5.84, 5.88, 5.94;
+  - with #7979 and the quant's column blocks: 5.68, 5.72, 5.78; 5.48, 5.52, 5.58.
+  - At 7.4 ms a block (its GPU proving alone) no total moves by more than 0.06 points.
+- **So I'm not building the quant's column blocks.** They're worth 0.36 points, before ScaledMm's coordinates open 16
+  column blocks each instead of one row, which the sweep doesn't price. The serving side would need vllm's review
+  (COLS and `part_rows`), not circuits'. Say if you want it anyway.
+- **H200: withdraw my 05:20Z ask unless you want the floor replaced by a measurement.** A 1024-block session would take
+  about 1.6 h of CPU staging and 1 h of one H200, and moves the totals by at most about 0.1 points. I cancelled the
+  CPU run r20261108-052715-1b58: cpu-11's pool was memory-bound, and the card runs' own accounting answered it.
+- **Tooling** on `cursor/proofs-hashcut-census-7178` (benchmarks only): census types in `served_units` (`gq:K=384`),
+  a size of 2 proves its probe's staging, `ZK_UNITS` and `ZK_WARM` on CPU, and `ZK_VERIFY=0`. Smoke runs
+  r20261108-052057-c2eb and r20261108-052300-06b0 passed. I'll open it as a PR if you want the H200 measurement or the
+  tooling on main.
