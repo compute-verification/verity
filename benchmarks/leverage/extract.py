@@ -13,7 +13,10 @@ Parts (--part):
           z + (s*A - h_i) E[:, i], so the top-k served logprobs, divided by s*A, are the k largest (s = +1) or smallest
           entries of column i of the unembedding E, up to one constant (softmax's shift, aligned away). Per fault: k - 1
           entries. No knowledge of z or h is needed, and no logit bias. Under --boxes the amplitude is coordinate i's
-          box, or what one FP8 code reaches at its token's own group scale (--box-amps).
+          box, or what one FP8 code reaches at its token's own group scale (--box-amps). With --differential the
+          decoder picks k tokens by logit bias and also reads them from an honest query on the same prompt: the
+          difference over (s*A - h_i) reads column i at any amplitude the logits' rounding resolves, not only where
+          the fault dominates the honest logits (the scale s*A - h_i is one number per column and prompt, aligned).
   honest  the honest baseline with the same observables: Carlini et al. 2024's SVD attack. Full logit vectors of n
           honest positions, rounded as served and centred (softmax's shift), give E up to an invertible d x d map G (and
           a constant per column); aligning G by least squares against the truth leaves the error, over V*d - d^2 - d
@@ -29,6 +32,9 @@ Parts (--part):
           error against norm(w_j) includes what the honest layers after l add, so this part shows where depth costs
           the attack and where it does not. Under --boxes the values are in range (`fault_values`), a joint fault's
           target is the sum of what its group's units add, and --pick widest attacks the units with the widest boxes.
+          With --differential the decoder also reads the honest final state from an honest query on the same prompt
+          and tokens, and reads the fault's direction from the difference (`differential_error`), which removes the
+          honest state and leaves only what the layers after l add. That costs one more unseen degree of freedom.
 
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model gpt2 --part final --out "$OUT"
 """
@@ -108,16 +114,17 @@ def part_final(lm: LM, tok, a) -> dict:
     V, d = E.shape
     var = E.var(0)
     grid = getattr(lm, "fp4_grid", None)
-    cols = torch.randperm(d, generator=torch.Generator().manual_seed(a.seed))[:a.columns].tolist()
+    gen = torch.Generator().manual_seed(a.seed)
+    cols = torch.randperm(d, generator=gen)[:a.columns].tolist()
     specs = list(a.amps) if lm.boxes is None else list(a.box_amps)
     L = lm.spec.layers
     out = []
     for pi in range(a.prompts):
         pre, last, t0 = prefix(lm, tok, PROMPTS[pi])
+        taps = {("final", L): None}
+        z_h = lm.forward(last, pre.expand(1), taps=taps)[:, -1]
+        h = taps[("final", L)][0, 0].float()
         if lm.boxes is not None:
-            taps = {("final", L): None}
-            lm.forward(last, pre.expand(1), taps=taps)
-            h = taps[("final", L)][0, 0].float()
             hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
         for amp in specs:
             for sign in (1.0, -1.0):
@@ -132,17 +139,22 @@ def part_final(lm: LM, tok, a) -> dict:
                     z = faulted_logits(lm, pre, last, t0, [("final", L, i, sign * A) for i, A in zip(cs, amps)])
                     sa = (sign * torch.tensor(amps)).to(torch.bfloat16).double()[:, None]
                     for prec in a.precisions:
-                        lp = served_logprobs(z, prec)
+                        lp = served_logprobs(z, prec).double()
+                        lp_h = served_logprobs(z_h, prec).double()
                         for k in a.ks:
-                            top = lp.topk(k, -1)
-                            est = top.values.double() / sa
-                            tru = E.double()[top.indices, torch.tensor(cs)[:, None]]
+                            if a.differential:
+                                toks = torch.stack([torch.randperm(V, generator=gen)[:k] for _ in cs])
+                                est = (lp.gather(1, toks) - lp_h[0, toks]) / (sa - h.double()[cs][:, None])
+                            else:
+                                top = lp.topk(k, -1)
+                                toks, est = top.indices, top.values / sa
+                            tru = E.double()[toks, torch.tensor(cs)[:, None]]
                             err = est - tru
                             err = err - err.mean(1, keepdim=True)
                             ratio = (err.pow(2).sum(1) / max(k - 1, 1)) / var.double()[cs]
                             hit = torch.full((len(cs),), float("nan"))
                             if grid is not None and k > 1:
-                                rel = (top.values.double() - top.values.double()[:, :1]) / sa + tru[:, :1]
+                                rel = est - est[:, :1] + tru[:, :1]
                                 hit = (snap(rel, grid) == tru.float())[:, 1:].float().mean(1)
                             for b, i in enumerate(cs):
                                 out.append((pi, amp, sign, prec, k, i, float(ratio[b]), float(hit[b])))
@@ -283,8 +295,9 @@ def part_rows(lm: LM, tok, a) -> dict:
     out = []
     t_start = time.time()
     pre, last, t0 = prefix(lm, tok, PROMPTS[0])
-    taps0 = {(site, l): None for l in layers}
-    lm.forward(last, pre.expand(1), taps=taps0)
+    taps0 = {(site, l): None for l in layers} | {("final", lm.spec.layers): None}
+    z0 = lm.forward(last, pre.expand(1), taps=taps0)[0, -1]
+    h0 = taps0[("final", lm.spec.layers)][0, 0].float()
     amax = torch.load(a.boxes)["amax"] if a.boxes is not None else None
     for l in layers:
         x0 = taps0[(site, l)][0, 0].float()
@@ -309,18 +322,26 @@ def part_rows(lm: LM, tok, a) -> dict:
                   f"{time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
             for prec in a.precisions:
                 zs = z.float().to(torch.bfloat16).float() if prec == "bf16" else z.float()
+                zs0 = z0.float().to(torch.bfloat16).float() if prec == "bf16" else z0.float()
                 for bi, j in enumerate(units):
                     tru = norm_dir(lm, deltas[bi])
                     best = norm_dir(lm, (h[bi] - b) / g)
-                    r_c = float((best - tru).pow(2).mean())
+                    if a.differential:
+                        r_c = differential_error(best, norm_dir(lm, (h0 - b) / g), tru)
+                    else:
+                        r_c = float((best - tru).pow(2).mean())
                     for m in reads:
-                        r, mi = read_row(E, g, b, zs[bi], torch.randperm(V, generator=gen)[:m], prec, 1.0, tru, lm)
+                        toks = torch.randperm(V, generator=gen)[:m]
+                        r, mi, xf = read_row(E, g, b, zs[bi], toks, prec, 1.0, tru, lm)
+                        if a.differential:
+                            r = differential_error(xf, read_row(E, g, b, zs0, toks, prec, 1.0, tru, lm)[2], tru)
                         out.append((l, v_spec, prec, m, j, r_c, r, mi))
     rows = []
     groups = {}
     for l, v_spec, prec, m, j, r_c, r, mi in out:
         groups.setdefault((l, v_spec, prec, m), []).append((r_c, r, mi))
     caps = {l: 32.0 if site == "resid" else code_bits(target_matrix(lm, site, l)) for l in layers}
+    lost += int(a.differential)
     for (l, v_spec, prec, m), rs in sorted(groups.items()):
         rc, r, mi = (sum(x[i] for x in rs) / len(rs) for i in range(3))
         rd = rd_bits(d - lost, r)
@@ -343,10 +364,20 @@ def ulp2(z: torch.Tensor, precision: str) -> torch.Tensor:
     return (2.0 ** (e - mant)).pow(2) / 12
 
 
-def read_row(E, g, b, z, toks, precision, s, tru, lm) -> tuple[float, float]:
+def differential_error(xf: torch.Tensor, xh: torch.Tensor, tru: torch.Tensor) -> float:
+    """The error, over tru's variance, of the fault's direction read as the faulted final state minus the honest one
+    at the same prompt. Each is known only up to the norm's scale, so the difference is known only off the faulted
+    state's own direction: both sides are projected off it, and the estimate's scale is aligned."""
+    u = xf.double() / xf.double().norm()
+    est, t = -(xh.double() - (xh.double() @ u) * u), tru.double() - (tru.double() @ u) * u
+    alpha = (est @ t) / (est @ est)
+    return float((alpha * est - t).pow(2).mean() / t.pow(2).mean())
+
+
+def read_row(E, g, b, z, toks, precision, s, tru, lm) -> tuple[float, float, torch.Tensor]:
     """MMSE estimate of the normalized row x from the served logits z[toks] = E[toks] (g * s x + b) + c + rounding, the
-    constant c (softmax's shift) unknown, x's prior N(0, I); returns its error against `tru` and the Gaussian
-    information the read carries about x, 1/2 log2 det of the prior over the posterior covariance."""
+    constant c (softmax's shift) unknown, x's prior N(0, I); returns its error against `tru`, the Gaussian
+    information the read carries about x, 1/2 log2 det of the prior over the posterior covariance, and the estimate."""
     Et = E[toks].double()
     A = torch.cat([Et * (s * g.double()), torch.ones(len(toks), 1, dtype=torch.float64)], 1)
     y = z[toks].double() - Et @ b.double()
@@ -359,7 +390,7 @@ def read_row(E, g, b, z, toks, precision, s, tru, lm) -> tuple[float, float]:
     est = norm_dir(lm, xh[:-1].float())
     r = float((est - tru).pow(2).mean())
     mi = -0.5 * float(torch.linalg.slogdet(C[:-1, :-1])[1]) / math.log(2)
-    return r, mi
+    return r, mi, est
 
 
 def main() -> int:
@@ -391,6 +422,10 @@ def main() -> int:
     ap.add_argument("--pick", default="random", choices=("random", "widest"),
                     help="rows: random units, or those with the widest boxes (then the largest calibrated values)")
     ap.add_argument("--read-over-d", type=float, nargs="+", default=[1.25, 4.0], help="rows: logits read per row, over d")
+    ap.add_argument("--differential", action="store_true",
+                    help="final and rows: the decoder also reads the same tokens' logprobs from an honest query on "
+                         "the same prompt and reads the fault from the difference; final then picks its k tokens by "
+                         "logit bias, at random, instead of reading the top k")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
@@ -410,7 +445,7 @@ def main() -> int:
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": lm.spec.vocab, "d": lm.spec.d,
                 "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
                 "seconds": time.time() - t})
-    tag = ("-fp4" if a.fp4 else "") + ("-clamped" if a.boxes is not None else "")
+    tag = ("-fp4" if a.fp4 else "") + ("-clamped" if a.boxes is not None else "") + ("-diff" if a.differential else "")
     (a.out / f"extract-{a.part}{tag}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res, indent=1))
     return 0
