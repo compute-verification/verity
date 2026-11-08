@@ -783,7 +783,7 @@ def test_holo_part_files_are_byte_equal(tmp_path, shape):
     statement's bindings, byte for byte: the file the verifier compares with V*'s own (`RecVStar.checkFile`) once it takes
     a private inner session. A few minutes a shape (Python lowers each part, a few million rows); no cheaper test writes a
     real holo part's whole file on both sides."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     sh = A.Shape(shape["m"], shape["k_log"], shape["claims"], holo=True)
     p = subprocess.run([str(D.build(LEAN, "vstar")), "statements", *map(str, (sh.m, sh.k_log, sh.claims)), "--holo"],
@@ -808,7 +808,7 @@ def _stage(sh: A.Shape) -> list[tuple[str, dict, object]]:
     function writing its circuit as `stage` does. A level's bindings and text are `rec_outer.stage`'s (its Program over the
     level's ``2 q`` openings, the template-instance partition of it, `compose` of the level's lowering); a part's text is
     `rec_residuals.statement`'s, which computes its bindings again (the test checks they are these)."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     def bindings(defn, n: int, sub) -> dict:
         program = P.population_program(defn, n)
