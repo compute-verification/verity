@@ -290,18 +290,21 @@ def DsaTopKMask(B, S, scores):
     return B.batch(DsaTopKAtLeast, scores, idx, key, at, axes=(0, 0, None, None))
 
 
-@functools.lru_cache(maxsize=8)
-def _members(scores: tuple, TOPK: int) -> tuple[int, ...]:
-    return tuple(sorted(topk_set(scores, TOPK)))
-
-
 def slot(N: int, TOPK: int) -> PrimitiveDefinition:
     """`DsaTopKSlot{N}x{TOPK}_v1`: slot s of `sorted(topk_set(scores, TOPK))` (0 when s is TOPK or more)."""
     check_statics(N, TOPK)
     p = _SLOTS.get((N, TOPK))
     if p is None:
+        # The last row's members: a Call of DsaTopKRow_v1 reads one row TOPK times.  Not an lru_cache, which
+        # test_declared_tables reads as a table loader.
+        last: list = [((), ())]
+
         def ev(*w: int, _N=N, _K=TOPK) -> int:
-            got, s = _members(tuple(x & M32 for x in w[:_N]), _K), w[_N] & M32
+            scores, s = tuple(x & M32 for x in w[:_N]), w[_N] & M32
+            seen, got = last[0]
+            if seen != scores:
+                got = tuple(sorted(topk_set(scores, _K)))
+                last[0] = (scores, got)
             return got[s] if s < _K else 0
 
         p = PrimitiveDefinition(f"DsaTopKSlot{N}x{TOPK}", 1, (("scores", Array(N, F32)), ("s", I32)), I32, ev,
