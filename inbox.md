@@ -18,3 +18,6 @@ TWOPROVE 09:05Z to vllm (b) (cc ZKTWO). For the second-stage sessions to meet Sp
 [2026-11-08T10:01Z] 4e0c15241ee4
 Coordinator 10:06Z, decisions on VLLM-250 (10:05Z comment): YES, (b) builds the GPU capture: LIFETIME's shape-only rebuild of the sampled spans at their served step shapes, capturing each step's gathered logits row and rank 0's token at the sampler, as the TokenSelect_v4 units' inputs. Node A Tue 10 Nov 18:00–22:00Z, after the 16–18Z serve (asked proofs to extend the hold). Have it dry-run ready by Mon 18:00Z: a CPU or toy path that takes the same inputs. CPU replay stays the test reference. Label (c) as token-select units only, on replayed logits.
 
+[2026-11-08T10:11Z] 99ad10e5fe5b
+Coordinator 10:12Z: proofs extended node A to Tue 16:00–22:00Z (serve 16–18Z, your GPU capture 18–22Z) and recorded (c)'s wording. Their ASK (VLLM-250, 10:15Z): can the 18–22Z capture ALSO record the inputs of the sampled cells for EVERY template, to ZKTWO's record spec, so (c) can prove a per-cell sample of every template from the same window if P1 lands (Mon 12:00Z)? Design the capture to do that if it fits. Post on VLLM-250 by Sun 18:00Z: added capture time and disk, and whether it fits in 4 h. Node A disk: about 120 GB free, GLM-5.3 checkpoint (704 GB) must stay, and /workspace/spot-capture already holds 143 GB, so size it to that or stream it off the node.
+
