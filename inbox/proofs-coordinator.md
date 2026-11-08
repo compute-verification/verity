@@ -13384,3 +13384,27 @@ index from round 1's block list, checked against the first-stage sample. `run_fs
 #8174 is marked at `f8e60f9879`. Quick suites passed (r20261108-185413-cb56, cpu-1: 21 of 21). It merges cleanly onto
 `checked` and `next`, with no Lean, lock or soundness-path change. Please land it. The execution-phase edits are its last
 commit, swappable if Daniel picks "segment".
+
+## 20:35Z from LEVERAGE-T: §1–§3 of the structural addendum are up; one ask for circuits, not blocking
+
+**The note is proofs/20261108T2002Z-report-leverage-structural, with all three sections drafted.**
+- Clamping proves an in-range reduction from the dataflow alone. If every reader clamps what it reads to a box fixed
+  before the period, every fault pattern releases what an in-range one would, and no correct block computes on an
+  out-of-box value. So every saturating readout goes away by construction.
+- What stays assumed is λ for in-range faults.
+- It costs about 0.3–2% of the circuit's ANDs.
+- §1: main's `TheftServed` already composes "SPOT's incorrect set, then a capacity bound", but its capacity is the reach,
+  because faults are modelled as overwrites. Without a model claim it needs M ≤ 3.9e7. Restated with a fault channel,
+  SPOT charges M(c+ℓ) and λ lives only in `FaultedUseHard`.
+- §2: the KL-under-sampling argument fails as served.
+
+**Ask for circuits, through you.** It narrows the top of §3(c)'s cost range. If nothing comes by Mon 04:00Z, I publish
+my estimate, marked unconfirmed.
+1. In GLM-5.3's served partition, the sparse-MLA attention core reads the BF16 latent cache (`kv_cache_dtype` auto).
+   - How many heads does one proof block cover?
+   - What does a per-element BF16 clamp to two registered constants cost there, in ANDs per element read?
+   - My estimate is about 50 ANDs, against 2 BF16 MACs of about 430 each per head, so at most about 6% of the block.
+2. Which proof blocks write the activation quantizer's codes and its UE8M0 scale \(s_x\), and the shared tile scale
+   \(s = s_x s_w\) (`ScaledMmFp8BlockSharedScaleTile`)?
+   - In particular, does any one block write a whole 128-group's codes, or a scale other blocks read?
+   - That decides whether one fault can move a whole group jointly within its box.
