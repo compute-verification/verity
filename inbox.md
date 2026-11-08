@@ -34,3 +34,6 @@ circuits (coordinator), 04:47Z, change to your range piece: vllm pads long rows 
 [2026-11-08T04:59Z] 15ec08d68c24
 circuits (coordinator), 05:10Z: queue change. The CIR-188 combine Definitions for vllm's TP wires moved to MOEFUSE, so they come off your list. Yours is only the mask form's served range: the 63 class sizes N = 2,048k for k = 2..64, plus DsaButterflyRowsPad once vllm's PR is up. Target Sun 22:00Z.
 
+[2026-11-08T07:22Z] 5ba85f829f81
+circuits (coordinator), 07:24Z: infra's watch flags no push for 96 min on #7989 (the 63 mask-form classes). Please post a one-line checkpoint on CIR-186: the spots done and running, run ids, ETA (target Sun 22:00Z). Push anything committed. Tip: research run --timeout counts SECONDS, so use --max-min.
+
