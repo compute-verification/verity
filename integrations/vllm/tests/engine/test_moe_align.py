@@ -1,24 +1,27 @@
-"""The canonical `moe_align_block_size` (`moe_align.reference`): vLLM's buffers and padding, each expert's pairs in ascending
-pair index, on hand-made cases (vLLM's docstring example, empty experts, whole blocks, fewer pairs than experts, ids no
-expert takes, an expert map); the same schedule the align Definitions give when every pair's key is its index; any output
-vLLM's atomic order can give canonicalizes to it; the op wrapper replaces the op once and the plugin is off unless asked;
+"""`engine.moe_align`: the canonical `moe_align_block_size` (`moe_align.reference`), vLLM's buffers and padding with each
+expert's pairs in ascending pair index, on hand-made cases (vLLM's docstring example, empty experts, whole blocks, fewer pairs
+than experts, ids no expert takes, an expert map); the same schedule the align Definitions give when every pair's key is its
+index; any output vLLM's atomic order can give canonicalizes to it; the Marlin experts' wrapper allocates as vLLM's does and
+is installed once, armed before vLLM's module is imported, by the driver, every rank and the distribution's vLLM plugin;
 and, where Triton is importable, the kernels (in Triton's interpreter) write the reference on both paths."""
-import importlib.util
-import json
+from __future__ import annotations
+
+import ast
+import importlib
+import inspect
 import os
 import random
 import sys
+import tomllib
+import types
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
-# Triton builds its own library's kernels (tl.sum, tl.cumsum) for the interpreter only when this is set at its first import
-os.environ["TRITON_INTERPRET"] = "1"
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import moe_align
-from moe_align import reference
+from verity_vllm.engine import hooks, moe_align
+from verity_vllm.engine.moe_align import reference
 
+ROOT = Path(__file__).resolve().parents[2]
 # DeepSeek-V4-Pro's routed experts and slots
 E, TOPK = 384, 6
 
@@ -116,74 +119,124 @@ def test_sorted_len_is_vllms():
     assert moe_align.sorted_len(10, 3, 4) == 10 + 9 and moe_align.sorted_len(10, 3, 4, pad_sorted_ids=True) == 20
 
 
-def stand_in():
-    log = []
+class RefAlign(moe_align.Align):
+    """`Align` with `reference` for its kernels, on CPU tensors: the calls it gets and the buffers' lengths."""
 
-    def real(*args):
-        log.append(args)
-    return SimpleNamespace(moe_align_block_size=real), log
-
-
-class Recorder(moe_align.Align):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.args = []
+        self.args: list[tuple] = []
 
-    def __call__(self, *args):
-        self.args.append(args)
+    def __call__(self, topk_ids, num_experts, block_size, sorted_token_ids, experts_ids, num_tokens_post_pad, expert_map=None):
+        import torch
 
-
-def test_install_replaces_once_and_keeps_the_real_op():
-    ns, log = stand_in()
-    rec = Recorder()
-    assert moe_align.install(ns, rec) is rec
-    op = ns.moe_align_block_size
-    assert moe_align.install(ns) is rec and ns.moe_align_block_size is op and op.real.__name__ == "real"
-    op("ids", 384, 8, "s", "b", "n", None)
-    op("ids", 384, 8, "s", "b", "n")
-    assert rec.args == [("ids", 384, 8, "s", "b", "n", None)] * 2 and log == []
+        self.args.append((sorted_token_ids.numel(), experts_ids.numel(), num_tokens_post_pad.numel(), expert_map is not None))
+        s, b, n = reference(topk_ids.flatten().tolist(), num_experts, block_size,
+                            None if expert_map is None else expert_map.tolist(), sorted_token_ids.numel())
+        sorted_token_ids.copy_(torch.tensor(s, dtype=torch.int32))
+        experts_ids[:len(b)] = torch.tensor(b, dtype=torch.int32)
+        num_tokens_post_pad[0] = n
 
 
-def test_register_installs_only_from_a_site(monkeypatch, tmp_path):
-    calls = []
-    monkeypatch.setattr(moe_align, "install", lambda *a, **k: calls.append(a) or "align")
+def marlin_module(name: str = "fake_marlin_moe") -> types.ModuleType:
+    """vLLM's Marlin experts module as far as this goes: its module-global wrapper, which must not run once installed."""
+    m = types.ModuleType(name)
+
+    def moe_align_block_size(*args, **kwargs):
+        raise AssertionError("vLLM's wrapper ran")
+    m.moe_align_block_size = moe_align_block_size
+    return m
+
+
+@pytest.fixture
+def clean():
+    moe_align.uninstall()
+    yield
+    moe_align.uninstall()
+
+
+def test_install_replaces_marlins_wrapper_once_and_uninstall_restores_it(clean):
+    m = marlin_module()
+    vllms = m.moe_align_block_size
+    rec = RefAlign()
+    assert moe_align.install(m, rec) is rec and moe_align.installed() is rec
+    ours = m.moe_align_block_size
+    assert ours is not vllms and moe_align.install(m) is rec and m.moe_align_block_size is ours
+    moe_align.uninstall()
+    assert m.moe_align_block_size is vllms and moe_align.installed() is None
+
+
+def test_the_wrapper_allocates_as_vllms_and_applies_the_expert_map(clean):
+    torch = pytest.importorskip("torch")
+    rec = RefAlign()
+    call = moe_align.wrapper(rec)
+    ids = [2, 3, 4, 1, 2, 4, 1, 3, 4, 1, 2, 3]
+    t = torch.tensor(ids, dtype=torch.int32).reshape(4, 3)
+    for pad in (False, True):
+        s, b, n = call(t, 4, 5, None, pad_sorted_ids=pad)
+        L = moe_align.sorted_len(12, 5, 4, pad)
+        assert (s.numel(), b.numel(), n.numel()) == (L, moe_align.cdiv(L, 4), 1) == rec.args[-1][:3]
+        assert (s.tolist(), b.tolist(), int(n[0])) == reference(ids, 5, 4, length=L)
+    emap = torch.tensor([-1, 0, 2, 1, -1], dtype=torch.int32)
+    # Marlin's call: invalid experts ignored, so the op takes the map and counts no pair it sends to -1
+    s, b, n = call(t, 4, 5, emap, ignore_invalid_experts=True)
+    assert rec.args[-1][3] and (s.tolist(), b.tolist(), int(n[0])) == reference(ids, 5, 4, emap.tolist())
+    # otherwise every expert counts and the map renames the blocks' experts after the op, as vLLM's wrapper does
+    s, b, n = call(t, 4, 5, emap)
+    gs, gb, gn = reference(ids, 5, 4)
+    assert not rec.args[-1][3] and s.tolist() == gs and int(n[0]) == gn and b.tolist() == emap[torch.tensor(gb)].tolist()
+
+
+def test_install_is_refused_under_a_live_wrap_of_the_name(clean):
+    m = marlin_module()
+    on = hooks.wrap(m, moe_align.NAME, lambda orig: lambda *a, **k: orig(*a, **k))
+    try:
+        with pytest.raises(RuntimeError, match="already on"):
+            moe_align.install(m, RefAlign())
+        assert moe_align.installed() is None
+    finally:
+        on.uninstall()
+
+
+def test_arm_installs_when_vllms_module_is_imported_and_imports_nothing_itself(clean, tmp_path, monkeypatch):
+    pkg = tmp_path / "fake_vllm_experts"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "marlin_moe.py").write_text("def moe_align_block_size(*a, **k):\n    raise AssertionError(\"vLLM's wrapper ran\")\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    site = "fake_vllm_experts.marlin_moe"
+    try:
+        moe_align.arm(site)
+        moe_align.arm(site)
+        assert site not in sys.modules and moe_align.installed() is None
+        assert sum(isinstance(f, moe_align._OnImport) and f.site == site for f in sys.meta_path) == 1
+        mod = importlib.import_module(site)
+        assert moe_align.installed() is not None and mod.moe_align_block_size.__module__ == moe_align.__name__
+    finally:
+        sys.modules.pop(site, None)
+        sys.modules.pop("fake_vllm_experts", None)
+
+
+def test_register_arms_and_the_distribution_declares_it_as_a_vllm_plugin(monkeypatch):
+    armed = []
+    monkeypatch.setattr(moe_align, "arm", lambda *a: armed.append(a))
     moe_align.register()
-    assert calls == []
-    for log in (None, tmp_path / "log"):
-        d = moe_align.site(tmp_path / f"site-{log is None}", log)
-        spec = importlib.util.spec_from_file_location(f"site_moe_align_{log is None}", d / "moe_align.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        logged = []
-        monkeypatch.setattr(mod, "install", lambda *a, **k: calls.append(a) or "align")
-        monkeypatch.setattr(mod, "log_to", lambda align, d: logged.append((align, d)))
-        mod.register()
-        assert logged == ([] if log is None else [("align", str(log.resolve()))])
-        (d / mod.CONFIG).write_text('{"log": null, "mode": "sorted"}')
-        with pytest.raises(ValueError, match="log"):
-            mod.register()
-    assert calls == [(), ()]
+    assert armed == [()]
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    target = project["entry-points"]["vllm.general_plugins"]["verity_moe_align"]
+    module, _, attr = target.partition(":")
+    assert importlib.import_module(module) is moe_align and attr == "register"
 
 
-def test_log_rewrites_its_record(monkeypatch, tmp_path):
-    monkeypatch.setattr(moe_align, "_capturing", lambda: False)
-    monkeypatch.setattr(moe_align, "FLUSH_EVERY", 2)
-    align = moe_align.Align()
-    moe_align.log_to(align, str(tmp_path))
-    align.calls["one"] = 2
-    align.on_flush()
-    rec = json.loads((tmp_path / f"moe_align.{os.getpid()}.json").read_text())
-    assert rec["calls"] == {"one": 2, "chunked": 0} and rec["small_max"] == moe_align.SMALL_MAX
+def test_it_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_builds():
+    from verity_vllm.engine import build
+    from verity_vllm.pipeline.tp import rank_worker
 
-
-def test_site_declares_the_plugin(tmp_path):
-    d = moe_align.site(tmp_path)
-    eps = (d / "verity_moe_align-0.0.dist-info" / "entry_points.txt").read_text()
-    assert "[vllm.general_plugins]" in eps and "verity_moe_align = moe_align:register" in eps
-    for name in ("moe_align.py", "moe_align_kernels.py"):
-        assert (d / name).read_text() == Path(moe_align.__file__).with_name(name).read_text()
-    assert json.loads((d / moe_align.CONFIG).read_text()) == {"log": None}
-    assert not Path(moe_align.__file__).with_name(moe_align.CONFIG).exists()
+    top = ast.parse(inspect.getsource(moe_align)).body
+    assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)
+    assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "moe_align" in {a.name for a in n.names}
+               for n in ast.parse(inspect.getsource(rank_worker)).body)
+    src = inspect.getsource(build.build_engine)
+    assert src.index("moe_align.arm()") < src.index("llm = LLM(**kw)")
 
 
 def test_refuses_what_vllms_op_cannot_take():
@@ -213,16 +266,28 @@ def run_kernels(torch, align, ids, num_experts, block, expert_map=None, dtype=No
     return s.tolist(), b.tolist(), int(n[0])
 
 
-def interpreted(monkeypatch):
-    pytest.importorskip("triton")
-    torch = pytest.importorskip("torch")
-    monkeypatch.setattr(moe_align, "_KERNELS", {})
-    return torch
+@pytest.fixture(scope="module")
+def interpreted():
+    # Triton builds its own library's kernels (tl.sum, tl.cumsum) for the interpreter only when this is set at its first import,
+    # and `triton.jit` reads it when it decorates a kernel
+    if "triton" in sys.modules and os.environ.get("TRITON_INTERPRET") != "1":
+        pytest.skip("Triton was imported before TRITON_INTERPRET could be set")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("TRITON_INTERPRET", "1")
+        pytest.importorskip("triton")
+        torch = pytest.importorskip("torch")
+        from verity_vllm.engine import moe_align_kernels
+
+        importlib.reload(moe_align_kernels)
+        mp.setattr(moe_align, "_KERNELS", {})
+        yield torch
+        mp.undo()
+        importlib.reload(moe_align_kernels)
 
 
 @pytest.mark.parametrize("path", ["one", "chunked"])
-def test_kernels_write_the_reference_in_interpreter(monkeypatch, path):
-    torch = interpreted(monkeypatch)
+def test_kernels_write_the_reference_in_interpreter(interpreted, path):
+    torch = interpreted
     small = 1 << 20 if path == "one" else 0
     align = moe_align.Align(small_max=small, chunk=64, tile=16, long_tile=32, cols=16)
     rng = random.Random(path)

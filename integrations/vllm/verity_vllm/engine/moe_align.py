@@ -1,12 +1,15 @@
-"""vLLM's `moe_align_block_size` at the integration's pin, made a function of its inputs: a vLLM general plugin (`register`,
-entry point group ``vllm.general_plugins``, run in every process whose path holds the site directory `site` wrote) that
-replaces the op ``torch.ops._moe_C.moe_align_block_size`` (`OP`) with `Align`, which writes the same three outputs in the
-same buffers, with each expert's pairs in ascending pair index.
+"""vLLM's `moe_align_block_size` on the Marlin MoE path, made a function of its inputs: each expert's pairs in ascending pair
+index.
+
+`fused_marlin_moe`, in vLLM's module `SITE` (DeepSeek-V4-Pro's MXFP4 experts on Hopper), calls its module's `NAME`: vLLM's
+wrapper (fused_moe/moe_align_block_size.py), which allocates three int32 buffers and has the op
+``torch.ops._moe_C.moe_align_block_size`` (`OP`) fill them.  `install` replaces that name with `wrapper`, which allocates the
+same buffers (`sorted_len`) and has `Align` fill them.  Every other MoE path keeps vLLM's op.
 
 The op takes the router's ``topk_ids`` (``[tokens, top_k]``, any integer dtype, contiguous), ``num_experts`` E, the moe
-block ``BM``, the three int32 outputs vLLM's wrapper (fused_moe/moe_align_block_size.py) allocates, and an optional
-``expert_map``. A pair is p = t * top_k + k, a slot of ``topk_ids`` in memory order. An id outside [0, E), or one the map
-sends to -1, is no expert's. Expert e's c_e pairs are written from ``base[e] = sum over e' < e of round_up(c_e', BM)``:
+block ``BM``, the three outputs and an optional ``expert_map``. A pair is p = t * top_k + k, a slot of ``topk_ids`` in
+memory order. An id outside [0, E), or one the map sends to -1, is no expert's. Expert e's c_e pairs are written from
+``base[e] = sum over e' < e of round_up(c_e', BM)``:
 
 - ``sorted_token_ids[base[e] + r]`` is e's pair of rank r, the ranks in ascending pair index; every other slot of the
   buffer is ``numel`` (the pair count P);
@@ -15,30 +18,33 @@ sends to -1, is no expert's. Expert e's c_e pairs are written from ``base[e] = s
 - ``num_tokens_post_pad[0]`` is ``sum over e of round_up(c_e, BM)``.
 
 vLLM's kernel at E > 64 (count_and_sort_expert_tokens_kernel) writes the same buffers except the order within an
-expert, which is the order its atomicAdd on the expert's offset hands out slots, so it varies run to run. `reference`
-is the definition in Python, and the Triton kernels (`moe_align_kernels`) compute it with no atomics. A call of at most
-`SMALL_MAX` pairs is one launch (`align_small`) of tiles of `TILE` pairs; a longer one is three, over chunks of `CHUNK`
-pairs and tiles of `LONG_TILE`. Each program places a tile, ranking its pairs by comparing them with each other, `COLS`
-at a time.
+expert, which is the order its atomicAdd on the expert's offset hands out slots, so it varies run to run. That order
+decides which pairs share a Marlin block, and so where the GEMM's reductions are cut. `reference` is the definition in
+Python, and the Triton kernels (`moe_align_kernels`) compute it with no atomics. A call of at most `SMALL_MAX` pairs is
+one launch (`align_small`) of tiles of `TILE` pairs; a longer one is three, over chunks of `CHUNK` pairs and tiles of
+`LONG_TILE`. Each program places a tile, ranking its pairs by comparing them with each other, `COLS` at a time.
 
-The plugin's configuration is `CONFIG` in the site directory, which `site` writes and nothing else: it reads no
-environment variable. A site written with a log directory gets, per process, ``moe_align.PID.json`` there: the calls on
-each path.
+It is always on, as `engine.topp_pin` is.  Importing this module `arm`\\ s it: it is installed when vLLM's Marlin module is
+imported, and nothing is imported for it.  The driver (`engine.build.build_engine`) and each tensor-parallel rank
+(`pipeline.tp.rank_worker`) import it before vLLM builds the model, and `register`, the distribution's vLLM general plugin
+(``verity_moe_align`` in ``vllm.general_plugins``), arms it in every process of a vLLM that has the integration installed,
+vLLM's own server included.  It reads no environment variable.  `installed` is the `Align` this process's Marlin experts
+call; its `Align.record` counts their calls on each path.
 """
 from __future__ import annotations
 
-import atexit
-import json
+import importlib
 import os
-import shutil
-import types
+import sys
 from collections.abc import Callable, Sequence
-from pathlib import Path
 from typing import Any
 
-#: the plugin's configuration beside the module in a site directory (`site`): ``{"log": DIR or null}``
-CONFIG = "verity_moe_align.json"
-#: the op this replaces, under ``torch.ops._moe_C``
+from verity_vllm.engine import hooks
+
+#: vLLM's Marlin experts module, and the name in it `fused_marlin_moe` calls
+SITE = "vllm.model_executor.layers.fused_moe.experts.marlin_moe"
+NAME = "moe_align_block_size"
+#: the op vLLM's wrapper calls, under ``torch.ops._moe_C``
 OP = "moe_align_block_size"
 #: the most pairs `align_small` takes in one launch; a longer call is chunked
 SMALL_MAX = 2048
@@ -55,8 +61,6 @@ STORE = 1024
 PAD_STORE = 16
 #: vLLM's op refuses ``padded_num_experts >= 1024`` (moe_align_sum_kernels.cu): E rounded up to 32 below 1024
 MAX_EXPERTS = 992
-#: `log_to` rewrites its record every this many calls outside a CUDA graph's capture
-FLUSH_EVERY = 4096
 
 
 def cdiv(a: int, b: int) -> int:
@@ -146,9 +150,8 @@ _KERNELS: dict[str, Any] = {}
 def kernels() -> dict[str, Any]:
     """The Triton kernels (`moe_align_kernels`), imported on first use: importing this module needs no Triton."""
     if not _KERNELS:
-        import importlib
+        from verity_vllm.engine import moe_align_kernels as mod
 
-        mod = importlib.import_module("moe_align_kernels")
         _KERNELS.update({k: getattr(mod, k) for k in ("align_small", "count_chunks", "scan_chunks", "place_chunks")})
     return _KERNELS
 
@@ -172,8 +175,6 @@ class Align:
         self.fast_launch = fast_launch
         self._launch: dict[str, _Launch] = {}
         self.calls = {"one": 0, "chunked": 0}
-        #: called every `FLUSH_EVERY` calls outside a CUDA graph's capture (`log_to`)
-        self.on_flush: Callable[[], None] | None = None
 
     def __call__(self, topk_ids: Any, num_experts: int, block_size: int, sorted_token_ids: Any, experts_ids: Any,
                  num_tokens_post_pad: Any, expert_map: Any = None) -> None:
@@ -217,91 +218,93 @@ class Align:
             K["place_chunks"]((C, CH // T), (topk_ids, mp, ws, *bufs), (P, L, NB, E, BM, C),
                               {"HAS_MAP": has_map, "CHUNK": CH, "T": T, "JB": self.cols, "EP": EP, "TB": STORE,
                                "PW": PAD_STORE}, warps(CH))
-        if self.on_flush is not None and sum(self.calls.values()) % FLUSH_EVERY == 0 and not _capturing():
-            self.on_flush()
 
     def record(self) -> dict[str, Any]:
+        """This process's calls on each path, and the parameters they ran at."""
         return {"pid": os.getpid(), "calls": dict(self.calls), "small_max": self.small_max, "chunk": self.chunk,
                 "tile": self.tile, "long_tile": self.long_tile, "cols": self.cols, "fast_launch": self.fast_launch}
 
 
-def _capturing() -> bool:
+
+def wrapper(align: Align) -> Callable[..., tuple[Any, Any, Any]]:
+    """vLLM's wrapper (fused_moe/moe_align_block_size.py) with ``align`` for its op: the buffers it allocates, at the lengths it
+    allocates them (`sorted_len`), and the expert map passed to the op when invalid experts are ignored, else applied to
+    ``expert_ids`` after it."""
     import torch
 
-    return bool(torch.cuda.is_current_stream_capturing())
+    i32 = torch.int32
+
+    def moe_align_block_size(topk_ids: Any, block_size: int, num_experts: int, expert_map: Any = None,
+                             pad_sorted_ids: bool = False, ignore_invalid_experts: bool = False) -> tuple[Any, Any, Any]:
+        dev = topk_ids.device
+        L = sorted_len(topk_ids.numel(), num_experts, block_size, pad_sorted_ids)
+        sorted_ids = torch.empty((L,), dtype=i32, device=dev)
+        expert_ids = torch.empty((cdiv(L, block_size),), dtype=i32, device=dev)
+        total = torch.empty((1,), dtype=i32, device=dev)
+        align(topk_ids, num_experts, block_size, sorted_ids, expert_ids, total, expert_map if ignore_invalid_experts else None)
+        if expert_map is not None and not ignore_invalid_experts:
+            expert_ids = expert_map[expert_ids]
+        return sorted_ids, expert_ids, total
+
+    return moe_align_block_size
 
 
-def install(ns: Any = None, align: Align | None = None) -> Align:
-    """Replace `OP` on ``ns`` (default ``torch.ops._moe_C``) with `Align`; installing twice replaces once. Returns the
-    installed `Align`."""
-    if ns is None:
-        import torch
+_INSTALLED: tuple[hooks.Patch, Align] | None = None
 
-        import vllm._custom_ops  # noqa: F401  (loads the _moe_C ops)
 
-        ns = torch.ops._moe_C
-    real = getattr(ns, OP)
-    if isinstance(real, types.FunctionType) and "moe_align" in real.__dict__:
-        return real.__dict__["moe_align"]
+def install(module: Any = None, align: Align | None = None) -> Align:
+    """Replace `NAME` on ``module`` (`SITE`, imported when None) with `wrapper` of ``align`` (a new `Align` when None), once per
+    process; returns the `Align` installed.  Refused while another patch of that name is on: a capture's wrap of it
+    (`acquire.sources.moe_align_source`) goes on top of this one, never under it."""
+    global _INSTALLED
+    if _INSTALLED is not None and _INSTALLED[0].installed:
+        return _INSTALLED[1]
+    if module is None:
+        module = importlib.import_module(SITE)
+    if on := [p for p in hooks.live() if isinstance(p, hooks.Patch) and p.owner is module and p.name == NAME]:
+        raise RuntimeError(f"refused to install the canonical {NAME} under {on[-1].value!r}, which is already on: arm it before "
+                           "vLLM builds the model (engine.moe_align.arm)")
     align = align or Align()
-
-    def moe_align_block_size(topk_ids, num_experts, block_size, sorted_token_ids, experts_ids, num_tokens_post_pad,
-                             maybe_expert_map=None):
-        align(topk_ids, num_experts, block_size, sorted_token_ids, experts_ids, num_tokens_post_pad, maybe_expert_map)
-
-    moe_align_block_size.moe_align = align  # type: ignore[attr-defined]
-    moe_align_block_size.real = real  # type: ignore[attr-defined]
-    setattr(ns, OP, moe_align_block_size)
+    _INSTALLED = (hooks.patch(module, NAME, wrapper(align)), align)
     return align
 
 
-def log_to(align: Align, d: str) -> None:
-    """Keep ``align``'s record in ``d/moe_align.PID.json``: every `FLUSH_EVERY` calls and at exit."""
-    path = Path(d) / f"moe_align.{os.getpid()}.json"
+class _OnImport(hooks.OnImport):
+    """Runs `install` on ``site`` once its own code has run."""
 
-    def write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(align.record(), indent=1) + "\n")
-        tmp.replace(path)
+    def __init__(self, site: str) -> None:
+        super().__init__(site, install)
 
-    align.on_flush = write
-    atexit.register(write)
+
+def arm(site: str = SITE) -> None:
+    """`install` now if ``site`` is imported, else when it is: nothing is imported here.  Once per process."""
+    if site in sys.modules:
+        install(sys.modules[site])
+    elif not any(isinstance(f, _OnImport) and f.site == site for f in sys.meta_path):
+        sys.meta_path.insert(0, _OnImport(site))
+
+
+def uninstall() -> None:
+    """Put vLLM's wrapper back and disarm the import hook."""
+    global _INSTALLED
+    sys.meta_path[:] = [f for f in sys.meta_path if not isinstance(f, _OnImport)]
+    if _INSTALLED is not None:
+        _INSTALLED[0].uninstall()
+    _INSTALLED = None
+
+
+def installed() -> Align | None:
+    """The `Align` this process's Marlin experts call, or None while vLLM's wrapper is in place."""
+    return _INSTALLED[1] if _INSTALLED is not None and _INSTALLED[0].installed else None
 
 
 def register() -> None:
-    """The plugin: in a site directory (`CONFIG` beside this module), `install` on ``torch.ops._moe_C`` in this process,
-    logging to the configured directory if there is one; anywhere else, nothing."""
-    cfg = Path(__file__).with_name(CONFIG)
-    if not cfg.is_file():
-        return
-    conf = json.loads(cfg.read_text())
-    if set(conf) != {"log"} or not isinstance(conf["log"], (str, type(None))):
-        raise ValueError(f"{cfg}: {{\"log\": DIR or null}}, not {conf!r}")
-    align = install()
-    if conf["log"]:
-        log_to(align, conf["log"])
+    """The distribution's vLLM general plugin (``verity_moe_align = verity_vllm.engine.moe_align:register``, group
+    ``vllm.general_plugins``), which vLLM calls in each process it loads its plugins in: `arm`."""
+    arm()
 
 
-def site(d: Path, log: str | None = None) -> Path:
-    """Add this module to the site directory ``d`` as a vLLM general plugin, logging each process's calls to ``log`` if
-    given: a server or replay with ``d`` on its ``PYTHONPATH`` (and ``VLLM_PLUGINS`` unset or naming ``verity_moe_align``)
-    loads it in every process."""
-    d = Path(d)
-    info = d / "verity_moe_align-0.0.dist-info"
-    info.mkdir(parents=True, exist_ok=True)
-    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-moe-align\nVersion: 0.0\n")
-    (info / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_moe_align = moe_align:register\n")
-    for name in ("moe_align.py", "moe_align_kernels.py"):
-        shutil.copy(Path(__file__).with_name(name), d / name)
-    (d / CONFIG).write_text(json.dumps({"log": None if log is None else str(Path(log).resolve())}) + "\n")
-    return d
+arm()
 
-
-if __name__ == "__main__":
-    import sys
-
-    a = sys.argv[1:]
-    if not (len(a) == 2 or len(a) == 4 and a[2] == "--log") or a[0] != "site":
-        raise SystemExit("usage: python moe_align.py site DIR [--log LOGDIR]")
-    print(site(Path(a[1]), a[3] if len(a) == 4 else None))
+__all__ = ["MAX_EXPERTS", "NAME", "OP", "SITE", "Align", "arm", "canonical", "cdiv", "install", "installed", "reference", "register",
+           "sorted_len", "uninstall", "wrapper"]

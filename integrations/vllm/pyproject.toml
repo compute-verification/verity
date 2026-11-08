@@ -12,6 +12,11 @@ dependencies = [
 [project.scripts]
 verity-vllm = "verity_vllm.pipeline.cli:main"
 
+# vLLM calls each general plugin in every process it loads plugins in (vllm/plugins/__init__.py): this one puts the canonical
+# moe_align_block_size on the Marlin MoE path (verity_vllm/engine/moe_align.py)
+[project.entry-points."vllm.general_plugins"]
+verity_moe_align = "verity_vllm.engine.moe_align:register"
+
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
 torch = ["torch>=2.4"]
