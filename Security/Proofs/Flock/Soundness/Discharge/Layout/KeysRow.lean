@@ -19,7 +19,7 @@ verifier checks, once every input a unit row reads is a port bit (`PortReads`) a
 (`CutsFromRows`; `keysRow_of_cuts`). A unit with only its leaf group has no wire into it (`cutsFromRows_of_single`), so
 `keysRow_of_parse` is that case:
 
-* [e2e-aliased]'s `srcKey_leaf`, restated with the key: a stacked leaf port bit's key is the zero or message bit `t % 8`
+* `Aliased.srcKey_leaf`, restated with the key: a stacked leaf port bit's key is the zero or message bit `t % 8`
   of byte `2 (x − start q) + t / 8` of the port `q` holding leaf word `x`, for the port bit `t`;
 * a cut port bit's key is the same at its one leaf cut's row word (`check_facts`' `wired`: with no wire into the unit,
   each cut port of each unit copy has exactly one leaf cut), or the zero past the cut word's 16 bits;

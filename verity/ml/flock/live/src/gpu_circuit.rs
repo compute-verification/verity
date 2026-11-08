@@ -16,7 +16,7 @@ use rayon::prelude::*;
 use crate::{
     LiveChallenger,
     chunk::comp,
-    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, decode_with, link_cb, prove_params, sched, statics_for},
+    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, decode_with, link_cb, prove_params, sched, statics_for},
     ir_block::IrUnitNet,
     circuit::{Kind, Stmt},
 };
@@ -765,8 +765,7 @@ fn types(st: &Stmt) -> &'static Types {
                         Kind::Net(i) => {
                             let net = &c.nets[i].1;
                             let n = 1usize << net.unit_log;
-                            let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(n, Vec::new()); SparseBinaryMatrix { num_rows: n, num_cols: n, rows: x.into() } };
-                            Some((csc_from_rows(&pad(&net.a)), csc_from_rows(&pad(&net.b))))
+                            Some((csc_of(&net.a, n), csc_of(&net.b, n)))
                         }
                         Kind::Mask => {
                             let n = 1usize << r.slot_log;

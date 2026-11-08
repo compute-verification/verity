@@ -286,7 +286,7 @@ conflicts refuse it.  A restack runs in the background, one `restack.py` a head 
 once (`_restack`, the state's `restacking`), and its PR waits off `next` meanwhile (`RESTACKING`), a wait that refuses nothing
 and rings no one; a later sync reads its result (the state's `restacks`) and merges the PR, drops the result once the PR's head
 changed, and runs a job that ended with none (it died, or ran past `RESTACK_WAIT_S`) once more before that failure refuses the
-PR.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
+PR, and one something else interrupted (SIGINT, SIGTERM, a restart of the pod) again without counting it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
 landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
 move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
@@ -444,6 +444,10 @@ RESTACK_LOST_S = RESTACK_WAIT_S + 300
 #: job's directory ($1)
 RESTACK_OUT = "restack.json"
 RESTACK_JOB = f'd=$1; shift; exec timeout -s INT -k 60 {RESTACK_WAIT_S} "$@" > "$d/{RESTACK_OUT}"'
+#: the exits of a restack job something else interrupted (`restack_end`): SIGINT's and SIGTERM's, 128 + the signal as `timeout`
+#: passes its command's on, which an operator, drive's stop or the pod's shutdown sends.  Not `timeout`'s own 124 at
+#: `RESTACK_WAIT_S`, nor SIGKILL's 137, which the OOM killer and `timeout -k` send too
+RESTACK_INTERRUPTED = ("130", "143")
 #: why a PR waits off `next` while it is restacked in the background (`Restacking`): it refuses nothing, so nothing caches it and
 #: drive tells no one (`drive.Driver.tell_out`)
 RESTACKING = "restacking across the move"
@@ -2459,19 +2463,24 @@ class Queue:
     def _collect_restacks(self, wanted: set[str]) -> None:
         """Read each restack job that ended (`restack_end`) into `_restacks`, dropping its result once its PR's head is none of
         ``wanted``.  A job that ended with no result (it died, or ran past `RESTACK_WAIT_S`) runs once more, and then that is
-        the restack's failure."""
+        the restack's failure; one something else interrupted runs again without that counting as a try, so a stop or a
+        restart of the pod never refuses a PR."""
         ended = False
         for key, job in list(self._restacking.items()):
             if (end := restack_end(job, self.now())) is None:
                 continue
             ended = True
             del self._restacking[key]
-            (head, move), (said, how) = key.split(":"), end
+            (head, move), (said, how, interrupted) = key.split(":"), end
             if job["of"] not in wanted or not self._has(head):
                 self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} is dropped: "
                          + (f"its PR's head {job['of'][:8]} changed" if job["of"] not in wanted else "the clone lost it"))
             elif said is not None:
                 self._restacks[key] = said
+            elif interrupted:
+                self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} was interrupted ({how}); "
+                         "again, not counted as a try")
+                self._launch_restack(head, Move(move, job["map"]), job["of"], job["tries"], job["since"])
             elif job["tries"] < 2:
                 self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} ended with no result ({how}); "
                          "once more")
@@ -3361,17 +3370,18 @@ def _tail(r: subprocess.CompletedProcess, n: int = 6) -> str:
     return " | ".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-n:])
 
 
-def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
+def restack_end(job: dict, now: float) -> tuple[dict | None, str, bool] | None:
     """A restack job's end (`Queue._launch_restack`), its directories removed: (what `restack.py` said of its head, as a sync
     caches it, {"result": the restacked commit} or {"why": what it says}, else None; how the job ended, with its output's tail,
-    and why its results don't read when it exited 0).  None while it runs, up to `RESTACK_LOST_S` after its start."""
+    and why its results don't read when it exited 0; whether something else interrupted it: an exit of `RESTACK_INTERRUPTED`,
+    or its process gone with no exit written, a restart of the pod).  None while it runs, up to `RESTACK_LOST_S` after its
+    start."""
     from .drive import _job_end
 
     if (end := _job_end(job, RESTACK_OUT)) is None and now - job["at"] <= RESTACK_LOST_S:
         return None
     if not isinstance(end, tuple):
         shutil.rmtree(job["dir"], ignore_errors=True)
-        end = end or f"no exit written {RESTACK_LOST_S // 60} min after its start"
     unread = ""
     try:
         (x,) = json.loads(Path(job["out"], RESTACK_OUT).read_text())
@@ -3382,12 +3392,15 @@ def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
         said, unread = None, f"; its results don't read ({type(e).__name__}: {e})"
     shutil.rmtree(job["out"], ignore_errors=True)
+    if end is None:
+        return said, f"no exit written {RESTACK_LOST_S // 60} min after its start", False
     if isinstance(end, str):
-        return said, end
+        return said, end, True
     rc, tail, _ = end
     stopped = f", stopped {RESTACK_WAIT_S // 60} min after its start" if rc == "124" else ""
     tail = " | ".join(tail.splitlines()[-6:])
-    return said, f"exit {rc}{stopped}" + (f": {tail}" if tail else "") + (unread if rc == "0" else "")
+    return (said, f"exit {rc}{stopped}" + (f": {tail}" if tail else "") + (unread if rc == "0" else ""),
+            rc in RESTACK_INTERRUPTED)
 
 
 def changed(repo: Path, base: str, commit: str) -> set[str]:

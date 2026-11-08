@@ -81,7 +81,7 @@ def test_secrets_name_what_the_role_lacks_and_where_to_add_it(monkeypatch):
 
 
 def test_a_secret_the_vm_injects_and_lost_is_a_finding_whose_fix_is_a_fresh_shell_or_a_new_vm(monkeypatch):
-    """ci's VM on 3 Oct: the injected values gone from every shell after an exec-daemon restart, unnoticed."""
+    """A VM's injected values can vanish from every shell after an exec-daemon restart, unnoticed."""
     for n in LANE:
         monkeypatch.setenv(n, "dummy")
     monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", ",".join([*LANE, "JOBS_TOKEN"]))

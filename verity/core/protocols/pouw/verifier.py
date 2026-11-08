@@ -134,6 +134,6 @@ def coins(n: int) -> bytes:
     return bytes.fromhex(body)
 
 
-#: the claim instance naming `coins`'s bytes, which a served challenger reads (`sampled_proofs.challenger.coin_claim`)
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`spot.challenger.coin_claim`)
 CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
