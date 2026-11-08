@@ -862,6 +862,15 @@ def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
     assert bad and all(not w["passed"] and "doesn't fit its 1 bits" in w["served_rows"]["error"] for w in bad)
 
 
+def test_the_served_statics_refuse_an_output_length_past_a_length_slot():
+    """`SERVED_SLICE` charges each output length in a 32-bit slot (`charge_chain.check_length_slots`): an engine whose
+    max_model_len needs more is refused at start, as its windows' proofs would refuse it."""
+    with pytest.raises(ValueError, match="wider than a length slot"):
+        sc.served_statics({**ENGINE, "max_model_len": 2**33}, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6})
+    assert sc.served_statics({**ENGINE, "max_model_len": 2**32 - 1}, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3,
+                                                                       "IW": 6})["L"] == 2**32 - 1
+
+
 def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--max-num-seqs", "8", "--window-steps", "16", *more],

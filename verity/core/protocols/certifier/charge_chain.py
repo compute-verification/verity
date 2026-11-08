@@ -49,6 +49,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import arith_encode as AE
+from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.arith_encode import Carry, ChargeBook
 from verity.core.protocols.certifier.head_check import BIT, _part
 from verity.core.protocols.sampled_proofs.one_stage import produced
@@ -266,6 +267,18 @@ def book_of(D: int, v: dict[str, list[int]]) -> ChargeBook:
     return ChargeBook(tuple(v["arrived"]), v["total"][0], tuple(zip(v["zfreq"], v["ztotal"])))
 
 
+#: a length slot's width: its max_tokens and its output length, each a u32 of the certified body (`window_charge.MW`)
+LENGTH_BITS = 32
+
+
+def check_length_slots(st: dict) -> dict:
+    """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v4`): refused
+    where an output length, LW = bitlen(L) bits (`replay_chain.widths`), is wider than a length slot's `LENGTH_BITS`."""
+    if (lw := RC.widths(SimpleNamespace(**st)).LW) > LENGTH_BITS:
+        raise ValueError(f"statics {dict(st)}: an output length of {lw} bits, wider than a length slot's {LENGTH_BITS}")
+    return st
+
+
 class SliceCharge:
     """The compile slice's charge (`compile_slice.CODE`): `ChargeLink_v1{D}` on ``pub``'s book from ``cin`` to ``cout``
     over ``adv``'s decisions; `compile_slice_v4`'s adds the length terms. `pub_fields`, ``pub``'s fields past c;
@@ -349,7 +362,7 @@ def size(N: int) -> dict[str, int]:
             "record_bytes_per_window": 2 * produced.BC_BYTES}
 
 
-__all__ = ["ChargeLink", "ROW_BITS", "SliceCharge", "VALUE", "WORD_BITS", "book_fields", "book_of", "book_values",
-           "build_link", "carry_of", "check_chain", "check_rows", "commit_rows", "commit_window", "encode",
+__all__ = ["ChargeLink", "LENGTH_BITS", "ROW_BITS", "SliceCharge", "VALUE", "WORD_BITS", "book_fields", "book_of", "book_values",
+           "build_link", "carry_of", "check_chain", "check_length_slots", "check_rows", "commit_rows", "commit_window", "encode",
            "evaluate_links", "ints", "link_arguments", "link_unit", "openings", "reads", "reference_link", "row",
            "session", "size", "start_opening", "start_salt", "unrow"]

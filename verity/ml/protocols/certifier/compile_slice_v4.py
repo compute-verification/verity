@@ -117,13 +117,8 @@ class LengthCharge(CC.SliceCharge):
 CODE = LengthCharge()
 
 
-def _check(S) -> None:
-    if RC.widths(CS.chain(S)).LW > WC.MW:
-        raise ValueError(f"statics {dict(S.__dict__)}: an output length wider than a length slot's {WC.MW} bits")
-
-
 def _sig(S):
-    _check(S)
+    CC.check_length_slots(vars(S))
     return CS._sig(S, CODE)
 
 
@@ -141,9 +136,7 @@ CompileSliceRowGroups.refuse = CS._refuse_blocks
 
 def statics(*args, **kw) -> dict:
     """`compile_slice.statics`, CompileSlice_v1's, refused where an output length is wider than a length slot."""
-    st = CS.statics(*args, **kw)
-    _check(SimpleNamespace(**st))
-    return st
+    return CC.check_length_slots(CS.statics(*args, **kw))
 
 
 def unit(**st):
