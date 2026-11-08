@@ -8,6 +8,7 @@
 #   (a job run from a clone of the tree)
 # env: ZK_KS=4096,16384  ZK_SIZES=1,8  ZK_DRAWS=1,c  ZK_ARMS=fw  ZK_COLD=1  ZK_WARM=0  ZK_RUNS=0 (no warm process)
 #      ZK_UNITS="gq:K=384" (served or census types instead of A6's coordinates, zk_cost.py's --units; no fit)
+#      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server)
 # Kept in $OUT: the records (stage, prove and verify .jsonl; each prove record's peak_rss_kb is the session's summed peak), the
 # fit and the logs; never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -55,9 +56,11 @@ if [ "$rc" = 0 ]; then
   ZK prove --cpu --bin "$BIN" --arms "${ZK_ARMS:-fw}" --cold "${ZK_COLD:-1}" --warm "${ZK_WARM:-0}" --runs "${ZK_RUNS:-0}" 2>&1 \
     | tee -a "$O/zk.log" | grep ZKCOST
   rc=${PIPESTATUS[0]}
-  log "prove: exit $rc; verify"
-  ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
-  [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+  if [ "${ZK_VERIFY:-1}" = 1 ]; then
+    log "prove: exit $rc; verify"
+    ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+    [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+  fi
   [ -n "${ZK_UNITS:-}" ] || ZK fit 2>&1 | tee -a "$O/zk.log"
 fi
 (cd "$Z" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
