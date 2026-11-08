@@ -542,7 +542,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJPLaw`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
+| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
@@ -568,7 +568,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   one-stage form is v2, which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed
   coins; one-stage v1, which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's
   acceptance to `SampledKSLiveV3`'s event.
-- **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJPLaw`, `TableCRZAt`,
+- **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
   `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
