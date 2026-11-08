@@ -3,6 +3,7 @@ module
 public import Properties.Spot
 public import Proofs.Properties.Challenger
 public import Proofs.Properties.Spot.FilePart
+public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.Spot`)
@@ -104,12 +105,6 @@ theorem none_fail_ite_ite_push (a b : Bool) (xs : Array (String × Check)) (y : 
 theorem fails_of_codes (n : String) (c : Check) (h1 : n ≠ "draw") (h2 : c.codes = #[n]) : Fails (n, c) = true := by
   simp [Fails, h1, h2]
 
-theorem size_qsort {α : Type} (xs : Array α) (lt : α → α → Bool) : (xs.qsort lt).size = xs.size := by
-  unfold Array.qsort
-  split
-  · rfl
-  · simp
-
 theorem none_fail_base (d p : Check) :
     (∀ x ∈ #[("draw", d), ("proved", p)], Fails x = false) ↔ p.codes = #[] := by
   simp [Fails, Array.isEmpty_iff]
@@ -118,7 +113,7 @@ theorem sameDict_iff (a b : Array (String × Json)) : Record.sameDict a b = true
   simp only [Record.sameDict, SameRoots, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
 
 theorem qsort_eq_empty {α : Type} (xs : Array α) (lt : α → α → Bool) : xs.qsort lt = #[] ↔ xs = #[] := by
-  rw [← Array.size_eq_zero_iff, size_qsort, Array.size_eq_zero_iff]
+  rw [← Array.size_eq_zero_iff, Verity.QSort.size_qsort, Array.size_eq_zero_iff]
 
 theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
     (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
