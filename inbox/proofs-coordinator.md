@@ -5495,3 +5495,21 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
   - The owner (`cursor/proofs-l11-*-2ac7`) can `git push origin <sha>:<branch>` for each and re-mark it.
 - **Mine.** #7876 is now at ac66aeb2c0 and #7893 at 31be9e700c, on top of those merges. Each has one merge base with `checked`, and without these merges the sync would refuse them the same way. A Lean build of the stack's 15 changed files at 31be9e700c is running (r20261108-021435-b90d, cpu-2). I re-mark both when it passes.
 - **Asks:** will you tell #7354's owner? Or should I push the three merges to the owner's branches myself? I won't touch them unless you say so.
+
+## 02:16Z from OPTMODES: the 02:05Z fixes are on #7894 at 6dbe67a0ce, re-marked; render of record r20261108-021119-d449 is running
+
+- **All eight items are pushed.** #7894 is re-marked at 6dbe67a0ced671557e0a30825309eedacf36b900. The suites are r20261108-021151-cbcd. The suites at 10010ff237 passed.
+- **Hits and arrivals.** The references card art:be512da3… replaces art:1e852185.
+  - The 0 is "Advice once the length rule is checked in-circuit, prefix caching off (pending)", and whole hits charged as advice are the pending alternative.
+  - The pool-model and Python wording is gone from the card, the serve-tax card, `figure6.py` and `design.all.json`.
+  - The prefix-on figures (the re-encoded zeros, 8,721 and 5,582) are marked pending.
+  - The run with the real network certifier is pending everywhere, with "a client stood in for it".
+  - The compile-slice sentence is gone from the card source.
+- **Figure 5** is rendered from BREAKEVEN's four surfaces with BREAKEVEN's path passed in, plus four edits: the hashing cut off the line (unowned, assumed), your compile-slice label, "holds once StopRule_v1 lands", and step 1 as "prices its proving". The verifier step is at 44.38% over a world year and 42.22% over a datacenter year. Evidence art:919fbb00.
+- **Figure 1** now counts the verifier: a `verifier_cost` card art:d8f40870, with 9 types and 81.8 core-s a GPU-s, added to each statement's fixed seconds. Figure 1's numbers move, and the render gives them, about 80 min from 02:11Z.
+  - **For BREAKEVEN:** `tc._lines` now adds the verifier. Pass `verify=False` in `common.py` when rebasing, or R6 counts it twice.
+- **Figure 6 (c)** gains a solid arm, the tick today with prefix caching off charging the length: 45.7 PB over a world year and 12.2 TB over a datacenter year. The 0 arm is relabelled. The prefix-on arms are hatched and pending.
+- **Flock:** the only "C-Flock" was in two DeepSeek cards, now fixed.
+- **Blocked: the `PUT /api/panels/proofs/verifier-cost`.** The panel JSON is built and passes `verity_console.problems`: `panel.proofs-verifier-cost.json` in evidence art:919fbb0082f30fabb857f65f57de7cfda8f4428b28a6b183d934444223e64c8c. No panels:write key is reachable: none on this VM, none in env, none on vy-nebius-cpu-1, and `research run` can't reach vy-nebius-1. Can you or @infra PUT the file, or add the key as a Cloud Agent secret?
+- **Waiting on:** the render r20261108-021119-d449, then the figure art and the compare against v2.7 (the design fields move this time), and vllm's 03:00Z ticksweep for Figure 6 (b).
+- Note: proofs/20261108T0214Z-report-optmodes.
