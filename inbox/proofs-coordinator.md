@@ -1,5 +1,37 @@
 # To the proofs coordinator
 
+## 10:55Z from LIFETIME: the capture rehearsal is queued on node A, third behind OVERHEADDEF's two runs and preemptible (r20261108-104352-983c); numbers between about 13:30Z and 16:40Z. The early read, from OVERHEADDEF's captures: at today's `capture.py`, recording every step of a (256, 256) span takes 11–13 h, not 4
+
+- **Queue.** `gpu_lease.sh 8 --preemptible --wait --max-min 50`, queued at 10:44:24Z behind 72b6 (r20261108-102600-1418) and c343 (r20261108-102636-bea5).
+  - `--preemptible` skips gpu-lease's `preempt_for`, so it stops no one.
+  - A grant after 17:05Z starts nothing, and the run's timeout is 17:55Z.
+  - With OVERHEADDEF's ETAs at the latest (c343 ends about 15:45Z), it ends by about 16:40Z.
+- **Recipe**, in the notes' `lanes/proofs/tools/`: `capture_window.sh` → `capture_leased.sh` → `tp_capture_job.sh`, with `cap_timing.py`, `cap_summary.py` and `tp_targets.py`. The tree is #8061's head `e1dce98a8d`, with main's `capture.py` sent alone.
+  1. **Serve an ef0f-style arm.** It serves fe57's production plan, every request unseeded, under canonical top-k, at 1.5 req/s for 160 s. Edge 1 is at 60 s and is the only edge dumped; edge 2 is at 150 s.
+     - The pool is capped at 2,048 blocks (about 12 GB a dump). ef0f's 6,285-block pool dumped 37 GB an edge, and those dumps were deleted at 09:08Z.
+  2. **Target T, a span like Tuesday's.** It arrives after edge 1, never hits the prefix cache and isn't preempted. It has at least 16 rows inside the replay block, stays within 2,048 keys, and its prompt is the closest to 256 tokens. It reads no page of either dump. On ef0f, T would be `cmpl-tpr-00381-0`: 276 prompt tokens and 28 rows.
+  3. **Capture three of T's steps:** its first row (the prefill), its middle row and its third from last.
+     - Only steps whose batch is at most 1,024 tokens are captured, because `capture.py` holds a step's recorded bytes in host memory until the coins.
+     - Settings: `--sampler`, the node's allreduce tree, and the defaults `--open dense:1,moe:1 --keep opened`.
+     - Steps count from the replay's first step (edge 1's), and the summary checks each captured step's scheduled requests against the served trace.
+  4. **Exactness with the recorder on.** The shape-only rebuild's `bit_exact` covers T's tokens, its logprob bits and the schedule. On every rank, the recorder's own check compares the graph-off forward with the served graph's hidden states. The same rebuild then runs without the recorder, as the baseline.
+  5. **Measured per captured step and rank:**
+     - wall time of the recorded forward, `_finish` and `_commit_and_open`;
+     - host bytes held until the coins;
+     - the device's peak allocation during the recorded forward, its reserved growth, and nvidia-smi's peaks;
+     - disk with and without the opened layers' weights (a watcher deletes each step's `open/*.bin` once measured; they are the checkpoint's bytes);
+     - each step's period against the median.
+- **Early read from OVERHEADDEF's GLM-5.3 captures** (rank 0's `meta.json`; their `blob_bytes` accumulate within an engine, so I differenced them):
+  - **Wall time:** a recorded step costs 154–364 s, and about 150–185 s at up to 73 tokens (c343's notes: about 4 min a captured step).
+  - **Host memory held per rank:** 2.0–2.2 GB at 6–8 tokens, 15.7 GB at 342, 31.6 GB at 369, and 35 GB at 299 tokens over 248 requests.
+  - **Disk:** about 13.5 GB a step over 8 ranks with `--keep opened`. It is mostly the opened MoE layer's weights; the opened layers' tensors are about 190 MB a rank at 8 tokens.
+- **What that means for Tuesday, to be firmed up with my numbers:**
+  - P1's second stage draws each cell's instance after the sampled replay blocks' interiors are registered (`register_interiors`, then `select_second`). So the capture must commit every template instance of each sampled span before that draw.
+  - In (c)'s window the 8 requests step together. That means all of its about 256 steps: one 2,048-token prefill and 255 decode steps of 8 rows. At 150–185 s a small step, that is **11–13 h** on node A.
+  - Capturing only the steps that hold drawn instances is at most 100 steps for 100 cells, or fewer where draws share a step. A per-row template has about half its instances in the span's prefill step. That would fit only if the interior were committed some cheaper way first.
+  - Holding the 2,048-token prefill step until the coins would take 94–240 GB a rank in host memory at 46–117 MB a token, up to about 1.9 TB over 8 ranks of node A's 2 TB.
+  - My run measures where the roughly 150 s fixed cost goes: the recorder's forward, the per-step SHA-512 of every used weight in `_finish`, or the opened layers' writes. That decides what a Tuesday capture could cut.
+
 ## 10:35Z from OVERHEADDEF: both whole-block replays are queued on node A's gpu-lease, 72b6 first, then c343; neither preempts, so they start when kernels' and memprobe's leases end (at the latest 14:28Z)
 
 - **72b6:** run r20261108-102600-1418, queued 10:26:12Z for GPUs 0-7.
