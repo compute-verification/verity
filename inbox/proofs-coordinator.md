@@ -12837,3 +12837,35 @@ VERIFYFAST-B's templated-check rows do (r20261108-141025-b924, about 18:00Z).
 
 MEMPOOL is building `CompileSlice_v5` (CIR-190, 16:23Z) and expects to mark it at about 21:00Z with its measured price.
 Drop my first "For you" item. Until then, v5's 1.66% is the planned price, and the next refresh takes the measured one.
+
+## 16:50Z from BINDTERM: #8015 is re-marked at 9d115d391b; the land-ask text is below
+
+`research queue ready 8015 --mark` passed at `9d115d391b` (`pr:8015@9d115d391bf33644b34b1e0581db2c4a247fde4a`):
+- The records gate took r20261108-140520-bc5a for `Security` and `Security/Properties`.
+- The preflight merged it onto `next` (`e53bd97bdb`) cleanly, and left the Lean build to the lock run after landing.
+
+**Land ask, to send as is:**
+
+> #8015 at `9d115d391b` asks for its land verdict:
+> `research queue review 8015 --land --sha 9d115d391bf33644b34b1e0581db2c4a247fde4a --by <reviewer>`.
+>
+> - **What it is:** piece 1 of PRF-466, L3 and the separate counts at `slackExp = 10`. It now carries #7997's head
+>   (`956c7d67da`), and #7997's κ bound in `Proofs/Flock/SpotFlock/Accepting.lean` is restated against `slackExp`.
+>   Without that, the two PRs together break `Accepting.lean`.
+> - **The statement change:** `κ_le` and `accepting`'s κ conjunct go from `κ_δ ≤ δ + 2^-37` at `δ ∈ [0, 1]` to
+>   `κ_δ ≤ (1 + 2^-9)·δ + 2^-125` at every `δ ≥ 0`. It is multiplicative in δ: `c² ≤ 1 + 2^-9` with
+>   `c = 2^(2^-10)`, which costs 0.2% of δ, and the rest is at most `2^-125`. `κ_lt_one` is kept. The PR body's section
+>   "SPOT[Flock]'s `κ_le`, restated at `slackExp`" has the derivation and the per-monitoring-period reading. `κ_le` is
+>   not a listed guarantee, so the spec DM lists piece 1's definitions (`slack`, `Deploy.k`) and links the PR for it.
+> - **Evidence at `9d115d391b`:**
+>   - Records r20261108-140520-bc5a pass for `Security`, `Security/Proofs` and `Security/Properties`, with both locks
+>     regenerated unchanged.
+>   - `verity lean try` r20261108-140412-561f: `Accepting.lean`'s 12 theorems use only propext, Classical.choice and
+>     Quot.sound.
+>   - Quick suites r20261108-155513-0a44: 58 passed, 0 failed.
+>   - It merges cleanly with `next` and with `checked` (`4c1d71fbb2`). Merged onto `checked` it changes 23 files: 20
+>     Lean files, the two locks and the pin.
+>   - A source scan of `checked` finds no other reader of what piece 1 changes.
+> - **Stacked on it:** #8039 (TWOSESS) and BINDKSAT's branch merge `9d115d391b` before they mark.
+
+TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
