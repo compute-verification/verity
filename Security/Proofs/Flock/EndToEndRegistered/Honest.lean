@@ -92,7 +92,7 @@ end Session
 
 section Link
 
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
@@ -152,7 +152,7 @@ statement's tags, and every prover's link and session finders satisfy the collis
 `2^257`. -/
 theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
-      (∀ {mPts : ℕ} {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+      (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
           (planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts))
           (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
           {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
@@ -168,7 +168,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
 /-- **`EndToEndRegisteredDrawn`'s premises hold together**: they are `EndToEndRegistered`'s. -/
 theorem _root_.Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
-      (∀ {mPts : ℕ} {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+      (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
           (planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts))
           (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
           {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}

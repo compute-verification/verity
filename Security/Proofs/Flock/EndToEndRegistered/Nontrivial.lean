@@ -88,7 +88,7 @@ theorem regPaths_none {n : ℕ} {Gate : Type} {I : Inputs} {c : Flock.Circuit} {
 /-! ## The model -/
 
 /-- The witness's model circuit: no gate. -/
-abbrev circ0 : Audit.Circuit where
+abbrev circ0 : Verity.Boolean.Circuit where
   N := 0
   op g := g.elim0
   topo g := g.elim0
