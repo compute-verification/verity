@@ -13,8 +13,8 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `span`: one sampled span's units of the stream's template, read from its `Replay` exactly as the serving rows read
   the committed store (`serving_rows.population`, `serving_rows.read_all`).
 * `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
-  (`write_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out. A
-  replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
+  (`engine.sampler_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out.
+  A replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
 * `interior`: the replay sample's spans, each padded to n_rho with copies of its last unit, committed as one window
   (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member, each input port a table of its own
   Q·n_rho rows and unit i reading row i, so each row a session proves is a registered read of the interior record. It is
@@ -47,15 +47,13 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
+from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.logits_capture import LogitsCapture
 
 #: the tag `interior_run` hashes under
 RUN_TAG = b"verity-vllm/interior-run/v1\x00"
-#: a sampler capture's record (`write_capture`, `captured`)
-CAPTURE = "capture.json"
-
 Given = Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
 
 
@@ -233,28 +231,8 @@ def span(inst: dict[str, Any], replay: Replay, template: str, *, program_dir: st
                 {"index_s": round(t1 - t0, 3), "read_s": round(time.perf_counter() - t1, 3)})
 
 
-def write_capture(directory: Path, template: str, spans: Mapping[str, Mapping[str, Any]]) -> Path:
-    """What a replay at the served step shapes took at the sampler for each request ``rid`` of ``spans``, written to
-    ``directory`` for `captured`: its ``logits`` ((n, V) u16, row j the bf16 bits its j-th token was selected from),
-    ``tokens`` (the n ids selected), ``steps`` (the n engine steps) and ``program`` (what fixes its Program: the
-    Program's digest, or its launch's). ``template`` is the token-select row template the rows are units of."""
-    directory.mkdir(parents=True, exist_ok=True)
-    out = {}
-    for k, (rid, s) in enumerate(spans.items()):
-        a = np.ascontiguousarray(s["logits"], dtype="<u2")
-        (directory / f"{k}.u16").write_bytes(a.tobytes())
-        out[rid] = {"file": f"{k}.u16", "sha256": hashlib.sha256(a.tobytes()).hexdigest(), "rows": list(a.shape),
-                    "tokens": [int(t) for t in s["tokens"]], "steps": [int(t) for t in s["steps"]],
-                    "program": str(s["program"])}
-    path = directory / CAPTURE
-    doc = LogitsCapture(template, out).dump()
-    LogitsCapture.of(doc, str(path))
-    path.write_text(json.dumps(doc, indent=1))
-    return path
-
-
 def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> Span:
-    """Request ``rid``'s span of the capture's token-select template (`write_capture`): unit j reads logits row j and
+    """Request ``rid``'s span of the capture's token-select template (`sampler_capture.write`): unit j reads logits row j and
     outputs token j, laid out as `span` reads a token select's units from a Program. ``served``: the ids serving emitted,
     which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed."""
     cap = LogitsCapture.of(json.loads((directory / CAPTURE).read_text()), str(directory / CAPTURE))
@@ -348,4 +326,4 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 
 __all__ = ["Interior", "Replay", "Span", "captured", "interior", "interior_ports", "interior_run", "interior_window", "register",
-           "span", "write_capture"]
+           "span"]

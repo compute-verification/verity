@@ -26,6 +26,7 @@ from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.engine import sampler_capture as SC
 from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
@@ -268,7 +269,7 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     ones served, or whose rows changed after it was written, is refused before any commitment."""
     replayed = {rid: IR.span(world.inst, _replay(world, rid), TSEL) for rid in PROMPTS}
     served = _tokens(world)
-    IR.write_capture(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
+    SC.write(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
                                             "program": s.program} for rid, s in replayed.items()})
     got = {rid: IR.captured(tmp_path, rid, served[rid]) for rid in PROMPTS}
     for rid, s in replayed.items():
@@ -286,8 +287,8 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     (tmp_path / "1.u16").write_bytes(bytes(raw))
     with pytest.raises(ValueError, match="is not the capture's"):
         IR.captured(tmp_path, "r1")
-    doc = json.loads((tmp_path / IR.CAPTURE).read_text())
+    doc = json.loads((tmp_path / SC.CAPTURE).read_text())
     doc["spans"]["r1"]["steps"] = doc["spans"]["r1"]["steps"][:-1]
-    (tmp_path / IR.CAPTURE).write_text(json.dumps(doc))
+    (tmp_path / SC.CAPTURE).write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="for 3 tokens at 2 steps"):
         IR.captured(tmp_path, "r1")
