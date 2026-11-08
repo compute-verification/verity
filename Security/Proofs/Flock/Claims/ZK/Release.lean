@@ -82,8 +82,9 @@ ZK server computes:
 * `LeanRelease.HelloRefine`: at every tape, the server's `Hello` is the prover's first message;
 * `LeanRelease.OwnRefine`: at the link and the `Finish`, on every history where the deferred release releases a frame,
   the ZK server's own message is the prover's;
-* `LeanRelease.LiveRefine`: on every history at a frame round whose rounds all passed and whose last coins the frame
-  takes, the frame's release of the worker's round is the prover's message;
+* `LeanRelease.LiveRefine`: on every history of the deferred release's own run (`ZkServer.OwnHist`) at a frame round
+  whose rounds all passed and whose last coins the frame takes, the frame's release of the worker's round is the
+  prover's message;
 * `LeanRelease.FillRefine`: on every history at a frame round below the last round on which a round failed and whose
   last coins the frame takes, the frame's release of the ZK server's scheduled round, at the values the release log
   reports there, is the prover's message;
@@ -1020,11 +1021,13 @@ def OwnRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pr
   ∀ ρ κ h, L.kindAt x h.length = .recomputed → (h.length + 1 < n x ∨ L.toSrv.live wk x w ρ κ h = true) →
     L.toSrv.OwnHist L.fillOf wk x w ρ κ h → (((P w).next x h ρ).eval H).1 = L.ownMsg x w ρ h
 
-/-- **The frame rounds the worker passed**: after every history at a frame round on which every round so far passed and
-whose last coins the frame takes, the Lean frame's release of the worker's round is `P`'s message. -/
+/-- **The frame rounds the worker passed**: after every history of the deferred release's own run (`ZkServer.OwnHist`)
+at a frame round on which every round so far passed and whose last coins the frame takes, the Lean frame's release of
+the worker's round is `P`'s message. -/
 def LiveRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (wk : L.toSrv.Worker)
     (x : Msg) (w : W) : Prop :=
   ∀ ρ κ h v, L.kindAt x h.length = .masked → L.toSrv.live wk x w ρ κ h = true → L.refusesCoins x ρ h = false →
+    L.toSrv.OwnHist L.fillOf wk x w ρ κ h →
     wk x w ρ h 0 = some (v, false) → (((P w).next x h ρ).eval H).1 = L.release x ρ h false v
 
 /-- **The stand-in rounds**: after every history at a frame round below the last round `n x - 1` on which a round failed
@@ -1082,7 +1085,7 @@ theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pro
       | true =>
         rw [L.release_of_refusesCoins x ρ h _ _ hs]
         exact hI.2.2.2.2 ρ κ h hk hcond hs
-      | false => exact hI.2.2.1 ρ κ h v hk hl hs hv
+      | false => exact hI.2.2.1 ρ κ h v hk hl hs hown hv
     | false =>
       have hlt : h.length + 1 < n x := hcond.resolve_right (by rw [hl]; exact Bool.false_ne_true)
       have hu : L.toSrv.wkD L.fillOf wk κ x w ρ h 0 = some (L.fillOf x h.length 0 w ρ h) := by

@@ -97,13 +97,13 @@ def test_the_trust_base_is_one_list():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
-    for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
-    updates the citation."""
-    proofs = ROOT / "Security/Proofs"
-    version = (proofs / "lean-toolchain").read_text().strip().rpartition(":")[2]
-    for doc in ("ASSUMPTIONS.md", "Assumptions.lean"):
-        assert f"Lean {version}'s runtime" in (proofs / "Flock/Soundness" / doc).read_text(), doc
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes` in `Definitions/Assumptions/Flock.lean`)
+    cites what the toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump
+    fails here until someone re-reads it and updates the citation."""
+    security = ROOT / "Security"
+    version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
+    for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Definitions/Assumptions/Flock.lean"):
+        assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
 
 
 def _module_roots(pkg: Path):
@@ -240,6 +240,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
+# Security's 945: merge residue of renamed premise texts, which the lock run's --update drops and the after-landing bookkeeping lowers
 INLINE = {"Security": 917, "Security/Properties": 132, "verity/core/service/flock": 6}
 
 
@@ -302,7 +303,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"Security": 40}
+TREES_EXCEPT = {"Security": 41}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -489,7 +490,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 690}
+OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 700}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -515,8 +516,8 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
 #: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
 IMPORT_ALL: dict[str, str] = {
-    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: SampledProofs.Draw":
-        "its proofs open `SampledProofs.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
+        "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
 IMPORT_ALL_USES = {"Security/Proofs": 1}

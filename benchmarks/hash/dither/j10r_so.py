@@ -17,14 +17,20 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 import dither_a as DA
 import dither_one as DO
 from h1r import H1R
-from verity_config.settings import of
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from h1r import Call, Plan
 
 settings = of(__file__)
 J10R_SHA = "559bc0aa69"
@@ -57,12 +63,13 @@ class RefH1R(H1R):
     M = 0
     SKIP = True
 
-    def plan(self, calls, seeds=None, out=None):
+    def plan(self, calls: list[Call], seeds: torch.Tensor | None = None, out: torch.Tensor | None = None) -> Plan:
         if not self.SKIP:
             calls = [dataclasses.replace(c, live=torch.ones_like(c.live)) for c in calls]
         return super().plan(calls, seeds, out)
 
-    def launch(self, plan, salt, nowrite=False, version=2, step_base=None) -> None:
+    def launch(self, plan: Plan, salt: torch.Tensor, nowrite: bool = False, version: int = 2,
+               step_base: torch.Tensor | None = None) -> None:
         if version != 1 or not self.M:
             raise RuntimeError(f"RefH1R: version 1 at a set M only, not version {version} at M = {self.M}")
         self.launch_j10r(plan, salt, self.M, nowrite, step_base)
@@ -72,7 +79,7 @@ class Refs:
     """dither_a.check's references under J10-R for capture g of step s at layout rows M (`swapped`), and after it the gate
     step's whole calls against j10r_units (`definition`)."""
 
-    def __init__(self, win, g: dict, M: int, skip: bool = True):
+    def __init__(self, win: DO.DitherState, g: dict, M: int, skip: bool = True) -> None:
         self.win, self.g, self.M, self.s, self.skip = win, g, M, g["s"], skip
         self.cache: dict[tuple, np.ndarray] = {}
         self.itself0 = DO.h1v3_itself
@@ -133,7 +140,7 @@ class Refs:
                     settings.put(k, v)
 
     @contextlib.contextmanager
-    def swapped(self):
+    def swapped(self) -> Iterator[Refs]:
         RefH1R.M, RefH1R.SKIP = self.M, self.skip
         h1r0, unit0, itself0 = DA.H1R, DO.h1v3_unit, DO.h1v3_itself
         self.itself0 = itself0
@@ -161,7 +168,8 @@ class Refs:
                 "words": words, "bad": bad, "ok": not bad and words > 0}
 
 
-def check(win, lib_h1o: str, which: str, n_cpu_units: int, g: dict, r_round: dict, mode: str, skip: bool = True) -> dict:
+def check(win: DO.DitherState, lib_h1o: str, which: str, n_cpu_units: int, g: dict, r_round: dict, mode: str,
+          skip: bool = True) -> dict:
     """dither_a.check of capture g under J10-R's references; on the gate step also `Refs.definition`."""
     M = rows(mode, win.t, g["m"])
     refs = Refs(win, g, M, skip)

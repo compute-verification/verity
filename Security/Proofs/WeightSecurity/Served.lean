@@ -4,7 +4,7 @@ public import Definitions.WeightSecurity.Guarantees
 public import Proofs.Core.Game.Basic
 public import Proofs.Core.Game.Interleave
 public import Proofs.Core.Game.Union
-public import Proofs.SampledProofs.ExfiltrationBound
+public import Proofs.Spot.ExfiltrationBound
 public import Proofs.WeightSecurity.Theft
 
 /-! `WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed`, `Theft`'s leakage lemma at an
@@ -210,7 +210,7 @@ open scoped ENNReal
 open Classical in
 theorem avg_indicator {α : Type} [Fintype α] (P : α → Prop) :
     avg (fun z => if P z then (1 : ℝ≥0∞) else 0) = ENNReal.ofReal (Claims.Pr P) := by
-  unfold avg Claims.Pr
+  unfold avg Claims.Pr Claims.prUniform
   rw [← mul_sum, sum_boole]
   rcases Nat.eq_zero_or_pos (Fintype.card α) with h0 | hpos
   · have : IsEmpty α := Fintype.card_eq_zero_iff.1 h0
