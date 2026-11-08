@@ -192,11 +192,11 @@ def mufu_scale() -> Any:
 def install_fused(t: Tree, device: Any) -> None:
     """Wrap ``flashinfer.comm.allreduce_fusion``, which vLLM's fused all-reduce + RMSNorm op looks up at each call, and compile
     the scale kernel now: this runs in vLLM's eager profiling forward, before any CUDA graph is captured. FlashInfer's own
-    decorator already sets ``__wrapped__``, so the wrapper is told by a mark of its own."""
+    decorator already sets ``__wrapped__``, so the wrapper is told by a mark of its own. vLLM's FlashInfer all-reduce has loaded
+    ``flashinfer.comm`` by the first all-reduce; a process that hasn't has no fused op to wrap."""
     import torch
-    try:
-        import flashinfer.comm as fc
-    except ImportError:
+    fc = sys.modules.get("flashinfer.comm")
+    if fc is None:
         return
     if not getattr(fc.allreduce_fusion, "tree_from_mnnvl", False):
         fc.allreduce_fusion = fused_from_mnnvl(fc.allreduce_fusion, t)
