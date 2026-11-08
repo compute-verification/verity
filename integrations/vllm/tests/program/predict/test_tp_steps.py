@@ -1,8 +1,8 @@
 """verity_vllm.program.predict.tp_steps: a node's advice compiled at every rank of φ.tp's world and composed (`compile_tp`).
 
 The dense toy at TP2 compiles in seconds; GLM-5.3 at TP8, class G's registration, is the opt-in test, with a one-token prompt
-and a two-token one, whose TP window (`pipeline.tp.wires`) places every collective at its producers' grain: the route
-all-reduce over a prefill's rows is a coordinate combine a word of the rows."""
+and a two-token one, whose TP window (`pipeline.tp.wires`) places every collective at a grain C-Flock proves: each rank's
+coordinates gathered into 96-word rows, one combine unit a chunk, and the chunks gathered into the call's row."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.pipeline.test_tp_wires import in_order, peer_bits, sent_at_own_slices
+from tests.pipeline.test_tp_wires import in_order, parts_bits, peer_bits, proof_blocks, sent_at_own_slices
 from tests.program.predict.test_steps import GREEDY, _class_g, _mixed, _registered, _session
 from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program.predict.steps import compile_steps
@@ -48,10 +48,11 @@ def test_compile_tp_compiles_the_advice_at_every_rank_and_composes_them():
 def class_g_tp(hf_home: Path, layers: int | None = None) -> dict:
     """GLM-5.3 at TP8 under class G's registration (with ``layers``, its first ``layers`` decoder layers), a one-token prompt
     and a two-token one prefilled in one step, each decoding once: `compile_tp`'s digests and sites, and the TP window of
-    both requests' sites: its units by template, its input bits, the bits of every rank's partial wired from its producer
-    units and of every combine's operand, the reads of a combine's output left free (by kind, `Sites.unwired` without the
-    request, site, rank and node), whether each rank's sent partial is its own segment at every site's slice, and the first
-    wire running backward in the public order (None)."""
+    both requests' sites: its units by template, its input bits, the bits of every rank's partial wired into what reads
+    every rank's and of every combine's operand, the reads of a combine's output left free (by kind, `Sites.unwired` without
+    the request, site, rank and node), the window's own units C-Flock's composer refuses (`proof_blocks`), whether each
+    rank's sent partial is its own segment at every site's slice, and the first wire running backward in the public order
+    (None)."""
     advice, ingress = _session([(1, 2, ONCE, [5]), (2, 2, ONCE, [5, 6])], [[(0, 0, 1), (1, 0, 2)], [(0, 1, 1), (1, 2, 1)]])
     c = compile_tp(_class_g(hf_home, layers=layers), advice, ingress)
     live = [b for b in c.bindings if b is not None]
@@ -69,8 +70,8 @@ def class_g_tp(hf_home: Path, layers: int | None = None) -> dict:
             "combines": sorted({b.fns[0][s.combine[0][0]].id for b in live for s in b.sites}),
             "units": dict(sorted(sites.circuit.units.items())),
             "count": I.input_count(I.descriptor_record(sites.circuit, 64), by.__getitem__),
-            "parts_bits": sum(b.world * b.world * (s.hi - s.lo) * 16 for b in live for s in b.sites),
-            "peer_bits": peer_bits(sites), "unwired": dict(sorted(kinds.items())),
+            "parts_bits": sum(parts_bits(b) for b in live), "peer_bits": peer_bits(sites),
+            "unwired": dict(sorted(kinds.items())), "proof_blocks": proof_blocks(sites),
             "sent": all(sent_at_own_slices(b) for b in live), "backward": backward,
             "wires": len(sites.circuit.wires), "templates": len(sites.circuit.templates)}
 
@@ -82,11 +83,12 @@ def class_g_tp(hf_home: Path, layers: int | None = None) -> dict:
 def test_class_g_composes_its_eight_ranks_with_stable_digests_and_wires_every_peer_row(tmp_path):
     """GLM-5.3 at TP8 (`class_g_tp`) in two fresh processes of other hash seeds: the same rank workloads, bindings, TP
     workload digest and window. The window of both requests, the two-token request's embedding all-reduce over both its
-    rows among them, wires every bit of every rank's partial from its producer units, into its combine units (embedding,
-    attention and MoE all-reduces) or the logits' readers (the all-gather); each rank's sent partial is its own segment at
-    every site's slice; every wire runs forward in the public order; the only reads of a combine's output left free are the
-    MoE row's new residual, a 6144-word row, into the next attention all-reduce's coordinate combines, a word a unit (a grain
-    boundary). `at_rank` of the registration is each rank's own, so
+    rows among them, wires every bit of every rank's partial from its gathered rows, into its chunk combine units
+    (embedding and attention all-reduces) and the MoE's fused row, or into each rank's token select (the logits'
+    all-gather); each rank's sent partial is its own segment at every site's slice; every wire runs forward in the public
+    order; no read of a combine's output is left free, the MoE row's new residual into the next attention all-reduce's
+    chunk units among them; and C-Flock's composer refuses none of the window's own units. `at_rank` of the registration is
+    each rank's own, so
     each rank's digest is `compile_steps`' there. What no cheaper test can: the binding of eight ranks of a served model's
     compiled Programs at their producers' grain, each rank's place among the others read from its Programs, and their
     digests' stability across processes; it compiles GLM-5.3 eight times in each of two processes."""
@@ -105,9 +107,7 @@ def test_class_g_composes_its_eight_ranks_with_stable_digests_and_wires_every_pe
     assert len(set(g["ranks"])) == 8 and g["sites"][0] < g["sites"][1] and g["peer_bits"] == g["parts_bits"] <= g["count"]["wired"]
     assert g["sent"] and g["backward"] is None
     assert {c.split("{")[0] for c in g["combines"]} >= {"AllReduceRmsNormMnnvl_v1", "AllGather_v1"}
-    assert g["unwired"] and all(re.fullmatch(r"class-g: \(AllReduceRmsNormMnnvl_v1\{[^)]*\}\) res reads leaves \[\.\.\): 6144-word "
-                                             r"rows of AllReduceRmsNormMnnvl_v1\{.*\} into a word a "
-                                             r"AllReduceResidualMnnvlCoordinate_v1\{WORLD=8,SHOT=\d\} unit", u) for u in g["unwired"])
+    assert g["unwired"] == {} and g["proof_blocks"] == {}
     reg = _class_g(tmp_path / "phi")
     assert all(at_rank(reg, r) == _class_g(tmp_path / "phi", rank=r) for r in range(8))
     print(json.dumps(g))
