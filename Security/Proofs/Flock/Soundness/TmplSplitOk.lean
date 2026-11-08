@@ -92,10 +92,31 @@ theorem binds_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array 
     UOk D.ins nk (Tab.binds (Tab.bind (Tab.ref D pt summed A B as gL pos) c) o count ch rm wk) :=
   foldl_inv (UOk D.ins nk) _ _ o (fun o' j _ hq => bind_U D pt summed A B as gL pos c o' j ch rm wk (hwk j) hq) ho
 
+theorem flush_U (summed : Bool) (o : Tab) (cx cy : ℕ) (w : F128) (acc : Array F128) {ins nk : ℕ}
+    (ho : UOk ins nk o) : UOk ins nk (Tab.flush summed o cx cy w acc) := by
+  unfold Tab.flush
+  split_ifs <;> exact ho
+
+theorem refs_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) {nk : ℕ}
+    (o : Tab) {k : ℕ} (hk : k < nk) (cx : ℕ) (w : F128) (vs : Array ℕ) (ho : UOk D.ins nk o) :
+    UOk D.ins nk (Tab.refs D pt summed A B as gL pos o k cx w vs) := by
+  unfold Tab.refs
+  split_ifs
+  · rw [← Array.foldl_toList]
+    exact foldl_inv (UOk D.ins nk) _ _ _ (fun _ _ _ h => ref_U D pt summed A B as gL pos _ hk _ _ _ h) ho
+  · rw [← Array.foldl_toList]
+    refine flush_U _ _ _ _ _ _ (foldl_inv (fun st : Tab × ℕ × Array F128 => UOk D.ins nk st.1) _ _ _
+      (fun st v _ h => ?_) ho)
+    simp only [Tab.refStep]
+    split_ifs
+    · exact h
+    · exact flush_U _ _ _ _ _ _ h
+    · exact ref_U D pt summed A B as gL pos _ hk _ _ _ h
+
 theorem rows_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
-    (rowLow : ℕ → ℕ → F128) (alpha : F128) (nk A' : ℕ) (rows : Array (ℕ × Array ℕ × Array ℕ)) (o : Tab)
+    (rowLow : ℕ → ℕ → F128) (alpha : F128) (nk : ℕ) (rows : Array (ℕ × Array ℕ × Array ℕ)) (o : Tab)
     (ho : UOk D.ins nk o) :
-    UOk D.ins nk (Tab.rows (Tab.ref D pt summed A B as gL pos) rowLow alpha nk A' pos rows o) := by
+    UOk D.ins nk (Tab.rows D pt summed A B as gL pos rowLow alpha nk rows o) := by
   unfold Tab.rows
   rw [← Array.foldl_toList]
   refine foldl_inv (UOk D.ins nk) _ _ o (fun o' r _ hq => ?_) ho
@@ -104,9 +125,7 @@ theorem rows_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array �
   have hw : ∀ (T : Tab) (n : ℕ), UOk D.ins nk T → UOk D.ins nk { T with work := n } := fun _ _ h => h
   refine hw _ _ (foldl_inv (UOk D.ins nk) _ _ o' (fun o'' k hk hq' => ?_) hq)
   have hk := List.mem_range.mp hk
-  rw [← Array.foldl_toList, ← Array.foldl_toList]
-  exact foldl_inv (UOk D.ins nk) _ _ _ (fun _ _ _ h => ref_U D pt summed A B as gL pos _ hk _ _ _ h)
-    (foldl_inv (UOk D.ins nk) _ _ _ (fun _ _ _ h => ref_U D pt summed A B as gL pos _ hk _ _ _ h) hq')
+  exact refs_U D pt summed A B as gL pos _ hk _ _ _ (refs_U D pt summed A B as gL pos _ hk _ _ _ hq')
 
 /-! ## Values of the walk's pure steps -/
 
@@ -115,13 +134,186 @@ theorem foldl_val {α δ : Type} (V : δ → GF128) (f : δ → α → δ) (G : 
   | [], o => by simp
   | a :: l, o => by rw [List.foldl_cons, foldl_val V f G h l, h, List.map_cons, List.sum_cons, add_assoc]
 
-/-- **A Definition's own rows**, through a `ref` that adds `of w · Z k cx v`: each row's references, copy by copy. -/
+/-! ## A row's references, summed in runs
+
+`Tab.refs` sums an own column's factors along a run of references in one column chunk and adds the run's sums at its
+end (`Tab.flush`). A run's *pending* value (`pendX`, `pendS`) is what its flush will add; each step keeps the table's
+value plus the pending one equal to the per-reference sum `Tab.ref` would have reached. -/
+
+/-- **A run's sums, added** (explicit): slot `s`'s sum at the row's and the run's chunks. -/
+theorem flush_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ → ℕ → GF128) (o : Tab) (cx cy : ℕ)
+    (w : F128) (acc : Array F128) :
+    tabExp pt s L H iv (Tab.flush false o cx cy w acc) =
+      tabExp pt s L H iv o + of w * of (acc.getD s 0) * (hiE pt L H cx * hiG pt L H cy) := by
+  unfold Tab.flush tabExp
+  rw [if_neg Bool.false_ne_true]
+  dsimp only
+  rw [foldl_val (fun (m : HashMap (ℕ × ℕ × ℕ) F128) =>
+      hsum m fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0) _
+      (fun s' => if s' = s then of w * of (acc.getD s' 0) * (hiE pt L H cx * hiG pt L H cy) else 0)
+      (fun m s' => ?_), list_range_sum, Finset.sum_ite_eq' (Finset.range 64) s,
+    if_pos (Finset.mem_range.2 hs)]
+  · ring
+  · dsimp only
+    by_cases h1 : (acc.getD s' 0).isZero = true
+    · rw [if_pos h1, isZero_eq h1, of_zero']
+      split_ifs <;> ring
+    · rw [if_neg h1, hsum_bump, of_mul]
+      dsimp only
+      split_ifs <;> ring
+
+/-- **A run's sum, added** (summed): at the row's and the run's chunks. -/
+theorem flush_tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF128) (o : Tab) (cx cy : ℕ) (w : F128)
+    (acc : Array F128) :
+    tabSum pt L H gl gc iv (Tab.flush true o cx cy w acc) =
+      tabSum pt L H gl gc iv o + gl * (of w * of (acc.getD 0 0) * (hiE pt L H cx * hiG pt L H cy)) := by
+  unfold Tab.flush
+  rw [if_pos rfl]
+  dsimp only
+  by_cases h : (acc.getD 0 0).isZero = true
+  · rw [if_pos h, isZero_eq h, of_zero']
+    ring
+  · rw [if_neg h]
+    unfold tabSum
+    dsimp only
+    rw [hsum_bump, of_mul]
+    dsimp only
+    ring
+
+/-- A run's pending value at slot `s` (explicit). -/
+noncomputable def pendX (pt : FoldPt) (s L H cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) : GF128 :=
+  of w * of (st.2.2.getD s 0) * (hiE pt L H cx * hiG pt L H st.2.1)
+
+/-- A run's pending value (summed). -/
+noncomputable def pendS (pt : FoldPt) (L H cx : ℕ) (gl : GF128) (w : F128) (st : Tab × ℕ × Array F128) : GF128 :=
+  gl * (of w * of (st.2.2.getD 0 0) * (hiE pt L H cx * hiG pt L H st.2.1))
+
+theorem refStep_size (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
+    (k cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) (v : ℕ) (hst : st.2.2.size = 64) :
+    (Tab.refStep D pt summed A B as gL pos k cx w st v).2.2.size = 64 := by
+  simp only [Tab.refStep]
+  split_ifs <;> simp [hst]
+
+/-- **One reference, summed in its run** (explicit): `Tab.ref`'s term. -/
+theorem refStep_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
+    (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (k cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) (hst : st.2.2.size = 64)
+    (v : ℕ) :
+    tabExp pt s L H iv (Tab.refStep D pt false A B as gL pos k cx w st v).1 +
+        pendX pt s L H cx w (Tab.refStep D pt false A B as gL pos k cx w st v) =
+      tabExp pt s L H iv st.1 + pendX pt s L H cx w st + of w * (hiE pt L H cx * refX D pt s L H A B as gL pos iv k v) := by
+  obtain ⟨o, cy, acc⟩ := st
+  dsimp only at hst
+  by_cases hv : v < D.cols
+  · have hi : (as.getD k 0 + B * (pos v % A)) % 64 < acc.size := by
+      rw [hst]; exact Nat.mod_lt _ (by norm_num)
+    have hi' : (as.getD k 0 + B * (pos v % A)) % 64 < (Array.replicate 64 (0 : F128)).size := by
+      rw [Array.size_replicate]; exact Nat.mod_lt _ (by norm_num)
+    simp only [Tab.refStep, pendX, refX, hv, ↓reduceIte, Bool.false_eq_true]
+    by_cases hc : pos v / A = cy
+    · simp only [hc, beq_self_eq_true, eq_self_iff_true, ↓reduceIte]
+      rw [getD_modify _ _ hi]
+      split_ifs
+      · rw [of_add]; ring
+      · ring
+    · simp only [beq_eq_false_iff_ne.2 hc, Bool.false_eq_true, ↓reduceIte]
+      rw [flush_tabExp pt hs, getD_modify _ _ hi', getD_replicate]
+      split_ifs
+      · rw [of_add, of_zero']; ring
+      · rw [of_zero']; ring
+  · simp only [Tab.refStep, pendX, hv, ↓reduceIte]
+    rw [ref_tabExp]
+    ring
+
+/-- **One reference, summed in its run** (summed): `Tab.ref`'s term. -/
+theorem refStep_sum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) (gl gc : GF128)
+    (iv : ℕ → GF128) (k cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) (hst : st.2.2.size = 64) (v : ℕ) :
+    tabSum pt L H gl gc iv (Tab.refStep D pt true A B as gL pos k cx w st v).1 +
+        pendS pt L H cx gl w (Tab.refStep D pt true A B as gL pos k cx w st v) =
+      tabSum pt L H gl gc iv st.1 + pendS pt L H cx gl w st + of w * (hiE pt L H cx * refS D pt L H A gL pos gl gc iv v) := by
+  obtain ⟨o, cy, acc⟩ := st
+  dsimp only at hst
+  by_cases hv : v < D.cols
+  · have hi : 0 < acc.size := by omega
+    have hi0 : 0 < (Array.replicate 64 (0 : F128)).size := by simp
+    simp only [Tab.refStep, pendS, refS, hv, eq_self_iff_true, ↓reduceIte]
+    by_cases hc : pos v / A = cy
+    · simp only [hc, beq_self_eq_true, eq_self_iff_true, ↓reduceIte]
+      rw [getD_modify _ _ hi, if_pos rfl, of_add]
+      ring
+    · simp only [beq_eq_false_iff_ne.2 hc, Bool.false_eq_true, ↓reduceIte]
+      rw [flush_tabSum, getD_modify _ _ hi0, if_pos rfl, getD_replicate, of_add, of_zero']
+      ring
+  · simp only [Tab.refStep, pendS, hv, ↓reduceIte]
+    rw [ref_tabSum]
+    ring
+
+/-- **A row's references** (explicit): each adds `Tab.ref`'s term, summed in runs or not. -/
+theorem refs_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
+    (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (o : Tab) (k cx : ℕ) (w : F128) (vs : Array ℕ) :
+    tabExp pt s L H iv (Tab.refs D pt false A B as gL pos o k cx w vs) = tabExp pt s L H iv o +
+      (vs.toList.map fun v => of w * (hiE pt L H cx * refX D pt s L H A B as gL pos iv k v)).sum := by
+  unfold Tab.refs
+  split_ifs
+  · rw [← Array.foldl_toList]
+    exact foldl_val (tabExp pt s L H iv) _ _ (fun o v => by rw [ref_tabExp, mul_assoc]) _ _
+  · rw [← Array.foldl_toList]
+    have key : ∀ (l : List ℕ) (st : Tab × ℕ × Array F128), st.2.2.size = 64 →
+        tabExp pt s L H iv (l.foldl (Tab.refStep D pt false A B as gL pos k cx w) st).1 +
+            pendX pt s L H cx w (l.foldl (Tab.refStep D pt false A B as gL pos k cx w) st) =
+          tabExp pt s L H iv st.1 + pendX pt s L H cx w st +
+            (l.map fun v => of w * (hiE pt L H cx * refX D pt s L H A B as gL pos iv k v)).sum := by
+      intro l
+      induction l with
+      | nil => intro st _; simp
+      | cons v l ih =>
+        intro st hst
+        rw [List.foldl_cons, ih _ (refStep_size D pt false A B as gL pos k cx w st v hst),
+          refStep_exp D pt hs L H A B as gL pos iv k cx w st hst v, List.map_cons, List.sum_cons]
+        ring
+    have h := key vs.toList (o, 0, Array.replicate 64 0) (by simp)
+    unfold pendX at h
+    dsimp only
+    rw [flush_tabExp pt hs, h]
+    simp only [getD_replicate, of_zero', mul_zero, zero_mul, add_zero]
+
+/-- **A row's references** (summed): each adds `Tab.ref`'s term, summed in runs or not. -/
+theorem refs_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) (gl gc : GF128)
+    (iv : ℕ → GF128) (o : Tab) (k cx : ℕ) (w : F128) (vs : Array ℕ) :
+    tabSum pt L H gl gc iv (Tab.refs D pt true A B as gL pos o k cx w vs) = tabSum pt L H gl gc iv o +
+      (vs.toList.map fun v => of w * (hiE pt L H cx * refS D pt L H A gL pos gl gc iv v)).sum := by
+  unfold Tab.refs
+  split_ifs
+  · rw [← Array.foldl_toList]
+    exact foldl_val (tabSum pt L H gl gc iv) _ _ (fun o v => by rw [ref_tabSum, mul_assoc]) _ _
+  · rw [← Array.foldl_toList]
+    have key : ∀ (l : List ℕ) (st : Tab × ℕ × Array F128), st.2.2.size = 64 →
+        tabSum pt L H gl gc iv (l.foldl (Tab.refStep D pt true A B as gL pos k cx w) st).1 +
+            pendS pt L H cx gl w (l.foldl (Tab.refStep D pt true A B as gL pos k cx w) st) =
+          tabSum pt L H gl gc iv st.1 + pendS pt L H cx gl w st +
+            (l.map fun v => of w * (hiE pt L H cx * refS D pt L H A gL pos gl gc iv v)).sum := by
+      intro l
+      induction l with
+      | nil => intro st _; simp
+      | cons v l ih =>
+        intro st hst
+        rw [List.foldl_cons, ih _ (refStep_size D pt true A B as gL pos k cx w st v hst),
+          refStep_sum D pt L H A B as gL pos gl gc iv k cx w st hst v, List.map_cons, List.sum_cons]
+        ring
+    have h := key vs.toList (o, 0, Array.replicate 64 0) (by simp)
+    unfold pendS at h
+    dsimp only
+    rw [flush_tabSum, h]
+    simp only [getD_replicate, of_zero', mul_zero, zero_mul, add_zero]
+
+/-- **A Definition's own rows**, through `Tab.refs`, which adds `of w · Z k cx v` for each reference: each row's
+references, copy by copy. -/
 theorem rows_val (V : Tab → GF128) (hW : ∀ (o : Tab) (n : ℕ), V { o with work := n } = V o)
-    (ref : Tab → ℕ → ℕ → F128 → ℕ → Tab) (Z : ℕ → ℕ → ℕ → GF128)
-    (hV : ∀ o k cx w v, V (ref o k cx w v) = V o + of w * Z k cx v)
-    (rowLow : ℕ → ℕ → F128) (alpha : F128) (nk A : ℕ) (pos : ℕ → ℕ) (rows : Array (ℕ × Array ℕ × Array ℕ))
-    (o : Tab) :
-    V (Tab.rows ref rowLow alpha nk A pos rows o) = V o + (rows.toList.map fun r => ∑ k ∈ Finset.range nk,
+    (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
+    (Z : ℕ → ℕ → ℕ → GF128)
+    (hR : ∀ o k cx w vs, V (Tab.refs D pt summed A B as gL pos o k cx w vs) =
+      V o + (vs.toList.map fun v => of w * Z k cx v).sum)
+    (rowLow : ℕ → ℕ → F128) (alpha : F128) (nk : ℕ) (rows : Array (ℕ × Array ℕ × Array ℕ)) (o : Tab) :
+    V (Tab.rows D pt summed A B as gL pos rowLow alpha nk rows o) = V o + (rows.toList.map fun r => ∑ k ∈ Finset.range nk,
       ((r.2.1.toList.map fun v => of (alpha * rowLow k (pos r.1)) * Z k (pos r.1 / A) v).sum +
         (r.2.2.toList.map fun v => of (rowLow k (pos r.1)) * Z k (pos r.1 / A) v).sum)).sum := by
   unfold Tab.rows
@@ -134,8 +326,7 @@ theorem rows_val (V : Tab → GF128) (hW : ∀ (o : Tab) (n : ℕ), V { o with w
   rw [hW, ← list_range_sum]
   refine foldl_val V _ (fun k : ℕ => (ra.toList.map fun v => of (alpha * rowLow k (pos x)) * Z k (pos x / A) v).sum +
       (rb.toList.map fun v => of (rowLow k (pos x)) * Z k (pos x / A) v).sum) (fun o'' k => ?_) (List.range nk) o'
-  rw [← Array.foldl_toList, ← Array.foldl_toList, foldl_val V _ _ (fun o v => hV o k (pos x / A) _ v),
-    foldl_val V _ _ (fun o v => hV o k (pos x / A) _ v), add_assoc]
+  rw [hR, hR, add_assoc]
 
 /-- **A call's bindings**, copy by copy. -/
 theorem binds_val (V : Tab → GF128) (bind : Tab → ℕ → Tab → (ℕ → ℕ × F128) → (ℕ → ℕ → List (ℕ × F128)) → Tab)
