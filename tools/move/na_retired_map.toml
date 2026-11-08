@@ -10,8 +10,10 @@
 #
 # [words] rename each word wherever it stands, as a name or one part of one; each table lists its longer words first,
 # since a table's words are tried in order. A homonym another area declares (`pr_draws_le` in Pous, `WindowLaw` in the
-# bridge, `drawOf`, `drawsOf`, `drawnOf`, `recordDraw`) or a word a field, binder or JSON key shares (`wrong`, `draws`,
-# `drawn`, `horizon`) is renamed only in network accounting's files, as a whole word or at the receiver it is read on.
+# bridge, `drawsOf`, `drawnOf`, `recordDraw`) or a word a field, binder or JSON key shares (`wrong`, `draws`, `drawn`,
+# `horizon`) is renamed only in network accounting's files, as a whole word or at the receiver it is read on.
+# `Accounting.Compose.drawOf` keeps its name: PoUW's period proofs read it unqualified, where PouwCheck's, ZkLink's and
+# Flock's own `drawOf` are open too, and only the elaborator tells those apart.
 # The Lean check's and the queue's own code and fixtures (tools/verity/lean, tools/research) are left out: their
 # examples are synthetic or pinned to historical locks.
 
@@ -59,7 +61,6 @@
 "drawUniform_val" = "sampleUniform_val"
 "pr_draws_le_map" = "pr_samples_le_map"
 "sampledLeak_tap" = "sampledLeak_certifier"
-"Compose.drawOf" = "Compose.sampleOf"
 "LiveCoinsDrawn" = "LiveCoinsSampled"
 "RateWindowDraw" = "RateWindowSample"
 "WardenSchedule" = "CertifierSchedule"
@@ -190,12 +191,6 @@ files = ["Security/*Gates*", "Security/*EncodeChain*"]
 "Draw.key" = "Sample.key"
 "`draws`" = "`samples`"
 "Draw k" = "Sample k"
-
-# the composed window's sample
-[[words_in]]
-files = ["Security/*Accounting/*Compose*"]
-[words_in.words]
-"drawOf" = "sampleOf"
 
 # accounting's own rate-audit lemmas, TS layer and sampling design (Pous and the bridge keep theirs)
 [[words_in]]

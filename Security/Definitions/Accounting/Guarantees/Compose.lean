@@ -78,7 +78,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **(L) The circuit's work, live coins** (the logical layer). For every declared circuit `Cd` and scheme `Sc`, run as
 one window: the circuit's rounds in order, each round's noise coin live and released after its operands are committed
-(one coin a round), then the service's sample of `K_d` of the `N_p ≥ units` grid-padded tiles, one a proof block (`sampleOf`,
+(one coin a round), then the service's sample of `K_d` of the `N_p ≥ units` grid-padded tiles, one a proof block (`drawOf`,
 a uniform `K_d`-subset), with the proofs' coins `Ξ`, each sampled tile proved with its noise's generation. Under:
 * the logical ranges (`Scope`: every round holding a credited tile live, `Declared.Live`, and the service's commit
   order, `LayerCommitted`: each value the prover writes committed under a root before its IR cut's coin, or, a
@@ -147,7 +147,7 @@ random-oracle model (`fiat-shamir`): the window's seeds are uniform answers to t
 roots, and `SeedExtractedAt` is where that model is named. For every declared circuit `Cd` and scheme `Sc`, run as one
 window whose rounds are seed groups: each round one call site, its coin the oracle's answers to the cheater's `T_q`
 queries for that call's seed (`Fin T_q → B`, uniform), then the service's live sample of `K_d ≥ 1` of the `N_p` tiles
-(`sampleOf`) with the proofs' coins `Ξ`. The run is any joint run `R` of all the rounds' answers: a cheater may choose
+(`drawOf`) with the proofs' coins `Ξ`. The run is any joint run `R` of all the rounds' answers: a cheater may choose
 round `r`'s operands, values and skips after querying the oracle for any round's seed. Under:
 * the seeded ranges (`ScopeSeeded`: every round holding a credited tile seeded, one call site a round, no credited
   kind GRIND hasn't priced, so H1 + fx1's attention uncredited, and `SeedNamed`: every value a seeded round reads,

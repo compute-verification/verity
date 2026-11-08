@@ -84,7 +84,7 @@ The logical layer:
 * `tileGame`, `PerTile`: a tile's stage as the ideal game split at the receipt (`ReceiptGame`), in each skipped mode,
   and a claim of every credited tile at its stage, whatever the past: what `OperandHMu` and `ReceiptLuckAt` and
   `Assumptions.Compose.GuessLuckAt` are taken of.
-* `jointGame`, `serviceGame`, `sampleOf`: the window as one round on coins `A × (Equiv.Perm (Fin N) × Ξ)`: the rounds'
+* `jointGame`, `serviceGame`, `drawOf`: the window as one round on coins `A × (Equiv.Perm (Fin N) × Ξ)`: the rounds'
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
   `Ξ`. Its share is `a·(folded weight) + b·(whole weight)` at the weights it is given, and it passes when every sampled
   tile's checked value is honest; `serviceGame` is it at a split-stage window's joint run.
@@ -677,7 +677,7 @@ noncomputable def serviceGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (W
   jointGame (W.joint stg) w a b K
 
 /-- **The service's samples**: sample `i` is the permutation's image of `i`, so the `K` samples are `subsetDraw K`. -/
-def sampleOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ) (i : Fin K) : Fin N :=
+def drawOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ) (i : Fin K) : Fin N :=
   β.1 (Fin.castLE hK i)
 
 /-! ## The window's proofs, their static half from the IR -/
@@ -699,7 +699,7 @@ structure ProofRun (C B : Type) (m s Np : ℕ) (V : Type) where
 
 /-- **The window's proofs as the IR defines them** (`SampledLayer`, at one service round): positions are the
 circuit's gates and slots are numbered, and
-* `draw`: the service's (`sampleOf`, the first `K_d` images of a uniform permutation of the `N_p` tiles);
+* `draw`: the service's (`drawOf`, the first `K_d` images of a uniform permutation of the `N_p` tiles);
 * `pos t k`: tile `t`'s `k`-th slot (`Declared.slots`), its first slot past the list (no position for a tile of no
   gates: `Cd.dag.length`, which no unit writes);
 * `coin t`: its unit's round (`Declared.roundOf`, in range under `Declared.Wf`);
@@ -713,7 +713,7 @@ run. -/
 def Declared.layer {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V) :
     SampledLayer C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd (Fin Np) ℕ ℕ V where
-  draw := sampleOf hK
+  draw := drawOf hK
   pos := fun _ t k => (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length)
   coin := fun _ t => ⟨min (Cd.roundOf t.val) (Cd.rounds - 1),
     Nat.lt_of_le_of_lt (Nat.min_le_right _ _) (Nat.sub_lt hr Nat.one_pos)⟩

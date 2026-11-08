@@ -48,7 +48,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
 declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
 `CircuitWork`'s: the circuit's rounds in order, each round's noise coin live and released after its operands are
-committed, then the service's sample of `K_d` of the `N_p ≥ Cd.units` tiles (`sampleOf`, uniform over every tile, dead ones
+committed, then the service's sample of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
 included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s sample. The
 cheater's play in each window, its live tiles included, may be any function of every earlier window's coins
 (`WindowPlay`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted

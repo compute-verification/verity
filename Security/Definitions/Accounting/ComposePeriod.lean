@@ -231,7 +231,7 @@ def PerLiveTile {ι K C : Type} {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) 
 /-- **The period's proofs as the IR defines them**: `Declared.layer` in every window, its positions tagged by their
 window. Window `w`'s tile `t` reads `(w, ℓ)` for each of its slots `ℓ`, its noise reads window `w`'s coin of its round,
 position `(w, ℓ)` is cut at window `w`'s coin `Declared.layer` cuts `ℓ` at and written by window `w`'s proof block of
-`ℓ`, and window `w`'s sample is its own (`sampleOf`). No position crosses windows: a value one window hands the next
+`ℓ`, and window `w`'s sample is its own (`drawOf`). No position crosses windows: a value one window hands the next
 (decode feedback, a KV cache) is the next window's input, cut where that window's IR cuts it, so the period's late
 cones stay inside their windows. A registered input is cut at its window's first coin, no earlier than the service
 commits it. The sample is uniform over every tile, dead ones included, as the served gate's is; a sampled dead tile is
@@ -239,7 +239,7 @@ proved like any other, and its words count for nothing (`periodMode`, `liveCone`
 def Declared.periodLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) :
     SampledLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V where
-  draw := sampleOf hK
+  draw := drawOf hK
   pos := fun w t k => (w, (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length))
   coin := fun _ t => ⟨min (Cd.roundOf t.val) (Cd.rounds - 1),
     Nat.lt_of_le_of_lt (Nat.min_le_right _ _) (Nat.sub_lt hr Nat.one_pos)⟩
