@@ -4,28 +4,28 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-#: The Boolean Definitions of `dsa_topk_mask`'s sidecar's RANGES, over the same key counts and at the same spots, each held to
+#: The Boolean Definitions of `dsa_topk_mask`'s sidecar's RANGES, over the same size classes and at the same spots, each held to
 #: its word Definition there by its word view (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaTopKMask_v2 ...``).
 #: The rows' read spans the row width too: at every W it is one network (`dsa_topk_mask.rows`, by N and K) of
 #: `DsaWaksmanSwap_v2{W,E}` and `DsaWaksmanPick_v2{W,E}`, one AND a payload bit, so the spots check the network at every N at
-#: one word and the latent rows' 576 words at the first row past INDEX_TOPK, where they are already over circuit-check's input
-#: budget and read lazily (`circuit_check.targets.LAZY_OPERANDS`)
+#: one word and the latent rows' 576 words at the first class, where they are already over circuit-check's input budget and
+#: read lazily (`circuit_check.targets.LAZY_OPERANDS`)
 RANGES = {
-    "DsaTopKMask_v2{N=2049..131072,TOPK=2048}": (
-        "N=2049", "N=131072",
-        "N=2050", "N=4096", "N=4097", "N=16385", "N=65537", "N=100001",
+    "DsaTopKMask_v2{N=4096..131072 step 2048,TOPK=2048}": (
+        "N=4096", "N=131072",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
     ),
-    "DsaButterflySettings_v2{N=2049..131072,K=2048}": (
-        "N=2049", "N=131072",
-        "N=2050", "N=4096", "N=4097", "N=16385", "N=65537", "N=100001",
+    "DsaButterflySettings_v2{N=4096..131072 step 2048,K=2048}": (
+        "N=4096", "N=131072",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
     ),
-    "DsaButterflyRows_v2{N=2049..131072,K=2048,W=1..576,E=16}": (
-        "N=2049,W=576", "N=2049,W=1", "N=131072,W=1",
-        "N=2050,W=1", "N=4096,W=1", "N=4097,W=1", "N=16385,W=1", "N=65537,W=1", "N=100001,W=1",
+    "DsaButterflyRows_v2{N=4096..131072 step 2048,K=2048,W=1..576,E=16}": (
+        "N=4096,W=576", "N=4096,W=1", "N=131072,W=1",
+        "N=6144,W=1", "N=10240,W=1", "N=18432,W=1", "N=34816,W=1", "N=67584,W=1", "N=8192,W=1", "N=129024,W=1",
     ),
-    "DsaTopKRow_v2{N=2049..131072,TOPK=2048}": (
-        "N=2049", "N=131072",
-        "N=2050", "N=4096", "N=4097", "N=16385", "N=65537", "N=100001",
+    "DsaTopKRow_v2{N=4096..131072 step 2048,TOPK=2048}": (
+        "N=4096", "N=131072",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
     ),
 }
 
