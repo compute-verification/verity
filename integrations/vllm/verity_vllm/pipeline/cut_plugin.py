@@ -29,8 +29,9 @@ step; one that falls while the engine is idle is taken at its next step) or ``ev
 steps), ``hold_s`` (30 by default), ``log`` (a directory) and ``feed`` (a file). **Learning e.** With ``feed``, `SentFeed`,
 the OpenAI server's ASGI ``--middleware`` (inside `tick_plugin.TickFeed`), appends each streamed completion's count of
 output token ids as its bytes leave the server, keyed by its X-Request-Id, and the engine core reads them every step
-(`Sent`): e is what the server has sent, which the network certifier in front of it releases. Without ``feed``, e is the
-count the engine emitted, so the hold is the flush alone. Refused: a scheduling policy other than FCFS, a KV connector,
+(`Sent`): e is what the server has sent, an upper bound on what the network certifier in front of it has released, which
+takes its place once the certifier posts its released counts in the same records. Without ``feed``, e is the count the
+engine emitted, so the hold is the flush alone. Refused: a scheduling policy other than FCFS, a KV connector,
 and more than one data-parallel engine.
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
