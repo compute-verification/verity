@@ -84,7 +84,7 @@ inputs = [
     "tools/verity/circuit_check", "benchmarks/census",
     # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
     # its pinned vectors
-    "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
+    "verity/core/protocols/spot", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
     "verity/core/protocols/network/nci/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
@@ -132,7 +132,7 @@ paths = [
     "verity/core/primitives/lms/lean",
     "verity/core/protocols/interface",
     "verity/core/service/flock",
-    "verity/core/service/sampled_proofs",
+    "verity/core/service/spot",
 ]
 
 [[tool.verity.tests.reads]]

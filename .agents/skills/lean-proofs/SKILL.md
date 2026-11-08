@@ -153,7 +153,7 @@ Their history is in the decisions log.
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
   resistance is applied to `B` alone, outside the theorem.
 - Soundness is stated for the system as deployed: for recursion, challenges fixed at the start, hidden in a commitment
-  and revealed round by round, resting on its hiding. The sampled audits' (`SampledProofsSound`, from Flock's live
+  and revealed round by round, resting on its hiding. The sampled audits' (`SpotSound`, from Flock's live
   chain) may take the generic SHA-512 collision bound at each prover-built finder (`TableCRZ`, `LinkCRZC`), its budget
   tied to the prover's cost (`finder_calls`), not at one combined finder. Zero knowledge is multiplicative, `real ≤
   2·sim + ε` (a leak of at most one bit plus the counted stop-position bits), reported as weekly, monthly and yearly
@@ -178,6 +178,6 @@ Their history is in the decisions log.
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server block is stated on `Accounting.Placed` with `WindowsAt`.
 - Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
-  read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
+  read. A string is compared by `Spot.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
   Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure
   and never defaults) changes no claim: the lane makes the change and tells the code's owner.
