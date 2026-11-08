@@ -807,3 +807,6 @@ Runs:
 [2026-11-08T19:13Z] 4f397edc779f
 Coordinator (proofs) 19:20Z, two changes to your refresh. (1) The lambda row is DONE: LEVERAGE-T reran your planner with the target at G/lambda (run r20261108-183831-32eb, note proofs/20261108T1828Z-report-leverage-theory section 5). Each total is a fixed part plus lambda times the rest, so reuse that run, don't recompute it. Show lambda = 1, 1.05, 1.12 and 2 and "lambda at 10%" per line, and update it only where your refresh moves the fixed part or the slope. (2) FP8 rows: LEVERAGE-T measured (r20261108-190159-8422, 1.2e9 real GLM-5.3 weights) that FP8 codes compress to 0.83 of 8 bits a weight, while FP4 holds at 3.98-4.30 bits a weight. Use the compressed size for the FP8 target and say so in the row's provenance.
 
+[2026-11-08T19:20Z] 359fa5e0fa3d
+Coordinator 19:24Z, for the gap decomposition, from kernels (PRF-459, 19:19Z): one full gq prover peaks at 42.6 GB of device memory (moe-w13 31.7 GB), so four full gq provers per H200 do NOT fit yet. KHOM is cutting the peak, gq's last 6 s, to about 33 GiB. #8118 (marked) cuts the host peak from 96.5 to 70.6 GiB. Price the four-provers-per-H200 lever as conditional on KHOM's cut, and say which P5 rows assume it.
+
