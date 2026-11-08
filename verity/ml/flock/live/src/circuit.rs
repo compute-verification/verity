@@ -54,7 +54,7 @@ use rayon::prelude::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
+use crate::{chunk::log2ceil, ir_block::{IrUnitNet, RowRead}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
@@ -72,8 +72,9 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
-/// A templated statement (the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
-/// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
+/// A templated statement (the Lean `Tags.circuitTmpl`): its template section right after META (`TEMPLATE n`, then the
+/// template's `n` lines) and META `layout` in place of the unit's rows, which the prover reads from `flock-tmpl-unit`'s
+/// file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
 pub const TMPL_TAGS: Tags =
@@ -690,6 +691,17 @@ fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
     out
 }
 
+/// The next `n` lines of `lines`, a `split_inclusive('\n')` of `text`, as the one slice of `text` they span: their
+/// concatenation, without copying it.
+fn next_lines<'a>(text: &'a str, lines: &mut std::str::SplitInclusive<'a, char>, n: usize) -> &'a str {
+    let at = |l: &str| l.as_ptr() as usize - text.as_ptr() as usize;
+    let mut taken = lines.by_ref().take(n);
+    let Some(first) = taken.next() else { return "" };
+    let start = at(first);
+    let end = taken.last().map_or(start + first.len(), |l| at(l) + l.len());
+    &text[start..end]
+}
+
 impl Composite {
     /// The statement's Ligerito trees have plain SHA-512 leaves ([`leaf_scheme_plain`], the SHA-512 build only).
     pub fn plain_leaves(&self) -> bool {
@@ -701,8 +713,8 @@ impl Composite {
         Self::parse_with(text, tables, None)
     }
 
-    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its META
-    /// `template` and `layout`, at their positions (an `ORDER` line).
+    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its template
+    /// section and META `layout`, at their positions (an `ORDER` line).
     pub fn parse_with(text: &str, tables: Option<&str>, tmpl_unit: Option<&str>) -> Result<Self, String> {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
@@ -733,7 +745,12 @@ impl Composite {
                 m.as_object_mut().ok_or("META is not an object")?.remove(k);
             }
             let rest = text.splitn(3, '\n').nth(2).unwrap_or("");
-            Sha512::digest(format!("{head}\nMETA {}\n{rest}", serde_json::to_string(&sorted(&m)).unwrap()).as_bytes()).into()
+            let json = serde_json::to_string(&sorted(&m)).unwrap();
+            let mut h = Sha512::new();
+            for part in [head, "\nMETA ", json.as_str(), "\n", rest] {
+                h.update(part.as_bytes());
+            }
+            h.finalize().into()
         };
         let is_sha512 = |v: &Value| v.as_str().is_some_and(|x| x.len() == 128 && x.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)));
         if !is_sha512(&meta["program_sha512"]) {
@@ -761,8 +778,16 @@ impl Composite {
             }
             instance = Some(inst);
         } else if tmpl {
-            if !meta["template"].is_array() || !meta["layout"].is_string() {
-                return Err("META: a templated statement's template (its lines) and layout (its mode)".into());
+            if !meta["layout"].is_string() {
+                return Err("META: a templated statement's layout (its mode)".into());
+            }
+            let h: Vec<&str> = lines.next().unwrap_or("").split_whitespace().collect();
+            let n: usize = match h.as_slice() {
+                ["TEMPLATE", n] if n.bytes().all(|c| c.is_ascii_digit()) => n.parse().map_err(|_| "TEMPLATE line count")?,
+                _ => return Err("a templated statement's template section (TEMPLATE n, then its n lines) is not right after META".into()),
+            };
+            for _ in 0..n {
+                lines.next().ok_or("the template section is truncated")?;
             }
             let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?)?;
             if unit.order.is_none() {
@@ -783,8 +808,8 @@ impl Composite {
                 return Err("CIRCUIT unit: a templated statement's unit is its template, never rows".into());
             }
             let n: usize = h[2].parse().map_err(|_| "CIRCUIT sections count")?;
-            let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
-            let net = std::panic::catch_unwind(|| IrUnitNet::parse(&body)).map_err(|_| format!("CIRCUIT {}: not a flock-ir-unit/v2 expanded circuits", h[1]))?;
+            let body = next_lines(text, &mut lines, n);
+            let net = std::panic::catch_unwind(|| IrUnitNet::parse(body)).map_err(|_| format!("CIRCUIT {}: not a flock-ir-unit/v2 expanded circuits", h[1]))?;
             if net.cut.is_some() {
                 return Err(format!("CIRCUIT {}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation", h[1]));
             }
@@ -1146,7 +1171,7 @@ impl Composite {
         // the bit and its gate's value to zero (elsewhere it would only force A·z · B·z to zero, or free the bit)
         for (n, r) in self.pinned_rows() {
             let net = &self.nets[n].1;
-            if (0..16).any(|t| r.checked_add(t).and_then(|i| net.b.get(i)).map(Vec::as_slice) != Some(&[net.const_pos][..])) {
+            if (0..16).any(|t| r.checked_add(t).is_none_or(|i| i >= net.b.n_rows() || !net.b.row_is(i, &[net.const_pos]))) {
                 return Err(PINNED_LINEAR.into());
             }
         }
@@ -1471,7 +1496,7 @@ impl Composite {
         let ands = ours.map(|n| {
             let net = &self.nets[n].1;
             let port = |r: usize| net.in_groups.iter().chain(&net.out_groups).any(|g| (g.col * WORD..(g.col + g.words) * WORD).contains(&r));
-            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count()
+            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a.row_len(r) == 0 && net.b.row_len(r) == 0)).count()
         }).sum();
         (rows, ands)
     }
@@ -1863,10 +1888,17 @@ impl Instances {
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512,
                                   public_file_sha512, population, tables: Some(RowTables { refs, ..t.clone() }), public });
         }
+        let gather = |src: &[u8], w: usize| -> Vec<u8> {
+            let mut out = Vec::with_capacity(units.len() * w);
+            for &u in &units {
+                out.extend_from_slice(&src[u * w..(u + 1) * w]);
+            }
+            out
+        };
         Ok(Instances {
             header, n: units.len(),
-            rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
-            salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
+            rows: self.rows.as_ref().map(|r| gather(r, rb)),
+            salts: self.salts.as_ref().map(|s| gather(s, np * SALT_BYTES)),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
             public_sha512,
             public_file_sha512,
@@ -2276,7 +2308,7 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
             match r.kind {
                 Kind::Net(i) => {
                     let net = &c.nets[i].1;
-                    cols.extend((if a { &net.a } else { &net.b }).get(q - slot0).into_iter().flatten().map(|&k| slot0 + k));
+                    cols.extend((if a { &net.a } else { &net.b }).cols_or_empty(q - slot0).map(|k| slot0 + k));
                 }
                 Kind::Mask => cols.push(q),
             }
@@ -2288,12 +2320,14 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
         .map(|(ri, q)| format!("region {:?}: column {q} shares a word with the region's bits and is not forced to zero", regions[ri].region))
 }
 
+#[derive(Clone)]
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
     /// per slot type: its log size and its circuit, column-major: the fold gathers each column's rows, where a row scatter
-    /// would give each of its ~4 chunks per thread an accumulator as wide as the slot (2^21 to 2^24 columns for a GEMM unit)
-    pub types: Vec<(usize, CscCircuit)>,
+    /// would give each of its ~4 chunks per thread an accumulator as wide as the slot (2^21 to 2^24 columns for a GEMM unit);
+    /// shared by every statement of the circuit ([`Stmt::drawn`])
+    pub types: Arc<Vec<(usize, CscCircuit)>>,
     /// per slot type: a generated read's table-direct B side
     pub tables: Vec<Option<TableSide>>,
     /// (type index, first position, count) per range
@@ -2362,7 +2396,8 @@ pub type RowIns<'a> = &'a (dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + S
 
 /// Everything a session needs, the same on both sides.
 pub struct Stmt {
-    pub c: Composite,
+    /// the circuit, shared by every statement of it ([`Stmt::drawn`])
+    pub c: Arc<Composite>,
     pub n: usize,
     pub blocks_real: usize,
     pub nbl: usize,
@@ -2642,9 +2677,8 @@ fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
 pub const GPU_NNZ_MAX: u64 = u32::MAX as u64;
 
 /// Refuses a circuit whose A or B side holds more than `limit` nonzeros.
-pub fn nnz_within(name: &str, a: &[Vec<usize>], b: &[Vec<usize>], limit: u64) -> Result<(), String> {
-    let count = |m: &[Vec<usize>]| m.iter().map(|r| r.len() as u64).sum::<u64>();
-    let (na, nb) = (count(a), count(b));
+pub fn nnz_within<R: RowRead + ?Sized>(name: &str, a: &R, b: &R, limit: u64) -> Result<(), String> {
+    let (na, nb) = (a.nnz() as u64, b.nnz() as u64);
     if na.max(nb) > limit {
         return Err(format!("{name}: {na} nonzeros in A and {nb} in B, past the GPU prover's {limit} (32-bit offsets): the CPU prover"));
     }
@@ -2698,13 +2732,13 @@ impl StmtCache {
         Self(Mutex::new(BTreeMap::new()))
     }
 
-    /// `Stmt::new(base.c, n, identity)`, built at the first call with this key and the same statement after it.
+    /// `base.drawn(n, identity)`, built at the first call with this key and the same statement after it.
     pub fn drawn(&self, base: &Stmt, n: usize, identity: Value) -> Result<Arc<Stmt>, String> {
         let key = (base.digest, n, sorted(&identity).to_string());
         if let Some(s) = self.0.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
             return Ok(s.clone());
         }
-        let s = Arc::new(Stmt::new(base.c.clone(), n, identity)?);
+        let s = Arc::new(base.drawn(n, identity)?);
         Ok(self.0.lock().unwrap_or_else(PoisonError::into_inner).entry(key).or_insert(s).clone())
     }
 
@@ -2719,11 +2753,9 @@ impl StmtCache {
 
 impl Stmt {
     pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
-        let k_log = c.k_log;
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
-        let m = k_log + nbl;
-        shape_in_range(m, PT_LOCAL + nbl)?;
+        shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)?;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut types: Vec<(usize, CscCircuit)> = Vec::new();
@@ -2737,12 +2769,7 @@ impl Stmt {
             let key = format!("{:?}", r.kind);
             let t = *type_of.entry(key).or_insert_with(|| {
                 let circ = match r.kind {
-                    Kind::Net(i) => {
-                        let net = &c.nets[i].1;
-                        let k = 1usize << net.unit_log;
-                        let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                        CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b))
-                    }
+                    Kind::Net(i) => c.nets[i].1.csc(),
                     Kind::Mask => {
                         let k = 1usize << r.slot_log;
                         let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
@@ -2759,6 +2786,29 @@ impl Stmt {
         if let Some(e) = region_word_violation(&c, &regions, &da, &db) {
             return Err(e);
         }
+        let circuit = BlockCircuit { k_log: c.k_log, pin, types: Arc::new(types), tables, ranges, da, db };
+        Self::of(Arc::new(c), circuit, regions, None, n, identity)
+    }
+
+    /// `Stmt::new(self.c, n, identity)`, the statement of this one's circuit at `n` instances (a drawn sample's), with this
+    /// one's circuit, slot types and `A_0`, `B_0`, `C_0` shared rather than built again: [`Stmt::new`] derives them from the
+    /// circuit alone.
+    pub fn drawn(&self, n: usize, identity: Value) -> Result<Self, String> {
+        let r = &self.r1cs;
+        let mats = [r.a_0.clone(), r.b_0.clone(), r.c_0.clone()];
+        Self::of(self.c.clone(), self.circuit.clone(), Self::regions(&self.c)?, Some(mats), n, identity)
+    }
+
+    /// The statement of circuit `c` (its slot types and regions built) at `n` instances; `mats`: its `A_0`, `B_0` and `C_0`,
+    /// functions of its `k_log` alone, where another statement of it holds them.
+    fn of(c: Arc<Composite>, circuit: BlockCircuit, regions: Vec<RegionShape>, mats: Option<[SparseBinaryMatrix; 3]>,
+          n: usize, identity: Value) -> Result<Self, String> {
+        let k_log = c.k_log;
+        let blocks_real = n.div_ceil(c.g);
+        let nbl = log2ceil(blocks_real.max(1)).max(3);
+        let m = k_log + nbl;
+        shape_in_range(m, PT_LOCAL + nbl)?;
+        let pin = circuit.pin;
         let mut h = Sha512::new();
         h.update(c.tags().statement.as_bytes());
         h.update(c.sha512);
@@ -2766,7 +2816,7 @@ impl Stmt {
         for x in [n, blocks_real, nbl, m, k_log, pin, regions.len(), c.g] {
             h.update((x as u64).to_le_bytes());
         }
-        for d in [&da, &db] {
+        for d in [&circuit.da, &circuit.db] {
             h.update((d.len() as u64).to_le_bytes());
             for &(i, cc) in d.iter() {
                 h.update(i.to_le_bytes());
@@ -2776,21 +2826,23 @@ impl Stmt {
         let digest: [u8; 64] = h.finalize().into();
         let flock_digest: [u8; 32] = digest[..32].try_into().unwrap();
         let kk = 1usize << k_log;
-        let empty = || SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: vec![Vec::new(); kk].into() };
+        let [a_0, b_0, c_0] = mats.unwrap_or_else(|| {
+            let empty = || SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: vec![Vec::new(); kk].into() };
+            [empty(), empty(), SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: (0..kk).map(|i| vec![i]).collect::<Vec<_>>().into() }]
+        });
         let r1cs = BlockR1cs {
             m,
             k_log,
             k_skip: b3::K_SKIP,
             useful_bits: kk,
-            a_0: empty(),
-            b_0: empty(),
-            c_0: SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: (0..kk).map(|i| vec![i]).collect::<Vec<_>>().into() },
+            a_0,
+            b_0,
+            c_0,
             layout: WitnessLayout::RowMajor,
             const_pin: Some(pin),
             digest_cache: OnceLock::from(flock_digest),
             csc_cache: OnceLock::new(),
         };
-        let circuit = BlockCircuit { k_log, pin, types, tables, ranges, da, db };
         Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity,
                   c0_identity: OnceLock::new() })
     }
@@ -3534,6 +3586,8 @@ mod tests {
         assert_eq!((again.rows.as_ref(), again.salts.as_ref(), &again.bcs, &again.public), (inst.rows.as_ref(), Some(&salts), &inst.bcs, &inst.public));
         assert_eq!(again.public_file().unwrap(), inst.public_file().unwrap());
         let mut d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        let (rb, sb) = (c.row_bytes(), np * SALT_BYTES);
+        assert_eq!((d.rows.as_deref(), d.salts.as_deref()), (Some(&inst.rows.as_deref().unwrap()[rb..2 * rb]), Some(&salts[sb..2 * sb])));
         assert!(d.prover_file().is_err() && d.set_salts(np, vec![0; SALT_BYTES * np]).is_err());
     }
 
@@ -3588,10 +3642,12 @@ mod tests {
         let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
         let uw = 1usize << (net.unit_log - 7);
         // an assertion row (its own column in A, B the constant) that fails: z is not a & b there
+        use crate::ir_block::RowWrite;
         let mut bad = net.clone();
-        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a[i].is_empty() && !bad.b[i].is_empty()).unwrap();
-        bad.b[i] = vec![bad.const_pos];
-        bad.a[i].push(i);
+        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a.row(i).is_empty() && !bad.b.row(i).is_empty()).unwrap();
+        bad.b = bad.b.with_row(i, &[bad.const_pos]);
+        let row: Vec<usize> = bad.a.row_cols(i).chain([i]).collect();
+        bad.a = bad.a.with_row(i, &row);
         for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&bad, 100, true)] {
             let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| match (w, wide) {
                 (0, false) => F128::new(r() & ((1 << n) - 1), 0),
@@ -3766,7 +3822,7 @@ mod tests {
         let eq: Vec<F128> = (0..n).map(|_| { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) }).collect();
         let mut want = vec![F128::ZERO; n];
         for r in ln.prod0()..ln.prod0() + (ln.k << 5) {
-            for &c in &net.b[r] {
+            for c in net.b.row_cols(r) {
                 want[c] += eq[r];
             }
         }
@@ -3792,10 +3848,7 @@ mod tests {
             }
             let k = 1usize << r.slot_log;
             let (a, b) = match r.kind {
-                Kind::Net(i) => {
-                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
-                }
+                Kind::Net(i) => c.nets[i].1.padded(k),
                 Kind::Mask => {
                     let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
                     (id.clone(), id)
@@ -3826,7 +3879,7 @@ mod tests {
         }
         let mut s = 7u64;
         let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
-        for (log, circ) in &b.types {
+        for (log, circ) in b.types.iter() {
             let alpha = rnd();
             let eq: Vec<F128> = (0..1usize << log).map(|_| rnd()).collect();
             out.extend(format!("{log} {} {:?}|", circ.n_cols(), circ.fold_alpha_batched(alpha, &eq)).bytes());
@@ -3853,8 +3906,10 @@ mod tests {
             for n in [1, 2, 3, 8, 9] {
                 for id in [json!({}), json!({"zk": true, "reps": 2, "leaf": "hm96-sha512/v1"})] {
                     let cached = cache.drawn(&base, n, id.clone()).unwrap_or_else(|e| panic!("{name} n={n}: {e}"));
-                    let fresh = Stmt::new(base.c.clone(), n, id.clone()).unwrap();
+                    let fresh = Stmt::new((*base.c).clone(), n, id.clone()).unwrap();
                     assert!(stmt_bytes(&cached) == stmt_bytes(&fresh), "{name} n={n} {id}: the cached statement is not the fresh one");
+                    assert!(Arc::ptr_eq(&cached.c, &base.c) && Arc::ptr_eq(&cached.circuit.types, &base.circuit.types),
+                            "{name} n={n}: the circuit or its slot types built again");
                     assert!(Arc::ptr_eq(&cached, &cache.drawn(&base, n, id).unwrap()), "{name} n={n}: rebuilt under the same key");
                 }
             }
@@ -3880,10 +3935,38 @@ mod tests {
             let got = cache.drawn(base, n, id.clone()).unwrap();
             assert!(!Arc::ptr_eq(&first, &got), "{what}: the cached statement of another key");
             assert!(got.digest != first.digest, "{what}: the same statement digest");
-            assert!(stmt_bytes(&got) == stmt_bytes(&Stmt::new(base.c.clone(), n, id).unwrap()), "{what}: not the fresh build");
+            assert!(stmt_bytes(&got) == stmt_bytes(&Stmt::new((*base.c).clone(), n, id).unwrap()), "{what}: not the fresh build");
             assert_eq!(cache.len(), k + 2, "{what}: not built");
         }
         assert!(Arc::ptr_eq(&first, &cache.drawn(&bases[0], 2, json!({})).unwrap()), "the first key's statement was dropped");
+    }
+
+    /// A section's lines as one slice of the text are the lines copied out, past the text's end too.
+    #[test]
+    fn next_lines_is_the_lines_concatenated() {
+        let text = "a\nbb\n\nccc\nd";
+        for takes in [[0usize, 2, 3], [1, 1, 3], [5, 0, 1], [2, 2, 2], [4, 3, 0]] {
+            let (mut x, mut y) = (text.split_inclusive('\n'), text.split_inclusive('\n'));
+            for n in takes {
+                let want: String = (0..n).map(|_| x.next().unwrap_or("")).collect();
+                assert_eq!(next_lines(text, &mut y, n), want, "{takes:?}");
+            }
+        }
+    }
+
+    /// A slot type's circuit from its rows in place is the one from its rows padded to its slot with empty rows.
+    #[test]
+    fn slot_csc_is_the_padded_rows_circuit() {
+        let mut padded = 0;
+        for (name, c) in test_circuits() {
+            for (nm, net) in &c.nets {
+                let k = 1usize << net.unit_log;
+                padded += usize::from(net.a.len() < k || net.b.len() < k);
+                let (a, b) = net.padded(k);
+                assert!(net.csc() == CscCircuit::from_matrices(&a, &b), "{name} {nm}");
+            }
+        }
+        assert!(padded > 0, "no slot type with a padding row to leave out");
     }
 
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.

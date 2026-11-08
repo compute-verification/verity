@@ -45,6 +45,7 @@ from verity.ml.circuits.refs import array_of, coll_concat
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array
 from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
@@ -106,7 +107,7 @@ def _flushed(C, x):
 
 def multimem_sum(S):
     """`AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}`'s builder."""
-    tree, flush = TA.multimem_tree(S.TREE, TA.ranks(S.WORLD)), bool(S.FTZ)
+    tree, flush = TN.multimem_tree(S.TREE, TA.ranks(S.WORLD)), bool(S.FTZ)
 
     def build(C, *col):
         def value(t):
