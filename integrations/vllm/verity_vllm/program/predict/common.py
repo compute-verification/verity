@@ -85,12 +85,13 @@ def finish_run(run, params: tuple, B) -> tuple:
     return B.params
 
 
-def with_checks(model, out: Coll, extra: list[tuple[Coll, str]] = ()) -> tuple[Coll, dict | None]:
+def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1) or the wrapper adds any after them (`extra`, the length rule's: `frontend.stop_rule`), and what
-    `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
+    verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
+    Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
     from verity.ml.circuits.types import Tuple
-    checks = [*(getattr(model, "checks", None) or ()), *extra]
+    from verity_vllm.program.frontend import stop_rule as SR
+    checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
         return out, None
     ret = Coll(Tuple(out.type, Array(len(checks), Value(1))), concat([out.refs, *[c.refs for c, _ in checks]]))

@@ -46,7 +46,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
             ("StopRule_v1:2:length", lambda: bind(X.StopRule, L=2, STOP=GLM, FINISH="length")),
             ("StopRule_v1:4096:eos", lambda: bind(X.StopRule, L=4096, STOP=GLM, FINISH="eos")),
             ("StopRule_v1:4096:length", lambda: bind(X.StopRule, L=4096, STOP=GLM, FINISH="length")),
-            ("StopRule_v1:64:llama", lambda: bind(X.StopRule, L=64, STOP=(128001,), FINISH="eos"))]
+            ("StopRule_v1:64:one-id", lambda: bind(X.StopRule, L=64, STOP=(128001,), FINISH="eos"))]
 
 
 #: GLM-5.3's stop ids, its config's ``eos_token_id``

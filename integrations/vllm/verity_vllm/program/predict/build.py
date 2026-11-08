@@ -39,8 +39,6 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
-from verity_vllm.program.frontend.stop_rule import check as stop_check
-from verity_vllm.program.frontend.stop_rule import spec as stop_spec
 from verity_vllm.program.prune import dead_free as dead_free_form
 
 from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, finish_run, in_launch, kind, launch_batch,
@@ -702,11 +700,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     request's prefill as the engine ran it, in launches of these rows in turn (the chunked request wrapper), where its kernels read
     the launch: per chunk one forward at its own step of `batch` (its chunks, then its T decodes), the sample after the last chunk,
     a chunk that leaves the prompt incomplete sampling nothing (vLLM discards that sample); the SRC config is `{"chunks": [...]}`
-    (its wrapper's class unchanged); one chunk is the request wrapper. `stop`: a request's length rule over its outputs
-    (`frontend.stop_rule.spec`), its last Call and last check, the Build's `--stop`; the SRC config holds it as ``stop``."""
+    (its wrapper's class unchanged); one chunk is the request wrapper. `stop`: its length rule, the last check (`stop_rule`)."""
     t0 = time.time()
-    if stop is not None and wrapper != "request":
-        raise Unexpressible(f"the length rule reads a request's outputs, and a {wrapper!r} wrapper has none")
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
@@ -769,8 +764,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
-    rule = [] if stop is None else [stop_check(B, out, stop)]
-    params, (out, checks) = finish_run(run, params, B), with_checks(model, out, rule)
+    params, (out, checks) = finish_run(run, params, B), with_checks(model, out, B, stop)
     B.ret_type = out.type
     body, names = B.finish(out), None
     if finish is not None:
@@ -786,8 +780,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
                                                                   **({"history": C} if C and not dense else {}),
-                                                                  **({"stop": stop_spec(stop["ids"], stop["finish"])} if stop else {})
-                                                                  })).hexdigest()[:16]}
+                                                                  **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",

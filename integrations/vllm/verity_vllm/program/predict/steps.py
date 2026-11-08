@@ -51,13 +51,8 @@
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
-- Each request Program returns the length rule as its last check (`frontend.stop_rule`: `io_shell.StopRule_v1{L, STOP, FINISH}`
-  over its L outputs, `RequestUnit.stop`, `stop_of`), which the verifier requires to be 1: STOP the registered model's stop ids
-  (its config's ``eos_token_id``), FINISH ``eos`` where the request finished on a stop id at its Program's last output, else
-  ``length``, no stop id among them (its cap, an abort, or a class-G window that carries it out before its last output; a request
-  carried in had its earlier outputs checked in the Programs before). Requests share a Program only under one rule. A request
-  with no stop ids has no rule and can't finish on one: under ``ignore_eos`` (vLLM's `update_from_generation_config` keeps only
-  the body's `stop_token_ids` then, which v0 refuses), or under a registration that states none.
+- Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
+  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, and one with no stop ids has none.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
@@ -71,9 +66,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - a target without batch invariance outside class G, and in class G a step over the registered `max_num_batched_tokens` or
   `max_num_seqs`, or a request's row over its `long_prefill_token_threshold`;
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary,
-  whose `output_len` and `finish` its `max_tokens` contradicts, or that names stop strings or `stop_token_ids` (the length
-  rule reads the registered model's stop ids alone; each refusal names its fix), or finished on a stop id with none (under
-  ``ignore_eos``, or a registration that states none);
+  whose `output_len` and `finish` its `max_tokens` contradicts, whose stop fields its length rule doesn't read
+  (`stop_rule.body_refusal`), or that finished on a stop id with none;
 - a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
   request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
   the hit (a resume's run of its own KV is I1's replay's to hold);
@@ -344,33 +338,19 @@ def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
         raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs the cap in the body, a positive integer)")
     if q.output_len > m or (q.finish == "length" and q.output_len != m) or (q.finish == "abort" and q.output_len == m):
         raise Unexpressible(f"request {i}: {q.output_len} kept outputs, finished on {q.finish}, against its max_tokens {m}")
-    if params.get("stop") not in (None, []):
-        raise Unexpressible(f"request {i}: stop strings {params['stop']!r}, which vLLM's detokenizer matches and no request Program "
-                            f"checks, so its length would be unchecked advice. The fix: a length rule over the stop strings' token "
-                            f"sequences beside `io_shell.StopRule_v1`, which reads stop ids only")
-    if params.get("stop_token_ids") not in (None, []):
-        raise Unexpressible(f"request {i}: stop_token_ids {params['stop_token_ids']!r}, and the length rule's stop ids are the "
-                            f"registered model's alone. The fix: `StopRule_v1`'s STOP the request's own ids beside the model's (its "
-                            f"alone under ignore_eos), keyed in its Program (`stop_of`)")
-    if params.get("ignore_eos") not in (None, False, True):
-        raise Unexpressible(f"request {i}: ignore_eos {params['ignore_eos']!r}, not a bool")
+    if why := SR.body_refusal(params):
+        raise Unexpressible(f"request {i}: {why}")
     if q.finish == "eos" and params.get("ignore_eos") is True:
         raise Unexpressible(f"request {i}: finished on a stop token with ignore_eos set (and no stop_token_ids, its only stop ids)")
     return tuple(prompt), params
 
 
 def stop_of(i: int, q: I1.RequestAdvice, T: int, ids: tuple[int, ...]) -> dict | None:
-    """Request `i`'s length rule over its Program's outputs (`frontend.stop_rule.spec`), under its stop ids `ids` (the registered
-    model's, none under ignore_eos): FINISH ``eos`` where it finished on a stop id at its Program's last output (index T, its
-    last: ``output_len`` − 1), else ``length``: none of them is one (its cap, an abort, or a window that carries it out before its
-    last). With no stop ids there is no rule (None), and a request that finished on one is refused."""
-    finish = "eos" if q.finish == "eos" and T == q.output_len - 1 else "length"
-    if not ids:
-        if q.finish == "eos":
-            raise Unexpressible(f"request {i}: finished on a stop id, and the registered model states none (its config's "
-                                f"eos_token_id): register them")
-        return None
-    return SR.spec(ids, finish)
+    """Request `i`'s length rule over its Program's outputs, the last at index T (`frontend.stop_rule.of`), under stop ids `ids`."""
+    try:
+        return SR.of(q.finish, T == q.output_len - 1, ids)
+    except ValueError as e:
+        raise Unexpressible(f"request {i}: {e}") from None
 
 
 def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -> None:
@@ -521,14 +501,12 @@ class Plan:
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
-    (`dead_free`) at any world, its length rule its last check (`RequestUnit.stop`); `named`: with its trace's names
-    (`naming.named_program`, which names no class-G decoder)."""
+    (`dead_free`) at any world, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
-    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
-                         stop=unit.stop)
+    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks, stop=unit.stop)
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
@@ -780,8 +758,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
     φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
     (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its prefill chunks there when it has them
-    (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`); with its length rule
-    (`--stop`, `RequestUnit.stop`)."""
+    (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`); its length rule `--stop`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
