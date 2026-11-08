@@ -43,6 +43,8 @@
   "Proofs.Properties.SampledProofs.Bits",
   "Proofs.Properties.SampledProofs.Interval",
   "Proofs.Properties.SampledProofs.FactorUpper",
+  "Proofs.Properties.SampledProofs.TwoStageCheck",
+  "Proofs.Properties.SampledProofs.PlanCheck",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",

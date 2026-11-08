@@ -42,7 +42,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 /-- A coin array as a run's coin step: its one word as a scalar, or else the vector of its words. -/
 def coinArr {W F : Type} [Inhabited W] (ι : W → F) (c : Array W) : Msg :=
-  if c.size = 1 then ⟨F, ι c[0]!⟩ else ⟨Fin c.size → F, fun i => ι c[i.val]!⟩
+  if c.size = 1 then ⟨F, ι (c)[0]!⟩ else ⟨Fin c.size → F, fun i => ι (c)[i.val]!⟩
 
 /-- `m` put at the front of the first group. -/
 def consHead (m : Msg) : List (List Msg) → List (List Msg)
