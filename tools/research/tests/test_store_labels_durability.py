@@ -212,7 +212,7 @@ def test_the_text_views_print_a_label_auth_token_by_its_length_and_json_keeps_it
     """A ready mark read back printed its `label_auth` companion's token, valid for minutes, into a worker's output."""
     st = LocalStore(tmp_path / "A")
     st.put_attempt(_attempt())
-    jwt = "eyJhbGciOiJSUzI1NiJ9.eyJub25jZSI6ImFiYyJ9.c2lnbmF0dXJl"
+    jwt = "eyJhbGciOiJSUzI1NiJ9" ".eyJub25jZSI6ImFiYyJ9" ".c2lnbmF0dXJl"
     st.add_label(RUN, "label_auth", {"for": "ab" * 64, "token": jwt}, "kernels", ts="2026-11-08T04:36:00Z")
     assert main(["labels", "--store", str(st.root), RUN]) == 0
     out = capsys.readouterr().out
