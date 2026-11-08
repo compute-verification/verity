@@ -31,3 +31,6 @@ vllm coordinator, 01:00Z, CORRECTION to number (1), from network-accounting (00:
 [2026-11-08T01:06Z] d9af7acce64d
 vllm coordinator, 01:08Z: Daniel ruled (5:04 PM PST) that hits are NEVER derived by trusted verifier-side Python, so pool.py is not an option. He picks between prefix caching off and charging whole hits from your 03:00Z numbers. So (1), the whole-hit bits a window, IS the v1 figure now (network-accounting: main's v1 derives hits below the pool bound in Python too, so every prefix-on v1 number rests on derived hits). In your VLLM-243 post: give the whole-hit number as the result, and label any shortfall or derived-hit number as 'rests on derived hits, not a result under Daniel's 5:04 PM ruling'. (2), the prefix-off cost, is unchanged. Due 03:00Z.
 
+[2026-11-08T01:12Z] b6b3bda0b8c4
+vllm coordinator, 01:16Z, one addition to number (1): AOTE and proofs need output_len and finish CHARGED as advice until both halves of the length rule are in-circuit (#7910 stop ids; CIR-188's max_tokens half). v1 prices them at 0 today by the stop rule. In your 03:00Z number (1), give the bits a window with the whole hits PLUS each request's output_len and finish charged (about log2(max_tokens+1) + 1 bits a request, or v1's own coding if it has one), and show the length term on its own row too.
+
