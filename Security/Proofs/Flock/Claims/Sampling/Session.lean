@@ -55,7 +55,9 @@ discharge there:
   Flock's), of a Flock prover fixed by the run's coins off them; the session decides the run; and the sampled verifier
   makes the Flock verifier's `H` calls. The session's view needs only the coins before its first round.
 * `InnerNumbers`: the inner numbers (`innerWaits`, `innerCap`, `innerN₀`) are Flock's at every session's statement, and
-  its `ε_table` and weight at most the inner ones.
+  its `ε_table` and weight at most the inner ones. `InnerNumbersAt D n₀` is the same with each unit's own `N₀`,
+  `n₀ x u`, for a two-stage record whose units' sessions set up tables of different shapes; at `n₀ x _ = innerN₀ x` it
+  is `InnerNumbers` (`innerNumbersAt_innerN₀`).
 
 At first-stage coins `(ω, r)`, the selected unit's rounds are a set that resampling keeps (`Ex_resample`), so the second
 stage's coins average over the session's coins with the coins off it fixed, and there the sampled run is the Flock
@@ -335,6 +337,17 @@ def InnerNumbers (D : Deploy Coin Col T) : Prop :=
   ∀ x u v xS vS, D.session x u v = some (xS, vS) →
     D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧
       D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
+
+/-- **The inner numbers are Flock's at each unit's `N₀`**: `InnerNumbers` with a session of unit `u` at `x` at `N₀ =
+n₀ x u`. -/
+def InnerNumbersAt (D : Deploy Coin Col T) (n₀ : Msg → ℕ → ℝ) : Prop :=
+  ∀ x u v xS vS, D.session x u v = some (xS, vS) →
+    D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = n₀ x u ∧
+      D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+theorem innerNumbersAt_innerN₀ (D : Deploy Coin Col T) : InnerNumbersAt D (fun x _ => D.innerN₀ x) ↔ InnerNumbers D :=
+  Iff.rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **`DrawFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the

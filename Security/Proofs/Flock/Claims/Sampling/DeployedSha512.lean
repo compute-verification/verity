@@ -71,7 +71,7 @@ set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, at SHA-512 at the deployed relation**: `sampling_deployed` with
 Flock's KS at the untrimmed masked instance discharged (`FlockDeploy.KS.zk_KS_untrim`). -/
 theorem sampling_deployed_sha512
-    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy relD c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens shaD (deploy relD c) iroots) (hfix : InteriorFixed shaD (deploy relD c) iroots)
     (hprog : ProgramScope (deploy relD c)) (hchecks : ChecksScope shaD (deploy relD c)) (hreveals : RevealsLe c)
@@ -105,7 +105,7 @@ set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record with zero knowledge from the models, at SHA-512 at the deployed
 relation**: `sampling_deployed_models` with `hKS` discharged (`FlockDeploy.KS.zk_KS_untrim`). -/
 theorem sampling_deployed_models_sha512
-    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy relD c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens shaD (deploy relD c) iroots) (hfix : InteriorFixed shaD (deploy relD c) iroots)
     (hprog : ProgramScope (deploy relD c)) (hchecks : ChecksScope shaD (deploy relD c)) (hreveals : RevealsLe c)
@@ -133,7 +133,7 @@ set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record with zero knowledge of the sampled masked protocol, at SHA-512 at the
 deployed relation**: `sampling_deployed_sampled` with `hKS` discharged (`FlockDeploy.KS.zk_KS_untrim`). -/
 theorem sampling_deployed_sampled_sha512
-    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy relD c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens shaD (deploy relD c) iroots) (hfix : InteriorFixed shaD (deploy relD c) iroots)
     (hprog : ProgramScope (deploy relD c)) (hchecks : ChecksScope shaD (deploy relD c)) (hreveals : RevealsLe c)
@@ -163,7 +163,7 @@ set_option synthInstance.maxSize 1024 in
 tables, at SHA-512 at the deployed relation**: `sampling_deployed_tables` with `hKS` discharged
 (`FlockDeploy.KS.zk_KS_untrim`). -/
 theorem sampling_deployed_tables_sha512
-    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy relD c)) (hsessions : SessionRuns shaD (deploy relD c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy relD c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens shaD (deploy relD c) iroots) (hfix : InteriorFixed shaD (deploy relD c) iroots)
     (hprog : ProgramScope (deploy relD c)) (hchecks : ChecksScope shaD (deploy relD c)) (hreveals : RevealsLe c)

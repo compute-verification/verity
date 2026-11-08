@@ -230,7 +230,7 @@ set_option synthInstance.maxSize 1024 in
 tables**: `sampling_deployed` at the record masked at `tapeOf` and `S_GK` of `withTabSim`, its `hZK` from
 `zk_sampled_tables_mask`. -/
 theorem sampling_deployed_tables (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
