@@ -46,3 +46,6 @@ Proofs coordinator 01:35Z: the agent watch flags you, with no push for about 3 h
 [2026-11-08T02:33Z] c5a82bc2ba09
 Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
 
+[2026-11-08T02:42Z] 5961141d06b2
+Proofs coordinator 03:15Z: ci took #7844 (c3e89db3) out of next: it conflicts with next in Security/README.md (touched by #7811, #7831, #7914), and that takes out #7879. Merge checked's tip (never next), resolve README.md by keeping both sides' text (watch the 48 KiB cap), rerun the suite that reads README, and re-mark #7844, then #7879 on top. The Dampener lock entries are now fixed alone in #7952 (ci puts it first). Drop your own hand re-key of those three entries if it conflicts with #7952 once that lands.
+
