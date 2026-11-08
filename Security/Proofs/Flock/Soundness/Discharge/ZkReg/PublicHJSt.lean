@@ -24,10 +24,11 @@ import Proofs.Flock.Soundness.Game.Prob
 /-!
 # `zk_session_soundHJR_custody_reg` at the session's statement circuit
 
-`rsZHJS_wrongRegZ`, `zk_session_soundHJR_custody_reg` and `zk_session_soundHJR_custody_drawn_reg` at `HmOut.parseStmt`
-(`hcS`, a templated file's committed circuit unrolled), with the rows' fit `hv1` given: the same proofs at `ZkHidden`'s
-statement-circuit rows (`layShHJSt`, `rsShHJSt`, `rsZHJSt`) and places (`placeZHJSt`), the record's custody giving the
-samples through `drawOkZKHJ_of_fileSt`, and the registered check through `checked_of_acceptsHJSt`.
+`zk_session_soundHJR_custody_regSt` and `zk_session_soundHJR_custody_sampled_regSt` are
+`zk_session_soundHJR_custody_reg` and `zk_session_soundHJR_custody_drawn_reg` at `HmOut.parseStmt` (`hcS`, a templated
+file's committed circuit unrolled), with the rows' fit `hv1` given: the same proofs at `ZkHidden`'s statement-circuit
+rows (`layShHJSt`, `rsShHJSt`, `rsZHJSt`) and places (`placeZHJSt`), the record's custody giving the samples through
+`drawOkZKHJ_of_fileSt`, and the registered check through `checked_of_acceptsHJSt`.
 -/
 
 @[expose] public section
@@ -40,21 +41,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
-
-/-- **The registered commit strings are the public file's**, at the session's statement circuit (`rsZHJS_wrongRegZ` at
-`HmOut.parseStmt`). -/
-theorem rsZHJSt_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hv1 : Hidden.Any.RowsFitS c)
-    (hscope : Layout.scopeOkH c = true) (hU : Built c.unit) {pub : Public}
-    (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (R R' : Reg) (Xv : Fin (Layout.keyN c hU n) → Bool) :
-    wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-        ((rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub)) R Xv =
-      wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-        ((rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub)) R' Xv := by
-  apply wrongRegZ_congr
-  intro p
-  rfl
 
 /-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound against the registration under
 `live-verifier`, and its registered reads are checked**, at the session's statement circuit
@@ -120,7 +106,7 @@ theorem zk_session_soundHJR_custody_regSt
 /-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it samples, and its
 registered reads are checked**, at the session's statement circuit (`zk_session_soundHJR_custody_drawn_reg` at
 `HmOut.parseStmt`). -/
-theorem zk_session_soundHJR_custody_drawn_regSt
+theorem zk_session_soundHJR_custody_sampled_regSt
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     (hv1 : Hidden.Any.RowsFitS c) (hU : Built c.unit)

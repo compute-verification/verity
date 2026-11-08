@@ -9,7 +9,7 @@ public import Proofs.Flock.EndToEndRegistered.Statement
 with its first conjunct's first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s
 (`Audit.Law.subset_miss`, and `linkBoundZC` at A2); its second conjunct is unchanged.
 `Flock.SecurityProofs.EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn` is
-`zk_session_soundHJR_custody_drawn_regSt` with its first conjunct's last term in closed form. Both read the circuit the
+`zk_session_soundHJR_custody_sampled_regSt` with its first conjunct's last term in closed form. Both read the circuit the
 descriptor unrolls to, a flat file's or a templated statement's (`Flock.Desc.parseStmt_stmt`), and each flat form is
 `zk_session_soundHJR_custody_reg` or `zk_session_soundHJR_custody_drawn_reg` the same way, at the circuit
 `HmOut.parse` reads.
@@ -34,8 +34,8 @@ theorem EndToEndRegistered : Flock.Guarantees.EndToEndRegistered := by
 theorem EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn := by
   intro n Reg I ht own D hD hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
     hρ hr t' ht' τ qF qS L P hcS hv1 vb σ hCR hA2
-  have h := Discharge.ZkReg.zk_session_soundHJR_custody_drawn_regSt I ht own hcS hv1 hU hpub hscope kd hdiv dj y₀ wr dg
-    N Lb src hTags hCust hk hRw hM hρ hr ht' τ (qF := qF) (qS := qS) hCR
+  have h := Discharge.ZkReg.zk_session_soundHJR_custody_sampled_regSt I ht own hcS hv1 hU hpub hscope kd hdiv dj y₀ wr
+    dg N Lb src hTags hCust hk hRw hM hρ hr ht' τ (qF := qF) (qS := qS) hCR
   rw [Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 

@@ -59,7 +59,8 @@ open scoped ENNReal
 open Classical in
 /-- **Flock's one-stage audit, end to end, with registered reads.** As in `EndToEndHidden`, for
 `flock-verify verify --zk --registered F --session-tables J` (`own` F's ports), over hidden outputs and a public file
-with or without shared-row tables. Every row is registered under the public file's `b ‖ c` (`rsZHJSt_wrongRegZ`). Then
+with or without shared-row tables. Every row is registered under the public file's `b ‖ c` (`layShHJSt`'s population is
+the public file). Then
 for every live prover `τ`:
 1. $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
