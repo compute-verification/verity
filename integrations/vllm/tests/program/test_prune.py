@@ -20,7 +20,7 @@ from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.prims import BF16
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, runs
 from verity.ml.circuits.types import Array
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -126,6 +126,30 @@ def test_each_reference_is_renumbered_in_its_own_form():
     _read(c, read)
     _read(empty, read)
     assert read == {0, 2, 4}
+
+
+def test_the_cuts_of_one_history_are_walked_once_per_part_and_keep_their_prefix():
+    """A causal attention's history is one `PartLog`, cut one row longer per call. Renumbering maps each of its parts once, into one
+    renumbered copy of the log, and each cut stays a cut of that copy (its `prefix`), as `runs`, replay and the descriptor encoder
+    need to keep O(1) work a cut; a cut whose parts don't move is returned as it is. `_read` reads each part of the log once."""
+    log = PartLog()
+    for k in range(6):
+        log.append(Affine("n", k, 0, 4))
+    cuts = [log.cut(j, [Affine("n", 9, j, 1)]) for j in range(2, 7)]
+    assert all(c.prefix == (log, j) for c, j in zip(cuts, range(2, 7)))
+    new, memo = [k + 10 for k in range(10)], {}
+    got = [_renumbered(c, new, memo) for c in cuts]
+    (mapped,) = {id(g.prefix[0]): g.prefix[0] for g in got}.values()
+    assert len(mapped) == 6 and [g.prefix[1] for g in got] == list(range(2, 7))
+    for g, j in zip(got, range(2, 7)):
+        assert runs(g) == [("n", 10 + k, 0, 4) for k in range(j)] + [("n", 19, j, j + 1)]
+    same: dict = {}
+    assert all(_renumbered(c, list(range(10)), same) is c for c in cuts)
+    read: set[int] = set()
+    logs: dict = {}
+    for c in reversed(cuts):
+        _read(c, read, logs)
+    assert read == {0, 1, 2, 3, 4, 5, 9} and logs[id(log)][1] == 6
 
 
 DOT = G.GEMM_HOPPER["DOT"]

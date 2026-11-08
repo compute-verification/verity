@@ -20,16 +20,49 @@ from functools import cache
 from typing import Any
 
 from verity.ml.circuits.defs import Body, Node, bind
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided
 
 
-def _read(r: Refs, out: set[int]) -> None:
+def _unseen(r: Concat, logs: dict) -> list:
+    """The parts of ``r`` a walk of one body has yet to read: of a cut from a `PartLog` (`r.prefix`), the log's parts past the
+    longest cut of it the walk has read (``logs``, per log), then its own. A causal attention reads one row more of each history per
+    call, so walking each cut whole costs O(rows^2) a sequence."""
+    if r.prefix is None:
+        return r.parts
+    log, j = r.prefix
+    hit = logs.setdefault(id(log), [log, 0])
+    new = log.parts[hit[1]:j] if j > hit[1] else []
+    hit[1] = max(hit[1], j)
+    return new + list(r.parts[j:])
+
+
+def _mapped_cut(r: Concat, f, memo: dict) -> Refs:
+    """``r``, a cut from a `PartLog`, with each part mapped by ``f``: a cut of the log's mapped copy, each of its parts mapped once
+    (``memo``, per log), so the cut keeps its prefix; ``r`` itself when no part it holds changed."""
+    log, j = r.prefix
+    hit = memo.get(("log", id(log)))
+    if hit is None:
+        hit = memo[("log", id(log))] = [log, PartLog(), None]   # the log, its mapped copy, its first changed part
+    mapped = hit[1]
+    for i in range(len(mapped), j):
+        q = f(log.parts[i])
+        if q is not log.parts[i] and hit[2] is None:
+            hit[2] = i
+        mapped.append(q)
+    extra = [f(p) for p in r.parts[j:]]
+    if (hit[2] is None or hit[2] >= j) and all(q is p for q, p in zip(extra, r.parts[j:])):
+        return r
+    return mapped.raw_cut(j, extra)
+
+
+def _read(r: Refs, out: set[int], logs: dict | None = None) -> None:
+    logs = {} if logs is None else logs
     if isinstance(r, (Affine, Strided)):
         if r.space == "n" and r.count:
             out.add(r.idx)
     elif isinstance(r, Concat):
-        for p in r.parts:
-            _read(p, out)
+        for p in _unseen(r, logs):
+            _read(p, out, logs)
     elif isinstance(r, Explicit):
         out.update(i for s, i, _ in r.items if s == "n")
     else:
@@ -38,13 +71,13 @@ def _read(r: Refs, out: set[int]) -> None:
 
 def live_units(body: Body) -> list[bool]:
     """Per node of `body`, whether the return reads it through live nodes (a node reads only earlier nodes)."""
-    live, read = [False] * len(body.nodes), set()
-    _read(body.ret, read)
+    live, read, logs = [False] * len(body.nodes), set(), {}
+    _read(body.ret, read, logs)
     for k in range(len(body.nodes) - 1, -1, -1):
         if k in read:
             live[k] = True
             for a in body.nodes[k].args:
-                _read(a.refs, read)
+                _read(a.refs, read, logs)
     return live
 
 
@@ -53,7 +86,7 @@ def dead_units(body: Body) -> list[int]:
     return [k for k, v in enumerate(live_units(body)) if not v]
 
 
-def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs]) -> Refs:
+def _renumbered(r: Refs, new: list[int], memo: dict) -> Refs:
     if (hit := memo.get(id(r))) is not None:
         return hit
     if isinstance(r, Affine):
@@ -61,6 +94,8 @@ def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs]) -> Refs:
     elif isinstance(r, Strided):
         out = (Strided("n", new[r.idx], r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
                if r.space == "n" and r.count and new[r.idx] != r.idx else r)
+    elif isinstance(r, Concat) and r.prefix is not None:
+        out = _mapped_cut(r, lambda p: _renumbered(p, new, memo), memo)
     elif isinstance(r, Concat):
         parts = [_renumbered(p, new, memo) for p in r.parts]
         out = r if all(p is q for p, q in zip(parts, r.parts)) else Concat(parts)
@@ -81,7 +116,7 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
     new = list(range(len(body.nodes)))
     for i, k in enumerate(kept):
         new[k] = i
-    memo: dict[int, Refs] = {}
+    memo: dict = {}
 
     def coll(a: Coll) -> Coll:
         r = _renumbered(a.refs, new, memo)
@@ -125,7 +160,7 @@ def _widen(span: list[int], lo: int, hi: int) -> None:
     span[0], span[1] = min(span[0], lo), max(span[1], hi)
 
 
-def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set[int]) -> None:
+def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set[int], logs: dict) -> None:
     """Widen `spans[k]` ([least, past the greatest) leaf read) by the leaves `r` reads of each node k it holds."""
     if id(r) in seen:
         return
@@ -141,8 +176,8 @@ def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set
             last = [r.count - 1] + ([(r.count - 1) // r.inner * r.inner - 1] if r.count > r.inner else [])
             _widen(spans[r.idx], r.base, max(r[j][2] for j in last) + 1)
     elif isinstance(r, Concat):
-        for p in r.parts:
-            _reach(p, spans, full, seen)
+        for p in _unseen(r, logs):
+            _reach(p, spans, full, seen, logs)
     elif isinstance(r, Explicit):
         for s, i, j in r.items:
             if s == "n" and i in spans:
@@ -151,7 +186,7 @@ def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set
         raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
 
 
-def _shifted(r: Refs, by: dict[int, int], memo: dict[int, Refs]) -> Refs:
+def _shifted(r: Refs, by: dict[int, int], memo: dict) -> Refs:
     """`r` with each leaf of a node k in `by` moved down by `by[k]`, each reference kept in its form."""
     if (hit := memo.get(id(r))) is not None:
         return hit
@@ -160,6 +195,8 @@ def _shifted(r: Refs, by: dict[int, int], memo: dict[int, Refs]) -> Refs:
     elif isinstance(r, Strided):
         out = (Strided("n", r.idx, r.base - by[r.idx], r.inner, r.outer_stride, r.inner_stride, r.count)
                if r.space == "n" and r.count and r.idx in by else r)
+    elif isinstance(r, Concat) and r.prefix is not None:
+        out = _mapped_cut(r, lambda p: _shifted(p, by, memo), memo)
     elif isinstance(r, Concat):
         parts = [_shifted(p, by, memo) for p in r.parts]
         out = r if all(p is q for p, q in zip(parts, r.parts)) else Concat(parts)
@@ -181,10 +218,11 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
     full = {k: n.out.leaves for k, n in cand.items()}
     spans = {k: [full[k], 0] for k in cand}
     seen: set[int] = set()
+    logs: dict = {}
     for n in body.nodes[min(cand) + 1:]:
         for a in n.args:
-            _reach(a.refs, spans, full, seen)
-    _reach(body.ret, spans, full, seen)
+            _reach(a.refs, spans, full, seen, logs)
+    _reach(body.ret, spans, full, seen, logs)
     cols, by, nodes = {}, {}, list(body.nodes)
     for k, n in cand.items():
         N = n.fn.bindings["N"]
@@ -200,7 +238,7 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
         cols[k], by[k] = (a, b), a * per
     if not cols:
         return body, {}
-    memo: dict[int, Refs] = {}
+    memo: dict = {}
     for k in range(min(cols) + 1, len(nodes)):
         n = nodes[k]
         args = tuple(Coll(c.type, r) if (r := _shifted(c.refs, by, memo)) is not c.refs else c for c in n.args)
