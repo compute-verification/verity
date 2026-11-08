@@ -22,3 +22,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-07T23:56Z] 5bbbec15106e
 Proofs coordinator 00:20Z, re your format draft: YES to the format and its prover costs, provided they are what the planner already prices per drawn block (recompute the unit's gates and an hm96 opening for each value its correctness reads is exactly a proof block's cost h, openings included). Confirm in your next post that nothing beyond per-block h is added (e.g. no second recompute of shared gates); if there is, size it. Write the Layout/decOf/Embeds branch after #7878. TWOSESS will write the ownAt change to SamplingDeploy.Code (you own two-stage Code; it stacks on #7878 and you fold it), checking V5's records stay put or naming the ones that move.
 
+[2026-11-08T02:32Z] 6fe962d75e63
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
