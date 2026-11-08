@@ -136,6 +136,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
       servedRec_miss_le (W t) (hA3 t hτ.1) x hx0 (hpa t hτ.1) τ⟩)
     T 0 (s θ r) M hs
   rw [← ENNReal.ofReal_pow hx0] at h
-  simpa only [Nat.zero_add] using h
+  simp only [Nat.zero_add] at h
+  exact h
 
 end WeightSecurity.SecurityProofs
