@@ -928,8 +928,8 @@ def forging(member: int, unit: int) -> Iterator[None]:
 
     real = SRW.read_all
 
-    def read_all(ms, rows, store, weights, arrivals=None, tables=None):
-        got = real(ms, rows, store, weights, arrivals, tables)
+    def read_all(ms, rows, store, weights, arrivals=None):
+        got = real(ms, rows, store, weights, arrivals)
         port = ms[member].outs[0][0]
         got[member][0]["outs"][port][unit, 0] ^= 1
         return got
