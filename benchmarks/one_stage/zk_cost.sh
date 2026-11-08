@@ -20,9 +20,9 @@
 #      point is proved; data only, so a noexec tmpfs such as /dev/shm keeps them, about 24 GB of circuit.txt for
 #      FlashInfer K=2048 a size, off a shared disk)
 #      ZK_NEED_GB, ZK_WORK_GB (this run's peaks under ZK_SCRATCH, with the stagers' memory where it is a tmpfs, and under
-#      FLOCK_WORK, the builds; given, nothing is built or staged until each filesystem, and memory for a tmpfs, has its
-#      peak + ZK_MARGIN_GB=30 free, plus the GB of each ZK_HOLD="RUN_ID:GB ..." run not yet done, failed or cancelled;
-#      ZK_GATE_UNTIL, a UTC time, gives up the wait)
+#      FLOCK_WORK, the CUDA unpack and the builds; given, staging waits until ZK_SCRATCH's filesystem, and memory for a
+#      tmpfs, has its peak + ZK_MARGIN_GB=30 free, and the builds until FLOCK_WORK's has theirs, each plus the GB of
+#      each ZK_HOLD="RUN_ID:GB ..." run not yet done, failed or cancelled; ZK_GATE_UNTIL, a UTC time, gives up a wait)
 #      ZK_LAST_START (a UTC time no point starts at or after: one granted later gives its GPU back unproved)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server; with ZK_UNITS and no fw
 #      arm, no Lean build either: nothing then reads flock-verify or the ZK server's Lean frame)
@@ -46,6 +46,8 @@ free_gb() {
   fi
   echo "$f"
 }
+# each PATH:GB given: wait until its filesystem has GB + ZK_MARGIN_GB free, with memory for a tmpfs, plus each ZK_HOLD
+# run's room while that run is live
 room() {
   local h st held d f n ok msg said= runs=${RESEARCH_RUN_DIR:-/workspace/research/runs/-}
   local -A need at
@@ -57,7 +59,7 @@ room() {
       case $st in done | failed | cancelled) ;; *) held=$((held + ${h##*:})) ;; esac
     done
     need=() at=() ok=1 msg=
-    for h in "$ZK_SCRATCH:${ZK_NEED_GB:-0}" "$FLOCK_WORK:${ZK_WORK_GB:-0}"; do
+    for h in "$@"; do
       d=$(stat -c %d "${h%:*}"); at[$d]=${h%:*}; need[$d]=$((${need[$d]:-0} + ${h##*:}))
     done
     for d in "${!need[@]}"; do
@@ -72,7 +74,7 @@ room() {
     said=$msg; sleep 60
   done
 }
-[ -z "${ZK_NEED_GB:-}${ZK_WORK_GB:-}" ] || room || exit 75
+[ -z "${ZK_NEED_GB:-}" ] || room "$ZK_SCRATCH:$ZK_NEED_GB" || exit 75
 export PYTHONDONTWRITEBYTECODE=1
 unset CARGO_TARGET_DIR
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; } > "$O/host.txt" 2>&1
@@ -98,6 +100,7 @@ if [ -n "${ZK_UNITS:-}" ]; then
   rc=${PIPESTATUS[0]}
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
 fi
+[ -z "${ZK_WORK_GB:-}" ] || room "$FLOCK_WORK:$ZK_WORK_GB" || { keep; exit 75; }
 for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done
