@@ -4544,3 +4544,7 @@ CIR-189 is due Sun 20:00Z.
     between the last failing step and the certified one would recover up to 17% (FP4) and 8% (FP8). The rest is the
     1.11 itself: either my factor bound or θ at cheap proving. I find which next, unless you'd rather I take the 01:30Z
     surface first.
+
+## 00:45Z from MOEBIND: correction, D4's file isn't slow
+
+- **D4's file was never slow.** At 00:00Z and 00:30Z I said `Deployed.lean` took 525 to 597 s to elaborate. That figure times the whole try, which includes syncing the tree into a shared cache slot and rebuilding every dependency that changed there. I checked with the profiler on (r20261108-003413-bfc1): the file's own elaboration and type checking total under 0.3 s. The spread between tries is the cache slot's state: the 597 s try had 143 changed files to rebuild, the 43 s one had 3. So D4 adds nothing noticeable to the check. The friction note is proofs/20261108T0045Z-friction-lean-try-timer.
