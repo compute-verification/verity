@@ -142,6 +142,32 @@ def live_spans(sched: Any, kvm: Any) -> dict[str, tuple[list[int], int]]:
     return {rid: (kvm.get_block_ids(rid)[0], r.num_computed_tokens) for rid, r in sched.requests.items() if r.num_computed_tokens > 0}
 
 
+def alloc_prefix(kvm: Any, pool: Any, q: Any, n: int, old: list[int], fresh_of: dict[int, int], bs: int) -> tuple[list[int], int]:
+    """``q``'s ``n`` computed tokens allocated in the fresh pool as a KV connector's load does, its leading full blocks
+    shared with a request allocated before wherever the served engine held them under one block id (``old``, the
+    request's served block ids; ``fresh_of``, served id to fresh id so far), so the fresh pool holds as many blocks as
+    the served one and preempts where it did. Returns the request's fresh block ids and how many lead ones are shared,
+    which hold their bytes already."""
+    from vllm.v1.core.kv_cache_manager import KVCacheBlocks
+
+    full = n // bs
+    j = 0
+    while j < full and old[j] in fresh_of:
+        j += 1
+    if j * bs == n:
+        j -= 1  # allocate_slots places at least one token
+    hit = KVCacheBlocks(([pool.blocks[fresh_of[b]] for b in old[:j]],)) if j else None
+    if kvm.allocate_slots(q, 0, num_new_computed_tokens=j * bs, new_computed_blocks=hit, num_external_computed_tokens=n - j * bs,
+                          delay_cache_blocks=True, has_scheduled_reqs=False) is None:
+        raise SystemExit(f"no room in the fresh pool for {q.request_id}'s {n} tokens")
+    q.num_computed_tokens = n
+    kvm.cache_blocks(q, n)
+    new = kvm.get_block_ids(q.request_id)[0][: -(-n // bs)]
+    for a, b in zip(old[:full], new, strict=False):
+        fresh_of.setdefault(a, b)
+    return new, j
+
+
 def recorded_starts(steps: dict[int, dict], first: int) -> dict[str, list[tuple[int, int]]]:
     """Each request's first position at every step from ``first`` on where the served engine scheduled it new or resumed
     it (its row's start: the prefix-cache hit, in tokens), in step order."""
@@ -392,6 +418,8 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
     pairs: list[tuple[int, int]] = []
     partial: list[tuple[int, int]] = []
     statuses: dict[str, int] = {}
+    fresh_of: dict[int, int] = {}
+    shared = 0
     for rid in order:
         r = reqs[rid]
         statuses[r.status.name] = statuses.get(r.status.name, 0) + 1
@@ -405,15 +433,13 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
         n = min(r.num_computed_tokens, q.num_tokens - 1)
         if n <= 0:
             continue
-        if kvm.allocate_slots(q, 0, num_external_computed_tokens=n, delay_cache_blocks=True) is None:
-            raise SystemExit(f"no room in the fresh pool for {rid}'s {n} tokens")
-        q.num_computed_tokens = n
-        kvm.cache_blocks(q, n)
         k = -(-n // block_size)
-        new, old = kvm.get_block_ids(rid)[0][:k], served_blocks[rid][:k]
-        if len(new) < k or len(old) < k:
-            raise SystemExit(f"{rid}: {n} tokens in {len(old)} served and {len(new)} fresh blocks")
-        pairs += zip(old, new, strict=True)
+        old = served_blocks[rid][:k]
+        if len(old) < k:
+            raise SystemExit(f"{rid}: {n} tokens in {len(old)} served blocks")
+        new, j = alloc_prefix(kvm, pool, q, n, old, fresh_of, block_size)
+        shared += j
+        pairs += zip(old[j:], new[j:], strict=True)
         if n % block_size:
             partial.append((new[-1], n % block_size))
     alloc_s = time.monotonic() - t
@@ -431,7 +457,8 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
                 dst[b, j * slot:].view(dt).fill_(float("nan"))
     torch.cuda.synchronize()
     return {"requests": len(order), "statuses": statuses, "with_prefix": len({p for p in order if reqs[p].num_computed_tokens > 0}),
-            "blocks_loaded": len(pairs), "bytes_loaded": len(pairs) * int(rows[0].shape[1]) * len(rows),
+            "blocks_loaded": len(pairs), "blocks_shared": shared, "blocks_served": len({b for v in served_blocks.values() for b in v}),
+            "blocks_fresh": pool.num_gpu_blocks - 1 - pool.get_num_free_blocks(), "bytes_loaded": len(pairs) * int(rows[0].shape[1]) * len(rows),
             "partial_blocks": len(partial), "alloc_s": alloc_s, "load_s": time.monotonic() - t, "tail": tail,
             "order": order}
 
@@ -462,6 +489,8 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
     chunks: list[Any] = []
     partial: list[tuple[int, int]] = []
     statuses: dict[str, int] = {}
+    fresh_of: dict[int, int] = {}
+    shared = 0
     order = []
     for rid in start["order"]:
         if rid in start["finished_before"]:
@@ -478,16 +507,13 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
         n = min(r["computed"], q.num_tokens - 1)
         if n <= 0:
             continue
-        if kvm.allocate_slots(q, 0, num_external_computed_tokens=n, delay_cache_blocks=True) is None:
-            raise SystemExit(f"no room in the fresh pool for {rid}'s {n} tokens")
-        q.num_computed_tokens = n
-        kvm.cache_blocks(q, n)
         k = -(-n // bs)
-        new = kvm.get_block_ids(rid)[0][:k]
+        new, j = alloc_prefix(kvm, pool, q, n, start["blocks"][rid][:k], fresh_of, bs)
+        shared += j
         x = np.zeros((k * bs, L, slot), np.int8)
         x[:n] = mirror.rows(rid, n)
-        chunks.append(x.reshape(k, bs, L, slot).transpose(2, 0, 1, 3).reshape(L, k, bs * slot))
-        ids += new
+        chunks.append(x.reshape(k, bs, L, slot).transpose(2, 0, 1, 3).reshape(L, k, bs * slot)[:, j:])
+        ids += new[j:]
         if n % bs:
             partial.append((new[-1], n % bs))
     alloc_s = time.monotonic() - t
@@ -503,8 +529,11 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
             else:
                 dst[b, j * slot:].view(dt).fill_(float("nan"))
     torch.cuda.synchronize()
+    served = {b for rid in order for b in start["blocks"].get(rid, ())}
     return {"requests": len(order), "statuses": statuses, "skipped_finished": len(start["finished_before"]),
-            "blocks_loaded": len(ids), "bytes_loaded": len(ids) * int(rows[0].shape[1]) * L, "partial_blocks": len(partial),
+            "blocks_loaded": len(ids), "blocks_shared": shared, "blocks_served": len(served),
+            "blocks_fresh": pool.num_gpu_blocks - 1 - pool.get_num_free_blocks(),
+            "bytes_loaded": len(ids) * int(rows[0].shape[1]) * L, "partial_blocks": len(partial),
             "alloc_s": alloc_s, "load_s": time.monotonic() - t, "tail": tail, "order": order}
 
 
@@ -557,7 +586,7 @@ def start_state(sched: Any, kvm: Any, kv: Any, mirror: Mirror, arrived: dict[str
     truth = roots(kv.rows, spans, block_size)
     mine = {rid: mirror.root(rid, n) for rid, (_, n) in spans.items() if rid in mirror.store and mirror.written[rid] >= n}
     return {"step": step, "processed_through": done, "order": order, "requests": reqs, "finished_before": finished,
-            "truth": truth, "mirror_vs_gpu": roots_diff(truth, mine),
+            "blocks": {rid: list(ids) for rid, (ids, _) in spans.items()}, "truth": truth, "mirror_vs_gpu": roots_diff(truth, mine),
             "preempted_waiting": sorted(r for r in order if reqs[r]["status"] == "PREEMPTED"),
             "partial_last_pages": sum(1 for _, n in spans.values() if n % block_size)}
 
