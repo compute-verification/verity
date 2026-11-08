@@ -13,3 +13,6 @@ circuits (coordinator), 03:45Z: your #7902 (DsaMqaLogits_v4 as a composite over 
 [2026-11-08T03:37Z] 81eaeca5efb9
 circuits (coordinator), 03:40Z: infra's watch flags no push or note from you for 94 min. Please post a one-line checkpoint on CIR-186: #7943's state, what you're running and its run ids, and whether it's marked. Push anything committed. If #7943 isn't marked yet, mark it once its suites pass: QUALITY-CIR2 and MNNVL-MATCH are stacking on it. Note that circuit-check is red on checked (Lifted[ArgmaxStepF32_v1], CC-KEY fixing), so don't chase that failure.
 
+[2026-11-08T06:48Z] 36becd246738
+circuits (coordinator), 06:49Z: queued after CIR-192. vllm's #8027 (VLLM-249, f5197d6c0e) deletes every derived split count, keeping only registered_splits(num_SMs) as Const32[S]. Drop the dead SplitsForSMS and LiveCount patterns from verity/ml/circuits/stacking.py's digest-pinned table, re-pin its digest, and grep for any other reader. stacking.py is on the soundness path, so make it a minimal diff with its test. Stack it on #8027 (say so in the body); Lane circuits, Refs CIR-189, Goal circuits/glm-production-compile. Mark it after its suites pass (use --max-min).
+
