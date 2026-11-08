@@ -2,6 +2,7 @@
 each lever rewrites the priced strata, the replay per sampled request or the scope's budget, and the bound and the
 break-even beta follow from optimize.two_stage_design."""
 import json
+import re
 import sys
 from dataclasses import replace
 from math import log, sqrt
@@ -56,6 +57,17 @@ def fuse_reads(strata, fixed="read"):
     return out
 
 
+def split_cols(strata, pattern, n):
+    """Each block of the types `pattern` matches cut into `n` column blocks (#7979's COLS rows): n times the blocks a
+    token, each with 1/n of its outputs, MACs and ANDs, 2^-Δk its seconds a block and 2^Δk its statement's cap, as
+    total_cost.priced scales a Definition measured at another size."""
+    dk = log(n, 2)
+    return [x | {"per_token": x["per_token"] * n, "out_bits": x["out_bits"] / n, "macs": x["macs"] / n,
+                 "ands": x["ands"] / n, "in_bits": x["in_bits"] / n, "k_log": x["k_log"] - dk,
+                 "seconds_per_block": x["seconds_per_block"] / n, "statement_blocks": x["statement_blocks"] * n}
+            if re.match(pattern, x["block"]) else x for x in strata]
+
+
 def set_bits(strata, prefix, bits):
     return [x | {"out_bits": bits} if x["block"].startswith(prefix) else x for x in strata]
 
@@ -92,6 +104,9 @@ def bound(L, beta, scope="world week", scale=1.0, full=False, lean=False):
     budget = (beta - extra) * s.gpu_seconds
     if budget <= 0:
         return f1.served_total(m)
+    if form := opts.get("budget_form"):
+        import zkstack
+        return zkstack.bound(m, g, budget, span, full, per_machine=form == "zkstack-machine")
     pt = tc._point((name, m, g, budget, comp, conf.form, span, lean))["exfiltration"]
     return (pt["y"], pt) if full else pt["y"]
 
