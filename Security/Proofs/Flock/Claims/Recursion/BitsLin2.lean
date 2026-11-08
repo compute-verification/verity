@@ -92,19 +92,6 @@ open Claims
 
 section NoHash
 
-theorem noHash_viewing {R : Type} (f : Seen → Seen) (r : R) : Claims.Sampling.NoHash (viewing f r) :=
-  Claims.Sampling.NoHash.rerun r _ fun _ => Claims.Sampling.NoHash.ret _
-
-theorem noHash_serve {R₁ R₂ α : Type} {q : R₁ → RP R₂ Seen} (hq : ∀ r, Claims.Sampling.NoHash (q r))
-    {p : RP R₁ α} (hp : Claims.Sampling.NoHash p) : Claims.Sampling.NoHash (serve q p) := by
-  induction hp with
-  | ret a =>
-    simp only [serve]
-    exact Claims.Sampling.NoHash.ret a
-  | rerun r k _ ih =>
-    simp only [serve]
-    exact Claims.Sampling.NoHash.bind (hq r) fun v => ih v
-
 theorem noHash_collect {R α : Type} :
     ∀ ps : List (RP R (Option α)), (∀ p ∈ ps, Claims.Sampling.NoHash p) → Claims.Sampling.NoHash (collect ps)
   | [], _ => by
@@ -129,7 +116,8 @@ theorem noHash_EO {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
   split
   · exact noHash_collect _ fun p hp => by
       obtain ⟨s, -, rfl⟩ := List.mem_map.1 hp
-      exact noHash_serve (fun r => noHash_viewing _ r) (Claims.Sampling.NoHash.firstWait _ _ _ _ _)
+      exact Claims.Sampling.NoHash.serve (fun r => Claims.Sampling.NoHash.viewing _ r)
+        (Claims.Sampling.NoHash.firstWait _ _ _ _ _)
   · exact Claims.Sampling.NoHash.ret _
 
 /-- `E_O` calls SHA-512 at most `t` times per rerun, when every run makes at most `t` calls. -/

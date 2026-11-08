@@ -61,7 +61,8 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
 * `KSCount` from `KS` (`KSCount_of_KS`);
 * `Bits` from `KS`, the extractor's expected reruns (`E_runs_exp`) and its own calls (`Bits_of_KS`);
 * `Efficient` at `FlockDeploy.zkStepPoly`: the extractor's reruns (`E_runs_le`), expected reruns (`E_runs_exp`, with
-  the sample before the sessions) and own calls (`E_own_le`) at the record's decoder, and that decoder's `ListWithin`
+  the sample before the sessions, each a Flock run) and own calls (`E_own_le`) at the record's decoder, and that
+  decoder's `ListWithin`
   at `deployZk` (`FlockDeploy.listWithin_zk`) and its step count, the trimmed record's (`FlockDeploy.efficient_zk`),
   whose decoder is `deployZk`'s (`FlockDeploy.decode_zk`).
 
@@ -79,8 +80,9 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
   registered path check; at the deployed record by definition and proved (`SamplingDeploy.deploy_commit`,
   `SamplingDeploy.row_places`).
 * `DrawFixed`, `SessionRuns`, `InnerNumbers` (`Sampling.Session`): the checked units' sessions are in the second stage
-  and the sample doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
-  the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
+  and the sample doesn't read them; a checked unit's session is a Flock run on its own rounds that accepts where the run
+  does, with the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session.
+  The Lean
   sampled-proofs verifier, the verifier, with the Python held to it by difftest.
 * `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
   design are the verifier's own: the partition has the shape of its layout, and the design is the one `Slots.select`
@@ -98,7 +100,7 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
 * `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
   calls; at the deployed record, from the reveal count (`SamplingDeploy.openCallsLe_deploy`). With it the extractor's
   own calls are `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns
-  are with `DrawFixed` (`E_runs_exp`).
+  are with `DrawFixed` and `SessionRuns` (`E_runs_exp`).
 * `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `PrivateCircuit.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
@@ -152,8 +154,8 @@ theorem sampling_assembled_of {T : Type}
   have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS hfixed hsessions hnum hε) hopens hfix
     (drawLaw_of_slots D hslots) hrefuse hε
   exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
-    Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
-    ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hlist, hcount⟩, hComplete⟩
+    Bits_of_KS hks (E_runs_exp H D hfixed hsessions) (E_own_le hopen) hε,
+    ⟨E_runs_le H D _, E_runs_exp H D hfixed hsessions _, E_own_le hopen _, hlist, hcount⟩, hComplete⟩
 
 /-- **The masked record's decoder lists within the radius**: it is the masked radius decoder
 (`FlockDeploy.decode_zk`, `FlockDeploy.listWithin_zk`). -/

@@ -51,8 +51,8 @@ theorem noHash_EO (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin
     obtain ⟨s, -, rfl⟩ := List.mem_map.1 hp
     unfold Compiled.sessionProg
     split
-    · exact Claims.Sampling.NoHash.bind (Claims.Recursion.noHash_serve
-        (fun _ => Claims.Recursion.noHash_viewing _ _) (Claims.SamplingGeneric.noHash_ext _ _ _ _))
+    · exact Claims.Sampling.NoHash.bind (Claims.Sampling.NoHash.serve
+        (fun _ => Claims.Sampling.NoHash.viewing _ _) (Claims.SamplingGeneric.noHash_ext _ _ _ _))
         fun _ => Claims.Sampling.NoHash.ret _
     · exact Claims.Sampling.NoHash.ret _
   · exact Claims.Sampling.NoHash.ret _

@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Aggregate
 public import Proofs.Flock.Claims.Sampling.Bext
 public import Proofs.Flock.Claims.Sampling.Escape
 public import Proofs.Flock.Claims.Sampling.Wait
+import Proofs.Flock.Claims.Recursion.Cost
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -222,18 +223,47 @@ section Extractor
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
+/-- **A checked unit's session's runs**: at each coin vector, the session's view (`sessView`) of the prover's run
+there, as a run with no calls of its own. The unit's waits see their reruns so. -/
+def Deploy.sessRun (D : Deploy Coin Col T) (x : Msg) (u : ℕ) (run' : (Fin (D.V.k x) → Coin) → Trace)
+    (r : Fin (D.V.k x) → Coin) : Trace :=
+  ⟨(D.sessView x u (run' r).seen).msgs, [], [], (D.sessView x u (run' r).seen).out⟩
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem sessRun_seen (D : Deploy Coin Col T) (x : Msg) (u : ℕ) (run' : (Fin (D.V.k x) → Coin) → Trace)
+    (r : Fin (D.V.k x) → Coin) : (D.sessRun x u run' r).seen = D.sessView x u (run' r).seen := rfl
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **A program seen as a unit's session returns** what it returns on the session's runs (`sessRun`). -/
+theorem eval_sessView {α : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (u : ℕ)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (p : RP (Fin (D.V.k x) → Coin) α) :
+    ((Recursion.serve (Recursion.viewing (D.sessView x u)) p).eval H run').1 = (p.eval H (D.sessRun x u run')).1 := by
+  rw [Recursion.serve_eq, (RP.serve_eval H _ run' p).1]
+  rfl
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **A program seen as a unit's session reruns** as often as on the session's runs: once per view. -/
+theorem runs_sessView {α : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (u : ℕ)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (p : RP (Fin (D.V.k x) → Coin) α) :
+    ((Recursion.serve (Recursion.viewing (D.sessView x u)) p).eval H run').2.2 =
+      (p.eval H (D.sessRun x u run')).2.2 := by
+  have hsr : servedRun H (Recursion.viewing (D.sessView x u)) run' = D.sessRun x u run' := rfl
+  rw [Recursion.serve_eq, (RP.serve_eval H _ run' p).2.2, hsr, RP.eval_runs_eq H (D.sessRun x u run') p]
+  simp only [Recursion.viewing_runs, List.map_const', List.sum_replicate, smul_eq_mul, mul_one]
+
 /-- **A checked proof block's `E^rep`** at the run `r`, on the prover's runs `run'`: Flock's waits on the unit's session
-(`unitExt`'s), `none` when `r` shows no session for `u` or the waits find no witness. -/
+(`unitExt`'s), seen as the session's view, `none` when `r` shows no session for `u` or the waits find no witness. -/
 noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) :
     Option Flock.Wit :=
   match D.session x u (run' r).seen with
   | none => none
   | some (xS, _) =>
-    ((firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
-        (Flock.check D.flock.parse xS)
-        ((List.finRange (D.innerWaits x)).map fun i =>
-          (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).eval H run').1
+    ((Recursion.serve (Recursion.viewing (D.sessView x u))
+        (firstWait (D.innerK x) (fun vS => [D.flock.cols vS])
+          (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS) (Flock.check D.flock.parse xS)
+          ((List.finRange (D.innerWaits x)).map fun i =>
+            (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j)))).eval H run').1
 
 /-- The extractor at one accepted inner run `li`, under the outer run `j`: every checked unit's extraction. -/
 noncomputable def innerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : AuditStatement)
@@ -715,7 +745,8 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
   | some xv =>
     obtain ⟨xS, vS⟩ := xv
     rw [hsess] at hwF'
-    have hchk := firstWait_some H run' _ _ _ _ _ wF hwF'
+    simp only [eval_sessView] at hwF'
+    have hchk := firstWait_some H _ _ _ _ _ _ wF hwF'
     obtain ⟨b', hb', hcor⟩ :=
       hopens x s Pt Ω P ω (forkOn (D.stage2 x) r d) v xS vS wF hs hPt hin hacc' ⟨p, hp⟩ hsess hchk
     have hcorr := hcor (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v)) fun q hq hok => by

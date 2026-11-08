@@ -201,6 +201,19 @@ theorem NoHash.firstWait {R W Op : Type} (k : ℕ) (opens : Seen → List Op) (a
       · exact ih
     · exact ih
 
+theorem NoHash.viewing {R : Type} (f : Seen → Seen) (r : R) : NoHash (Recursion.viewing f r) :=
+  NoHash.rerun r _ fun _ => NoHash.ret _
+
+theorem NoHash.serve {R₁ R₂ α : Type} {q : R₁ → RP R₂ Seen} (hq : ∀ r, NoHash (q r)) {p : RP R₁ α}
+    (hp : NoHash p) : NoHash (Recursion.serve q p) := by
+  induction hp with
+  | ret a =>
+    simp only [Recursion.serve]
+    exact NoHash.ret a
+  | rerun r k _ ih =>
+    simp only [Recursion.serve]
+    exact (hq r).bind fun v => ih v
+
 /-- **A program without SHA-512 calls of its own** calls SHA-512 at most `t` times per rerun, when every run makes at
 most `t` calls. -/
 theorem calls_le_of_noHash {R α : Type} (H : Msg → Msg) (run : R → Trace) (t : ℕ)

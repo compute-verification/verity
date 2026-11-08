@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims
+public import Definitions.Claims.Recursion
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
@@ -33,7 +34,8 @@ the code side's.
    `CommitmentScheme.layer`); the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal
    unit (`PrivateCircuit`, `Universal`), a fact about the programs private circuits run as; the acceptance probabilities
    (`OneStage.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second
-   stage, in each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the
+   stage, in each Flock's `E^rep` on every checked unit's session, its reruns seen as the session's view (`sessView`);
+   the expected-time finder (`Bext`); and the
    parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment
    `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
@@ -516,11 +518,9 @@ def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ slackExp * (2 * nPU 
 /-- The waits give up after `K = 2^128·k` reruns. -/
 def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
 
-/-- The opened columns of a checked unit's session, each table's, as Flock's `E^rep` reads a run's opening. -/
-def Deploy.sessionCols (D : Deploy Coin Col T) (x : Msg) (u : ℕ) (v : Seen) : List (ℕ → List (ℕ × Col)) :=
-  match D.session x u v with
-  | some (_, vS) => [D.flock.cols vS]
-  | none => []
+/-- A checked unit's session's view of a run, a rejection with no messages where the run shows no session. -/
+def Deploy.sessView (D : Deploy Coin Col T) (x : Msg) (u : ℕ) (v : Seen) : Seen :=
+  ((D.session x u v).map Prod.snd).getD ⟨[], .rej⟩
 
 /-- The coins of one session's `E^rep`. -/
 abbrev Deploy.UnitCoins (D : Deploy Coin Col T) (x : Msg) := Fin (D.innerWaits x) → Fin (D.innerCap x) → Fin (D.V.k x) → Coin
@@ -533,17 +533,19 @@ def checkRevealed {R : Type} (Cm : CommitmentScheme Bool) :
 
 /-- **A checked unit's extraction at an accepted run** `(r, v)`: Flock's `E^rep` on the unit's session, at a decoder,
 without its replay (the run accepted), its reruns fresh on the session's rounds and `r`'s elsewhere, so the prover makes
-the same session; then what its witness reveals that passes its opening check. -/
+the same session, and each seen as the session's view (`sessView`), so the waits keep the reruns the session accepts,
+whatever the run's other sessions do; then what its witness reveals that passes its opening check. -/
 noncomputable def unitExt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) :
     RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   match D.session x u v with
   | none => .ret []
   | some (xS, _) =>
-    (firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
-        (Flock.check D.flock.parse xS)
-        ((List.finRange (D.innerWaits x)).map fun i =>
-          (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).bind fun
+    (Recursion.serve (Recursion.viewing (D.sessView x u))
+        (firstWait (D.innerK x) (fun vS => [D.flock.cols vS])
+          (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS) (Flock.check D.flock.parse xS)
+          ((List.finRange (D.innerWaits x)).map fun i =>
+            (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j)))).bind fun
       | none => .ret []
       | some wF => checkRevealed D.commit (D.reveal s u v wF)
 

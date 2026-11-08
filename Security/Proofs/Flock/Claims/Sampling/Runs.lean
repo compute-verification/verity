@@ -127,10 +127,10 @@ theorem unitExt_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List
   split
   · simp [RP.eval]
   · rename_i xS _ _
-    rw [(RP.eval_bind H run' _ _).2]
-    have hw := waits_runs_le H run' (D.innerWaits x) (D.innerK x) (D.innerCap x) (D.sessionCols x u)
-      (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS) (Flock.check D.flock.parse xS)
-      fun i j => forkOn (D.rounds x u) r (ρ i j)
+    rw [(RP.eval_bind H run' _ _).2, runs_sessView]
+    have hw := waits_runs_le H (D.sessRun x u run') (D.innerWaits x) (D.innerK x) (D.innerCap x)
+      (fun vS => [D.flock.cols vS]) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
+      (Flock.check D.flock.parse xS) fun i j => forkOn (D.rounds x u) r (ρ i j)
     unfold waitsProg at hw
     refine le_of_le_of_eq (Nat.add_le_add_right hw _) ?_
     split
@@ -208,7 +208,9 @@ theorem unitExt_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCa
   unfold unitExt
   split
   · simp [ownLog]
-  · rw [ownLog_bind, ownLog_of_noHash H run' (NoHash.firstWait _ _ _ _ _), List.nil_append]
+  · rw [ownLog_bind,
+      ownLog_of_noHash H run' (NoHash.serve (fun r => NoHash.viewing _ r) (NoHash.firstWait _ _ _ _ _)),
+      List.nil_append]
     split
     · simp [ownLog]
     · rw [ownLog_checkRevealed_length]

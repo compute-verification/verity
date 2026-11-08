@@ -189,10 +189,11 @@ section RunsExp
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 /-- A checked unit's waits' reruns at coins `r` and its `E^rep` coins `ρ`: Flock's `m′` waits of `K′` samples, fresh on
-the unit's rounds. -/
+the unit's rounds, on the unit's session's runs. -/
 noncomputable def unitWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : ℝ :=
-  ∑ a, (waitRuns (run' ∘ forkOn (D.rounds x u) r) (D.innerK x) ((List.finRange (D.innerCap x)).map (ρ a)) 0 : ℝ)
+  ∑ a, (waitRuns (D.sessRun x u run' ∘ forkOn (D.rounds x u) r) (D.innerK x)
+    ((List.finRange (D.innerCap x)).map (ρ a)) 0 : ℝ)
 
 /-- Position `i`'s unit's waits, `0` when fewer units are checked at `r`. -/
 noncomputable def posWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
@@ -254,8 +255,8 @@ theorem unitExt_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode 
   · simp only [RP.eval, Nat.cast_zero]
     exact unitWaits_nonneg D x run' u r ρ
   · rename_i xS _ _
-    rw [(RP.eval_bind H run' _ _).2]
-    have hw := firstWait_runs_le_sum H run' (D.innerK x) (D.sessionCols x u)
+    rw [(RP.eval_bind H run' _ _).2, runs_sessView]
+    have hw := firstWait_runs_le_sum H (D.sessRun x u run') (D.innerK x) (fun vS => [D.flock.cols vS])
       (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS) (Flock.check D.flock.parse xS)
       ((List.finRange (D.innerWaits x)).map fun i =>
         (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))
@@ -263,7 +264,7 @@ theorem unitExt_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode 
     rw [← Fin.sum_univ_def] at hw
     have hw' := (Nat.cast_le (α := ℝ)).2 hw
     rw [Nat.cast_sum] at hw'
-    have hu : (∑ a, ((waitRuns run' (D.innerK x)
+    have hu : (∑ a, ((waitRuns (D.sessRun x u run') (D.innerK x)
         ((List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ a j)) 0 : ℕ) : ℝ)) =
         unitWaits D x run' u r ρ :=
       Finset.sum_congr rfl fun a _ => by
@@ -320,12 +321,31 @@ theorem Ex_innerB_le (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' :
         Ex_pi_eval (j, l, i) fun ρ => posWaits D x run' i r' ρ))
     (innerW_nonneg D x run')
 
+/-- **A run's acceptance carries to its checked units' sessions**: where `run'` accepts at coins fresh on a checked
+unit's rounds, so does the unit's session (`sessRun`). `SessionRuns` gives it at the prover's runs
+(`sessAccepts_of_runs`). -/
+def SessAccepts (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) : Prop :=
+  ∀ (r : Fin (D.V.k x) → Coin) (u : ℕ), (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
+    ∀ σ, (run' (forkOn (D.rounds x u) r σ)).out = .acc → (D.sessRun x u run' (forkOn (D.rounds x u) r σ)).out = .acc
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+theorem sessAccepts_of_runs {H : Msg → Msg} {D : Deploy Coin Col T} (hruns : SessionRuns H D) (x : Msg) {Ω : Type}
+    (P : Prover Ω) (ω : Ω) : SessAccepts D x (run H P D.V x ω) := by
+  intro r u hu σ hacc
+  obtain ⟨xS, emb, P', -, -, hrun, hview⟩ := hruns x Ω P ω r u hu
+  have hag : ∀ t ∉ D.rounds x u, forkOn (D.rounds x u) r σ t = r t := fun t ht => by simp [forkOn, ht]
+  have hs := (hview _ fun t ht _ => hag t ht).1
+  have h := hrun _ hag hacc
+  simp only [Deploy.sessRun, Deploy.sessView, hs, Option.map_some, Option.getD_some]
+  exact h
+
 omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **One position's unit waits, given acceptance**: over the second stage `d` at `r`, acceptance times position
 `i`'s expected unit waits is at most `m′·k′`. Resampling the unit's rounds keeps the checked units (`DrawFixed`), so
-acceptance weighs as the unit's own acceptance probability, against which its waits amortize. -/
+acceptance weighs as at most the unit's session's acceptance probability (`SessAccepts`), against which its waits
+amortize. -/
 theorem unit_exp_le {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
-    (i : Fin (nPU D x)) (r : Fin (D.V.k x) → Coin) :
+    (hsess : SessAccepts D x run') (i : Fin (nPU D x)) (r : Fin (D.V.k x) → Coin) :
     Ex (fun d : Fin (D.V.k x) → Coin => (if (run' (forkOn (D.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
         Ex fun ρ : D.UnitCoins x => posWaits D x run' i (forkOn (D.stage2 x) r d) ρ) ≤
       D.innerWaits x * D.innerK x := by
@@ -353,28 +373,30 @@ theorem unit_exp_le {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run
       unfold posWaits unitWaits
       rw [hfix.2 σ, ← hsel, h, Option.map_some, Option.getD_some, forkOn_forkOn']
     simp only [hp]
+    set sr := D.sessRun x u run' ∘ forkOn (D.rounds x u) (forkOn (D.stage2 x) r d)
     have hE : (Ex fun ρ : D.UnitCoins x => unitWaits D x run' u (forkOn (D.stage2 x) r d) ρ) =
-        D.innerWaits x * waitExp (run' ∘ forkOn (D.rounds x u) (forkOn (D.stage2 x) r d)) (D.innerK x)
-          (D.innerCap x) 0 :=
+        D.innerWaits x * waitExp sr (D.innerK x) (D.innerCap x) 0 :=
       Ex_sum_pi (fun σ : Fin (D.innerCap x) → Fin (D.V.k x) → Coin =>
-        (waitRuns (run' ∘ forkOn (D.rounds x u) (forkOn (D.stage2 x) r d)) (D.innerK x)
-          ((List.finRange (D.innerCap x)).map σ) 0 : ℝ)) (D.innerWaits x)
+        (waitRuns sr (D.innerK x) ((List.finRange (D.innerCap x)).map σ) 0 : ℝ)) (D.innerWaits x)
     rw [hE, Ex_mul_right, Ex_ind]
-    have hw := waitRuns_exp (run' ∘ forkOn (D.rounds x u) (forkOn (D.stage2 x) r d)) (D.innerK x) (D.innerCap x) 0
-      (Nat.zero_le _)
-    simp only [Function.comp_apply, Nat.cast_zero, sub_zero] at hw
+    have hw := waitRuns_exp sr (D.innerK x) (D.innerCap x) 0 (Nat.zero_le _)
+    simp only [Nat.cast_zero, sub_zero] at hw
+    have hpr : Pr (fun σ => (run' (forkOn (D.rounds x u) (forkOn (D.stage2 x) r d) σ)).out = .acc) ≤
+        Pr (fun σ => (sr σ).out = .acc) :=
+      Pr_mono fun σ => hsess _ u (selUnit_mem h) σ
     calc Pr (fun σ => (run' (forkOn (D.rounds x u) (forkOn (D.stage2 x) r d) σ)).out = .acc) *
-          (D.innerWaits x * waitExp (run' ∘ forkOn (D.rounds x u) (forkOn (D.stage2 x) r d)) (D.innerK x)
-            (D.innerCap x) 0)
+          (D.innerWaits x * waitExp sr (D.innerK x) (D.innerCap x) 0)
         = D.innerWaits x * (Pr (fun σ => (run' (forkOn (D.rounds x u) (forkOn (D.stage2 x) r d) σ)).out = .acc) *
-          waitExp (run' ∘ forkOn (D.rounds x u) (forkOn (D.stage2 x) r d)) (D.innerK x) (D.innerCap x) 0) := by
+          waitExp sr (D.innerK x) (D.innerCap x) 0) := by
           ring
+      _ ≤ D.innerWaits x * (Pr (fun σ => (sr σ).out = .acc) * waitExp sr (D.innerK x) (D.innerCap x) 0) :=
+          mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right hpr (waitExp_nonneg _ _ _ _)) (Nat.cast_nonneg _)
       _ ≤ D.innerWaits x * D.innerK x := mul_le_mul_of_nonneg_left hw (Nat.cast_nonneg _)
 
 omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **An outer body's weight against the inner acceptance**: `ε₂(r) · outerG(r) ≤ k + k·n_PU·m′·k′`. -/
 theorem outerG_amortized {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
-    (r : Fin (D.V.k x) → Coin) :
+    (hsess : SessAccepts D x run') (r : Fin (D.V.k x) → Coin) :
     Pr (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) * outerG D x run' r ≤
       D.k x + D.k x * (nPU D x * (D.innerWaits x * D.innerK x)) := by
   refine (level_amortized run' (forkOn (D.stage2 x) r) (D.k x) (D.cap x) (innerW D x run')
@@ -392,7 +414,7 @@ theorem outerG_amortized {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg)
         (if (run' (forkOn (D.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
           Ex fun ρ : D.UnitCoins x => posWaits D x run' i (forkOn (D.stage2 x) r d) ρ)
       ≤ ∑ _i : Fin (nPU D x), (D.innerWaits x * D.innerK x : ℝ) :=
-        Finset.sum_le_sum fun i _ => unit_exp_le hdraw x run' i r
+        Finset.sum_le_sum fun i _ => unit_exp_le hdraw x run' hsess i r
     _ = nPU D x * (D.innerWaits x * D.innerK x) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
@@ -429,9 +451,10 @@ theorem E_runs_le_outer (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List
       simp only [RP.eval, Nat.cast_zero, zero_add, le_refl]
 
 omit [DecidableEq Col] [Zero Col] in
-/-- **`ExtractRunsExpLe` at the sampling extractor**, at every decoder, when the sample precedes the sessions: at most
-`1 + k + k²·(1 + n_PU·m′·k′)` reruns in expectation. -/
-theorem E_runs_exp (H : Msg → Msg) (D : Deploy Coin Col T) (hdraw : DrawFixed D) (decode : List (ℕ × Col) → List T) :
+/-- **`ExtractRunsExpLe` at the sampling extractor**, at every decoder, when the sample precedes the sessions and each
+checked unit's session is a Flock run (`SessionRuns`): at most `1 + k + k²·(1 + n_PU·m′·k′)` reruns in expectation. -/
+theorem E_runs_exp (H : Msg → Msg) (D : Deploy Coin Col T) (hdraw : DrawFixed D) (hruns : SessionRuns H D)
+    (decode : List (ℕ × Col) → List T) :
     ExtractRunsExpLe H (E D decode)
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)) := by
   intro x Ω P ω
@@ -485,7 +508,7 @@ theorem E_runs_exp (H : Msg → Msg) (D : Deploy Coin Col T) (hdraw : DrawFixed 
       rw [Ex_acc_forkOn (D.stage2 x) (fun r => (run' r).out = .acc) (outerG D x run') fun r d => by
         unfold outerG
         rw [forkOn_forkOn']]
-      refine (Ex_mono fun r => outerG_amortized hdraw x run' r).trans_eq ?_
+      refine (Ex_mono fun r => outerG_amortized hdraw x run' (sessAccepts_of_runs hruns x P ω) r).trans_eq ?_
       exact Ex_const _
     calc Ex (fun s' : (Fin (D.V.k x) → Coin) × (E D decode).C x => (((E D decode).eval H P x ω s'.1 s'.2).2.2 : ℝ))
         ≤ 1 + Pr (fun r => (run' r).out = .acc) * Ex Rout := (Ex_mono hpt).trans_eq hsplit
