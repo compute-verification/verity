@@ -9883,3 +9883,33 @@ The sizes are my reading of the code; TWOOPENS to confirm 3a's. TWOPROVE to conf
 - **No:** item 3. Neither `Embeds` route is marked by Mon 18:00Z.
 
 The full note is `proofs/20261108T1030Z-plan-zktwo-onedesc`. No runs are in flight.
+
+## 10:31Z from TSVERIFY: BLOCKER, a revert commit can't back #8063 out of #8029; adaptation branch for vllm is up
+- **I didn't push the revert.** It's `5b25c1ca8e`, local only, and its tree equals `15867b66ef`'s.
+  - The queue lands PRs as true merges, and the merge brought #8029 the newer main #8063 is based on, as ancestors.
+  - So the reverted head's "change" undoes that main. I ran `git merge-tree --write-tree origin/checked` on both heads:
+    the revert head and `15867b66ef` give trees 531 files apart (+8,293 / −17,898 lines).
+  - For example, landing the revert head brings back `Accounting/ComposePeriod.lean`, undoing the rename already on
+    checked.
+  - #8063's 13 commits, and the part of #8032 they merge, would also become main's ancestors with their changes
+    reverted. When #8063 or #8032 lands afterwards, those changes would be dropped without any conflict.
+- **What fixes it: only a history without `d852ed0174`.** Either of these works:
+  - (a) `git push --force-with-lease=cursor/proofs-wiresacyclic-3f8d:d323e29267` of #8029's branch back to
+    `15867b66ef`. This is my recommendation. Then the suite cache reuses 2f3f and I mark it.
+  - (b) A replacement PR from `15867b66ef`, closing #8029.
+  - You said no force-push, so I'm waiting for your OK on (a) or (b). Until then, #8029's pushed head stays
+    `d323e29267`, unmarked, so nothing lands. Suites d158 is cancelled; it never got a slot.
+- **The adaptation for vllm:** `cursor/proofs-tsverify-8063-adapt-827f` @ `58eadac76a`. It sits on #8063's head
+  d852ed0174:
+  - `573ad38e8d` merges #8029's head `15867b66ef`, for `Circuit.order` and `check_wires`. Its one conflict,
+    `test_tp_wires.py`, keeps #8063's file.
+  - `58eadac76a`, the one adaptation commit: `order=` at `sites_circuit`, and the test on the new `Sites.units` keys.
+  - The final tree is the same as `d323e29267`'s, where `test_tp_wires.py` passed 9 of 9 and the windows tests 87
+    passed, 1 skipped.
+  - **Coverage change for vllm:** at #8063's coordinate grain a producer's `x` row (32 words) is never as wide as its
+    combine's `o0` (1 word). So a forged back wire is refused for its width before the cycle check, and the TP test no
+    longer forges a cycle. It checks instead that the circuit's order is `Sites.order`, the wires pass, and the
+    reversed order is refused by name. Forged cycles stay tested in `verity/ml/windows` and the Lean difftest.
+  - vllm should take it after #8029 lands, which keeps `15867b66ef` an ancestor whichever way you pick above.
+- **#8043:** records r20261108-100943-fa7b has been running since 10:09:52Z and is past where e1ac failed. ETA about
+  11:00Z. Then I commit its records and mark.
