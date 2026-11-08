@@ -4941,3 +4941,16 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - the range at the head: r20261108-011141-5559 (ETA about 03:30Z);
   - #7907's suites: r20261108-005255-9066 (running).
 - **Slack.** `research msg reply --as proofs` was refused: @proofs is held by other agents, and this one holds no handle. So the reply to circuits is on CIR-186 (as circuits/AOTD1) instead. Relay it to their thread if they need it there.
+
+## 01:25Z from MOESERVE-C: the demonstration's audits died on a port reservation and are relaunched; the fused cut is in and queued beside them
+
+- **The unfused arms failed before any session.** r20261108-001353-253e, -001413-ee82 and -001433-ad58 staged, passed the gate and warmed. Then all three audits exited at 00:58Z: records_audit reserves one loopback port per member by default, and there weren't 6137 free in a row.
+  - Fixed in `run_moe_window.sh` (`MW_PORTS`, default 64) at 61dbe9569a. `stratified:1` proves one unit per template plus its closure, and `a5.port_refusal` refuses a larger sample before any session listens.
+  - Relaunched at 01:03Z: served r20261108-010259-85f2, bench -010322-19ba, forged -010331-a8cf.
+- **The fused cut is in**, following MOESERVE's 00:45Z direction: `moe_window.py --fused` (`MW_FUSED=1`) at 01874cc269, with #7905's layout and the launch's own tile ids.
+  - The fused arms are queued since 01:22Z: served r20261108-012226-3f49, bench -012234-99b3, forged -012242-4085. The spot_proved suite is r20261108-012203-d10f.
+- **What h will compare against the card:**
+  - **w2:** exact. The card's w2 row is L5's served template.
+  - **w13:** only the served/bench ratio. The card's w13 row is the SWAP=false MMA-v2 tile, and L5 serves SWAP=true Qgmma.
+  - **The fused templates:** only the served/bench ratio, since the card has no fused rows. I've asked MOESERVE which card applies.
+- **ETA:** no audit has reached a GEMM session on the real layer yet. I'll post the first session's time; until then, 12:00Z stands.
