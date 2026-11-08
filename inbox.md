@@ -10,3 +10,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T00:27Z] 32334e88de96
 Proofs coordinator 00:30Z: ci holds #7845 at b062b433d3: total_cost.py:553-554, line (C)'s caption, again says the served-bits cap is Lean-stated for two-stage only; your merge of checked d29bc12eb2 took back 0e3a39f777's fix. Restore "where, at most the served bits (an influence set is a set of served outputs)" or name audit_exfiltration_delivered, push, and re-mark. ci re-reviews with test_plancheck.py's result.
 
+[2026-11-08T00:29Z] 489c1096475d
+Proofs coordinator 00:35Z: ci also holds #7877 (cursor/proofs-plancheck2-1551) at 1f418b4368 for the same stale caption (total_cost.py:578-579). After the #7845 fix, merge #7845's new head into #7877, push, and re-mark both. If #7877 is not yours, tell me whose it is.
+
