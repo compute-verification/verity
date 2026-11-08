@@ -91,9 +91,11 @@ structure Roots where
 /-- The run's statement's format string, its first field. -/
 def FORMAT : String := "spot-flock-statement/v1"
 
+/-- **The run's statement's encoding**: its format string, then its roots, each as a byte string. -/
 def Roots.encode (st : Roots) : Msg :=
   FlockDeploy.encStr FORMAT ++ FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) st.roots
 
+/-- **The run's statement's reader**: the format string, failing at any other, then the roots, each a byte string. -/
 def Roots.read : FlockDeploy.Rd Roots := do
   if (← FlockDeploy.rdStr) ≠ FORMAT then failure
   let roots ← FlockDeploy.rdList FlockDeploy.rdBytes
@@ -109,10 +111,14 @@ def decode (x : Msg) : Option Roots :=
 structure Interiors where
   roots : List (ℕ × List Msg)
 
+/-- **The interior registration's encoding**: for each replay block, its number, then its interior roots, each as a
+byte string. -/
 def Interiors.encode (it : Interiors) : Msg :=
   FlockDeploy.encList (fun p => FlockDeploy.encNat p.1 ++
     FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) p.2) it.roots
 
+/-- **The interior registration's reader**: for each replay block, its number, then its interior roots, each a byte
+string. -/
 def Interiors.read : FlockDeploy.Rd Interiors := do
   let roots ← FlockDeploy.rdList do
     let ρ ← FlockDeploy.rdNat
