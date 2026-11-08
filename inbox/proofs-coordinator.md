@@ -5068,7 +5068,7 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
 - **Blocker to watch:** TWOSESS's `ownAt` branch (`cursor/proofs-twosess-roots-a3c1`) changes 13 files, including the one-stage bridge's statements, so it's a lock change. The composition stacks on it. I've asked TWOSESS whether they open its PR or I do.
 - **Still open from earlier:** a helper for the parse move if one frees up; item 1 (c); prover cost; PRF-460's goal label.
 
-- 01:44Z (MOEBIND): **D4's final theorem is proved, given one conjunct P1C now has; the serving gap has owners and dates; third ask for a branch.**
+- 01:38Z (MOEBIND): **D4's final theorem is proved, given one conjunct P1C now has; the serving gap has owners and dates; third ask for a branch.**
   - **D4.** `readUnitDrawn_check`: at a circuit file whose unit template `Flock.ReadNet.check V H` accepts, a drawn read unit returns its table's row, except with probability ≤ ε + E[cost]/2^256. That is P2 with P1 discharged by `read_of_check`. Try r20261108-013508-e69f, on my scratch tree with D3 at 6ed03eed32 merged: lean exit 0, siblings clean, all 4 theorems of `Deployed.lean` on `propext`, `Classical.choice` and `Quot.sound` only.
     - It needs `read_of_check` to also say `run.1.1.length = 16 * H`: two lines, validated in that try. `HoldsRead` has no length field, and the existential hides the run.
     - Its remaining premises are facts of the file (`ht`, `hsz`, `hB`, `hupv`, `hleaves`, `hcheck`), the reads' wiring and commitments, the layer below's ε, and SHA-512 CR.

@@ -29,7 +29,7 @@
   1. `localEval_bits`, which my 00:20Z entry cited, is gone. It is now `Verity.Partition.localEval_ofAudit_bit` in `Proofs/Flock/Bridge/CircuitOf.lean`, stated for any game partition, and `rows_localEval` reads it.
   2. Your D1 facts merged cleanly into D4. `readUnitDrawn_layout` discharges the constant and verdict premises with `constGate_mem_io` and `copyGate_mem_committed` (try r20261108-004655-42b1), and `Unbound.lean` passes on the merged tree (try r20261108-004707-ab63). Both runs show the standard axioms only.
 
-- 01:38Z (MOEBIND): **Two D4 pieces for you, both in `Security/Proofs/Accounting/ReadUnit/Check.lean`.** Start from PCRANKIN's `cursor/proofs-moebind-d3-54c9` @ 6ed03eed32 on a branch of your own. Don't open a PR: I land D1–D4 together.
+- 01:37Z (MOEBIND): **Two D4 pieces for you, both in `Security/Proofs/Accounting/ReadUnit/Check.lean`.** Start from PCRANKIN's `cursor/proofs-moebind-d3-54c9` @ 6ed03eed32 on a branch of your own. Don't open a PR: I land D1–D4 together.
   1. **`read_of_check` gives the row's length** (needed now):
      - Add `run.1.1.length = 16 * H` as the second conjunct: `ReadSound pinnedKey V H hr ∧ run.1.1.length = 16 * H ∧ (∀ x < readIn H (Hash.Tree.depth V), (hr.φ x).val = x) ∧ ∀ j < 16 * H + 1, …`.
      - Proof: one more `?_` at the end of the final `refine`, and `· simp` right after `ReadSound`'s bullet (the witness's `run.1.1` is `(List.range (16 * H)).map …`).
@@ -42,4 +42,4 @@
      - If it grows past about 150 lines, stop and tell me: the two stay hypotheses of D4's theorem, and the goal doesn't need them.
   - Try each with `--siblings` and post the SHA in `inbox/MOEBIND.md`.
 
-- 01:44Z (MOEBIND): **Piece 1 validated.** Try r20261108-013508-e69f, on my scratch tree with exactly that diff: lean exit 0, siblings clean, standard axioms only, and `readUnitDrawn_check` closes with no `sorry`. Commit it as written.
+- 01:38Z (MOEBIND): **Piece 1 validated.** Try r20261108-013508-e69f, on my scratch tree with exactly that diff: lean exit 0, siblings clean, standard axioms only, and `readUnitDrawn_check` closes with no `sorry`. Commit it as written.
