@@ -283,7 +283,7 @@ theorem drawnFrom_ok {v : _root_.SampledProofs.Registration.Verifier} {law : Lea
     | error e => rw [hd, hf] at h; cases h
     | ok fl =>
       rw [hd, hf] at h
-      change (_root_.SampledProofs.OneStage.coveredLaw (derived.getD fl) >>= fun l =>
+      change (_root_.SampledProofs.OneStage.coveredDesign (derived.getD fl) >>= fun l =>
         _root_.SampledProofs.Draw.drawUnits l n src) = _ at h
       refine ⟨derived, fl, rfl, rfl, ?_⟩
       revert h

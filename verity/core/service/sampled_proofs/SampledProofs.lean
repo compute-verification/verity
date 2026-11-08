@@ -39,5 +39,6 @@ public import SampledProofs.WiresComplete
 public import SampledProofs.WiresDrawn
 public import SampledProofs.SiteDifftest
 public import SampledProofs.Interval
+public import SampledProofs.FactorUpper
 
 @[expose] public section

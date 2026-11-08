@@ -146,7 +146,7 @@ class TargetProfile:
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
+                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
@@ -307,9 +307,9 @@ class TargetProfile:
             if got != canon:
                 raise ValueError(f"protocols must be spelled {list(canon)} (one entry per protocol, in install order); got {list(got)}")
             if not any(e.startswith("sampled-proofs:") for e in canon):
-                raise ValueError(f"protocols {list(canon)} lacks sampled-proofs: a TargetProfile is the target of sampled proofs' Program")
+                raise ValueError(f"protocols {list(canon)} lacks sampled-proofs: a TargetProfile is the target of SPOT's Program")
             if canon == DEFAULT_ROW_PROTOCOLS:
-                raise ValueError(f"protocols {list(canon)} is the default (sampled proofs alone): declare None")
+                raise ValueError(f"protocols {list(canon)} is the default (SPOT alone): declare None")
             object.__setattr__(self, "protocols", canon)
         if self.ir is not None and self.ir not in self.IRS:
             raise ValueError(f"ir must be None (word) or one of {list(self.IRS)}; got {self.ir!r}")

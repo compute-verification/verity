@@ -111,7 +111,10 @@ def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():
                                         (chunk(False, True, 32, False), N),
                                         (descriptor_id(bind(FM.MoeExpertFp8BlockGemmV3, K=K, N=1, G=G, KB=KB, SWAP=False,
                                                             DOT=HopperE4m3MmaV2Dot32)), N),
-                                        (descriptor_id(EMB.read(E, K // 2)), N), (descriptor_id(EMB.read(E, 2 * K // G)), NB))
+                                        (descriptor_id(EMB.read(E, K // 2)), N),
+                                        (descriptor_id(bind(BFM.MoeExpertFp8ReadGemmV1, READ=EMB.read(E, K // 2), K=K, N=1, G=G, KB=KB,
+                                                            SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)), N),
+                                        (descriptor_id(EMB.read(E, 2 * K // G)), NB))
     assert [(SRW.template(t).layout, SRW.template(t).word) for t in TMPLS] == [
         ("kchunk", chunk(f, la, boolean=False)) for f, la in ((True, False), (False, False), (False, True))]
     with pytest.raises(ValueError, match="no chunk cap"):
