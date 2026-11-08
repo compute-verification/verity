@@ -8,9 +8,9 @@ public import Flock
 public import VStar.Unit
 public import VStar.Compose
 public import Std.Data.String.ToNat
-import all Flock.HmRow
-import all Flock.Net
-import all Flock.HmNets
+import Flock.HmRow
+import Flock.Net
+import Flock.HmNets
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.String.Defs
 import all Init.Data.String.Basic
@@ -22,12 +22,12 @@ import all Init.Data.List.Control
 import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
-import all Flock.Canon
-import all Flock.JsonParse
-import all Flock.RecOpen
-import all Flock.RecResiduals
-import all Flock.RecSparse
-import all Flock.RecOpening
+import Flock.Canon
+import Flock.JsonParse
+import Flock.RecOpen
+import Flock.RecResiduals
+import Flock.RecSparse
+import Flock.RecOpening
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
 import all Std.Data.DTreeMap.Raw.Basic
