@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import ast
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -79,17 +78,18 @@ UNMEASURED = ("qr_comm", "fi_pcie_ipc_ar_comm", "aiter_ar_comm")
 
 def wrap(orig: Any, t: Tree) -> Any:
     """`CudaCommunicator.all_reduce` with the calls vLLM hands torch's symmetric memory or NCCL summed in ``t``. FlashInfer's and
-    the custom all-reduce's calls (rank order on every node) and other dtypes go to vLLM; a route the tree wasn't measured with
-    (NCCL's symmetric memory, quick reduce, FlashInfer's PCIe IPC, aiter) is refused."""
+    the custom all-reduce's calls (an order in software, the same on every node) and other dtypes go to vLLM; a route the tree
+    wasn't measured with (NCCL's symmetric memory, quick reduce, FlashInfer's PCIe IPC, aiter) is refused."""
     def all_reduce(self, input_):
         import torch
         fi, ca = self.fi_ar_comm, self.ca_comm
         if input_.dtype != torch.bfloat16 or (fi is not None and not fi.disabled and fi.should_use_fi_ar(input_)) \
                 or (ca is not None and not ca.disabled and ca.should_custom_ar(input_)):
             return orig(self, input_)
+        from vllm.distributed.device_communicators.pynccl_allocator import is_symmetric_memory_enabled
         on = [k for k in UNMEASURED if getattr(self, k, None) is not None and not getattr(getattr(self, k), "disabled", False)]
-        if os.environ.get("VLLM_USE_NCCL_SYMM_MEM", "0").lower() in ("1", "true"):
-            on.append("VLLM_USE_NCCL_SYMM_MEM")
+        if is_symmetric_memory_enabled():
+            on.append("NCCL's symmetric memory")
         if on:
             raise RuntimeError(f"tree-allreduce: {', '.join(on)} on, a route the tree wasn't measured with")
         if sorted(leaves(t)) != list(range(self.world_size)):

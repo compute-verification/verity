@@ -18,6 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 TA = importlib.import_module("tree_allreduce")
 
 NODE_A = "(((((((0,2),3),1),5),6),4),7)"
+NCCL_SYMM = {"on": False}
+
+
+@pytest.fixture(autouse=True)
+def _pynccl_allocator(monkeypatch):
+    """vLLM's `pynccl_allocator.is_symmetric_memory_enabled`, answering ``NCCL_SYMM["on"]``."""
+    NCCL_SYMM["on"] = False
+    mod = types.ModuleType("vllm.distributed.device_communicators.pynccl_allocator")
+    mod.is_symmetric_memory_enabled = lambda: NCCL_SYMM["on"]
+    monkeypatch.setitem(sys.modules, "vllm.distributed.device_communicators.pynccl_allocator", mod)
 
 
 def _bf16(words: np.ndarray) -> np.ndarray:
@@ -120,15 +130,15 @@ def test_a_call_is_gathered_in_chunks_with_the_same_bits(monkeypatch):
     assert np.array_equal(_words(out).reshape(-1), _reference(words.reshape(8, -1), [0, 2, 3, 1, 5, 6, 4, 7]))
 
 
-def test_a_route_the_tree_was_not_measured_with_is_refused(monkeypatch):
+def test_a_route_the_tree_was_not_measured_with_is_refused():
     inputs = [torch.ones(4, dtype=torch.bfloat16)] * 8
     ar = TA.wrap(None, TA.parse_tree(NODE_A))
     comm = _Comm(inputs, fi_max=0)
     comm.qr_comm = SimpleNamespace(disabled=False)
     with pytest.raises(RuntimeError, match="qr_comm on"):
         ar(comm, inputs[0])
-    monkeypatch.setenv("VLLM_USE_NCCL_SYMM_MEM", "1")
-    with pytest.raises(RuntimeError, match="VLLM_USE_NCCL_SYMM_MEM on"):
+    NCCL_SYMM["on"] = True
+    with pytest.raises(RuntimeError, match="NCCL's symmetric memory on"):
         ar(_Comm(inputs, fi_max=0), inputs[0])
 
 
