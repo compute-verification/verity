@@ -1378,6 +1378,18 @@ def test_workers_are_found_in_recent_notes_and_workers_d_minus_the_coordinators(
     assert found[W1_]["heard"] == T0 - 60
 
 
+def test_a_note_in_a_lanes_subdirectory_is_its_agents_activity_and_its_lanes(tmp_path):
+    """ci's pool reviewers write `lanes/ci/reviewers/review-1.md`; read only one level deep, review-1 was called silent."""
+    notes = tmp_path / "notes"
+    note(notes, "ci", "reviewers/review-1.md", f"review-1 ({W1_})", lane_field=False)
+    coordinators(tmp_path, [], {})
+    coords = W.holders(tmp_path / "registry.json", tmp_path / "routes.d")
+    found = W.workers(notes, tmp_path / "workers.d", tmp_path / "registry.json", coords, T0)
+    assert found[W1_]["lane"] == "ci", "a note with no lane: the lane directory it is under, not its own directory"
+    heard, _, lanes = W.note_times(notes, T0)
+    assert heard[W1_] == T0 - 60 and lanes == {"ci": T0 - 60}
+
+
 def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_lane(tmp_path):
     """A pool reviewer is a worker the list doesn't show: read by id, it is IDLE and moved 12 min after its latest run
     FINISHED, which Cursor shows as ERROR. Its lane's handle is rung, once per `updatedAt`."""

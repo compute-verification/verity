@@ -410,15 +410,21 @@ def front_matter(p: Path) -> dict[str, str]:
 
 
 def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, dict[str, str]]]:
-    """(path, mtime, front-matter) of each note under `notes/lanes/` modified in the last `WORKER_NOTES_S`. The notes clone is
-    synced every 2 min, and git gives a file it adds or changes the time it did so, so a note's mtime is when it arrived."""
-    for p in sorted((notes / "lanes").glob("*/*.md")) if notes else []:
+    """(path, mtime, front-matter) of each note under `notes/lanes/`, at any depth (`lanes/ci/reviewers/review-1.md`), modified in
+    the last `WORKER_NOTES_S`. The notes clone is synced every 2 min, and git gives a file it adds or changes the time it did so,
+    so a note's mtime is when it arrived."""
+    for p in sorted((notes / "lanes").glob("*/**/*.md")) if notes else []:
         try:
             heard = p.stat().st_mtime
         except OSError:
             continue
         if t - heard < WORKER_NOTES_S:
             yield p, heard, front_matter(p)
+
+
+def note_lane(notes: Path, p: Path) -> str:
+    """The lane whose directory under `notes/lanes/` holds note `p`, however deep."""
+    return p.relative_to(notes / "lanes").parts[0]
 
 
 def lane_handle(lane: str, names: set[str]) -> str | None:
@@ -452,7 +458,7 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
             handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
             add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
     for p, heard, fm in recent_notes(notes, t):
-        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
+        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or note_lane(notes, p)
         launcher = next((i for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
@@ -473,7 +479,7 @@ def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str
         for agent in set(AGENT_RE.findall(origin)) | set(SHORT_AGENT_RE.findall(origin)):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
-        for lane in {p.parent.name, fm.get("lane", "")} - {""}:
+        for lane in {note_lane(notes, p), fm.get("lane", "")} - {""}:
             lanes[lane] = max(lanes.get(lane, mtime), mtime)
     return heard, named, lanes
 
