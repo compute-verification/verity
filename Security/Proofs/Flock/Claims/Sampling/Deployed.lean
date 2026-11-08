@@ -128,7 +128,8 @@ theorem commit_binds (c : Code) (H : Msg → Msg) : (commit c).Binds H := by
       (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (c.ownAt roots o.pos)) c.layer).opens
         roots o'' := by
     intro o'' h
-    show (pathCommit _ _ _ (regPath (c.ownAt roots o''.pos)) _).opens roots o'' = _
+    show (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (c.ownAt roots o''.pos)) c.layer).opens
+      roots o'' = _
     rw [h]
   unfold CommitmentScheme.Opens
   rw [e o rfl, e o' hp.symm]
