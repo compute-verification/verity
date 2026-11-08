@@ -3359,7 +3359,7 @@
   "Flock.SecurityProofs.SampledKSLiveV3": [
    "FlockSoundness.Assumptions.LinkCRZCAt",
    "FlockSoundness.Assumptions.TableCRZAt",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
    "FlockSoundness.Built",
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
   ],
