@@ -7736,6 +7736,9 @@
    "type_hash": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
    "unfolded_hash": "f67acbfdf1493d8b55b2cd8a2e106c39a8aee72d9451fd0174a3ad1a15dfbd94"
   },
+  "Properties.SampledProofs.wiresAcyclic": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.haltEndsOpen": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.haltEndsOpen : Properties.SampledProofs.HaltEndsOpen"],
