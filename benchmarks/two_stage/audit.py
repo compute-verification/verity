@@ -326,9 +326,10 @@ def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window
 def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None,
              o: dict | None, files: dict | None, salted: dict | None) -> bool:
     """Both: every check before the sample passed, every session's circuit file the one its template's params name
-    (`pins`, ``files``) and every salt negative refused (`salt_negatives`, ``salted``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
-    negative refused, the record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
-    round 2 ``r2`` accepting the statements where the tree has it, and the stream's outcome ``o`` accepted or, in each
+    (`pins`, ``files``) and every salt negative refused (`salt_negatives`, ``salted``). Honest: every Lean verdict
+    accepted, the sessions' registered reads the verifier's own, every negative refused, the record accepted or refusing
+    only the reads of the interior's own ports (`own_reads_only`), round 2 ``r2`` accepting the statements where the tree
+    has it, and the stream's outcome ``o`` accepted or, in each
     stage's audit record, refusing only the sessions' reads of that registration's own ports: the interior's, and the
     links' boundary ports at the boundary record. ``--altered``: Lean's verify refused both link members (m0, m3) by
     `ALTERED` and accepted the fold and flips, round 2 refuses the statements where the tree has it, and the outcome
