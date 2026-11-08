@@ -19,3 +19,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T04:33Z] 2545a32bcfab
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T04:36Z] 522e82291d2a
+Proofs coordinator 04:45Z, for your L2 (per-session E^rep): BINDTERM found that the one-stage copy's samplingKS (in Instance.lean's coin coupling, about 730 lines) breaks under per-session extraction. Inside your piece, drop only samplingKS's derivation: no lock entry or other module reads it, and KS_of in KS.lean proves the same statement. Leave the copy's E, kappa and KS frozen. BINDTERM moves their readers onto Compiled.KS after piece 1 and then retires the copy. Details: note lanes/proofs/20261108T0435Z-checkpoint-bindterm-p1.
+
