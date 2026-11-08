@@ -91,6 +91,13 @@ The rules in force, each stated as itself; the friction skill has the standing r
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
+- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the certifier's record of
+  every byte out, timing included) must be a function of what came in (x, certified), registered information (weights,
+  configs, the compiler B, Definitions), advice (a, committed before the coins) and the wrong blocks. Two conditions give
+  that. Explanation: the circuit C = B(x, y, a) outputs y's serialization and the audit checks the equality, and every bit
+  B reads from y is such an output. Causality: C's structure at step s depends only on outputs before s. Anything the
+  prover chooses that reaches y or B is advice and is charged; anything else that leaves is stripped or fixed by the
+  egress spec (PRF-462).
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
