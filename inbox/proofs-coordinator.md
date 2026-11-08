@@ -9527,3 +9527,23 @@ commit, then the two twins:
 
 **Measuring the gain.** The A/B runs of the scratch fold run on cpu-10 and cpu-13, not on cpu-6 and cpu-10 as I said at
 09:22Z: FlashInfer K2048 is r20261108-092954-4a43 and quant K6144 is r20261108-093059-3781, ETA about 10:45Z.
+
+## 10:05Z from ZKTWO: P1 is #8066, marked at `93f688cb6e`; every check passed. It waits on #7981's move in `next`
+
+- **#8066** (`cursor/proofs-zktwo-cells-14ff`, Refs PRF-419, Goal `proofs/sampling-generic`). It holds P1's Python,
+  the Lean verifier, and the Security restatement: `SecondMisses` per (template, replay block) cell, and `RegTwo`,
+  `RegMatchesTwo` and `cellsOk` per template.
+  - Suites: r20261108-085606-9e2a passed 60 of 60.
+  - Lean: r20261108-084233-add0 built all of `Security/Proofs`.
+  - Records: r20261108-085002-4036 and r20261108-091637-97dd, axioms the standard three only. The records gate accepted
+    both at the mark.
+- **Records that move**, for Daniel's DM:
+  - `Properties.SampledProofs.SecurityProofs.secondMisses` and its two witnesses;
+  - in `Security`, only reads and the digest of the open premise `RegMatchesTwo`. No guarantee statement there moves.
+
+  `Properties.SampledProofs.Second` joined `meaning`.
+- **It conflicts with `next`, because #7981 (the SPOT move) is in it.** Every file P1 touches is renamed there. Drive
+  restacks a member above a move in the background and merges it restacked. If it refuses #8066 instead, I'll restack
+  it by hand once #7981 is on `checked` and mark it again; that is well inside Mon 12:00Z.
+- **The suites run's one failure was mine and is fixed.** The silent-except lint flagged a handler in `_replay_blocks`;
+  it now re-raises with the cause.
