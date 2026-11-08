@@ -598,7 +598,7 @@ theorem refDK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
     have hrx : ∑ k ∈ Finset.range nk, of (ws.getD k 0) * (hiE pt L H cx * refX D pt s L H A B as gL pos iv k v) =
         (∑ j ∈ Finset.range nk, if as.getD (0 + j) 0 + B * (pos v % A) % 64 = s then
           of (ws.getD (0 + j) 0) * of (fac v) else 0) * (hiE pt L H cx * hiG pt L H (pos v / A)) := by
-      rw [Finset.sum_mul]
+      simp only [Finset.sum_mul]
       refine Finset.sum_congr rfl fun k hk => ?_
       obtain ⟨h1, h2⟩ := low_split hB (has k (Finset.mem_range.1 hk)) (pos v % A)
       simp only [refX, hv, ↓reduceIte, h1, h2, hfac v hv, Nat.zero_add]
