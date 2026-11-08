@@ -61,8 +61,9 @@ theorem opens_frame {roots : List Msg} {o : Opening Bool} {reg : _root_.Flock.Re
 
 /-- **The frame opens the session's rows**, at a session layout `L`: at the statements `Reveals` reads and the
 session's setup, with registered ports `own`, for each gate `g` the unit's correctness reads, the layout's wire for `g`
-is column `y` of table `j` in the unit's block `β`, and the reveal holds an opening at `g` of the witness's bit there,
-under the roots `Reveals` names, whose row and salt are row `q` of a unit `n` of the table as the witness holds it, and
+is column `y` of table `j` in the unit's block `β`, and the code's reveal (`Reveal.reveal`, whose opening at `g` holds the
+frame's there) holds an opening at `g` of the witness's bit there, under the roots `Reveals` names, whose row and salt
+are row `q` of a unit `n` of the table as the witness holds it, and
 which the frame checks at the registered read `reg` that the table's port `q` is named like: at `reg`'s root and the
 position the session header gives for the row, among ports whose first with that root is `reg`, through the path the
 header gives for it. -/
@@ -76,7 +77,7 @@ def FrameIs (L : Layout) : Prop :=
     ∀ g, s.prog.Needs b g → ∃ β j y n q reg, L.blockOf x m₁ xS u = some β ∧ ∃ hj : j < sts.size,
       y < 2 ^ sts[j].c.kLog ∧ L.wire u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧ reg ∈ own ∧
       (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
-      ∃ o ∈ h.frame.reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF, o.2.pos = g ∧
+      ∃ o ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF, o.2.pos = g ∧
         o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
         o.1 = (if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ
           else s.roots) ∧
