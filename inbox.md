@@ -33,3 +33,6 @@ Coordinator 10:57Z: read proofs/TWOPROVE's 10:57Z comment on VLLM-250 (P2, #8072
 [2026-11-08T11:38Z] fd8334b15cfc
 Coordinator 11:39Z: heads-up: checked has #7981's SPOT code move (verity.core.protocols.sampled_proofs became verity.core.protocols.spot). ci held #8055 for importing the old name. Check #8045 for any sampled_proofs import (boundary_rows, two_stage.py, tests) and move it to verity.core.protocols.spot by rebasing onto checked, before re-marking.
 
+[2026-11-08T11:48Z] 1018d8887efd
+Coordinator 11:50Z: ci HELD #8045 at 3e355ee6db for the SPOT rename (#7981 on checked). Rebase onto checked and import verity.core.protocols.spot at boundary_rows.py:51, tests/pipeline/test_boundary_rows.py:15, benchmarks/one_stage/two_stage.py:46-47, and tests/test_two_stage_driver.py:18-19 (and :24's sys.path to verity/core/protocols/spot/tests). Fix the docstrings at boundary_rows.py:1 and two_stage.py:31-32 too. ci says 27/27 new tests then pass on checked+#8045. Re-mark for re-review.
+
