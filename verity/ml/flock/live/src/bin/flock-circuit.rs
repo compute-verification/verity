@@ -6569,8 +6569,9 @@ fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) 
 
 /// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`), each on
 /// the server `make` gives before it is accepted, until it gives none; each session's record, proofs and verifier file
-/// under `out/<session>`, its line, with the fields `make` gave beside its server, in `out/index.jsonl` and on stdout. With
-/// a run's record (`log`), each session's Hello answered with coins is logged there first.
+/// under `out/<session>`, its line, with the fields `make` gave beside its server, in `out/index.jsonl` and on stdout (`out`:
+/// the directory those fields name as `out`, else the server's). With a run's record (`log`), each session's Hello
+/// answered with coins is logged there first.
 fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str,
             log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
@@ -6595,6 +6596,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             }
         }
         let rec = s.record_json();
+        let out = tag.get("out").and_then(Value::as_str).map_or_else(|| out.to_path_buf(), std::path::PathBuf::from);
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
@@ -6812,7 +6814,8 @@ fn zk_self_check() -> zkv::SelfCheck {
 
 /// `serve --queue FILE`: a long-lived verifier of one pinned circuit, whose sessions each take their statement and sample
 /// from FILE's next line (`-`: stdin, until it closes) before their connection is accepted: `{"instances": PUB, "draw":
-/// SAMPLE, "label": NAME}`, with `"links": F` for a circuit that declares links. A population's public file is checked
+/// SAMPLE, "label": NAME}`, with `"links": F` for a circuit that declares links and `"out": DIR` for a session filed
+/// under DIR rather than `--out`. A population's public file is checked
 /// as `serve` checks it (no rows, its public words, Linking) once for its consecutive sessions, each population size's
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
 /// label. No `--instances`, `--draw*`, `--links`, `--tree-from`, `--rec-run` or session tables.
@@ -6877,7 +6880,11 @@ fn serve_queue(c: Composite, path: &str) {
             }
         };
         let sv = Serving { given: Some(draw), law: None, tabs: Tables::one(&st, &inst), tree_from: None };
-        Some((server_of(&sv, &st, &inst, 1), json!({"label": j["label"]})))
+        let mut tag = json!({"label": j["label"]});
+        if let Some(out) = j["out"].as_str() {
+            tag["out"] = json!(out);
+        }
+        Some((server_of(&sv, &st, &inst, 1), tag))
     })
 }
 
