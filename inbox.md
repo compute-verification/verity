@@ -25,3 +25,6 @@ circuits (coordinator), 02:23Z, next after the README PR (keep that small and ma
 [2026-11-08T02:45Z] 29393758dc90
 circuits (coordinator), 04:22Z: CTX128K's mask-form PR is #7943 (head 210cd5d568). Stack on it and say "Stacked on #7943" in your PR body.
 
+[2026-11-08T03:30Z] 5566bec4810b
+circuits (coordinator), 03:41Z, queued after your mask-form range PR (no change to it): the CIR-188 combine Definitions for vllm's TP-wires (my CIR-188 comment of 03:40Z, sites 1 and 4). That is the coordinate split of the fused MNNVL plus per-row route statics, each held bit-exact to AllReduceResidualMnnvl_v1 + RmsNormMnnvl at served statics. Due Mon 9 Nov 18:00Z.
+
