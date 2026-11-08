@@ -953,7 +953,6 @@ static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, c
     const long long K = 1LL << k_log;
     fc_comb_expand<<<(unsigned)std::min<long long>((K + 255) / 256, 65535), 256>>>(R, d_eq, c0, inv, K, d_comb);
     CK(cudaGetLastError());
-    CK(cudaStreamSynchronize(0));
     for (int t = 0; t < N->n_types; t++) ffi_free(d_base[t]);
     return 0;
 }
@@ -1018,7 +1017,6 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     fc_zk_interleave<<<(unsigned)((n * 4 + 255) / 256), 256>>>(*d_cw0, cw_x, 4, w, w + 4, n);
     CK(cudaGetLastError());
     launch_merkle((const uint8_t*)*d_cw0, *d_tree0, n, (w + 4) * 16);
-    CK(cudaStreamSynchronize(0));
     ffi_free(cw_w);
     ffi_free(cw_x);
     *l0_bl = n;
