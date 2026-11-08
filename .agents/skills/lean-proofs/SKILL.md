@@ -106,8 +106,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing what that
   guarantee says. Undo it, or say so in the PR and paste the printout.
 - **A move is not a change**: map old names to new (declarations or namespaces) in `MOVES.json` for `check.py --update
-  --moved MOVES.json PKG` on the record as it was; a lift (`theorem X : e` to `theorem X : G`, `G` unfolding to `e`)
-  needs no map.
+  --moved MOVES.json PKG` on the record as it was (the fast path's `--records PKG --update --moved MOVES.json` takes it
+  to PKG's requirers too); a lift (`theorem X : e` to `theorem X : G`, `G` unfolding to `e`) needs no map.
 - **One shape** (`shape` in the README): a property takes its inputs, one hypothesis that its function returned an
   outcome, and premises (heads under `shape.premises`, or a conjecture); the rest, in any binder order, is its
   conclusion, a probability's acceptance inside the event. What doesn't fit yet is under `shape.frozen`, its reason
@@ -119,7 +119,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Standards
 
 The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
-hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation3 "X"` makes `X` a token).
+hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and `"Y"` make each a
+token, and the parse error lands far from the binder).
 
 ## Before the PR
 

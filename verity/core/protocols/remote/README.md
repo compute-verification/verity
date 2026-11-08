@@ -89,8 +89,8 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
-      proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
+      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
+      receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
@@ -99,7 +99,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
+   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
 ## The security argument, end to end
@@ -213,7 +213,7 @@ the whole, and nothing is retried.
 
 - the proof system is sound against the window's check (`Properties.Pouw.PeriodJ10R.TileServiceSound`), a named
   assumption no theorem discharges yet;
-- the published sample is the tile stratum's sample at the coin (`TileDrawIsCoin`), and registration precedes the
+- the published sample is the tile stratum's sample at the coin (`TileSampleIsCoin`), and registration precedes the
   sample (`RegisteredBeforeDraw`);
 - the salt is a live coin (`SaltIsLiveCoin`), which the deployed path doesn't meet;
 - PoUW's per-step receipts bind (`SharedNoiseLucks`: H-μ⁺ with the receipts' and guesses' lucks at J10-R's shared
@@ -303,7 +303,7 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 **Assumes.** Parts 1 to 4's assumptions.
 
 **Lean.** `Accounting.Guarantees.JointHorizonLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -412,11 +412,11 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointHorizonLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
-  `flock-verify --zk` itself, as the recursive form runs V*'s compiled check; v1, which takes verdicts as evidence, is
-  refused. Where v2 accepts, its session is in V3's and V5's events (`Verity.Sampled.checkBlobs_event`); only V5's
-  transcript event has a coupling to v2's acceptance (`Verity.Sampled.CouplingTarget`).
-- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
+- **The verifier's verdicts.** One-stage v2 (`verity/sampled-proofs/one-stage/v2`) runs the proof
+  check (`verity verify proof`, today's `flock-verify --zk`) itself, as the recursive form runs V*'s compiled check; v1,
+  which takes verdicts as evidence, is refused. Where v2 accepts, its session is in V3's and V5's events
+  (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it (`Verity.Sampled.CouplingTarget`).
+- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
@@ -473,7 +473,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
 
 - `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
-- `Properties.Pouw.PeriodJ10R.TileDrawIsCoin`: on every accepted window, the proof blocks the check demands proofs of
+- `Properties.Pouw.PeriodJ10R.TileSampleIsCoin`: on every accepted window, the proof blocks the check demands proofs of
   are the tile stratum's sample at the window's coin. A protocol-code fact still to prove.
 - `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the

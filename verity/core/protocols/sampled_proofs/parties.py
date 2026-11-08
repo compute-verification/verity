@@ -1,61 +1,101 @@
-"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the ZK server, the workers and the
-verifier, as roles and channels a deployment configuration declares (`MANIFEST`), and their table (`PROTOCOL`;
-`PROTOCOLS` by id), which the deployment layer's runtime runs (`verity.core.deploy.runtime.run`).
+"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`), as roles and channels a deployment configuration
+declares, in two deployments, which the deployment layer's runtime runs (`verity.core.deploy.runtime.run`; `PROTOCOLS` by
+id):
+
+- **SPOT[Flock] on its own** (`SPOT_ID`: `SPOT_MANIFEST`, `SPOT_PROTOCOL`), three roles. The inference server serves and
+  commits its values. The proof server replays the sampled proof blocks and proves them (`flock-circuit prove --zk`). The
+  verifier holds the challenger's live coins and signed log, with the challenger on its side, and runs the Lean verifier.
+  There is no ZK server and no recursion: the proof server talks only to the verifier.
+- **The core deployment** (`ID`: `MANIFEST`, `PROTOCOL`), which wraps SPOT[Flock] for both composites (remote and onsite).
+  Its workers are the inference server and the proof server on one machine, proving behind the ZK server, whose pin the
+  verifier holds. Its verifier composes each block's audit with the composite's other subprotocols.
+
+The network certifier is a layer of its own. It stamps each request's release order and bucket at ingress, and SPOT reads
+that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`); they compose only above both.
 
 ~~~text
-challenger -> verifier    Challenger {address, pin}: where its host answers the verifier's open and finish of a session
-ZK server   -> verifier    Firewall {sha512, sessions}: the Lean ZK server every outer proof goes through, one at a time
-workers    -> verifier    Registration {block}, the execution phase's registration record its body (canonical JSON)
-verifier   -> challenger  Done, once every execution phase is decided
+SPOT[Flock]
+challenger       -> verifier          Challenger {address, pin}: where its host answers the open and finish of a session
+inference server -> verifier          Registration {block}, the execution phase's registration record its body
+inference server -> proof server      Replay {block}, the values the block's proof blocks read its body; one way
+verifier         -> proof server      Draw {block, address}, the block's sample its body, once its registration is in
+proof server     -> verifier          Proof {block}, the proofs of the sample's proof blocks its body
+verifier         -> challenger        Done, once every execution phase is decided
+
+the core deployment
+challenger -> verifier    Challenger {address, pin}
+ZK server  -> verifier    Firewall {sha512, sessions}: the Lean ZK server every outer proof goes through, one at a time
+workers    -> verifier    Registration {block}
+verifier   -> challenger  Done
 ~~~
 
 A party does no I/O: what its machine does is a capability it is given (`Identity.capabilities`), by name.
 
-- the workers' ``serve(block) -> bytes``: serve execution phase ``block`` of the run, and give its registration record;
-- the ZK server's ``pin() -> {"sha512", "sessions"}``: the ZK server the prover's sessions run, by its SHA-512;
 - the challenger's ``host``, with ``start() -> {"address", "pin"}`` and ``stop()``: the challenger's host on its machine,
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
   and pinned on main's first-parent commit ``pin``;
-- the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
-  sampled on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
-  (`COMPOSED`'s, in its one-stage form), or None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
-  digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
-  remote or onsite).
+- SPOT[Flock]'s:
+  - the inference server's ``serve(block) -> bytes``, execution phase ``block`` served and its registration record, and
+    ``replay(block) -> bytes``, the block's replay inputs, which only the proof server reads: every value its proof
+    blocks read, each a proof block's output, a certified input (the network certifier's stamp among them), a registered
+    value or advice charged at its width, with the salts that open their commitments. A value the served hardware
+    decides that no block computes is never a free witness among them: serving makes it canonical, or it is advice;
+  - the proof server's ``prove(block, replay, sample, address) -> bytes``: the sample's proof blocks replayed and proved,
+    each session's coins live from the challenger's host at ``address``;
+  - the verifier's ``draw(block, registration, challenger) -> bytes``, the block's sample on that challenger's coins, and
+    ``audit(block, registration, challenger, sample, proof) -> answer``: the Lean verifier over the proofs and the
+    challenger's signed log, its answer (``verdict``, its ``commitment`` and ``reason``);
+- the core deployment's:
+  - the workers' ``serve(block) -> bytes``, as the inference server's;
+  - the ZK server's ``pin() -> {"sha512", "sessions"}``: the ZK server the prover's sessions run, by its SHA-512;
+  - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
+    sampled on that challenger's coins, its answer and its case for the product (`COMPOSED`'s, in its one-stage form), or
+    None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
+    digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
+    remote or onsite).
 
 A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
-The run's parameters (`params_of`) are its execution phases (``blocks``), the configuration's listed subprotocols
-(``components``: exactly one composite's, by name, `SUBPROTOCOLS`, `verity.core.deploy.config.COMPOSITES`) and what
-its coins are (``coins``: ``simulated`` when the challenger's host is a machine the prover's parties share, else
-``development``, a key made for the session).
+The run's parameters are its execution phases (``blocks``) and what its coins are (``coins``: ``simulated`` when the
+challenger's host is a machine the prover's parties share, else ``development``, a key made for the session); the core
+deployment's (`params_of`) also list the configuration's subprotocols (``components``: exactly one composite's, by name,
+`SUBPROTOCOLS`, `verity.core.deploy.config.COMPOSITES`), SPOT[Flock]'s (`spot_params_of`) none.
 
-The verifier audits block ``i`` once its registration, the ZK server's pin and the challenger's address are all in, in
-order of the blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). It
-holds the audit's commitment to the registration the workers sent: an accepting audit of another record rejects, its
-case withheld from the composite. A listed subprotocol with no answer is ``absent``, its case `NO_CASE`, which its own
-decoders refuse, so the composite never accepts over it. Each block's line is an output entry of the record and the verifier's outcome:
+Both verifiers take block ``i``'s coins only once its registration and the challenger's address are in, in order of the
+blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). SPOT[Flock]'s draws
+block ``i``'s sample then and sends it to the proof server, and audits the block once its proof is in. The core
+deployment's audits it once the ZK server's pin is in too. Each holds the audit's commitment to the registration it was
+sent: an accepting audit of another record rejects. Each block's line is an output entry of the record and the verifier's
+outcome:
 
-    {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
-     "registration": DIGEST, "verdict": V, "reason": R}
+    SPOT[Flock]:  {"block": I, "coins": C, "registration": DIGEST, "verdict": V, "reason": R}
+    core:         {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
+                   "registration": DIGEST, "verdict": V, "reason": R}
 
-An audit or a product that is `Unavailable` is that block's ``error``, never a verdict (an audit's reason a private entry
-of the record). The verifier refuses by name a block out of
-range or registered twice (``schema``, ``out-of-phase``), a second address or pin (``out-of-phase``), and a peer that
-leaves before it said what the verifier waits on (``closed``); it tells the challenger ``Done`` before it finishes,
-however it finishes, and the challenger stops its host on ``Done`` or when the verifier leaves.
+In the core deployment a listed subprotocol with no answer is ``absent``, its case `NO_CASE`, which its own decoders
+refuse, so the composite never accepts over it, and an accepting audit of another record has its case withheld from the
+composite. An audit or a product that is `Unavailable` is that block's ``error``, never a verdict (an audit's reason a
+private entry of the record); a draw that is `Unavailable` ends SPOT[Flock]'s verifier refused ``draw``. A verifier refuses
+by name a block out of range or registered twice (``schema``, ``out-of-phase``), a second address or pin, or a proof of a
+block not drawn or already proved (``out-of-phase``), and a peer that leaves before it said what the verifier waits on
+(``closed``); it tells the challenger ``Done`` before it finishes, however it finishes, and the challenger stops its host
+on ``Done`` or when the verifier leaves. The proof server refuses a draw or replay of a block out of range (``schema``) or
+sent twice (``out-of-phase``), and a peer that leaves before it sent what the proof server waits on (``closed``).
 
-What stays the machine's (the capabilities above): the toy's serving, the records audit that runs the prover's sessions
-behind the ZK server on the sampled members, the challenger's host (its LMS key, ledger and pins log) and the Lean product
-over the record. Until the audit's sample, its witnesses and its proofs are messages of their own (the configuration's
-``draw``, ``witness`` and ``proof`` channels), the verifier and the workers share the machine the block's rows are on.
+What stays the machine's (the capabilities above): the serving, the replay and the prover's sessions, the challenger's
+host (its LMS key, ledger and pins log) and the Lean verifier; in the core deployment also the records audit that runs
+the prover's sessions behind the ZK server on the sampled members and the Lean product over the record. There, until the
+audit's sample, its witnesses and its proofs are messages of their own (the configuration's ``draw``, ``witness`` and
+``proof`` channels, as SPOT[Flock]'s ``Draw`` and ``Proof`` are), the verifier and the workers share the machine the
+block's rows are on.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from verity.core.deploy.config import COMPOSITES
@@ -72,7 +112,10 @@ ID = R.PROTOCOL
 #: names it; `ID`'s own audit, whose verdicts are the evidence's, is refused
 COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
+#: SPOT[Flock] on its own: no ZK server, no recursion and no composite
+SPOT_ID = "verity/sampled-proofs/spot/v1"
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
+INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
 #: and both compose sampled proofs as `COMPOSED`
@@ -96,6 +139,11 @@ NO_CASE = {"commitment": "", "evidence": "", "params": {}}
 ABSENT = "absent"
 MAX_BLOCKS = 1 << 16
 MAX_REGISTRATION = 1 << 24
+MAX_SAMPLE = 1 << 24
+MAX_REPLAY = MAX_PROOF = (1 << 32) - 1
+CHALLENGER_SCHEMA = Schema("Challenger", 1, "structure", {"address": Str(255), "pin": Str(64, r"[0-9a-f]{40}|[0-9a-f]{64}")})
+DONE_SCHEMA = Schema("Done", 1, "structure")
+REGISTRATION_SCHEMA = Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))
 MANIFEST = Manifest(
     ID, VERSION, "verity.core.protocols.sampled_proofs.parties:params_of",
     parties=(Role(CHALLENGER, "auditor", needs=("host",)), Role(FIREWALL, "developer", needs=("pin",)),
@@ -105,10 +153,23 @@ MANIFEST = Manifest(
               Channel(VERIFIER, CHALLENGER, ("Done",)),
               Channel(FIREWALL, VERIFIER, ("Firewall",)),
               Channel(WORKERS, VERIFIER, ("Registration",))),
-    messages=(Schema("Challenger", 1, "structure", {"address": Str(255), "pin": Str(64, r"[0-9a-f]{40}|[0-9a-f]{64}")}),
-              Schema("Done", 1, "structure"),
+    messages=(CHALLENGER_SCHEMA, DONE_SCHEMA,
               Schema("Firewall", 1, "structure", {"sha512": Hex(64), "sessions": Int(1, 1 << 10)}),
-              Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))))
+              REGISTRATION_SCHEMA))
+SPOT_MANIFEST = Manifest(
+    SPOT_ID, VERSION, "verity.core.protocols.sampled_proofs.parties:spot_params_of",
+    parties=(Role(CHALLENGER, "auditor", needs=("host",)), Role(INFERENCE_SERVER, "developer", needs=("serve", "replay")),
+             Role(PROOF_SERVER, "developer", needs=("prove",)), Role(VERIFIER, "auditor", needs=("draw", "audit"))),
+    channels=(Channel(CHALLENGER, VERIFIER, ("Challenger",), carries_coins=True),
+              Channel(VERIFIER, CHALLENGER, ("Done",)),
+              Channel(INFERENCE_SERVER, VERIFIER, ("Registration",)),
+              Channel(INFERENCE_SERVER, PROOF_SERVER, ("Replay",)),
+              Channel(VERIFIER, PROOF_SERVER, ("Draw",), carries_coins=True, after=("Registration", "Challenger")),
+              Channel(PROOF_SERVER, VERIFIER, ("Proof",), after=("Draw", "Replay"))),
+    messages=(CHALLENGER_SCHEMA, DONE_SCHEMA, REGISTRATION_SCHEMA,
+              Schema("Replay", 1, "private", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REPLAY)),
+              Schema("Draw", 1, "coins", {"block": Int(0, MAX_BLOCKS - 1), "address": Str(255)}, Body(max=MAX_SAMPLE)),
+              Schema("Proof", 1, "private", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_PROOF))))
 
 
 def ids_of(names: Sequence[str]) -> dict[str, str]:
@@ -119,21 +180,42 @@ def ids_of(names: Sequence[str]) -> dict[str, str]:
     raise ValueError(f"components lists one composite's subprotocols, each once ({COMPOSITES}), not {list(names)}")
 
 
-def params_of(blocks: int, components: Sequence[str], coins: str) -> dict[str, Any]:
-    """The run's parameters (module docstring), or a ValueError saying which is wrong."""
+def _blocks(blocks: int) -> None:
     if type(blocks) is not int or not 1 <= blocks <= MAX_BLOCKS:
         raise ValueError(f"blocks is an integer in [1, {MAX_BLOCKS}], not {blocks!r}")
-    listed = list(components)
-    ids_of(listed)
+
+
+def _coins(coins: str) -> None:
     if coins not in COINS:
         raise ValueError(f"coins is one of {COINS}, not {coins!r}")
+
+
+def params_of(blocks: int, components: Sequence[str], coins: str) -> dict[str, Any]:
+    """The core deployment's parameters (module docstring), or a ValueError saying which is wrong."""
+    _blocks(blocks)
+    listed = list(components)
+    ids_of(listed)
+    _coins(coins)
     return {"blocks": blocks, "components": listed, "coins": coins}
+
+
+def spot_params_of(blocks: int, coins: str) -> dict[str, Any]:
+    """SPOT[Flock]'s parameters (module docstring), or a ValueError saying which is wrong."""
+    _blocks(blocks)
+    _coins(coins)
+    return {"blocks": blocks, "coins": coins}
 
 
 def _params(params: Mapping[str, Any]) -> dict[str, Any]:
     if set(params) != {"blocks", "components", "coins"}:
         raise ValueError(f"the parameters are blocks, components and coins, not {sorted(params)}")
     return params_of(params["blocks"], params["components"], params["coins"])
+
+
+def _spot_params(params: Mapping[str, Any]) -> dict[str, Any]:
+    if set(params) != {"blocks", "coins"}:
+        raise ValueError(f"the parameters are blocks and coins, not {sorted(params)}")
+    return spot_params_of(params["blocks"], params["coins"])
 
 
 class Unavailable(Exception):
@@ -165,7 +247,7 @@ class Challenger:
 
 
 class Firewall:
-    """The ZK server: its pin told to the verifier."""
+    """The core deployment's ZK server: its pin told to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:
@@ -179,41 +261,111 @@ class Firewall:
         return []
 
 
+#: a serving party's step: its capability's name, and the party and message type its bytes go to
+type Step = tuple[str, str, str]
+REGISTER: Step = ("serve", VERIFIER, "Registration")
+
+
+def _serve(params: Mapping[str, Any], identity: Identity, parse: Callable[[Mapping[str, Any]], dict[str, Any]],
+           steps: Sequence[Step]) -> list[Any]:
+    """Each execution phase served in order, each of ``steps`` sending its capability's bytes for the block; refused by a
+    step's name when its capability is `Unavailable`, and ``schema`` on parameters out of range."""
+    try:
+        blocks = parse(params)["blocks"]
+    except ValueError:
+        return [Finish({"served": 0}, "schema")]
+    caps, out = identity.capabilities, []
+    for i in range(blocks):
+        for name, to, kind in steps:
+            try:
+                raw = bytes(caps[name](i))
+            except Unavailable as e:
+                return [*out, Finish({"served": i, "error": _why(e)}, name, kind="private")]
+            out.append(Send(to, Message(kind, {"block": i}, raw)))
+    return [*out, Finish({"served": blocks})]
+
+
 class Workers:
-    """The workers: each execution phase served, and its registration sent to the verifier."""
+    """The core deployment's workers: each execution phase served, and its registration sent to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        try:
-            blocks = _params(params)["blocks"]
-        except ValueError:
-            return [Finish({"served": 0}, "schema")]
-        serve, out = identity.capabilities["serve"], []
-        for i in range(blocks):
-            try:
-                registration = bytes(serve(i))
-            except Unavailable as e:
-                return [*out, Finish({"served": i, "error": _why(e)}, "serve", kind="private")]
-            out.append(Send(VERIFIER, Message("Registration", {"block": i}, registration)))
-        return [*out, Finish({"served": blocks})]
+        return _serve(params, identity, _params, [REGISTER])
 
     def on(self, r: Received) -> list[Any]:
         return []
 
 
-class Verifier:
-    """The verifier: each block audited on the challenger's coins, then the composite of the listed subprotocols (module
-    docstring)."""
+class InferenceServer:
+    """SPOT[Flock]'s inference server: each execution phase served, its registration sent to the verifier, then its replay
+    inputs to the proof server, which never answers."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
+        return _serve(params, identity, _spot_params, [REGISTER, ("replay", PROOF_SERVER, "Replay")])
+
+    def on(self, r: Received) -> list[Any]:
+        return []
+
+
+class ProofServer:
+    """SPOT[Flock]'s proof server: each block proved once its replay inputs and its draw are in, and its proof sent to the
+    verifier (module docstring)."""
+
+    def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
+        self.prove = identity.capabilities["prove"]
+        self.replays: dict[int, bytes] = {}
+        self.draws: dict[int, tuple[bytes, str]] = {}
+        self.proved = 0
+        try:
+            self.blocks = _spot_params(params)["blocks"]
+        except ValueError:
+            return [Finish({"proved": 0}, "schema")]
+        return []
+
+    def on(self, r: Received) -> list[Any]:
+        m = r.message
+        if m.type == "Refused":
+            return [Finish({"proved": self.proved}, m.fields["name"])]
+        if m.type == "Closed":
+            waits = self.replays if r.channel == INFERENCE_SERVER else self.draws
+            return [] if self.proved + len(waits) == self.blocks else [Finish({"proved": self.proved}, "closed")]
+        held = self.replays if m.type == "Replay" else self.draws
+        i = m.fields["block"]
+        if i >= self.blocks:
+            return [Finish({"proved": self.proved}, "schema")]
+        if i in held or i < self.proved:
+            return [Finish({"proved": self.proved}, "out-of-phase")]
+        held[i] = m.body if m.type == "Replay" else (m.body, m.fields["address"])
+        out: list[Any] = []
+        while self.proved in self.replays and self.proved in self.draws:
+            i = self.proved
+            replay, (sample, address) = self.replays.pop(i), self.draws.pop(i)
+            try:
+                proof = bytes(self.prove(i, replay, sample, address))
+            except Unavailable as e:
+                return [*out, Finish({"proved": i, "error": _why(e)}, "prove", kind="private")]
+            self.proved += 1
+            out.append(Send(VERIFIER, Message("Proof", {"block": i}, proof)))
+        if self.proved == self.blocks:
+            out.append(Finish({"proved": self.proved}))
+        return out
+
+
+class _Verifier:
+    """What both deployments' verifiers share: their parameters, the challenger's address and each block's registration
+    held, a refusal by name, an accepting audit held to the registration it was sent, and ``Done`` told to the challenger
+    however it finishes (module docstring). A deployment's verifier adds its other messages (`_take`), what it waits on
+    from its other peers (`_said`) and its decisions (`_advance`)."""
+
+    #: the party whose registrations it holds
+    SERVER = WORKERS
+
+    def _start(self, params: Mapping[str, Any], parse: Callable[[Mapping[str, Any]], dict[str, Any]]) -> list[Any]:
         self.lines: list[dict[str, Any]] = []
         self.registrations: dict[int, tuple[bytes, dict[str, Any]]] = {}
         self.challenger: dict[str, Any] | None = None
-        self.firewall: dict[str, Any] | None = None
         self.done = False
-        caps = identity.capabilities
-        self.audit, self.component, self.product = caps["audit"], caps["component"], caps["product"]
         try:
-            self.params = _params(params)
+            self.params = parse(params)
         except ValueError:
             return self._finish("schema")
         return []
@@ -226,33 +378,76 @@ class Verifier:
             if r.channel == CHALLENGER:
                 self.done = True
             return [] if self._said(r.channel) else self._finish("closed")
-        if m.type == "Challenger" or m.type == "Firewall":
-            if (self.challenger if m.type == "Challenger" else self.firewall) is not None:
-                return self._finish("out-of-phase")
-            if m.type == "Challenger":
-                self.challenger = dict(m.fields)
-            else:
-                self.firewall = dict(m.fields)
-        else:
-            i = m.fields["block"]
-            if i >= self.params["blocks"]:
-                return self._finish("schema")
-            if i in self.registrations:
-                return self._finish("out-of-phase")
-            try:
-                record = json.loads(m.body)
-            except ValueError:
-                return self._finish("schema")
-            if not isinstance(record, dict):
-                return self._finish("schema")
-            self.registrations[i] = (m.body, record)
-        return self._advance()
+        refused = self._take(m)
+        return self._advance() if refused is None else self._finish(refused)
+
+    def _take(self, m: Message) -> str | None:
+        """Hold ``m``, or say what it is refused by."""
+        if m.type == "Challenger":
+            if self.challenger is not None:
+                return "out-of-phase"
+            self.challenger = dict(m.fields)
+            return None
+        i = m.fields["block"]
+        if i >= self.params["blocks"]:
+            return "schema"
+        if i in self.registrations:
+            return "out-of-phase"
+        try:
+            record = json.loads(m.body)
+        except ValueError:
+            return "schema"
+        if not isinstance(record, dict):
+            return "schema"
+        self.registrations[i] = (m.body, record)
+        return None
 
     def _said(self, peer: str) -> bool:
         """Whether ``peer`` sent everything the verifier waits on from it."""
-        if peer == WORKERS:
+        if peer == self.SERVER:
             return len(self.registrations) == self.params["blocks"]
-        return (self.firewall if peer == FIREWALL else self.challenger) is not None
+        return self.challenger is not None
+
+    def _advance(self) -> list[Any]:
+        raise NotImplementedError
+
+    def _held(self, answer: dict[str, Any], digest: str) -> dict[str, Any]:
+        """``answer``, or a rejection when it accepts a commitment other than ``digest``, the registration's."""
+        if answer.get("verdict") == "accept" and answer.get("commitment") != digest:
+            return {"verdict": "reject", "commitment": answer.get("commitment"),
+                    "reason": f"the audit's commitment is not the registration the {self.SERVER.replace('-', ' ')} sent"}
+        return answer
+
+    def _finish(self, refused: str | None) -> list[Any]:
+        out: list[Any] = [] if self.done else [Send(CHALLENGER, Message("Done"))]
+        self.done = True
+        return [*out, Finish({"verdicts": list(self.lines)}, refused)]
+
+
+def _unavailable(i: int, e: Unavailable) -> LogEntry:
+    return LogEntry({"block": i, "audit": "unavailable", "error": _why(e)}, "private")
+
+
+class Verifier(_Verifier):
+    """The core deployment's verifier: each block audited on the challenger's coins behind the ZK server's pin, then the
+    composite of the listed subprotocols (module docstring)."""
+
+    def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
+        self.firewall: dict[str, Any] | None = None
+        caps = identity.capabilities
+        self.audit, self.component, self.product = caps["audit"], caps["component"], caps["product"]
+        return self._start(params, _params)
+
+    def _take(self, m: Message) -> str | None:
+        if m.type != "Firewall":
+            return super()._take(m)
+        if self.firewall is not None:
+            return "out-of-phase"
+        self.firewall = dict(m.fields)
+        return None
+
+    def _said(self, peer: str) -> bool:
+        return self.firewall is not None if peer == FIREWALL else super()._said(peer)
 
     def _advance(self) -> list[Any]:
         out: list[Any] = []
@@ -272,10 +467,9 @@ class Verifier:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
         except Unavailable as e:
             answer, case = {"verdict": "error"}, None
-            out.append(LogEntry({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
-        if answer.get("verdict") == "accept" and answer.get("commitment") != digest:
-            answer, case = {"verdict": "reject", "commitment": answer.get("commitment"),
-                            "reason": "the audit's commitment is not the registration the workers sent"}, None
+            out.append(_unavailable(i, e))
+        if (held := self._held(answer, digest)) is not answer:
+            answer, case = held, None
         status, cases, digests = {}, {}, {}
         ids = ids_of(self.params["components"])
         for c in self.params["components"]:
@@ -294,16 +488,78 @@ class Verifier:
         self.lines.append(line)
         return [*out, LogEntry(line, "output")]
 
-    def _finish(self, refused: str | None) -> list[Any]:
-        out: list[Any] = [] if self.done else [Send(CHALLENGER, Message("Done"))]
-        self.done = True
-        return [*out, Finish({"verdicts": list(self.lines)}, refused)]
+
+class SpotVerifier(_Verifier):
+    """SPOT[Flock]'s verifier: each block's sample drawn on the challenger's coins once its registration is in and sent to
+    the proof server, and the block audited once its proof is in (module docstring)."""
+
+    SERVER = INFERENCE_SERVER
+
+    def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
+        self.samples: list[bytes] = []
+        self.proofs: dict[int, bytes] = {}
+        caps = identity.capabilities
+        self.draw, self.audit = caps["draw"], caps["audit"]
+        return self._start(params, _spot_params)
+
+    def _take(self, m: Message) -> str | None:
+        if m.type != "Proof":
+            return super()._take(m)
+        i = m.fields["block"]
+        if i >= self.params["blocks"]:
+            return "schema"
+        if i >= len(self.samples) or i in self.proofs or i < len(self.lines):
+            return "out-of-phase"
+        self.proofs[i] = m.body
+        return None
+
+    def _said(self, peer: str) -> bool:
+        if peer == PROOF_SERVER:
+            return len(self.lines) + len(self.proofs) == self.params["blocks"]
+        return super()._said(peer)
+
+    def _advance(self) -> list[Any]:
+        out: list[Any] = []
+        blocks = self.params["blocks"]
+        while len(self.samples) < blocks and len(self.samples) in self.registrations and self.challenger is not None:
+            i = len(self.samples)
+            try:
+                sample = bytes(self.draw(i, self.registrations[i][0], dict(self.challenger)))
+            except Unavailable as e:
+                return [*out, LogEntry({"block": i, "draw": "unavailable", "error": _why(e)}, "private"),
+                        *self._finish("draw")]
+            self.samples.append(sample)
+            out.append(Send(PROOF_SERVER, Message("Draw", {"block": i, "address": self.challenger["address"]}, sample)))
+        while len(self.lines) < blocks and len(self.lines) in self.proofs:
+            out += self._decide(len(self.lines))
+        if len(self.lines) == blocks:
+            out += self._finish(None)
+        return out
+
+    def _decide(self, i: int) -> list[LogEntry]:
+        """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
+        raw, record = self.registrations[i]
+        digest = R.digest(record)
+        out = []
+        try:
+            answer = self._held(self.audit(i, raw, dict(self.challenger), self.samples[i], self.proofs.pop(i)), digest)
+        except Unavailable as e:
+            answer = {"verdict": "error"}
+            out.append(_unavailable(i, e))
+        reason = answer.get("reason")
+        line = {"block": i, "coins": self.params["coins"], "registration": digest, "verdict": str(answer.get("verdict", "error")),
+                "reason": None if reason is None else str(reason)}
+        self.lines.append(line)
+        return [*out, LogEntry(line, "output")]
 
 
 PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, FIREWALL: Firewall, WORKERS: Workers, VERIFIER: Verifier})
-PROTOCOLS = {ID: PROTOCOL}
+SPOT_PROTOCOL = ProtocolDef(SPOT_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
+                                            PROOF_SERVER: ProofServer, VERIFIER: SpotVerifier})
+PROTOCOLS = {ID: PROTOCOL, SPOT_ID: SPOT_PROTOCOL}
 
 
-__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE",
-           "PROTOCOL", "PROTOCOLS", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall",
-           "Unavailable", "Verifier", "Workers", "ids_of", "params_of"]
+__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "FIREWALL", "ID", "IDS", "INFERENCE_SERVER", "MANIFEST",
+           "NO_CASE", "PROOF_SERVER", "PROTOCOL", "PROTOCOLS", "SPOT_ID", "SPOT_MANIFEST", "SPOT_PROTOCOL", "SUBPROTOCOLS",
+           "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "InferenceServer", "ProofServer", "SpotVerifier",
+           "Unavailable", "Verifier", "Workers", "ids_of", "params_of", "spot_params_of"]
