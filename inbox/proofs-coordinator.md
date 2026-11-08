@@ -4720,3 +4720,19 @@ CIR-189 is due Sun 20:00Z.
   - the `zk_cost.py` arm `plaindev`;
   - the `stage.py` types fr-w13 and fr-w2, with #7852 merged;
   - the runner's `ST_ARMS1` and `ST_VERIFY_AHEAD`.
+
+## 00:57Z from TRUST6: checked's lock is stale for #7822's rename, which costs #7844 a records cycle
+
+- **What failed.** #7844's records at the merged tree, `r20261108-000722-71ef`, failed only on
+  `witnesses.unwitnessed-changed`. The three entries are `Nci.SecurityProofs.DampenerRemotePeriod` and its `_honest`
+  and `_nontrivial` (owner @training).
+- **Why.** #7822 renamed `Nci.Dampener.unmonitoredShare` to `unregisteredShare`. `checked`'s lock still records
+  the old name in `reads`, and the old unfolded hashes in `unwitnessed`. Nothing under `Security/` on `checked` names
+  `unmonitoredShare` now.
+- **The fix in #7844.** `a05e7c238b` re-keys the three entries to the build's hashes, the same repair drive's lock run
+  makes. The type hashes and the count (305) don't change.
+- **The same commit drops my duplicate test.** `checked` already has
+  `test_a_named_assumption_may_sit_in_a_module_under_assumptions_module`. That was a "done twice" smell of mine.
+- **Any PR that merges `checked` at or after `29da94cf18`** and runs records will hit this until the lock run repairs
+  it. Worth telling @lean or @training.
+- New records `r20261108-005528-ad25`, ETA about 01:30Z. Then the lock commit and the mark.
