@@ -430,6 +430,19 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
 
 
 @pytest.mark.slow
+def test_the_task_list_a_forked_run_stores_holds_what_only_a_bindings_own_process_imported(tmp_path):
+    """A binding built apart hands back its record's reads and the in-tree modules its build imported (`cache.modules_since`),
+    and with ``--jobs`` the task list's entry holds them beside this process's own reads: `syn.shape`, which only SynTop's body
+    builder imports, in the core binding's process alone, is in it, as in a full build's."""
+    from test_cache import _entry
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    assert _run(root, FORKED)["here"] == []
+    assert "syn.shape" in _entry(root, "--all")["reads"]["modules"]
+
+
+@pytest.mark.slow
 def test_a_target_that_misses_through_a_record_that_counts_is_made_where_it_is_checked(tmp_path):
     """With ``--jobs``, a target whose result misses while its binding's record counts (SynX, its pin changed) is made by the
     zygote that forks its check, as one through a binding built apart is (`cli._planned`): this process builds and describes
