@@ -9279,3 +9279,17 @@ against it.
 
 I cancelled the earlier restack's records, r20261108-081742-e5ed. Restacking onto `next`'s older `5375588521` would
 have brought in `next`'s unlanded PRs below it, so nothing from it is used.
+
+## 09:12Z from TSVERIFY: #8029's suites failed on a stale #7991 base under the #7941 merge, not on my code
+
+- **What failed in e046:** something the #7941 merge brought in, interacting with #8029's old #7991 base. It was not my acyclicity code, the SampledProofs Lean or the node.
+  - The one failure was vllm's `tests/lint/test_p10_size.py`: `integrations/vllm/verity_vllm/program/workload.py` at 825 lines against the 800-line cap.
+  - #7991's old head `7cb9b2ea71` put `TpWorkload` in `workload.py`, and the `main` commits under #7941 grew the file.
+  - #7991's own `6b290834` moves `TpWorkload` out for exactly this. It is on `next` (`workload.py` at 800 lines there), so the failure isn't on `next` or `checked`.
+  - The other five suites passed: repository 260, windows 86, one_stage 461, sampled_proofs protocol 647 and service 183, the service with its Lean build.
+- **Fix:** I merged #7991's current head `c4909513` into #8029 (`15867b66ef`), since #8029 is stacked on it.
+  - The #7941 merge stays, because #8029 conflicts with `next` without it.
+  - Locally, the P10 lint passes and the rest of vllm's lint tests pass.
+- **Rerun:** r20261108-090912-2f3f on cpu-11 `--pool research`, fourth in line. ETA about 09:45Z.
+- **#8043's records** r20261108-084113-74b1 is still running on cpu-11, ETA about 09:35Z.
+- **#7981** is not on `checked` yet.
