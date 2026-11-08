@@ -68,9 +68,9 @@ open Finset
 
 section Probability
 
-/-- The probability of an event under the uniform distribution on a finite type (Core's `Claims.Pr`). -/
-noncomputable abbrev prob {Ω : Type} [Fintype Ω] (p : Ω → Prop) : ℝ :=
-  Claims.Pr p
+/-- The probability of an event under the uniform distribution on a finite type (Core's `Claims.prUniform`). -/
+noncomputable abbrev prob {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : ℝ :=
+  Claims.prUniform p
 
 end Probability
 

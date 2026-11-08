@@ -68,7 +68,7 @@ variable {n P N b h ρ S L q r s d G τ : ℕ}
 
 /-- The remote model's probability is the game's, as a real. -/
 theorem pouw_pr_eq {α : Type} [Fintype α] (Q : α → Prop) : Pouw.pr Q = (Pous.pr Q).toReal := by
-  unfold Pouw.pr Claims.Pr; simp only [Pous.pr_eq_card]
+  unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
   rw [ENNReal.toReal_div]
   simp
 

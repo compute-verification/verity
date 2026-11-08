@@ -367,7 +367,7 @@ open Bandwidth (pr_exists_le pr_mono)
 private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) :
     Pouw.pr E ≤ Pouw.pr F := by
   classical
-  unfold Pouw.pr Claims.Pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (Finset.univ.filter E) ⊆ Finset.univ.filter F := fun x hx => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
@@ -425,7 +425,7 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
       (pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
-    unfold Pouw.pr Claims.Pr; simp only [Pous.pr_eq_card]
+    unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
     rw [ENNReal.toReal_div]
     simp
   unfold SketchBound Trace.Holds

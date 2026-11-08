@@ -592,7 +592,7 @@
   },
   "Pouw.Assumptions.SAKServed": {
    "owner": "@compute-research",
-   "digest": "93bec8e86263ca2c28a8eb88d30bde6a8c34e804630df6eaf2ea72e1762f1e8a",
+   "digest": "f0e12824cc546338a62a6ffb8bd14f09157e056e8b2143a7e6a6334209ff1c1a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -676,7 +676,7 @@
   },
   "Properties.Pouw.Period.ServiceSound": {
    "owner": "@compute-accounting",
-   "digest": "aa2c1d76237e34bb0e2dde82892f53d0dbea6f80930c2225f4bdf9a1c0297a57",
+   "digest": "6abffbd796bf0fa56d131433a69dcfc0f8c7bc5d4d710313849e835b90e26e92",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -706,7 +706,7 @@
   },
   "Properties.Pouw.PeriodJ10R.TileServiceSound": {
    "owner": "@compute-accounting",
-   "digest": "d5875aaed3a6b1aea042f0a904f1b8ebd474a7f40b19d51ea323435a212e1c58",
+   "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -718,7 +718,7 @@
   },
   "Properties.Pouw.Served.CertifiedExchange": {
    "owner": "@compute-research",
-   "digest": "46ce5ef0864b693c989ad35bf5b67a7e1f3a352fff53604288c71696441b7d6c",
+   "digest": "a6929f13489cdf297588075b1af62348834de2858da838b461415ef613750244",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1571,15 +1571,15 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
-   "unfolded_hash": "ee5841b7b12dc9b27e8d28a1fe3fade8b33ad7fbb46c85434521021414a27e15"
+   "unfolded_hash": "4d6ca0d165dc6a4581fbbf48c670e1e6887a45e0d7f9439256bb3947fa78b51b"
   },
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
    "type_hash": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
-   "unfolded_hash": "dcd17a6308d4709ce3dd48325ee751e697ca4717f2eebc721bab1e7cd9be9008"
+   "unfolded_hash": "61174b882a658de15ecb52ad00c53ade75a9ea7bbc2f6f3268a3554c84679d90"
   },
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
-   "unfolded_hash": "e4c9e33e7e6da8e0cba934a7b43e624161a66bcdde2d4809a069e025ee9a9b82"
+   "unfolded_hash": "ba89ac2ce6836e5b87db0a5f6925fa323faa1f1faee500891889e5b38234fad8"
   },
   "Properties.Pouw.LiveSalt.acceptMeans": {
    "type_hash": "08ffebe48af4af15238fe6dff6acba886d81b463b52ce075c4ac2481e6477319",
@@ -1607,35 +1607,35 @@
   },
   "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": {
    "type_hash": "9760d3f0de8b2e011d055cb27ac03744c5ba66617c21c1e80df0b8673106c567",
-   "unfolded_hash": "bc92b93e06b27a48990531314077dc0a4f0b0ebdc70c03113bc41d2bfed818cb"
+   "unfolded_hash": "001170905f54680e26383875a993a59bbe6df6b92bc88d8f7891b9f69362c8f0"
   },
   "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
    "type_hash": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
-   "unfolded_hash": "8a2579ff7cfd144dd9bc4b7c5b0e1b61212e8ab9b7e56e381053e1474049c1dc"
+   "unfolded_hash": "1ee00ae50c30cb5aa5b54153b2b4f104258aef608a2fd83a20ec7cc1e814dd64"
   },
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": {
    "type_hash": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
-   "unfolded_hash": "f8de2e49d17765ae4d8a36f3c42b0c4cbce80522daf509019688a59caa487336"
+   "unfolded_hash": "431222858f769e9e76102f50ecd9eb6e03455a74483d6034cf6c403d6d6464b8"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
-   "unfolded_hash": "1747c6522b4daf347254d869f2611d4984694b696139d63eaff5ad147744d5f8"
+   "unfolded_hash": "ace6e9d0ba3233c7ed1224fb8d6e644b3890fa41d083c5dfc8d971dd00d91ac6"
   },
   "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
    "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
-   "unfolded_hash": "018ef2680862b5c6be22166c78f8edce92a131daeb664d00d4e4454e1179bd7e"
+   "unfolded_hash": "48008f91e15fd0230fdb59177b5556a64d10bbfa2b43f7035ad5238162924f2f"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "type_hash": "503b5b4232f83c7d7559aac6b44b71c1ac7d87dfd10390aa9784221d73009c89",
-   "unfolded_hash": "9d732fb43a758e8fe44c4229d0319437507c09b41e7056f6e69d70a621948109"
+   "unfolded_hash": "21350d4653bfa429b58e77a7493e405af8c7c80695537867aa88c7b2f1b62601"
   },
   "Properties.Pouw.Served.SecurityProofs.servedWork": {
    "type_hash": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
-   "unfolded_hash": "8b8f755b86540c705f798bfa2fb278a1d474bd3bc6a7df482c3f1eb53b442a6f"
+   "unfolded_hash": "f7ad9e84ee1596ce9a3cc02f1cd8adbba0d83529ca665bdcdd58e355fd433b54"
   },
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
    "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
-   "unfolded_hash": "268eade3082633bae64e1478523f79d37a73f5bc99d543963ebe39ead8e8c33e"
+   "unfolded_hash": "abcdd918548cbe075abbafe2e209a56c54f4eddce1a8599f65cad97f57370ba6"
   },
   "Properties.Pouw.Strata.strataTile": {
    "type_hash": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566",
@@ -6099,7 +6099,7 @@
     "reads": []
    },
    "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
-   "unfolded_hash": "ee5841b7b12dc9b27e8d28a1fe3fade8b33ad7fbb46c85434521021414a27e15"
+   "unfolded_hash": "4d6ca0d165dc6a4581fbbf48c670e1e6887a45e0d7f9439256bb3947fa78b51b"
   },
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
    "owner": "@compute-accounting",
@@ -6112,7 +6112,7 @@
     "reads": []
    },
    "type_hash": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
-   "unfolded_hash": "dcd17a6308d4709ce3dd48325ee751e697ca4717f2eebc721bab1e7cd9be9008"
+   "unfolded_hash": "61174b882a658de15ecb52ad00c53ade75a9ea7bbc2f6f3268a3554c84679d90"
   },
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
    "owner": "@proofs",
@@ -6125,7 +6125,7 @@
     "reads": []
    },
    "type_hash": "da2f768e700e9964667fcfd3102973e9822b21487fdf0713729e3cfefb31f876",
-   "unfolded_hash": "704a65da31aee91e920b387186e052d85f027ff90ea2c6c14277ae276fe02b2b"
+   "unfolded_hash": "8915a365710023ecb14a222c82e627ba9c5c520d0c7ba275b37e672ca7a02224"
   },
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": {
    "owner": "@proofs",
@@ -6184,7 +6184,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "a7ce9d374147343f21365cd9f3077677c5ad00e482c31fa46a0a723f48baafd4"
+   "type_hash": "12f3ca8e98677f6e6995ec42d2279e8296183c03f73be651e8240633b2e19f09"
   },
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
    "owner": "@compute-accounting",
@@ -6197,7 +6197,7 @@
     "reads": []
    },
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
-   "unfolded_hash": "e4c9e33e7e6da8e0cba934a7b43e624161a66bcdde2d4809a069e025ee9a9b82"
+   "unfolded_hash": "ba89ac2ce6836e5b87db0a5f6925fa323faa1f1faee500891889e5b38234fad8"
   },
   "Properties.Pouw.LiveSalt.acceptMeans": {
    "owner": "@compute-accounting",
@@ -6300,7 +6300,7 @@
     "reads": []
    },
    "type_hash": "9760d3f0de8b2e011d055cb27ac03744c5ba66617c21c1e80df0b8673106c567",
-   "unfolded_hash": "bc92b93e06b27a48990531314077dc0a4f0b0ebdc70c03113bc41d2bfed818cb"
+   "unfolded_hash": "001170905f54680e26383875a993a59bbe6df6b92bc88d8f7891b9f69362c8f0"
   },
   "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
    "owner": "@compute-accounting",
@@ -6325,7 +6325,7 @@
     "reads": []
    },
    "type_hash": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
-   "unfolded_hash": "8a2579ff7cfd144dd9bc4b7c5b0e1b61212e8ab9b7e56e381053e1474049c1dc"
+   "unfolded_hash": "1ee00ae50c30cb5aa5b54153b2b4f104258aef608a2fd83a20ec7cc1e814dd64"
   },
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -6353,7 +6353,7 @@
     "reads": []
    },
    "type_hash": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
-   "unfolded_hash": "f8de2e49d17765ae4d8a36f3c42b0c4cbce80522daf509019688a59caa487336"
+   "unfolded_hash": "431222858f769e9e76102f50ecd9eb6e03455a74483d6034cf6c403d6d6464b8"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -6383,7 +6383,7 @@
     ]
    },
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
-   "unfolded_hash": "1747c6522b4daf347254d869f2611d4984694b696139d63eaff5ad147744d5f8"
+   "unfolded_hash": "ace6e9d0ba3233c7ed1224fb8d6e644b3890fa41d083c5dfc8d971dd00d91ac6"
   },
   "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
    "owner": "@compute-research",
@@ -6413,7 +6413,7 @@
     ]
    },
    "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
-   "unfolded_hash": "018ef2680862b5c6be22166c78f8edce92a131daeb664d00d4e4454e1179bd7e"
+   "unfolded_hash": "48008f91e15fd0230fdb59177b5556a64d10bbfa2b43f7035ad5238162924f2f"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "owner": "@compute-research",
@@ -6449,7 +6449,7 @@
     ]
    },
    "type_hash": "503b5b4232f83c7d7559aac6b44b71c1ac7d87dfd10390aa9784221d73009c89",
-   "unfolded_hash": "9d732fb43a758e8fe44c4229d0319437507c09b41e7056f6e69d70a621948109"
+   "unfolded_hash": "21350d4653bfa429b58e77a7493e405af8c7c80695537867aa88c7b2f1b62601"
   },
   "Properties.Pouw.Served.SecurityProofs.servedWork": {
    "owner": "@compute-research",
@@ -6482,7 +6482,7 @@
     ]
    },
    "type_hash": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
-   "unfolded_hash": "8b8f755b86540c705f798bfa2fb278a1d474bd3bc6a7df482c3f1eb53b442a6f"
+   "unfolded_hash": "f7ad9e84ee1596ce9a3cc02f1cd8adbba0d83529ca665bdcdd58e355fd433b54"
   },
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
    "owner": "@compute-research",
@@ -6508,7 +6508,7 @@
     ]
    },
    "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
-   "unfolded_hash": "268eade3082633bae64e1478523f79d37a73f5bc99d543963ebe39ead8e8c33e"
+   "unfolded_hash": "abcdd918548cbe075abbafe2e209a56c54f4eddce1a8599f65cad97f57370ba6"
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
@@ -12926,10 +12926,10 @@
    }
   },
   "Definitions.Accounting.HMu": {
-   "digest": "b9d6212eb4e738ac237642980705d4b39d9f45569bfa3f5e28cbf668f553cb52",
+   "digest": "9da8578d55844993d0483142418dcfa0e05e12d675a59e53b61f98da90650a39",
    "definitions": {
     "Accounting.HMu.SkipRound": "8390732f289217d622a124a873406756a6d29ace45985c75d84313c2edca2f2c",
-    "Accounting.HMu.SkipRound.PointMass": "6c92a088e0a0a56283dfe73479de0d6f5a19a75cfa91e21c14a42601f0472fc1",
+    "Accounting.HMu.SkipRound.PointMass": "d37ce8587f2ae4e1ef2014e0a12d792295addafb6c4b5d7b5a6b89a7f7f7bd0f",
     "Accounting.HMu.SkipRound.committed": "c6682b0588b42994e2851433e4cf6e8a187a9a53770215486d3445f444be7496",
     "Accounting.HMu.SkipRound.d": "e69aa8b317114192de76f842049f67c3945e971312a6d7299861ee505a18937f",
     "Accounting.HMu.SkipRound.honest": "5e39ae0c75a04be40cc58a082182f2f473aa38b22b6065263d13e8a7e834bdab",
@@ -13326,13 +13326,13 @@
    }
   },
   "Definitions.Accounting.TS.Play": {
-   "digest": "f627bc0e585f9fcc257697ee93da256d728246453230837590682c3af52e33e3",
+   "digest": "177137cd1fa60d6fc2fa81c6bc2d0c5b1c65168993cd3ab4df92328fe58657d2",
    "definitions": {
     "Accounting.TS.Play": "0a19c63985b76a029e766be1955d0db7b59cd18e49a947d38e5dbd302ca2cc94",
     "Accounting.TS.Play.accepts": "d5b18f31fb88ab2ec495b88ca47bd355fc8d1da09c47afc1a5657f3528eba728",
     "Accounting.TS.Play.game": "aa577a84048a3bf1691a92a903dc4fa585463d7691aa9e64bab030c71a8ef306",
     "Accounting.TS.Play.run": "5d43ee0a30cee63a628946da12c4265690d05b8964a594a12e64926011f862ba",
-    "Accounting.TS.RoundGame.LuckAt": "e5d76bcc273a4fdc864e3e80c03ed4d2f193b58dce2074ebe7adc776c4571e52"
+    "Accounting.TS.RoundGame.LuckAt": "7f0192e1f88ccd3bfb4e32ce0e30d61b14746ba75dae1b58f1805911daf12334"
    }
   },
   "Definitions.Accounting.TS.ProofLayer": {
@@ -13342,10 +13342,10 @@
    }
   },
   "Definitions.Accounting.TS.Receipt": {
-   "digest": "64171b04b572a7389edd0c0b567771b379b330ed8589eb36a968ddaadf1b503f",
+   "digest": "ad85977ff6363242edc21b6933fd67a6f0144f90d7adaf5d324701f131a241a5",
    "definitions": {
     "Accounting.TS.ReceiptGame": "2286970ee38b99490080368e7ff9c0e66baadf5fa6f01f3b20cbbfb537797690",
-    "Accounting.TS.ReceiptGame.ReceiptLuck": "d160694aa085e60f5d1599029827eac01c3a2a0cb7f39a1d56625f1113e51992",
+    "Accounting.TS.ReceiptGame.ReceiptLuck": "c447610751b29ecdbfa433b3e253d751eb9308bd2f575be8699be9f99c249f67",
     "Accounting.TS.ReceiptGame.below": "9ea31cd8e8b7825f1ae2db00987697911674befa3f2f54a170f79685b90a96aa",
     "Accounting.TS.ReceiptGame.brecOn": "8b56f30b30a49b35717b36c02fc1fb03adbc76e5ecf0c452b13cab19150c8cd1",
     "Accounting.TS.ReceiptGame.brecOn.go": "abf70a713be8975bd2c832ffaab3fc50dae5ce1996254078a4eaa4ed5ce5211b",
@@ -14443,10 +14443,10 @@
    }
   },
   "Definitions.Pous.Game.Prob": {
-   "digest": "fc8fa6f648c1d31fe2430d56f5b02873b379a8f6a19c2153baf75459895b297a",
+   "digest": "423437181081ecd73c837e7d9ddc404d2fc1be7ec8e7b9ff0fd94500071c39f5",
    "definitions": {
     "Pous.Bits": "9290fa20f06bfe4423f67acf59109a8e4d14d7a87a9aa1e5085b43ee795a0f68",
-    "Pous.pr": "41bd49489d09bf6d4ef51d84ca1ee8595d91a1e74fb504ab324d9fa9eac0b476"
+    "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    }
   },
   "Definitions.Pous.Model.Audit": {
@@ -14573,9 +14573,9 @@
    }
   },
   "Definitions.Pouw.Assumptions.ServedWork": {
-   "digest": "dd1f18dd1fd0e7a24f4254a65d210424203a74dc5a8f3c46e907e5246dc05feb",
+   "digest": "5942661616849b5c1c317505109817ca8b179a0c5f13ea241c63311a7c961c02",
    "definitions": {
-    "Pouw.Assumptions.SAKServed": "93bec8e86263ca2c28a8eb88d30bde6a8c34e804630df6eaf2ea72e1762f1e8a",
+    "Pouw.Assumptions.SAKServed": "f0e12824cc546338a62a6ffb8bd14f09157e056e8b2143a7e6a6334209ff1c1a",
     "Pouw.Assumptions.rightWords": "db1931cfcdc1dfaa4689b26636aa7ac12adb89bc89f1069232b50fc0e9788136"
    }
   },
@@ -14704,7 +14704,7 @@
    }
   },
   "Definitions.Pouw.RelativeSecurity": {
-   "digest": "38e55abb8a887bc41ff8a9e2c1fc89c8d4079a931f1bea1faf37ff229be5da56",
+   "digest": "85935d523f713ac3cae728597d189f5c9fede99d956f92ba6f399ae6adac2562",
    "definitions": {
     "Pouw.RelativeSecurity.Machine": "db1e3ba31b215c56bd28f4744afd95c18ed44034107608ecfdf9b5d703332e56",
     "Pouw.RelativeSecurity.Machine.Alg": "5bb07b241d9d771465bfd79641f083d3e19ac351d53167abfb2978abd7151692",
@@ -14720,7 +14720,7 @@
     "Pouw.RelativeSecurity.RoundGame.done": "c9382774b1fd23c21ff020d16b06722f99cc6e45a1409927fdb968f30e6ab7f0",
     "Pouw.RelativeSecurity.RoundGame.rec": "abcc0878adb0b351364230899fa6e97aeea237e306d5cdc543991f1b8c4caf0b",
     "Pouw.RelativeSecurity.RoundGame.round": "54383a4741af130b19b1913257b27b59be03317af693b3b72be0c1cc50f420c9",
-    "Pouw.RelativeSecurity.prob": "da736246ca9e0d3e4c1260c2ddb260b05718f7dea556ebffcbe5651e6f641634"
+    "Pouw.RelativeSecurity.prob": "45903db0657e0aae952b67744101d45314e1904c052d74ff5b83d86cbbdda633"
    }
   },
   "Definitions.Pouw.Window": {
@@ -20791,10 +20791,10 @@
    }
   },
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "192adf57101721cb58b97583f67923021b13f6630ab1810d6e0da51b1d19ce01",
+   "digest": "5cd75624a198f1f85509410e3e17695428e494f04d03ff80f010bd92ca79aeee",
    "definitions": {
     "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "7c58cc81b691e9ec820fb94f4210285efb1c39550afbd56296b5477c8580c762",
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt": "d6021da63919f7524d1d06c2c1f99e6f23a54c13da4094a96a7fc7825103834d",
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt": "bd84a20db27bccde436d9cf5e8084ba15672b47f46ba6fff5f97d00cdae6568f",
     "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200": "a762552b60a5c45f1c73049a7cc13cfea07447cb5b027de1c6edfc29fe0bf90c"
    }
   },
@@ -22016,13 +22016,13 @@
    }
   },
   "Properties.Pouw.Credit": {
-   "digest": "bc31e1a3ed623d42489dba38d00d833531d32be201df534d160961d6e58f307f",
+   "digest": "82b3a93ffa8cd93e17da7affc555f7bc8d47aad76696cbbdf508b1dc9cf05585",
    "definitions": {
     "Properties.Pouw.Credit.DrawWithheld": "47d7696570ce6a6e6b5c943280e4961e247c906700ce36d761e3a71a07830b35",
-    "Properties.Pouw.Credit.EpsAtSound": "690750efd55f0d4e9894403419cb8acd6202fbc66c4f3cd0eee7c6fe922300d3",
-    "Properties.Pouw.Credit.EstablishedSound": "8180439c744acfcbd475e7f26ce61fcfdc13314a42f384078f68b3e593b730a8",
-    "Properties.Pouw.Credit.GroupedDrawMisses": "9973120b68782f70975034aeef14f93227fb1e6ab9f1a1012660149b5d045239",
-    "Properties.Pouw.Credit.WorkDrawMisses": "1b5c282e92e35d607123aad039fa5973cb3f54a2d7d13fd572f8c9d81fa64793",
+    "Properties.Pouw.Credit.EpsAtSound": "59c35f29819665d4be10fdf0734bb1d800314d70307e9a64b814bed7138a63bf",
+    "Properties.Pouw.Credit.EstablishedSound": "f44bfab5cd57b989a0b63b36850d427e8f60a1af4d6011a5fe4e4b21274896b3",
+    "Properties.Pouw.Credit.GroupedDrawMisses": "beb2317dd78efc95b172fa25ca88d285e81a640910c735811cf84c866ecb22e0",
+    "Properties.Pouw.Credit.WorkDrawMisses": "70b66ff3e659b2e55c4417a37f9dbab2985016e5fb62df03d88f5cb77dcb632e",
     "Properties.Pouw.Credit.creditedWork": "a22b8f2c576c22410c362913d19a734ee4731a5ec3d907535822c3c160ff9499",
     "Properties.Pouw.Credit.drawnOn": "d6545cd22778d04224c13c81beb0aa7ffa4b3942c6e80fdf8efe5b98cfb0b809",
     "Properties.Pouw.Credit.idleLaw": "dda170ee95af6e71723ca95283f619f61231795a43e80e69e094a13b1ef72c25",
@@ -22075,21 +22075,21 @@
    }
   },
   "Properties.Pouw.Period": {
-   "digest": "50cd258b25095221b833e3cb3bd0e3262d8e1f77decb20c0e787f860c0fd65b8",
+   "digest": "d82c415b860137b7edf1329a29a345d074351cd271651c7085f3b0d63b1646bc",
    "definitions": {
     "Properties.Pouw.Period.Accepts": "f8d73ed3046e1cfeb747c2ee4dc59ebe1506b4534642b95d6a902e320e950399",
-    "Properties.Pouw.Period.CheckedCreditPeriod": "93346db47a22572894879ef088216dc6ac03a93e9c2752ebb2e3b4d9c18567a8",
-    "Properties.Pouw.Period.CheckedWorkPeriod": "5965732cdc943779a6450edbcc3c7c460c09a94df1f2f1beafc41dcb536da455",
+    "Properties.Pouw.Period.CheckedCreditPeriod": "53b2540ca2d0280a5ff1b4a51f518a841a08dbd443ad74200355e64f0f71edb4",
+    "Properties.Pouw.Period.CheckedWorkPeriod": "2483cc144258c5cfdca7222a8483f8b2ba3710e658ba9bfafd3b33594e7272be",
     "Properties.Pouw.Period.Executions": "b21a6d1dfe9eaf750ef072e3656a972f39d54444b013fd93f81567d2c38ce4f4",
     "Properties.Pouw.Period.Executions.AcceptedUpTo": "f201892cf63bd6edd6b3a6ebb0157140e3f3284a1568f108064fb4e6ca4c3a73",
     "Properties.Pouw.Period.Executions.ev": "7259707cb574416b1b8036c193cf257261e99a165b6cb1023421e46ba449d0be",
     "Properties.Pouw.Period.Executions.prefixLen": "9a66ae5af1bf5a8e63f575a786aa87cd272fa5d2cafd5e1da475d9445a523d75",
     "Properties.Pouw.Period.Executions.reg": "9d2a1ce7f4bab80ea45ca65b718f7861fecfbac12f7efac81606ff7471a2bf63",
-    "Properties.Pouw.Period.H1CheckedCreditPeriod": "25390b69af6ff86bb9863932138948c43cfdc377d58a58f8dd627585bc9fd138",
+    "Properties.Pouw.Period.H1CheckedCreditPeriod": "e7a684b8f703c77398c17be419b07d15b0ee0bee4c32f01ccfb1e99150e92145",
     "Properties.Pouw.Period.RegisteredBeforeDraw": "d8cc1ecae9bb8b8cf9c08215350227c4d934787e2f2dbfdd8867f2d9332e16db",
     "Properties.Pouw.Period.SaltIsLiveCoin": "62bf1dbd153325c70fa3981569702dee28e3d52af7dd5a58c64d6dd060a87331",
     "Properties.Pouw.Period.SampleIsCoin": "bc966fcdb3f6f1e6db43a4a6188cc8ffa596c76ea084f6e793d77468ba46ada5",
-    "Properties.Pouw.Period.ServiceSound": "aa2c1d76237e34bb0e2dde82892f53d0dbea6f80930c2225f4bdf9a1c0297a57",
+    "Properties.Pouw.Period.ServiceSound": "6abffbd796bf0fa56d131433a69dcfc0f8c7bc5d4d710313849e835b90e26e92",
     "Properties.Pouw.Period.StagedPins": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1",
     "Properties.Pouw.Period.checkedLayer": "e40cf44df27df93eff57e87b97a6eded55fb8f0e443ef600dc2991978883a40a",
     "Properties.Pouw.Period.checkedLive": "5f67cde4acdf782ea2eb675e68ebf71eff5374401bfc9595df00950db9e32d87",
@@ -22099,7 +22099,7 @@
    }
   },
   "Properties.Pouw.PeriodJ10R": {
-   "digest": "a7855e3482d9c3c7e8b44eb85151dd6f35e1461b696ef0fb7719965f9fdb35b6",
+   "digest": "9ec5990b11946e8fbb95451463ea793a35bce66fa64d4bda27c8667c5599b3bc",
    "definitions": {
     "Properties.Pouw.PeriodJ10R.Answered": "ad07d7dcb3b5ba1b02c1e159a9fa1fbc49fa3c68721667dba455072e3f7cfc7f",
     "Properties.Pouw.PeriodJ10R.Answered.draw": "34232c1aa04dce901132afc7c85bd9db84df44b652b39520da011c3cdcaf91c9",
@@ -22117,7 +22117,7 @@
     "Properties.Pouw.PeriodJ10R.CreditWindows.ev": "5d97042b68f974c30d422a9c9381fce0dc6940b93e0da820f0b8dbeb38d493ed",
     "Properties.Pouw.PeriodJ10R.CreditWindows.prefixLen": "4271c5dd8cadacd18d3d09ac070cc01966c0fb95324f94e8862a9156fc2c4227",
     "Properties.Pouw.PeriodJ10R.CreditWindows.reg": "7924972f2ce6b21894946c383e0035414427b32fa79656a93138cbd6938b99bc",
-    "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod": "6c55340195c78165022a680a9f47f2a9e83bda5ef7e5eccadaee3d8dac6bb6f5",
+    "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod": "70851947a3ce1c5f1febf335c6526571e20ca7872279c6896c611eb5f3eefb02",
     "Properties.Pouw.PeriodJ10R.Noise": "9db7acd4bb3369d4c5346106776c1cf40c73ec30f58a551c192a90d33f1f07b7",
     "Properties.Pouw.PeriodJ10R.Place": "2e99d079adf78d0472e2b6fc484d29de695cbdec842c260865508bf580be9e1a",
     "Properties.Pouw.PeriodJ10R.Place.I": "54159bcffe13a9bfd954e981582354ed0d77a6652efea6afe6abc836dd1f1564",
@@ -22147,7 +22147,7 @@
     "Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw": "23a8f8237659d197b7e3f6e1d8705e75f826487400abb3a198dace96f5d237db",
     "Properties.Pouw.PeriodJ10R.SharedNoiseLucks": "74a01360a1920935c289005bfc3de8ebdb5066b785d1af549f86696fcbce86b4",
     "Properties.Pouw.PeriodJ10R.TileSampleIsCoin": "6d1e72e12ddb1c1f38b4b41d3fe145057d984f8b49a18f7d62c8b999ec576f87",
-    "Properties.Pouw.PeriodJ10R.TileServiceSound": "d5875aaed3a6b1aea042f0a904f1b8ebd474a7f40b19d51ea323435a212e1c58",
+    "Properties.Pouw.PeriodJ10R.TileServiceSound": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572",
     "Properties.Pouw.PeriodJ10R.WindowAccepts": "b0c80e06df4a2e8ed2c865c01574e0fd2a2ac0cbae60384335b76db1522a8cea",
     "Properties.Pouw.PeriodJ10R.creditDrawn": "d602a92a26854ee5a5b86e4d4f16297f046246126d68cda8672534a7c3a953bf",
     "Properties.Pouw.PeriodJ10R.creditLive": "63dd34f3c96ff119f29c6d3d019252ed5ad63cd7a1736697836a1ebc253a33a1",
@@ -22164,10 +22164,10 @@
    }
   },
   "Properties.Pouw.PeriodJ10RStrata": {
-   "digest": "2b015c754ed3cc475b4816b0481e9abd455541b72cbb3215f649515ad556c975",
+   "digest": "78d57ebda7c4b0382fac5cfea019ce7edf7c8e51ee0dbf255657a826047ef581",
    "definitions": {
     "Properties.Pouw.PeriodJ10RStrata.BlockDraw": "8c51d87a44f26cbacd92f87b041c9f78598f3db7ddd2a2faba318647f99e076c",
-    "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "c6088e9f6a3c68bd736888fb61df5dcd3f6138f7252d2b45764db67fdc2b2fc3",
+    "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "17c5b1555a5518ec76cb66d9d345bd5b83ba0c2e9cb03379d9e7a7c042777de2",
     "Properties.Pouw.PeriodJ10RStrata.Rest": "8a7ce9ec6b58e64025d0e07db7d22b6838a29c7f5500f05be754aefa00e8d31a",
     "Properties.Pouw.PeriodJ10RStrata.StrataCoin": "3b72d8959db0aa1c61278a35b72916d9816258e5e421d654717d40ba985d6b37",
     "Properties.Pouw.PeriodJ10RStrata.StrataSampleIsCoin": "6db67837187e2ecbf7e05c9a0719aff41704ed8cc81e3dc374b720a8d4c07247",
@@ -22184,20 +22184,20 @@
    }
   },
   "Properties.Pouw.ServedFreed": {
-   "digest": "41d1d70ee32bf63b0d3df136de4d8a3d1af51aa4c584beff14b94148a1cd4878",
+   "digest": "329ceb1f6a75901885b48e769f758e8a16dc0cb64a0aa33d0dbd52d4667b8126",
    "definitions": {
-    "Properties.Pouw.Served.CertifiedExchange": "46ce5ef0864b693c989ad35bf5b67a7e1f3a352fff53604288c71696441b7d6c",
+    "Properties.Pouw.Served.CertifiedExchange": "a6929f13489cdf297588075b1af62348834de2858da838b461415ef613750244",
     "Properties.Pouw.Served.OutsourceWithinEgressServed": "19cd4ab81fedf945c477eb836d3259d50e6e9b9dba5d85a0bae33cc138a0561f",
-    "Properties.Pouw.Served.ServedFreed": "6deeab8627bf5544e9d573135ae567fb2c4859031a73bad9b49f4482c4259efd"
+    "Properties.Pouw.Served.ServedFreed": "935aa09cec14841eab5f6cc8948a0ee35c344cfae19a3130d3ea8276268c99d4"
    }
   },
   "Properties.Pouw.ServedValues": {
-   "digest": "a36a80f97137060174f9fb1c8f73542326c2d5414df4106048305b95e1a069ec",
+   "digest": "7022cf2002a39a9098392ca1f25da59d3876e6409686babe1c2c175848ce3749",
    "definitions": {
     "Properties.Pouw.ServedValues.BlockMap": "bc62c1278c493d91a709e67f64a74f32d9c8977b25cadc6cbdaeafadf8d7045b",
     "Properties.Pouw.ServedValues.BlockMap.gates": "f16109f5542ed907db77fbdb501363b78016f50681e59856d18fdfcf0e3f64d3",
     "Properties.Pouw.ServedValues.BlockMap.size": "b2bfad42cef1eade64a9bcf15ff6c72cd5006df6e751a1f181fb441800ac59ea",
-    "Properties.Pouw.ServedValues.RightValues": "8c292c6b7159eb23768b1be8c1f99d5528d2f78ace93be2b559f7661f99e488e",
+    "Properties.Pouw.ServedValues.RightValues": "ebce5200bdbdfcb933fb0d11d7af54994840ef6b63763803b154fc4893ee6a87",
     "Properties.Pouw.ServedValues.creditFloor": "ffff1c82d19708c5b5c820a9c621aa7b693faf1f75717b7a5661d0b447ca13ee",
     "Properties.Pouw.ServedValues.creditedSize": "f6c3c9cf84f62308104b3a91dba729431d7c6a5c6238caaae97a6d901b12512c",
     "Properties.Pouw.ServedValues.epsSkip": "bfef0dcd964fcd5edd0ff33051be4991d36e6c45f1e9d6fcc8cdf7152eb72e5b",
@@ -22207,11 +22207,11 @@
    }
   },
   "Properties.Pouw.ServedWork": {
-   "digest": "8e5c9567637880297226ffe83a1d71fc54b046fbdd562476720737e34eb28dab",
+   "digest": "564db789a444da417c9e4781cb357b4c3f52a0558c6ad9bafdd09d364b9421de",
    "definitions": {
     "Properties.Pouw.Served.FixedAreRight": "9be619b683c72f950f517a112a029aa40bbf146b2b3c751dc6122dcc6d01d74f",
     "Properties.Pouw.Served.FixedBeforeSalt": "cbe84fdbd51a7a9a6aa58fa57c4ccf1dad0c50b4906eea8f5fdae2fffea79153",
-    "Properties.Pouw.Served.ServedWork": "9530aecb9400ea05c5e3e2a9e6d3e9f5132671d14b59a542dd862555baf65300",
+    "Properties.Pouw.Served.ServedWork": "cb723e7a81e12ecc5eb48ee3e1b0edb5fca27052850ede7e911bea2568b45685",
     "Properties.Pouw.Served.saltCoin": "f95cf7355cafb204149cfc4579725f0b76d837194ab042ba8ec7f80e9a304a97"
    }
   },

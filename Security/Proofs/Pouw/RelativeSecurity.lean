@@ -167,21 +167,21 @@ open Finset hiding expect
 
 section Probability
 
-theorem prob_nonneg {Ω : Type} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
-  unfold prob Claims.Pr
+theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
+  unfold prob Claims.prUniform
   positivity
 
-theorem prob_le_one {Ω : Type} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
+theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h | h
   · simp [h]
   · rw [div_le_one (by exact_mod_cast h)]
     exact_mod_cast card_filter_le _ _
 
-theorem prob_mono {Ω : Type} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω → q ω) : prob p ≤ prob q := by
+theorem prob_mono {Ω : Type*} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω → q ω) : prob p ≤ prob q := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   apply div_le_div_of_nonneg_right _ (by positivity)
   exact_mod_cast card_le_card fun ω hω => by
     simp only [mem_filter, mem_univ, true_and] at hω ⊢
@@ -190,9 +190,9 @@ theorem prob_mono {Ω : Type} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω
 theorem mem_filter_univ_iff {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (inst : DecidablePred p) (ω : Ω) :
     ω ∈ @Finset.filter _ p inst univ ↔ p ω := by simp
 
-theorem prob_or_le {Ω : Type} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω => p ω ∨ q ω) ≤ prob p + prob q := by
+theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω => p ω ∨ q ω) ≤ prob p + prob q := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   rw [← add_div]
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s t u : Finset Ω, (∀ ω ∈ s, ω ∈ t ∨ ω ∈ u) → (s.card : ℝ) ≤ t.card + u.card := fun s t u h => by
@@ -204,7 +204,7 @@ theorem prob_or_le {Ω : Type} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω =
 theorem markov {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
     X * prob (fun ω => X ≤ f ω) ≤ expect f := by
   classical
-  unfold prob expect Claims.Pr
+  unfold prob expect Claims.prUniform
   rw [mul_div_assoc']
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s : Finset Ω, (∀ ω ∈ s, X ≤ f ω) → X * (s.card : ℝ) ≤ ∑ ω, f ω := fun s hs => by
@@ -250,7 +250,7 @@ theorem expect_prod_swap {α β : Type} [Fintype α] [Fintype β] (f : α × β 
 theorem prob_eq_expect {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
     prob p = expect fun ω => if p ω then 1 else 0 := by
   classical
-  unfold prob expect Claims.Pr
+  unfold prob expect Claims.prUniform
   rw [Finset.card_filter, Nat.cast_sum]
   congr 1
   refine Finset.sum_congr rfl fun ω _ => ?_
@@ -272,22 +272,22 @@ theorem prob_prod_eq_sum {α β : Type} [Fintype α] [Fintype β] (E : α × β 
   exact Finset.sum_congr rfl fun b _ => by rw [prob_eq_expect (fun a => E (a, b))]
 
 /-- Probabilities are invariant under a relabelling of the sample space. -/
-theorem prob_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
+theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
     prob p = prob fun b => p (e.symm b) := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   rw [Fintype.card_congr e]
   congr 2
   exact Finset.card_equiv e fun a => by simp
 
 /-- The union bound over a finite family of events. -/
-theorem prob_exists_le {Ω : Type} {ι : Type*} [Fintype Ω] (s : Finset ι) (B : ι → Ω → Prop) :
+theorem prob_exists_le {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (B : ι → Ω → Prop) :
     prob (fun ω => ∃ w ∈ s, B w ω) ≤ ∑ w ∈ s, prob (B w) := by
   classical
   induction s using Finset.induction_on with
   | empty =>
     simp only [Finset.notMem_empty, false_and, exists_false, sum_empty]
-    unfold prob Claims.Pr
+    unfold prob Claims.prUniform
     simp
   | insert a s ha ih =>
     rw [Finset.sum_insert ha]
@@ -302,10 +302,10 @@ theorem one_sub_mul_exp_le (u : ℝ) : (1 - u) * Real.exp u ≤ 1 := by
   have h2 : Real.exp (-u) * Real.exp u = 1 := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
   nlinarith [Real.exp_pos u]
 
-theorem prob_add_not {Ω : Type} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
+theorem prob_add_not {Ω : Type*} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
     prob q + prob (fun ω => ¬q ω) = 1 := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   have := Finset.card_filter_add_card_filter_not (s := (univ : Finset Ω)) q
   rw [Finset.card_univ] at this
   have h' : ((univ.filter q).card : ℝ) + ((univ.filter fun ω => ¬q ω).card : ℝ) = Fintype.card Ω := by
@@ -314,10 +314,10 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
   rw [← add_div, div_eq_one_iff_eq hC]
   convert h'
 
-theorem prob_add_not_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q + prob (fun ω => ¬q ω) ≤ 1 := by
+theorem prob_add_not_le {Ω : Type*} [Fintype Ω] (q : Ω → Prop) : prob q + prob (fun ω => ¬q ω) ≤ 1 := by
   rcases isEmpty_or_nonempty Ω with hΩ | hΩ
   · have h0 : ∀ q : Ω → Prop, prob q = 0 := fun q => by
-      unfold prob Claims.Pr
+      unfold prob Claims.prUniform
       simp
     rw [h0, h0]
     norm_num
@@ -567,11 +567,11 @@ theorem pathBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : Round
     rw [e1, e2]
     rcases isEmpty_or_nonempty Ω with hΩ | hΩ
     · have h0 : ∀ q : Ω → Prop, prob q = 0 := fun q => by
-        unfold prob Claims.Pr
+        unfold prob Claims.prUniform
         simp
       rw [h0, h0, mul_zero]
     · have h1 : prob (fun _ : Ω => True) = 1 := by
-        unfold prob Claims.Pr
+        unfold prob Claims.prUniform
         simp
       rw [h1, mul_one]
       exact hpass
@@ -2486,7 +2486,7 @@ theorem serviceFloorPerProver_of_slices {Mc : Machine} {S : Service} {Ω : Type}
     rw [ENNReal.ofReal_mul hβ, ENNReal.ofReal_sum_of_nonneg fun w _ => ?_]
     · unfold finderTerm
       exact mul_le_mul' le_rfl (Finset.sum_le_sum fun w _ => ofReal_finderPr_le_ecrBound _ _ _)
-    · unfold Claims.Finder.Pr Claims.Pr
+    · unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
       positivity
   rw [prob_prod_eq_sum, ENNReal.ofReal_sum_of_nonneg fun r _ => ?_]
   swap
@@ -4719,7 +4719,7 @@ theorem prob_zero_le_of_cubeQuad {f : (V → R) → R} (hf : CubeQuad f) (hne : 
   have hsum := Finset.card_filter_add_card_filter_not (s := (univ : Finset (Finset V)))
     (fun S : Finset V => f (bitInd S) = 0)
   rw [prob_eq_expect, ← prob_eq_expect]
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   have hpos : (0 : ℝ) < Fintype.card (Finset V) := by exact_mod_cast Fintype.card_pos
   rw [div_le_iff₀ hpos]
   have h' : ((univ.filter fun S : Finset V => f (bitInd S) = 0).card : ℝ) +
@@ -4843,7 +4843,7 @@ theorem luck_quad_tight :
   · have h3 : (univ.filter fun S : Finset (Unit ⊕ Unit) =>
         (bitInd S (.inl ()) : ℤ) * bitInd S (.inr ()) = 0).card = 3 := by decide
     have h4 : Fintype.card (Finset (Unit ⊕ Unit)) = 4 := by decide
-    unfold prob Claims.Pr
+    unfold prob Claims.prUniform
     rw [h4]
     convert (show ((3 : ℕ) : ℝ) / ((4 : ℕ) : ℝ) = 3 / 4 by norm_num) using 3
     convert h3
@@ -4908,7 +4908,7 @@ theorem luck_coins {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f₀ 
           exact hmaps S hS) (hinv.injective.injOn)
       have hsum := Finset.card_filter_add_card_filter_not (s := (univ : Finset (Finset V)))
         (fun S : Finset V => f₀ a + ∑ u ∈ S, f u a = 0)
-      unfold prob Claims.Pr
+      unfold prob Claims.prUniform
       have hpos : (0 : ℝ) < Fintype.card (Finset V) := by exact_mod_cast Fintype.card_pos
       rw [div_le_iff₀ hpos]
       have h' : ((univ.filter fun S : Finset V => f₀ a + ∑ u ∈ S, f u a = 0).card : ℝ) +
@@ -4925,7 +4925,7 @@ at most one letter: probability at most `1 / |α|`. -/
 theorem prob_dropped_le {α : Type} [Fintype α] (U : α → R) (hU : Function.Injective U) (c c' : R)
     (hc' : IsUnit c') : prob (fun a => c + c' * U a = 0) ≤ 1 / Fintype.card α := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   have h1 : (univ.filter fun a => c + c' * U a = 0).card ≤ 1 :=
     Finset.card_le_one.mpr fun a ha b hb => by
       simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha hb
@@ -5024,7 +5024,7 @@ theorem luck_dropped_reEncoded_zero {β V : Type} [Fintype β] [Fintype V] [Deci
   have hF : ∀ ab : Finset (Fin 7) × β, ¬∀ v, f v ab = 0 := fun ab hab =>
     (hc'.mul_right_eq_zero.not.mpr (uRe_ne_zero ab.1)) ((hv₀ ab.1 ab.2) ▸ hab v₀)
   have h2 : prob (fun ab : Finset (Fin 7) × β => ∀ v, f v ab = 0) ≤ 0 := by
-    unfold prob Claims.Pr
+    unfold prob Claims.prUniform
     simp [hF]
   linarith
 
@@ -5168,7 +5168,7 @@ theorem valid_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m), (∀ x s 
     refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr (Nat.cast_nonneg _))
     rcases isEmpty_or_nonempty C with hC | hC
     · have h0 : spotDef e = 0 := by
-        unfold spotDef prob Claims.Pr
+        unfold spotDef prob Claims.prUniform
         simp
       rw [h0, mul_zero]
       unfold expect
@@ -6451,7 +6451,7 @@ theorem valid_sgameP (M : ℕ) {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, 
     refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr (Nat.cast_nonneg _))
     rcases isEmpty_or_nonempty C with hC | hC
     · have h0 : parDef fr φ e = 0 := by
-        unfold parDef prob Claims.Pr
+        unfold parDef prob Claims.prUniform
         simp
       rw [h0, mul_zero]
       unfold expect

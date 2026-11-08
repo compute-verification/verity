@@ -357,7 +357,7 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
       ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
     fun _ => ⟨_, _, by simp only [namedFinder, if_neg hne], hl, hd⟩
   classical
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
 
@@ -410,7 +410,7 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
 
 /-- The idle finder outputs no collision. -/
 theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [finder]
   exact Or.inl rfl
 
