@@ -53,13 +53,17 @@ def _xor_bits(word: bool):
 
 def test_a_word_view_past_its_budget_still_compares_random_vectors():
     """The word view draws 16 x `Options.vectors` within 16 x `Options.reference_budget`; a word Definition too large for that
-    takes as many as the budget pays for, at least `Options.min_vectors`, half of them random."""
+    takes as many as the budget pays for, at least `Options.min_vectors`, half of them random; and at least
+    `WORD_RANDOM_FLOOR` of them are random whatever the options."""
     t = _xor_bits(word=True)
     F = CK.Findings()
     r = CK.word_view(t, CK.Options(vectors=8), F)
     assert (r["compared"], r["edge_vectors"], r["mismatches"]) == (128, 6, 0) and not F.failures
     r = CK.word_view(t, CK.Options(vectors=8, reference_budget=0), F)
     assert (r["compared"], r["edge_vectors"], r["mismatches"]) == (4, 2, 0) and not F.failures
+    for opts in (CK.Options(vectors=8, reference_budget=0, min_vectors=0), CK.Options(vectors=0, min_vectors=0)):
+        r = CK.word_view(t, opts, F)
+        assert r["compared"] - r["edge_vectors"] >= CK.WORD_RANDOM_FLOOR == 2 and r["mismatches"] == 0 and not F.failures
 
 
 def test_a_boolean_composite_over_the_input_budget_is_compared_through_its_word_view():
@@ -70,7 +74,8 @@ def test_a_boolean_composite_over_the_input_budget_is_compared_through_its_word_
     assert not e["failures"] and "unchecked" in e["correspondence"]
     (w,) = [w for w in e["warnings"] if w["check"] == "correspondence"]
     assert w["code"] == "unchecked" and w["name"].startswith("correspondence/unchecked CircuitCheckXorNibble_v1")
-    assert "parameter 0 has 4 leaves, over the input budget" in w["name"] and w["name"].endswith(
+    assert w["operands"] == ["x", "y"] and "operand 'x' (4 leaves), 'y' (4 leaves) over the input budget (2)" in w["name"]
+    assert w["name"].endswith(
         "a Boolean Definition's reference is its gates, total on every input, and its word view compares them with "
         "CircuitCheckXorNibbleWord_v1")
     (wv,) = [r for r in e["correspondence"]["realizations"] if r["via"].startswith("word:")]

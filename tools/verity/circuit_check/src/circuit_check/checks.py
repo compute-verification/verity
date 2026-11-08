@@ -365,9 +365,12 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         if word is None:
             F.fail("correspondence", "unprobed-table", t.id, why)
             return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
-        why = (f"{why}; a Boolean Definition's reference is its gates, total on every input, and its word view compares them "
-               f"with {word.id}")
-        F.warn("correspondence", "unchecked", t.id, 1, why)
+        names = [n for n, _ in resolve(t).signature()[0]]
+        over = [names[j] for j in wide]
+        why = (f"operand {', '.join(f'{names[j]!r} ({params[j].leaves} leaves)' for j in wide)} over the input budget "
+               f"({opts.input_budget}): a Boolean Definition's reference is its gates, total on every input, and its word view "
+               f"compares them with {word.id}")
+        F.warn("correspondence", "unchecked", t.id, 1, why, operands=over)
         return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": [], "unchecked": why}, None, []
     n = _n_vectors(t, opts)
     arrays = vectors(params, n, opts.seed)
@@ -540,14 +543,18 @@ def _word_or_none(t: Any) -> Any:
         return None
 
 
+#: the word view compares a Boolean Definition with its word Definition on at least this many random vectors, whatever it costs
+WORD_RANDOM_FLOOR = 2
+
+
 def _word_vectors(word: Any, pw: Sequence, opts: Options) -> tuple[int, int]:
     """``(vectors, all-edge vectors)`` of the word view: ``16 * opts.vectors``, the all-edge ones first, while the word
     reference's work on them is within ``16 * opts.reference_budget`` gate evaluations; past it, as many as that pays for and at
-    least ``opts.min_vectors``, at most half of them all-edge, so a Definition too large for the full count is still compared on
-    random vectors."""
+    least ``opts.min_vectors``, at most half of them all-edge; and at least `WORD_RANDOM_FLOOR` of them random either way, so a
+    Definition too large for the full count is still compared on random vectors."""
     full = 16 * opts.vectors
-    n = max(opts.min_vectors, min(full, 16 * opts.reference_budget // max(1, _gates(word))))
-    return n, min(edge_count(pw), n if n == full else n // 2)
+    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(word))))
+    return n, min(edge_count(pw), n if n == full else n // 2, n - WORD_RANDOM_FLOOR)
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
