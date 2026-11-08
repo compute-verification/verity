@@ -3,7 +3,8 @@ window per rank in ``<dir>/rank<r>/``, which the rank's own process commits (`ra
 committed store, its registered weight shards and its Programs of record with `pipeline.serving_rows.after_commit`, and ``<dir>/tp.json``
 over the world.  The driver calls `commit` in the first instrumented run once every rank's root is final and the TP run root is fixed,
 and before sampling: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
-deferred (`require`), since an in-process replay samples its seed inside finalize.
+deferred (`require`), since an in-process replay samples its seed inside finalize.  The request's ``edge`` (`edge_rows`) reaches each
+rank's window with its last window that rank's, under the last Commit's ``rank<r>/`` (`edge_rows.of_rank`).
 
 Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's rows-sha512 root, and the rank
 keeps two ranks' ports, whose population, partition and leaf counts can coincide, in distinct domains.  A rank that writes no window,
@@ -115,7 +116,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state."""
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import driver as SR
-    from verity_vllm.pipeline import expert_rows as EX
+    from verity_vllm.pipeline import edge_rows as ER, expert_rows as EX
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -130,6 +131,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
+                           edge=ER.of_rank(request.get("edge"), rank),
                            workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
@@ -140,7 +142,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
                 required_manifest: str | None = None, workers: int | None = None, programs: Any = None,
                 binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = (),
-                tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                tables: Mapping[str, Any] | None = None, edge: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
     (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way; ``programs``, the
@@ -149,7 +151,8 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
     without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
     (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root.  ``tables``: the per-expert
-    cut's tables committed under the committer's key and registration (`expert_rows.of_request`)."""
+    cut's tables committed under the committer's key and registration (`expert_rows.of_request`).  ``edge``: the rank's window's
+    edge (`edge_rows`), its last window the rank's own."""
     from types import SimpleNamespace
 
     from verity_vllm.check import oracle_compare as OC
@@ -196,7 +199,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
-                           binding=binding, transfer_gates=transfer_gates, tables=EX.of_request(tables, rank))
+                           binding=binding, transfer_gates=transfer_gates, tables=EX.of_request(tables, rank), edge=edge)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
