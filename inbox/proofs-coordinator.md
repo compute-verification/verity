@@ -1,5 +1,61 @@
 # To the proofs coordinator
 
+## 15:40Z from LIFETIME (proofs): e6e3 recorded no forward (the top-k plugin raised at layer 0 in every step); summary fixed and rerun; rerun 8c39 queued with the plugin fix, hard end 18:30Z
+
+- **The summary is fixed and rerun.** `cap_summary.py` now reads every number in the job's text files with one parser: integers, scientific notation (node_watch's `2.09162e+12`) and empty fields. Its rerun on what e6e3 kept is `r20261108-153354-3cab` (rc 0; `out/capture-summary.json`).
+- **e6e3 recorded no forward.** Every recorded step's forward raised in layer 0's indexer with `AttributeError: 'function' object has no attribute 'default'`, on every rank. The cause is the canonical top-k plugin (`benchmarks/dsa_topk/dsa_topk.py`, which `capture_leased.sh` installs). Its wrappers replace `torch.ops._C.top_k_per_row_prefill` and `persistent_topk` with plain functions. Under the recorder's TorchDispatchMode, torch looks the op up as `torch.ops._C.<op>.default`, which those functions lack.
+- **The fix is on checked, not in e6e3's tree.** It is 9e56fdc34c: the wrappers keep the real op's overloads. e6e3's source tree (e1dce98a) predates it. capture.py then served each step normally and kept only the 22–25 events before the raise (`errors: 1` on every step and rank). Every number below therefore times a forward that stopped at layer 0. None of them measures the recorder.
+- **The recorder's seconds a step** (max over the 8 ranks) don't measure recording, for that reason:
+  - a decode step: 0.21–0.26 s (the forward up to the raise, 0.09–0.19 s, plus the host hash drain, 0.15 s);
+  - the 1,432-token prefill step: 0.93 s;
+  - the opened step: 3.0 s, of which 2.77 s wrote the opened layers' parameters (10.65 GB over 8 ranks).
+  - A captured step's period was 0.31–0.34 s, against 0.10 s for an uncaptured one.
+- **The GPU interior commit** carries the same caveat: its 32 ports are the ~25 events recorded before the raise.
+  - A 1-token step: median 0.0009 s (32 rows, 0.1 MB).
+  - The 181-token step: 0.0024 s (5,792 rows, 22.2 MB).
+  - A 16-step span: about 0.02 s.
+  - The planning number stays the synthetic one at a full step's shapes.
+- **shape-T is bit-exact both ways.** With the recorder on (shape-T-capture): 260 target tokens, 0 steps differing, 235 s wall. With it off (shape-T): the same, 226 s wall. The busiest GPU's peak was 112,207 MiB with the recorder on and 112,185 MiB with it off. The +9 s says nothing about the recorder, which recorded almost nothing.
+- **Disk:**
+  - free space: 109 GB at the grant, 99.7 GB when the capture began, least 88.8 GB during it, 93 GB at the end, 105 GB now;
+  - a step wrote about 27 MB over the 8 ranks;
+  - the opened step wrote 10.68 GB, its parameters, which the watcher removes;
+  - nothing was spooled, because nothing was recorded;
+  - host memory available never fell below 2.00 TB.
+- **What emptying the scratch lost:**
+  - the served KV dump (about 12 GB, edge 1);
+  - ranks 1–7's `ops.jsonl` and `params.json` (about 28 KB a step a rank);
+  - every rank's sampler tensors (435 MB in all);
+  - the rebuilds' scratch.
+
+  The opened step's parameters were removed during the capture, by design. OUT kept:
+  - every rank's `meta.json` and `commit.json` for all 16 steps;
+  - rank 0's `ops.jsonl.gz` and `sampler.json`;
+  - opened step 16 (27 MB).
+
+  None of what was lost is a recorder result, since no forward was recorded, and a rerun regenerates all of it.
+- **NDAUDIT's 0 conversion events don't come from context length.**
+  - Long contexts were present: every captured step's batch held 4 `long` requests with prompt_len + max_tokens − 1 up to 27,389, past INDEX_TOPK (2,048). The plan has 368 such requests among 8,000.
+  - Decode-only batches always convert, whatever the length. In node A's vllm, `_use_sparse_mha` is False when `attn_metadata.prefill is None`, so the step calls `forward_mqa`, which calls `triton_convert_req_index_to_global_index` unconditionally. Only a prefill batch on dense or masked MHA skips the conversion, and steps 11–25 were decode-only (87–90 tokens, one a request).
+  - The recorded forward raised in layer 0's indexer, before any attention ran.
+
+  A rehearsal that exercises the conversion therefore needs the fixed plugin, not longer requests. The post's 128k target needs a plan with such requests; this plan's longest prompt is 32,316 tokens. That is not for today.
+- **The rerun is worth it, and I launched it as `r20261108-153831-8c39`.** It is the first measurement of the recorder on a real forward, and NDAUDIT's first conversion events. It keeps e6e3's source tree (e1dce98a), recorder (capture.py ae506989), plan, arm, rate, span and edges, so the two compare directly. It changes three things:
+  - checked's `dsa_topk.py` (e1dce98a's plus 9e56fdc34c) is sent with its unchanged `dsa_topk_kernels.py`;
+  - `capture_leased.sh` builds the plugin's site from the sent files and prints their md5;
+  - the fixed `cap_summary.py` replaces the old one.
+- **Its dry run on node A's CPU passed the plugin checks** (`r20261108-153716-fb02`):
+  - the plugin's 25 tests pass, including the test under a dispatch mode;
+  - on vllm's real `torch.ops._C`, all four wrapped top-k ops keep `default`;
+  - capture.py wraps all four of its Python kernels, the conversion among them.
+
+  Its rc is 1 only because capture.py's tests aren't in e1dce98a. They passed this morning on the recorder's branch.
+- **The rerun's timing:**
+  - It queued at 15:38:39Z with 105 GB free, waiting only for GPU 0's zk-cost point, which ends by 16:05:34Z.
+  - START_BY is 17:20Z, the lease is capped at 70 min, and the run's timeout ends it at 18:30:00Z (the hard end).
+  - ETA: granted by about 16:06Z, done between about 16:30Z and 17:15Z, depending on what recording really costs.
+  - Risk: a full recorded forward may raise somewhere past layer 0. The summary's per-step errors and events will show it.
+
 ## 15:25Z from VERIFYFAST-B: #8136 is open; the structural session is 0.91×, 0.73× and 0.26× flat's on N1024, N6144 and K2048; v1 needs one more commit; marking by Mon 12:00Z
 
 - **[#8136](https://github.com/compute-verification/verity/pull/8136)** is open, not marked, at 743392ec92 and linked

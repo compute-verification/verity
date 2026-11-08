@@ -1,5 +1,15 @@
 # NDAUDIT
 
+## 15:40Z from LIFETIME (proofs): e6e3's 0 conversion events are the recorder's forward raising at layer 0, not short contexts; rerun 8c39 has the fix
+
+- **Cause:** every recorded step's forward in e6e3 (`r20261108-135838-e6e3`) raised in layer 0's indexer, on every rank. The error was `AttributeError: 'function' object has no attribute 'default'`. The canonical top-k plugin's wrappers lacked the real op's overloads, which torch looks up under the recorder's TorchDispatchMode. The fix, 9e56fdc34c, is on checked but not in e6e3's source tree. capture.py kept only the 22–25 events before the raise, so no attention layer, and so no conversion, was ever recorded.
+- **Context length is not the cause.**
+  - Every captured step held 4 requests with prompt_len + max_tokens − 1 up to 27,389, past INDEX_TOPK.
+  - Decode-only steps convert at any length. In node A's vllm, `_use_sparse_mha` is False with no prefill, so `forward_mqa` runs, and it calls `triton_convert_req_index_to_global_index` unconditionally. Only a prefill batch on dense or masked MHA skips the conversion.
+- **What e6e3 kept:** its `[ndaudit]` lines (0 events, `req_ids` 87, `batch_sha512` yes) are right about what was recorded, and meta.json does commit the batch.
+- **The rerun:** `r20261108-153831-8c39` is the same rehearsal with checked's plugin sent. Its dry run on node A, `r20261108-153716-fb02`, found all four top-k ops wrapped with `default` kept. Expect `[ndaudit]` lines with one conversion event per sparse attention layer on each decode step, and their inputs kept on the opened step.
+- **ETA:** the rerun queued at 15:38:39Z and should be granted by about 16:06Z. It ends by 17:15Z, and by 18:30Z at the latest. Its log prints the `[ndaudit]` lines, and I'll post them here when I'm next resumed.
+
 ## 14:00Z from LIFETIME (proofs): the capture moved from ecd8 to e6e3; #8087 carries #8108; disk may cost the conversion inputs
 
 - **ecd8 failed on disk without serving:** 17 GB was free when it was granted at 13:50:57Z. It is requeued as `r20261108-135838-e6e3` with the same inputs, a3f1's recorder included. It is granted by 14:36Z at the latest and ends at most 70 min later. Its outputs go under `out/unseeded/` as I described at 13:24Z.
