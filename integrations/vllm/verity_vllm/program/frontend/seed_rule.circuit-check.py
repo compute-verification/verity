@@ -2,14 +2,25 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
+
+SIZES = ((16, 4), (64, 16))
 
 
-def _by_calls_roots() -> list[Any]:
-    """`ServedSeed_v1` and `SeedCheck_v1` at a message of one SHA-512 block (a 16-byte coin, a 4-byte id) and of two (a 64-byte
-    coin, a 16-byte id), checked by their calls: each is `Sha512Compress_v1` Calls, a few hundred thousand gates a block, then
-    `SeedSelect_v1` (and `SeedEqual_v1`), which are static-free and built whole."""
+def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
+    """`SeedBlocks_v1` at a message of one SHA-512 block (a 16-byte coin, a 4-byte id) and of two (a 64-byte coin, a 16-byte
+    id); `SeedSelect_v1` and `SeedEqual_v1` are static-free."""
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.frontend import seed_rule as SR
 
-    return [bind(d, COIN=coin, RID=rid) for d in (SR.ServedSeed, SR.SeedCheck) for coin, rid in ((16, 4), (64, 16))]
+    return [(f"SeedBlocks_v1:{c}:{r}", lambda c=c, r=r: bind(SR.SeedBlocks, COIN=c, RID=r)) for c, r in SIZES] + [
+        ("SeedSelect_v1", lambda: SR.SeedSelect), ("SeedEqual_v1", lambda: SR.SeedEqual)]
+
+
+def _by_calls_roots() -> list[Any]:
+    """`ServedSeed_v1` and `SeedCheck_v1` at the same two sizes, checked by their calls: `SeedBlocks_v1`, a
+    `Sha512Compress_v1` Call (a few hundred thousand gates) a block, then `SeedSelect_v1` (and `SeedEqual_v1`)."""
+    from verity.ml.circuits.defs import bind
+    from verity_vllm.program.frontend import seed_rule as SR
+
+    return [bind(d, COIN=c, RID=r) for d in (SR.ServedSeed, SR.SeedCheck) for c, r in SIZES]
