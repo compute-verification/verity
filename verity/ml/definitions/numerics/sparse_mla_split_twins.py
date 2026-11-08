@@ -1,5 +1,6 @@
 """Numpy twins of `registry.sparse_mla_split`'s Definitions, vectorised over rows: `MufuLg2Ftz_v1` (`mufu_lg2_words`, with
-`undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`),
+`undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`), `SparseMlaCombineLse_v1`
+(`combine_lse_rows`),
 `SparseMlaSplitPart_v1` (`part_rows`, one split's partial and lse) and `SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1
 is `SparseMlaHead_v1`).  The blocks are `derived_rows.attn_block` over
 q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s steps, which `SparseMlaBlock_v1` restates), the step
@@ -75,22 +76,38 @@ def _lane0(op, v: np.ndarray) -> np.ndarray:
     return v[:, 0]
 
 
-def combine_rows(lse, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
-    """`SparseMlaCombine_v1{NSPLIT, DV, INV}`: lse (R, NSPLIT), o (R, NSPLIT, DV) f32 words -> (R, DV) bf16 words."""
+def _combine(lse, o, inv) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The combine's (out (R, DV) bf16 words, the warp max before its guard (R,), the warp sum (R,))."""
     lse, o = np.asarray(lse, dtype=U32), np.asarray(o, dtype=U32)
     R, NSPLIT = lse.shape
     if not 1 <= NSPLIT <= W.LANES:
         raise ValueError(f"combine_rows: NSPLIT={NSPLIT} splits, the warp holds 1 to {W.LANES}")
     lanes = np.concatenate([lse, np.full((R, W.LANES - NSPLIT), W.NEG_INF, dtype=U32)], axis=1)
-    cur = DR.guard_neg_inf_zero(_lane0(DR.max_fmnmx, lanes))
+    mx = _lane0(DR.max_fmnmx, lanes)
+    cur = DR.guard_neg_inf_zero(mx)
     log2e = np.full(lanes.shape, W.LOG2E, dtype=U32)
     scale = DR.mufu_ex2_ftz(DR.mul_ftz(DR.sub_ftz(lanes, cur[:, None]), log2e))
-    inv_sum = inv(_lane0(DR.add_ftz, DR.add_ftz(np.zeros_like(scale), scale)))
+    tot = _lane0(DR.add_ftz, DR.add_ftz(np.zeros_like(scale), scale))
+    inv_sum = inv(tot)
     acc = np.zeros((R, o.shape[2]), dtype=U32)
     for s in range(NSPLIT):
         w = DR.mul_ftz(scale[:, s], inv_sum)
         acc = np.where(gtz(w)[:, None], DR.fma_ftz(np.broadcast_to(w[:, None], acc.shape), o[:, s], acc), acc)
-    return DR.f2fp_bf16(acc)
+    return DR.f2fp_bf16(acc), mx, tot
+
+
+def combine_rows(lse, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
+    """`SparseMlaCombine_v1{NSPLIT, DV, INV}`: lse (R, NSPLIT), o (R, NSPLIT, DV) f32 words -> (R, DV) bf16 words."""
+    return _combine(lse, o, inv)[0]
+
+
+def combine_lse_rows(lse, o, *, inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
+    """`SparseMlaCombineLse_v1{NSPLIT, DV, INV}`: `combine_rows`' (R, DV) bf16 words and the stored lse (R,), FFMA.FTZ of the
+    sum's MUFU.LG2, LN2 and the FMNMX max before its guard, every NaN the GPU's 0x7FFFFFFF."""
+    out, mx, tot = _combine(lse, o, inv)
+    s = DR.fma_ftz(mufu_lg2_words(tot), np.full(tot.shape, W.LN2, dtype=U32), mx)
+    nan = ((s & 0x7F800000) == 0x7F800000) & ((s & 0x7FFFFF) != 0)
+    return out, np.where(nan, U32(W.QNAN), s).astype(U32)
 
 
 def _operands(what: str, q_nope, q_rope, kv, T: int, DR_: int, DV: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

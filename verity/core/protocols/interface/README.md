@@ -135,7 +135,7 @@ A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated agai
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
 port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
 `Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
-- It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
+- It requires `security` (the spec, Definitions) and, by path, the code it states properties of. It never requires
   `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
 - A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
   `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. Sampled proofs' `audit_profile`

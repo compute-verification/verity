@@ -74,7 +74,7 @@ def scatter(m: Any, j0: int, out: Any, offset: int, size: int) -> int:
 def flat(buf: Any) -> Any:
     """`buf`'s bytes as a flat uint8 view (a load buffer is any contiguous tensor)."""
     if not buf.is_contiguous():
-        raise ValueError("a staging buffer is contiguous")
+        raise ValueError("a load buffer is contiguous")
     return buf.view(-1).view(torch.uint8)
 
 
@@ -149,7 +149,7 @@ class EncodedRows:
         if padded:
             why.append(f"{padded} tensors' last blocks are nonzero past the tensor's end")
         if lib & 1:
-            why.append("a tweak's first candidate at or above p (the spec draws the next; the library doesn't)")
+            why.append("a tweak's first candidate at or above p (the spec derives the next; the library doesn't)")
         if lib & ~1:
             why.append(f"library flags {lib:#x}")
         if why:
@@ -175,7 +175,7 @@ def decode_layer(store: EncodedRows, layer: int, staging: Any, *, check: bool = 
     writes; `staging`."""
     dst, total = flat(staging), store.layout.staging_bytes(layer)
     if dst.numel() != total:
-        raise ValueError(f"layer {layer}'s staging buffer is {total} bytes, not {dst.numel()}")
+        raise ValueError(f"layer {layer}'s load buffer is {total} bytes, not {dst.numel()}")
     at = 0
     for t in sorted(store.layout.layer(layer), key=lambda t: t.staging_offset):
         dst[at:t.staging_offset].zero_()
