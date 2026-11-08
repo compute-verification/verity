@@ -21,3 +21,6 @@ Coordinator 10:06Z, decisions on VLLM-250 (10:05Z comment): YES, (b) builds the 
 [2026-11-08T10:11Z] 99ad10e5fe5b
 Coordinator 10:12Z: proofs extended node A to Tue 16:00–22:00Z (serve 16–18Z, your GPU capture 18–22Z) and recorded (c)'s wording. Their ASK (VLLM-250, 10:15Z): can the 18–22Z capture ALSO record the inputs of the sampled cells for EVERY template, to ZKTWO's record spec, so (c) can prove a per-cell sample of every template from the same window if P1 lands (Mon 12:00Z)? Design the capture to do that if it fits. Post on VLLM-250 by Sun 18:00Z: added capture time and disk, and whether it fits in 4 h. Node A disk: about 120 GB free, GLM-5.3 checkpoint (704 GB) must stay, and /workspace/spot-capture already holds 143 GB, so size it to that or stream it off the node.
 
+[2026-11-08T10:18Z] de76d244445b
+Coordinator 10:22Z: read proofs' 10:25Z comment on VLLM-250. P1 is MARKED: #8066 (93f688cb6e, cursor/proofs-zktwo-cells-14ff), with the second stage sampling one cell per (replay block, template); it lands after #7981. A possible change to the interior record (mixed_population_program vs the templates' folded form) is decided by about 11:30Z: don't lock the interior layout before then. Build against P1's per-template cells.
+
