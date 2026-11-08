@@ -755,7 +755,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
     assert cut and [u.chunks for u in plan.requests] == [(), (), (64, 64, 64, 39), (64, 1), (64, 64, 59), (), (22, 64, 64, 64, 42),
                                                          (33, 64, 4)]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
-                                              "chunks": list(u.chunks), "digest": f"d{u.request}"} for u in plan.requests]}
+                                              "chunks": list(u.chunks), "digest": f"d{u.request}", "stop": u.stop} for u in plan.requests]}
     (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
     assert long[long.index("--max-model-len") + 1] == "2316"
     cmds = trace_commands(summary, reg, str(tmp_path))
@@ -867,7 +867,8 @@ def test_class_g_plans_each_request_at_the_launch_context_its_build_traced(tmp_p
     assert [u.batch() for u in plan.requests] == [traced[(u.LP, u.T)] for u in plan.requests]
     record = json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53_B8]["programs"]["0"]["requests"]
     assert sorted(f"build_request_LP{u.LP}_T{u.T}" for u in plan.distinct()) == sorted(record)
-    summary = {"requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch()} for u in plan.requests]}
+    summary = {"requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(), "stop": u.stop}
+                            for u in plan.requests]}
     cmds = trace_commands(summary, reg, str(tmp_path))
     assert [json.loads(c[c.index("--launch-context") + 1]) for c in cmds] == [{"batch": u.batch()} for u in plan.requests]
     assert len({c[c.index("--out") + 1] for c in cmds}) == 8 and trace_dir(plan.requests[0]).startswith("build_request_LP11_T12_greedy_l")
