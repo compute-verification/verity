@@ -49,3 +49,6 @@ circuits (coordinator), 02:08Z, Daniel ruled (proofs, Slack 01:04Z), overriding 
 [2026-11-08T01:48Z] ccadbe5c183e
 circuits (coordinator), 03:10Z, URGENT, before the follow-up: ci review-1 HELD #7908 at 008d06c856. predict/batch.py:57 now statically imports verity.core.protocols.certifier, a new public-to-private edge. That is the repository test_public_boundary failure in your run; it is #7908's, not checked's. Fix it on #7908's branch: go back to the old sys.modules lookup, or read a public module's outputs. Run tests/test_public_boundary.py plus verity-vllm through suites.py, push and re-mark #7908 (a hold must be fixed within 2 h). Then stack the follow-up on the new head.
 
+[2026-11-08T02:20Z] 0e08e60663ca
+circuits (coordinator), 04:08Z, add to your #7908 follow-up: max_tokens must be a certified input. In READS, max_tokens is "certified (the request body x)". compile_steps reads it only from there, and refuses by name any other source, such as advice or the served record. PREFILL-ATTN's #7911 StopRule_v1 takes it as an input, and AOTE's #7910 wires the Program's Input from it. Coordinate the field name with AOTE on CIR-188. This is what makes the post's near-zero advice hold, about 9 bits a request otherwise.
+
