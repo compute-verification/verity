@@ -562,16 +562,16 @@ theorem flushP_pend (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ 
   flushP_tabExp pt hs L H iv _ _ _ _
 
 /-- **`addK`'s sums**: slot `s` gains `ws[j] · f` for each of the `n` copies `j` from `k` on whose slot `as[j] + t` is
-`s`. -/
-theorem addK_spec (as : Array ℕ) (ws : Array F128) (t : ℕ) (f : F128) (s : ℕ) :
+`s` (each times `c`). -/
+theorem addK_spec (as : Array ℕ) (ws : Array F128) (t : ℕ) (f : F128) (s : ℕ) (c : GF128) :
     ∀ (n k : ℕ) (pd : Array F128), pd.size = 64 → (∀ j, k ≤ j → j < k + n → as.getD j 0 + t < 64) →
       (addK as ws t f n k pd).size = 64 ∧
-        of ((addK as ws t f n k pd).getD s 0) = of (pd.getD s 0) +
-          ∑ j ∈ Finset.range n, if as.getD (k + j) 0 + t = s then of (ws.getD (k + j) 0) * of f else 0
+        of ((addK as ws t f n k pd).getD s 0) * c = of (pd.getD s 0) * c +
+          ∑ j ∈ Finset.range n, if as.getD (k + j) 0 + t = s then of (ws.getD (k + j) 0) * of f * c else 0
   | 0, k, pd, hpd, _ => by simp [addK, hpd]
   | n + 1, k, pd, hpd, hj => by
     have hi : as.getD k 0 + t < pd.size := by rw [hpd]; exact hj k le_rfl (by omega)
-    obtain ⟨h1, h2⟩ := addK_spec as ws t f s n (k + 1) (pd.modify (as.getD k 0 + t) (· + ws.getD k 0 * f))
+    obtain ⟨h1, h2⟩ := addK_spec as ws t f s c n (k + 1) (pd.modify (as.getD k 0 + t) (· + ws.getD k 0 * f))
       (by rw [Array.size_modify, hpd]) (fun j hj1 hj2 => hj j (by omega) (by omega))
     simp only [addK]
     refine ⟨h1, ?_⟩
@@ -596,18 +596,20 @@ theorem refDK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
       rw [← (low_split hB (has j (by omega)) (pos v % A)).1]
       exact Nat.mod_lt _ (by norm_num)
     have hrx : ∑ k ∈ Finset.range nk, of (ws.getD k 0) * (hiE pt L H cx * refX D pt s L H A B as gL pos iv k v) =
-        (∑ j ∈ Finset.range nk, if as.getD (0 + j) 0 + B * (pos v % A) % 64 = s then
-          of (ws.getD (0 + j) 0) * of (fac v) else 0) * (hiE pt L H cx * hiG pt L H (pos v / A)) := by
-      simp only [Finset.sum_mul]
+        ∑ j ∈ Finset.range nk, if as.getD (0 + j) 0 + B * (pos v % A) % 64 = s then
+          of (ws.getD (0 + j) 0) * of (fac v) * (hiE pt L H cx * hiG pt L H (pos v / A)) else 0 := by
       refine Finset.sum_congr rfl fun k hk => ?_
       obtain ⟨h1, h2⟩ := low_split hB (has k (Finset.mem_range.1 hk)) (pos v % A)
       simp only [refX, hv, ↓reduceIte, h1, h2, hfac v hv, Nat.zero_add]
       split_ifs <;> ring
     rw [hrx]
+    obtain ⟨h1, h2⟩ := addK_spec as ws (B * (pos v % A) % 64) (fac v) s
+      (hiE pt L H cx * hiG pt L H (pos v / A)) nk 0 pd hst hlt
+    obtain ⟨h1', h2'⟩ := addK_spec as ws (B * (pos v % A) % 64) (fac v) s
+      (hiE pt L H cx * hiG pt L H (pos v / A)) nk 0 (Array.replicate 64 0) (by simp) hlt
     by_cases hc : px = cx ∧ py = pos v / A
-    · obtain ⟨rfl, rfl⟩ := hc
-      simp only [Tab.refDK, hv, ↓reduceIte, beq_self_eq_true, Bool.and_self]
-      obtain ⟨h1, h2⟩ := addK_spec as ws (B * (pos v % A) % 64) (fac v) s nk 0 pd hst hlt
+    · obtain ⟨hx, hy⟩ := hc
+      simp only [Tab.refDK, hv, ↓reduceIte, hx, hy, beq_self_eq_true, Bool.and_self]
       refine ⟨h1, ?_⟩
       unfold pendP
       dsimp only
@@ -615,11 +617,10 @@ theorem refDK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
       ring
     · have hc' : (px == cx && py == pos v / A) = false := Bool.eq_false_iff.2 fun h => hc (by simpa using h)
       simp only [Tab.refDK, hv, ↓reduceIte, hc', Bool.false_eq_true]
-      obtain ⟨h1, h2⟩ := addK_spec as ws (B * (pos v % A) % 64) (fac v) s nk 0 (Array.replicate 64 0) (by simp) hlt
-      refine ⟨h1, ?_⟩
+      refine ⟨h1', ?_⟩
       unfold pendP
       dsimp only
-      rw [h2, flushP_tabExp pt hs, getD_replicate, of_zero']
+      rw [h2', flushP_tabExp pt hs, getD_replicate, of_zero']
       ring
   · simp only [Tab.refDK, hv, ↓reduceIte]
     refine ⟨hst, ?_⟩
