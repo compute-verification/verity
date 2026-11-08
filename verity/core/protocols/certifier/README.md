@@ -132,6 +132,11 @@ A spec-level reference for network accounting's timing channel:
   hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
   leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
   cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
+- the block pool as memory-checked RAM (`cache_step_v3`): `CacheStep_v3`, a window's pool calls as one stream of NS
+  access slots over the five memories vLLM's `BlockPool` is made of (blocks, keys, key copies, request blocks, request
+  keys), checked by `MemCheck_v1`'s fingerprint under live coins, with a bus product of the calls' records for
+  `ReplayStep_v1`. A window's price is NS slots and NE list entries from a public ladder, whatever the pool's size;
+  `Stream` is its specification, held to the replay's pool by `benchmarks/mempool/stream.py`;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
@@ -277,7 +282,7 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
-The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `compile_slice_v2`,
+The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
 `compile_slice_v3`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
