@@ -79,9 +79,9 @@ theorem SampledLeakChecked_nontrivial :
       (Bext FlockDeploy.sha512 (leakD Bool).V (Claims.Sampling.E (leakD Bool) fun _ => [()])) := by
   intro h
   have hb := h [] ⟨leakD_scopeAcc [], checkedWitness_true _ _ _ []⟩ Unit silentP
-  exact leakD_bound_fails FlockDeploy.sha512 _ _ (Claims.Sampling.κ (leakD Bool) 0 [] + 0) []
-    (fun w hw => leakD_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakChecked hw))
+  refine leakD_bound_fails FlockDeploy.sha512 _ _ (Claims.Sampling.κ (leakD Bool) 0 [] + 0) [] ?_
     (by linarith [leakD_κ (Coin := Bool) []]) hb
+  exact fun w hw => leakD_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakChecked hw)
 
 /-- **`PooledLeakChecked`'s escape bound fails at an audit that always accepts**: one window, `q = 1`, `Fmax = 1`, no
 error, and the window's observations empty where its horizon is one step, so its good event fails at every sample. -/
@@ -91,10 +91,12 @@ theorem PooledLeakChecked_nontrivial :
           (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
           (fun _ => [])) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
-  have hng : ¬PooledGoodChecked (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) 1
-      (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
-      (fun _ => []) := fun h => absurd (h.2 0).2.2.1 (by simp)
-  rw [Pr_congr fun _ => iff_true_intro ⟨fun _ => trivial, hng⟩]
+  have hp : (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
+      ¬PooledGoodChecked (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) 1
+        (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
+        (fun _ => [])) = fun _ => True :=
+    funext fun _ => propext (iff_true_intro ⟨fun _ => trivial, fun h => absurd (h.2 0).2.2.1 (by simp)⟩)
+  rw [hp]
   simp [Pr]
 
 end NetTiming.Witness

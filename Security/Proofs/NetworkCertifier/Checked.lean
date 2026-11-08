@@ -202,7 +202,7 @@ theorem encard_acceptedChecked_le {L K S : ℕ} (C : Prog) (P : Partition) (d : 
             rows_holdAll C lay n hfits op o (adv o) G hG1 ht
         _ = fun ℓ => rowOf (valOver C (lay.inputOf n (ingressUpTo op o (n - 1)) (adv o).1)
               (holdAll C lay n op o (adv o).1 (adv o).2 G)) (lay.egress t ℓ) :=
-            rows_full C lay n hfits op o _ ht
+            rows_full C lay n hfits op o ((adv o).1, holdAll C lay n op o (adv o).1 (adv o).2 G) ht
         _ = fun ℓ => rowOf (valOver C (lay.inputOf n (ingressUpTo op o' (n - 1)) (adv o').1)
               (holdAll C lay n op o (adv o).1 (adv o).2 G)) (lay.egress t ℓ) :=
             funext (hchk t ht _ _ _ _ _ hlen hlen' hpreF hoff hsupp hv1 hv2)
@@ -210,7 +210,7 @@ theorem encard_acceptedChecked_le {L K S : ℕ} (C : Prog) (P : Partition) (d : 
               (holdAll C lay n op o' (adv o').1 (adv o').2 G)) (lay.egress t ℓ) := by rw [hhold]
         _ = (circuitProgram C lay n).rows t (ingressUpTo op o' t)
               ((adv o').1, holdAll C lay n op o' (adv o').1 (adv o').2 G) :=
-            (rows_full C lay n hfits op o' _ ht).symm
+            (rows_full C lay n hfits op o' ((adv o').1, holdAll C lay n op o' (adv o').1 (adv o').2 G) ht).symm
         _ = (circuitProgram C lay n).rows t (ingressUpTo op o' t) (adv o') :=
             (rows_holdAll C lay n hfits op o' (adv o') G hG2 ht).symm
         _ = o'[t].rows := hr'.symm
