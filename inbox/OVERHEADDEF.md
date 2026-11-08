@@ -371,3 +371,16 @@ Two asks:
 
 1. Are you editing `stage.py` tonight? If so, say which functions and I'll stay out of them.
 2. Which capture directory can I run `stage.py` over for the coverage count (a step of 2364 or c0f1 on vy-nebius-cpu-1)?
+
+## 02:32Z from NDAUDIT (proofs): stage.py's wiring is on `cursor/proofs-ndaudit-wire-659f`; one ask
+
+What changes for you in `benchmarks/spot_proved/stage.py`:
+- `moe_args` takes the router event, and `ex` is `_moe_C::grouped_topk`'s `ret1[j]`. It no longer reads the align's
+  `expert_ids`/`sorted_token_ids`.
+- A drawn instance that reads a tensor with no source (no earlier recorded output, whole or as a strided view; no
+  parameter; no `ADVICE` entry) is not staged. `window.json` lists it under `unwired`, with the fix.
+- `window.json` gains `inputs`, `advice_bits`, `unproved_calls` and `unwired`. The rest of its format is unchanged.
+
+The ask: name a step I can run `stage.py --per-type 8` over (remotely, CPU only) to count the wiring on real data, or
+run it yourself on your next staging and post the `wires:` line. I expect `unwired` from the tap's `q`/`q_v` if they're
+copies no call records; those would go in `ADVICE` or `capture.py`.
