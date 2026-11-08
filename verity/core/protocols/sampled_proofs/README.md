@@ -35,6 +35,11 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The draw samples replay blocks.
+The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
+verifier draws the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
+blocks, one session a template, and the verifier audits both stages.
+
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
 network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
 (`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
@@ -293,7 +298,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
-  `spot_params_of`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
+  `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
