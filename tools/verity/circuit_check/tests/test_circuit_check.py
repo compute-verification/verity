@@ -1031,20 +1031,15 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
-_SERVED_EXPERTS = ("GLM-5.3's MoE expert GEMM at served statics, kept in the suite by its digest pin (`fp8_moe_experts.circuit-check.py`); "
-                   "the word query and Q_call resolve every leaf of its expert stack, and its partition is checked at the sidecar's E=4 bindings")
-
 #: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
-#: is allowed: the suite's (GLM-5.3's served expert GEMMs over the leaf budget, an E = 256 stack of FP8 weights: 805M leaves
-#: for w13, 403M for w2), and any range spot or callee of one `_unchecked_walk` reaches.  Each passes no Call status to its
-#: callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes.  Over the gate budget
-#: alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut member
-#: by member; the σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`, whose split moves GLM-5.3's and
-#: DeepSeek-V4's word digests) and multimem at 86 rows and more, over the leaf budget too, are partitioned by their callees
-OVER_PARTITION_BUDGET = {
-    **{f"MoeExpertFp8Gemm{w}_v1{{E=256,K={k},N={n},G=128,KB=128,SWAP={swap},DOT=HopperE4m3{dot}Dot32_v1}}": _SERVED_EXPERTS
-       for w, k, n in (("", 6144, 512), ("W", 256, 6144)) for swap in (False, True) for dot in ("MmaV2", "Qgmma")},
-}
+#: is allowed: the suite's, and any range spot or callee of one `_unchecked_walk` reaches; none is.  Each passes no Call status
+#: to its callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes.  Over the gate
+#: budget alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut
+#: member by member; the σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`, whose split moves
+#: GLM-5.3's and DeepSeek-V4's word digests), multimem at 86 rows and more, over the leaf budget too, and GLM-5.3's served
+#: expert GEMMs, over the leaf budget (an E = 256 stack of FP8 weights: 805M leaves for w13, 403M for w2), are partitioned by
+#: their callees
+OVER_PARTITION_BUDGET: dict[str, str] = {}
 
 
 def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
