@@ -14,7 +14,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import coins as T, service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 import fake_challenger as FC
 
@@ -360,6 +360,24 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
         assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
     with pytest.raises(ValueError, match="fixed count"):
         S.Law("subset:2")
+
+
+def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pads_n():
+    """`stratified-rate:1/3` and `work-rate:1/3` size each stratum's k over the registration's own strata, at least
+    ⌈n_s/3⌉ (Lean's `Rate.workK_ge`), so a registration padded tenfold (N = 60 for 6) samples 20 of its one stratum and
+    every proof block is still sampled with probability k/n_s ≥ 1/3, where `stratified:2` or `work:2`, which a rule can't
+    state, would fall to 2/60."""
+    for text, table in (("stratified-rate:1/3", None), ("work-rate:1/3", WORK)):
+        for n, k in ((6, 2), (60, 20)):
+            program = P.population_program(PAIR, n)
+            law, rated = S.params_law(text, program, QUERY, table)
+            assert [s["k"] for s in D.derive(program, QUERY, law, rated)["strata"]] == [k] and 3 * k >= n, (text, n)
+            stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)))
+            draw = stream.select(stream.register(_rated(text, n, table=table), _ports(n), work_table=table))
+            assert len(draw.units) == k, (text, n)
+    for text in ("stratified:2", "work:2"):
+        with pytest.raises(ValueError, match="fixed count"):
+            S.Law(text)
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
