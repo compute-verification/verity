@@ -77,7 +77,7 @@ subcircuit template bound from its Definition, with the number of the template's
 - `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
 - `Attention_v3`, `Attention_v2` and `Attention_v4` are NH `attention-head` (FA2, or FA3; `Attention_v4` is FA3 under its per-iteration `Check_inf` construction, whose `MASKED_FROM` names the first masked key block);
 - `RoPE_v1` is NHEADS `rope-head`;
-- the MoE expert GEMMs and the FP8 block-scaled GEMM are N coordinates;
+- the MoE expert GEMMs and the FP8 GEMM with scale groups are N coordinates;
 - the other families are one row each.
 
 The captured input sets (vllm-vu-export) sample these counts. They cross-check the mix and are linked to their workload

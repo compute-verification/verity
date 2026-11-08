@@ -33,7 +33,7 @@ gate reads ``LEFT_OUT``, ``FIX``, ``holds``, ``sites`` and ``parse`` from the ba
 
     python3 tests/lint/test_repo_lane_text.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_lane_text.py --prune          # delete and lower what this tree no longer finds
-    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the gate holds a rise)
+    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the ratchet gate flags a rise)
 """
 from __future__ import annotations
 
