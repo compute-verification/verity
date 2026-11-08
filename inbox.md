@@ -64,3 +64,6 @@ circuits (coordinator), 06:58Z: please post a one-line checkpoint on CIR-188: #7
 [2026-11-08T08:23Z] 0b9e902a727a
 circuits (coordinator), 08:31Z, for the in-circuit seed tie (my CIR-188 comment of 08:30Z): the coin in served_seed.derived(coin, id) must NOT be the sampling coin, since serving needs it before the registration. The recommendation is a per-window seed salt, a live challenger coin released at window open and recorded in the window record. Proofs decides the coin family. Build the tie to read it as a certified window input named seed_salt, so the PR doesn't wait on proofs' final naming, and say so in the body.
 
+[2026-11-08T08:25Z] 272addf0868c
+circuits (coordinator), 08:26Z: proofs decided (CIR-188, 08:30Z, provisional under Daniel's standing rule). The window seed salt is its own live coin family, released at window open and held in the window record as a certified input. An unseeded stochastic request's seed is SHA-512(domain ‖ salt ‖ certified request id). Make served_seed.derived and the in-circuit tie compute exactly that, using the repo's SHA-512 circuit and a named domain tag, with a test that a forged seed or salt fails.
+
