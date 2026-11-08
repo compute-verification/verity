@@ -34,8 +34,8 @@ from verity_vllm.records import weights_registration as WRG
 
 from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.pouw import audit as AU
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
@@ -290,9 +290,10 @@ def test_a_slots_outputs_are_its_selects_collected_into_its_entry(window):
 
 def test_a_slots_entry_stops_at_the_registered_models_stop_ids(window):
     """The entry's ``STOP`` is `stop_ids`, the registered model's config's ``eos_token_id`` (an id, a list of them or none):
-    TINY declares none, Llama-3.2-1B one (128001), and a list is its set in order."""
+    TINY declares one (255), Llama-3.2-1B one (128001), and a list is its set in order."""
     circuit, ids = window
-    assert circuit.template(ids[ENTRY]).bindings["STOP"] == WC.stop_ids(S._registered()) == ()
+    assert circuit.template(ids[ENTRY]).bindings["STOP"] == WC.stop_ids(S._registered()) == (255,)
+    assert WC.stop_ids(S._registered({k: v for k, v in S.TINY.items() if k != "eos_token_id"})) == ()
     assert WC.stop_ids(S._registered({**S.TINY, "eos_token_id": 128001})) == (128001,)
     assert WC.stop_ids(S._registered({**S.TINY, "eos_token_id": [9, 3, 9]})) == (3, 9)
 

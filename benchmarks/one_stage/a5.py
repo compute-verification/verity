@@ -131,10 +131,13 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
   (`tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
   registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
-  root. The audit record's ``registered_reads`` carries each sampled chunk's table and root from that file beside the
+  root. Lean takes registered reads only when they name every port of the circuit (`Flock.Registered.checkComplete`), so
+  each such member's reads also name its other ports, each as rows of its own tree at the registration's root, unit
+  ``base + i`` its row i (`rows.own_reads`), and its header gives their paths (`rows.own_entries`). The audit record's
+  ``registered_reads`` carries each sampled chunk's table and root from that file beside the
   ``registered`` finding Lean's verdict reports opening its rows against (`tables.reported_reads`), and a5 accepts only
-  when they are one. Negatives on one sampled chunk: no registered reads, another root, its units reading another row
-  (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
+  when they are one. Negatives on one sampled chunk: no registered reads, another root, its units reading another row, a
+  port committed afresh (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
 * **Wiring across statements** (`commit.wiring`, `HmOut` ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
@@ -184,9 +187,9 @@ from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E40
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
-from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
 from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
 from verity.ml.windows import wiring as WI  # noqa: E402
 
@@ -485,22 +488,38 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
     registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
     value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
-    ports' reads as registered."""
+    ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
+    verifier's reads (`Flock.Registered.checkComplete`)."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
-    port = next(iter(honest["ports"]))
+    port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
     p = honest["ports"][port]
-    cases = {"chunk-without-registered-reads": (None, "holds no registered roots"),
-             "registered-read-against-another-root": ({"root": "00" * 64}, "does not open")}
+
+    def changed(change: dict) -> dict:
+        return {**honest["ports"], port: {**p, **change}}
+
+    cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
+             "registered-read-against-another-root": (changed({"root": "00" * 64}), "does not open", None)}
     if p["leaves"] > 1:
-        cases["registered-reads-another-row"] = ({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}, "the verifier's program reads")
+        cases["registered-reads-another-row"] = (changed({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}),
+                                                 "the verifier's program reads", None)
+    if last != port:
+        d = sdir / "port-committed-afresh"
+        shutil.copytree(st["dir"], d, copy_function=os.link, dirs_exist_ok=True)
+        head, body = (d / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
+        h = json.loads(head)
+        h["registered"].pop(last)
+        (d / f"pub-{n}.bin").unlink()
+        (d / f"pub-{n}.bin").write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+                                         + b"\n" + body)
+        cases["registered-reads-leaving-a-port-committed-afresh"] = (
+            {q: e for q, e in honest["ports"].items() if q != last}, "registered reads (complete)", d)
     out = {}
-    for name, (change, why) in cases.items():
-        alt = {x: y for x, y in st.items() if x != "registered_file"}
-        if change is not None:
+    for name, (ports, why, d) in cases.items():
+        alt = {x: y for x, y in st.items() if x != "registered_file"} | ({"dir": d} if d else {})
+        if ports is not None:
             alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], port: {**honest["ports"][port], **change}}},
-                                                         sort_keys=True))
+            alt["registered_file"].write_text(json.dumps({**honest, "ports": ports}, sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
     return out
@@ -737,8 +756,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
-    # a member reading an outside registered value, against the root its owner signed
-    reads = {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
+    # a member reading an outside registered value, against the root its owner signed; and either's other ports, against the
+    # registration's own roots, since Lean takes registered reads only when they name every port
+    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})},
+                         mine, roots, registered=REG)
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
@@ -989,11 +1010,11 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None) -> None:
-    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
-    (`v2_proof`), the case of the audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in
+    (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
     ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
     ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
@@ -1025,7 +1046,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
+    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
     public file's, taken when it was staged before the sample, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
@@ -1033,7 +1054,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
     members' (``<member>/<port>``)."""
     import replay as RP
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
@@ -1063,7 +1084,7 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"

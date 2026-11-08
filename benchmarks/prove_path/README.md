@@ -122,16 +122,20 @@ conditional escape and its leak relation as hypotheses, which `SampledKSLive` an
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
-`advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
-- c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+`advice_bits`, `c`, `other_inputs`, `bound`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and
+`exfiltration_bound`):
+- c is `c`. It is `advice.bits` (the registration's `window.advice.bits`: the I1 advice's length, which
+  `prove_path.py advice` prints as `bits`) only while the window's leak count (`records_audit.leak_count`) is within the
+  charge, so the advice is the only free input outside the registration. Otherwise `c` is null and `bound` is `vacuous`,
+  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its units' inputs,
+  and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
+  states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
-  `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
+  `wrong_units` function in `verity/core/protocols/spot/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
-  in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  in `verity/core/protocols/spot/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 

@@ -27,6 +27,7 @@ untraced = [
     "tests/test_binprov.py",
     "tests/test_bucket_index.py",
     "tests/test_budgets.py",
+    "tests/test_carry.py",
     "tests/test_checked_guard.py",
     "tests/test_cli.py",
     "tests/test_commitmap.py",
@@ -38,6 +39,7 @@ untraced = [
     "tests/test_disk_hold.py",
     "tests/test_doctor.py",
     "tests/test_drive_alarms.py",
+    "tests/test_drive_carry.py",
     "tests/test_drive_checked.py",
     "tests/test_drive_config.py",
     "tests/test_drive_executor.py",
@@ -187,6 +189,7 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
 tests = [
     "tests/test_checked_guard.py",
     "tests/test_drive_alarms.py",
+    "tests/test_drive_carry.py",
     "tests/test_drive_checked.py",
     "tests/test_drive_config.py",
     "tests/test_drive_executor.py",

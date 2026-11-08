@@ -27,7 +27,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
-open Properties.SampledProofs (slotPartition slotDesign)
+open Properties.Spot (slotPartition slotDesign)
 
 /-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
@@ -185,7 +185,7 @@ theorem cell_eq_empty {Pt Pρ : Partition} {ρ t : ℕ} (ht : Pt.strata.length <
   unfold Partition.stratumOf at hvt
   omega
 
-theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : SampledProofs.Slots.Layout} {d : Design.Two}
+theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : Spot.Slots.Layout} {d : Design.Two}
     (hc : cellsOk g Pt l d = true) : ∀ ρ b, l.blocks[ρ]? = some b →
       (b.unit = some ρ ∧ Set.InjOn (g.blockOf ρ) (Set.Iio g.n) ∧ ∃ t₀ < Pt.strata.length, d.k.getD t₀ 0 = g.k ∧
           ∀ t, cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅) ∨
@@ -285,9 +285,9 @@ theorem parse_prog {x : Msg} {s : AuditStatement} (hs : parse h x = some s) : s.
   | some st => rw [hd] at hs; cases hs; rfl
 
 theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s = some Pt) :
-    ∃ lb, SampledProofs.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ Pt = slotPartition lb := by
+    ∃ lb, Spot.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ Pt = slotPartition lb := by
   unfold partition at hP
-  cases hlb : (SampledProofs.Slots.layout h.reg.first.program h.blockQuery).toOption with
+  cases hlb : (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
   | none => simp [hlb] at hP
   | some lb =>
     rw [hlb] at hP
@@ -295,15 +295,15 @@ theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s =
     exact ⟨lb, ok_of_toOption hlb, rfl⟩
 
 theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    ∃ l lb, SampledProofs.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧
-      SampledProofs.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ replayDesign h = some d.replay ∧
+    ∃ l lb, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧
+      Spot.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ replayDesign h = some d.replay ∧
       d = ⟨slotPartition l, d.replay, h.k⟩ ∧ scopeOk h.prog (slotPartition lb) d = true ∧
       cellsOk h.reg (slotPartition lb) l d = true := by
   unfold two at hd
-  cases hl : (SampledProofs.Slots.layout h.reg.first.program h.reg.first.query).toOption with
+  cases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with
   | none => simp [hl] at hd
   | some l =>
-    cases hlb : (SampledProofs.Slots.layout h.reg.first.program h.blockQuery).toOption with
+    cases hlb : (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
     | none => simp [hl, hlb] at hd
     | some lb =>
       cases hr : replayDesign h with
@@ -356,7 +356,7 @@ theorem refusesTwo (H : Msg → Msg) :
 evaluates only where the replay layout's slots are its cells. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
-      ∃ g l, reg h x = some g ∧ SampledProofs.Slots.layout g.first.program g.first.query = .ok l ∧
+      ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
         d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
         ∀ ρ b, l.blocks[ρ]? = some b →
           (b.unit = some ρ ∧ Set.InjOn (g.blockOf ρ) (Set.Iio g.n) ∧ ∃ t₀ < Pt.strata.length, d.k.getD t₀ 0 = g.k ∧

@@ -1,7 +1,8 @@
 // verity flock-circuit: Flock-CUDA for verity/flock-circuit (verity/ml/flock/live/src/circuit.rs). Included after
 // prove_chunk.cuh at the end of cuda-ghash/prove_ffi.cu by verity/ml/flock/cuda_circuit_patch.py, which also derives
 // flock_cuda_prove_circuit from flock_cuda_prove_chunk's body: the same commit, zerocheck, lincheck, ring switch and
-// Ligerito, with this file's witness (fc_witness) and lincheck fold (fc_fold) in place of the chunk statement's.
+// Ligerito, with this file's witness (fc_witness), lincheck fold (fc_fold) and arena size (fc_arena_of, arena_bytes.h) in place
+// of the chunk statement's.
 //
 // A block holds ranges of slots of a few types (compressions, units, the mask slot), each type's circuit a CSC of
 // 2^type_log columns. The witness is built on the device: the compressions from their host-given inputs (natively, fc_sha_tape
@@ -14,9 +15,10 @@
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
-// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the witness's scratch (at most 2 GiB
-// at a time), its inputs, and the first proof's cached type matrices
-#define FC_KEEP_MARGIN ((size_t)4 << 30)
+// the witness's scratch outside the arena (sha512 tapes, compression and unit rows) goes in batches of at most this many bytes:
+// it is held beside the arena while the next session's witness builds
+#define FC_WITNESS_BATCH (512LL << 20)
+#include "arena_bytes.h"
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -66,9 +68,9 @@ typedef struct {
     const uint64_t* zk_pads; const uint64_t* zk_extra;
     // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
     int u_host;
-    // rep 1 from rep 0's witness and level-0 commitment (both reps bind one level-0 root): 1 keeps them for the next call with
-    // the same reuse_tag, which leaves the device arena open between the two calls; 2 takes them, or proves in full when
-    // nothing was kept (rep 0 had no room)
+    // rep 1 from rep 0's level-0 commitment (both reps bind one level-0 root): 1 keeps it for the next call with the same
+    // reuse_tag, which leaves the device arena open between the two calls; 2 takes it and builds the witness again, or proves
+    // in full when nothing was kept
     int rep_reuse;
     unsigned long long reuse_tag;
     // the compression slots' native witness (the SHA-512 build): per row of the sha512x3 circuit, its a and b sources (two u32:
@@ -211,14 +213,12 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
     }
 }
 
-// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b; rep 1 transposes z for the lincheck again) and level-0
-// codeword, tree and cap, and under M1 level 0's pads and extra lanes (the session's, which rep 1's lane phase reads), live in
-// the device arena, which stays open until rep 1 releases them.
+// What rep 0 keeps for rep 1 (rep_reuse): its level-0 codeword, tree and cap, and under M1 level 0's pads and extra lanes (the
+// session's, which rep 1's lane phase reads), live in the device arena, which stays open until rep 1 releases them.
 struct FcKept {
     bool live = false;
     unsigned long long tag = 0;
     int m = 0, k_log = 0;
-    F128 *df = nullptr, *d_a = nullptr, *d_b = nullptr;
     F128* d_cw0 = nullptr;
     uint8_t* d_tree0 = nullptr;
     long long l0_bl = 0;
@@ -227,34 +227,38 @@ struct FcKept {
     F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;
 };
 static FcKept g_fc_kept;
-// the most this prover has asked of device_arena, which only grows (a larger request by another prover makes the keep check
-// below conservative, never optimistic)
-static size_t g_fc_arena = 0;
+
+// A circuit's index arrays on the device, uploaded once per circuit and kept for the process, so one prover proves statements
+// of many circuits. Keyed by the host arrays' addresses, which the host builds once per circuit and never frees
+// (gpu_circuit.rs `types`, gpu.rs `statics_for`).
+struct FcUploads {
+    std::mutex mu;
+    std::vector<std::pair<std::vector<const void*>, std::vector<uint32_t*>>> held;
+    // the device copies of the `n` arrays `h[i]` of `len[i]` words each
+    cudaError_t get(const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d) {
+        const std::vector<const void*> key(h, h + n);
+        std::lock_guard<std::mutex> lock(mu);
+        for (const auto& e : held)
+            if (e.first == key) { std::copy(e.second.begin(), e.second.end(), d); return cudaSuccess; }
+        std::vector<uint32_t*> got(n, nullptr);
+        for (size_t i = 0; i < n; i++) {
+            cudaError_t err = cudaMalloc(&got[i], (len[i] ? len[i] : 1) * sizeof(uint32_t));
+            if (err == cudaSuccess && len[i]) err = cudaMemcpy(got[i], h[i], len[i] * sizeof(uint32_t), cudaMemcpyHostToDevice);
+            if (err != cudaSuccess) { for (uint32_t* p : got) if (p) cudaFree(p); return err; }
+        }
+        held.emplace_back(key, got);
+        std::copy(got.begin(), got.end(), d);
+        return cudaSuccess;
+    }
+};
 
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
-    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0,
-                    (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
+    for (void* p : {(void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0, (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
         if (p) ffi_free(p);
     device_arena.finish();
     g_fc_kept = FcKept{};
-}
-
-// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 0: z, a and b held past the zerocheck and
-// Ligerito's copy of z fit in the arena's own peak, the zerocheck's buffers, which are freed by then; 3 counts them on top)
-static size_t fc_keep_extra(size_t w) {
-    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 0L; }();
-    return (size_t)k * w;
-}
-
-// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free (FC_KEEP_MARGIN)
-static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
-    size_t free_b = 0, total_b = 0;
-    if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess) { cudaGetLastError(); return false; }
-    const size_t want = arena + extra;
-    const size_t after = want <= g_fc_arena ? free_b : (free_b + g_fc_arena >= want ? free_b + g_fc_arena - want : 0);
-    return after >= margin;
 }
 
 // rep 1 opens rep 0's level-0 tree: with hm96 leaves its salts are level 0's (tree 0), and rep 1's own trees count from 1
@@ -493,6 +497,14 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
     return 0;
 }
 
+static size_t fc_arena_of(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
+    long long fold_words = 0;
+    for (int t = 0; t < N->n_types; t++) fold_words += 1LL << N->type_log[t];
+    const FcArenaShape s = {P->m, P->k_log, N->c.sub_log, P->initial_k, P->recursive_steps, P->log_inv_rates, P->recursive_ks,
+                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
+    return fc_arena_bytes(&s);
+}
+
 // chunk_zlin_transpose's former kernel, one byte a thread per store (the same bytes): FC_ZLIN_BYTEWISE=1 times it in the same job
 __global__ void fc_zlin_transpose_bytewise(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
     const long long wpr = (1LL << k_log) / 128;
@@ -533,19 +545,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
         CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
         {
-            static std::once_flag h_once;
-            static cudaError_t h_err = cudaSuccess;
-            static uint32_t *h_ao = nullptr, *h_ac = nullptr, *h_bo = nullptr, *h_bc = nullptr, *h_lo = nullptr, *h_ord = nullptr;
-            std::call_once(h_once, [&] {
-                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                    if (h_err == cudaSuccess) h_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                    if (h_err == cudaSuccess && n) h_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-                };
-                up(&h_ao, N->h_a_off, N->h_useful + 1); up(&h_bo, N->h_b_off, N->h_useful + 1);
-                up(&h_ac, N->h_a_col, N->h_a_off[N->h_useful]); up(&h_bc, N->h_b_col, N->h_b_off[N->h_useful]);
-                up(&h_lo, N->h_level_off, N->h_levels + 1); up(&h_ord, N->h_order, N->h_level_off[N->h_levels]);
-            });
-            CK(h_err);
+            static FcUploads h_up;
+            uint32_t* hd[6];
+            {
+                const uint32_t* h[6] = {N->h_a_off, N->h_b_off, N->h_a_col, N->h_b_col, N->h_level_off, N->h_order};
+                const size_t len[6] = {(size_t)N->h_useful + 1, (size_t)N->h_useful + 1, N->h_a_off[N->h_useful],
+                                       N->h_b_off[N->h_useful], (size_t)N->h_levels + 1, N->h_level_off[N->h_levels]};
+                CK(h_up.get(h, len, 6, hd));
+            }
+            uint32_t *h_ao = hd[0], *h_bo = hd[1], *h_ac = hd[2], *h_bc = hd[3], *h_lo = hd[4], *h_ord = hd[5];
             const int hr = N->h_range;
             const int hl = N->type_log[N->r_type[hr]];
             const long long hper = N->r_count[hr];
@@ -638,7 +646,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 // FC_SHA_ROWS_NOCACHE=1: every row's tape bits read straight from the tape
                 static const int rows_cache = [] { const char* e = std::getenv("FC_SHA_ROWS_NOCACHE"); return !(e && e[0] == '1'); }();
                 const long long per = (long long)N->h_tape_words * 8;
-                const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(n_h, FC_WITNESS_BATCH / per));
                 uint64_t* d_tape;
                 CK(cudaMalloc(&d_tape, (size_t)(batch * per)));
                 const int nrg = (N->h_useful + 255) / 256;
@@ -659,7 +667,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
 #endif
             } else {
                 const long long per = 3LL * N->h_useful * 4;
-                const long long batch = std::max(1LL, std::min(hg, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(hg, FC_WITNESS_BATCH / per));
                 hs_bytes = (size_t)(batch * per);
                 CK(cudaMalloc(&d_hs, hs_bytes));
                 if (const int e = host_slots()) return e;
@@ -696,20 +704,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         }
         auto t1 = std::chrono::steady_clock::now();
         if (!N->u_host) {
-            static std::once_flag net_once;
-            static cudaError_t net_err = cudaSuccess;
-            static uint32_t *d_ao = nullptr, *d_ac = nullptr, *d_bo = nullptr, *d_bc = nullptr, *d_lo = nullptr, *d_ord = nullptr;
-            std::call_once(net_once, [&] {
-                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                    if (net_err == cudaSuccess) net_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                    if (net_err == cudaSuccess && n) net_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-                };
-                const size_t na = N->u_a_off[N->u_useful], nb = N->u_b_off[N->u_useful];
-                up(&d_ao, N->u_a_off, N->u_useful + 1); up(&d_bo, N->u_b_off, N->u_useful + 1);
-                up(&d_ac, N->u_a_col, na); up(&d_bc, N->u_b_col, nb);
-                up(&d_lo, N->u_level_off, N->u_levels + 1); up(&d_ord, N->u_order, N->u_level_off[N->u_levels]);
-            });
-            CK(net_err);
+            static FcUploads net_up;
+            uint32_t* ud[6];
+            {
+                const uint32_t* h[6] = {N->u_a_off, N->u_b_off, N->u_a_col, N->u_b_col, N->u_level_off, N->u_order};
+                const size_t len[6] = {(size_t)N->u_useful + 1, (size_t)N->u_useful + 1, N->u_a_off[N->u_useful],
+                                       N->u_b_off[N->u_useful], (size_t)N->u_levels + 1, N->u_level_off[N->u_levels]};
+                CK(net_up.get(h, len, 6, ud));
+            }
+            uint32_t *d_ao = ud[0], *d_bo = ud[1], *d_ac = ud[2], *d_bc = ud[3], *d_lo = ud[4], *d_ord = ud[5];
             const int ur = N->u_range;
             const int ul = N->type_log[N->r_type[ur]];
             const long long per_block = N->r_count[ur];
@@ -718,11 +721,11 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             uint64_t* d_in; uint32_t* d_scratch; size_t scratch_bytes;
             CK(cudaMalloc(&d_in, (size_t)n_units * N->u_in_words * 16));
             CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
-            // groups in batches that keep the scratch under ~2 GB
+            // groups in batches that keep the scratch under FC_WITNESS_BATCH
             const long long per = 3LL * N->u_useful * 4;
             const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
             if (N->u_n_late == 0) {
-                const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(groups, FC_WITNESS_BATCH / per));
                 scratch_bytes = (size_t)(batch * per);
                 CK(cudaMalloc(&d_scratch, scratch_bytes));
                 for (long long g0 = 0; g0 < groups; g0 += batch) {
@@ -783,22 +786,21 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
 }
 
 static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, const F128* d_eq, F128 alpha, int k_log, F128* d_comb) {
-    static std::once_flag once;
-    static cudaError_t err = cudaSuccess;
-    static uint32_t* d_csc[FC_MAX_TYPES][4];
-    std::call_once(once, [&] {
-        auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-            if (err == cudaSuccess) err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-            if (err == cudaSuccess && n) err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-        };
+    static FcUploads up;
+    uint32_t* d_csc[FC_MAX_TYPES][4];
+    {
+        const uint32_t* h[FC_MAX_TYPES * 4];
+        size_t len[FC_MAX_TYPES * 4];
         for (int t = 0; t < N->n_types; t++) {
             const size_t cols = (size_t)1 << N->type_log[t];
             const bool comp = N->t_a_col_ptr[t] == nullptr;
-            up(&d_csc[t][0], comp ? P->a_col_ptr : N->t_a_col_ptr[t], cols + 1); up(&d_csc[t][1], comp ? P->a_rows : N->t_a_rows[t], comp ? P->a_nnz : N->t_a_nnz[t]);
-            up(&d_csc[t][2], comp ? P->b_col_ptr : N->t_b_col_ptr[t], cols + 1); up(&d_csc[t][3], comp ? P->b_rows : N->t_b_rows[t], comp ? P->b_nnz : N->t_b_nnz[t]);
+            h[4 * t] = comp ? P->a_col_ptr : N->t_a_col_ptr[t]; len[4 * t] = cols + 1;
+            h[4 * t + 1] = comp ? P->a_rows : N->t_a_rows[t]; len[4 * t + 1] = (size_t)(comp ? P->a_nnz : N->t_a_nnz[t]);
+            h[4 * t + 2] = comp ? P->b_col_ptr : N->t_b_col_ptr[t]; len[4 * t + 2] = cols + 1;
+            h[4 * t + 3] = comp ? P->b_rows : N->t_b_rows[t]; len[4 * t + 3] = (size_t)(comp ? P->b_nnz : N->t_b_nnz[t]);
         }
-    });
-    CK(err);
+        CK(up.get(h, len, 4 * (size_t)N->n_types, &d_csc[0][0]));
+    }
     int min_log = 64;
     for (int t = 0; t < N->n_types; t++) min_log = std::min(min_log, N->type_log[t]);
     std::vector<F128> head((size_t)1 << std::min(min_log, 10));

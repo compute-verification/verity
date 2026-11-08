@@ -31,7 +31,7 @@
   (`dsv4_moe_twin.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
 * `Dsv4TopkRule`: a scored layer's `_dsv4_topk_kernel` launch derives per token word for word the capture's twin
   (`dsv4_moe_twin.router_twin`), and another kernel body or specialization refuses by name;
-* `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
+* `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in pair-index order, and
   its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
   a batch, block or shape the capture does not give, or a launch that also routes other requests' tokens, refuses by name;
 * `loader_parity.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
@@ -64,9 +64,7 @@ from verity_vllm.program.frontend.rules.triton_iface import triton_launch
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.export_ops import CollectiveBus, TPStub
 from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
-from verity_vllm.program.frontend.vllm_meta import ScheduledWithPeers, with_peers
 from verity.ml.definitions.numerics import deepgemm_twins as DT
 from verity.ml.definitions.numerics import dsv4_compressor_twin as DC
 from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as TQ
@@ -372,18 +370,15 @@ class _Routed(nn.Module):
 
 @pytest.fixture
 def marlin_site(monkeypatch):
-    """vLLM's Marlin MoE modules, and rank 0 of a TP2 group with its bus in probe mode."""
+    """vLLM's Marlin MoE modules."""
     mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
     site, scalar_type = types.ModuleType(mml._MARLIN_MOE), types.ModuleType("vllm.scalar_type")
-    parallel_state = types.ModuleType(mml._PARALLEL_STATE)
     mxfp4.Mxfp4MoEMethod = _Mxfp4Method
     oracle.Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
     oracle.make_mxfp4_moe_kernel = lambda **kwargs: kwargs
     scalar_type.scalar_types = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
     site.fused_marlin_moe = _launches
-    parallel_state._TP = TPStub(0, 2, CollectiveBus(rank=0, world=2))
-    parallel_state.get_tp_group = lambda: parallel_state._TP
-    for module in (mxfp4, oracle, site, scalar_type, parallel_state):
+    for module in (mxfp4, oracle, site, scalar_type):
         monkeypatch.setitem(sys.modules, module.__name__, module)
     return site
 
@@ -393,34 +388,22 @@ def _prompt(M: int = 3) -> tuple:
 
 
 def test_the_mxfp4_marlin_moe_exports_as_its_steps_with_its_expert_gemms_as_leaf_ops(marlin_site):
-    bus = sys.modules[mml._PARALLEL_STATE]._TP.bus
+    """The align reads the router ids alone (each expert's pairs in pair-index order), so the export takes the prompt only and
+    needs no TP bus."""
     model = _Routed(_MarlinMoe(marlin_site))
     with mml.mxfp4_marlin_moe_leaf(model):
         kernel = model.moe.quant_method.moe_kernel
-        torch.export.export(model, _prompt(), strict=False)
-        assert bus.schedule_record == [{"k": 0, "shape": [3, 2], "pairs": 6, "offset": 0}]
-        wrapped, inputs = with_peers(model, _prompt(), bus)
-        ep = torch.export.export(wrapped, inputs, strict=False)
-        with pytest.raises(ValueError, match="greedy wrapper's form only"):
-            with_peers(model, _prompt() + (torch.empty(1),), bus)
+        ep = torch.export.export(model, _prompt(), strict=False)
     assert model.moe.quant_method.moe_kernel is None and marlin_site.fused_marlin_moe is _launches
     assert kernel["moe_quant_config"] == ("quant_config", (4, 64, 32)) and kernel["routing_tables"] == "routing_tables"
-    assert isinstance(wrapped, ScheduledWithPeers) and [tuple(t.shape) for t in inputs] == [(3, 64), (6,)]
-    prompt, schedule = [n for n in ep.graph.nodes if n.op == "placeholder" and n.name in ep.graph_signature.user_inputs]
+    assert len(ep.graph_signature.user_inputs) == 1
     (align,) = [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_align.default"]
-    ids, key, E, block_m = align.args
-    assert key.args == (key.args[0], [3, 2]) and key.args[0].args == (schedule, 0, 0, 6) and (E, block_m) == (4, 8)
+    ids, E, block_m = align.args
+    assert (E, block_m) == (4, 8)
     blk, par = sorted(align.users, key=lambda n: n.args[1])
     gemms = [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_mxfp4_gemm.default"]
     assert [n.args[3:6] for n in gemms] == [(ids, blk, par)] * 2
     assert [(tuple(n.meta["val"].shape), n.args[-3:]) for n in gemms] == [((6, 64), (8, 2, False)), ((6, 64), (8, 1, True))]
-
-
-def test_a_marlin_moe_without_a_tp_bus_refuses_at_export(marlin_site, monkeypatch):
-    monkeypatch.setattr(sys.modules[mml._PARALLEL_STATE], "_TP", types.SimpleNamespace())
-    model = _Routed(_MarlinMoe(marlin_site))
-    with mml.mxfp4_marlin_moe_leaf(model), pytest.raises(NotImplementedError, match="no TP bus"):
-        torch.export.export(model, _prompt(), strict=False)
 
 
 def test_a_marlin_moe_beyond_the_leafs_operands_refuses_at_export(marlin_site):
@@ -1141,19 +1124,19 @@ class _MarlinLaunches(nn.Module):
         self.s13, self.s2 = p(self.bytes13), p(self.bytes2)
         self.block_m = block_m
 
-    def forward(self, x, ids, key, weights, act):
-        blk, par = iface.marlin_moe_align(ids, key, MARLIN_E, self.block_m)
+    def forward(self, x, ids, weights, act):
+        blk, par = iface.marlin_moe_align(ids, MARLIN_E, self.block_m)
         up = iface.marlin_moe_mxfp4_gemm(x, self.w13, self.s13, ids, blk, par, weights, self.block_m, MARLIN_TOPK, False)
         down = iface.marlin_moe_mxfp4_gemm(act, self.w2, self.s2, ids, blk, par, weights, self.block_m, 1, True)
         return blk, par, up, down
 
 
-def _align(ids: np.ndarray, key: np.ndarray, E: int, BM: int) -> tuple[np.ndarray, int]:
-    """`moe_align_block_size` with each expert's pairs sorted by (key, pair): each pair's sorted position / BM, and the padded count
-    / BM."""
+def _align(ids: np.ndarray, E: int, BM: int) -> tuple[np.ndarray, int]:
+    """The deterministic `moe_align_block_size`, each expert's pairs in pair-index order: each pair's sorted position / BM, and the
+    padded count / BM."""
     blk, start = np.zeros(len(ids), np.int64), 0
     for e in range(E):
-        for r, p in enumerate(sorted(np.flatnonzero(ids == e), key=lambda q: (key[q], q))):
+        for r, p in enumerate(np.flatnonzero(ids == e)):
             blk[p] = (start + r) // BM
         start += -(-int((ids == e).sum()) // BM) * BM
     return blk, start // BM
@@ -1162,8 +1145,7 @@ def _align(ids: np.ndarray, key: np.ndarray, E: int, BM: int) -> tuple[np.ndarra
 def _marlin_inputs(rng) -> tuple:
     P = MARLIN_M * MARLIN_TOPK
     ids = np.stack([rng.permutation(MARLIN_E)[:MARLIN_TOPK] for _ in range(MARLIN_M)]).astype(np.int32)
-    key = rng.permutation(P).reshape(MARLIN_M, MARLIN_TOPK).astype(np.int32)
-    return (W.bf16(_f32(rng, MARLIN_M, MARLIN_H)), ids, key, _f32(rng, MARLIN_M, MARLIN_TOPK), W.bf16(_f32(rng, P, MARLIN_I)))
+    return (W.bf16(_f32(rng, MARLIN_M, MARLIN_H)), ids, _f32(rng, MARLIN_M, MARLIN_TOPK), W.bf16(_f32(rng, P, MARLIN_I)))
 
 
 def _derive_marlin(model, xs, monkeypatch, served=MARLIN_SMALL):
@@ -1180,14 +1162,13 @@ def test_the_marlin_moes_align_and_expert_gemms_derive_per_pair_word_for_word_th
     rep, inputs = _derive_marlin(model, xs, monkeypatch)
     assert rep.program is not None, rep.unsupported
     apps = {a["rule"]: a for a in rep.provenance["applications"] if "vllm-marlin-moe" in a["rule"]}
-    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v2"]["emitted"] == "MoeAlignRanks_v1{E=3,P=6,BM=8} + MoeAlignBlocks_v1{P=6,BM=8}"
-    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v2"]["schedule"] == "marlin_moe_align"
+    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v3"]["emitted"] == "MoeAlignRanks_v1{E=3,P=6,BM=8} + MoeAlignBlocks_v1{P=6,BM=8}"
     gemms = [a for a in rep.provenance["applications"] if a["rule"] == "MarlinMoeGemm[vllm-marlin-moe]_v1"]
     assert [(a["preconditions_checked"]["TK"], a["preconditions_checked"]["TN"], a["preconditions_checked"]["GRID"]) for a in gemms] == [
         (64, 128, 132), (64, 128, 264)]
     assert rep.provenance["weight_roles"]["w13"]["role"] == "moe.expert_weight_e2m1x2"
-    x, ids, key, g, act = xs
-    blk, par = _align(ids.reshape(-1), key.reshape(-1), MARLIN_E, 8)
+    x, ids, g, act = xs
+    blk, par = _align(ids.reshape(-1), MARLIN_E, 8)
     e, pair = ids.reshape(-1), np.arange(MARLIN_M * MARLIN_TOPK)
     up = MR.launch(x[pair // MARLIN_TOPK], blk, par, e, model.codes13, model.bytes13, np.arange(2 * MARLIN_I), TK=64, TN=128, GRID=132)
     down = MR.launch(act, blk, par, e, model.codes2, model.bytes2, np.arange(MARLIN_H), TK=64, TN=128, GRID=264, g=g.reshape(-1))
