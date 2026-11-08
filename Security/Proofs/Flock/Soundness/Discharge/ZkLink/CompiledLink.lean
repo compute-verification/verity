@@ -4,9 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
 public import Proofs.Flock.Soundness.LinkCarry
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `δ_link` for the compiled `--zk` session, under expected-time collision resistance

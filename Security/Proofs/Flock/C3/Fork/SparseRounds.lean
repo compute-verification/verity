@@ -6,8 +6,7 @@ public import Mathlib.Algebra.Polynomial.Degree.Defs
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Data.Nat.Bitwise
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds

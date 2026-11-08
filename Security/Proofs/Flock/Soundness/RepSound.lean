@@ -7,7 +7,7 @@ public import Mathlib.CategoryTheory.Category.Basic
 public import Proofs.Flock.Soundness.LigeritoPhase
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 

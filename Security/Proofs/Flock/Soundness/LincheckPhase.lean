@@ -8,10 +8,7 @@ public import Proofs.Flock.Soundness.Rounds
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.LinearAlgebra.Lagrange
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The lincheck phase (`Flock.Piop`)
