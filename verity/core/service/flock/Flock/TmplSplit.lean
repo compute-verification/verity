@@ -104,13 +104,14 @@ def half (pt : FoldPt) (rho : Bool) (lo n : Nat) : SV Half := do
 
 def ident (c : Nat) : Nat × F128 := (c, 1)
 
-/-- A row's low factor at local position `P`, class copy `k`: `eq(ρ[β−6 ..], P mod 2^al)` summed, else
-`lw[q mod 64] · eq(ρ, ⌊q/64⌋)` at the low part `q = as[k] + 2^β (P mod 2^al)`. -/
-def Tab.rowLow (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (eL : Half) (k P : Nat) : F128 :=
-  if summed then eL.at (P % A)
+/-- A row's low factor at local position `P`, class copy `k`, from its half's values `eAt`: `eq(ρ[β−6 ..], P mod 2^al)`
+summed, else `lw[q mod 64] · eq(ρ, ⌊q/64⌋)` at the low part `q = as[k] + 2^β (P mod 2^al)`. -/
+@[specialize]
+def Tab.rowLow (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (eAt : Nat → F128) (k P : Nat) : F128 :=
+  if summed then eAt (P % A)
   else
     let q := as.getD k 0 + B * (P % A)
-    pt.lw.getD (q % 64) 0 * eL.at (q / 64)
+    pt.lw.getD (q % 64) 0 * eAt (q / 64)
 
 /-- Caller reference `v` with weight `w` for a row of chunk `cx`, low part `k`: an own column at local position `pos v`
 adds at its column chunk (and slot, while explicit), an input opens, the constant adds at the row chunk. -/
@@ -303,16 +304,27 @@ def Tab.rowT (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (p
   let st := rb.foldl (Tab.colT D pt A B as gL pos cx ex) st
   ({ st.1 with work := st.1.work + (ra.size + rb.size) }, st.2)
 
+/-- Own column `v`'s sum `x` at copy `0`, on pending sums: `x · fac v` added at its slot once the pending sums are at its
+chunks, as `Tab.refDK` adds it with weights `#[x]`. The sum is `x · fac v + pd[t]`, so the compiled code reuses
+`pd[t]`'s cell. -/
+@[specialize]
+def Tab.colD (A B : Nat) (as : Array Nat) (pos : Nat → Nat) (fac : Nat → F128) (cx : Nat) (x : F128)
+    (st : Tab × Nat × Nat × Array F128) (v : Nat) : Tab × Nat × Nat × Array F128 :=
+  let (o, px, py, pd) := st
+  let P := pos v
+  let t := as.getD 0 0 + B * (P % A) % 64
+  if px == cx && py == P / A then (o, px, py, pd.modify t (x * fac v + ·))
+  else (Tab.flushP o px py pd, cx, P / A, (Array.replicate 64 0).modify t (x * fac v + ·))
+
 /-- `Tab.rowsT`'s columns `v, v + 1, …`, `n` of them: each nonzero sum `W[v]` times its factor at its slot, on pending
-sums (`Tab.refDK` at one copy). -/
+sums (`Tab.colD`). -/
 @[specialize]
 def Tab.colsP (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
     (cx : Nat) (W : Array F128) : Nat → Nat → Tab × Nat × Nat × Array F128 → Tab × Nat × Nat × Array F128
   | 0, _, st => st
   | n + 1, v, st =>
     let x := W.getD v 0
-    Tab.colsP D pt A B as gL pos fac cx W n (v + 1)
-      (if x.isZero then st else Tab.refDK D pt A B as gL pos fac 1 cx #[x] st v)
+    Tab.colsP D pt A B as gL pos fac cx W n (v + 1) (if x.isZero then st else Tab.colD A B as pos fac cx x st v)
 
 /-- Explicit rows of one row chunk `cx` at one copy, column by column, as the flat fold's `Sparse.foldT` folds: each
 row's weight summed per own column (`Tab.rowT`), then each column's sum times its factor (`Tab.colsP`), so a
@@ -340,9 +352,10 @@ def Tab.rowsC (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
 
 /-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`; all copies at
 once (`Tab.rowsC`, an own column's factor `fac`) while explicit with every copy's low part below `B` and `B` dividing
-64. Specialized at `walk`'s `pos` and `fac`, as are `Tab.ref`, `Tab.refs`, `Tab.refStep`, `Tab.rowsC`, `Tab.rowsT`,
-`Tab.rowT`, `Tab.colT`, `Tab.colsP`, `Tab.rowsK`, `Tab.rowK`, `Tab.halfK`, `Tab.refDK`, `Tab.refsK`, `Tab.refStepK` and
-`tabled`, so a reference reads its position and factor from their tables without a closure call. -/
+64. Specialized at `walk`'s `pos`, `fac` and `rowLow`, as are `Tab.ref`, `Tab.refs`, `Tab.refStep`, `Tab.rowsC`,
+`Tab.rowsT`, `Tab.rowT`, `Tab.colT`, `Tab.colsP`, `Tab.colD`, `Tab.rowsK`, `Tab.rowK`, `Tab.halfK`, `Tab.refDK`,
+`Tab.refsK`, `Tab.refStepK`, `Tab.rowLow` and `tabled`, so a reference reads its position and factor from their tables
+without a closure call. -/
 @[specialize]
 def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (fac : Nat → F128) (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat)
@@ -457,7 +470,9 @@ def walkCall (t : Tmpl) (lays : Array Lay) (pt : FoldPt)
         (List.range nk).map fun k => (k, eLow (as.getD k 0 + B * j)))
 
 /-- **Walk Definition `d`'s class** `(β, as)` at local offset `off` in chunks of `2^al` (`fuel` bounds the depth;
-`multi`: reached on more than one path): its own rows, then each call's (`walkCall`), a call's class `walkChild`'s. -/
+`multi`: reached on more than one path): its own rows, then each call's (`walkCall`), a call's class `walkChild`'s. Its
+columns' positions, and its halves' values at the low parts of its columns' factors and its rows', are tabled once (at
+most one entry per column, and per row for the rows'), so a column or row reads them without a product. -/
 def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     Nat → Nat → Nat → Array Nat → Nat → Nat → SV Tab
   | 0, _, _, _, _, _ => throw "split fold: calls nest deeper than the definitions"
@@ -475,10 +490,11 @@ def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     let posD := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
     let pa := (Array.range m).map posD
     let pos := tabled pa posD
-    let facD := fun (y : Nat) => gL.at (B * (pos y % A) / 64)
-    let fa := (Array.range (if summed then 0 else m)).map facD
-    let fac := tabled fa facD
-    let o := Tab.rows D pt summed A B as gL pos fac (Tab.rowLow pt summed A B as eL)
+    let nh := if summed then 0 else B * m / 64 + 1
+    let gA := (Array.range nh).map gL.at
+    let fac := fun (y : Nat) => tabled gA gL.at (B * (pos y % A) / 64)
+    let eA := (Array.range (min nh D.rows.size)).map eL.at
+    let o := Tab.rows D pt summed A B as gL pos fac (Tab.rowLow pt summed A B as (tabled eA eL.at))
       pt.alpha (if summed then 1 else as.size) D.rows {}
     (List.range D.calls.size).foldlM
       (walkCall t lays pt (walkChild lays multi pt (walk t lays multi pt fuel)) d β as off al gL) o
