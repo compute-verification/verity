@@ -510,8 +510,9 @@ def _window_interior(program: Program, previous: str) -> tuple[dict, dict]:
 def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     """A replay block of PAIR x 2 and TRIPLE x 1: the boundary registration over N of them, the interior over the
     sample's Q·3 proof blocks template-major (PAIR's Q·2, then TRIPLE's Q), the second stage one stratum per cell, k of
-    each PAIR cell and TRIPLE's one-unit cells whole, and an accepted outcome whose whole run is the Lean verifier's; its
-    profile is `Subset(min k_t)` over T·n_max proof blocks a replay block, which bounds the cells' escape."""
+    each PAIR cell and TRIPLE's one-unit cells whole, and an outcome whose whole run is the Lean verifier's, refused by
+    round 2 (its replay block returns two templates' outputs, which round 2 links to no boundary port: `second-links`);
+    its profile is `Subset(min k_t)` over T·n_max proof blocks a replay block, which bounds the cells' escape."""
     stream = _window_stream()
     assert stream.cells == (2, 1) and stream.counts == (1, 1) and stream.n_rho == 3
     boundary = P.population_program(MIXED, N)
@@ -528,8 +529,9 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert sorted(u // 2 for u in second.units if u < 4) == [0, 1] and {4, 5} <= set(second.units)
     assert stream.deliver(second, [SESSION]) is None
     out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)})
-    assert out.accepted and "run" not in stream.records[0]["audit"]["checks"]
-    p = out.profile
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and checks["statements"]["codes"] == ["second-links"] and "run" not in checks, checks
+    p = stream._footprint(stream._entries[reg.order])
     assert p.sizes == (N, 4) and p.draws["unit"] == Subset(1) and dict(p.drawn) == {S.REPLAY: Q, "unit": Q * 2}
     for w in ((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)):
         cells = Fraction(comb(2 - w[0], 1), comb(2, 1)) * Fraction(comb(1 - w[1], 1), comb(1, 1))
@@ -596,8 +598,9 @@ def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
 
 def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
     """The auditor's params reach the run of record under the interior's params, where the Lean verifier reads them
-    (`Run.templateCircuits`): an outcome naming each template's file accepts, its run carrying them; a run whose params
-    the Lean refuses fails `run`; params `template_circuits` refuses are refused before anything is decided, and a
+    (`Run.templateCircuits`): an outcome naming each template's file is the run of record's too, its run carrying them
+    (refused by round 2, as `test_a_replay_block_of_two_templates_runs_with_a_template_major_interior` says); a run whose
+    params the Lean refuses fails `run`; params `template_circuits` refuses are refused before anything is decided, and a
     one-stage stream takes none."""
     runs, lean = [], V.lean
     tampered = {"templates": _circuits()["templates"][::-1]}
@@ -625,7 +628,7 @@ def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
         out = stream.outcome(second, _lean(), {"statement": "stub"},
                              session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, proofs=_circuits())
         assert runs.pop()["interior"]["params"]["proofs"] == (tampered if tamper else _circuits()) and not runs
-        assert out.accepted is not tamper and ("run" in stream.records[0]["audit"]["checks"]) is tamper
+        assert not out.accepted and ("run" in stream.records[0]["audit"]["checks"]) is tamper
     stream = FC.Stream(S.Spec(VALUES[:2], S.Law("subset:2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
                                                                       proof_deadline=60.0), PUBLIC, b"two-stage-test"),
                        BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
