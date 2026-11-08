@@ -117,7 +117,7 @@ def idle(ks: list[tuple[str, int, int, int]], uq: int, steps: int) -> dict:
                     "units": sum(1 for *_, n in w if SP.part(n, None) == SP.PARTS[4][0]), "gaps": pairs})
     per.sort(key=lambda p: p["wall_ms"])
     keys = {k for p in per for k in p["gaps"]}
-    def med(xs):
+    def med(xs: list[float]) -> float:
         return float(np.median(xs)) if xs else 0.0
     gaps = {k: med([p["gaps"].get(k, 0.0) for p in per]) for k in keys}
     return {"steps": len(per), "median_wall_ms": med([p["wall_ms"] for p in per]),

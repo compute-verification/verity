@@ -99,8 +99,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") lives in its area's `Definitions/<Area>/Assumptions` (Flock's in
-  `Proofs/Flock/Soundness/Assumptions` for now), its owner in the lock. Its docstring opens with its claim id
+- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`,
+  or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
+  reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
+  `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` digests every in-repo premise and
   the assumptions it mentions, so strengthening one changes a record.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
