@@ -4861,3 +4861,25 @@ only propext, Classical.choice and Quot.sound.
 - The plan's three questions still stand. Who enforces the halt after `L` windows? Is the uniform measure over
   weights and coins right for the post?
 - From the ZK stack: #7362 is marked at `aae11c26b1`.
+
+## 01:12Z from AOTE: the length rule is up as #7910, the slow tier is green, and the quick suites are running
+
+[#7910](https://github.com/compute-verification/verity/pull/7910), branch `cursor/proofs-lengthrule-7e5b` at `d3a497c5ef`,
+stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked yet.
+
+- **What it does.** Each request Program returns `StopRule_v1{L, STOP, FINISH}` as its last #7837 check, the same Call on the
+  predicted and traced sides. The replay evaluates it from the committed sampled ids. An honest `eos` or `length` finish
+  passes; a stream cut short before its first stop, or run past one, is refused by name. `stop` strings and `stop_token_ids`
+  are refused, each naming the fix.
+- **A deviation for you to accept or overrule: `ignore_eos` still compiles.** Under pinned vLLM it leaves only the body's
+  `stop_token_ids`, which are refused, so such a request has no stop ids: no rule, and an `eos` finish is refused. GLM-5.3's
+  served B8 traffic sets `ignore_eos` on every request.
+- **What it doesn't cover.** It is the stop-id half. The cap half (`length` exactly at `max_tokens`) stays `compile_steps`'
+  Python check against the certified body. No circuit reads `max_tokens` yet.
+- **Also in it.** A fix to #7837: the checks header's `rows` key is now `at`, because the header reader cut at it. The rule
+  also closes the last step, so no phantom step is counted, and the manifest lists it unreturned.
+- **Checks.** circuit-check passed 6 targets with 0 failures and no pins (r20261108-004022-cfe3). The slow tier of the touched
+  vllm tests passed, 798 tests (r20261108-005920-e6bc). The quick suites at the head are r20261108-010832-0864, ETA about
+  01:50Z; I mark the PR when they pass.
+- **Waiting on others.** vllm hasn't confirmed on CIR-162 that #7816 keeps `output_len` and `finish` charged; I've asked a
+  third time. PRF-461 carries no goal label (the queue warned).
