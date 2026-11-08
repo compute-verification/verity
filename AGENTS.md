@@ -36,8 +36,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
-  exported to the public repository (Daniel, 4 Nov); new infra goes here too. compute-verification/infra holds only the
-  website.
+  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
+  (its `infra/`) and its `.cursor`, nothing else.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -76,7 +76,14 @@ The rules in force, each stated as itself; the friction skill has the standing r
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
-  model's size is public.
+  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
+  ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
+  commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
+  the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
+  exfiltration. The demonstration adds the network certifier as a separate layer: it stamps each request's release order
+  and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
+  SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
+  and proof; the two compose only above both.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
@@ -87,16 +94,29 @@ The rules in force, each stated as itself; the friction skill has the standing r
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
   phase's live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
-  retries: a failed proof is a visible failure, and nothing resamples. Outer proofs go through the ZK server as independent
+  retries: a failed proof is a visible failure, and nothing resamples. In the core protocols, outer proofs go through the ZK server as independent
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
+- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the certifier's record of
+  every byte out, timing included) must be a function of what came in (x, certified), registered information (weights,
+  configs, the compiler B, Definitions), advice (a, committed before the coins) and the wrong blocks: given those, at most
+  one y is self-consistent (else the bound adds log₂ of how many are). Explanation: the circuit C = B(x, y, a) outputs y's
+  serialization and the audit checks the equality, and every bit B reads from y is such an output. Prefix stability:
+  changing y at or after step s doesn't change what C computes before s. Every block is a function of its committed
+  inputs. Anything the prover chooses that reaches y or B is advice and is charged; anything else that leaves is refused
+  by the egress spec.
+- **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
+  blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
+  (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
+  unique, and it is still a function.
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
-- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest prover's GPU
+- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
@@ -180,7 +200,7 @@ team skill). A red's culprit is the one landing whose change touches what its fa
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal samples a warning, never a refusal. A change a `warn_gates`
+is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
 ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
 next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
@@ -221,15 +241,22 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
   named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
   open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
-  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
+  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it). Each
+  deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's collision resistance, uniform
+  randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on (`trust.extra`, each with its
+  reason), only on the premises its `trust_gap` entry lists, which `--update` never adds to; the check prints each one's
+  gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
   after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
-  the witnesses rule holds to missing witnesses, a stale entry, a missing owner, or a cap of `unread-caps.json` or
+  the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
+  no longer rests on, a missing owner, or a cap of `unread-caps.json` or
   `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
-  malformed lock always fail. Lock files never conflict on merge.
+  malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
+  merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
+  drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
 

@@ -83,7 +83,7 @@ class Side:
     def end(self, k: int) -> dict:
         ev = self.expect("ended")
         if ev["k"] != k:
-            raise SideError(f"session {ev['k']} ended, not {k}")
+            raise SideError(f"run {ev['k']} ended, not {k}")
         return ev | {"passes_at_ns": self.passes_at.get(k)}
 
     def stop(self) -> dict:

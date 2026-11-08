@@ -2,14 +2,16 @@
 keys by it.
 
 vLLM keys its tuned kernel configs by that name (`get_device_name_as_file_name`: GLM-5.3's fused-MoE tiles, `program.registry.fp8_moe`),
-so a GPU-free Build answers its row's (`export_compat.select_cuda_platform`) and reads the config file the class's GPU does.  On a
-class not listed the platform answers nothing, and a construction that reads the name fails there by name.  `FUSED_MOE_CONFIGS` holds
+so a GPU-free Build answers its target's (`export_compat.select_cuda_platform`: a traced request Build's `--device-name`, else its
+row's) and reads the config file that GPU does.  On a class not listed the platform answers nothing, and a construction that reads
+the name fails there by name.  `FUSED_MOE_CONFIGS` holds
 the files a prediction reads without vLLM (`predict`).  `CARD` is the card each served target is registered on, by that name, and
 `NO_CARD` the served targets with no card file yet."""
 from __future__ import annotations
 
 import json
 
+from verity_vllm.config import workload_file
 from verity_vllm.target_family import device_token_of_row
 
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
@@ -40,8 +42,9 @@ def device_name_of_row(row_id: str) -> str | None:
 
 
 def device_name(workload: str | None) -> str | None:
-    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list or without a workload."""
-    sweep = (json.load(open(workload)).get("sweep") or {}) if workload else {}
+    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list or without a workload.  A
+    stored workload is made present and checked first (`config.workload_file`)."""
+    sweep = (json.loads(workload_file(workload).read_text()).get("sweep") or {}) if workload else {}
     return device_name_of_row(sweep.get("row_id") or "")
 
 
