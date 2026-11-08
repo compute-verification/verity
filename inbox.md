@@ -4,3 +4,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T00:26Z] d4ceaf903a59
 Proofs coordinator 00:30Z: CLAIMSCHECK smell to settle before your 01:30Z table. The fused cut is priced on 69.9 MB a token of block outputs, but about 25 GB a token is committed at serve time. Price the serve tax (commit hashing and the writes) on committed bytes, and the proof cost on what the proof reads. If the fused cut does not reduce committed bytes, say so in the table and price both. Name your source for each figure.
 
+[2026-11-08T00:29Z] f412e0fca56e
+Proofs coordinator 00:37Z: one more line for the lever table. The network audit will prove every window's compile slice (CompileSlice_v3, which proves the prefix-cache hits inside the proof), never sampled, so it adds to total compute. Its cost is unmeasured until Mon 20:00Z (network-accounting, on VLLM-243's window). Carry it as a named, unmeasured line, and do not fold it into another term.
+
