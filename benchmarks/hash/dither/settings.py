@@ -28,8 +28,8 @@ REGISTRY = Registry(
     # the execution phase: dither_one, dither_a, dither_so
     S("DITHER_H1C", str, None, WHERE, f"libh1c.so, the hiding tables' commit: {BUILD}"),
     S("DITHER_H1C_KC", str, None, WHERE, f"libh1c_kc.so, the dither-a-hbc arm's tables: {BUILD}"),
-    S("DITHER_H1F", str, None, WHERE, f"libh1f.so, the fused window's units: {BUILD}"),
-    S("DITHER_H1O", str, None, WHERE, f"libh1o.so, the one-stream window's units: {BUILD}"),
+    S("DITHER_H1F", str, None, WHERE, f"libh1f.so, the fused execution phase's units: {BUILD}"),
+    S("DITHER_H1O", str, None, WHERE, f"libh1o.so, the one-stream execution phase's units: {BUILD}"),
     S("DITHER_UNITS", str, "block", VALUE, "dither_one's units form (block, mix, ...): which kernel computes a call's units"),
     S("DITHER_PEEL", one, False, VALUE, "1: z = A B^T from O (the peel of b and c), so y is today's served y"),
     S("DITHER_PERCALL", str, None, VALUE, "the per-call challenger round's waits, measured only: a file of ns "
@@ -55,10 +55,13 @@ REGISTRY = Registry(
     S("DITHER_CHECK_WORKERS", int, 0, WHERE, "the gate check's worker processes (0: its own count): how fast it checks"),
     S("DITHER_DEAD_ONCE", one, False, VALUE, "1: a step's GEMMs and y commits write a row past m only where an earlier step "
                                              "left something else; the same bytes"),
-    S("DITHER_ROUNDS", int, None, VALUE, "the window's round coins' layout (the session's when the coins are off the node)"),
-    S("DITHER_MANIFEST_DIR", str, None, WHERE, "where an off-node window's manifest.json goes (its per-call roots to scratch)"),
-    S("DITHER_SPILL_MAX_GB", float, None, WHERE, "the spill pool's bound in GiB, past which a window's spill refuses"),
-    S("DITHER_CHALLENGERS", json.loads, None, WHERE, "each arm's challenger session off the node, as JSON ({ARM: {session, "
+    S("DITHER_ROUNDS", int, None, VALUE, "the execution phase's round coins' layout (the challenge phase's when the coins "
+                                         "are off the node)"),
+    S("DITHER_MANIFEST_DIR", str, None, WHERE, "where an off-node execution phase's manifest.json goes (its per-call roots "
+                                               "to scratch)"),
+    S("DITHER_SPILL_MAX_GB", float, None, WHERE, "the spill pool's bound in GiB, past which an execution phase's spill "
+                                                 "refuses"),
+    S("DITHER_CHALLENGERS", json.loads, None, WHERE, "each arm's challenge phase off the node, as JSON ({ARM: {session, "
                                                      "address, secret_file, commitment, rounds}}): where its coins come "
                                                      "from, which its stats say"),
     S("DITHER_CREDIT_GATE", str, None, WHERE, "the credit gate's credit_gate.py sbench.sh fetched, which dither-1s-credit runs"),
