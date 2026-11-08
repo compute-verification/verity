@@ -1,5 +1,4 @@
 {
- "format": 1,
  "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
@@ -3300,97 +3299,6 @@
    "due": "2026-11-06"
   }
  },
- "trust": {
-  "base": {
-   "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
-   "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
-   "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
-   "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
-   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
-   "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
-   "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
-   "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
-   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
-  }
- },
- "deployed": [
-  "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
-  "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
-  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
-  "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
-  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
-  "Bandwidth.SecurityProofs.AuditRO",
-  "Flock.SecurityProofs.DeltaPubDeployed",
-  "Flock.SecurityProofs.RecursiveKSDeployed",
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
-  "Flock.SecurityProofs.SampledKSLiveV3",
-  "Flock.SecurityProofs.SampledKSLiveV5",
-  "Flock.SecurityProofs.SessionLoopZKDeployed",
-  "NetTiming.SecurityProofs.PeriodLeakAccepted",
-  "Pous.SecurityProofs.StreamedWipe"
- ],
- "trust_gap": {
-  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": [
-   "Accounting.Assumptions.SketchHashRandom",
-   "Accounting.Assumptions.SketchRank",
-   "Accounting.Remote.Sketch.Assumptions.KeyBudget",
-   "Accounting.Remote.Sketch.Assumptions.Present",
-   "Accounting.Remote.Sketch.Assumptions.Receipted"
-  ],
-  "Accounting.SecurityProofs.RemoteSessionConservationDeployed": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
-  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": ["Accounting.Assumptions.SketchHashBudget", "Accounting.Assumptions.SketchRank"],
-  "Accounting.SecurityProofs.StackedRequirementSketchDeployed": [
-   "Accounting.Assumptions.ChainSum",
-   "Accounting.Assumptions.KeyBinding",
-   "Accounting.Assumptions.SketchHashBudget",
-   "Accounting.Assumptions.SketchRank",
-   "Accounting.Assumptions.SquaringFloor",
-   "Accounting.Requirement.PlanMatches",
-   "Accounting.Requirement.StoreMatches"
-  ],
-  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": [
-   "Accounting.Assumptions.ChainSum",
-   "Accounting.Assumptions.KeyBinding",
-   "Accounting.Assumptions.SketchHashBudget",
-   "Accounting.Assumptions.SketchRank",
-   "Accounting.Assumptions.SquaringFloor"
-  ],
-  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
-   "Claims.ZKMal.RefSession.SwCausalOn",
-   "Flock.Guarantees.ReleaseReadsNoStop",
-   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
-  ],
-  "Flock.SecurityProofs.SampledKSLiveV3": [
-   "FlockSoundness.Assumptions.LinkCRZCAt",
-   "FlockSoundness.Assumptions.TableCRZAt",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-   "FlockSoundness.Built",
-   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
-  ],
-  "Flock.SecurityProofs.SampledKSLiveV5": [
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
-   "FlockSoundness.Built",
-   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-   "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-   "FlockSoundness.Discharge.ZkLink.SessCRZ"
-  ],
-  "Flock.SecurityProofs.SessionLoopZKDeployed": [
-   "Claims.ZKMal.RefSession.SwCausalOn",
-   "Claims.ZKServer.LeanRelease.FillRoundEq",
-   "Claims.ZKServer.LeanRelease.LiveRoundEq",
-   "Claims.ZKServer.Loop.Src",
-   "Flock.Guarantees.LoopInnerRound0"
-  ],
-  "NetTiming.SecurityProofs.PeriodLeakAccepted": [
-   "Claims.Flock.ListWithin",
-   "Claims.Sampling.KS",
-   "NetTiming.ScopeAcc",
-   "NetTiming.TapOpens",
-   "Verity.Assumptions.TrustedHost"
-  ]
- },
  "meaning": [
   "Definitions.Core",
   "Definitions.Core.Assumptions",
@@ -4956,7 +4864,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "cf50487a15ba30695c770baf3219b6fc7f8637aee33c8feabad4c4de52abe8b0"
+   "unfolded_hash": "e8931a524eb1910c4f8dabd603fba7120726856113dede6cf66b2076f14acdf8"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
@@ -15027,7 +14935,7 @@
     "reads": []
    },
    "type_hash": "8aa10cc7e22e6a935407fa817c1bd6d0924244fdaf7afc7ec532b6790d1150d5",
-   "unfolded_hash": "5b94d4d24d4e02de86ec9412d9263eb9d8a3b59acb969a1e4b7df94cdc67b70b"
+   "unfolded_hash": "d28f7ca289405a8704f45ab0730bb5ba189347ea88e938bb3665a936662f6c74"
   },
   "Flock.SecurityProofs.SampledKSTwo": {
    "owner": "@proofs",
@@ -25372,7 +25280,7 @@
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v and link cost t' + v per run for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
    "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (lawOf: drawnLaw, deriveLaw over Partition.strata, else flockLaw, and subset 0 where it names none), never a Bernoulli law (the verifier refuses one, OneStage.coveredLaw, notBernoulli_lawOf), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
+   "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (RowsOk, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility), and its tags are in TagsOkZHJ, the case in which it gives its bound; it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary registered circuit (Verity.RegisteredCircuit) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "frozen (no-function): It is a counting fact about an arbitrary circuit's counted operations and a partition refining another (Verity.Partition.Refines), with no premise, not about a function's acceptance.",
@@ -26508,9 +26416,9 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
@@ -39643,11 +39551,12 @@
    }
   },
   "Flock.KsScope": {
-   "digest": "50cf5d56ff405d2414e18eadd134f9170a4dc30556a902a8f1452a9fce4dd963",
+   "digest": "dbf0fb429a3d8051910558463f0689cef64e9505aff06a5a02f70d6d8b2f3b3c",
    "definitions": {
     "Flock.KsScope.ROOTS_WHY": "856122f76860449b1a6c7504a4ecf832f3c95daaabfa94f7812092d433ee5c64",
     "Flock.KsScope.SCOPE_WHY": "dd0e53f27f892c737ac8ffd6097ac7a8412479c7e79053f6fda35dc725ada0c0",
     "Flock.KsScope.TABLES_WHY": "09402a61bb542aa4c0887e6cf8dbcafe20c58a7975c87d0c5edadc53e3fbdaad",
+    "Flock.KsScope.check": "98de35be0ebbf86b7d0acfab0d7c936f53624812bda256da2c05c348fb4d644d",
     "Flock.KsScope.checkOf": "f059a38c0005f2721a8884d7e3caed1b60cd8f1a6ccf7494e78dbc47d4cec658",
     "Flock.KsScope.collidesT": "d64b1507c7afd599e8161438c8ea995b72b9f89b67f3f3552c4cf8848a99d6a0",
     "Flock.KsScope.drawWhy": "31490eabd56ff3e8894152ecbe4e94d5669e623c79d6f763cc1121f716063779",
@@ -44452,14 +44361,15 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Honest": {
-   "digest": "8feacca842be80d3948a384419a226e71740c8822412acfa01fc0db8f8711098",
+   "digest": "e5b5f062d45027e7b0738cda4309050afa3f10a0993a1c17e5b9e28e29238ea7",
    "definitions": {
-    "Flock.Guarantees.SampledKSLiveV5Honest": "86fe43a5138c166dfc5339168ac55c9f00f7f2a9b20e7036d926c37d35c278c2"
+    "Flock.Guarantees.SampledKSLiveV5Honest": "2d51dc8389a88d211a9c4b6d3f5484c572ba4245092713156cdce46ee5b4990b"
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "f4a5e03a37467ee9550130f729e4224b1d512d15d1a143c8d409705b8650a82d",
+   "digest": "d1ec94de7d7fcfa7f8832d090f84974ac8299f21a5f41ef71fba053493f21110",
    "definitions": {
+    "Flock.Bridge.LiveAcceptsKSP": "37809f2a683eead9277e0b94e6b4e03eeecc54ce87ce47882c4b0139c79b87cd",
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
     "Flock.Guarantees.SampledKSLiveV5": "c07c1fe9d2b79bf57eb258a276071706ce3d2c7dfe973ef826505a6ae511701f"
    }
@@ -54133,9 +54043,101 @@
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
+ "format": 1,
  "four_names_except": {
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; @proofs lifts it with `check.py --lift`",
   "Pouw.Salt.keyed_leaf_binds": "proves `Pouw.Guarantees.KeyedLeaf.Binds` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Binds` with `--moved`",
   "Pouw.Salt.keyed_leaf_hides": "proves `Pouw.Guarantees.KeyedLeaf.Hides` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Hides` with `--moved`"
+ },
+ "trust": {
+  "base": {
+   "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
+   "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
+   "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
+   "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
+   "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
+   "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
+   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
+  }
+ },
+ "deployed": [
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
+  "Bandwidth.SecurityProofs.AuditRO",
+  "Flock.SecurityProofs.DeltaPubDeployed",
+  "Flock.SecurityProofs.RecursiveKSDeployed",
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
+  "Flock.SecurityProofs.SampledKSLiveV3",
+  "Flock.SecurityProofs.SampledKSLiveV5",
+  "Flock.SecurityProofs.SessionLoopZKDeployed",
+  "NetTiming.SecurityProofs.PeriodLeakAccepted",
+  "Pous.SecurityProofs.StreamedWipe"
+ ],
+ "trust_gap": {
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": [
+   "Accounting.Assumptions.SketchHashRandom",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Remote.Sketch.Assumptions.KeyBudget",
+   "Accounting.Remote.Sketch.Assumptions.Present",
+   "Accounting.Remote.Sketch.Assumptions.Receipted"
+  ],
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": ["Accounting.Assumptions.SketchHashBudget", "Accounting.Assumptions.SketchRank"],
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed": [
+   "Accounting.Assumptions.ChainSum",
+   "Accounting.Assumptions.KeyBinding",
+   "Accounting.Assumptions.SketchHashBudget",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Assumptions.SquaringFloor",
+   "Accounting.Requirement.PlanMatches",
+   "Accounting.Requirement.StoreMatches"
+  ],
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": [
+   "Accounting.Assumptions.ChainSum",
+   "Accounting.Assumptions.KeyBinding",
+   "Accounting.Assumptions.SketchHashBudget",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Assumptions.SquaringFloor"
+  ],
+  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
+   "Claims.ZKMal.RefSession.SwCausalOn",
+   "Flock.Guarantees.ReleaseReadsNoStop",
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
+  ],
+  "Flock.SecurityProofs.SampledKSLiveV3": [
+   "FlockSoundness.Assumptions.LinkCRZCAt",
+   "FlockSoundness.Assumptions.TableCRZAt",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
+   "FlockSoundness.Built",
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
+  ],
+  "Flock.SecurityProofs.SampledKSLiveV5": [
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+   "FlockSoundness.Built",
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+   "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+   "FlockSoundness.Discharge.ZkLink.SessCRZ"
+  ],
+  "Flock.SecurityProofs.SessionLoopZKDeployed": [
+   "Claims.ZKMal.RefSession.SwCausalOn",
+   "Claims.ZKServer.LeanRelease.FillRoundEq",
+   "Claims.ZKServer.LeanRelease.LiveRoundEq",
+   "Claims.ZKServer.Loop.Src",
+   "Flock.Guarantees.LoopInnerRound0"
+  ],
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": [
+   "Claims.Flock.ListWithin",
+   "Claims.Sampling.KS",
+   "NetTiming.ScopeAcc",
+   "NetTiming.TapOpens",
+   "Verity.Assumptions.TrustedHost"
+  ]
  }
 }
