@@ -122,7 +122,7 @@ theorem member_of_replayOf {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sam
     {d : Claims.Sampling.Design.Two} {u ρ : ℕ} (hP : SpotFlock.partition h s = some Pt)
     (hd : SpotFlock.two h s = some d) (hin : Claims.Sampling.InScopeTwo Pt d s) (hu : u < Pt.blocks.length)
     (hρ : Claims.Sampling.replayOf Pt d.part u = some ρ) :
-    ∃ t, t < h.ms.length ∧ ∃ p, p < h.reg.ns.getD t 0 ∧ ρ * h.reg.ns.getD t 0 + p < h.ms[t].2.size ∧
+    ∃ t, ∃ _ : t < h.ms.length, ∃ p, p < h.reg.ns.getD t 0 ∧ ρ * h.reg.ns.getD t 0 + p < h.ms[t].2.size ∧
       u = Properties.Spot.unitBase h.ms t + (ρ * h.reg.ns.getD t 0 + p) := by
   obtain rfl := SpotFlock.partition_eq h hP
   obtain ⟨l, -, -, hdd, -, hfo⟩ := SpotFlock.two_eq h hd
