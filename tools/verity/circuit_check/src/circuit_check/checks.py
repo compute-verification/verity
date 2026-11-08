@@ -61,7 +61,8 @@
                      (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
                      of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
                      past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
-                     window's templates each stage one, unless `block_held.HELD` says why not (the report's, `summarize`)
+                     window's templates each stage one, unless `block_held.HELD` says why not (the report's, `summarize`);
+                     a Call serving stages as its cut (its module's ``CUTS``, `cut_of`), for each unit of the cut instead
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -71,6 +72,7 @@ property left unchecked, and the report prints it under ``unchecked``, apart fro
 from __future__ import annotations
 
 import random
+import sys
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -1370,31 +1372,64 @@ def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
     sha512x3 and hm96 slots and the mask beside its own slot, as `compose` places them), against Flock's proved range of
     2^``K_MAX``; past it a failure where ``t`` is checked whole (``applies``: not as a subcircuit whose units are its
     template's proof blocks).  Which of those failures are held is the report's (`summarize`, `block_held`), so no target's
-    verdict reads the list."""
+    verdict reads the list.  A Call serving stages as its cut (`cut_of`) never needs its own block: each unit of the cut is
+    held to the range in its place, a failure naming the Call and the unit, and the entry's ``k_log`` and ``bits`` are the
+    largest unit's, its ``whole`` the Call's, its ``cut`` each unit's with how many of it."""
     from verity_flock import circuit as FC
 
     b = FC.unit_block(t)
-    if applies and (why := FC.past_block(b)) is not None:
-        F.fail("block", "past-range", t.id, why, **b)
-    return {**b, "applies": applies}
+    if (cut := cut_of(t)) is None:
+        if applies and (why := FC.past_block(b)) is not None:
+            F.fail("block", "past-range", t.id, why, **b)
+        return {**b, "applies": applies}
+    units = []
+    for u, n in cut:
+        ub = FC.unit_block(u)
+        units.append({"unit": u.id, "count": n, **{k: ub[k] for k in ("ands", "bits", "k_log")}})
+        if applies and (why := FC.past_block(ub)) is not None:
+            F.fail("block", "past-range", t.id, f"its cut's unit {u.id}: {why}", **ub)
+    top = max(units, key=lambda u: u["bits"])
+    return {**b, "applies": applies, "k_log": top["k_log"], "bits": top["bits"],
+            "whole": {"k_log": b["k_log"], "bits": b["bits"]}, "cut": units}
 
 
-def _held_blocks(entries: list[dict]) -> tuple[dict[str, str], list[dict]]:
+def cut_of(t: Any) -> list[tuple[Any, int]] | None:
+    """The units serving stages Call ``t`` as, each Definition bound with how many of it, where the module whose function
+    builds ``t`` names its family in ``CUTS`` (family -> its cut at a binding's statics, `sparse_mla.CUTS`); else None.  Only
+    that module is read, which ``t``'s check reads already."""
+    from . import cache as CC
+
+    mod = sys.modules.get(CC._function_module(getattr(t, "defn", t)) or "")
+    cut = getattr(mod, "CUTS", {}).get(getattr(t, "base_id", None))
+    return None if cut is None else cut(t)
+
+
+def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, str], list[dict]]:
     """Of ``entries``, the Definitions `block_held.HELD` holds past the block, each with why, and a ``block/stale-hold``
-    failure for each held one checked whole whose block fits."""
+    failure for each held one checked whole whose block fits (a cut Call's, each unit of its cut); over the whole catalog
+    (``catalog``: an unsharded ``--all`` or every shard of one), a ``block/absent-hold`` failure for each held id no entry
+    names, which nothing is checked as any longer."""
     from .block_held import HELD
 
-    held, stale = {}, []
+    fix = "delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX"
+    held, stale, seen = {}, [], set()
     for e in entries:
         d, b = e.get("definition") or e.get("target"), e.get("block") or {}
+        seen.add(d)
         if d not in HELD or not b.get("applies"):
             continue
         if b["k_log"] > b["k_max"]:
             held[d] = HELD[d]
             continue
+        fits = (f"each unit of its cut fits 2^{b['k_max']} (the largest 2^{b['k_log']} bits)" if "cut" in b else
+                f"its block of 2^{b['k_log']} bits fits 2^{b['k_max']}")
         F = Findings()
-        F.fail("block", "stale-hold", d, f"its block of 2^{b['k_log']} bits fits 2^{b['k_max']}, but block_held.HELD holds it "
-               f"({HELD[d]}): delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX", **b)
+        F.fail("block", "stale-hold", d, f"{fits}, but block_held.HELD holds it ({HELD[d]}): {fix}", **b)
+        stale += F.failures
+    for d in sorted(set(HELD) - seen) if catalog else ():
+        F = Findings()
+        F.fail("block", "absent-hold", d, f"block_held.HELD holds it ({HELD[d]}), but the catalog checks no Definition of that "
+               f"id any longer: {fix}")
         stale += F.failures
     return held, stale
 
@@ -1661,7 +1696,7 @@ def classified(r: dict) -> dict:
     return {**r, "warnings": [*r.get("warnings", ()), *F.warnings]}
 
 
-def summarize(entries: Iterable[dict]) -> dict:
+def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
     """Totals over entries: failures by name (`ok` is none: whether one may stay red is drive's policy, never the runner's),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
     too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
@@ -1670,12 +1705,12 @@ def summarize(entries: Iterable[dict]) -> dict:
     (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned by
     its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those whose
     correspondence read a table or an operand lazily (where kernels decline and no lowering runs); ``block_held``: each
-    Definition past the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted
-    (`_held_blocks`)."""
+    Definition past the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted, and
+    over the whole catalog (``catalog``) each held id it no longer has failed (`_held_blocks`)."""
     entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
-    held, stale = _held_blocks(entries)
+    held, stale = _held_blocks(entries, catalog)
     for e in entries:
         fails.update((f["name"], f) for f in e.get("failures", [])
                      if (f["check"], f["code"]) != ("block", "past-range") or f["definition"] not in held)
@@ -1717,16 +1752,17 @@ def summarize(entries: Iterable[dict]) -> dict:
                          for k, v in by_check.most_common()}}
 
 
-def report(targets: list[dict], opts: Options) -> dict:
-    """The report over ``targets``, each by-calls root with its callees' targets' verdicts (`circuit_check.by_calls.joined`)."""
+def report(targets: list[dict], opts: Options, catalog: bool = False) -> dict:
+    """The report over ``targets``, each by-calls root with its callees' targets' verdicts (`circuit_check.by_calls.joined`);
+    ``catalog`` where they are the whole catalog's (`summarize`)."""
     from .by_calls import joined
 
     targets = joined(targets)
-    return {"schema": SCHEMA, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "summary": summarize(targets),
-            "targets": targets}
+    return {"schema": SCHEMA, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__},
+            "summary": summarize(targets, catalog), "targets": targets}
 
 
 __all__ = ["Findings", "Options", "SCHEMA", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
-           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "dead_gates",
+           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "cut_of", "dead_gates",
            "floored", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
            "target_equivalence", "template_lowering", "uncut", "unit_block", "vector_class", "whole_lowering"]

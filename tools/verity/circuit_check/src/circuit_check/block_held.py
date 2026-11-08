@@ -3,7 +3,8 @@ range of 2^27 bits and that the report holds rather than fails (`checks.summariz
 as one Flock unit, or it is served and its calls are moving to a chunked form, named with the PR that moves them.
 
 The report reads this list, no target's check: an edit to it reruns no target.  It only shrinks: `MAX` is its length, a
-test holds it there, and a held Definition whose block fits fails ``block/stale-hold``, so a fix deletes its entry and
+test holds it there, a held Definition whose block fits (a Call its module cuts, `checks.cut_of`: each unit of the cut) fails
+``block/stale-hold``, and one the whole catalog no longer checks fails ``block/absent-hold``, so a fix deletes its entry and
 lowers `MAX` in the same change."""
 from __future__ import annotations
 
@@ -61,7 +62,6 @@ HELD: dict[str, str] = {
         "MhcPreBroadcast_v1{HC=4,H=7168,NS=28,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}",
         "RMSNormCudaVector8_v1{N=7168,EPS=1e-06,BLOCK=256}",
         "RMSNormCudaVector8_v1{N=7168,EPS=1e-06,BLOCK=896}",
-        "SparseMla_v1{T=65,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}",
     ], UNCUT),
     **dict.fromkeys([
         "MoeExpertFp8Coordinate_v1{E=256,K=6144,G=128,KB=128,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v1}",
@@ -101,4 +101,4 @@ HELD: dict[str, str] = {
         "TopPMask_v1{V=64}",
     ], INSIDE),
 }
-MAX = 117
+MAX = 116
