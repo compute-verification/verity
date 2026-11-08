@@ -390,8 +390,8 @@ PROVER_GOAL = reprice.PROVE_MAIN / reprice.PROVE_TARGET
 def served_line() -> dict[str, Case]:
     """(A′) at 128k priced as the long-running proof server proves it (`N0`..`N5`): today's measured server prices,
     main's verifier and the quant card, then each lever in turn; the measured levers alone (`N5m`); the extras on `N5`,
-    the path from it (`P1`..`P5`), a pool per window's lost hits and the per-window budget form on both, and the advice
-    charged two ways."""
+    the path from it (`P1`..`P5`), a pool per window's lost hits on `N5`, `P1` and `P5`, the per-window budget form on
+    `N5` and `P5`, and the advice charged two ways."""
     life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
     n0 = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K, fuse=True, fused=FUSED, server=True,
               verify=1.0, column="today", compile_core_h=1.0)
@@ -417,10 +417,11 @@ def served_line() -> dict[str, Case]:
     for e, kw in extras.items():
         out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
     out["N5m+ktypes"] = Case(**(steps["N5m"] | dict(k_gain="types")))
-    for s in ("N5", "P5"):
+    for s in ("N5", "P1", "P5"):
         for w in POOL_WINDOW_LOST:
             if s == "P5" or w == 600:
                 out[f"{s}+poolwin{w}"] = Case(**(steps[s] | dict(pool_window_s=w, scale=1 + POOL_WINDOW_LOST[w])))
+    for s in ("N5", "P5"):
         out[f"{s}+zk"] = Case(**(steps[s] | dict(budget_form="zkstack")))
         out[f"{s}+zkmachine"] = Case(**(steps[s] | dict(budget_form="zkstack-machine")))
     return out
