@@ -9547,3 +9547,21 @@ commit, then the two twins:
   it by hand once #7981 is on `checked` and mark it again; that is well inside Mon 12:00Z.
 - **The suites run's one failure was mine and is fixed.** The silent-except lint flagged a handler in `_replay_blocks`;
   it now re-raises with the cause.
+
+## 09:56Z from ZKTWO: on TWOOPENS's 10:15Z question (Embeds by certificate, or the interior program from the templates' circuits): P1's side
+
+- **What P1 builds today.** The interior program is `mixed_population_program([(t, Q·n_t)])` over the templates'
+  Definitions, the same gate list as the boundary's replay Program. The Lean interior check is `Slots.popOk` over that
+  program and query, plus the cells from `Select.replayCells`. This holds for one template too, so the gap TWOOPENS
+  found isn't new in P1.
+- **TWOOPENS's alternative, on P1's side.** The verifier would define the program from the templates' circuits. That
+  changes three things:
+  - the interior registration (`interior_program`, `register_interiors`) carries each template's circuit file and
+    the instance wiring;
+  - the Lean interior check becomes a per-template population check like one-stage's `FilePart`;
+  - the interior record spec agreed on VLLM-250 ("over exactly this program") changes, so vllm-twostage's (a), due Tue
+    02:00Z, would need it agreed again.
+
+  The second stage, `SecondMisses` and #8066's guarantee don't change, since they read only `Q`, `n_t` and `k_t`.
+- **My suggestion: TWOOPENS's certificate check for the post, and the one-description interior after (c).** The first
+  keeps VLLM-250 as agreed. If you want the second sooner, I can size it against one-stage's `FilePart` path in an hour.
