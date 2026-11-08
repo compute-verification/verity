@@ -92,6 +92,7 @@ def test_an_input_is_wired_to_the_call_that_output_its_bytes_or_a_tensor_it_view
     assert wires.source(0, ev[2]["in"]["self"])["kind"] == "call", "aten::gelu is no population's: committed, not proved"
     view = wires.source(0, ev[3]["in"]["self"])
     assert (view["kind"], view["seq"], view["view"]) == ("block", 0, {"offset": 2, "stride": [8, 1]})
+    assert wires.source(0, ev[3]["in"]["self"]) is view, "a reference's source is found once"
     assert wires.source(0, ev[0]["out"]["ret0"]) == {"kind": "block", "rank": 0, "seq": 0, "op": "aten::mm", "out": "ret0"}
 
 
@@ -106,8 +107,9 @@ def test_a_parameter_is_registered_and_an_advice_input_charged_at_its_width(step
 def test_an_input_no_earlier_call_output_is_unwired_with_the_fix_and_the_enclosing_calls_output_too(step) -> None:
     stage, cap, wires = step
     ev = cap.events[0]
-    with pytest.raises(stage.Unwired, match=r"reads other, .*declare \('aten::add', 'other'\) in stage\.ADVICE"):
-        wires.source(0, ev[2]["in"]["other"])
+    for _ in range(2):
+        with pytest.raises(stage.Unwired, match=r"reads other, .*declare \('aten::add', 'other'\) in stage\.ADVICE"):
+            wires.source(0, ev[2]["in"]["other"])
     with pytest.raises(stage.Unwired, match="reads self"):
         wires.source(0, ev[6]["in"]["self"])
 

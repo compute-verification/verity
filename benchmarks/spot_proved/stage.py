@@ -901,6 +901,7 @@ class Wires:
         self.at: dict[int, tuple[int, int, str, str]] = {}
         self.made: dict[tuple[int, str], list[tuple[int, str]]] = {}
         self.outs: dict[int, list[tuple[int, str, dict]]] = {}
+        self.found: dict[int, dict | Unwired] = {}
         self.by_seq = {r: {e["seq"]: e for e in cap.events[r]} for r in cap.ranks}
         for r in cap.ranks:
             for e in cap.events[r]:
@@ -928,6 +929,20 @@ class Wires:
         return out
 
     def source(self, r: int, ref: dict) -> dict:
+        """``ref``'s source, found once per recorded reference (instances of one call read the same ones)."""
+        if id(ref) not in self.at:
+            return self._source(r, ref)
+        if id(ref) not in self.found:
+            try:
+                self.found[id(ref)] = self._source(r, ref)
+            except Unwired as ex:
+                self.found[id(ref)] = ex
+        got = self.found[id(ref)]
+        if isinstance(got, Unwired):
+            raise got
+        return got
+
+    def _source(self, r: int, ref: dict) -> dict:
         if "param" in ref:
             return {"kind": "registered", "rank": r, "param": ref["param"],
                     "sha512": self.cap.params[r].get(ref["param"], {}).get("sha512")}
