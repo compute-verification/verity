@@ -22,6 +22,9 @@ opening at gate `g`, of the witness's bit at the wire's column, under the roots 
 `frameRows_of_frameIs`: `FrameIs` gives `FrameRows`. Such an opening passes the deployed check wherever its row's
 `b ‖ c` opens `reg` there (`opens_frame`), and its `b ‖ c` is the commit string `FrameRows` reads
 (`InnerRows.commitString_data`). `leaf_commitString`: the deployed check's hm96 leaf is Flock's tree leaf of `b ‖ c`.
+
+`sessionOpensTwo_of_frameIs`: so `SessionOpensTwo` at SPOT[Flock]'s two-stage code follows from two premises on the
+registration, `Embeds` and `FrameIs` (`sessionOpensTwo_of_rows`).
 -/
 
 @[expose] public section
@@ -101,5 +104,12 @@ theorem frameRows_of_frameIs (L : Layout) (hF : FrameIs h L) : FrameRows h L := 
   refine opens_frame h hat hfind ?_
   rw [hrow, hsalt, _root_.Flock.InnerRows.commitString_data, hb, hπ]
   exact hop
+
+/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a layout** where the session statement holds each checked
+unit's gates (`Embeds`) and the frame opens the session's rows (`FrameIs`). -/
+theorem sessionOpensTwo_of_frameIs (L : Layout) (he : Embeds h L) (hF : FrameIs h L) :
+    Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
+      (two h) iroots :=
+  sessionOpensTwo_of_rows h L he (frameRows_of_frameIs h L hF)
 
 end SpotFlock
