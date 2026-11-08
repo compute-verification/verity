@@ -636,11 +636,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit("the fresh engine's KV pool is laid out unlike the served one's")
     near_file = kv_file(files[a.from_edge], st0["kv_layout"])
     pages = edge_pages(near_file, st0["pool"])
-    mirror = Mirror(sched, kvm, kv.rows, bs) if a.mirror_out else None
+    # forced hits read pages written inside the block from the mirror, as lifetime replay reads its host copy, where the
+    # fresh pool evicted a page the served one still had cached
+    mirror = Mirror(sched, kvm, kv.rows, bs) if a.mirror_out or a.hits == "forced" else None
     t = time.monotonic()
     if begin:
         saved = Saved(a.from_mirror / "mirror")
-        pages = first_of(pages, saved.page)
+        pages = first_of(pages, saved.page, *([mirror.page] if mirror else []))
         out["rebuilt"] = readd_mirror(eng, core, begin, saved, w["outputs"], st0["kv_layout"], bs, a.tail)
         readded = set(out["rebuilt"].pop("order"))
         want0 = {r: v for r, v in begin["truth"].items() if r in readded}
@@ -682,7 +684,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         def wrapped(*args, **kw):
             if mirror:
                 mirror.flush()
-                if trace.scheduled == a.at_step:
+                if a.mirror_out and trace.scheduled == a.at_step:
                     stop["start"] = start_state(sched, kvm, kv, mirror, arrived, w["steps"], max(outs, default=first - 1),
                                                 a.at_step, bs)
                     raise _Stop
@@ -721,7 +723,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     steps = {r["step"]: r for r in trace.records if r["kind"] == "step" and first <= r["step"] < w["hi"]}
     block = {"from_edge": a.from_edge, "to_edge": a.to_edge, "from_step": w["lo"], "to_step": w["hi"], "first_step": first,
              "arrivals": len(w["arrive"]), "requests_at_start": len(readded)}
-    if mirror:
+    if a.mirror_out:
         hooks.uninstall()
         st = stop["start"]
         keep = set(st["order"])
