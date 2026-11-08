@@ -25,6 +25,8 @@
 #      with K provers for each K, on ST_MIX's stream (each type's blocks a sampled replay block, type=blocks,...),
 #      ST_SESSIONS=120 timed sessions a prover after ST_SERVER_WARM warm ones, FC_VERIFY_AHEAD=ST_VERIFY_AHEAD; stage each
 #      type at quarter,half,full)
+#      ST_ZK (a directory the staged statements stay in after the run, so a later run with it reuses each type staged there
+#      with the same spec and device check; unset: the run's scratch)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -57,7 +59,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$X/venv/bin/python
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
-Z=$W/zk; mkdir -p "$Z/records"; echo '[]' > "$Z/plan.json"
+Z=${ST_ZK:-$W/zk}; mkdir -p "$Z/records"; echo '[]' > "$Z/plan.json"
 SPECS=(); JOBS=${ST_STAGE_JOBS:-0}
 stage_type() {
   taskset -c "$SC" "$PY" benchmarks/served_units/stage.py "$1" "$2" "$3/c{n}/stage" > "$3/stage.log" 2>&1 \
@@ -66,6 +68,8 @@ stage_type() {
 for spec in ${ST_UNITS:?}; do
   u=${spec%@*}; COUNTS=${ST_COUNTS:-half,full}; [ "$u" = "$spec" ] || COUNTS=${spec#*@}
   t=$(echo "$u" | tr ':,=' '---' | tr -d '-'); sd=$Z/$t; mkdir -p "$sd"
+  if [ -e "$sd/staged" ] && [ "$(cat "$sd/spec" 2>/dev/null)" = "$spec" ]; then log "$u: staged before, reused"; continue; fi
+  rm -rf "$sd"/{staged,failed,device-ok,c*}; echo "$spec" > "$sd/spec"
   if [ "$JOBS" -gt 0 ]; then
     while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
   fi
@@ -195,8 +199,9 @@ if [ -n "${ST_SERVER:-}" ]; then
 print(", ".join("%s at k_log %s (%s s)" % (r["n"], r["k_log"], r["seconds"]["total"])
                 for r in (json.load(open(f)) for f in sorted(glob.glob(sys.argv[1] + "/c*/stage/stage.json")))))' "$Z/$t")"
     d=$(ls -dv "$Z/$t"/c*/stage | head -1)
-    if "$BIN" statement --zk --gpu --instances "$d/pub.bin" --circuit "$d/circuit.txt" > "$Z/$t/device-check.log" 2>&1; then
-      TYPES+=("${e%|*}")
+    if [ -e "$Z/$t/device-ok" ] || "$BIN" statement --zk --gpu --instances "$d/pub.bin" --circuit "$d/circuit.txt" \
+        > "$Z/$t/device-check.log" 2>&1; then
+      TYPES+=("${e%|*}"); touch "$Z/$t/device-ok"
     else
       log "${e%|*}: the device prover refuses it: $(tail -c 400 "$Z/$t/device-check.log")"
     fi
