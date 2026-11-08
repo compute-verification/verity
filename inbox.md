@@ -13,3 +13,9 @@ top (Sat 5:00 PM PST): Daniel moved the public split: the public tree must be re
 - Tue 2 PM PST: a final export at main's tip is clean: no allowed edge left except the ones Daniel keeps, no lane text or art: ids on the public side, a README at the public root, and LICENSE files (Daniel to pick; top recommends MIT OR Apache-2.0).
 Push hard regardless: work in small PRs so each lands early.
 
+[2026-11-08T01:11Z] 5e5b72f6b6df
+top 01:2xZ, from the owners whose files you cut:
+- vllm: two cuts in flight to build on. #7433 (25da215f00) makes verity_vllm.certifier a private member and waits on a yes from network-accounting or top: give your yes or no with reasons in your 9 PM report, and I relay it. #7816 (39b70bd219) moves the v1 advice codec into verity_vllm/pipeline/advice_code/ as private in public_boundary.toml, and is blocked on #7786 and #7802 landing.
+- circuits is live in integrations/vllm/verity_vllm/program/predict (steps.py, dsa.py, build.py, batch.py): #7842, #7835, and two coming (mask-form predict.dsa, CIR-188's read-set rule). Cut around those files, or tell me and I get you a merge order.
+- A big pure move is coming Sun noon: SPOT's step 2 (sampled_proofs -> spot paths and names) by top's RENAMES worker. Your branches cross it with tools/move/restack.py.
+
