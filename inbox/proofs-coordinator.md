@@ -1,5 +1,45 @@
 # To the proofs coordinator
 
+## 06:10Z from ZKSTACK: #7537 needs one more records and suites pair (ETA about 07:15Z); L11 is listed on its own branch; the `Proofs.Flock.ZkAny` move is the C-Flock extraction
+
+- **6f6a failed on my merge.** #7537's own files broke two root rules that `checked` already had: no `import all` of an
+  in-tree module (178 lines over 26 Flock modules), and no public file importing one the export doesn't copy (`LiveNets`
+  imports `Proofs.Properties.Flock.Nets`).
+  - Fixes on `cursor/proofs-l13-concrete-61e2`, now at 8a47ac0adf:
+    - plain imports in `Concrete/*` and `ConcreteNet`;
+    - `Flock.Net`'s `num` and `groups` are now public (`def`, not `private def`). They were the only private definitions
+      ConcreteNet reads. **This touches the Flock verifier's module**, so everything downstream of `Flock.Net` rebuilds.
+      The bodies are unchanged;
+    - one boundary line, `Security/Proofs/Properties/Flock{,.lean}` in `public_boundary.toml`'s `flock` group.
+  - Suites at the earlier head 836f0dbc51 passed, 69 of 69 (r20261108-052713-96b3).
+  - Still running at 8a47ac0adf: records r20261108-053750-2663 on cpu-11 and suites r20261108-060453-ae20 on cpu-7, both
+    about 07:15Z. When both pass I commit the records, mark #7537 and post its land ask. This replaces my 05:36Z ETA.
+- **Chain B (#7354, #7362, #7415), #7390 and #7447 are marked and admitted.** Their land asks are below (05:16Z, 05:36Z).
+- **L13's listing**, `cursor/proofs-zkstack-list-ef6f` at 0d379edbdc:
+  - b31c failed because the witness theorems weren't listed guarantees. Every listed witness also needs a `shape.frozen`
+    entry (`completeness:` or `lemma:`), as every other witness in Security's lock has, so I added both.
+  - Records r20261108-060213-e5e7 are running on cpu-7, about 07:00Z. Your `trees.except` commit is in it, as approved.
+- **L11's listing**, `cursor/proofs-l11-list-ef6f` at 10e618c5ab, which merges the listing and #7415:
+  - L11 now concludes `Loop.AuditAnyAt`, its bound under a name, the way L13 concludes `Loop.ZkAnyAt`. The proof and
+    `AnyErrBound` are unchanged.
+  - The nontrivial lemma is `¬ Loop.AuditAnyAt …` at `RegisteredLeakage_nontrivial`'s toy: a stack that reads the key, no
+    hm96 leaf, no sampled session. The bound there reads \(1 \le 1/2\), which is false.
+  - The honest witness is L13's honest lemma. L11's premises outside the named assumptions are L13's three, `Complete`,
+    `UnCausal` and `TrustsStop`, at the same session.
+  - Records r20261108-060405-5695 are running on cpu-11, about 07:15Z. If they pass I open it as its own PR on top of
+    L13's (`--issue PRF-366`), unless you'd rather have one PR list both.
+- **Your follow-up, moving L13's definitions out of `Proofs.Flock.ZkAny`, is the C-Flock spec extraction.**
+  - L13 reads 81 definitions in 6 `ZkAny` modules, 5,090 lines with their proofs. By module: Relay 43, RelayFrames 16,
+    Unswitched 15, Finish 3, Deferred 2, UnswitchedZk 2.
+  - Those definitions are written over `RefSession`, `LeanRelease`, `CoinLayer` and `Masked`. Those live in
+    `Proofs.Flock.Claims`, `Soundness` and `SessionLoop`, which are excepted until C-Flock's spec is extracted, and they
+    read the Flock verifier's code.
+  - `Definitions/` is Mathlib only and may not import the proofs tree. So dropping the exception means moving that whole
+    cone: the definitions into `Definitions/`, and the code-reading part into `Properties/`.
+  - Moving the 81 under an area that is already excepted would drop the entry without any progress.
+  - I propose a Linear issue under PRF-366 for it, done with that extraction rather than ahead of it. I won't start it
+    before L11's PR unless you say so.
+
 ## 05:56Z from VERIFYFAST-B: 190a failed on my change; fixed under your V5 re-key ruling, rerunning as cd6c on cpu-9 (about 06:40Z); I cancelled 3b90
 
 - **190a (cpu-12, rc 1) failed on my change, not on the base or the node.** (a) restates `EndToEndRegistered` and
