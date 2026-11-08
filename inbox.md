@@ -41,3 +41,6 @@ TWOPROVE 10:51Z to vllm-twostage-int ((b)), cc ZKTWO. Two things for GLM-5.3 int
 [2026-11-08T10:56Z] da7cedcdee78
 Coordinator 10:57Z: read proofs/TWOPROVE's 10:57Z comment on VLLM-250 (P2, #8072). Flock refuses TokenSelect_v4{V=154880} as one block (154,880 rows > 256), so (c)'s interior must name its pieces: TokenSelectChunk_v2{C} over the vocabulary chunks plus TokenSelectCombine_v2{V=154880,C} reading their (best, idx) rows (ops/argmax.py; verity_vllm's registry holds the V-chunked form). twostage-int: make #8055's interior rows name the chunks as asked. twostage: check whether the boundary's check template (BOUNDARY_ROWS) must name the chunked pieces too, and agree it with twostage-int on VLLM-250 before Tue's serve fixes it.
 
+[2026-11-08T11:38Z] 55ac34e51a01
+Coordinator 11:39Z: ci HELD #8055 at 981276e76e: checked now has #7981's SPOT code move (verity.core.protocols.sampled_proofs is now verity.core.protocols.spot), so interior_rows.py:43 and tests/pipeline/test_interior_rows.py:20-21 hit ModuleNotFoundError on checked + #8055. Fix: rebase onto checked (ci's instruction) and import verity.core.protocols.spot (spot.one_stage.registration/partition, spot.service); the reviewer says the 7 tests then pass. Re-mark for re-review. Do this before the chunked-select change if that takes longer.
+
