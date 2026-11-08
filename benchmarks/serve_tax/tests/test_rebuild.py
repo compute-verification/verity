@@ -369,6 +369,21 @@ def test_the_perturbed_row_is_sampled_as_the_block_s_first_arrival_and_never_sto
     assert RB.perturb_row(8, 0, [])["sampling"] == {"ignore_eos": True}
 
 
+def test_the_perturbed_row_jumps_the_waiting_queue() -> None:
+    from collections import deque
+
+    class Queue(deque):
+        def remove_request(self, r):
+            self.remove(r)
+
+        def prepend_request(self, r):
+            self.appendleft(r)
+
+    sched = NS(requests={"a": "A", "b": "B", RB.PERTURB_ID: "P"}, waiting=Queue(["A", "B", "P"]))
+    RB.jump_queue(sched, RB.PERTURB_ID)
+    assert list(sched.waiting) == ["P", "A", "B"]
+
+
 def test_full_pages_are_the_blocks_a_request_s_computed_tokens_fill() -> None:
     assert RB.full_pages({"a": ([4, 5, 6], 9), "b": ([7], 3), "c": ([1, 2], 8)}, 4) == {"a": [4, 5], "b": [], "c": [1, 2]}
 

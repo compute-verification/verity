@@ -701,13 +701,24 @@ class Dummies:
         self.pending.clear()
 
 
+PERTURB_ID = "shape-perturb-0"
+
+
 def perturb_row(n: int, first: int, arrivals: list[dict]) -> dict[str, Any]:
     """The perturbed control's one dummy row more than serving ran: ``n`` prompt tokens from the first step on, sampled
     as the block's first arrival was and never stopping early, so that only the batch's shape changes (a greedy row
     would take a batch of unseeded rows off FlashInfer's sampler)."""
     sampling = dict(arrivals[0]["sampling"]) if arrivals else {}
-    return {"engine_id": "shape-perturb-0", "before_step": first, "prompt_ids": [0] * n, "max_tokens": 2048,
+    return {"engine_id": PERTURB_ID, "before_step": first, "prompt_ids": [0] * n, "max_tokens": 2048,
             "sampling": sampling | {"ignore_eos": True}}
+
+
+def jump_queue(sched: Any, rid: str) -> None:
+    """``rid`` to the head of the scheduler's waiting queue. An arrival under load waits behind every request queued
+    before it, and the perturbed control's row has to run while the target does, or the batch's shape never changes."""
+    q = sched.requests[rid]
+    sched.waiting.remove_request(q)
+    sched.waiting.prepend_request(q)
 
 
 def served_finish(st_requests: dict[str, int], outputs: dict[int, dict], steps: dict[int, dict]) -> dict[str, int]:
@@ -1147,6 +1158,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 prompt, _ = shape.tokens(prompt, [])
                 r = r | shape.params(r["engine_id"], r)
             eng.add_request(r["engine_id"], {"prompt_token_ids": prompt}, R.params(r))
+            if r["engine_id"] == PERTURB_ID:
+                jump_queue(sched, PERTURB_ID)
         if pending and pending[0]["before_step"] < trace.scheduled:
             raise SystemExit(f"the replay passed step {pending[0]['before_step']} before {pending[0]['engine_id']} arrived")
 
@@ -1398,6 +1411,8 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
                 prompt, _ = shape.tokens(prompt, [])
                 r = r | shape.params(r["engine_id"], r)
             eng.add_request(r["engine_id"], {"prompt_token_ids": prompt}, params(r))
+            if r["engine_id"] == PERTURB_ID:
+                jump_queue(sched, PERTURB_ID)
         if pending and pending[0]["before_step"] < trace.scheduled:
             raise SystemExit(f"the replay passed step {pending[0]['before_step']} before {pending[0]['engine_id']} arrived")
 
