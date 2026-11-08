@@ -536,3 +536,93 @@ What you will get for each type, as it finishes:
 [2026-11-08T15:09Z] d1815c1a3045
 Proofs coordinator 15:10Z, heads-up on +pool: circuits (MEMPOOL) measured the BUILT pool unit paying for positions, not activity: >= 1.6e11 ANDs a window vs the 5.5e10 activity model (~3x). Whether #8098 v4 (the post form, proved every window) does the same comes on CIR-190 within the hour. Until then show +pool two ways: as built (scaled by the measured factor if v4 confirms) and with MEMPOOL ragged token row lever (back to the activity model), each labelled measured or modelled.
 
+[2026-11-08T15:10Z] 2e6e0eda1127
+
+## STATIONARY, 15:10Z Sun: MPS rows for seven served types; rmsnorm-v8 at K = 4 does not fit an H200, so its 2.60× is void
+
+All four runs ended with SUCCESS: r20261108-133509-efd0 (GPU 0, no MPS), r20261108-134908-f18a (GPU 2),
+r20261108-134918-937e (GPU 4) and r20261108-140550-4d23 (GPU 0, after efd0). Each MPS run first measured K = 1 without
+MPS, then K = 1, 2 and 4 under an MPS daemon scoped to its leased GPU. So every factor below is over K = 1 without MPS in
+the same run on the same GPU. Each daemon's log shows every prover connecting (70, 14 and 14 client connections). Rates
+are per statement, so they are the same for any monitoring period and scope.
+
+**A correction first: rmsnorm-v8 has no valid K = 4 row.**
+- Four rmsnorm provers need about 140 GiB of device memory, which is the H200's whole 140 GiB.
+- The same thing happened in every K = 4 run (6ab1, efd0, and 4d23 under MPS). One prover's allocation failed with
+  `out of memory` at `prove_circuit.cuh:651`, and its later sessions failed with `invalid argument` at `:952`.
+- 8 of 40 sessions were refused in each run. A refused session files fast, which inflated those rows' rates.
+- So these earlier figures are void:
+  - the 2.60× I posted at 12:27Z and 13:36Z;
+  - the 91% front hidden at K = 4 in the 13:08Z N4 table;
+  - the same row in #8104's body, which I've corrected and extended with the rows below. Its head is unchanged.
+  - My 13:36Z line "every session in these runs was accepted" held for the fr rows it reported, but not for 6ab1 as a
+    whole, which also held this row.
+- rmsnorm's largest K on one H200 is 2. Every K = 2 session was accepted, so the K = 2 figures stand, including 6ab1's 48%
+  front hidden at K = 2.
+
+**Rates** (statements/s; × is over K = 1 without MPS):
+
+| type | K = 1 without MPS | K = 1 with MPS | K = 2 with MPS | K = 4 with MPS |
+|---|---|---|---|---|
+| ar-multimem | 0.1227 | 0.1198 | 0.2158 (1.76×) | 0.3672 (2.99×) |
+| residual-add | 0.4392 | 0.4551 | 0.6952 (1.58×) | 1.0449 (2.38×) |
+| dsa-logits-v3 | 0.4164 | 0.4190 | 0.4825 (1.16×) | 0.7027 (1.69×) |
+| fr-w13 | 0.3960 | 0.3950 | 0.5096 (1.29×) | 0.5956 (1.50×) |
+| sm-fp8-k2048 | 0.5721 | 0.5884 | 0.6689 (1.17×) | 0.7465 (1.30×) |
+| sm-fp8-k6144 | 0.5907 | 0.5984 | 0.7203 (1.22×) | 0.7617 (1.29×) |
+| rmsnorm-v8 | 0.2729 | 0.2710 | 0.4664 (1.71×) | void: out of device memory |
+
+MPS's own cost at K = 1 is between −2.4% and +3.6%, which is within this node's run-to-run noise.
+
+**Busy, device peak and host peak.**
+- Busy is nvidia-smi's busy fraction. Host peak is the provers' plus the verifiers' peak RSS.
+- Values in parentheses come from the void row.
+- In the busy column, the figure before the semicolon is K = 1 without MPS; the three after it are K = 1, 2 and 4 with MPS.
+
+| type | busy | device peak at K = 1, 2, 4 with MPS | host peak at K = 1, 2, 4 with MPS |
+|---|---|---|---|
+| ar-multimem | 0.86; 0.84, 0.86, 0.94 | 35.3, 69.5, 139.0 GiB | 89.6, 179.2, 355.1 GiB |
+| residual-add | 0.62; 0.63, 0.69, 0.89 | 30.3, 60.5, 120.6 GiB | 39.5, 78.9, 157.1 GiB |
+| dsa-logits-v3 | 0.60; 0.59, 0.55, 0.67 | 29.8, 59.5, 118.8 GiB | 21.2, 39.2, 78.1 GiB |
+| fr-w13 | 0.31; 0.31, 0.39, 0.44 | 30.4, 60.7, 121.3 GiB | 52.1, 103.9, 206.1 GiB |
+| sm-fp8-k2048 | 0.37; 0.39, 0.45, 0.48 | 29.5, 59.0, 117.9 GiB | 21.9, 42.3, 80.5 GiB |
+| sm-fp8-k6144 | 0.38; 0.40, 0.46, 0.48 | 29.7, 59.4, 118.7 GiB | 23.8, 48.5, 95.2 GiB |
+| rmsnorm-v8 | 0.21; 0.21, 0.35, (0.38) | 35.2, 69.8, (139.6) GiB | 148.4, 295.6, (574.9) GiB |
+
+**Verdicts.** Each row's count includes its warm sessions (2 per prover) with the timed ones. The expected counts are 18
+at K = 1, 20 at K = 2 and 40 at K = 4, or 26, 28 and 40 for efd0's 24 timed sessions. Every process exited 0. Every
+session was accepted, except in the rmsnorm-v8 K = 4 rows:
+- f18a: all 20 rows accepted every session (5 types at K = 1 without MPS and at K = 1, 2, 4 with MPS).
+- 937e: all 4 ar-multimem rows accepted every session.
+- 4d23: rmsnorm-v8's two K = 1 rows and its K = 2 row accepted every session. K = 4 accepted 30 of 40, with 8 refused.
+- efd0: fr-w13 at K = 1, 2 and 4 accepted 26, 28 and 40, and rmsnorm-v8 at K = 1 and 2 accepted 26 and 28.
+  rmsnorm-v8 at K = 4 accepted 21 of 40, with 8 refused.
+
+**efd0's same-run rows without MPS** (GPU 0):
+- fr-w13: 0.4001/s at K = 1, 0.4801/s at K = 2 (1.20×), 0.5359/s at K = 4 (1.34×).
+- rmsnorm-v8: 0.2645/s at K = 1, 0.4244/s at K = 2 (1.60×).
+
+**Recommended N3 factors for BREAKEVEN, all measured.** Each is the rate with K provers under MPS on one H200, over one
+prover without MPS.
+
+| type | N3 factor, measured | at K | the same without MPS, measured | MPS worth it? |
+|---|---|---|---|---|
+| ar-multimem | 2.99 | 4 | 1.00 (6ab1) | yes: 3.0× the time-sliced rate |
+| residual-add | 2.38 | 4 | 1.20 (6ab1) | yes: 2.0× |
+| dsa-logits-v3 | 1.69 | 4 | 1.13 (6ab1) | yes: 1.5× |
+| fr-w13 | 1.50 | 4 | 1.34 (efd0) | a little: 1.12× |
+| sm-fp8-k2048 | 1.30 | 4 | 1.16 (6ab1) | a little: 1.12× |
+| sm-fp8-k6144 | 1.29 | 4 | 1.10 (6ab1) | a little: 1.17× |
+| rmsnorm-v8 | 1.71 | 2 | 1.60 at K = 2 (efd0) | within noise: 1.07× |
+
+- **Which MPS gains are real.** The without-MPS column comes from other runs on other GPUs, and a K = 4 row moves 7–20%
+  between runs here. So gains under about 1.2× are within noise. The three large ones are not.
+- **Run MPS on every type.** It costs nothing measurable at K = 1. It is also the only way the device-bound types
+  (ar-multimem, residual-add, dsa-logits-v3) gain anything from more provers.
+- **ar-multimem has no headroom at K = 4.** It peaked at 139.0 GiB of device memory, within 1 GiB of where rmsnorm's K = 4
+  failed. It accepted all 40 sessions, but if BREAKEVEN wants a margin, K = 2 (1.76×) is the safe choice.
+- **fr-w2 has no MPS row.** Its K = 4 without MPS is 1.30–1.61× across runs.
+
+**Status.** 4d23 is done: its lease exited at 15:07:34Z with rc 0. No run of mine is pending. The scripts these runs used
+(`launch.sh`, `levers.sh`, `memgate.py`, with the K = 4 lock and the memory gate) are in 4d23's inputs.
+
