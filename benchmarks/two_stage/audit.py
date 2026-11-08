@@ -98,18 +98,21 @@ def first_stage(a: argparse.Namespace, bc: T.CS.Committed, brec: dict, out: Path
     return (sorted(int(u) for u in draw["units"]) if d.ok else None), got
 
 
-def own_ports(window: T.CS.Binding) -> list[str]:
-    """The interior registration's own ports the sessions read: every member's every port but its link port."""
-    return sorted(m.port(p) for t, m in enumerate(window.members) for p, _ in m.all_rows if p != T.link(t))
+def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
+    """The interior registration's own ports the sessions read: every port but its link port of each member the second
+    stage drew a unit of."""
+    return sorted(m.port(p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in drawn)
+                  for p, _ in m.all_rows if p != T.link(t))
 
 
-def own_reads_only(record: dict, window: T.CS.Binding) -> bool:
+def own_reads_only(record: dict, window: T.CS.Binding, drawn: list[int]) -> bool:
     """Whether the audit record refuses only the sessions' reads of the interior's own ports: its one failed check is
     one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and exactly those
     ports. `SpotFlock.FrameIs` asks for those reads, so the two-stage record check is to take them."""
     bad = {k: v for k, v in (record.get("checks") or {}).items() if not v.get("ok")}
     d = (bad.get("registered") or {}).get("detail") or {}
-    return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == own_ports(window)
+    return (set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong")
+            and d.get("opened") == own_ports(window, drawn))
 
 
 def statements(audit_dir: Path, window: T.CS.Binding) -> list[dict]:
@@ -178,7 +181,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
         refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
         return (before and audit.get("complete") is True and audit.get("registered_reads") is True
                 and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
-                and (ok or own_reads_only(record, window)))
+                and (ok or own_reads_only(record, window, s.get("draw") or [])))
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
     return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
@@ -229,7 +232,7 @@ def main(argv=None) -> int:
                              "members": [{"key": m.key, "n": m.n, "base": m.base, "links": T.LINKS.get(t)}
                                          for t, m in enumerate(it.window.members)]},
                    sample=sample, **got)
-    summary["record"]["own_reads_only"] = own_reads_only(record, it.window)
+    summary["record"]["own_reads_only"] = own_reads_only(record, it.window, s.get("draw") or [])
     summary["as_expected"] = expected(a, s, ok, record, it.window)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     print("TWO " + json.dumps({x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")}, default=str))
