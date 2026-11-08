@@ -10997,3 +10997,53 @@ on cpu-11 and r20261108-120829-8127 on cpu-7. Whichever starts first runs, and t
 **ETAs:** the suites finish about 13:05Z, and the mark follows about 13:15Z. Unless a suite fails, the marked head is
 `d07a440d93`.
 
+
+## 12:13Z from TWOOPENS: yes to BINDKSAT on #8090's `FrameIs`; `FrameIs` on that frame is 300–600 lines (about Tue 17 Nov); 3a's per-unit lowering is green
+
+**#8090 review: yes, sent to BINDKSAT at 12:09Z.**
+- The restated `FrameIs` is the old one with the search replaced by the code's own opening at each gate.
+- The clauses it dropped are proved: membership (`Reveal.openAt_mem`), the position (`rfl`) and the roots
+  (`Reveal.rootsAt_eq`). `iroots []` stands for `iroots x` soundly, since `iroots` ignores that argument.
+- One lemma the discharge needs, about 30 lines and no blocker: `frameAt` of a frame that is itself a `Reveal.reveal` is
+  that frame's opening at the gate. I'll add it with my `FrameIs` work unless BINDKSAT puts it in #8090.
+
+**`FrameIs` on #8090's frame: 300–600 lines, down from 550–950; about Tue 17 Nov, after 3a.** #8090's stack already
+does most of the first two rows of my 11:10Z table:
+
+| Piece | Lines |
+| --- | --- |
+| Interior roots per replay block: `iroots` reads block `ρ`'s roots from the round-1 record | done on #8090's stack (was 150–250) |
+| The pin leaving the registered reads free (`pinOk`, `readsOk`); left: tying the header's root, positions and paths to `FrameIs`'s check clause | 50–100 (was 100–200) |
+| The concrete opening's value and data, `frameAt_reveal`, the decoders, and `FrameIs` from `opens_frame` | 250–500 (was 300–500) |
+
+- It waits on the session layout `L`, which 3a fixes: member `t`'s unit at template instance `i mod g_t` of block
+  `i / g_t` in session `t`'s table, in the columns the accepted statement places it (`AcceptedH.col`).
+- It also assumes #8090's stack lands.
+
+**3a: the per-unit chain is green** on `cursor/proofs-twoopens-lowering-b262` at `7a1f14b825`, in
+`SpotFlock/UnitRows.lean`, with only the standard axioms:
+- `accepted_check`: each table of a checked hidden-output statement has an accepted statement whose block R1CS every
+  witness of the deployed relation satisfies.
+- `unitPlace`: unit `u` of the circuit's program (`Placed.keyProg c hU n`), placed at any template instance and block of
+  that statement. It works for any `n` and `u`, so member `t`'s unit `k` sits directly at the session's template
+  instance with no relabeling, despite the session's circuit being `keyProg c_t (q·n_t)`. I've told ZKTWO.
+- `UnitPlace.apply_decode`: at an accepted witness, the decoded values satisfy each gate of the unit.
+- `runIn_unitPlace`: Bridge's lowering computes them at each wire's position.
+- **Left for 3a:** the composition to `Embeds` over the lowering, and the unit-to-session map. Both need ZKTWO's 3b
+  program and the per-template sessions, so still about Fri 13 Nov once the sessions change lands.
+
+**#7981.** All four of my PRs (#7948, #7972, #7977, #8041) are already on `checked`. The 3a branch was the only one to
+carry: `restack.py --move-commit 92acf33adc --onto 92acf33adc --main origin/main --no-pins` came out clean at
+`7a1f14b825`, and it builds on the moved tree.
+
+**Still blocked:** sessions by template waits on your routing of the generic extractor change (option A, my 11:16Z
+and 11:18Z notes).
+
+**Runs:**
+- cpu-6: r20261108-120152-4c20 failed, then r20261108-120415-8484 and r20261108-120856-5022 (on the moved tree)
+  passed.
+- I cancelled r20261108-114133-4804 on cpu-11. It waited 22 min in the research pool's check line, two checks ahead
+  of it, and never started.
+
+None are in flight. **Next:** the 3a composition lemma against ZKTWO's branch, then the hourly checkpoint at about
+12:35Z.
