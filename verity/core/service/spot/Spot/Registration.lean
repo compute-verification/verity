@@ -42,6 +42,10 @@ digest, whose leaf count must be the value's rows (`R7-output` otherwise). One m
 registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
+
+An output value the parameters give only a port (`{"port"}`, a window's history) is that port of the previous record, the
+log's last, which R6 holds `previous` to (`lastDigest`): the verifier names the record itself, so the value is held to the
+previous window's root and domain for that port, and with no previous record it is `R7-output`.
 -/
 module
 
@@ -169,6 +173,15 @@ def unwindowed (v : Verifier) : Array String :=
   if v.windowRoot.isSome then #[] else
     let fixed := fixedOf v
     ((heldRoots v.log (ownEntries v)).map (·.1)).filter (!fixed.contains ·)
+
+/-- **The previous record's digest**, the one R6 holds `previous` to: the log's last record's, and empty, which names no
+record, when the log is empty or that record has no digest. An output value the parameters give only a port is that port
+of this record (`OneStage.paramsParsed`), so a window's history is the previous window's output whatever else the log
+holds. -/
+def lastDigest (log : Array Json) : String :=
+  match log.back? with
+  | some e => (digestHex e).toOption.getD ""
+  | none => ""
 
 /-- `registration._output_port`: the `roots` entry for `port` of the log's first record with digest `record` (its last,
 as a dict reads it). -/

@@ -8,7 +8,7 @@ census and rho's reference.  The output carries them all beside every plotted se
 the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
-a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
+a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`reporting.PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
 proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
@@ -74,7 +74,7 @@ from math import inf, log, sqrt
 from pathlib import Path
 
 import cards as spot_cards
-from verity.core.protocols.pous.wipe_monitoring import PERIODS
+from verity.core.protocols.reporting import PERIODS
 from verity.core.protocols.spot import plancheck
 from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
@@ -334,8 +334,8 @@ class Scope:
         return f"{self.who} {self.period}"
 
 
-#: the post's headline scope, whose figures carry the bare file names, and its stretch scope, plotted beside it
-PRIMARY, SECONDARY = "datacenter year", "world year"
+#: the post's headline scope, whose figures carry the bare file names, and its secondary scope, plotted beside it
+PRIMARY, SECONDARY = "world year", "datacenter year"
 
 
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
@@ -601,7 +601,8 @@ def infiltration_ratio(infiltration: dict, exfiltration: list[dict], scope: str,
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis can't plot and its caption names."""
+    """Each panel's lines at 0 in `scope`, which a log axis has no place for: drawn along its floor and named in its
+    caption."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}
 
@@ -662,7 +663,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
         out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
-            out[panel] += f" At 0, so not plotted: {'; '.join(labels)}."
+            out[panel] += f" At 0, drawn along the axis's floor: {'; '.join(labels)}."
     return out
 
 

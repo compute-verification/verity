@@ -217,7 +217,7 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 def test_the_coin_commitments_hiding_is_charged(store) -> None:
     """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledDraw` reads none)."""
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledSample` reads none)."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
@@ -232,7 +232,7 @@ def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part
 
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
-    """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
+    """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
     than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and

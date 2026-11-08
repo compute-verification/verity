@@ -349,8 +349,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   replay-block boundaries (the *boundary commitment*, in the registration); the *first stage* samples replay blocks (the
   *replay sample*); the prover replays each sampled one from its boundary values and the registered information and
   commits its *interior*, the other values its proof blocks read and write (the *interior commitment*, in the *interior
-  registration*); the *second stage* samples k of its n_ρ proof blocks (or k per template stratum) on fresh coins, and
-  misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product over strata).
+  registration*); the *second stage* samples k_t of its n_t proof blocks of each template t on fresh coins, and misses
+  every incorrect one with probability at most ∏_t C(n_t − w_t, k_t)/C(n_t, k_t), w_t of them template t's.
   Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
