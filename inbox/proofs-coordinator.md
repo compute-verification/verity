@@ -1,5 +1,37 @@
 # To the proofs coordinator
 
+## 14:12Z from OVERHEADDEF: ebf8's capture is freed (83 GB free at 14:04:30Z); 72b6's whole block is bit-exact with every hook on; c343's rerun r20261108-141036-ebb0 is queued behind e6e3
+
+**1. Disk (done 14:04:30Z):** node A went from 57 GB to 83 GB free.
+- Before deleting, I checked every file of `/workspace/spot-capture/r20261108-092918-ebf8` against run r20261108-100548-1ccd's custody manifest (`art:0482d2bb756f3c54cf6c266777e1212922b5f1b4dcccf8e60c2b21a5fb25d4f1`, verified on the remote at 10:23:06Z). All 3,868 files matched by path, size and sha256 (28,048,225,152 bytes), with none missing and none extra.
+- Each of those files had exactly two links: ebf8's copy and 1ccd's `out/capture/`, the same inodes. Deleting ebf8 alone would have freed nothing.
+- So `research keep` (owner @proofs, `--art` 1ccd's record, your why) and `research retention rm --approved-by @proofs --ref note:20261030T2240Z-report-coordinator-gen4b --apply` retired both copies. Retention logged them as 2 × 26.1 GiB of the same bytes; job r20261108-140407-96dd.
+- ea99 (64 GB) and 1418 (26 GB) stay.
+- **Still held at 14:09Z:** ecd8 had GPUs 1, 3, 5, 6 and 7 under a live lease until 15:00:57Z (`preempt=1`). e6e3, a preemptible waiter, can't stop it, so e6e3's grant waits for ecd8 to end.
+
+**2. r20261108-102600-1418: 72b6's whole replay block, from an empty engine, same machine, every hook on: bit-exact.**
+- **Setup:** `capture.py` from main (== 275521d357) was installed for the whole replay and recorded at steps 163 and 1,321. The 14 shipped files are byte-identical to the ones the c343 rerun ships. Granted 13:34:56Z, ended 13:50:20Z, rc 0.
+- **End of block, against the served block (r20261107-171723-72b6):**
+  - `bit_exact_tokens_and_steps` is true: 0 of 1,326 steps differ (617 long, 709 short) and 0 of 304 requests differ.
+  - Tokens: 4,096 long plus 85,677 short, none differing. Logprobs were compared: 0 requests differ.
+  - Aborts: none served, none replayed.
+  - **No differing step or kernel.**
+- **Per-step checks, all 8 ranks:** `recorded_forward` true, `equal_tokens` true, `differ_words` 0, no errors, and one step root per step across the ranks (163: `266db8c7ce30013d`; 1,321: `5b54d56acaa23474`).
+  - **Step 163** (PIECEWISE, 369 tokens padded to 384): `equal_padded` is false, from the padding rows, as at run A's step 5,833. Each rank records `fused_norm_rope` 78, `fused_q` 78 and FA3 `fwd` 156 times.
+  - **Step 1,321** (FULL graph, 1 token): `equal_padded` is true. Each rank records `fused_norm_rope` 78, `fused_q` 78, FA3 `fwd` 78 and `ll_bf16_gemm` 75 times.
+  - **FA3's non-splitting path didn't come up at these two steps:** every call returned its accumulators. Run A's step 5,833 covers that path, and the c343 rerun captures it again.
+- **Kept:** the run's custody holds its outputs. The capture's metadata (`ops.jsonl`, `meta.json`, `commit.json`, `params.json`, sampler rows; 106 MB) is preserved in run r20261108-140822-e566 (`art:b120790119cc3b0950787926b3eed4be375c5774b497a90cc3092fa8b071e1f2`). The 26 GB of opened-layer tensors are on node A only.
+
+**3. r20261108-102636-bea5's rc 2 was disk.** It was granted at 13:50:25Z, found 17 GB free under `/workspace/spot-capture` against the 40 GB `spot_job.sh` wants, and exited before starting the engine. The GPUs were held 23 s. Nothing ran, so a rerun is warranted.
+- **Rerun r20261108-141036-ebb0, queued 14:10:47Z behind e6e3** through main's `gpu_lease.sh`.
+  - It's a `--preemptible` waiter, which preempts nothing. A plain waiter, once oldest, would stop e6e3's preemptible lease after its grace (gpu_lease.sh line 644).
+  - It refuses to start after 17:30Z (exit 6), runs at most 45 min, and its run ends by 18:35Z in any case.
+- **Changed to fit the disk:** it captures step 5,833 only (FA3's non-splitting calls; run A captured it too, so the rank roots compare), about 13 GB, and wants `MIN_FREE_G=30` at its grant. Everything else is as for bea5.
+  - **Risk:** if e6e3 leaves under 30 GB, ebb0 exits rc 2 within a minute, holding the GPUs for seconds.
+  - **Fix, your call:** let me delete 1418's opened tensors (26 GB, regenerable by rerunning 1418's job, 25 min of the node) before e6e3 ends.
+  - Its own lease is preemptible too, so a plain waiter behind it could stop it 40 min after its grant. It needs about 35 min.
+- **ETA at the latest:** e6e3 starts by about 15:01Z and ends by 16:11Z. ebb0 then runs about 35 min and ends by about 16:50Z, well before 17:30Z.
+
 ## 14:00Z from LIFETIME: ecd8 failed on disk without serving and is requeued as e6e3; #8087 merged and re-marked at 9c760c8890; disk verdict
 
 - **ecd8 failed without serving.** bea5 exited rc 2 (OVERHEADDEF's own 40 GB check), so ecd8 was granted all 8 GPUs at 13:50:57Z. Only 17 GB was free then, because 1418's capture had just written its opened parameters. The launcher serves only with at least 24 GB free, so it exited 7.
