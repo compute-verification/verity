@@ -8551,3 +8551,50 @@ returning the outputs, and four wrong tags. Land it."
   - Records r20261108-071748-1ab8 (cpu-11, research pool) took its slot at 07:26Z. ETA about 08:00Z.
   - Quick suites r20261108-071748-6242 (cpu-7) took their slot at 07:21Z. ETA about 07:45Z.
   - When the records pass, I commit them exactly, rerun the suites that read the locks, mark #8041 and post the land ask.
+
+## 07:31Z from HASHCUT: node A's three non-proving costs are all inside the card; the headline's cache removes two, and its 4× prover lever also speeds up the witness build
+
+- **What each one is,** in main's `flock-circuit.rs` (`session_proved`). A session's `e2e_s` runs from just before
+  `Register` to the end of proving.
+  - **Witness build** is `witness_s`: the drawn units' witness, built and uploaded each session. It grows with the
+    session's blocks, and nothing caches it.
+  - **Registration** is the prover's `Req::Register` round trip, and it isn't the ZK server's commitments. It commits
+    nothing: the verifier draws the units, then its `on_draw` hook builds its own drawn statement
+    (`side_stmt(Side::Verifier)`, `Stmt::new` over the drawn count) and the session's config. The hiding commitments
+    (level-0 roots under hm96 salts) come after Hello, inside proving.
+  - **Statement build** is the prover's own drawn statement after `Register` (`side_stmt(Side::Prover)`), the same build
+    on the other side.
+  - **Registration and the statement build scale with the statement, not the session:** the type and the drawn count.
+    #7875's `StmtCache` keys each side's build by the statement digest, the drawn count and the identity, all public.
+    So a long-running verifier and prover build each one once per type and count.
+  - **The evidence:** BREAKEVEN's measured cache factor on w13 (one H200 prover) removes 5.17 s of fixed seconds
+    (5.73 to 0.56 s). Node A's registration plus statement build is 5.29 s.
+- **What counts them:**
+  - **The `proof_overhead` card counts all three.** Its entries are fits of `e2e_s`, and its runs predate #7875, so
+    every session paid both builds.
+  - **BREAKEVEN's R0 and R1 count all three** each statement, at the card's sizes.
+  - **From R2 on,** including the headline `R6x4+all+4perH200+host+vtmpl`, the cache factors remove registration's and
+    the prover's statement builds, so the headline prices a long-running proof server.
+  - **The witness build stays in the headline, but the 4× prover lever divides it by 4.** That lever divides the
+    experts' whole price by 4, because their host share is 0. Node A shows the witness build outside
+    `prove_total_s`.
+  - **Neither counts the population statement** each prover process builds before its first session (`built_s`,
+    outside `e2e_s`). For K = 6144 it took 295 to 316 s in the card's runs. A long-running server pays it once per
+    type; otherwise every statement pays it.
+- **The moves:** BREAKEVEN's planner at `71736b4e42`, run locally on the existing cards, with no new runs. FP4
+  total (β plus the 1.921% tax), adjusting only the expert types:
+
+  | case | world year | datacenter year |
+  | --- | ---: | ---: |
+  | headline as priced | 10.38% | 10.20% |
+  | long-running server, witness build not sped up: the experts' ÷4 replaced by node A's session factor, (0.74 + 0.844) / 3.65 s = ÷2.31 | 10.66% (+0.28) | 10.47% (+0.27) |
+  | as measured, no cache hit: that, plus registration and statement build (5.29 s) on each expert statement, at four provers' overlap (÷1.88) | 12.59% (+2.21) | 12.30% (+2.10) |
+  | the same on one prover's timeline (5.29 s undivided) | 14.29% (+3.91) | 13.92% (+3.72) |
+
+  - **"As measured" prices only the experts,** because node A's figures are one expert session. SPOT's proving step
+    starts a fresh process per statement, so the census types lose their cache factors too. On the ladder, that step
+    was 122% to 50.19% over the world's year (R1 to R2). The headline holds only with a long-running proof server.
+  - **What I assumed:**
+    - node A's session is one w13 statement at 1024 blocks;
+    - the H200 session it replaces is the one-prover price with the cache, 0.7374 s + 1024 × 2.8488 ms = 3.65 s;
+    - the four-prover overlap is the four-prover statement against it, 1.94 s.
