@@ -779,7 +779,7 @@ def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> d
     in proportion to its size, which cells of several templates' sizes don't follow, so the law is the work law at
     k = 1 and unit work: its rule (`draw.work_k`) gives each stratum max(floor, 1) capped at its size, and each cell's
     floor is its count. The Lean verifier's `Select.secondLaw` is this."""
-    q, off = len(sample), _offsets(len(sample), ns)
+    off = _offsets(len(sample), ns)
     return {"law": "work", "k": 1,
             "strata": [{"template": f"{r}/{t}", "units": [[off[t] + i * n, off[t] + (i + 1) * n]], "work": 1,
                         "floor": ks[t], "k": ks[t]}
@@ -1480,10 +1480,10 @@ class Stream:
         if sum(ns) < 2:
             raise ValueError(f"a replay block of {sum(ns)} proof blocks is a proof block: its rule is 'law'")
         try:
-            gated = len(P.unit_gates(program, spec.check.query)) == sum(ns)
-        except (P.QueryRefused, ValueError):
-            gated = False
-        if not gated:
+            gates = P.unit_gates(program, spec.check.query)
+        except (P.QueryRefused, ValueError) as e:
+            raise ValueError("a proof block of the replay block has no gates of its own") from e
+        if len(gates) != sum(ns):
             raise ValueError("a proof block of the replay block has no gates of its own")
         ks = second_counts(rule.k, [P.template_id(u) for u in units], ns)
         if ks == ns:

@@ -124,12 +124,11 @@ has at most `2^-40`. The proof system adds, per proof block, its knowledge-sound
 while serving and, once a sampled replay block's interior is committed (`Stream.register_interiors`; `GLOSSARY.md`,
 "Two-stage design"), samples `k_t` of its `n_t` instances of each template `t` of the check, one cell (the claims'
 `cell`; the rule's `k`, one count or one per template, capped at the cell's size; counts proving every cell whole are
-refused). The check names
-the replay block's templates in the order of their first instance in it and the interior is template-major, so each
-cell is a range of the interior's proof blocks and the second stage is one stratum per cell (`second_law`). A cell of
-`n` proof blocks and footprint `w` is missed with probability at most `C(n − w, k) / C(n, k)`, a replay block's cells
-independently; the profile at the footprint reads a replay block as `Subset(min k_t)` over `T·n_max` proof blocks,
-which bounds that product. The verifier samples both stages
+refused). The check names the replay block's templates in the order of their first instance in it and the interior is
+template-major, so each cell is a range of the interior's proof blocks and the second stage is one stratum per cell
+(`second_law`). A cell of `n` proof blocks and footprint `w` is missed with probability at most
+`C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
+`Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
 holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
