@@ -1,14 +1,15 @@
 module
 
 public import Proofs.Flock.SessionLoop.Statement
-public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.FinalC
 public import Proofs.Flock.SessionLoop.TakesTau
 public import Proofs.Flock.SessionLoop.Inner
 public import Proofs.Flock.SessionLoop.InnerWitness
+public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.Link
+public import Proofs.Flock.SessionLoop.LiveRefine
 public import Proofs.Flock.Claims.ZK.FinishSwFrame
 public import Proofs.Flock.Claims.ZK.FinishSwRep
 public import Proofs.Flock.SessionLoop.FinishParts
@@ -40,8 +41,63 @@ public import Proofs.Flock.SessionLoop.CutInnerLive
 public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 public import Proofs.Flock.SessionLoop.LiveInnerAt
+public import Proofs.Flock.SessionLoop.SchedAt
+public import Proofs.Flock.SessionLoop.PcsRank
+public import Proofs.Flock.SessionLoop.RhoUnrefused
+public import Proofs.Flock.SessionLoop.RhoKeepRep
+public import Proofs.Flock.SessionLoop.SchedUnrefused
+public import Proofs.Flock.SessionLoop.RoundSwitchFrame
+public import Proofs.Flock.SessionLoop.RoundSwitchCut
+public import Proofs.Flock.SessionLoop.RoundSwitchSched
+public import Proofs.Flock.SessionLoop.RoundSwitchRank
+public import Proofs.Flock.SessionLoop.RoundSwitchSv
+public import Proofs.Flock.SessionLoop.RoundSwitchRel
+public import Proofs.Flock.SessionLoop.RoundSwitch
+public import Proofs.Flock.SessionLoop.RoundLig
+public import Proofs.Flock.SessionLoop.L0FixedHonest
+public import Proofs.Flock.SessionLoop.RoundL0Vals
+public import Proofs.Flock.SessionLoop.RoundL0Cut
+public import Proofs.Flock.SessionLoop.RoundL0Frame
+public import Proofs.Flock.SessionLoop.RoundOffL0
+public import Proofs.Flock.SessionLoop.RoundOffCap
+public import Proofs.Flock.SessionLoop.RoundOffOpenBind
+public import Proofs.Flock.SessionLoop.RoundLigLock
+public import Proofs.Flock.SessionLoop.RoundLigFrameBind
+public import Proofs.Flock.SessionLoop.RoundLigFrameShape
+public import Proofs.Flock.SessionLoop.RoundLigFramePast
+public import Proofs.Flock.SessionLoop.RoundLigFrameOff
+public import Proofs.Flock.SessionLoop.RoundLigFrame
+public import Proofs.Flock.SessionLoop.RoundLigCoin
+public import Proofs.Flock.SessionLoop.RoundLigCut
+public import Proofs.Flock.SessionLoop.RoundLigBasis
+public import Proofs.Flock.SessionLoop.RoundOff
+public import Proofs.Flock.SessionLoop.SchedSlot
+public import Proofs.Flock.SessionLoop.LiveSchedOwn
+public import Proofs.Flock.SessionLoop.LiveInnerOwn
+public import Proofs.Flock.SessionLoop.LiveOwn
 public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.ZkAny
+public import Proofs.Flock.SessionLoop.VsOfTakes
+public import Proofs.Flock.SessionLoop.VsOfBody
+public import Proofs.Flock.SessionLoop.SwCausalExe
+public import Proofs.Flock.SessionLoop.RowsHonest
+public import Proofs.Flock.SessionLoop.RoundsPassFrame
+public import Proofs.Flock.SessionLoop.ScheduleTotal
+public import Proofs.Flock.SessionLoop.SchedTotalWalk
+public import Proofs.Flock.SessionLoop.SchedTotalPiop
+public import Proofs.Flock.SessionLoop.SchedTotalHolds
+public import Proofs.Flock.SessionLoop.RoundsPassAt
+public import Proofs.Flock.SessionLoop.RoundsPassTaken
+public import Proofs.Flock.SessionLoop.RoundsPassPiop
+public import Proofs.Flock.SessionLoop.RoundsPassZc
+public import Proofs.Flock.SessionLoop.RoundsPassOpen
+public import Proofs.Flock.SessionLoop.RoundsPassL0
+public import Proofs.Flock.SessionLoop.RoundsPassSwitch
+public import Proofs.Flock.SessionLoop.RoundsPassLig
+public import Proofs.Flock.SessionLoop.FinHonest
+public import Proofs.Flock.SessionLoop.RoundsPassInner
+public import Proofs.Flock.SessionLoop.RoundsPassInner0
+public import Proofs.Flock.SessionLoop.RoundsPass
 public import Proofs.Flock.SessionLoop.SampledAudit
 public import Proofs.Flock.SessionLoop.SampledRelay
 
@@ -57,15 +113,16 @@ which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the l
 (`LeanRelease.ofLoopLink`),
 whose `LinkRoundEq` holds in the masked scope where the loop samples the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
-holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausalOn` (`Loop.finishIsOn`). That level-0 half is
-satisfiable at every statement (`Loop.level0Src_tapeSrc`, `Proofs.Flock.SessionLoop.Level0SrcSat`). The switched
-causality is asked only at `Loop.SwOk`'s coins, and the loop's stop rule computes only there
-(`LeanRelease.stopsOk_swOk`: its frames refuse a zerocheck outer coin `1`, `LeanRelease.rfOf_outer`).
+holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` (at the own histories only, `LiveRoundEqOwn`) and
+`SwCausalOn` (`Loop.finishIsOn`). That level-0 half is satisfiable at every statement (`Loop.level0Src_tapeSrc`,
+`Proofs.Flock.SessionLoop.Level0SrcSat`). The switched causality is asked only at `Loop.SwOk`'s coins, and the loop's
+stop rule computes only there (`LeanRelease.stopsOk_swOk`: its frames refuse a zerocheck outer coin `1`,
+`LeanRelease.rfOf_outer`).
 
 `SessionLoopZKDeployed` is over every worker. Its premises on the worker (`LiveRoundEq`, `FillRoundEq`) read it in the
 algebraic phase only (`Proofs.Flock.SessionLoop.Phase`): a worker that, until the algebraic phase's last coins, reads
-only the nonce, what the workers see of the statement's tables (`RefSession.seenOf`, what `vs` reads) and the answers as
-coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phase's worker, whatever it reads after them
+only the nonce, what the workers see of the statement's tables (`RefSession.seenOf`, what `vs` reads) and the answers
+after `Hello` as coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phase's worker, whatever it reads after them
 (`Loop.PhaseBlind.exists_phased`), and the premises at it are the premises at that worker as a pad-blind one
 (`Loop.liveRoundEq_phased`, `Loop.fillRoundEq_phased`).
 -/
@@ -120,7 +177,7 @@ theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
     (Claims.ZKServer.LeanRelease.stopsOk_swOk T L₀ real) wk x w hR hServe
     (fun ρ _ _ _ hs => hreal ▸ Claims.ZKServer.Loop.realTabs_realOf src x w ρ hs) hL0 hLk
     (Claims.ZKServer.LeanRelease.finalRoundEq_ofLoop T vs L₀ real _ wk x w hA
-      (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE hEf Vs θ hk Ev
+      (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE.own hEf Vs θ hk Ev
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
 
 /-- **Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
@@ -135,6 +192,6 @@ theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed := by
     Claims.ZKServer.Loop.tapeOK_dataE
     (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src) src _ rfl wk x w hR hServe
     hL0 (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src _ hScope hR hSrc.1.linkLevel0)
-    (Claims.ZKServer.Loop.finishIsOn vs L₀ src wk x w hScope hR hServe hL0 hSrc hE hsc) hE hEf Vs θ hk Ev
+    (Claims.ZKServer.Loop.finishIsOn vs L₀ src wk x w hScope hR hServe hL0 hSrc hE.own hsc) hE hEf Vs θ hk Ev
 
 end Flock.SecurityProofs
