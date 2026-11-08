@@ -1,27 +1,32 @@
 """The fixture of `verify --zk`'s form refusals (`verity/core/protocols/sampled_proofs/tests/test_form_refusals.py`): honest
-M0 `--zk` sessions of `forged_proofs.py`'s A8 unit, staged as it stages them (N instances, every unit sampled, bound to its
-template query's partition), differing only in the circuit's form:
+M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
+`forged_proofs.py` stages them, differing in the statement's form:
 
-    honest      x then w in one input row: the unit's form (`Flock.ProvedScope.scopeOkH`)       verify --zk accepts
-    two-groups  x and w in two input rows, so the unit reads two input groups                  refused for its form
+    honest     forged_proofs.py's A8 unit, flat (`Flock.ProvedScope.scopeOkH`)                 verify --zk accepts
+    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its     refused for its form
+               rows not in the file
+    tail       MoeRouterSigmoidScore_v2 with its MUFU reads in lookup slots, its last stage    refused for its form
+               returning the outputs
 
-`ProvedScope.check` admits both (`scopeOkI`); only `Flock.KsScope.filesWhy` refuses the second, and `verify` gives a form's
-reason only once every other check, the proof's included, has passed. Lean's verdict on the honest session under each of
-`WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
+`ProvedScope.check` admits each (`scopeOkT`, `scopeOkI`); the sampled audit's knowledge-soundness form refuses the last two
+(`Flock.KsScope`), and `verify` gives a form's reason only once every other check, the proof's included, has passed. Lean's
+verdict on the honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\
-      --work DIR --fixture DIR
+      --tmpl-unit flock-tmpl-unit --work DIR --fixture DIR
 
-``--fixture`` gets per case ``<case>/stage/`` (circuit.txt, partition.json, program.json), ``<case>/pub-N.bin`` and
-``<case>/session/``, and ``cases.json`` (each case's LIVE line, M0's verdict and Lean's at generation, and the honest session's
-under each wrong statement). Never a prover's inst file; ``--work`` keeps those and every log."""
+``--fixture`` gets per case ``<case>/stage/`` (circuit.txt, partition.json, program.json), ``<case>/tables/``,
+``<case>/pub-N.bin`` and ``<case>/session/``, and ``cases.json`` (each case's LIVE line, M0's verdict and Lean's at
+generation, and the honest session's under each wrong statement). Never a prover's inst file; ``--work`` keeps those and
+every log."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,64 +40,86 @@ import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
+from verity_flock import ir_lower as IL  # noqa: E402
+from verity_flock import tmpl as TM  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 #: statements outside the form, each refused for another reason: typed, public outputs, plain leaves, templated
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
-              "verity/flock-circuit/tmpl")
-SCOPE_WHY = ("refused: a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns "
-             "the outputs): a statement form the soundness proof does not cover")
+              FC.TMPL_STATEMENT)
+TAIL = "MoeRouterSigmoidScore_v2"
+FORM = ": a statement form the soundness proof does not cover"
+
+
+def forms(rng) -> dict:
+    """Each case's Definition, input rows, output rows, staged rows, stager options and statement."""
+    x, w = FP.bf16(rng.normal(0, 1, (FP.N, FP.K))), FP.bf16(rng.normal(0, 0.02, (FP.N, FP.K)))
+    dot = (FP.KIND, [("r0", V2, 32 * FP.K, ["x", "w"])], [(V2, (0,))], {"r0": np.concatenate([x, w], axis=1)})
+    f32 = rng.normal(0, 2, (FP.N, 2)).astype(np.float32).view(np.uint32).astype(np.uint64)
+    ab = np.stack([f32[:, 0] & 0xFFFF, f32[:, 0] >> 16, f32[:, 1] & 0xFFFF, f32[:, 1] >> 16], axis=1).astype(np.uint16)
+    return {"honest": (*dot, {}, FC.STATEMENT),
+            "templated": (*dot, {"layout": "iv/hybrid/4", "structural": True}, FC.TMPL_STATEMENT),
+            "tail": (TAIL, [("r0", V2, 64, ["x", "b"])], [(V2, (0,)), (V2, (1,))], {"r0": ab}, {"reads": "slots"},
+                     FC.STATEMENT)}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
     ap.add_argument("--lean", required=True, help="flock-verify")
+    ap.add_argument("--tmpl-unit", required=True, help="flock-tmpl-unit, the prover's placement of a templated unit")
     ap.add_argument("--work", required=True)
     ap.add_argument("--fixture", required=True)
     a = ap.parse_args()
     work, fx = Path(a.work), Path(a.fixture)
     TG.load_registries()
-    fn = TG.definition(FP.KIND)
-    program = P.mixed_population_program([(fn, FP.N)])
-    part = P.partition(program, P.template_instances_query([fn]))
-    rng = np.random.default_rng(20261019)
-    x, w = FP.bf16(rng.normal(0, 1, (FP.N, FP.K))), FP.bf16(rng.normal(0, 0.02, (FP.N, FP.K)))
-    forms = {"honest": ([("r0", V2, 32 * FP.K, ["x", "w"])], {"r0": np.concatenate([x, w], axis=1)}),
-             "two-groups": ([("r0", V2, 16 * FP.K, ["x"]), ("r1", V2, 16 * FP.K, ["w"])], {"r0": x, "r1": w})}
     salt_key = hashlib.sha256(b"verity/flock/form-refusals/salts").digest()
     cases: dict[str, dict] = {}
-    for name, (in_rows, rows) in forms.items():
+    for name, (kind, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
+        fn = TG.definition(kind)
+        program = P.mixed_population_program([(fn, FP.N)])
+        part = P.partition(program, P.template_instances_query([fn]))
         d = work / name
         stage = d / "stage"
         stage.mkdir(parents=True, exist_ok=True)
         (stage / "partition.json").write_text(json.dumps(part, sort_keys=True))
         (stage / "program.json").write_bytes(canonical_json(encode_program(program)))
-        st = CS.UnitStager(fn, f"unit/form-refusals-{name}", in_rows, [(V2, (0,))], circuit=stage / "circuit.txt",
-                           bind={"partition": P.digest(part), "program": part["program"]})
+        st = CS.UnitStager(fn, f"unit/form-refusals-{name}", in_rows, out_rows, circuit=stage / "circuit.txt",
+                           bind={"partition": P.digest(part), "program": part["program"]}, **kw)
         FP.stage_case(st, rows, (), d, salt_key, f"{st.iset.name}-{name}")
         (d / "tables").mkdir(exist_ok=True)
+        if st.meta.get("lookups"):
+            IL.write_tables(d / "tables")
         (d / "circuit.txt").symlink_to("stage/circuit.txt")
-        sd = {"dir": d, "pin": st.pin, "partition_file": stage / "partition.json", "program_file": stage / "program.json"}
+        sd = {"dir": d, "pin": st.pin, "partition_file": stage / "partition.json", "program_file": stage / "program.json",
+              "statement": statement}
+        if "layout" in kw:
+            (d / "unit.tmpl").write_text(TM.write(st.low.template))
+            subprocess.run([a.tmpl_unit, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(d / "unit.placed")],
+                           check=True, capture_output=True)
+            sd["tmpl_unit"] = d / "unit.placed"
         record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", FP.free_port(), d / "run", zk=True)
         lean = a0.lean_verify(a.lean, sd, FP.N, d / "run", zk=True)
-        cases[name] = {"live": live, "m0": (record or {}).get("verdict"), "lean": lean,
-                       "draw": (record or {}).get("unit_draw")}
+        cases[name] = {"kind": kind, "statement": statement, "live": live, "m0": (record or {}).get("verdict"),
+                       "lean": lean, "draw": (record or {}).get("unit_draw")}
         if name == "honest":
             cases[name]["wrong_tags"] = {t: a0.lean_verify(a.lean, {**sd, "statement": t}, FP.N, d / "run", zk=True,
                                                            log=f"lean-verify-{t.replace('/', '_')}") for t in WRONG_TAGS}
-        print(f"form-refusals {name}: M0 {cases[name]['m0']}, Lean {lean.get('accepted')} {lean.get('why')}", flush=True)
+        print(f"form-refusals {name}: M0 {(cases[name]['m0'] or {}).get('accepted')}, Lean {lean.get('accepted')} "
+              f"{lean.get('why')}", flush=True)
         recs = sorted((d / "run" / "sessions").glob("*/session.json"))
         if recs:
             shutil.copytree(recs[-1].parent, fx / name / "session")
         shutil.copytree(stage, fx / name / "stage")
+        shutil.copytree(d / "tables", fx / name / "tables")
         shutil.copy(d / f"pub-{FP.N}.bin", fx / name / f"pub-{FP.N}.bin")
-    (fx / "cases.json").write_text(json.dumps({"kind": FP.KIND, "n": FP.N, "draw_law": f"subset:{FP.N}", "cases": cases},
-                                              indent=1, sort_keys=True, default=str))
-    honest, two = cases["honest"], cases["two-groups"]
+    (fx / "cases.json").write_text(json.dumps({"n": FP.N, "draw_law": f"subset:{FP.N}", "cases": cases}, indent=1,
+                                              sort_keys=True, default=str))
+    honest = cases["honest"]
     ok = (honest["lean"]["accepted"] and not any(v["accepted"] for v in honest["wrong_tags"].values())
-          and not two["lean"]["accepted"] and two["lean"]["why"] == SCOPE_WHY)
+          and all(not c["lean"]["accepted"] and str(c["lean"]["why"]).endswith(FORM) for n, c in cases.items() if n != "honest"))
     return 0 if ok else 1
 
 

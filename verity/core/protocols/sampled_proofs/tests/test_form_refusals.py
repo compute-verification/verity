@@ -1,13 +1,14 @@
 """`verify --zk` itself refuses a statement outside the form the sampled audit's knowledge soundness covers
 (`Flock.KsScope`, `Flock.ProvedScope`), on sessions the prover made in full, and so does the v2 audit's own run of it.
 
-The sessions are M0 `--zk` sessions of one small A8 unit (LlBf16DotprodDot_v1 at K=128, four instances, every unit
-sampled, bound to its template query's partition), written by `benchmarks/one_stage/form_refusals.sh`: ``honest``, x then
-w in one input row, and ``two-groups``, x and w in two, so its unit reads two input groups. `ProvedScope.check` admits
-both; only `KsScope.filesWhy` refuses the second, and `verify` gives a form's reason only once every other check, the
-proof's included, has passed, so that reason says the session was otherwise accepted. The honest session under a
-statement `verify --zk` must refuse (`WRONG_TAGS`: typed, public outputs, plain leaves, templated) is refused, each by the
-check that catches it as at generation.
+The sessions are M0 `--zk` sessions of four instances, every unit sampled, bound to its template query's partition, written
+by `benchmarks/one_stage/form_refusals.sh`: ``honest``, a small A8 unit (LlBf16DotprodDot_v1 at K=128) flat;
+``templated``, the same unit as its structural template (`verity/flock-circuit/tmpl`, the rows not in the file); and
+``tail``, MoeRouterSigmoidScore_v2 with its MUFU reads in lookup slots, its last stage returning the outputs.
+`ProvedScope.check` admits each; the knowledge-soundness form refuses the last two, and `verify` gives a form's reason
+only once every other check, the proof's included, has passed, so that reason says the session was otherwise accepted.
+The honest session under a statement `verify --zk` must refuse (`WRONG_TAGS`: typed, public outputs, plain leaves,
+templated) is refused as at generation.
 
 `Flock.KsScope`'s own tests run its check functions on Lean values, and `flock-verify ks-form` runs the check alone; these are
 the tests that `verify --zk`'s verdict calls them. Each verify sets up an m = 25 table (about 10 s), so they are slow.
@@ -31,7 +32,7 @@ VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 N = 4
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               "verity/flock-circuit/tmpl")
-SCOPE_REFUSAL = PF._refusal(PF.SCOPE_WHY)
+FORM = ": a statement form the soundness proof does not cover"
 
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
@@ -52,46 +53,55 @@ def _cases(fx: Path) -> dict:
     return json.loads((fx / "cases.json").read_text())["cases"]
 
 
-def _verify(fx: Path, case: str, statement: str = PF.STATEMENT) -> dict:
-    s = fx / case / "stage"
-    p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", statement, "--circuit", str(s / "circuit.txt"),
-                        "--public", str(fx / case / f"pub-{N}.bin"), "--partition", str(s / "partition.json"),
-                        "--program", str(s / "program.json"), "--session", str(fx / case / "session")],
-                       capture_output=True, text=True)
-    (line,) = [x for x in p.stdout.splitlines() if x.startswith("VERDICT ")] or [f"VERDICT {json.dumps({'why': p.stderr[-400:]})}"]
-    return json.loads(line[len("VERDICT "):])
+def _verify(fx: Path, case: str, statement: str | None = None) -> tuple[dict | None, int]:
+    """Lean's VERDICT on the case's session under ``statement`` (the case's own by default), or None, and the exit code."""
+    s, c = fx / case / "stage", fx / case
+    p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", statement or _cases(fx)[case]["statement"],
+                        "--circuit", str(s / "circuit.txt"), "--public", str(c / f"pub-{N}.bin"), "--tables", str(c / "tables"),
+                        "--partition", str(s / "partition.json"), "--program", str(s / "program.json"),
+                        "--session", str(c / "session")], capture_output=True, text=True)
+    line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
+    return (json.loads(line[len("VERDICT "):]) if line else None), p.returncode
 
 
 def _v2(fx: Path, case: str) -> PF.Finding:
-    s = fx / case / "stage"
-    got, refused = PF.verdicts_v2(PF.Proof(s / "circuit.txt", fx / case / f"pub-{N}.bin", (fx / case / "session",)),
+    s, c = fx / case / "stage", fx / case
+    got, refused = PF.verdicts_v2(PF.Proof(s / "circuit.txt", c / f"pub-{N}.bin", (c / "session",)),
                                   circuit_sha512=PF.file_sha512(s / "circuit.txt"),
                                   program=json.loads((s / "program.json").read_bytes()),
-                                  partition=json.loads((s / "partition.json").read_text()))
+                                  partition=json.loads((s / "partition.json").read_text()),
+                                  tables=sorted(f for f in (c / "tables").iterdir() if f.is_file()))
     assert refused is None, refused
     (finding,) = got
     return finding
 
 
 def test_verify_zk_accepts_the_honest_session(fx):
-    v = _verify(fx, "honest")
-    assert v.get("accepted") is True, v
+    v, _ = _verify(fx, "honest")
+    assert v is not None and v.get("accepted") is True, v
 
 
-def test_verify_zk_refuses_a_unit_of_two_input_groups_for_its_form(fx):
-    """The session's proof checks and every check before the form pass; `KsScope.filesWhy` refuses its circuit."""
-    v = _verify(fx, "two-groups")
-    assert v.get("accepted") is False and v.get("why") == SCOPE_REFUSAL, v
+@pytest.mark.parametrize("case", ["templated", "tail"])
+def test_verify_zk_refuses_a_session_outside_the_form_for_its_form(fx, case):
+    """The session's proof checks and every check before the form pass; the form's check refuses its statement."""
+    v, _ = _verify(fx, case)
+    assert v is not None and v.get("accepted") is False and str(v.get("why")).endswith(FORM), v
+    assert v["why"] == _cases(fx)[case]["lean"]["why"], v
 
 
-def test_the_v2_audits_own_run_accepts_the_honest_session_and_refuses_the_other_for_its_form(fx):
-    honest, two = _v2(fx, "honest"), _v2(fx, "two-groups")
+def test_the_v2_audits_own_run_accepts_the_honest_session_and_refuses_the_tail_for_its_form(fx):
+    """v2 verifies under the flat statement only, so of the two outside the form it runs the tail's."""
+    honest, tail = _v2(fx, "honest"), _v2(fx, "tail")
     assert honest.accepted and honest.units == tuple(range(N)), honest
-    assert (two.accepted, two.why) == (False, SCOPE_REFUSAL), two
+    assert (tail.accepted, tail.why) == (False, _cases(fx)["tail"]["lean"]["why"]), tail
 
 
 @pytest.mark.parametrize("statement", WRONG_TAGS)
 def test_verify_zk_refuses_the_honest_session_under_a_statement_outside_the_form(fx, statement):
-    v = _verify(fx, "honest", statement)
-    assert v.get("accepted") is False, v
-    assert v.get("why") == _cases(fx)["honest"]["wrong_tags"][statement]["why"], v
+    v, rc = _verify(fx, "honest", statement)
+    at_generation = _cases(fx)["honest"]["wrong_tags"][statement]
+    assert not at_generation["accepted"], at_generation
+    if at_generation["digest"] is None:
+        assert v is None and rc != 0, (v, rc)
+    else:
+        assert v is not None and v.get("accepted") is False and v.get("why") == at_generation["why"], v
