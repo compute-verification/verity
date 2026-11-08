@@ -198,7 +198,6 @@ files = ["Security/*Accounting/*", "verity/core/protocols/remote/README.md"]
 "WindowLaw" = "WindowDesign"
 "draw_full" = "sample_full"
 "draw_fix" = "sample_fix"
-"drawnAt" = "sampledAt"
 "drawF" = "sampleF"
 
 # the network certifier's witnesses and its device's egress grid
