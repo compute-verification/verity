@@ -16,6 +16,12 @@
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      LEASE_MEM_GB (the lease's memory cap, gpu-lease's --mem-gb; else gpu-lease's own per-GPU default)
 #      ZK_NICE=0 (the staging's and the builds' nice; the sessions run at the job's own)
+#      ZK_NEED_GB (this run's peak under FLOCK_WORK: the builds, each staged statement's circuit.txt, and the stagers'
+#      memory where FLOCK_WORK is a tmpfs; given, nothing is built or staged until FLOCK_WORK's filesystem, and memory
+#      for a tmpfs, has ZK_NEED_GB + ZK_MARGIN_GB=30 free, plus the GB of each ZK_HOLD="RUN_ID:GB ..." run not yet
+#      done, failed or cancelled; ZK_GATE_UNTIL, a UTC time, gives up the wait. FLOCK_WORK=/dev/shm/... keeps it all
+#      off a shared disk; each staged statement is deleted once its last point is proved)
+#      ZK_LAST_START (a UTC time no point starts at or after: one granted later gives its GPU back unproved)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server; with ZK_UNITS and no fw
 #      arm, no Lean build either: nothing then reads flock-verify or the ZK server's Lean frame)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
@@ -28,8 +34,32 @@ REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
 mkdir -p "$PT_WORK" 2>/dev/null && [ -w "$PT_WORK" ] || PT_WORK=$FLOCK_WORK/verifier
-S=$(mktemp -d "$FLOCK_WORK/zk-cost.XXXXXX"); trap 'rm -rf "$S"' EXIT
+S=$(mktemp -d "$FLOCK_WORK/zk-cost.XXXXXX"); trap 'rm -rf "$S"' EXIT; trap 'exit 143' TERM INT HUP
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
+room() {
+  local h st held free mem need said= runs=${RESEARCH_RUN_DIR:-/workspace/research/runs/-}
+  while :; do
+    held=0
+    for h in ${ZK_HOLD:-}; do
+      st=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("state", ""))' \
+        "${runs%/*}/${h%%:*}/status.json" 2> /dev/null)
+      case $st in done | failed | cancelled) ;; *) held=$((held + ${h##*:})) ;; esac
+    done
+    free=$(df -B1G --output=avail "$FLOCK_WORK" | tail -1 | tr -d ' ')
+    if [ "$(stat -f -c %T "$FLOCK_WORK")" = tmpfs ]; then
+      mem=$(awk '/^MemAvailable:/ {print int($2 / 1048576)}' /proc/meminfo); [ "$mem" -lt "$free" ] && free=$mem
+    fi
+    need=$((${ZK_NEED_GB:-0} + ${ZK_MARGIN_GB:-30} + held))
+    [ "$free" -ge "$need" ] && { log "zk-cost: room under $FLOCK_WORK: $free GB free, $need needed ($held held)"; return 0; }
+    if [ -n "${ZK_GATE_UNTIL:-}" ] && [ "$(date -u +%s)" -ge "$(date -u -d "$ZK_GATE_UNTIL" +%s)" ]; then
+      log "zk-cost: no room under $FLOCK_WORK by $ZK_GATE_UNTIL: $free GB free, $need needed ($held held)"; return 1
+    fi
+    [ "$said" = "$free/$need" ] || log "zk-cost: waiting for room under $FLOCK_WORK: $free GB free, $need needed ($held held)"
+    said=$free/$need; sleep 60
+  done
+}
+[ -z "${ZK_NEED_GB:-}" ] || room || exit 75
+export TMPDIR=$S/tmp; mkdir -p "$TMPDIR"
 export PYTHONDONTWRITEBYTECODE=1
 unset CARGO_TARGET_DIR
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; } > "$O/host.txt" 2>&1
@@ -130,11 +160,20 @@ if [ "$rc" = 0 ]; then
   # one point's sessions at a time on this node, as proof_throughput's: two would share its host CPUs and memory bandwidth;
   # a lease a point keeps each lease short
   n=$("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$Z/plan.json")
+  last=${ZK_LAST_START:+$(date -u -d "$ZK_LAST_START" +%s)}
   for i in $(seq 0 $((n - 1))); do
-    flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" \
+    if [ -n "$last" ] && [ "$(date -u +%s)" -ge "$last" ]; then log "zk-cost: points $i on not started: past $ZK_LAST_START"; rc=1; break; fi
+    flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" bash -c '[ -z "$1" ] || [ "$(date -u +%s)" -lt "$1" ] \
+      || { echo "ZKCOST point granted past ZK_LAST_START: not proved"; exit 75; }; shift; exec "$@"' _ "$last" \
       "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --out "$Z" --points "$i" --arms "${ZK_ARMS:-fw,nofw}" \
       --cold "${ZK_COLD:-2}" --warm "${ZK_WARM:-1}" --runs "${ZK_RUNS:-3}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+    # a staged statement goes once its last point is proved: its records kept, its circuit and instances deleted
+    keep
+    for d in $("$PY" -c 'import json, sys; p, i = json.load(open(sys.argv[1])), int(sys.argv[2]); d = p[i].get("stage_dir")
+print(d if d and all(q.get("stage_dir") != d for q in p[i + 1:]) else "")' "$Z/plan.json" "$i"); do
+      rm -rf "$d" && log "zk-cost: point $i proved; deleted its statement ${d#"$S"/}"
+    done
   done
   if [ "${ZK_VERIFY:-1}" = 1 ]; then
     log "prove: exit $rc; verify"
