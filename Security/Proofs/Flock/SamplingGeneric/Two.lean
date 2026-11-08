@@ -279,7 +279,7 @@ theorem card_image_above_le (Pt : Partition) (d : Claims.Sampling.Design.Two) (S
     (S.image (above Pt d)).card ≤ 2 ^ footBits Pt d :=
   (card_image_le_of_counts Pt d S (above Pt d) fun _ _ h => above_congr Pt d h).trans (prod_cell_le_footBits Pt d)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **The contract's unions at `n_PU` bits**: counts of at least `n_PU` cover both waits' unions, since `M ≤ n_PU` and
 a replay sample has at most `n_PU` proof blocks. -/
 theorem unions_of_nPU_le {H : Msg → Msg} (L : CompiledTwo Coin A) (hout : ∀ x, L.nPU x ≤ L.nOut x)
@@ -464,7 +464,6 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
                 (hesc0 r) (hκr0 r) (hesc r) (hsess r)
             · have h0 : Pr (fun e : Fin (L.V.k x) → Coin => (run' (forkOn (L.stage2 x) r e)).out = .acc) = 0 :=
                 (Pr_congr fun e => ⟨fun h => hacc ⟨e, h⟩, False.elim⟩).trans Pr_false
-              dsimp only
               rw [h0, zero_mul]
               exact add_nonneg (add_nonneg (by positivity) (Real.exp_pos _).le)
                 (mul_nonneg hc.le (add_nonneg (hesc0 r) (hκr0 r)))
