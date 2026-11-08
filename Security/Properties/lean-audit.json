@@ -14083,9 +14083,10 @@
    }
   },
   "Definitions.Core.Uniform": {
-   "digest": "4c89bb9e29a36a5684af69a69f2a713a3757cca256ab843a79183e6a3ec68de9",
+   "digest": "ffd7c7a9986a1dc1d4cbf3b195714ef832836d7f9457f98b7b6fb63d909f66d5",
    "definitions": {
-    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d"
+    "Claims.Pr": "9056e3a71637194df30ffbf31cd301e3882983ded7f8936d6ea655319f3fda30",
+    "Claims.prUniform": "7b5d8971f0b41aff9cacb0343c6eaaed88950cfbe8f99b3e72e607f56678ba04"
    }
   },
   "Definitions.Flock.Audit.Harm": {
@@ -14443,10 +14444,10 @@
    }
   },
   "Definitions.Pous.Game.Prob": {
-   "digest": "423437181081ecd73c837e7d9ddc404d2fc1be7ec8e7b9ff0fd94500071c39f5",
+   "digest": "fc8fa6f648c1d31fe2430d56f5b02873b379a8f6a19c2153baf75459895b297a",
    "definitions": {
     "Pous.Bits": "9290fa20f06bfe4423f67acf59109a8e4d14d7a87a9aa1e5085b43ee795a0f68",
-    "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
+    "Pous.pr": "41bd49489d09bf6d4ef51d84ca1ee8595d91a1e74fb504ab324d9fa9eac0b476"
    }
   },
   "Definitions.Pous.Model.Audit": {
@@ -14704,7 +14705,7 @@
    }
   },
   "Definitions.Pouw.RelativeSecurity": {
-   "digest": "85935d523f713ac3cae728597d189f5c9fede99d956f92ba6f399ae6adac2562",
+   "digest": "c9c670418fbc7c7778de2ea0eac2ebd6d5878da9099cf74e7ef206dd0158f8c0",
    "definitions": {
     "Pouw.RelativeSecurity.Machine": "db1e3ba31b215c56bd28f4744afd95c18ed44034107608ecfdf9b5d703332e56",
     "Pouw.RelativeSecurity.Machine.Alg": "5bb07b241d9d771465bfd79641f083d3e19ac351d53167abfb2978abd7151692",
@@ -14720,7 +14721,7 @@
     "Pouw.RelativeSecurity.RoundGame.done": "c9382774b1fd23c21ff020d16b06722f99cc6e45a1409927fdb968f30e6ab7f0",
     "Pouw.RelativeSecurity.RoundGame.rec": "abcc0878adb0b351364230899fa6e97aeea237e306d5cdc543991f1b8c4caf0b",
     "Pouw.RelativeSecurity.RoundGame.round": "54383a4741af130b19b1913257b27b59be03317af693b3b72be0c1cc50f420c9",
-    "Pouw.RelativeSecurity.prob": "45903db0657e0aae952b67744101d45314e1904c052d74ff5b83d86cbbdda633"
+    "Pouw.RelativeSecurity.prob": "f9d6443628cce74d9bd0c6c0c88826e8c252e0dc0247fdf21ca37a3d39c5ebb6"
    }
   },
   "Definitions.Pouw.Window": {
