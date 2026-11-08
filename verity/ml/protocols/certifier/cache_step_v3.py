@@ -20,11 +20,13 @@ whatever the pool's size. `Stream` is the specification in Python; `benchmarks/m
 replay's pool (`pool_ram`, itself held to vLLM's `_KV`) after every call, with prefix caching on.
 
 **The memories** (tag: address → value; a value's fields least significant first):
-- B (0): b → (prev, next, cprev, cnext, ref, owner), b < NB: the free queue's links, the links among the blocks cached
-  under one key, the holders and 1 + the request that allocated it. The free queue's ends (head, tail) are the stream's
-  own registers, so vLLM's null block 0, the queue's sentinel, is never accessed: a link 0 is the sentinel.
+- B (0): b → (prev, next, cprev, cnext, ref, owner, stamp), b < NB: the free queue's links, the links among the blocks
+  cached under one key, the holders, 1 + the request that allocated it, and the memo's stamp. The free queue's ends
+  (head, tail) are the stream's own registers, so vLLM's null block 0, the queue's sentinel, is never accessed: a link
+  0 is the sentinel.
 - K (1): b → the key b is cached under, 0 for none.
-- M (2): key → (first, last), the blocks cached under the key in vLLM's order (`by_hash`), a list threaded through B.
+- M (2): key → (first, last, stamp), the blocks cached under the key in vLLM's order (`by_hash`), a list threaded
+  through B, and the memo's stamp.
 - RB (3): (r, k) → request r's k-th block, 0 for none.
 - RK (4): (r, k) → the key of request r's k-th block of tokens, read only.
 B's and K's addresses are b, M's a key, RB's and RK's r | k << RW. A key is a block's 128-bit print under the window's
@@ -45,6 +47,15 @@ coin (`verity.ml.commitments.gates.block_key`), which the caller makes each RK a
 An access a call doesn't need (a neighbour that is the sentinel, an eviction of a block with no key) is skipped, not
 idled: each call's accesses are a function of the pool, so the stream's slots are too. A call with no operation (a = 0
 for hit and free, b = 0 else) is in neither the stream nor the bus.
+
+**The head-of-line memo.** vLLM's scheduler looks up the waiting queue's head again every step it can't admit it, most
+often over a prefix nothing has changed. A hit that walks increments the stream's EW-bit walk epoch and stamps each M
+and B cell it reads with it; at its end the stream keeps (r, a, x, y) and clears its dirty bit. Any access to a cell
+stamped with the current epoch that changes its first copy (M) or whether it is held (B, ref = 0 or not) sets the dirty
+bit. The walk's result reads nothing else (RK is read only, and a request number is one request's in a window), so a hit
+of the kept r and a with the dirty bit clear returns the kept x and y in one slot with no access (`Slot.use` 0). A
+stale stamp of an earlier epoch can only set the bit spuriously, costing a walk. The epoch, the bit and the kept call
+are functions of the stream, so the memo adds no choice; a window starts with none kept.
 
 **The stream.** Slot i is at time i + 1. A call starts in the slot after the last one ended, which carries its fields
 (start = 1, kind, r, a, b) and performs its first access; every other slot's fields are zero. A slot between calls that
@@ -75,7 +86,8 @@ takes the least class its slots and its entries fit, with no refusal and no fall
 (G, A, V, T) = (3, 128, 128, TW): 3 chunks at TW ≥ 26.
 
 **Cost** (`size`): a slot is its access's check (`MemAccess_v1`: 6 products at 3 chunks), the bus product, and its
-call's logic over every kind's positions; an entry is `MemEntry_v1`.
+call's logic over every kind's positions, the memo's 169 ANDs at GLM-5.3's widths among them; an entry is
+`MemEntry_v1`.
 """
 from __future__ import annotations
 
@@ -103,10 +115,12 @@ STATICS = ("NS", "NE", "NB", "RW", "KW", "REFW", "TW")
 SLOT_STATICS = ("NB", "RW", "KW", "REFW", "TW")
 TAGS = {"B": 0, "K": 1, "M": 2, "RB": 3, "RK": 4}
 KINDS = {"hit": 1, "take": 2, "alloc": 3, "cache": 4, "free": 5}
-BF = ("prev", "next", "cprev", "cnext", "ref", "owner")
+BF = ("prev", "next", "cprev", "cnext", "ref", "owner", "stamp")
 #: positions an operation of each kind has (its accesses, before skipping)
 SHAPE = {"hit": 3, "take": 6, "alloc": 7, "cache": 6, "free": 5}
 G = 3
+#: a walk epoch's width: the stamp a hit's walk leaves on each M and B cell it reads
+EW = 4
 
 
 def _bitlen(v: int) -> int:
@@ -121,16 +135,18 @@ def widths(S) -> SimpleNamespace:
     if S.NB < 2:
         raise ValueError(f"a pool of {S.NB} blocks: NB ≥ 2 (block 0 is vLLM's null block)")
     NW, CW = _bitlen(S.NB - 1), S.KW + 1
-    BV = 4 * NW + S.REFW + S.RW
+    BV = 4 * NW + S.REFW + S.RW + EW
     if BV > 128 or S.RW + S.KW > 128:
         raise ValueError(f"a block's fields ({BV} bits) or a request slot's address ({S.RW + S.KW}) pass 128 bits")
     if S.TW + 3 + S.RW + 4 * CW > 128:
         raise ValueError("a bus record passes 128 bits")
     if hasattr(S, "NS") and S.NS >= 1 << S.TW:
         raise ValueError(f"the stream's times 1..{S.NS} need more than TW = {S.TW} bits")
-    off = {"prev": 0, "next": NW, "cprev": 2 * NW, "cnext": 3 * NW, "ref": 4 * NW, "owner": 4 * NW + S.REFW}
-    bw = {"prev": NW, "next": NW, "cprev": NW, "cnext": NW, "ref": S.REFW, "owner": S.RW}
-    return SimpleNamespace(NW=NW, CW=CW, BV=BV, off=off, bw=bw, MS=SimpleNamespace(G=G, A=128, V=128, T=S.TW))
+    off = {"prev": 0, "next": NW, "cprev": 2 * NW, "cnext": 3 * NW, "ref": 4 * NW, "owner": 4 * NW + S.REFW,
+           "stamp": 4 * NW + S.REFW + S.RW}
+    bw = {"prev": NW, "next": NW, "cprev": NW, "cnext": NW, "ref": S.REFW, "owner": S.RW, "stamp": EW}
+    return SimpleNamespace(NW=NW, CW=CW, BV=BV, off=off, bw=bw, MST=2 * NW,
+                           MS=SimpleNamespace(G=G, A=128, V=128, T=S.TW))
 
 
 def rk(S, r: int, k: int) -> int:
@@ -164,7 +180,8 @@ class Call(NamedTuple):
 
 
 class Slot(NamedTuple):
-    """One slot: its call fields (zero but where a call starts) and its access."""
+    """One slot: its call fields (zero but where a call starts) and its access, which a memoized hit's slot doesn't
+    make (``use`` 0, every access field 0)."""
     start: int
     kind: int
     r: int
@@ -176,6 +193,7 @@ class Slot(NamedTuple):
     t: int
     w: int
     now: int
+    use: int = 1
 
 
 class Refused(ValueError):
@@ -199,6 +217,9 @@ class Stream:
         self.slots: list[Slot] = []
         self.records: list[tuple[int, ...]] = []
         self._fields: tuple[int, int, int, int] | None = None
+        self.epoch, self.dirty = 0, 0
+        self.memo: tuple[int, int, int, int] | None = None
+        self.memos = self.rewalks = 0
 
     def _refuse(self, why: str) -> None:
         if self.strict:
@@ -218,10 +239,22 @@ class Stream:
             self.first[key] = v
         now = len(self.slots) + 1
         w = f(v)
+        self.dirty |= self._dirties(tag, v, w)
         fields, self._fields = self._fields or (0, 0, 0, 0), None
         self.slots.append(Slot(int(any(fields)), *fields, tag, addr, v, t, w, now))
         self.cells[key] = (w, now)
         return v
+
+    def _dirties(self, tag: int, v: int, w: int) -> int:
+        """Whether an access that writes w over v changes what the last walk read: a cell stamped with its epoch whose
+        first copy (M) or whose being held (B) changes."""
+        Z, mask = self.Z, (1 << self.Z.NW) - 1
+        if tag == TAGS["M"]:
+            return int((v >> Z.MST) & ((1 << EW) - 1) == self.epoch and (v & mask) != (w & mask))
+        if tag == TAGS["B"]:
+            d, e = bsplit(self.S, v), bsplit(self.S, w)
+            return int(d["stamp"] == self.epoch and (d["ref"] == 0) != (e["ref"] == 0))
+        return 0
 
     def _b(self, b: int, **put) -> dict[str, int]:
         """B[b]'s access with the fields ``put`` written; its old fields."""
@@ -248,13 +281,37 @@ class Stream:
 
     def _hit(self, c: Call) -> tuple[int, int]:
         S, Z = self.S, self.Z
+        if self.memo and self.memo[:2] == (c.r, c.a) and not self.dirty:
+            got = self.memo[2:]
+            if got != self.walk(c.r, c.a):
+                raise AssertionError(f"{c}: the memo's {got}, the pool's {self.walk(c.r, c.a)}")
+            fields, self._fields = self._fields, None
+            self.slots.append(Slot(1, *fields, 0, 0, 0, 0, 0, len(self.slots) + 1, use=0))
+            self.memos += 1
+            return got
+        self.rewalks += bool(self.memo and self.memo[:2] == (c.r, c.a))
+        self.epoch, self.dirty = (self.epoch + 1) % (1 << EW), 0
+        st = (1 << EW) - 1 << Z.MST
         h = ev = 0
         for k in range(c.a):
             key = self._acc(TAGS["RK"], rk(S, c.r, k))
-            first = self._acc(TAGS["M"], key) & ((1 << Z.NW) - 1)
+            first = self._acc(TAGS["M"], key, lambda v: v & ~st | self.epoch << Z.MST) & ((1 << Z.NW) - 1)
             if not first:
                 break
-            ev += self._b(first)["ref"] == 0
+            ev += self._b(first, stamp=self.epoch)["ref"] == 0
+            h += 1
+        self.memo = (c.r, c.a, h, ev)
+        return h, ev
+
+    def walk(self, r: int, a: int) -> tuple[int, int]:
+        """`find_longest_cache_hit` on the memories as they are, accessing nothing: (hit, held by no request)."""
+        S, mask = self.S, (1 << self.Z.NW) - 1
+        h = ev = 0
+        for k in range(a):
+            first = self.value(TAGS["M"], self.value(TAGS["RK"], rk(S, r, k))) & mask
+            if not first:
+                break
+            ev += bsplit(S, self.value(TAGS["B"], first))["ref"] == 0
             h += 1
         return h, ev
 
@@ -310,7 +367,7 @@ class Stream:
                 NW = self.Z.NW
                 mask = (1 << NW) - 1
                 self._acc(TAGS["M"], key, lambda v: (cn if v & mask == b else v & mask)
-                          | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW)
+                          | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW | v >> 2 * NW << 2 * NW)
                 if cp:
                     self._b(cp, cnext=cn)
                 if cn:
@@ -329,7 +386,7 @@ class Stream:
             if self.value(TAGS["K"], b):
                 self._refuse(f"cache of block {b}: it has a key")
             self._acc(TAGS["K"], b, lambda v: key)
-            m = self._acc(TAGS["M"], key, lambda v: (v & mask or b) | b << Z.NW)
+            m = self._acc(TAGS["M"], key, lambda v: (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW)
             last = (m >> Z.NW) & mask
             if last:
                 self._b(last, cnext=b)
@@ -386,6 +443,8 @@ class Stream:
         """(R, W) of the stream's accesses and its touched list under (α, γ) (`MemCheck_v1`'s records)."""
         MS, R, W = self.Z.MS, 1, 1
         for s in self.slots:
+            if not s.use:
+                continue
             R = mul(R, alpha ^ MC.element(MS, gamma, s.tag, s.addr, s.v, s.t))
             W = mul(W, alpha ^ MC.element(MS, gamma, s.tag, s.addr, s.w, s.now))
         for tag, a, v0, v, t in self.entries():
@@ -442,7 +501,8 @@ def _carry_layout(S) -> list[tuple[str, int]]:
     return [("ok", 1), ("R", 128), ("W", 128), ("P", 128), ("now", S.TW), ("seq", S.TW), ("head", NW), ("tail", NW),
             ("busy", 1), ("idle", 1), ("kind", 3), ("r", S.RW), ("ca", CW), ("cb", CW), ("k", CW), ("left", CW),
             ("x", CW), ("y", CW), ("pos", 3), ("key", 128), ("blk", NW), ("p", NW), ("n", NW), ("cp", NW), ("cn", NW),
-            ("flag", 1), ("cur", NW), ("cnx", NW)]
+            ("flag", 1), ("cur", NW), ("cnx", NW), ("epoch", EW), ("dirty", 1), ("mv", 1), ("mr", S.RW), ("ma", CW),
+            ("mx", CW), ("my", CW)]
 
 
 def _size(layout) -> int:
@@ -512,7 +572,12 @@ def slot_forms(C, S, carry, start, kind, r, a, b, v, t, alpha, gamma) -> list[li
     kin = _onehot(C, kind, 8)
     kind_e = mux(C, s, kind, c.kind)
     r_e, ca_e, cb_e = mux(C, s, r, c.r), mux(C, s, a, c.ca), mux(C, s, b, c.cb)
-    K = [C.AND(active, x) for x in _onehot(C, kind_e, 6)[1:]]
+    # the memo: a hit of the last walk's request and limit, with nothing that walk read changed since, makes no access
+    hs = C.AND(s, kin[1])
+    memo = and_reduce(C, [hs, c.mv[0], _eq(C, r, c.mr), _eq(C, a, c.ma), c.dirty[0].inv()])
+    walks = C.AND(hs, memo.inv())
+    acc = C.AND(active, memo.inv())
+    K = [C.AND(acc, x) for x in _onehot(C, kind_e, 6)[1:]]
     hit, take, alloc, cache, free = K
     a1 = sub(C, a, const_bits(1, CW), CW)[0]
     some = [kin[2], kin[3], kin[4]]
@@ -588,7 +653,19 @@ def slot_forms(C, S, carry, start, kind, r, a, b, v, t, alpha, gamma) -> list[li
     bput_(ret, "next", _sel(C, hl, cnx_e))
     bput_(Fr[3], "next", c.blk)
     bput_(Fr[4], "prev", c.blk)
+    put(L[1], Z.MST, c.epoch)
+    bput_(L[2], "stamp", c.epoch)
     w = _xor(v, delta)
+
+    # the dirty bit: a cell stamped with the last walk's epoch whose first copy (M) or whose being held (B) changes
+    ro = Z.off["ref"]
+    held_flips = ref0 ^ _z(C, w[ro:ro + S.REFW])
+    so = Z.off["stamp"]
+    dirties = OR(C, and_reduce(C, [_z(C, tag), _eq(C, v[so:so + EW], c.epoch), held_flips]),
+                 and_reduce(C, [_eq(C, tag, const_bits(TAGS["M"], G)), _eq(C, v[Z.MST:Z.MST + EW], c.epoch),
+                                _nz(C, delta[:NW])]))
+    dirty = [C.AND(walks.inv(), OR(C, c.dirty[0], dirties))]
+    epoch = mux(C, walks, add(C, c.epoch, const_bits(1, EW), width=EW), c.epoch)
 
     # the registers
     key = mux(C, _any(C, (L[0], T_[0], Cc[1], A[2], Fr[1])), v, c.key)
@@ -655,7 +732,11 @@ def slot_forms(C, S, carry, start, kind, r, a, b, v, t, alpha, gamma) -> list[li
     k = add(C, k_e, [dec] + [C.AND(dec, free)] * (CW - 1), width=CW)
     x = add(C, x_e, _pad([OR(C, L[2], ret)], CW), width=CW)
     y = add(C, y_e, _pad([C.AND(L[2], ref0)], CW), width=CW)
-    call_end = OR(C, miss, C.AND(dec, _z(C, left)))
+    walked = C.AND(OR(C, miss, C.AND(dec, _z(C, left))), hit)
+    mv, mr, ma = [OR(C, c.mv[0], walked)], mux(C, walked, r_e, c.mr), mux(C, walked, ca_e, c.ma)
+    mx, my = mux(C, walked, x, c.mx), mux(C, walked, y, c.my)
+    x, y = mux(C, memo, c.mx, x), mux(C, memo, c.my, y)
+    call_end = _any(C, (miss, C.AND(dec, _z(C, left)), memo))
     busy = C.AND(active, call_end.inv())
     idle = OR(C, c.idle[0], goidle)
     seq = add(C, c.seq, _pad([call_end], S.TW), width=S.TW)
@@ -664,7 +745,7 @@ def slot_forms(C, S, carry, start, kind, r, a, b, v, t, alpha, gamma) -> list[li
     Pbus = mul_forms(C, c.P, factor)
 
     # the access's check, and the slot's
-    R, W, ok = MC.access_forms(C, Z.MS, alpha, gamma, c.R, c.W, c.ok, [active], tag, addr, v, t, w, c.now)
+    R, W, ok = MC.access_forms(C, Z.MS, alpha, gamma, c.R, c.W, c.ok, [acc], tag, addr, v, t, w, c.now)
     lim = const_bits(1 << KW, CW + 1)
     span = add(C, a, b, width=CW + 1)
     over = sub(C, lim, mux(C, OR(C, kin[1], kin[5]), _pad(a, CW + 1), span), CW + 1)[1]
@@ -686,7 +767,8 @@ def slot_forms(C, S, carry, start, kind, r, a, b, v, t, alpha, gamma) -> list[li
     ok = [C.AND(ok[0], _any(C, bad).inv())]
     now = add(C, c.now, const_bits(1, S.TW), width=S.TW)
     out = (ok + R + W + Pbus + now + seq + head + tail + [busy, idle] + _pad(kind_e, 3) + r_e + ca_e + cb_e + k + left
-           + x + y + _pad(nxt, 3) + key + blk + p + n + cp + cn + flag + cur + cnx)
+           + x + y + _pad(nxt, 3) + key + blk + p + n + cp + cn + flag + cur + cnx + epoch + dirty + mv + mr + ma + mx
+           + my)
     assert len(out) == _size(_carry_layout(S))
     return [out, [active]]
 
@@ -812,7 +894,7 @@ def arguments(S, alpha: int, gamma: int, head: int, tail: int, slots: Sequence[S
     Z = widths(S)
     if len(slots) > S.NS or len(entries) > S.NE:
         raise ValueError(f"{len(slots)} slots or {len(entries)} entries past the class's {S.NS} and {S.NE}")
-    sl = list(slots) + [Slot(*[0] * 11)] * (S.NS - len(slots))
+    sl = list(slots) + [Slot(*[0] * 11, use=0)] * (S.NS - len(slots))
     en = [(1, *e) for e in entries] + [(0, 0, 0, 0, 0, 0)] * (S.NE - len(entries))
     return [_bits(alpha, 128), _bits(gamma, 128), _bits(head, Z.NW), _bits(tail, Z.NW),
             [x.start for x in sl], [q for x in sl for q in _bits(x.kind, 3)], [q for x in sl for q in _bits(x.r, S.RW)],

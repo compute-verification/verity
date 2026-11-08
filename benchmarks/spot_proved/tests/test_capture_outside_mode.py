@@ -47,6 +47,7 @@ def test_an_op_run_outside_the_mode_records_the_event_the_recorder_writes(tmp_pa
         out = torch.zeros(4)
         with capture.Recorder():
             got = torch.ops.spotcap_test.fwd(q, k, out=out)
+        capture._drain()
         return got, out, list(S.events)
 
     want, want_out, want_events = recorded()

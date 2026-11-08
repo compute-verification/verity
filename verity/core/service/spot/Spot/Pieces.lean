@@ -40,6 +40,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
+* `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512, as pairs in the
+  check's order (`Run.templateCircuits`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -58,6 +60,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`ChallengerCoins`): `read_reason`, the bytes a sample read against its segment, `coins_reason`, against the segment
   and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
   sizes the evidence holds against v2's limits.
+* `challenger_seed_salt`: a window's seed salt as the verifier reads it from the challenger's log (`seed_salt_of`,
+  `Challenger.seedSaltOf`): the one coin of the seed-salt family released after the window's open root.
 * `challenger_coin_trees`, `challenger_session_trees`, `challenger_sample_link_first`: a `--zk` session's coins
   (`ChallengerTrees`): the coin trees a release log shows the challenger sampled and opened (`coin_trees_of`), an
   audit's session records, each on its tables with their `root_B` lengths, held to them, one tree a session
@@ -558,8 +562,9 @@ hex source, `check_public`'s values and declared items, the challenger's name an
 with the proved units and instances null for the sample's own, and the coins' evidence (`coins_reason`'s, which a sample
 that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
 "record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots"}` in the same forms,
-`replay` one replay block's program object, and null otherwise. The verifier flips no coins of its own: an input whose
-`coin_source` is not the challenger's is refused. -/
+`replay` one replay block's program object, its params' `proofs` the auditor's naming each template's circuit file
+(`Run.templateCircuits`), and null otherwise. The verifier flips no coins of its own: an input whose `coin_source` is
+not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
@@ -603,17 +608,26 @@ def run (j : Json) : V Json := do
       let provedUnits ← match getD it "proved_units" with
         | .null => pure none
         | u => some <$> ints u "proved_units"
-      let ip ← params (getD it "params")
+      let ipj := getD it "params"
+      let ip ← params (Json.mkObj ((entries ipj).filter (·.1 != "proofs")).toList)
+      let circuits ← Run.templateCircuits (getD ipj "proofs") ip.verifier.query
       let replay ← Program.parse (← Flock.canon (getD it "replay")).toUTF8
       let values ← valuesOf (getD it "values") "an interior's values"
       let source ← Flock.unhex (← Flock.J.str it "source" "the interior")
       let instances ← instancesOf (getD it "instances")
       pure (some (Run.Interior.mk ip replay values (getD it "record") received source (getD it "coins") provedUnits
-        instances (getD it "served") (getD it "session_roots")))
+        instances (getD it "served") (getD it "session_roots") circuits))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", interior }
+
+/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit], ...]}`: a two-stage run's params naming each template's
+circuit file, as pairs in the order the check's template query names the templates (`Run.templateCircuits`); refused
+where the Python raises. -/
+def templateCircuits (j : Json) : V Json := do
+  let pairs ← Run.templateCircuits (getD j "proofs") (getD j "query")
+  return Json.mkObj [("circuits", Json.arr (pairs.map fun (t, c) => Json.arr #[Json.str t, Json.str c]))]
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
@@ -626,7 +640,7 @@ def table : List (String × (Json → V Json)) :=
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
@@ -637,6 +651,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
+   ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),

@@ -572,6 +572,7 @@
     "type": "8e2e6cce9b6d6ae53b8a87c5014777b7c77045053fc4d0004a8c1d40ac6c700b74a194404b5736370859bff62e4d3d8c22f9f8ba15ed2fbaaa4774de9c7ce0ec"
    }
   },
+  "struct_max_gates": {},
   "units": {}
  },
  "registered": [

@@ -11,10 +11,15 @@
 // - the ring-switch batch opens ab, c and every extra claim.
 
 #include <chrono>
+#include "async_copies.cuh"
 #include "pure_sha256.cuh"
+#include "ring_switch.cuh"
 #include "zerocheck_fused.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
+
+// *p += v: the lincheck's pinned column takes β on the device, so the host reads nothing back to add it
+__global__ void chunk_add_word(F128* p, F128 v) { *p = f128_add(*p, v); }
 
 // an 8x8 bit matrix, row r in byte r (bit c its column c), transposed
 __device__ __forceinline__ u64 zlin_t8(u64 x) {
@@ -248,79 +253,6 @@ __global__ void chunk_ring_fold_rows(const F128* __restrict__ witness, const F12
     }
 }
 
-// A 2^d eq table's entry x from its halves: eq[x] = lo[x mod 2^k] * hi[x >> k] (build_eq_device over the first k challenges and
-// the rest), the same field element as the doubling's
-__device__ __forceinline__ F128 chunk_eq_split(const F128* __restrict__ lo, const F128* __restrict__ hi, int k, long long x) {
-    return ghash_mul_karatsuba(lo[x & ((1LL << k) - 1)], hi[x >> k]);
-}
-
-// chunk_ring_fold_rows with its suffix as eq halves (no 2^d table): a warp takes 32 rows at a time, each lane one row's witness
-// word and eq entry, and folds all 32 through shuffles
-__global__ void chunk_ring_fold_rows_split(const F128* __restrict__ witness, const F128* __restrict__ lo, const F128* __restrict__ hi,
-                                           int k, long long len, int chunks, F128* __restrict__ partials) {
-    __shared__ F128 red[8][128];   // launched at 256 threads
-    const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5, nw = blockDim.x >> 5, sh = 4 * (lane & 15);
-    const long long per = (len + chunks - 1) / chunks, r0 = (long long)blockIdx.x * per, r1 = min(len, r0 + per);
-    F128 acc[4] = {};
-    for (long long base = r0 + 32LL * wid; base < r1; base += 32LL * nw) {
-        const long long i = base + lane;
-        F128 w{0, 0}, s{0, 0};
-        if (i < r1) { w = witness[i]; s = chunk_eq_split(lo, hi, k, i); }
-#pragma unroll 4
-        for (int j = 0; j < 32; j++) {
-            const u64 wl = __shfl_sync(0xffffffffu, w.lo, j), wh = __shfl_sync(0xffffffffu, w.hi, j);
-            const u64 sl = __shfl_sync(0xffffffffu, s.lo, j), shi = __shfl_sync(0xffffffffu, s.hi, j);
-            const unsigned nib = (unsigned)(((lane < 16 ? wl : wh) >> sh) & 15);
-#pragma unroll
-            for (int b = 0; b < 4; b++) {
-                const u64 m = 0ull - (u64)((nib >> b) & 1);
-                acc[b].lo ^= sl & m;
-                acc[b].hi ^= shi & m;
-            }
-        }
-    }
-#pragma unroll
-    for (int b = 0; b < 4; b++) red[wid][4 * lane + b] = acc[b];
-    __syncthreads();
-    for (int t = threadIdx.x; t < 128; t += blockDim.x) {
-        F128 x{0, 0};
-        for (int q = 0; q < nw; q++) { x.lo ^= red[q][t].lo; x.hi ^= red[q][t].hi; }
-        partials[(long long)t * chunks + blockIdx.x] = x;
-    }
-}
-
-// ring_switch_combine_basis's sums, the same XORs, with both suffixes as eq halves: each claim's 128 weights as 32 tables of their
-// nibbles' sums in shared memory, so a row is 64 lookups rather than a walk over its set bits
-__global__ void chunk_ring_combine_basis_split(const F128* __restrict__ ab_lo, const F128* __restrict__ ab_hi,
-                                               const F128* __restrict__ c_lo, const F128* __restrict__ c_hi, int k,
-                                               const F128* __restrict__ weights_ab, const F128* __restrict__ weights_c, long long len,
-                                               F128* __restrict__ combined) {
-    __shared__ F128 tab[2][32][16];
-    for (int e = threadIdx.x; e < 2 * 32 * 16; e += blockDim.x) {
-        const int c = e >> 9, p = (e >> 4) & 31, v = e & 15;
-        const F128* w = c ? weights_c : weights_ab;
-        F128 x{0, 0};
-        for (int b = 0; b < 4; b++)
-            if ((v >> b) & 1) { x.lo ^= w[4 * p + b].lo; x.hi ^= w[4 * p + b].hi; }
-        tab[c][p][v] = x;
-    }
-    __syncthreads();
-    for (long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x; i < len; i += (long long)gridDim.x * blockDim.x) {
-        const F128 s[2] = {chunk_eq_split(ab_lo, ab_hi, k, i), chunk_eq_split(c_lo, c_hi, k, i)};
-        F128 acc{0, 0};
-#pragma unroll
-        for (int c = 0; c < 2; c++) {
-#pragma unroll
-            for (int p = 0; p < 32; p++) {
-                const F128 x = tab[c][p][((p < 16 ? s[c].lo : s[c].hi) >> (4 * (p & 15))) & 15];
-                acc.lo ^= x.lo;
-                acc.hi ^= x.hi;
-            }
-        }
-        combined[i] = acc;
-    }
-}
-
 // build_quirky_eq_device's table, the same elements: the eq over the rest's challenges once (a doubling, 2^d_rest entries), then
 // each entry one product with its Lagrange weight (build_quirky_equality_table takes d_rest products an entry)
 __global__ void chunk_quirky_expand(int k_skip, long long n, const F128* __restrict__ rest, F128* __restrict__ out) {
@@ -346,6 +278,18 @@ static int chunk_quirky_eq_device(F128* d_out, F128 z_skip, const std::vector<F1
 // FC_RING_GROUPED=1: the ring switch's former kernels (the same sums), for a same-job control
 static bool chunk_ring_grouped() {
     static const bool v = [] { const char* e = std::getenv("FC_RING_GROUPED"); return e && e[0] == '1'; }();
+    return v;
+}
+
+// The ring switch's fold and combine on the tensor cores (ring_switch.cuh's _bmma kernels) on sm_90, where their b1 MMAs run at
+// full rate; FC_RING_SPLIT=1 keeps the split kernels, for a same-job control
+static bool chunk_ring_bmma() {
+    static const bool v = [] {
+        const char* e = std::getenv("FC_RING_SPLIT");
+        int dev = 0, major = 0;
+        return !(e && e[0] == '1') && cudaGetDevice(&dev) == cudaSuccess &&
+               cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev) == cudaSuccess && major == 9;
+    }();
     return v;
 }
 
@@ -833,6 +777,7 @@ typedef struct {
 int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams* C, uint8_t** out, size_t* out_len) {
     static std::mutex chunk_mutex;
     std::lock_guard<std::mutex> chunk_lock(chunk_mutex);
+    HcDrop hc_guard;
     auto t_start = std::chrono::steady_clock::now();
     auto t_ph = t_start;
     auto phase = [&](int i) -> int {
@@ -1033,7 +978,6 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         }
         CK(cudaGetLastError());
         launch_merkle((const uint8_t*)d_cw0, d_tree0, l0_bl, num_ntts * 16);
-        CK(cudaStreamSynchronize(0));
         uint32_t c0 = stratified_cap_depth(
             stratified_depths((size_t)P->queries[0], (uint32_t)k_code));
         l0_cap = merkle_cap_layer_device(d_tree0, (size_t)l0_bl, c0);
@@ -1112,9 +1056,9 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         for (int i = 6; i < 13; i++) round1_scale = MUL(round1_scale, ADD(ONE, zc_r[i]));
         launch_zc_round1((const uint8_t*)d_a, (const uint8_t*)d_b, (const uint8_t*)df, d_eq, 1LL << (m - 13), round1_scale,
                          d_r1ab, d_r1c);
-        CK(cudaGetLastError()); CK(cudaStreamSynchronize(0));
-        CK(cudaMemcpy(zc_r1ab.data(), d_r1ab, 64 * sizeof(F128), cudaMemcpyDeviceToHost));
-        CK(cudaMemcpy(zc_r1c.data(), d_r1c, 64 * sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(cudaGetLastError());
+        CK(hc_get(zc_r1ab.data(), d_r1ab, 64 * sizeof(F128))); CK(hc_get(zc_r1c.data(), d_r1c, 64 * sizeof(F128)));
+        CK(hc_wait());
         { std::vector<ChF128> s(64);
           for (int i = 0; i < 64; i++) s[i] = toch(zc_r1ab[i]); ch.observe_f128_slice(s.data(), 64);
           for (int i = 0; i < 64; i++) s[i] = toch(zc_r1c[i]);  ch.observe_f128_slice(s.data(), 64); }
@@ -1133,7 +1077,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
           for (int j = 0; j < 8; j++) for (int v = 0; v < 256; v++) { F128 acc{0, 0};
               for (int bb = 0; bb < 8; bb++) if ((v >> bb) & 1) acc = ADD(acc, ws[8 * j + bb]);
               ft[j * 256 + v] = acc; }
-          CK(cudaMemcpy(d_ft, ft.data(), 8 * 256 * sizeof(F128), cudaMemcpyHostToDevice)); }
+          CK(hc_put(d_ft, ft.data(), 8 * 256 * sizeof(F128))); }
         build_eq_device(d_eqlo, &zc_r[7], zt_lobits);
         build_eq_device(d_eqhi, &zc_r[7 + zt_lobits], zt_dfull - zt_lobits);
         F128 *cA = d_am, *cB = d_bm, *nA = d_amn, *nB = d_bmn;
@@ -1169,7 +1113,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             }
         };
         F128 h[8];
-        CK(cudaMemcpy(h, d_out8, 8 * sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(h, d_out8, 8 * sizeof(F128))); CK(hc_wait());
         observe_message(h[0], h[1]);
         F128 rho0 = mlv_rhos.back();
         observe_message(interp3(h[2], h[3], h[4], rho0), interp3(h[5], h[6], h[7], rho0));
@@ -1186,7 +1130,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(cudaGetLastError());
             { F128* t; t = cA; cA = nA; nA = t; t = cB; cB = nB; nB = t; }
             L /= 4;
-            CK(cudaMemcpy(h, d_out8, 8 * sizeof(F128), cudaMemcpyDeviceToHost));
+            CK(hc_get(h, d_out8, 8 * sizeof(F128))); CK(hc_wait());
             observe_message(h[0], h[1]);
             F128 rho = mlv_rhos.back();
             observe_message(interp3(h[2], h[3], h[4], rho), interp3(h[5], h[6], h[7], rho));
@@ -1205,15 +1149,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             { F128* t; t = cA; cA = nA; nA = t; t = cB; cB = nB; nB = t; }
             L /= 2;
             F128 m1, mi;
-            CK(cudaMemcpy(&m1, d_m1d, sizeof(F128), cudaMemcpyDeviceToHost));
-            CK(cudaMemcpy(&mi, d_mid, sizeof(F128), cudaMemcpyDeviceToHost));
+            CK(hc_get(&m1, d_m1d, sizeof(F128))); CK(hc_get(&mi, d_mid, sizeof(F128))); CK(hc_wait());
             observe_message(m1, mi);
         }
         { long long half = L / 2; launch_sumcheck_fold(cA, cB, nA, nB, half, mlv_rhos.back());
-          CK(cudaGetLastError()); CK(cudaStreamSynchronize(0));
+          CK(cudaGetLastError());
           F128* t; t = cA; cA = nA; nA = t; t = cB; cB = nB; nB = t; }
-        CK(cudaMemcpy(&zc_fa, cA, sizeof(F128), cudaMemcpyDeviceToHost));
-        CK(cudaMemcpy(&zc_fb, cB, sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(&zc_fa, cA, sizeof(F128))); CK(hc_get(&zc_fb, cB, sizeof(F128))); CK(hc_wait());
         ch.observe_f128(toch(zc_fa)); ch.observe_f128(toch(zc_fb));
         ffi_free(d_eq); ffi_free(d_r1ab); ffi_free(d_r1c); ffi_free(d_ft);
         ffi_free(d_am); ffi_free(d_bm); ffi_free(d_amn); ffi_free(d_bmn);
@@ -1222,10 +1164,6 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         ffi_free(d_part8); ffi_free(d_out8);
     }
     ffi_free(d_a); ffi_free(d_b);
-    // z's transpose for the lincheck, made once the zerocheck has freed its tables: nothing between the witness and here writes z
-    CK(ffi_malloc(&d_zlin, (size_t)len * 16));
-    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
-    CK(cudaGetLastError());
     W.f128s(zc_r1ab); W.f128s(zc_r1c);
     W.u64(zc_m1s.size());
     for (size_t i = 0; i < zc_m1s.size(); i++) { W.f128(zc_m1s[i]); W.f128(zc_mis[i]); }
@@ -1233,6 +1171,11 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     W.u64(zc_nonces.size());
     for (uint64_t n : zc_nonces) W.u64(n);
     CKI(phase(3));
+    // z's transpose for the lincheck, made once the zerocheck has freed its tables (nothing between the witness and here writes
+    // z), and queued after the phase's stamp so that it runs while the lincheck's first coins are drawn
+    CK(ffi_malloc(&d_zlin, (size_t)len * 16));
+    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
+    CK(cudaGetLastError());
 
     const int irl = k_log - k_skip;
     vector<F128> xab_inner(mlv_rhos.begin(), mlv_rhos.begin() + irl);
@@ -1347,15 +1290,11 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         if (C->n_delta_a) chunk_delta_scatter<<<(C->n_delta_a + 255) / 256, 256>>>(d_da, C->n_delta_a, d_eq_inner, alpha, 1, d_comb);
         if (C->n_delta_b) chunk_delta_scatter<<<(C->n_delta_b + 255) / 256, 256>>>(d_db, C->n_delta_b, d_eq_inner, alpha, 0, d_comb);
         CK(cudaGetLastError());
-        if (has_pin) {
-            F128 v; CK(cudaMemcpy(&v, d_comb + P->const_pin_col, sizeof(F128), cudaMemcpyDeviceToHost));
-            v = ADD(v, beta);
-            CK(cudaMemcpy(d_comb + P->const_pin_col, &v, sizeof(F128), cudaMemcpyHostToDevice));
-        }
+        if (has_pin) chunk_add_word<<<1, 1>>>(d_comb + P->const_pin_col, beta);
         build_eq_device(d_eq_outer, xab_outer.data(), n_log);
         CK(cudaGetLastError());
         launch_linear_check_partial_fold(d_zlin, d_eq_outer, n_stripes, K, P->useful_bits, d_zvec);
-        CK(cudaGetLastError()); CK(cudaStreamSynchronize(0));
+        CK(cudaGetLastError());
         CK(ffi_malloc(&d_zvec_initial, K * sizeof(F128)));
         CK(cudaMemcpy(d_zvec_initial, d_zvec, K * sizeof(F128), cudaMemcpyDeviceToDevice));
 
@@ -1366,8 +1305,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             launch_linear_check_message(cC, cZ, half, d_p1, d_pinf, d_e1, d_einf);
             CK(cudaGetLastError());
             F128 e1, einf;
-            CK(cudaMemcpy(&e1, d_e1, sizeof(F128), cudaMemcpyDeviceToHost));
-            CK(cudaMemcpy(&einf, d_einf, sizeof(F128), cudaMemcpyDeviceToHost));
+            CK(hc_get(&e1, d_e1, sizeof(F128))); CK(hc_get(&einf, d_einf, sizeof(F128))); CK(hc_wait());
             lc_e1s.push_back(e1); lc_einfs.push_back(einf);
             ch.observe_f128(toch(e1)); ch.observe_f128(toch(einf));
             F128 r;
@@ -1380,11 +1318,12 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             }
             lc_rrounds.push_back(r);
             launch_linear_check_fold_pair(cC, cZ, nC, nZ, half, r);
-            CK(cudaGetLastError()); CK(cudaStreamSynchronize(0));
+            CK(cudaGetLastError());
             F128* t; t = cC; cC = nC; nC = t; t = cZ; cZ = nZ; nZ = t;
             L = half;
         }
-        CK(cudaMemcpy(lc_zpart.data(), cZ, 64 * sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(lc_zpart.data(), cZ, 64 * sizeof(F128)));
+        CK(hc_wait());
         { std::vector<ChF128> s(64); for (int i = 0; i < 64; i++) s[i] = toch(lc_zpart[i]);
           ch.observe_f128_slice(s.data(), 64); }
         if (P->lc_skip_bits > 0) {
@@ -1428,7 +1367,9 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         build_eq_device(d_eq_shat_ab, r_inner_rest.data() + 1, irl - 1);
         ring_switch_fold_witness_evaluations<<<128, 128>>>(d_zvec_initial, d_eq_shat_ab, shat_ab_tail_len, d_shat);
         CK(cudaGetLastError());
-        CK(cudaMemcpy(shats[0].data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
+        // every claim's ŝ is read in stream order, before the next fold writes d_shat, and waited for once, before the first is
+        // observed
+        CK(hc_get(shats[0].data(), d_shat, 128 * sizeof(F128)));
         CK(ffi_free(d_eq_shat_ab)); CK(ffi_free(d_zvec_initial));
     }
     // the suffixes' eq tables (2^d entries each), or on the new kernels their halves (eq_split), 2^(d/2) entries each
@@ -1453,7 +1394,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(df, suffix, len, ring_switch_chunks, d_shat_partials);
         ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
         CK(cudaGetLastError());
-        CK(cudaMemcpy(shat.data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(shat.data(), d_shat, 128 * sizeof(F128)));
         return 0;
     };
     if ((int)xfull_c.size() - 1 != sfx_d) { printf("FFI chunk: the ring switch's suffixes differ in length\n"); return 209; }
@@ -1463,10 +1404,15 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     } else {
         build_eq_device(d_sc_lo, xfull_c.data() + 1, sfx_k);
         build_eq_device(d_sc_hi, xfull_c.data() + 1 + sfx_k, sfx_d - sfx_k);
-        chunk_ring_fold_rows_split<<<ring_switch_chunks, 256>>>(df, d_sc_lo, d_sc_hi, sfx_k, len, ring_switch_chunks, d_shat_partials);
-        ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
+        int fold_chunks = ring_switch_chunks;
+        if (chunk_ring_bmma() && sfx_k >= 8 && len == 1LL << sfx_d) {
+            fold_chunks = ring_fold_bmma_blocks(sfx_k, len >> sfx_k, ring_switch_chunks);
+            chunk_ring_fold_rows_bmma<<<fold_chunks, 256>>>(df, d_sc_lo, d_sc_hi, sfx_k, len >> sfx_k, d_shat_partials);
+        } else
+            chunk_ring_fold_rows_split<<<ring_switch_chunks, 256>>>(df, d_sc_lo, d_sc_hi, sfx_k, len, ring_switch_chunks, d_shat_partials);
+        ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, fold_chunks, d_shat);
         CK(cudaGetLastError());
-        CK(cudaMemcpy(shats[1].data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(shats[1].data(), d_shat, 128 * sizeof(F128)));
     }
     // Extra claims on their support only (see SparseBits): gather the words, fold them against the free-coordinate eq.
     std::vector<SparseBits> sp(n_extra);
@@ -1492,15 +1438,16 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     for (int ei = 0; ei < n_extra; ei++) {
         const long long n = sparse_n(ei);
         if (sp[ei].n_free) build_eq_device(d_e, free_x[ei].data(), sp[ei].n_free);
-        else { F128 one{1, 0}; CK(cudaMemcpy(d_e, &one, sizeof(F128), cudaMemcpyHostToDevice)); }
+        else { F128 one{1, 0}; CK(hc_put(d_e, &one, sizeof(F128))); }
         chunk_sparse_gather<<<(unsigned)std::min<long long>((n + 255) / 256, 65535), 256>>>(df, sp[ei], n, d_wx);
         CK(cudaGetLastError());
         if (chunk_ring_grouped()) ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(d_wx, d_e, n, ring_switch_chunks, d_shat_partials);
         else chunk_ring_fold_rows<<<ring_switch_chunks, 256>>>(d_wx, d_e, n, ring_switch_chunks, d_shat_partials);
         ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
         CK(cudaGetLastError());
-        CK(cudaMemcpy(shats[2 + ei].data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(shats[2 + ei].data(), d_shat, 128 * sizeof(F128)));
     }
+    CK(hc_wait());
     ch.observe_label((const uint8_t*)"flock-pcs-open-batch-v0", 23);
     vector<uint64_t> rs_nonce(n_cl, 0);
     vector<vector<F128>> eq_rd(n_cl);
@@ -1539,8 +1486,11 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     {
         vector<F128> w(2 * 128);
         for (int j = 0; j < 128; j++) { w[j] = MUL(gam[0], eq_rd[0][j]); w[128 + j] = MUL(gam[1], eq_rd[1][j]); }
-        CK(cudaMemcpy(d_w, w.data(), 256 * sizeof(F128), cudaMemcpyHostToDevice));
+        CK(hc_put(d_w, w.data(), 256 * sizeof(F128)));
         if (chunk_ring_grouped()) ring_switch_combine_basis<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
+        else if (chunk_ring_bmma() && sfx_k >= 4 && len == 1LL << sfx_d)
+            chunk_ring_combine_basis_bmma<<<(unsigned)std::min<long long>(len >> sfx_k, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo, d_sc_hi,
+                sfx_k, d_w, d_w + 128, len >> sfx_k, dcb);
         else chunk_ring_combine_basis_split<<<(unsigned)std::min<long long>((len + 255) / 256, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo,
             d_sc_hi, sfx_k, d_w, d_w + 128, len, dcb);
         CK(cudaGetLastError());
@@ -1550,10 +1500,10 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     for (int ei = 0; ei < n_extra; ei++) {
         vector<F128> w(128);
         for (int j = 0; j < 128; j++) w[j] = MUL(gam[2 + ei], eq_rd[2 + ei][j]);
-        CK(cudaMemcpy(d_w, w.data(), 128 * sizeof(F128), cudaMemcpyHostToDevice));
+        CK(hc_put(d_w, w.data(), 128 * sizeof(F128)));
         const long long n = sparse_n(ei);
         if (sp[ei].n_free) build_eq_device(d_e, free_x[ei].data(), sp[ei].n_free);
-        else { F128 one{1, 0}; CK(cudaMemcpy(d_e, &one, sizeof(F128), cudaMemcpyHostToDevice)); }
+        else { F128 one{1, 0}; CK(hc_put(d_e, &one, sizeof(F128))); }
         chunk_sparse_combine<<<(unsigned)std::min<long long>((n + 255) / 256, 65535), 256>>>(d_e, d_w, sp[ei], n, dcb);
         CK(cudaGetLastError());
     }
@@ -1566,8 +1516,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         CK(ffi_malloc(&du0, sizeof(F128))); CK(ffi_malloc(&du2, sizeof(F128)));
         launch_sumcheck_message(df, dcb, len / 2, p0, p2, du0, du2);
         CK(cudaGetLastError());
-        CK(cudaMemcpy(&first_u0, du0, sizeof(F128), cudaMemcpyDeviceToHost));
-        CK(cudaMemcpy(&first_u2, du2, sizeof(F128), cudaMemcpyDeviceToHost));
+        CK(hc_get(&first_u0, du0, sizeof(F128))); CK(hc_get(&first_u2, du2, sizeof(F128))); CK(hc_wait());
         CK(ffi_free(p0)); CK(ffi_free(p2)); CK(ffi_free(du0)); CK(ffi_free(du2));
     }
     W.u64(n_cl);

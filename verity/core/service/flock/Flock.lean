@@ -19,6 +19,7 @@ public import Flock.Tags
 public import Flock.Scan
 public import Flock.Net
 public import Flock.SplitNL
+public import Flock.ByteLines
 public import Flock.Lookup
 public import Flock.Circuit
 public import Flock.Public

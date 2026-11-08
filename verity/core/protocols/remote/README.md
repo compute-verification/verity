@@ -143,7 +143,7 @@ else is a theorem or a named gap.
 | Kind | Assumption | Lean | How it's tested, or why it's believed |
 |---|---|---|---|
 | Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
-| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJ`, `UniformRandomBytes`; `CoinsConfidential` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
+| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsConfidential` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
@@ -171,7 +171,7 @@ commitments' hiding gap.
 - SHA-512 collision resistance (`cr/sha-512`, `ecr/sha-512`).
 - The verifier's coins are uniform. Part 1's statements pick them in their own sampling design; `SampledKSLiveV3` and
   `IntegrityHorizon` take `FlockSoundness.Assumptions.UniformRandomBytes`.
-- The challenger's session record the verifier reads is the live run's (`FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`).
+- The challenger's record the verifier reads is the live run's (`Zk.RecordCustodyZKJPLaw`).
 - The hiding commitments' gap at their pinned key, which is below 2^-193 for all but 2^-64 of keys but not proved small
   for the pinned one.
 
@@ -232,7 +232,7 @@ The time credit adds the data sheet's rates.
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
 - The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
 - The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
-  served path meets it yet), `WindowLaw`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
+  served path meets it yet), `WindowDesign`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
   `ProofLayer.SoundAt` from part 1's theorem; it doesn't discharge `ServiceSound`.
 - The verifier's verdicts tied to these theorems: **open** (What's open, below).
 
@@ -302,8 +302,8 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 
 **Assumes.** Parts 1 to 4's assumptions.
 
-**Lean.** `Accounting.Guarantees.JointHorizonLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
+(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -410,7 +410,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `Verity.Soundness`, the one theorem over everything the compiled verifier accepts, isn't in Lean.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `PouwSound` are undischarged premises.
-  - `JointHorizonLive` isn't instantiated with parts 2 and 3.
+  - `JointPooledLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
 - **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
   the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
@@ -449,14 +449,14 @@ frontier"); how the execution's boundaries fix what a block's c and k count is i
 Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
 for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
-`DrawnLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
+`SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
 hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
 - `FlockSoundness.Assumptions.UniformRandomBytes`: the verifier's coins are uniform random bytes.
-- `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ` (`live-verifier`): the record the verifier reads is the one the
-  challenger wrote for the live run, and its sample file is the verifier's own sample.
+- `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw` (`live-verifier`, read as `RecordCustodyZKJ`): the record the
+  verifier reads is the challenger's for the live run, and its sample file is the verifier's own.
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
   (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
@@ -488,7 +488,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.
-- `Accounting.Assumptions.TS.WindowLaw`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
+- `Accounting.Assumptions.TS.WindowDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
   the sample follows its stated sampling design, the served checks hold, and the served roots are linked to the
   registered ones.
 - The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,

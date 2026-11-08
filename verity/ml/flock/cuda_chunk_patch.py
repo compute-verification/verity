@@ -25,7 +25,7 @@ except AssertionError as e:
     print("cuda_live_patch.py: CUDA half applied, harness half skipped")
 
 assert "live_cb" in pathlib.Path("cuda-ghash/challenger.hpp").read_text(), "live hook missing"
-for f in ("prove_chunk.cuh", "pure_sha256.cuh", "zerocheck_fused.cuh"):
+for f in ("async_copies.cuh", "prove_chunk.cuh", "pure_sha256.cuh", "ring_switch.cuh", "zerocheck_fused.cuh"):
     shutil.copy(here / "cuda" / f, f"cuda-ghash/{f}")
 pf = pathlib.Path("cuda-ghash/prove_ffi.cu")
 s = pf.read_text()
@@ -173,6 +173,100 @@ if '#include "ntt_tile.cuh"' not in s:
         s = s.replace(a, new)
     nt.write_text(s)
     print("ntt_f128.cuh: shared-memory chunks on ntt_tile.cuh's kernel, up to 8 layers a pass")
+
+
+def edit(path: pathlib.Path, pairs: list) -> None:
+    s = path.read_text()
+    for a, new, n in pairs:
+        assert s.count(a) == n, f"{path}: {a!r} occurs {s.count(a)} times, expected {n}"
+        s = s.replace(a, new)
+    path.write_text(s)
+
+
+# The host waits on the device only for a value it reads (async_copies.cuh): the eq tables' and Ligerito's uploads are queued
+# behind the kernels before them, a transcript read's values come back with one wait, an opening's rows and paths come back
+# with the next one, and a tree's cap read is its only wait. The same copies in the same stream order, so the same bytes.
+eq = pathlib.Path("cuda-ghash/induce_sumcheck.cuh")
+if '#include "async_copies.cuh"' not in eq.read_text():
+    edit(eq, [
+        ('#include "f128.cuh"\n', '#include "f128.cuh"\n#include "async_copies.cuh"\n', 1),
+        ("    if (d <= 0) { F128 one{1ull, 0ull}; (void)cudaMemcpy(d_out, &one, sizeof(F128), cudaMemcpyHostToDevice); return; }\n",
+         "    if (d <= 0) { F128 one{1ull, 0ull}; (void)hc_put(d_out, &one, sizeof(F128)); return; }\n", 1),
+        ("        cudaMemcpyToSymbol(g_eq_chal, challenges, (size_t)d * sizeof(F128));\n",
+         "        (void)hc_put_symbol(g_eq_chal, challenges, (size_t)d * sizeof(F128));\n", 1),
+        ("    F128 one{1ull, 0ull};\n    (void)cudaMemcpy(d_out, &one, sizeof(F128), cudaMemcpyHostToDevice);\n",
+         "    F128 one{1ull, 0ull};\n    (void)hc_put(d_out, &one, sizeof(F128));\n", 1),
+    ])
+    mo = pathlib.Path("cuda-ghash/merkle_open_device.cuh")
+    edit(mo, [
+        ('#include "merkle_open.hpp"   // MHash, merkle_multi_proof_indices\n',
+         '#include "merkle_open.hpp"   // MHash, merkle_multi_proof_indices\n#include "async_copies.cuh"\n', 1),
+    ])
+    mo.write_text(mo.read_text() + """
+// merkle_capped_paths_device's nodes into `out`, queued: `out` holds them after the next hc_wait. The scratch grows and stays;
+// a call reuses it behind the previous call's read in stream order.
+inline void merkle_capped_paths_queue(std::vector<MHash>& out, const uint8_t* d_tree, size_t num_leaves,
+                                      const std::vector<size_t>& queries, uint32_t cap_depth) {
+    const std::vector<size_t> idxs = merkle_capped_path_indices(num_leaves, queries, cap_depth);
+    const int n = (int)idxs.size();
+    out.assign(n, MHash{});
+    if (n == 0) return;
+    static unsigned long long* d_idx = nullptr;
+    static uint8_t* d_out = nullptr;
+    static int cap = 0;
+    if (n > cap) {
+        if (d_idx) { MOD_CK(cudaFree(d_idx)); MOD_CK(cudaFree(d_out)); }
+        cap = n + (n >> 1);
+        MOD_CK(cudaMalloc(&d_idx, (size_t)cap * sizeof(unsigned long long)));
+        MOD_CK(cudaMalloc(&d_out, (size_t)cap * sizeof(MHash)));
+    }
+    const std::vector<unsigned long long> h_idx(idxs.begin(), idxs.end());
+    MOD_CK(hc_put(d_idx, h_idx.data(), (size_t)n * sizeof(unsigned long long)));
+    const int tpb = 128;
+    gather_tree_nodes<<<(n + tpb - 1) / tpb, tpb>>>(d_tree, d_idx, n, d_out);
+    MOD_CK(cudaGetLastError());
+    MOD_CK(hc_get(out.data(), d_out, (size_t)n * sizeof(MHash)));
+}
+""")
+    lg = pathlib.Path("cuda-ghash/ligerito_f256.cuh")
+    read3 = ("            LFCK(cudaMemcpy(&{a}, d_u0, sizeof(F128), cudaMemcpyDeviceToHost));\n"
+             "            LFCK(cudaMemcpy(&{b}, d_u2, sizeof(F128), cudaMemcpyDeviceToHost));\n"
+             "            LFCK(cudaMemcpy(&y, d_hnew, sizeof(F128), cudaMemcpyDeviceToHost));\n")
+    wait3 = ("            LFCK(hc_get(&{a}, d_u0, sizeof(F128))); LFCK(hc_get(&{b}, d_u2, sizeof(F128)));\n"
+             "            LFCK(hc_get(&y, d_hnew, sizeof(F128))); LFCK(hc_wait());\n")
+    edit(lg, [
+        ('#include "merkle_open_device.cuh"\n', '#include "merkle_open_device.cuh"\n#include "async_copies.cuh"\n', 1),
+        ("                             const LigAlloc& A, LigF256Proof& out) {\n",
+         "                             const LigAlloc& A, LigF256Proof& out) {\n    HcDrop hc_guard;\n", 1),
+        ("        cudaMemcpy(h, d_out256, sizeof(h), cudaMemcpyDeviceToHost);\n",
+         "        (void)hc_get(h, d_out256, sizeof(h));\n        (void)hc_wait();\n", 2),
+        (read3.format(a="ou0", b="ou2"), wait3.format(a="ou0", b="ou2"), 1),
+        (read3.format(a="mu0", b="mu2"), wait3.format(a="mu0", b="mu2"), 1),
+        ("        launch_merkle((const uint8_t*)d_cw_out, d_tree_out, bl, num_ntts * 16);\n        LFCK(cudaDeviceSynchronize());\n",
+         "        launch_merkle((const uint8_t*)d_cw_out, d_tree_out, bl, num_ntts * 16);\n", 1),
+        ("            LFCK(cudaMemcpy(d_ind_q, qull.data(), qull.size() * sizeof(unsigned long long),\n"
+         "                            cudaMemcpyHostToDevice));\n",
+         "            LFCK(hc_put(d_ind_q, qull.data(), qull.size() * sizeof(unsigned long long)));\n", 1),
+        ("            LFCK(cudaMemcpy(open.rows_flat.data(), d_rows, open.rows_flat.size() * sizeof(F128),\n"
+         "                            cudaMemcpyDeviceToHost));\n",
+         "            LFCK(hc_get(open.rows_flat.data(), d_rows, open.rows_flat.size() * sizeof(F128)));\n", 1),
+        ("        open.path = merkle_capped_paths_device(d_prev_tree, (size_t)prev_bl, q_out,\n",
+         "        merkle_capped_paths_queue(open.path, d_prev_tree, (size_t)prev_bl, q_out,\n", 1),
+        ("        LFCK(cudaMemcpy(d_ind_q, qull.data(), qull.size() * sizeof(unsigned long long),\n"
+         "                        cudaMemcpyHostToDevice));\n"
+         "        LFCK(cudaMemcpy(d_ind_alpha, wcomb.data(), wcomb.size() * sizeof(F128),\n"
+         "                        cudaMemcpyHostToDevice));\n",
+         "        LFCK(hc_put(d_ind_q, qull.data(), qull.size() * sizeof(unsigned long long)));\n"
+         "        LFCK(hc_put(d_ind_alpha, wcomb.data(), wcomb.size() * sizeof(F128)));\n", 1),
+        ("        LFCK(cudaMemcpy(&m0, d_u0, sizeof(F128), cudaMemcpyDeviceToHost));\n"
+         "        LFCK(cudaMemcpy(&m2, d_u2, sizeof(F128), cudaMemcpyDeviceToHost));\n",
+         "        LFCK(hc_get(&m0, d_u0, sizeof(F128))); LFCK(hc_get(&m2, d_u2, sizeof(F128))); LFCK(hc_wait());\n", 1),
+        ("            LFCK(cudaMemcpy(out.yr.data(), regions[cur_f], out.yr.size() * sizeof(F128),\n"
+         "                            cudaMemcpyDeviceToHost));\n",
+         "            LFCK(hc_get(out.yr.data(), regions[cur_f], out.yr.size() * sizeof(F128))); LFCK(hc_wait());\n", 1),
+        ("    LFCK(A.release(d_hnew));\n    return 0;\n}\n", "    LFCK(A.release(d_hnew));\n    LFCK(hc_wait());\n    return 0;\n}\n", 1),
+    ])
+    print("induce_sumcheck.cuh, merkle_open_device.cuh, ligerito_f256.cuh: the host waits only for the values it reads")
 
 sm = os.environ.get("SM", "90")
 cuda = os.environ.get("CUDA", "/usr/local/cuda-13.3")
