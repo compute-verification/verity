@@ -3887,3 +3887,27 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
     - It's on by default for every `flock-circuit` caller, not only SPOT's.
   - **BREAKEVEN's fixed-cost table** is labelled priced (H200 setup by difference). STATIONARY's direct H200 numbers for w13 and w2 (10×, 8.3×) are in the same range.
   - **The PRF-459 reviews** were done by reading main's code, not by running it. Each verdict is a hold whose condition is the H200 determinism check against main's transcript, so nothing is credited before it runs.
+
+## 00:01Z from PCFACTOR: the break-even's upper side is Lean's on BREAKEVEN's surface (120 of 120 points) and on the table's β; #7886 is open, stacked on #7877
+
+- **PR:** [#7886](https://github.com/compute-verification/verity/pull/7886), `cursor/proofs-pcfactor-db87` @ `3035c2d8ad`, `--issue PRF-451`. It stacks on PLANCHECK's #7877 (`7940906383`); the diff over it is five files in `benchmarks/spot_figures`. Not marked yet: the suites at the head follow.
+- **What's certified:** at the β given, the bits Lean certifies for the planner's design (`checkTwoStage` via `lean_two`, `TwoStageCheckPatternsSound`, or the served bits if fewer) are at most the weights. So the β given is an upper bound on the β the weights need. Not Lean's: that the design costs at most β. That is the planner's pricing of the cards (dev-arm prices, and BREAKEVEN's assumed levers: fast4, fast8, hash4). The serve tax added for a total comes from its card.
+- **BREAKEVEN's surface, the draft's numbers:** all 120 points certified (r20261107-232737-3176). That covers 10 fused cases × 6 scopes × FP8 and FP4, re-swept with BREAKEVEN's `sweep.py` in r20261107-230137-41bf. Each claimed β is certified one 0.1% step past it, and the served bits never bind. World year, FP4, tax + certified β:
+  - `F+busy+fast4+hash4+life`: 9.31%
+  - `F+busy+fast8`: 9.34%
+  - `F+busy+fast8+hash4`: 7.75%
+  - `F+busy+fast8+hash4+life`: 5.76%
+  - **Flag:** `F+busy+fast4+hash4`, the draft's "FP4 at β ≤ 10%" path, is 9.27% β but **11.31% total**. Since Daniel's 10% includes the tax, that path doesn't make it; the two above do. Sent to BREAKEVEN.
+- **The figure's table** (r20261107-225705-67ee, at the head before PLANCHECK's precision-64 θ search):
+  - **Every β entry certified** (84 of 84) at Python's own β, with Lean's bits at most the planner's. World year, β for FP8 / FP4: (A) 5.62× / 11.3×, (A) batch-invariant 5.47× / 11.0×, (A′) 24.6× / 49.4×.
+  - **The h entries** (the overhead at which the bound at β = 1% reaches the weights) certified only on (A) batch-invariant (12 of 84). At those cheap-proving points, Lean's bits were up to 1.115× the planner's, and the floor up to 1.106×. That looks like the θ precision PLANCHECK fixed at 23:45Z (θ ≈ 10¹² there).
+  - Rerun at the head, with the precision fix and steps that double: world scopes r20261107-235824-0fa0 (cpu-13), datacenter r20261107-235844-b8f4 (cpu-1), both ETA about 00:35Z.
+  - If the h entries are still loose, the remaining gap is Lean's bound at very low overhead, which the figure's own points don't reach. I'll diagnose whether it's the factor bound or θ.
+- **Suites:** the last complete quick run (r20261107-230202-4e90, at `30c8d2fdaf`) passed 67 of 68 suites. The red is inherited from `checked` (`01c1347cb4` fails the same): `repository`'s `test_no_public_file_needs_one_the_export_does_not_copy`, from `Security/Proofs/Pouw/{Break,Sanity}.lean` importing `Definitions.Assumptions` (8c4368ade8). It belongs to that change's lane. Suites at the head: r20261107-235906-b008 (cpu-2), ETA about 00:25Z. I mark #7886 when they pass, that red aside.
+- **The lower side has no certificate, and can't get one from this engine.** Lean bounds a design's bits only from above. Nothing certifies that the planner's design is the best one at a β, or that any design at β(1 − 0.5%) is above the weights. So only the upper side is certified, which is the side the claim needs.
+- **`write_form`:**
+  - Its counting step can get a Lean statement at moderate cost, with no new probability: an admissible set's charge is at most Λ times the most charge per unit of hazard. The pieces are Σ_ρ h(y_ρ) ≤ Λ from the two-stage escape bound Lean already has, a fractional-knapsack lower bound on y for a charge, the candidate charges (c/h(y) peaks at the cells' bits or at F), and a checker on PCINTERVAL's e^x and ln.
+  - The footprint (a request's served bits for (A), a layer's boundary bits for (B)) is a modeling input, and the caption should say so; it already says no lemma states it.
+- **Wiring:**
+  - `breakeven(lean=True)` is the default, and `figures.py --no-lean` skips it. That is one line in PLANCHECK's driver, posted to him.
+  - `breakeven/certify.py` takes any `breakeven_surface.json`. It's offered to BREAKEVEN on `cursor/proofs-pcfactor-db87-surface`, since their directory has ruff errors that would redden #7886. I'll certify their 01:30Z surface once they name its run.
