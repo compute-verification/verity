@@ -28,9 +28,10 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   open"), the fold and flips accepted.
 
 Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record and the outcome
-accepted or refusing only the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads
-of earlier values alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and
-the outcome refused. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files too), a5's records
+accepted or refusing only the sessions' reads of their registrations' own ports (`own_reads_only`: one-stage's record takes
+reads of earlier values alone), the interior's at the interior record and the links' boundary ports at the boundary
+record, or (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome
+refused. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files too), a5's records
 (``audit/``), the challenger session's records (``challenger/``), the sessions' statements (``statements.json``) and
 ``summary.json`` (both stages' registrations, laws and draws, and the outcome, among it).
 
@@ -140,10 +141,12 @@ def drawn(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentR
     return draw, segment
 
 
-def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None]) -> dict:
+def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None],
+               own: dict[str, list[str]]) -> dict:
     """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
-    sessions, with both stages' coin evidence: accepted, and the checks each stage's audit record failed."""
+    sessions, with both stages' coin evidence: accepted, the checks each stage's audit record failed, and whether each
+    refuses only the sessions' reads of its registration's own ports ``own[stage]`` (`own_reads_only`)."""
     sessions = handed["sessions"]
     verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in handed["verdicts"].items()}
     given = {x: handed[x] for x in ("proved_units", "instances", "served", "session_roots")}
@@ -153,11 +156,11 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[di
     except (S.Refused, S.Pending) as e:
         return {"accepted": False, "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
     body = stream.records[-1]
-
-    def failed(audit: dict | None) -> list[str] | None:
-        return None if audit is None else sorted(k for k, c in audit["checks"].items() if not c["ok"])
-    return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"], "interior": failed(body["audit"]),
-            "replay_sample": failed((body.get("replay_sample") or {}).get("audit"))}
+    audits = {"interior": body["audit"], "replay_sample": (body.get("replay_sample") or {}).get("audit")}
+    return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"],
+            **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
+            "own_reads_only": {k: own_reads_only(r, own[k]) for k, r in audits.items()},
+            "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()}}
 
 
 def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
@@ -171,14 +174,21 @@ def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
                   for p, _ in m.all_rows if p != T.link(t))
 
 
-def own_reads_only(record: dict, window: T.CS.Binding, drawn: list[int]) -> bool:
-    """Whether the audit record refuses only the sessions' reads of the interior's own ports: its one failed check is
-    one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and exactly those
-    ports. `SpotFlock.FrameIs` asks for those reads, so the two-stage record check is to take them."""
-    bad = {k: v for k, v in (record.get("checks") or {}).items() if not v.get("ok")}
+def link_reads(window: T.CS.Binding, links: list[dict], drawn: list[int]) -> list[str]:
+    """The boundary registration's own ports the sessions read: the boundary port of each link (``{"template", "port",
+    "value"}``) whose member the second stage drew a unit of."""
+    hit = {m.template for m in window.members if any(m.base <= u < m.base + m.n for u in drawn)}
+    return sorted({x["value"] for x in links if x["template"] in hit})
+
+
+def own_reads_only(record: dict | None, ports: list[str]) -> bool:
+    """Whether the audit record refuses only the sessions' reads of its registration's own ``ports``: its one failed
+    check is one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and
+    exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a link
+    port's at the boundary record's leaf S[i]), so the two-stage record check is to take them."""
+    bad = {k: v for k, v in ((record or {}).get("checks") or {}).items() if not v.get("ok")}
     d = (bad.get("registered") or {}).get("detail") or {}
-    return (set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong")
-            and d.get("opened") == own_ports(window, drawn))
+    return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == ports
 
 
 def statements(audit_dir: Path, window: T.CS.Binding) -> list[dict]:
@@ -247,18 +257,21 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     """Honest: every check before the sample passed, every Lean verdict accepted, the sessions' registered reads the
     verifier's own, every negative refused, the record accepted or refusing only the reads of the interior's own
     ports (`own_reads_only`), round 2 ``r2`` accepting the statements where the tree has it, and the stream's outcome
-    ``o`` accepted or refusing only where the record does, the replay sample's audit record accepting. ``--altered``:
-    every check before the sample passed, Lean's verify refused both link members (m0, m3) by `ALTERED` and accepted
-    the fold and flips, round 2 refuses the statements where the tree has it, and the outcome refuses."""
+    ``o`` accepted or, in each stage's audit record, refusing only the sessions' reads of that registration's own ports:
+    the interior's, and the links' boundary ports at the boundary record. ``--altered``: every check before the sample
+    passed, Lean's verify refused both link members (m0, m3) by `ALTERED` and accepted the fold and flips, round 2
+    refuses the statements where the tree has it, and the outcome refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
     before = all((s.get("checks_before_draw") or {}).values())
     if not a.altered:
         refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
-        own = own_reads_only(record, window, s.get("draw") or [])
+        own = own_reads_only(record, own_ports(window, s.get("draw") or []))
+        oo = (o or {}).get("own_reads_only") or {}
         return (before and audit.get("complete") is True and audit.get("registered_reads") is True
                 and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
                 and (ok or own) and (r2 is None or r2.get("ok") is True) and o is not None
-                and (o.get("accepted") is True or (own and o.get("interior") == ["registered"] and o.get("replay_sample") == [])))
+                and (o.get("accepted") is True
+                     or (own and oo.get("interior") is True and (o.get("replay_sample") == [] or oo.get("replay_sample") is True))))
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
     return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
@@ -340,17 +353,21 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
                              "members": [{"key": m.key, "n": m.n, "base": m.base} for m in it.window.members],
                              "links": T.links(it.window)},
                    sample=sample, **got)
-    summary["record"]["own_reads_only"] = own_reads_only(record, it.window, s.get("draw") or [])
+    drawn_units = s.get("draw") or []
+    summary["record"]["own_reads_only"] = own_reads_only(record, own_ports(it.window, drawn_units))
     published = draws.evidence()
     summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
     if "handed" in s:
-        summary["outcome"] = outcome_of(stream, second, s["handed"], [AC.evidence(published, g) for g in segments])
+        own = {"interior": own_ports(it.window, drawn_units),
+               "replay_sample": link_reads(it.window, T.links(it.window), drawn_units)}
+        summary["outcome"] = outcome_of(stream, second, s["handed"], [AC.evidence(published, g) for g in segments], own)
     summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"), summary.get("outcome"))
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     r2, o = summary.get("round_two"), summary.get("outcome") or {}
     print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")},
                                "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
-                               "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "refused")}},
+                               "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "own_reads_only",
+                                                                 "refused")}},
                               default=str))
     return 0 if summary["as_expected"] else 1
 
