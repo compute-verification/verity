@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # The receipts' binding bound (trusted)
 
 The bound on the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`), the probability that some window
-opens a receipt presented with an accepted row other than the one its root holds, which `PooledDraw` and the memory
+opens a receipt presented with an accepted row other than the one its root holds, which `PooledSample` and the memory
 line's sampled guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
 receipt shows over the window's continuations (`Receipts.held`), so a receipt moves with probability at most the
 square root of the chance that two runs from the cut on independent openings coins show it with two different accepted
@@ -56,8 +56,8 @@ the code charges at the session's bounds on a window's receipts and draws, not a
 every window's roots, ranks and verifiers are fixed by its cut, `split_t = 0` and the bound is
 `Σ_t √(|L_t|·s_t)·q_t/2^256.5` (`Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed`), `ledger.binding`'s
 charge. The deployed challenger sends the prover no commitment to window `t`'s coin before window `t`'s roots are in
-(the coin commitment comes only with the outcome), the design note:20261025T0115Z-report-bind-close asks for; that
-the roots then read only the cut is not stated here, so `split_t` is not bounded: the gap `binding-split`.
+(the coin commitment comes only with the outcome). That the roots then read only the cut is not stated here, so
+`split_t` is not bounded: the gap `binding-split`.
 -/
 
 @[expose] public section

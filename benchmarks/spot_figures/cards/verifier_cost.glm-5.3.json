@@ -1,0 +1,130 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "verifier_cost",
+ "model": "GLM-5.3",
+ "status": "measured",
+ "provisional": true,
+ "source": "The Lean verifier (verify --zk --partition --program) on today's flat statement of one block, one core, setup included, measured on vy-spot-prove's CPU for nine of GLM-5.3's proof-block types at TP8; peak resident memory measured for two of them, restaged and verified under perf on vy-nebius-cpu-2 (FlashInfer K2048, 99.6 GB, run r20261107-163607-8de4) and vy-nebius-cpu-6 (quant K6144, 111 GB, run r20261107-163659-b576), null where not measured. The time goes as about 10 s plus 0.6 to 0.8 \u00b5s a matrix entry of the unit, most of it reading the unrolled circuit file (hashing it three times, decoding and tokenizing every row). A family's other types scale on the line through its members, through 10 s at size 0 where it has one; the expert GEMMs and the all-reduces take their member's seconds; any other type the nine's median. Converted at the core-seconds that cost one GPU-second at Nebius AI Cloud's on-demand list prices.",
+ "runs": [
+  "r20261107-163607-8de4",
+  "r20261107-163659-b576"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "verifier": "Lean verify --zk --partition --program, today's flat statement, setup included",
+  "device": "one core of vy-spot-prove's CPU",
+  "core_seconds_per_gpu_second": 81.81818181818181,
+  "ratio_source": "Nebius AI Cloud's on-demand list prices (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa core, two vCPUs at $0.015 a vCPU-hour with its 8 GiB at $0.0045 a GiB-hour",
+  "fixed_seconds": 10.0,
+  "types": [
+   {
+    "block": "FlashInferFp8Linear_v1{K=2048,",
+    "core_seconds": 2474.0,
+    "peak_gb": 99.6
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=6144,",
+    "core_seconds": 2100.0,
+    "peak_gb": 111.0
+   },
+   {
+    "block": "SparseMlaCombine_v1{NSPLIT=12,",
+    "core_seconds": 1634.0,
+    "peak_gb": null
+   },
+   {
+    "block": "RMSNormFusedCudaVector8_v1{N=6144,",
+    "core_seconds": 769.0,
+    "peak_gb": null
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=2048,",
+    "core_seconds": 681.0,
+    "peak_gb": null
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=1536,",
+    "core_seconds": 508.0,
+    "peak_gb": null
+   },
+   {
+    "block": "SparseMlaCombine_v1{NSPLIT=2,",
+    "core_seconds": 324.0,
+    "peak_gb": null
+   },
+   {
+    "block": "AllReduceMultimem_v1{",
+    "core_seconds": 314.0,
+    "peak_gb": null
+   },
+   {
+    "block": "MoeExpertFp8GemmW_v1{",
+    "core_seconds": 15.0,
+    "peak_gb": null
+   }
+  ],
+  "families": [
+   {
+    "types": [
+     "SparseMlaCombine_v1"
+    ],
+    "size": "NSPLIT",
+    "members": [
+     "SparseMlaCombine_v1{NSPLIT=2,",
+     "SparseMlaCombine_v1{NSPLIT=12,"
+    ]
+   },
+   {
+    "types": [
+     "Fp8GroupQuantUe8m0_v1"
+    ],
+    "size": "K",
+    "members": [
+     "Fp8GroupQuantUe8m0_v1{K=2048,"
+    ]
+   },
+   {
+    "types": [
+     "FlashInferFp8Linear_v1",
+     "ScaledMmFp8BlockSharedScale_v1"
+    ],
+    "size": "K",
+    "members": [
+     "FlashInferFp8Linear_v1{K=2048,"
+    ]
+   },
+   {
+    "types": [
+     "RMSNormCudaVector8_v1",
+     "DsaRMSNorm_v1",
+     "ResidualAdd_v1"
+    ],
+    "size": "N",
+    "members": [
+     "RMSNormFusedCudaVector8_v1{N=6144,"
+    ]
+   },
+   {
+    "types": [
+     "AllReduce",
+     "RmsNormMnnvl_v1"
+    ],
+    "size": null,
+    "members": [
+     "AllReduceMultimem_v1{"
+    ]
+   },
+   {
+    "types": [
+     "MoeExpertFp8",
+     "Fused["
+    ],
+    "size": null,
+    "members": [
+     "MoeExpertFp8GemmW_v1{"
+    ]
+   }
+  ]
+ },
+ "art": "art:d8f40870920ccca7175c641e9e62dfdfe8ff672b87ace259694862526c324e60"
+}

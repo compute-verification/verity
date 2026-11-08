@@ -30,7 +30,7 @@ public import Proofs.Flock.Soundness.OpeningPhase
 public import Proofs.Flock.Soundness.ListSize
 public import Proofs.Flock.Soundness.LincheckPhase
 public import Proofs.Flock.Soundness.ZerocheckPhase
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.LigeritoCoins
 public import Proofs.Flock.Soundness.LigeritoQueries
 public import Proofs.Flock.Soundness.JohnsonMCA
@@ -104,6 +104,7 @@ public import Proofs.Flock.Soundness.TmplNetOK
 public import Proofs.Flock.Soundness.TmplUnitAt
 public import Proofs.Flock.Soundness.TmplLayout
 public import Proofs.Flock.Soundness.ParseStmt
+public import Proofs.Flock.Soundness.TmplSpec
 public import Proofs.Flock.Soundness.ExecTyped
 public import Proofs.Flock.Soundness.ExecTemplate
 public import Proofs.Flock.Soundness.ExecTemplatePlace
