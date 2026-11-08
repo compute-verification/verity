@@ -481,10 +481,12 @@ theorem getD_map_range {α : Type} (f : ℕ → α) (n : ℕ) {k : ℕ} (hk : k 
 /-- A function read from a table of its own values is itself. -/
 theorem tabled_eq {α : Type} [Inhabited α] (n : ℕ) (f : ℕ → α) : tabled ((Array.range n).map f) f = f := by
   funext y
-  unfold tabled
-  split_ifs with h
-  · exact getD_map_range f n (by simpa using h) default
-  · rfl
+  by_cases h : y < n
+  · have h' : y < ((Array.range n).map f).size := by simpa using h
+    simp only [tabled, h', ↓reduceIte]
+    exact getD_map_range f n h default
+  · have h' : ¬ y < ((Array.range n).map f).size := by simpa using h
+    simp only [tabled, h', ↓reduceIte]
 
 /-- **A Definition's own rows**, through `Tab.refs`, which adds `of w · Z k cx v` for each reference, or, while
 explicit with each copy's low part below `B` and `B` dividing 64, through `Tab.refsK`, which adds them at every copy:
