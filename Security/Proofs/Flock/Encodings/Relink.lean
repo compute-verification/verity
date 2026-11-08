@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Encodings.Binding
 public import Proofs.Flock.Claims.Sampling.Down
-public import Proofs.NetworkCertifier.TapRows
+public import Proofs.Flock.Claims.Sampling.ProgReads
 
 /-!
 # The relation carries over the link (`relinkR`)
@@ -13,7 +13,7 @@ each checked by the record as the sum checks it (`relink_val_of_not_enc`). Where
 of the pairs at `g` that passes (`relink_val_of_enc`), which exists since the pairs link `g`. If the trace's value there
 differs from the pair's encoding opening, the encoding's binding collides on the two; if that record opening's differs
 from the pair's record opening, the record's does. Otherwise every value the trace opens, the relinked trace opens alike
-(`hext`), so a proof block correct on the trace's values is correct on the relinked ones (`NetTiming.TapProof.correct_mono`,
+(`hext`), so a proof block correct on the trace's values is correct on the relinked ones (`Prog.correct_mono`,
 it reads only opened values): the relinked faulty set is a subset of the trace's (`faulty_mono`), and `M_δ` is closed
 downward at every design (`design_M_down`: `P_a` is antitone in each one-stage design, and so in their product).
 -/
@@ -182,7 +182,7 @@ theorem faulty_mono {H : Msg → Msg} {Cm Cm' : CommitmentScheme Bool} {s : Audi
   intro v hv
   simp only [faulty, Finset.mem_filter, Faulty] at hv ⊢
   exact ⟨hv.1, fun ⟨u, hu, ι, hc⟩ => hv.2 ⟨u, hu, ι,
-    NetTiming.TapProof.correct_mono (NetTiming.TapProof.refIn_mono hext) hc⟩⟩
+    Prog.correct_mono (Prog.refIn_mono hext) hc⟩⟩
 
 /-- **The relation carries over the link.** -/
 theorem relinkR : RelinkR := by
