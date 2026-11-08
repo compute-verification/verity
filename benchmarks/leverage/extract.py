@@ -285,19 +285,21 @@ def norm_dir(lm: LM, w: torch.Tensor) -> torch.Tensor:
 def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor, T: torch.Tensor, a) -> dict:
     """What a decoder that doesn't know E, g or b uses instead: per served precision, estimates of E[T] diag(g) and
     E[T] b, each up to a constant a column (softmax's shift absorbs it), read from served logprobs on the tokens T by
-    logit bias, T[0] the reference every query also shows. Taking them costs 2 d faults for every k - 1 tokens of T,
-    once for every row read after.
+    logit bias, T[0] the reference every query also shows. Taking them costs 2 d faults (saturate) or 4 d (box, own)
+    for every k - 1 tokens of T, once for every row read after.
 
     saturate  paired faults of ±2^30 at coordinate i of the residual stream after the last layer saturate the final
               norm, whose output becomes g * (±s u_i) + b with u_i = e_i (RMSNorm; s = sqrt d) or e_i - 1/d (LayerNorm;
               s = d / sqrt(d - 1)). The pair's half-difference over s reads column i of E diag(g), centred over the
               coordinates under LayerNorm, which is all a centred state sees; the half-sums read E b.
     box, own  paired final-site faults ±v at coordinate i (v its box, or one FP8 code at its token's own group scale)
-              read column i of E from their half-difference over v. g and b are then fitted to honest final states
-              read through that estimate: RMSNorm's output has mean square 1, so sum_i h_i^2 / g_i^2 = d for each
-              state, linear in 1/g^2; LayerNorm's also has mean 0, which makes the same constraint linear in 1/g^2,
-              b/g^2 and |b/g|^2. The signs of g are taken from the truth: d residual-stream faults of a known sign
-              would show them."""
+              read column i of E from their half-difference over v. Paired faults ±δ at coordinate i of the residual
+              stream after the last layer (δ half the smaller of its box and the boxes' median, well inside the
+              norm's linear range) move the final state by 2 δ g_i / σ along e_i, σ the stream's scale, which the
+              same estimate reads: g up to one scale, signs included. Then b, under LayerNorm: each honest final
+              state h read through the estimate has |(h - b) / g|^2 the same, linear in b / g^2 given g; the fit
+              leaves b free along g, which only shifts a state along 1, which LayerNorm's centring removes. The
+              scale makes those states' mean square 1."""
     E = lm.E.float()
     V, d = E.shape
     L = lm.spec.layers
@@ -312,17 +314,26 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
         if lm.boxes is None:
             raise SystemExit(f"--peel {a.peel} reads at the boxes' amplitudes: give --boxes")
         site, layer, s = "final", L, 1.0
-        hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
+        pc = int(position_class(torch.tensor(t0)))
+        hi = lm.boxes.hi[("final", L)][pc].float()
         amps = torch.tensor([float(hi[i]) if a.peel == "box" else fault_values("own", i, h0, 0.0, hi, None)[1][0]
                              for i in range(d)])
+        hr = lm.boxes.hi[("resid", L - 1)][pc].float()
+        deltas = (torch.minimum(hr, hr.median()) / 2).to(torch.bfloat16).double()
     amps = amps.to(torch.bfloat16).double()
-    obs = {prec: [] for prec in a.precisions}
-    for c0 in range(0, d, max(a.batch // 2, 1)):
-        cs = list(range(c0, min(d, c0 + max(a.batch // 2, 1))))
-        z = faulted_logits(lm, pre, last, t0, [(site, layer, i, sg * float(amps[i])) for sg in (1.0, -1.0) for i in cs])
-        for prec in a.precisions:
-            lp = served_logprobs(z, prec)[:, T].double()
-            obs[prec].append((lp - lp[:, :1]).view(2, len(cs), len(T)))
+
+    def pairs(site: str, layer: int, vals: torch.Tensor) -> dict:
+        n, obs = max(a.batch // 2, 1), {prec: [] for prec in a.precisions}
+        for c0 in range(0, d, n):
+            cs = list(range(c0, min(d, c0 + n)))
+            z = faulted_logits(lm, pre, last, t0, [(site, layer, i, sg * float(vals[i])) for sg in (1.0, -1.0) for i in cs])
+            for prec in a.precisions:
+                lp = served_logprobs(z, prec)[:, T].double()
+                obs[prec].append((lp - lp[:, :1]).view(2, len(cs), len(T)))
+        return {prec: torch.cat(o, 1) for prec, o in obs.items()}
+
+    obs = pairs(site, layer, amps)
+    obr = pairs("resid", L - 1, deltas) if a.peel != "saturate" else None
     W_true = E[T].double() * g.double()
     if ln and a.peel == "saturate":
         W_true = W_true - W_true.mean(1, keepdim=True)
@@ -330,32 +341,50 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
     H = honest_states(lm, tok, len(PROMPTS), a.new).double() if a.peel != "saturate" else None
     res = {}
     for prec in a.precisions:
-        o = torch.cat(obs[prec], 1)
+        o = obs[prec]
         col = ((o[0] - o[1]) / (2 * s * (1.0 if a.peel == "saturate" else amps[:, None]))).T
+        g_hat = b_hat = None
         if a.peel == "saturate":
-            W, beta, g_hat = col, ((o[0] + o[1]) / 2).mean(0), None
+            W, beta = col, ((o[0] + o[1]) / 2).mean(0)
         else:
+            A = torch.cat([col, torch.ones(len(T), 1, dtype=torch.float64)], 1)
+            dh = torch.linalg.lstsq(A, (obr[prec][0] - obr[prec][1]).T).solution[:d]
+            g_hat = dh.diagonal() / (2 * deltas)
             Z = H @ E[T].double().T
             if prec == "bf16":
                 Z = Z.float().to(torch.bfloat16).double()
-            A = torch.cat([col, torch.ones(len(T), 1, dtype=torch.float64)], 1)
-            Hh = torch.linalg.lstsq(A, Z.T).solution[:d].T
-            rhs = torch.full((Hh.shape[0], 1), float(d), dtype=torch.float64)
+            Hh = torch.linalg.lstsq(A, (Z - Z[:, :1]).T).solution[:d].T
+            b_hat = torch.zeros(d, dtype=torch.float64)
             if ln:
-                sol = torch.linalg.lstsq(torch.cat([Hh.pow(2), -2 * Hh, torch.ones_like(rhs)], 1), rhs).solution[:, 0]
-                p, q = sol[:d].clamp_min(1e-12), sol[d:2 * d]
-                b_hat = q / p
-            else:
-                p, b_hat = torch.linalg.lstsq(Hh.pow(2), rhs).solution[:, 0].clamp_min(1e-12), torch.zeros(d)
-            g_hat = torch.sign(g.double()) / p.sqrt()
-            W, beta = col * g_hat, col @ b_hat.double()
-        res[prec] = {"W": W, "beta": beta,
-                     "W_mse_over_var": float((W - W_true).pow(2).mean() / W_true.pow(2).mean()),
-                     "g_mse_over_var": None if g_hat is None else
-                     float((g_hat - g.double()).pow(2).mean() / g.double().pow(2).mean())}
+                F = torch.cat([2 * Hh, torch.ones(len(Hh), 1, dtype=torch.float64)], 1)
+                b_hat = torch.linalg.lstsq(F, (Hh / g_hat).pow(2).sum(1, keepdim=True)).solution[:d, 0] * g_hat.pow(2)
+            xs = (Hh - b_hat) / g_hat
+            if ln:
+                xs = xs - xs.mean(1, keepdim=True)
+            g_hat = g_hat * xs.pow(2).mean().sqrt()
+            W, beta = col * g_hat, col @ b_hat
+        b_err = None
+        if b_hat is not None and ln:
+            e, gd = b_hat - b.double(), g.double()
+            b_err = float((e - (e @ gd) / (gd @ gd) * gd).pow(2).mean() / b.double().pow(2).mean())
+        res[prec] = {"W": W, "beta": beta, "W_mse_over_var": scaled_mse(W, W_true),
+                     "g_mse_over_var": None if g_hat is None else scaled_mse(g_hat, g.double()),
+                     "b_mse_over_var_off_g": b_err}
     if max(e["W_mse_over_var"] for e in res.values()) > 0.5:
-        raise SystemExit(f"--peel {a.peel}: E diag(g) read no better than its variance; the peel is broken")
+        raise SystemExit(f"--peel {a.peel}: E diag(g) read no better than its variance, the peel is broken: "
+                         + peel_summary(res))
     return res
+
+
+def peel_summary(res: dict) -> str:
+    return ", ".join(f"{p} " + ", ".join(f"{n} {v:.3g}" for n, v in e.items() if n.endswith(("var", "off_g"))
+                                          and v is not None) for p, e in res.items())
+
+
+def scaled_mse(x: torch.Tensor, y: torch.Tensor) -> float:
+    """x's error against y over y's variance, after x's best scale: the read normalizes its state, so a peel's
+    estimates count only up to one."""
+    return float((x * ((x * y).sum() / (x * x).sum()) - y).pow(2).mean() / y.pow(2).mean())
 
 
 def part_rows(lm: LM, tok, a) -> dict:
@@ -379,9 +408,7 @@ def part_rows(lm: LM, tok, a) -> dict:
     if a.peel:
         T = torch.randperm(V, generator=gen)[:max(reads)]
         est = peel(lm, tok, pre, last, t0, h0, T, a)
-        print(f"peel {a.peel}: " + ", ".join(f"{p} E diag(g) mse/var {e['W_mse_over_var']:.3g}, g mse/var "
-                                             f"{e['g_mse_over_var']}" for p, e in est.items())
-              + f", {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
+        print(f"peel {a.peel}: {peel_summary(est)}, {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
     for l in layers:
         x0 = taps0[(site, l)][0, 0].float()
         rms = float(x0.pow(2).mean().sqrt())
@@ -445,7 +472,8 @@ def part_rows(lm: LM, tok, a) -> dict:
     res = {"part": "rows", "rows": rows}
     if est is not None:
         res["peel"] = {"mode": a.peel, "tokens": len(T),
-                       "faults_by_k": {k: 2 * d * math.ceil(len(T) / (k - 1)) for k in a.ks if k > 1},
+                       "faults_by_k": {k: (2 if a.peel == "saturate" else 4) * d * math.ceil(len(T) / (k - 1))
+                                       for k in a.ks if k > 1},
                        "by_precision": {p: {n: v for n, v in e.items() if n not in ("W", "beta")}
                                         for p, e in est.items()}}
     return res
@@ -480,7 +508,9 @@ def read_row(Et, g, Eb, zt, precision, s, tru, lm) -> tuple[float, float, torch.
     P[:-1, :-1] += torch.eye(A.shape[1] - 1, dtype=torch.float64)
     P[-1, -1] += 1e-12
     C = torch.linalg.inv(P)
-    xh = C @ (A.T @ (w * y))
+    # Not C @ ...: a centred head (LayerNorm's, as a peel reads it) leaves P's condition near 1e14 at fp32's weights,
+    # where the explicit inverse loses the estimate and a solve doesn't.
+    xh = torch.linalg.solve(P, A.T @ (w * y))
     est = norm_dir(lm, xh[:-1].float())
     r = float((est - tru).pow(2).mean())
     mi = -0.5 * float(torch.linalg.slogdet(C[:-1, :-1])[1]) / math.log(2)
