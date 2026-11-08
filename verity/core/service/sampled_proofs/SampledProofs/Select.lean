@@ -209,22 +209,28 @@ def secondLaw (sample : Array Nat) (ns ks : Array Nat) : Json :=
     ("strata", Json.arr ((List.range ns.size).flatMap fun t => (List.range sample.size).map fun i =>
       cellObj (sample.size * (ns.toList.take t).sum) (ns.getD t 0) (ks.getD t 0) i (sample.getD i 0) t).toArray)]
 
+/-- Why the second stage refuses a replay sample `sample` with cells of `ns` proof blocks sampling `ks`, the first
+reason in the Python's order: a replay sample with a block twice or out of order, cells that aren't one or more
+templates' of at least one proof block each with a count each, a replay block of fewer than two proof blocks, a count
+not in `[1, n_t]`, or counts proving every cell whole (whole replay blocks). -/
+def secondProblem (sample : Array Nat) (ns ks : Array Nat) : Option String :=
+  if sample.isEmpty || !(sample.toList.zip sample.toList.tail).all (fun (a, b) => a < b) then
+    some "a replay sample is one or more replay blocks, ascending, each once"
+  else if ns.isEmpty || ks.size != ns.size || ns.toList.any (· == 0) then
+    some "a replay block's cells are one or more templates', each of at least one proof block, with a count each"
+  else if ns.toList.sum < 2 then
+    some s!"a replay block of {ns.toList.sum} proof blocks is a proof block: its rule is {pyRepr "law"}"
+  else if !(ks.toList.zip ns.toList).all (fun (k, n) => 1 ≤ k && k ≤ n) then
+    some s!"the second stage samples 1 to n_t of each cell's n_t proof blocks: counts {ks} over cells of {ns}"
+  else if ks == ns then some s!"counts {ks} prove every cell of {ns} whole, and so whole replay blocks"
+  else none
+
 /-- `service.select_second`: the second stage on the coins `src`, read after the interior registration's digest: the
 sample object of `secondLaw` over the interior's `sample.size · Σ n_t` proof blocks (`Draw.drawFirstRead`), held to
-`Draw.checkDraw`, and the number of bytes it read. An error where the Python raises: a replay sample with a block twice
-or out of order, cells that aren't one or more templates' of at least one proof block each with a count each, a replay
-block of fewer than two proof blocks, a count not in `[1, n_t]`, counts proving every cell whole (whole replay blocks),
-or a sample the coins don't end. -/
+`Draw.checkDraw`, and the number of bytes it read. An error where the Python raises: `secondProblem`, or a sample the
+coins don't end. -/
 def selectSecond (sample : Array Nat) (ns ks : Array Nat) (src : ByteArray) : V (Json × Nat) := do
-  if sample.isEmpty || !(sample.toList.zip sample.toList.tail).all (fun (a, b) => a < b) then
-    throw "a replay sample is one or more replay blocks, ascending, each once"
-  if ns.isEmpty || ks.size != ns.size || ns.toList.any (· == 0) then
-    throw "a replay block's cells are one or more templates', each of at least one proof block, with a count each"
-  if ns.toList.sum < 2 then
-    throw s!"a replay block of {ns.toList.sum} proof blocks is a proof block: its rule is {pyRepr "law"}"
-  if !(ks.toList.zip ns.toList).all (fun (k, n) => 1 ≤ k && k ≤ n) then
-    throw s!"the second stage samples 1 to n_t of each cell's n_t proof blocks: counts {ks} over cells of {ns}"
-  if ks == ns then throw s!"counts {ks} prove every cell of {ns} whole, and so whole replay blocks"
+  if let some e := secondProblem sample ns ks then throw e
   let law := secondLaw sample ns ks
   let m := sample.size * ns.toList.sum
   let (draw, read) ← Draw.drawFirstRead law m src
