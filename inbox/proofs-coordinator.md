@@ -6595,3 +6595,21 @@ Records that move:
 - its unwitnessed entry, re-keyed by hand (count 305);
 - the Dampener records' renamed field;
 - two stale `open` entries leave, as `bfe82d205a` ruled."
+
+- 04:01Z (TSVERIFY): **The window-history check is written, with its lemma, in [#7975](https://github.com/compute-verification/verity/pull/7975) (`cursor/proofs-history-7c3a`, CIR-188). Both Lean tries pass, and the suites pass. A watcher marks it when records r20261108-035324-2107 pass, ETA about 04:35Z. The served path still has to declare its edge values for the check to hold them; that wiring is the integration's.**
+  - **The check.** An `outputs` entry may now name a port alone, `{value: {"port": P}}`. The verifier reads it as port P of the previous record: the log's last record, the one R6 holds `previous` to. It takes that record's digest from its own log (`Registration.lastDigest`), so params can't point the history at another window. R7 then holds the value to that port:
+    - wrong leaves, a port the last record lacks, one only an older record holds, or no previous record: `R7-output`;
+    - a fresh root: `R7-held`;
+    - its own domain: `R7-domain` too.
+  - **Why R7 and not SpotFlock.** The history is a registered value, and the executable registration check is what both `OneStage.check` and `Run.run`'s register step run. SpotFlock's code starts from the run's roots and doesn't model the registration.
+  - **The lemma.** `history_of_R7`, and `history_of_accept` at `OneStage.check`'s accept through `acceptMeans`. For a registered, unfilled value u whose only output entry is `(u, lastDigest log, .port p)`, the previous record has port p, and the record's entry for u has that port's root, domain and leaf count. It needs `entries_values` and a fold invariant over `applyOutputs`. The axiom probe is clean.
+  - **Not listed, and I need your call on it.** A listed acceptance guarantee needs an honest witness on which `Registration.check` returns no codes, and the kernel can't evaluate the hashes the check computes over the record. `acceptMeans` is under `unwitnessed` for the same reason, and that list only shrinks. So the lemma is a proved theorem in `Proofs/` and appears in no record. Tell me if you want it listed some other way.
+  - **Records.** R7's statement is unchanged, so `acceptMeans` shouldn't move, and nothing listed reads the new code. If the run regenerates only stale entries, the watcher commits exactly those before marking. There's no statement change, so no DM to Daniel unless a record moves.
+  - **The size, as built.**
+    - Executable Lean: 17 lines in `Registration.lean` and `OneStage.lean`.
+    - Python: 33 lines in `registration.py`.
+    - Tests: about 45 lines (a new R7 test, plus difftest draws and mutations).
+    - Proof: 232 lines.
+  - **Follow-up for the vllm lane.** Window w + 1's verifier params must give each edge value (`edge.kv`, `edge.ik`, `edge.iks`, `edge.last`) as `outputs: {name: {"port": name}}`, and register it under window w's port root and domain. Until then, honest serving declares no history and the served history isn't held. Today the served path passes no `outputs` for them, and `pipeline/edge.py`'s docstring already describes them as R7 outputs. Who should own that wiring?
+  - **NDAUDIT.** I've corrected my 03:40Z note in `inbox/NDAUDIT.md`: the name rule mis-carried per-window inputs that share a name with a port, so the check takes a declared port instead. Q2 (an explicit `{"record", "port"}` for a history value) and Q3 (what `session_roots` adds) are still open.
+  - **#7966.** Try r20261108-031004-5ee0 passed. Records r20261108-031002-c539 failed on a base-inherited lock entry: `Nci.SecurityProofs.DampenerRemotePeriod`'s `unwitnessed` hash, which `origin/checked` already updates. I merged `origin/checked` into the branch (now `edc83846d5`; no change to its three `SpotFlock` files) and launched a new try, r20261108-035810-9a28 (cpu-8, ETA about 04:05Z), and records r20261108-035809-d7fa (cpu-11, ETA about 04:40Z). tmux `mark-7966` marks it when both pass. The regenerated record only drops @soundness's stale `open` entries `Verity.Circuit.BitFaninPos` and `Verity.Circuit.Boolean`. The watcher commits exactly what the run kept.
