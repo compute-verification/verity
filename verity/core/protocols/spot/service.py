@@ -303,10 +303,11 @@ class Law:
     are the prover's to size, so a fixed count, `subset:K`, `stratified:K` or `work:K`, which samples each proof block with
     K/N as the prover pads N, is refused (`fixed`). A rate samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a
     multiple of the T tables (`draw.rate_count`) over the N proof blocks each registration brings, so every proof block is
-    sampled with probability at least NUM/DEN however large the prover makes N. The stratified rate samples
-    ceil(NUM n_s / DEN) of each template's n_s proof blocks, and the work rate the work sampling design at K = ceil(NUM N /
-    DEN) with each stratum's floor at the rate (`selection_table`, `draw.rate_floor`), so each stratum's proof blocks are
-    sampled with probability at least NUM/DEN however the prover spreads N over templates."""
+    sampled with probability at least NUM/DEN however large the prover makes N. The stratified rate samples the stratified
+    sampling design at the K its strata need to draw ceil(NUM n_s / DEN) of each template's n_s proof blocks (`draw.strat_k`),
+    and the work rate the work sampling design at K = ceil(NUM N / DEN) with each stratum's floor at the rate
+    (`selection_table`, `draw.rate_floor`), so each stratum's proof blocks are sampled with probability at least NUM/DEN
+    however the prover spreads N over templates."""
 
     text: str
 
@@ -722,37 +723,41 @@ def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
         return False
 
 
-def selection_law(rule: Selection, n: int) -> dict[str, Any]:
-    """The sampling design a selection rule names over `n` proof blocks, before `draw.derive` expands it over the check's program and
-    query: `subset:n` for `All` and a `Law`'s own. A rate sampling design is `subset:K` at K = `draw.rate_count` over `n`, and raises
-    `Refused` (`rate`) unless 1 <= K <= n; a stratified rate is `work:1` and a work rate `work:K` at K = ceil(NUM n / DEN),
-    each over `selection_table`'s work table. A two-stage design's is its first stage's, over `n` replay blocks. The Lean
-    verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
+def selection_law(rule: Selection, n: int, sizes: Sequence[int] = ()) -> dict[str, Any]:
+    """The sampling design a selection rule names over `n` proof blocks in strata of `sizes` (`draw.strata_sizes` of the check's
+    program and query), before `draw.derive` expands it over them: `subset:n` for `All` and a `Law`'s own. A rate sampling
+    design is `subset:K` at K = `draw.rate_count` over `n`, a stratified rate `stratified:K` at K = `draw.strat_k` over
+    `sizes`, and a work rate `work:K` at K = ceil(NUM n / DEN) over `selection_table`'s work table, each raising `Refused`
+    (`rate`) unless 1 <= K <= n, and a stratified rate without strata too. A two-stage design's is its first stage's, over
+    `n` replay blocks. The Lean verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
     rate, strata = D.parse_rate(text), D.parse_strata_rate(text)
     if rate is None and strata is None:
         return D.parse_design(text)
-    if strata is not None and not strata[0]:
-        return {"law": "work", "k": 1}
-    k = D.rate_count(*rate, n) if rate is not None else D.rate_count(strata[1], strata[2], 1, n)
-    if not 1 <= k <= n:
+    if rate is not None:
+        kind, k = "subset", D.rate_count(*rate, n)
+    elif strata[0]:
+        kind, k = "work", D.rate_count(strata[1], strata[2], 1, n)
+    else:
+        kind, k = "stratified", D.strat_k(strata[1], strata[2], sizes, n)
+    if not 1 <= k <= n or (kind == "stratified" and not sizes):
         raise _refuse("rate", {"law": text, "population": n, "k": k})
-    return {"law": "subset", "k": k} if rate is not None else {"law": "work", "k": k}
+    return {"law": kind, "k": k}
 
 
 def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
                     work_table: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
     """The work table a selection rule's sampling design (`selection_law`'s) is expanded over, from the challenger's own
-    `work_table`: a stratified or work rate's, each stratum of `program` under `query` with its floor at the rate
-    (`draw.rate_table`), else `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has
-    no work table or it names no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
+    `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`draw.rate_table`), else
+    `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has no work table or it names
+    no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
     strata = D.parse_strata_rate(rule.text) if isinstance(rule, Law) else None
-    if strata is None:
+    if strata is None or not strata[0]:
         return work_table
     try:
-        return D.rate_table(program, query, strata, work_table)
+        return D.rate_table(program, query, strata[1], strata[2], work_table)
     except (P.QueryRefused, ValueError) as e:
         raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
 
@@ -761,7 +766,7 @@ def params_law(law: Any, program: Program, query: Mapping[str, Any],
                work_table: Mapping[str, Any] | None) -> tuple[Any, Mapping[str, Any] | None]:
     """One-stage's parameters' agreed sampling design and the work table it is expanded over: a law object as given, with
     `work_table`, or a rate as a selection rule states it (`draw.parse_rate`, `draw.parse_strata_rate`), its sampling design
-    over the population of `program` under `query` (`selection_law`) and its work table (`selection_table`). Raises
+    over the population of `program` under `query` and its strata (`selection_law`) and its work table (`selection_table`). Raises
     `ValueError` for any other text, a query that doesn't apply, or a rate `selection_law` or `selection_table` refuses.
     The Lean verifier's `OneStage.design` is this."""
     if not isinstance(law, str):
@@ -771,7 +776,8 @@ def params_law(law: Any, program: Program, query: Mapping[str, Any],
                          f"not {law!r}")
     rule = Law(law)
     try:
-        return selection_law(rule, P.units(program, query)), selection_table(rule, program, query, work_table)
+        law = selection_law(rule, P.units(program, query), D.strata_sizes(program, query))
+        return law, selection_table(rule, program, query, work_table)
     except (P.QueryRefused, Refused) as e:
         raise ValueError(str(e)) from None
 
@@ -1814,8 +1820,9 @@ class Stream:
         many registrations without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
-        samples none or more than N proof blocks (`rate`, `selection_law`, before R1-R7) or a stratified or work rate's
-        strata or work table don't apply (`rate`, `selection_table`, R1-R7 then reading its table), when either check fails, or, after both,
+        samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_law`, before
+        R1-R7) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R7 then reading its table),
+        when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
         are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
@@ -1833,15 +1840,15 @@ class Stream:
             if v.ok and not (type(n) is int and n >= 1):
                 v = _refuse("population", n).verdict
             if v.ok:
-                try:
-                    law = selection_law(self.spec.selection, n)
-                except Refused as r:
-                    v = r.verdict
-            if v.ok:
                 program = self._program(n, counts)
                 if program is None:
                     v = _refuse("population", {"counts": counts, "templates": None if self.templates is None else
                                                [P.template_id(t) for t in self.templates]}).verdict
+            if v.ok:
+                try:
+                    law = selection_law(self.spec.selection, n, D.strata_sizes(program, self.query))
+                except Refused as r:
+                    v = r.verdict
             if v.ok:
                 try:
                     table = selection_table(self.spec.selection, program, self.query, work_table)
@@ -2269,7 +2276,8 @@ class Stream:
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
                       reg.record, e.program, self.spec.check.query,
-                      selection_law(self.spec.selection, reg.record["population"]), SCHEME, ports, leaf_layer, anchors,
+                      selection_law(self.spec.selection, reg.record["population"],
+                                    D.strata_sizes(e.program, self.spec.check.query)), SCHEME, ports, leaf_layer, anchors,
                       earlier, e.work_table, registered, self.spec.selection.to_json(),
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
@@ -2315,7 +2323,8 @@ class Stream:
                        "audit": {k: x for k, x in boundary.items() if k != "verifiers"},
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
-                      reg.record, e.program, self.query, selection_law(self.spec.selection, reg.record["population"]),
+                      reg.record, e.program, self.query,
+                      selection_law(self.spec.selection, reg.record["population"], D.strata_sizes(e.program, self.query)),
                       SCHEME, ports, leaf_layer, anchors, earlier, e.work_table, registered,
                       self.spec.selection.to_json(), [(x.name, x.registered) for x in self._values()],
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,

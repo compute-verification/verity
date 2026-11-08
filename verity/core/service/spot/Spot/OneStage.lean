@@ -129,14 +129,15 @@ def rule (law : Json) : V Json := do
 
 /-- The agreed sampling design and the work table it is expanded over: a law object (`rule`) with the verifier's own work
 `table`, or a rate stated as a selection rule's law text (`Select.parseRate`, `Select.parseStrataRate`), which names its
-sampling design over the population of `program` under `query` as a stream's rule does (`Select.Rule.over`,
-`Select.Rule.lawOver`) and its work table (`Select.Rule.tableOver`). -/
+sampling design over the population of `program` under `query` and its strata as a stream's rule does (`Select.Rule.over`,
+`Select.strataSizes`, `Select.Rule.lawOver`) and its work table (`Select.Rule.tableOver`). -/
 def design (program : Program) (query : Json) (law : Json) (table : Option Json) : V (Json × Option Json) := do
   let .str t := law | return (← rule law, table)
   if (Select.parseRate t).isNone && (Select.parseStrataRate t).isNone then
     throw s!"a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, not {pyRepr t}"
   let n ← Partition.units program query
-  let some over := (Select.Rule.law t).over n | throw s!"a rate law over {n} units draws none of them or more than {n}"
+  let some over := (Select.Rule.law t).over n (Select.strataSizes program query)
+    | throw s!"a rate law over {n} units draws none of them or more than {n}"
   return (← over.lawOver n, ← (Select.Rule.law t).tableOver program query table)
 
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",

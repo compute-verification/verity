@@ -928,7 +928,7 @@ def select(j):
     try:
         n = P.units(program, query)
         table = service.selection_table(rule, program, query, j.get("work_table"))
-        law = DR.derive(program, query, service.selection_law(rule, n), table)
+        law = DR.derive(program, query, service.selection_law(rule, n, DR.strata_sizes(program, query)), table)
         obj = service.select_draw(rule, law, n, coins, closure=closure)
     except (P.QueryRefused, ValueError, service.Refused) as e:
         raise D.Reject(str(e)) from None
@@ -1334,7 +1334,7 @@ def run(j):
     if not (_int(n) and n >= 1):
         return {"codes": ["population"], "step": "register"}
     try:
-        law = service.selection_law(rule, n)
+        law = service.selection_law(rule, n, DR.strata_sizes(p["program"], p["query"]))
         table = service.selection_table(rule, p["program"], p["query"], p["work_table"])
     except service.Refused as e:
         return {"codes": list(e.verdict.codes), "step": "register"}
@@ -3354,7 +3354,8 @@ def _from_challenger(c: dict, rng: random.Random) -> tuple[Drawn, dict]:
     challenger opened after the registration's digest and read by the selection rule's sample (`Drawn`), the source the
     bytes read, the evidence the session's and the window root the ledger's open's."""
     rec, p, rule = c["record"], _params_of(c), _rule(c["rule"])
-    law = DR.derive(p["program"], p["query"], service.selection_law(rule, rec["population"]),
+    law = DR.derive(p["program"], p["query"],
+                    service.selection_law(rule, rec["population"], DR.strata_sizes(p["program"], p["query"])),
                     service.selection_table(rule, p["program"], p["query"], p["work_table"]))
 
     def reads(coins):
@@ -4621,7 +4622,8 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     rule, s = service.Law("stratified-rate:1/2"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]
-    law = DR.derive(s.program, s.query, service.selection_law(rule, rec["population"]),
+    named = service.selection_law(rule, rec["population"], DR.strata_sizes(s.program, s.query))
+    law = DR.derive(s.program, s.query, named,
                     service.selection_table(rule, s.program, s.query, None))
 
     def reads(coins):

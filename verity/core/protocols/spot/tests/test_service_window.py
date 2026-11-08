@@ -56,7 +56,8 @@ def _ports(counts=COUNTS, values=()) -> dict:
 
 def _named(program: Program, query=QUERY) -> tuple[dict, dict]:
     """The sampling design `LAW` names over `program`'s population under `query`, and the work table it is expanded over."""
-    return S.selection_law(LAW, P.units(program, query)), S.selection_table(LAW, program, query, None)
+    law = S.selection_law(LAW, P.units(program, query), D.strata_sizes(program, query))
+    return law, S.selection_table(LAW, program, query, None)
 
 
 def _record(counts=COUNTS, program=None, query=QUERY, law=None, values=(), **kw) -> dict:
@@ -89,7 +90,8 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
 
 def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified-rate:1/3`: registered at the challenger's own counts, sampled once
-    from its coins with each stratum sampled its k (a third of its proof blocks, rounded up), and run to an accepted outcome, the
+    from its coins by the stratified law at the K its strata need (`draw.strat_k`, 3), each stratum sampled its k (a third of
+    its proof blocks, rounded up), and run to an accepted outcome, the
     verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
     stream = _stream()
     rec = _record()
@@ -97,7 +99,7 @@ def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     law = stream._entries[reg.order].law
     assert [(s["template"], s["k"]) for s in law["strata"]] == [(P.template_id(PAIR), 1), (P.template_id(TRIPLE), 3)]
     draw = stream.select(reg)
-    assert draw.draw["law"] == "work" and len(draw.units) == 4 and 0 in draw.units
+    assert draw.draw["law"] == "stratified" and draw.draw["k"] == 3 and len(draw.units) == 4 and 0 in draw.units
     assert V.check_draw(draw.draw, rec, law).ok
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
@@ -131,8 +133,9 @@ def test_a_registration_of_another_window_is_refused():
 
 
 def test_a_stratum_short_of_its_floor_is_refused():
-    """A record whose sampling design samples PAIR's stratum none (below its floor of one) is refused (`R1-law`), and a sample short of
-    a stratum, from a sampler that samples only TRIPLE's proof blocks, is refused at the select (`check_draw`), before any proof."""
+    """A record whose sampling design samples PAIR's stratum none (the stratified law samples each at least one) is refused
+    (`R1-law`), and a sample short of a stratum, from a sampler that samples only TRIPLE's proof blocks, is refused at the
+    select (`check_draw`), before any proof."""
     rec = _record()
     short = {**rec, "law": {**rec["law"], "strata": [{**rec["law"]["strata"][0], "k": 0}, *rec["law"]["strata"][1:]]}}
     assert "R1-law" in _refused(lambda: _stream().register(short, _ports(), counts=COUNTS))

@@ -1049,8 +1049,9 @@ def challenger(a, at: SimpleNamespace, out: Path):
 
 
 def rule_of(k: int, n: int) -> str:
-    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.Law`), ceil(k n_s / n)
-    of each template's n_s, so each proof block is sampled with probability at least k/n however many the prover registers."""
+    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.Law`), at least
+    ceil(k n_s / n) of each template's n_s, so each proof block is sampled with probability at least k/n however many the prover
+    registers."""
     return f"stratified-rate:{min(k, n)}/{n}"
 
 
@@ -1065,7 +1066,8 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     units = [pg.stagers[tp].defn for tp in pg.templates]
     n = sum(m["n"] for m in members)
     law = S.Law(rule_of(k, n))
-    strata = [s["template"] for s in DR.derive(pg.program, pg.query, S.selection_law(law, n),
+    named = S.selection_law(law, n, DR.strata_sizes(pg.program, pg.query))
+    strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
                                                S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
               ("window", "the round's provenance: the group's link-windows of the warden's run"),

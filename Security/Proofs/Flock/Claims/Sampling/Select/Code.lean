@@ -117,13 +117,14 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
-population, R1–R7 under the sampling design of the rule over it (`Rule.over`, a rate law's `subset:K`) and the work table it
-expands (`Rule.tableOver`, a stratified or work rate law's), and the sample's own check, with its `draw` and `read` those of
-`Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
+population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
+rate law's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate law's), and the sample's own check,
+with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ n rule law workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n = some rule ∧
+    ∃ n rule law workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
+        (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
       rule.lawOver n = .ok law ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
       ¬(!(Registration.check i.record { i.params.verifier with law, workTable }).isEmpty) = true ∧

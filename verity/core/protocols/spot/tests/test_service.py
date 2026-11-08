@@ -88,9 +88,9 @@ def _record(n: int = 6, law=None, row: int = 0, previous: str | None = None, wor
 def _rated(text: str, n: int = 6, table=None, **change) -> dict:
     """A record of `n` proof blocks under the rate `text` as a stream registers it: its law and work table the ones the
     rate names over them (`selection_law`, `selection_table`), from the verifier's work `table`."""
-    rule = S.Law(text)
-    return _record(n, law=S.selection_law(rule, n),
-                   work_table=S.selection_table(rule, P.population_program(PAIR, n), QUERY, table), **change)
+    rule, program = S.Law(text), P.population_program(PAIR, n)
+    return _record(n, law=S.selection_law(rule, n, D.strata_sizes(program, QUERY)),
+                   work_table=S.selection_table(rule, program, QUERY, table), **change)
 
 
 def _lean(accepted=True, sessions=(SESSION,), **extra) -> dict:
@@ -229,7 +229,7 @@ def test_the_rule_refuses_a_template_population_unless_declared():
     assert S.check_public(declared, rec).ok
     stream = _stream(declared)
     draw = stream.select(stream.register(rec, _ports(6)))
-    assert draw.draw["law"] == "work" and len(draw.units) == 2
+    assert draw.draw["law"] == "stratified" and len(draw.units) == 2
 
 
 def test_the_rule_refuses_an_unsalted_digest():
@@ -365,7 +365,7 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
 
 def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pads_n():
     """`stratified-rate:1/3` and `work-rate:1/3` size each stratum's k over the registration's own strata, at least
-    ⌈n_s/3⌉ (Lean's `Rate.workK_ge`), so a registration padded tenfold (N = 60 for 6) samples 20 of its one stratum and
+    ⌈n_s/3⌉ (Lean's `Rate.stratK_ge`, `Rate.workK_ge`), so a registration padded tenfold (N = 60 for 6) samples 20 of its one stratum and
     every proof block is still sampled with probability k/n_s ≥ 1/3, where `stratified:2` or `work:2`, which a rule can't
     state, would fall to 2/60."""
     for text, table in (("stratified-rate:1/3", None), ("work-rate:1/3", WORK)):
@@ -379,6 +379,24 @@ def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pad
     for text in ("stratified:2", "work:2"):
         with pytest.raises(ValueError, match="fixed count"):
             S.Law(text)
+
+
+def test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need():
+    """`stratified-rate:NUM/DEN` over strata of n_s proof blocks of N is `stratified:K` at `draw.strat_k`, the least K at which
+    every stratum's `stratum_k` reaches ⌈NUM·n_s/DEN⌉ (Lean's `Rate.stratK_ge`), at most N, whatever strata the prover
+    registers; with no strata (a query that doesn't apply) it is refused (`rate`), and so is a work rate without a table."""
+    rng = random.Random("stratified-rate")
+    for _ in range(2000):
+        sizes = [rng.choice([1, 2, 3, rng.randrange(1, 40), rng.randrange(1, 5000)]) for _ in range(rng.randrange(1, 6))]
+        n, den = sum(sizes), rng.choice([1, 2, 3, 7, 20, 64, 1000])
+        num = rng.randrange(1, den + 1)
+        law = S.selection_law(S.Law(f"stratified-rate:{num}/{den}"), n, sizes)
+        k = law["k"]
+        assert law == {"law": "stratified", "k": k} and 1 <= k <= n, (sizes, num, den)
+        assert all(den * D.stratum_k(k, s, n) >= num * s for s in sizes), (sizes, num, den, k)
+        assert k == 1 or any(D.stratum_k(k - 1, s, n) < D.rate_count(num, den, 1, s) for s in sizes), (sizes, num, den, k)
+    assert _refused(lambda: S.selection_law(S.Law("stratified-rate:1/3"), 6, [])) == ("rate",)
+    assert _refused(lambda: S.selection_table(S.Law("work-rate:1/3"), P.population_program(PAIR, 6), QUERY, None)) == ("rate",)
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
@@ -754,7 +772,7 @@ def _refused(call) -> tuple[str, ...]:
 
 
 WORK = {PAIR.id: 10}
-STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
+STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the law's one stratum")
 #: A closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 

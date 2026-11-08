@@ -15,7 +15,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -70,13 +70,15 @@ def _table(program: Program | None = None) -> dict:
 def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return R.record(_program(), QUERY, S.selection_law(RULE, sum(COUNTS.values())), S.SCHEME, roots,
+    law = S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
+    return R.record(_program(), QUERY, law, S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": 0}, work_table=_table())
 
 
 def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None):
     """R1-R7 by the verifier on the toy window's registration and the verifier's copies, each a new object each call."""
-    law, program = S.selection_law(SPEC.selection, sum(COUNTS.values())), program or _program()
+    program = program or _program()
+    law = S.selection_law(SPEC.selection, sum(COUNTS.values()), D.strata_sizes(program, QUERY))
     return V.check(rec or _record(), program, QUERY, law, S.SCHEME, ports or _ports(), work_table=_table(program))
 
 

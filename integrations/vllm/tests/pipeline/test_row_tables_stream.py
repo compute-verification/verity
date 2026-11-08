@@ -16,7 +16,7 @@ import pytest
 from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
 from verity.ml.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
@@ -58,7 +58,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     outcomes each run by the Lean verifier: the only test that takes a row-table window's record through a Stream, so a
     `row-table` root the service can't register or the verifier refuses shows here and not on a served window."""
     program, query = CS.population_program([(DEFN, UNITS)], several=True)
-    c, _s, _got = committed(monkeypatch, law=S.selection_law(RULE, UNITS),
+    c, _s, _got = committed(monkeypatch, law=S.selection_law(RULE, UNITS, D.strata_sizes(program, query)),
                             work_table=S.selection_table(RULE, program, query, None))
     mine = c.window
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}

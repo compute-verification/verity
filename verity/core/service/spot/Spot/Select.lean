@@ -11,9 +11,10 @@ which the prover sizes, so a fixed count (`subset:K`, `stratified:K`, `work:K`),
 `K/N` as the prover pads `N`, is refused (`Rule.ofJson`, `FIXED`); `bernoulli:NUM/DEN` parses and is refused at
 registration (`Draw.bernoulli`). A rate names no sampling design until the population is known. Over `n` units a rate law
 is `subset:k` at `k = Rate.count` (`Rule.over`, `resolve`), so the sample, the registration's law and the audit are a
-uniform `k`-subset's, and `select` runs on that rule. A stratified rate law is `work:1` and a work rate law `work:K` at
-`K = ⌈NUM·n/DEN⌉`, each over the work table `Rule.tableOver` writes, every stratum's floor at the rate (`Rate.floor`), so
-each stratum samples at least `⌈NUM·n_s/DEN⌉` of its `n_s` proof blocks (`Rate.workK_ge`).
+uniform `k`-subset's, and `select` runs on that rule. A stratified rate law is `stratified:K` at the `K` its strata need
+(`Rate.stratK` over `strataSizes`), and a work rate law `work:K` at `K = ⌈NUM·n/DEN⌉` over the work table
+`Rule.tableOver` writes, every stratum's floor at the rate (`Rate.floor`), so under either each stratum samples at least
+`⌈NUM·n_s/DEN⌉` of its `n_s` proof blocks (`Rate.stratK_ge`, `Rate.workK_ge`).
 
 A two-stage rule (`Rule.twoStage grain replay k`) samples twice. Its first stage is `select` over the replay blocks, the
 population of the boundary registration's program under the replay grain's query, by its replay law (a rate law); its
@@ -186,51 +187,55 @@ def Rule.lawOver : Rule → Nat → V Json
   | .law t, _ => parseDesign t
   | .twoStage _ t _, _ => parseDesign t
 
-/-- A sampling design text over `n` units: a rate law is `subset:k` at `k = Rate.count NUM DEN T n`, none unless `1 ≤ k ≤ n`;
-a stratified rate law is `work:1` and a work rate law `work:k` at `k = Rate.count NUM DEN 1 n`, none unless `1 ≤ k ≤ n`, each
-over `Rule.tableOver`'s work table; any other text is itself. -/
-def textOver (t : String) (n : Nat) : Option String :=
+/-- A sampling design text over `n` units in strata of `sizes` units: a rate law is `subset:k` at
+`k = Rate.count NUM DEN T n`, a stratified rate law `stratified:k` at `k = Rate.stratK NUM DEN sizes n`, none without
+strata, and a work rate law `work:k` at `k = Rate.count NUM DEN 1 n` over `Rule.tableOver`'s work table, each none unless
+`1 ≤ k ≤ n`; any other text is itself. -/
+def textOver (t : String) (n : Nat) (sizes : List Nat) : Option String :=
   match parseRate t, parseStrataRate t with
   | some (num, den, tables), _ =>
     let k := Rate.count num den tables n
     if 1 ≤ k && k ≤ n then some s!"subset:{k}" else none
-  | none, some (false, _, _) => some "work:1"
+  | none, some (false, num, den) =>
+    let k := Rate.stratK num den sizes n
+    if !sizes.isEmpty && 1 ≤ k && k ≤ n then some s!"stratified:{k}" else none
   | none, some (true, num, den) =>
     let k := Rate.count num den 1 n
     if 1 ≤ k && k ≤ n then some s!"work:{k}" else none
   | none, none => some t
 
 /-- `service.selection_table`: the work table a rule's sampling design is expanded over, from the verifier's own `table`.
-A stratified or work rate law's names each stratum of `p` under `query` (`Partition.strata`) with its floor at the rate,
-`Rate.floor NUM DEN n_s f_s`: under a stratified rate law work one and `f_s` one, so each stratum samples `⌈NUM·n_s/DEN⌉`
-of its `n_s` proof blocks; under a work rate law the table's work and floor. Any other rule's is `table`. An error where
-the query doesn't apply, a work rate law has no table or its table names no work for a stratum's template. -/
+A work rate law's names each stratum of `p` under `query` (`Partition.strata`) with the table's work and its floor at the
+rate, `Rate.floor NUM DEN n_s f_s`, so each stratum samples at least `⌈NUM·n_s/DEN⌉` of its `n_s` proof blocks. Any other
+rule's is `table`. An error where the query doesn't apply, a work rate law has no table or its table names no work for a
+stratum's template. -/
 def Rule.tableOver (rule : Rule) (p : Program) (query : Json) (table : Option Json) : V (Option Json) := do
   let .law t := rule | return table
-  let some (work, num, den) := parseStrataRate t | return table
+  let some (true, num, den) := parseStrataRate t | return table
   let strata ← Partition.strata p query
-  let given ← if work then
-      match table with
-      | some j => Flock.Draw.workTableOfJson j
-      | none => throw "a work rate law needs the verifier's work table"
-    else pure #[]
+  let given ← match table with
+    | some j => Flock.Draw.workTableOfJson j
+    | none => throw "a work rate law needs the verifier's work table"
   let entries ← strata.mapM fun (tmpl, rs) => do
     let n := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
-    let (w, f) ← if work then
-        match given.find? (·.1 == tmpl) with
-        | some (_, w, f) => pure (w, f)
-        | none => throw s!"the work table names no work for template '{tmpl}'"
-      else pure (1, 1)
+    let some (_, w, f) := given.find? (·.1 == tmpl) | throw s!"the work table names no work for template '{tmpl}'"
     pure (tmpl, Json.mkObj [("work", Lean.toJson w), ("floor", Lean.toJson (Rate.floor num den n f))])
   return some (Json.mkObj entries.toList)
 
-/-- `service.selection_law`'s first step: the rule over `n` units, its rate `subset:k` or `work:k` (`textOver`); none where
-`selection_law` refuses (`rate`). It follows `lawOver`, whose matcher it shares, so that `lawOver` stays the definition
-the Properties lock records. -/
-def Rule.over : Rule → Nat → Option Rule
-  | .all, _ => some .all
-  | .law t, n => (textOver t n).map .law
-  | .twoStage g t k, n => (textOver t n).map (.twoStage g · k)
+/-- `draw.strata_sizes`: the units of each stratum of `p` under `query` (`Partition.strata`), which a stratified rate law's
+`K` reads (`textOver`); none where the query doesn't apply. -/
+def strataSizes (p : Program) (query : Json) : List Nat :=
+  match Partition.strata p query with
+  | .ok ss => ss.toList.map fun (_, rs) => rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
+  | .error _ => []
+
+/-- `service.selection_law`'s first step: the rule over `n` units in strata of `sizes` units (`strataSizes`), its rate
+`subset:k`, `stratified:k` or `work:k` (`textOver`); none where `selection_law` refuses (`rate`). It follows `lawOver`,
+whose matcher it shares, so that `lawOver` stays the definition the Properties lock records. -/
+def Rule.over : Rule → Nat → List Nat → Option Rule
+  | .all, _, _ => some .all
+  | .law t, n, sizes => (textOver t n sizes).map .law
+  | .twoStage g t k, n, sizes => (textOver t n sizes).map (.twoStage g · k)
 
 /-- The templates a template query names, in its order (`Flock.TemplateQuery.templatesOf`); an error for any other
 query. -/
@@ -313,11 +318,13 @@ def closureMap? (j : Json) : V (Array (Int × Array Int)) := do
 
 private def inRange (n : Nat) (u : Int) : Bool := 0 ≤ u && u < n
 
-/-- The rule over the population of `p` under `query` (`Partition.units`, `Rule.over`), which `select` runs over
-`Rule.tableOver`'s work table; an error where the query doesn't apply or `selection_law` refuses the rule's rate. -/
+/-- The rule over the population of `p` under `query` (`Partition.units`, `Rule.over` over its `strataSizes`), which
+`select` runs over `Rule.tableOver`'s work table; an error where the query doesn't apply or `selection_law` refuses the
+rule's rate. -/
 def resolve (rule : Rule) (p : Program) (query : Json) : V Rule := do
   let n ← Partition.units p query
-  let some r := rule.over n | throw s!"a rate law over {n} units draws none of them or more than {n}"
+  let some r := rule.over n (strataSizes p query)
+    | throw s!"a rate law over {n} units draws none of them or more than {n}"
   return r
 
 /-- `selection_law`, `draw.derive` and `select_draw` on the coins `src`, then `Stream.select`'s `draw.check_draw`, under

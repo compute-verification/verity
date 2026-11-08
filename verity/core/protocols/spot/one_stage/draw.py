@@ -39,11 +39,13 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
 **The rate sampling designs** (`parse_rate` and `parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
 selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a registration's
 N proof blocks `rate:NUM/DEN` or `rate:NUM/DEN:T` is `subset:K` at K = `rate_count`, ceil(q N) rounded up to a multiple of the T
-tables. `stratified-rate:NUM/DEN` and `work-rate:NUM/DEN` are the work sampling design over a table the verifier derives
-(`rate_table`), each stratum's floor raised to ceil(q n_s) (`rate_floor`): the stratified rate at K = 1 with every template's work 1,
-the work rate at K = ceil(q N) with the verifier's work table's work. Since k_s >= its floor, every stratum samples at least q of its
-proof blocks however many the prover registers (Lean `Rate.workK_ge`). A fixed count, `subset:K`, `stratified:K` or `work:K`, is
-refused as a rule: a proof block's inclusion K/N falls as the prover pads the N it registers.
+tables. `stratified-rate:NUM/DEN` is the stratified sampling design at the K its strata need (`strat_k`: the most any stratum of
+n_s proof blocks needs for `stratum_k` to reach ceil(q n_s), at most N), so every stratum samples at least q of its proof blocks
+however many the prover registers in it or elsewhere (Lean `Rate.stratK_ge`). `work-rate:NUM/DEN` is the work sampling design at K =
+ceil(q N) over a table the verifier derives (`rate_table`), the verifier's work table's work with each stratum's floor raised to
+ceil(q n_s) (`rate_floor`), and since k_s >= its floor, every stratum samples at least q of its proof blocks too (Lean
+`Rate.workK_ge`). A fixed count, `subset:K`, `stratified:K` or `work:K`, is refused as a rule: a proof block's inclusion K/N falls
+as the prover pads the N it registers.
 
 **Several tables** (`--session-tables J`) prove one sample split into J equal consecutive parts, so the sample's count must be
 fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset sample's k, or a stratified sample's sum of
@@ -127,29 +129,50 @@ def parse_strata_rate(text: Any) -> tuple[bool, int, int] | None:
 
 
 def rate_floor(num: int, den: int, n: int, floor: int) -> int:
-    """A stratum's floor at the rate NUM/DEN: ceil(NUM n / DEN), raised to the verifier's `floor`, at most the stratum's n proof
+    """A stratum's floor under the work rate NUM/DEN: ceil(NUM n / DEN), raised to the verifier's `floor`, at most the stratum's n proof
     blocks. A work sampling design samples each stratum at its floor or more (`work_k`), so every proof block of a stratum whose
     floor this is is sampled with probability at least NUM/DEN, whatever strata the prover registers. The Lean's
     `Spot.Rate.floor` is this, and `Rate.workK_ge` the bound."""
     return min(n, max(floor, rate_count(num, den, 1, n)))
 
 
-def rate_table(program: Program, query: Mapping[str, Any], rate: tuple[bool, int, int],
+def rate_need(num: int, den: int, size: int, n: int) -> int:
+    """The least K >= 1 at which the stratified sampling design draws ceil(NUM size / DEN) of a stratum of `size` of `n` proof
+    blocks (`stratum_k`): ceil((2 c n - n) / (2 size)) at c = that count, and 1 where c <= 1. The Lean's `Spot.Rate.need` is
+    this."""
+    c = rate_count(num, den, 1, size)
+    return 1 if c <= 1 else (2 * (c * n) - n + 2 * size - 1) // (2 * size)
+
+
+def strat_k(num: int, den: int, sizes: Sequence[int], n: int) -> int:
+    """The stratified rate's K over strata of `sizes` of `n` proof blocks: the most any stratum needs (`rate_need`), at most `n`,
+    at which each stratum draws all of its proof blocks. The Lean's `Spot.Rate.stratK` is this, and `Rate.stratK_ge` the bound."""
+    return min(n, max([1, *(rate_need(num, den, s, n) for s in sizes)]))
+
+
+def strata_sizes(program: Program, query: Mapping[str, Any]) -> list[int]:
+    """The proof blocks of each stratum of the program under the query (`partition.strata`), which the stratified rate's K reads
+    (`strat_k`); none where the query doesn't apply. The Lean's `Select.strataSizes` is this."""
+    try:
+        return [_size(rs) for _, rs in P.strata(program, query)]
+    except P.QueryRefused:
+        return []
+
+
+def rate_table(program: Program, query: Mapping[str, Any], num: int, den: int,
                table: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
-    """The work table a stratified or work rate sampling design (`parse_strata_rate`'s `rate`) is expanded over: each stratum
-    of the program under the query (`partition.strata`) with its floor at the rate (`rate_floor`), under the stratified rate
-    work 1 and floor 1 before the rate, under the work rate the verifier's `table`'s work and floor. Raises
-    `partition.QueryRefused` when the query doesn't apply, and `ValueError` when a work rate has no table or the table names
-    no work for a stratum's template. The Lean's `Select.Rule.tableOver` is this."""
-    work, num, den = rate
-    if work and table is None:
+    """The work table the work rate sampling design `work-rate:NUM/DEN` is expanded over: each stratum of the program under the
+    query (`partition.strata`) with the verifier's `table`'s work and its floor at the rate (`rate_floor`). Raises
+    `partition.QueryRefused` when the query doesn't apply, and `ValueError` when there is no table or the table names no work
+    for a stratum's template. The Lean's `Select.Rule.tableOver` is this."""
+    if table is None:
         raise ValueError("a work rate law needs the verifier's work table")
-    works = work_table(table) if work else {}
+    works = work_table(table)
     out: dict[str, dict[str, int]] = {}
     for t, rs in P.strata(program, query):
-        if work and t not in works:
+        if t not in works:
             raise ValueError(f"the work table names no work for template {t!r}")
-        w, f = works[t] if work else (1, 1)
+        w, f = works[t]
         out[t] = {"work": w, "floor": rate_floor(num, den, _size(rs), f)}
     return out
 

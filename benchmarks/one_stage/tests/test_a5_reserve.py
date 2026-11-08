@@ -52,7 +52,8 @@ def window(counts: list[int]):
 
 def law_of(rule: str, counts: list[int]) -> dict:
     program, query, n = window(counts)
-    return D.derive(program, query, S.selection_law(S.Law(rule), n), S.selection_table(S.Law(rule), program, query, None))
+    return D.derive(program, query, S.selection_law(S.Law(rule), n, D.strata_sizes(program, query)),
+                    S.selection_table(S.Law(rule), program, query, None))
 
 
 def need_of(rule: str, counts: list[int]) -> int:
@@ -130,7 +131,8 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
     t0, t1 = (P.template_id(template(i)) for i in range(2))
     table = {t0: {"work": 0, "floor": 32}, t1: {"work": 1, "floor": 1}}
     rule = S.Law("work-rate:1/20")
-    law = D.derive(program, query, S.selection_law(rule, n), S.selection_table(rule, program, query, table))
+    law = D.derive(program, query, S.selection_law(rule, n, D.strata_sizes(program, query)),
+                   S.selection_table(rule, program, query, table))
     assert law["k"] == 2 and [s["k"] for s in law["strata"]] == [32, 2]
     need = AC.need(rule.text, program, query, n, table)
     assert need == -(-(640 + 100 + 640) // Ch.COIN_BYTES) == 22
