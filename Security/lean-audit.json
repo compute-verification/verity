@@ -26373,8 +26373,8 @@
     "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (Accounting.Compose.aOf Sc Cd Z lam)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.jointGame R (Accounting.Compose.tileCone Sc Cd Np) 1 1 Kd)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atSample.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atSample.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Compose.CircuitWork": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -26390,8 +26390,8 @@
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.jointGame R (Accounting.Compose.tileCone Sc Cd Np) 1 1 Kd)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atSample.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atSample.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27076,14 +27076,14 @@
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq pub.n n": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV5": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27326,17 +27326,15 @@
    "NetTiming.SecurityProofs.PeriodLeakAccepted": {
     "∀ (i : Fin n), Eq (D.partition (sw i)) (Option.some (Pw i))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin n) (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets (sw i).design (Pw i) δ) F → instLENat.le (NetTiming.faultyBits (sw i).prog (Pw i) F) (β i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → ∀ (c : Conn), instLENat.le (s.cells c) (cap c)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → Set.instMembership.mem Ss (schedOf z)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (run tap { fst := schedOf z, snd := srvOf z }).fst) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : NetTiming.CertifierSchedule Conn), Set.instMembership.mem Ss s → ∀ (c : Conn), instLENat.le (s.cells c) (cap c)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : NetTiming.CertifierSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : NetTiming.CertifierSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → ∀ (c : Conn), instLENat.le (s.cells c) (cap c)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.PooledLeakAccepted": {
     "∀ (i : Fin m) (v : Nat), instLTNat.lt v (n i) → instLENat.le (NetTiming.faultyBits (sw i).prog (Pw i) (Finset.instSingleton.singleton v)) b": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → ∀ (c : Conn), instLENat.le (s.cells c) (cap c)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (ω : Fin m → Ω), Set.instMembership.mem Ss (schedOf z ω)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (ω : Fin m → Ω), Eq (dec ω (run tap { fst := schedOf z ω, snd := srvOf z ω }).fst) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (acc z i ω) (acc z i ω')": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27346,7 +27344,9 @@
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : NetTiming.CertifierSchedule Conn), Set.instMembership.mem Ss s → ∀ (c : Conn), instLENat.le (s.cells c) (cap c)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : NetTiming.CertifierSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : NetTiming.CertifierSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → ∀ (c : Conn), instLENat.le (s.cells c) (cap c)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : NetTiming.WardenSchedule Conn), Set.instMembership.mem Ss s → f.fits s": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -42679,7 +42679,7 @@
    }
   },
   "Flock.TemplateQuery": {
-   "digest": "f36bb1942986ba1df17f166198cdca467d976a54a047342a59d54d697d94c60f",
+   "digest": "166493e9cfd348a34bda8f14b7c3c3619df84c630eb59051a854d98bf6f7ca4a",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
@@ -42705,6 +42705,7 @@
     "Flock.TemplateQuery.TRange.first": "300a15fc0874f4d021d64b7cb584eeecb7d4e7c004891138fea17c1860cac4af",
     "Flock.TemplateQuery.TRange.node": "5f1b0a67687c76e53492726f0160d1345cf542d428ef2a35fb83ff200d3b7e93",
     "Flock.TemplateQuery.TRange.template": "c97082152447cce908ab19f4a60920ab5762ecbe2fe15762729a512482a742bd",
+    "Flock.TemplateQuery.contiguous": "b6a0f00b9ec63011cf891494779e722d069181639af9026c612b39948d269e85",
     "Flock.TemplateQuery.evaluate": "2c3cffe6280f54537c9f2424150d19110696a0200b1d791868c5f080e3771e5c",
     "Flock.TemplateQuery.gates": "5834244410f77b6e314f8c92aea6efb071fdc9eabdfeb24029bb1e9b202771ac",
     "Flock.TemplateQuery.instInhabitedDNode": "1d2ed3dda22709ce0a00c64c4cb97c5e33bcf5033920f6dc47ae79bcd0570ad5",
@@ -42713,6 +42714,8 @@
     "Flock.TemplateQuery.locate": "cbf34d266611b55bf150b9f1e4191ea6a805fc0dbc1821238d7cefd3565649f3",
     "Flock.TemplateQuery.population": "95d5a1b2851487e31ad71ba9b16aa179bd7fd3addcc3f06abfb9b01c15d93fa7",
     "Flock.TemplateQuery.templatesOf": "6bd71902f93f656a307dba92bef0e65c207b922f17bd0072014f2920b2beca08",
+    "Flock.TemplateQuery.unitGates": "01e0ad0edfc2aad6076b4cd259d98c6b2281f8f0a8362a946f942142d88bc5da",
+    "Flock.TemplateQuery.unitGatesRef": "eadb7b63c05ca67500de9ac2f378876b1a3f2b9b865c75cc61b9761662d3577a",
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    }
   },
@@ -54637,7 +54640,7 @@
    }
   },
   "Spot.Partition": {
-   "digest": "41291c410e10239ab34cc6e3e33a198e1843d92eb2b60435200bfebeae964d12",
+   "digest": "073d424a29f1f85a52df1000a4382194cbdfe26cae968d51c5c7ede97ff70d19",
    "definitions": {
     "Spot.Partition.QUERIES": "b7ec2ff065a8dc232bb4ec1360628fa3f2624ada1052fc9ab57200bb53310ded",
     "Spot.Partition.QUERY_X": "78489a58742c3288a5dc4bd60e838c5f3c367a5e9598ed3b3155762b17b1b1a0",
@@ -54655,7 +54658,8 @@
     "Spot.Partition.strata": "9741c00b0264978ff835c272c53b790c1013302a9005ca16de542bbf569f439d",
     "Spot.Partition.templateBits": "cbcec163926949b3f988a648cc2fd604f0e60e48d2936d96eecf1c96e89cf8fc",
     "Spot.Partition.unitClass": "8441e40d5c04c005cd696116b2cc9847bfbe009af47971f878f91731620a57cf",
-    "Spot.Partition.unitGates": "413108ab70d7569061177a8fdfefb24cf83733184646b8daf05be50ab531f1be",
+    "Spot.Partition.unitGates": "214dd5c3279ddfbd2305246cf6307a7c59c1fa8b8f7f187d1bf7c1600db0facd",
+    "Spot.Partition.unitGatesBy": "5bbaed7af9040c6bb02a3b94cc5b8b908efa5239efc48763e60ba41055f8493e",
     "Spot.Partition.units": "48d2154b62df0513da07f34da24c0158629bf6983dfb52696ccc37e1d2f65b37",
     "Spot.Partition.valid": "4c499021820260c0cb04fac1eab200a83172a5355287018f77429ee07024d85b",
     "Spot.Partition.wordCalls": "8f63981ff10eb24d570f34459d08250ced98e71b4a33f28a1215bddae425d438",
