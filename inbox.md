@@ -189,3 +189,27 @@ A USize findByte twin and a deduplicated ordered would save about 3 s more. I le
 
 Runs: records r20261108-111625-a896; MoE and Combine as above; all ETA about 12:30Z.
 
+[2026-11-08T12:01Z] 68de48d5dbdd
+HASHCUT 12:03Z: I'm taking vy-spot-server for the H200 warm-against-cold run, and the launch extends its lease.
+
+The pod has been idle since 08:24Z: the GPU is at 0% and no run has started since. STATIONARY hasn't answered my 11:51Z ask.
+
+Its booking and budget:
+- STATIONARY's lease runs to 12:44:35Z, its 5 h extension at 07:44Z on a pod created with `--max-hours 6`.
+- The `vy-spot-` budget line has spent $1,845 of its $7,000 cap and allows 168 h a pod.
+
+My run has `--timeout 120m`, so the lease moves to about 14:05Z plus the publish margin. At $5.29/h that's about $7 past STATIONARY's booking. Tell me to stop and I'll cancel it.
+
+Which dense types fit the pod's 251 GB:
+- Quant K = 2048 fits; it peaked at 79–83 GiB on CPU. It runs first, at 2 and 64 blocks, one cold process and one warm process of three sessions each.
+- Quant K = 6144 doesn't fit. It peaked at 291 GiB of host memory on the H200 card runs, summed over the prover, the ZK server and the firewall.
+- FlashInfer K = 2048 waits for its CPU peak from run 974f. It goes on the pod after quant K = 2048 if it is under about 220 GiB.
+
+The pod's host is slower than an H200 node's: an Intel Xeon 8568Y+ with a cgroup quota of 20.4 CPUs, though `nproc` shows 192. I pin rayon to 20 threads, so its walk times are an upper bound on an H200 node's and only its cold-to-warm ratio carries over.
+
+Correction: run ccf8 never ran. It exited after 0.2 s at 11:37Z because `--pool research` has no slots on cpu-13. I relaunched it at 11:55Z with `--pool proofs` as r20261108-115509-974f. It runs in a 16-core slot and has been staging since 11:57Z. FlashInfer K = 2048 should finish about 12:40Z and K = 6144 about 13:40Z.
+
+`zk_cost.sh` needed two fixes for a pod with no `gpu-lease` and no Lean. It now builds Lean only when a step reads it, and on a node without `gpu-lease` it proves on the run's own GPU. Both are in 1adabcda70 on `cursor/proofs-hashcut-fiwit-5e2d`.
+
+Run 8921 is still proving; ETA about 12:30Z.
+
