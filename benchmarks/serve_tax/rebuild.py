@@ -530,8 +530,13 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
                 dst[b, j * slot:].view(dt).fill_(float("nan"))
     torch.cuda.synchronize()
     served = {b for rid in order for b in start["blocks"].get(rid, ())}
+    # the served engine frees a request that finished at S-1 only once S-1's output is processed, after it schedules S:
+    # until then the fresh pool holds as many blocks as those requests held alone
+    gone = {b for rid in start["finished_before"] for b in start["blocks"].get(rid, ())} - served
+    held = pool.get_new_blocks(len(gone)) if gone else []
     return {"requests": len(order), "statuses": statuses, "skipped_finished": len(start["finished_before"]),
-            "blocks_loaded": len(ids), "blocks_shared": shared, "blocks_served": len(served),
+            "blocks_held_through_first_schedule": held,
+            "blocks_loaded": len(ids), "blocks_shared": shared, "blocks_served": len(served) + len(gone),
             "blocks_fresh": pool.num_gpu_blocks - 1 - pool.get_num_free_blocks(),
             "bytes_loaded": len(ids) * int(rows[0].shape[1]) * L, "partial_blocks": len(partial),
             "alloc_s": alloc_s, "load_s": time.monotonic() - t, "tail": tail, "order": order}
@@ -645,6 +650,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         pages = first_of(pages, saved.page, *([mirror.page] if mirror else []))
         out["rebuilt"] = readd_mirror(eng, core, begin, saved, w["outputs"], st0["kv_layout"], bs, a.tail)
         readded = set(out["rebuilt"].pop("order"))
+        held = out["rebuilt"].pop("blocks_held_through_first_schedule")
+        out["rebuilt"]["blocks_held_through_first_schedule"] = len(held)
         want0 = {r: v for r, v in begin["truth"].items() if r in readded}
         out["start"] = {k: begin[k] for k in ("step", "processed_through", "finished_before", "mirror_vs_gpu", "preempted_waiting",
                                               "partial_last_pages")}
@@ -653,6 +660,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             pages = first_of(pages, mirror.page)
         out["rebuilt"] = readd(eng, core, st0, arrived, near_file, bs, a.tail)
         readded = set(out["rebuilt"].pop("order"))
+        held = []
         want0 = roots(near_file, served_spans(st0), bs)
     trace.scheduled = first
     got0 = roots(kv.rows, live_spans(sched, kvm), bs)
@@ -692,6 +700,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             if hits:
                 hits.due(sched.requests, trace.scheduled)
             so = orig(*args, **kw)
+            if held:
+                pool.free_blocks(held)
+                held.clear()
             if mirror and so.total_num_scheduled_tokens:
                 mirror.scheduled(so)
             return so
