@@ -123,8 +123,7 @@ def test_the_lean_menu_lists_each_model_s_entries():
 
 
 def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
-    """`VStar.Menu.Pinned` is `lean` of F6's pinned `menu.json` (`data/f6-menu.json`, the one in
-    art:bb9b72df0377d54ad001bb52a9d24b6152e83cdefb896d02fbbce26bc281dffa), byte for byte."""
+    """`VStar.Menu.Pinned` is `lean` of F6's pinned `menu.json` (`data/f6-menu.json`), byte for byte."""
     import json
     from pathlib import Path
 
