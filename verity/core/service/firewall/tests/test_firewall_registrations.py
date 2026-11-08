@@ -30,6 +30,8 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 SCHEMAS = ["hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]
 REG_LABEL = hashlib.sha512(b"verity/zk-server/registration/v1\0").digest()
+TAG_LABEL = hashlib.sha512(b"verity/zk-server/value-commitment/v1\0").digest()
+INTERIOR_LABEL = hashlib.sha512(b"verity/zk-server/interior-key/v1\0").digest()
 NOT_OPENED = "is none the current epoch opened: a session registers once, in the epoch that opened it"
 ONE_SESSION = ("the current epoch's session is not yet registered: an epoch opens one commit session (`register S` registers "
                "it, and the next commit opens the next epoch's)")
@@ -66,9 +68,10 @@ class Values:
                 out += b
         return out
 
-    def commit(self, trees=TREES) -> tuple[bytes, list[tuple[bytes, bytes]]]:
-        """Commits a table at each of `trees`, `LEAVES` random digests each: the session and each table's root and tag."""
-        out = self.request(f"commit {len(trees)}" + "".join(f" {d.hex()} {LEAVES} {sc}" for _, d, sc in trees),
+    def commit(self, trees=TREES, word: str = "commit") -> tuple[bytes, list[tuple[bytes, bytes]]]:
+        """Commits a table at each of `trees`, `LEAVES` random digests each, an interior commit where `word` is
+        `interior`: the session and each table's root and tag."""
+        out = self.request(f"{word} {len(trees)}" + "".join(f" {d.hex()} {LEAVES} {sc}" for _, d, sc in trees),
                            os.urandom(64 * LEAVES * len(trees)))
         head, _, out = out.partition(b"\n")
         assert head.startswith(b"ok "), head
@@ -242,6 +245,35 @@ def test_the_loop_admits_each_registration_once_oldest_first(exe, tmp_path):
     events = [(e["event"], e.get("n")) for e in FW.Firewall(state).record() if e["event"] in ("admit", "skip")]
     assert events == [("admit", 0), ("skip", 1), ("admit", 2), ("skip", 3), ("skip", 4), ("admit", 5)]
     assert fw.failures("u") == 2
+
+
+def test_an_interior_registration_is_under_its_sessions_key(exe, tmp_path):
+    """An interior commit's registration is numbered and appended as any other, its record the reference's with its table
+    tags and record tag under the session's own key `SHA-512(k ‖ L ‖ s)`, none under `k`. The loop, which holds `k`,
+    derives that key from the record's session: a statement reading the registration is admitted, and under another key
+    it is refused, reaching nothing of the auditor."""
+    state, key, other = tmp_path / "state", tmp_path / "salt.key", tmp_path / "other.key"
+    fw = FW.Firewall(state)
+    for _ in range(2):
+        fw.finish(fw.open("t", ["L0"]))
+    v = Values(exe, state, key)
+    k = key.read_bytes()
+    s, got = v.commit(word="interior")
+    tk = hashlib.sha512(k + INTERIOR_LABEL + s).digest()
+    assert all(tag != hashlib.sha512(k + TAG_LABEL + s + struct.pack(">I", j) + dom + struct.pack(">Q", LEAVES)
+                                     + bytes([SCHEMAS.index(sc)]) + root).digest()
+               for j, ((_, dom, sc), (root, tag)) in enumerate(zip(TREES, got)))
+    assert v.register(s) == (1, reference(tk, 0, 1, s, got))
+    assert v.register(s) == f"the session {s.hex()} {NOT_OPENED}"
+    v.close()
+    Values(exe, tmp_path / "other-state", other).close()
+    roots = [r for r, _ in got]
+    why = "registration 0: its record tag is not the ZK server's for its number, session count and table refs"
+    for sid, kf, refused in (("r0000", other, f"recursive session r0000 stopped at L0: {why}"), ("r0001", key, None)):
+        got_why, sent = _session(exe, state, sid, public(tmp_path / f"{sid}.pub", roots), kf, tmp_path)
+        assert got_why == refused and sent == ([] if refused else [[REGISTER]]), (sid, got_why, sent)
+    events = [(e["event"], e.get("n")) for e in FW.Firewall(state).record() if e["event"] in ("admit", "skip")]
+    assert events == [("admit", 0)]
 
 
 def test_the_loop_refuses_a_statement_it_cannot_read_under_its_key(exe, tmp_path):

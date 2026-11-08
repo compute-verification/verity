@@ -704,6 +704,15 @@ leak through `m` too. So the service of record fixes `m` at 1, protocol structur
 commit while its session is not yet registered is refused (`err the current epoch's session is not yet registered: …`),
 nothing of it answered. The stack chooses neither `m` nor a session, every record says `m = 1`, and the term is 0.
 
+**Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
+sample, so the service commits it apart (`interior J D₀ N₀ S₀ …`, the commit request's form and body;
+`Salts.interiorAnswer`). Once the request is whole it samples `s` and each leaf's 192-byte salt from the OS, and holds
+the salts by session while it runs, answering them to `salts`; a service started again holds none. The tables' tags and
+the registration's record tag are under the session's own key `SHA-512(k ‖ L' ‖ s)` (`Salts.interiorKey`, `L'` the
+SHA-512 of `verity/zk-server/interior-key/v1\0`), which the release side derives from `k` and the record's session. So
+nothing made under `k` reads a value or a root that may follow the sample: `k` meets the interior only at `s`, sampled
+once the request is whole. The registration is numbered, appended and admitted as any other.
+
 The release side admits each registration once, oldest first (the record's rule 5, `Core.Firewall.admitReads`, §10.5). Given the
 key (`core-firewall session --salt-key FILE`; `FC_FIREWALL_SALT_KEY` for `flock-circuit --firewall-state`), every hm96
 tree of a statement's public file must be a table of a registration on the record, at its domain, leaf count, schema and
