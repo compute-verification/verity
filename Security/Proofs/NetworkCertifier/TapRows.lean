@@ -38,6 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Binding
+import Proofs.Flock.Claims.Sampling.ProgReads
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
@@ -49,7 +50,7 @@ The network certifier registers its records at the transfer gates (`TapOpens`). 
 proof block outside the incorrect set is correct on the trace's committed values, so the trace opens every transfer gate
 there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network
 certifier, unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves
-unopened (`fill`): a correct proof block stays correct (`correct_mono`, it reads only opened values), and the filled
+unopened (`fill`): a correct proof block stays correct (`Prog.correct_mono`, it reads only opened values), and the filled
 trace carries the network certifier's records at every transfer gate (`carries_fill`), the incorrect proof blocks'
 included, since the trace's own value there, where it has one, is the network certifier's. So `accepted_of` gives
 `Accepted` with the incorrect proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
@@ -72,98 +73,6 @@ The registered-input and collision steps follow the registration's (proofs' P1b)
 namespace NetTiming.TapProof
 
 open Claims Claims.Sampling NetTiming NetTiming.SampledAuditProof
-
-/-! ### A correct proof block stays correct when unopened values are filled in -/
-
-theorem mapM_mono {rd rd' : ℕ → Option Bool} :
-    ∀ {ws : List ℕ}, (∀ i ∈ ws, ∀ b, rd i = some b → rd' i = some b) → ∀ {bs : List Bool},
-      ws.mapM rd = some bs → ws.mapM rd' = some bs
-  | [], _, bs, h => h
-  | i :: ws, hrd, bs, h => by
-    rcases hri : rd i with _ | c
-    · simp [List.mapM_cons, hri] at h
-    · rcases hws : ws.mapM rd with _ | cs
-      · simp [List.mapM_cons, hri, hws] at h
-      · have h1 := hrd i (by simp) c hri
-        have h2 := mapM_mono (ws := ws) (fun j hj => hrd j (by simp [hj])) hws
-        simp only [List.mapM_cons, hri, hws, Option.bind_eq_bind, Option.bind_some, Option.pure_def,
-          Option.some.injEq] at h
-        simp [List.mapM_cons, h1, h2, ← h]
-
-theorem val_mono {rd rd' : ℕ → Option Bool} {own own' : Option Bool} (x : BGate)
-    (hrd : ∀ i ∈ x.reads, ∀ b, rd i = some b → rd' i = some b) (hown : ∀ b, own = some b → own' = some b) {b : Bool}
-    (h : x.val rd own = some b) : x.val rd' own' = some b := by
-  cases x with
-  | input => exact hown b h
-  | const c => exact h
-  | not i =>
-    simp only [BGate.val] at h ⊢
-    obtain ⟨c, hc, rfl⟩ := Option.map_eq_some_iff.1 h
-    rw [hrd i (by simp [BGate.reads]) c hc]
-    rfl
-  | and ws =>
-    simp only [BGate.val] at h ⊢
-    obtain ⟨bs, hbs, rfl⟩ := Option.map_eq_some_iff.1 h
-    rw [mapM_mono (fun i hi => hrd i (by simpa [BGate.reads] using hi)) hbs]
-    rfl
-  | xor ws =>
-    simp only [BGate.val] at h ⊢
-    obtain ⟨bs, hbs, rfl⟩ := Option.map_eq_some_iff.1 h
-    rw [mapM_mono (fun i hi => hrd i (by simpa [BGate.reads] using hi)) hbs]
-    rfl
-
-theorem read_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b) {i : ℕ}
-    {b : Bool} (h : C.read ref i = some b) : C.read ref' i = some b := by
-  by_cases hc : ∃ c, C.gates[i]? = some (.const c)
-  · obtain ⟨c, hc⟩ := hc
-    rw [read_const hc] at h ⊢
-    exact h
-  · have hc' : ∀ c, C.gates[i]? ≠ some (.const c) := fun c h' => hc ⟨c, h'⟩
-    rw [read_of_not_const hc'] at h ⊢
-    exact hext i b h
-
-theorem runIn_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b)
-    (u : List ℕ) : ∀ g b, C.runIn ref u g = some b → C.runIn ref' u g = some b := by
-  intro g
-  induction g using Nat.strong_induction_on with
-  | _ g ih =>
-  intro b h
-  rw [Prog.runIn] at h ⊢
-  rcases hx : C.gates[g]? with _ | x
-  · rw [hx] at h
-    cases h
-  · rw [hx] at h
-    simp only [Option.bind_some] at h ⊢
-    refine val_mono x (fun i _ c hc => ?_) (hext g) h
-    by_cases hiu : i ∈ u
-    · simp only [hiu, ite_true] at hc ⊢
-      by_cases hig : i < g
-      · rw [dite_eq_left hig] at hc ⊢
-        exact ih i hig c hc
-      · rw [dite_eq_right hig] at hc
-        cases hc
-    · simp only [hiu, ite_false] at hc ⊢
-      exact read_mono hext hc
-
-theorem refIn_mono {C : Prog} {u : List ℕ} {ref ref' : ℕ → Option Bool} {ι : ℕ → Bool}
-    (hext : ∀ g b, ref g = some b → ref' g = some b) :
-    ∀ g b, C.refIn u ref ι g = some b → C.refIn u ref' ι g = some b := by
-  intro g b h
-  unfold Prog.refIn at h ⊢
-  split_ifs at h ⊢
-  · exact h
-  · exact hext g b h
-
-theorem correct_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b)
-    {u : List ℕ} (hc : C.Correct ref u) : C.Correct ref' u := by
-  intro g hg
-  obtain ⟨h1, h2⟩ := hc g hg
-  refine ⟨fun x hx i hi hiu => ?_, fun hbd => ?_⟩
-  · obtain ⟨c, hc⟩ := Option.ne_none_iff_exists'.1 (h1 x hx i hi hiu)
-    rw [read_mono hext hc]
-    exact Option.some_ne_none _
-  · obtain ⟨b, hb1, hb2⟩ := h2 hbd
-    exact ⟨b, hext g b hb1, runIn_mono hext u g b hb2⟩
 
 /-! ### The trace filled in with the network certifier's values -/
 
@@ -238,7 +147,7 @@ theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (l
     fill_ext
   have hcar := carries_fill hfit htap (hagree s hs htap.1)
   have hacc := accepted_of hsc.1 hsc.2.1 hfit ι
-    (fun v u hu hv => correct_mono (refIn_mono hext) (hι v u hu hv)) hcar hcov
+    (fun v u hu hv => Prog.correct_mono (Prog.refIn_mono hext) (hι v u hu hv)) hcar hcov
   have hacc' : Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o
       (traceVal s.prog (w.val H D.commit s),
         heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (tapVal (tops s)))) := by
