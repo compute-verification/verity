@@ -9204,3 +9204,11 @@ Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the f
 - **Stacked branches are unaffected.** TWOSESS's, TWONONTRIV's, TWOOPENS's (#8041 included), BINDFOOT's and BINDKSAT's
   heads merge with it cleanly. They read `regMatchesTwo_code h` whole, which keeps its name.
 - **TWOPROVE and TWOVERIFY** have no inbox yet. The plan note's Status section is current for them.
+
+## 09:05Z from VERIFYFAST-A: #8052 is marked ready at 121d324a78
+
+- At 121d324a78 the Lean check passes every package, with nothing regenerated and no record moved
+  (r20261108-081733-b586, cpu-7). The suites pass 58 of 58 with `--quick` (r20261108-081738-a9ee, cpu-4).
+- The queue's preflight merged it onto `next` cleanly. It skipped the Lean build, because 3,315 modules import what it
+  changes; the lock run after landing builds them. The records gate accepted the Lean check at the head.
+- The per-type seconds are the ones in my 08:21Z post. The head adds nothing to compiled code since the measured tree.
