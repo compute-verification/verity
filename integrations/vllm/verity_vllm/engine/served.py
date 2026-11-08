@@ -16,6 +16,11 @@ one and keeping its reason when the two agree:
 read-back that is not what was declared.  `require` judges every rank of a built engine (`read_rank`) and fails the Commit closed; the
 Commit records the result (`record`) in versions.json and summary.json as ``served``, and the circuit database's config record carries
 it (`pipeline.config_record`).  Torch-free: vLLM is imported only inside a serving process.
+
+The collectives' switches are among them: which of `CudaCommunicator.all_reduce`'s routes are on, FlashInfer's all-reduce backend, and
+NCCL's own (`NCCL_ENVS`, those that change its algorithm, protocol, channels or chunking).  What vLLM resolved from them on a rank, which
+the node decides too (FlashInfer's ``auto`` backend falls back to ``trtllm`` without NVSwitch multicast), is read back beside the
+switches as ``collectives`` (`collectives`) and recorded, not judged: two engines' records compare with `collectives_differ`.
 """
 from __future__ import annotations
 
@@ -46,10 +51,24 @@ DEFAULTS: dict[str, Any] = {
     "attention_backend": None,
     "flash_attn_version": None,
     "moe_backend": "auto",
+    "VLLM_ALLREDUCE_USE_FLASHINFER": True,
+    "VLLM_FLASHINFER_ALLREDUCE_BACKEND": "auto",
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": True,
+    "VLLM_USE_NCCL_SYMM_MEM": False,
+    "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC": False,
+    "VLLM_DISABLE_PYNCCL": False,
 }
+#: NCCL's switches that change which algorithm, protocol, channels, chunks or intra-node transport (whose topology search orders
+#: the ranks) reduce a call, and so the order of its adds; NCCL tunes each itself when unset, vLLM's default but under batch
+#: invariance.
+NCCL_ENVS = ("NCCL_ALGO", "NCCL_PROTO", "NCCL_NVLS_ENABLE", "NCCL_COLLNET_ENABLE", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS",
+             "NCCL_MIN_CTAS", "NCCL_MAX_CTAS", "NCCL_NTHREADS", "NCCL_BUFFSIZE", "NCCL_P2P_LEVEL", "NCCL_SHM_DISABLE",
+             "NCCL_CUMEM_ENABLE", "NCCL_GRAPH_FILE", "NCCL_TOPO_FILE")
+DEFAULTS.update(dict.fromkeys(NCCL_ENVS))
 _FLAGS = ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM", "VLLM_DISABLE_SHARED_EXPERTS_STREAM", "VLLM_USE_FLASHINFER_SAMPLER",
-          "VLLM_USE_V2_MODEL_RUNNER")
-ENVS = (*_FLAGS, "NCCL_P2P_DISABLE")
+          "VLLM_USE_V2_MODEL_RUNNER", "VLLM_ALLREDUCE_USE_FLASHINFER", "VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_USE_NCCL_SYMM_MEM",
+          "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC")
+ENVS = (*_FLAGS, "VLLM_DISABLE_PYNCCL", "VLLM_FLASHINFER_ALLREDUCE_BACKEND", "NCCL_P2P_DISABLE", *NCCL_ENVS)
 #: Where engine arguments set each config switch: a key of `LLM(**kw)`, or a key of one of its config dicts.
 ARGS: dict[str, tuple[tuple[str, ...], ...]] = {
     "disable_custom_all_reduce": (("disable_custom_all_reduce",),),
@@ -79,9 +98,14 @@ EXECUTIONS: dict[str | None, tuple[dict[str, Any], str]] = {
 }
 #: The ``enforce_eager`` each execution label builds its engine with.
 ENFORCE_EAGER = {k: v[0]["enforce_eager"] for k, v in EXECUTIONS.items() if k is not None}
-#: What vLLM's config sets under ``VLLM_BATCH_INVARIANT``, over every argument (`ParallelConfig._verify_args`), and why.
-BATCH_INVARIANT: tuple[dict[str, Any], str] = ({"disable_custom_all_reduce": True},
-                                               "vLLM's batch invariance turns its custom all-reduce off (ParallelConfig._verify_args)")
+#: What vLLM sets under ``VLLM_BATCH_INVARIANT``, over every argument and the environment (`ParallelConfig._verify_args`, and
+#: `override_envs_for_invariance` in each worker), and why.  It turns FlashInfer's all-reduce off in `CudaCommunicator` itself, which
+#: ``collectives`` shows and no switch does.
+BATCH_INVARIANT: tuple[dict[str, Any], str] = (
+    {"disable_custom_all_reduce": True, "VLLM_ALLREDUCE_USE_SYMM_MEM": False, "NCCL_COLLNET_ENABLE": "0", "NCCL_NVLS_ENABLE": "0",
+     "NCCL_MIN_NCHANNELS": "1", "NCCL_MAX_NCHANNELS": "1", "NCCL_PROTO": "Simple", "NCCL_ALGO": "allreduce:tree", "NCCL_NTHREADS": "1"},
+    "vLLM's batch invariance turns its custom all-reduce and torch's symmetric memory off and pins NCCL to one channel of its tree "
+    "(ParallelConfig._verify_args, override_envs_for_invariance)")
 _MISSING = object()
 
 
@@ -109,8 +133,12 @@ def value(switch: str, v: Any) -> Any:
         return None
     if switch in _FLAGS:
         return v if isinstance(v, bool) else bool(int(v))
-    if switch == "NCCL_P2P_DISABLE":
+    if switch == "VLLM_DISABLE_PYNCCL":
+        return v if isinstance(v, bool) else str(v).lower() in ("true", "1")
+    if switch.startswith("NCCL_"):
         return str(v)
+    if switch == "VLLM_FLASHINFER_ALLREDUCE_BACKEND":
+        return str(v).lower()
     if switch in ("enforce_eager", "disable_custom_all_reduce"):
         return bool(v)
     if switch == "flash_attn_version":
@@ -200,12 +228,65 @@ def read_rank(worker: Any) -> dict[str, Any]:
 
     vc = worker.vllm_config
     cc, ac = vc.compilation_config, vc.attention_config
-    got = {k: getattr(envs, k) for k in _FLAGS if k != "VLLM_USE_V2_MODEL_RUNNER"}
-    got.update(VLLM_USE_V2_MODEL_RUNNER=vc.use_v2_model_runner, NCCL_P2P_DISABLE=engine_env.snapshot().get("NCCL_P2P_DISABLE"),
+    env = engine_env.snapshot()
+    got = {k: getattr(envs, k) for k in (*_FLAGS, "VLLM_DISABLE_PYNCCL", "VLLM_FLASHINFER_ALLREDUCE_BACKEND")
+           if k != "VLLM_USE_V2_MODEL_RUNNER"}
+    got.update({k: env.get(k) for k in ("NCCL_P2P_DISABLE", *NCCL_ENVS)})
+    got.update(VLLM_USE_V2_MODEL_RUNNER=vc.use_v2_model_runner,
                disable_custom_all_reduce=vc.parallel_config.disable_custom_all_reduce, enforce_eager=vc.model_config.enforce_eager,
                compilation_mode=cc.mode, cudagraph_mode=cc.cudagraph_mode, attention_backend=ac.backend,
                flash_attn_version=ac.flash_attn_version, moe_backend=vc.kernel_config.moe_backend)
-    return {"rank": int(get_tensor_model_parallel_rank()), "switches": {k: value(k, v) for k, v in got.items()}}
+    return {"rank": int(get_tensor_model_parallel_rank()), "switches": {k: value(k, v) for k, v in got.items()},
+            "collectives": collectives()}
+
+
+#: The switches that pick a TP all-reduce's route or NCCL's order of adds, which `collectives_differ` compares
+COLLECTIVE_SWITCHES = ("disable_custom_all_reduce", "VLLM_ALLREDUCE_USE_FLASHINFER", "VLLM_FLASHINFER_ALLREDUCE_BACKEND",
+                       "VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_USE_NCCL_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC",
+                       "VLLM_DISABLE_PYNCCL", "NCCL_P2P_DISABLE", *NCCL_ENVS)
+
+
+def collectives() -> dict[str, Any]:
+    """In a serving process: the TP group's all-reduce routes as vLLM resolved them on this rank, in `CudaCommunicator.all_reduce`'s
+    order: each communicator on or off, FlashInfer's workspace backend (which the fused all-reduce + RMSNorm shares; None before its
+    first call), the custom all-reduce's and torch symmetric memory's byte caps, and the NCCL version pynccl loaded.  A read that
+    fails is recorded as ``error``: this record is never a reason to fail a Commit."""
+    try:
+        from vllm.distributed.parallel_state import get_tp_group
+        dc = getattr(get_tp_group(), "device_communicator", None)
+        try:
+            from vllm.distributed.device_communicators import flashinfer_all_reduce as fi
+            ws = getattr(fi, "_fi_ar_workspace", None)
+        except ImportError:
+            ws = None
+
+        def on(name: str) -> bool:
+            c = getattr(dc, name, None)
+            return c is not None and not getattr(c, "disabled", False)
+
+        ca, sm, nc = (getattr(dc, n, None) for n in ("ca_comm", "symm_mem_comm", "pynccl_comm"))
+        return {"world": getattr(dc, "world_size", None), "flashinfer": on("fi_ar_comm"),
+                "flashinfer_backend": getattr(ws, "backend", None), "quick": on("qr_comm"),
+                "flashinfer_pcie_ipc": on("fi_pcie_ipc_ar_comm"), "aiter": on("aiter_ar_comm"), "custom": on("ca_comm"),
+                "custom_max_bytes": getattr(ca, "max_size", None) if on("ca_comm") else None, "symm_mem": on("symm_mem_comm"),
+                "symm_mem_max_bytes": getattr(sm, "max_size", None) if on("symm_mem_comm") else None, "pynccl": on("pynccl_comm"),
+                "nccl_version": getattr(nc, "nccl_version", None)}
+    except Exception as ex:  # noqa: BLE001
+        return {"error": f"{type(ex).__name__}: {ex}"}
+
+
+def collectives_differ(a: Mapping[str, Any], b: Mapping[str, Any]) -> list[str]:
+    """Where two engines' served records (`record`) differ, rank by rank, in a `COLLECTIVE_SWITCHES` switch or a resolved route
+    (``collectives``).  Two engines whose all-reduces are to agree bit for bit, such as a replay on another node, need none; the
+    order a node's NVSwitch reduces in is its own, and neither record shows it."""
+    ra, rb = ({r["rank"]: r for r in x["ranks"]} for x in (a, b))
+    out = [] if set(ra) == set(rb) else [f"ranks {sorted(ra)} against {sorted(rb)}"]
+    for k in sorted(set(ra) & set(rb)):
+        sa, sb = ra[k]["switches"], rb[k]["switches"]
+        out += [f"rank {k}: {s} {sa.get(s)!r} against {sb.get(s)!r}" for s in COLLECTIVE_SWITCHES if sa.get(s) != sb.get(s)]
+        ca, cb = ra[k].get("collectives") or {}, rb[k].get("collectives") or {}
+        out += [f"rank {k}: {c} {ca.get(c)!r} against {cb.get(c)!r}" for c in sorted(set(ca) | set(cb)) if ca.get(c) != cb.get(c)]
+    return out
 
 
 def record(ranks: list[Mapping[str, Any]], decl: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
