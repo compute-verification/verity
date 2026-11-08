@@ -6493,3 +6493,22 @@ premise. Records that move:
   far edge's dump. GLM's mixed-precision pool zeroes newly allocated blocks, and the blocks `readd` loads are exempted
   from that, as vLLM exempts a KV connector's. Next: a TP1 check of that path on vy-spot-shape, then the window run.
 - Note: `note:proofs/20261108T0245Z-report-shape-replay`.
+
+- 03:50Z (BINDTERM): **(b) Changing constants can't cut the reruns enough; three structural changes can. That is more than a day of Lean, so it's scoped and not started. (c) The time-read proposal is drafted as Daniel's ask page, with its Lean statements type-checked on a branch. Please file it.**
+  - **Why constants fail.** The extractor's expected reruns are W = 1 + k + k²(1 + N·e_s), with k = 2^40(2N+1). That grows as N³, and W = 2^261 at machine A′ (N = 2^49.3).
+    - K never enters the expectation.
+    - k = O(N·log(1/δ)) is the slack exponent j ≈ 5–10 in c = 2^{2^-j}. On its own it leaves ε_bind at 2^-18.7 a run.
+  - **The levers**, each checked against the proof:
+    - L1: the outer wait's union over footprints. A candidate Y enters only through `counts Y`, giving about 2^22–2^25 bits in place of 2^49.3.
+    - L1′: the inner wait's union projected onto the sampled request's N_S = 2^36.5 blocks. Its bad event reads X itself, so footprints don't apply there.
+    - L2: one E^rep per Flock session instead of per slot.
+    - L3: j as a parameter. At j = 10, δ's coefficient is 1 + 2^-9.5. I'd take j as the lane's call (provisional) rather than an ask.
+  - **Result.** With all four at j = 10, W ≈ 2^124 and ε_bind ≈ 2^-90 a run at the honest t. Read at the adversary's capacity (c), it is 2^-45.5 over the world's year, or 2^-57.7 if one session proves every sampled block (my 03:25Z figures assumed that case). One-stage needs only L2, L3 and a separate inner count: 2^-55.7.
+  - **Size.** About 700–1,000 changed lines in 16 files, and every record reading `Compiled.E`, `κ` or `work` moves. Sequence it as L3 with separate counts, then L2, then L1 with L1′. L2 and L1 can run as two workers on disjoint files. I'd retire the `Deploy` copy of the extractor rather than fix it too.
+  - **(c) The ask.** Should SPOT's hash term be charged at a budget read from the adversary's time (all its SHA-512 work), as PoUW's per-prover bounds do, instead of at the oracle calls the model logs?
+    - I recommend A: time-costed finders read through `ecrBound` and a new `sbBound`, in a `KSAt` beside the unchanged probability form. I suggest A as the default at 17:00 PST Tue 10 Nov.
+    - The statements are 77 lines on `cursor/proofs-bindterm-26b2`, not landed, and `verity lean try` on vy-nebius-cpu-9 exits 0: `sbBound`, `BAt`, `sbB`, `Sampling.BextAt`, `Sampling.KSAt`, `Sampling.BextAtCostLe`, `Compiled.KSAt` and `CompilerKSAt`.
+    - If approved, `compilerBits` and its witnesses retire and `compilerKSAt` is proved from `compilerKS` and `compilerEfficient`, under a day. `compilerBits` is the only sampling guarantee that takes the hash assumptions as premises. No KS record moves.
+  - **Numbers at the time reading.** The adversary's SHA-512 capacity is 2^79.8, 2^82.0 and 2^85.6 a week, month and year for the world, and 2^68.0, 2^70.1 and 2^73.7 for a datacenter. Honest auditing uses about a tenth of it. √(γ·Pr[B]) over the world's year is 2^-144.4. Keeping ε_bind ≤ 2^-40 over the world's year needs W ≤ 2^129.4.
+  - **The post** is unchanged from 03:25Z: give the form with ε_bind named, and no deployed number until (b) lands.
+  - **Notes:** `proofs/20261108T0340Z-report-bindterm-reruns-scope` for (b); `proofs/20261108T0350Z-ask-draft-spot-hash-budget-from-time` for (c), the page in the ask template; the script is `proofs/bindterm/bindterm.py`.
