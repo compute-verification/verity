@@ -109,10 +109,10 @@ def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_again
     """`verify`'s verdict names the public file it checked the session against by its header's digest
     (``public_header_sha512``, the SHA-512 of the header's canonical JSON, `publicHeader`: the population's header, which
     the sampled statement is drawn from, never the drawn one), the registered reads by the digest of their file
-    (``registered_sha512``, the SHA-512 of its canonical JSON) and the session's sample (``unit_draw``, its record's),
-    which the second stage's audit holds each statement to. On a public file whose header is another's (one more key),
-    or a registered file at another root, the session is refused, and its verdict names that file, never the one it was
-    proved on."""
+    (``registered_sha512``, the SHA-512 of its canonical JSON), the session's sample (``unit_draw``, its record's) and
+    its tables (``session_tables``, one here), which the second stage's audit holds each statement to. On a public file
+    whose header is another's (one more key), or a registered file at another root, the session is refused, and its
+    verdict names that file, never the one it was proved on."""
     import served_registered as SR
 
     def digest(j) -> str:
@@ -130,6 +130,7 @@ def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_again
     assert ok["accepted"] is True, ok
     assert ok["public_header_sha512"] == digest(header) and ok["registered_sha512"] == digest(doc)
     assert ok["unit_draw"] == json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
+    assert ok["session_tables"] == 1
     other = {**header, "staged_for": "another file"}
     (tmp_path / "pub-32.bin").write_bytes(json.dumps(other).encode() + pub[nl:])
     bad = _verify(fx, reads, public=tmp_path / "pub-32.bin")

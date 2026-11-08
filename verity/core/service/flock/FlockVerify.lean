@@ -855,7 +855,8 @@ and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set 
 sample; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
-file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`),
+file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
+session up as (`session_tables`, `--session-tables J`, else 1),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
 `recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
 SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
@@ -1158,11 +1159,12 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
       (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
-      -- the public file's header and the registered reads it checked the session against, by their digests, and the
-      -- sample it drew the session's statement at, which a caller holds a statement of the session to
+      -- the public file's header and the registered reads it checked the session against, by their digests, the
+      -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
+      -- the session to
       (match header with | some h => [("public_header_sha512", Lean.Json.str h)] | none => []) ++
       (match registeredSha with | some h => [("registered_sha512", Lean.Json.str h)] | none => []) ++
-      (match draw with | some d => [("unit_draw", d)] | none => []) ++
+      (match draw with | some d => [("unit_draw", d)] | none => []) ++ [("session_tables", Lean.toJson count)] ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
       (if opened.isNull then [] else [("openings", opened)]) ++
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
