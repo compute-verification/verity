@@ -37,6 +37,9 @@ from verity.ml.protocols.certifier import compile_slice_v4 as V4, compile_slice_
 from verity_vllm.engine import pool_row as PR
 
 GROUP = bytes(PR.GROUP_BYTES)
+#: the replay's pool and block hashes, under the names the advice decoder's module gives them where it has them
+KV, HASHES = getattr(RP, "_KV", None) or RP.BlockPool, getattr(RP, "_Hashes", None) or RP.BlockHashes
+NEW_BLOCKS = "_new_blocks" if hasattr(KV, "_new_blocks") else "_get_new_blocks"
 
 
 # --- vLLM d9105ea80's BlockPool (vllm/v1/core/block_pool.py, kv_cache_utils.py), one group, full blocks ----------------
@@ -296,8 +299,8 @@ class _Driver:
 
 @contextmanager
 def _tapped(drv: _Driver):
-    K = RP._KV
-    names = ("hit", "allocate_slots", "cache_blocks", "_new_blocks", "_free_blocks")
+    K = KV
+    names = ("hit", "allocate_slots", "cache_blocks", NEW_BLOCKS, "_free_blocks")
     orig = {n: getattr(K, n) for n in names}
     T = drv.T
 
@@ -338,8 +341,8 @@ def _tapped(drv: _Driver):
                 T.cache_full_blocks(drv.keys_of(r), [T.blocks[b] for b in self.req_blocks[r.i]], done, full, self.B)
                 drv.counts["cached"] += full - done
 
-    def _new_blocks(self, k):
-        out = orig["_new_blocks"](self, k)
+    def new_blocks(self, k):
+        out = orig[NEW_BLOCKS](self, k)
         if self.mine is None:
             got = [b.block_id for b in T.get_new_blocks(k)]
             if got != out:
@@ -353,7 +356,7 @@ def _tapped(drv: _Driver):
             T.free_blocks([T.blocks[b] for b in ordered])
             drv.check(self)
 
-    taps = {"hit": hit, "allocate_slots": allocate_slots, "cache_blocks": cache_blocks, "_new_blocks": _new_blocks,
+    taps = {"hit": hit, "allocate_slots": allocate_slots, "cache_blocks": cache_blocks, NEW_BLOCKS: new_blocks,
             "_free_blocks": _free_blocks}
     for n in names:
         setattr(K, n, taps[n])
@@ -371,7 +374,7 @@ def drive(path: Path, *, every: int = 1) -> dict[str, Any]:
     if not inp.engine.enable_prefix_caching:
         raise ValueError(f"{path.name}: the pool row needs prefix caching on")
     drv = _Driver(statics(inp), every)
-    H = RP._Hashes
+    H = HASHES
     intern = H.__call__
 
     def call(self, p, block):
