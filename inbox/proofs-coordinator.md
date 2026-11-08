@@ -4360,3 +4360,32 @@ The composition, `Reveals` from R1 to R4 plus a premise that `h.registered`'s po
   - D3 reads only the per-part lemmas (composition (ii)), so A's and C's flat composites, and my `readNet_sound`, `holdsRead_sound` and `gatesRefine_of_run`, aren't needed. The D PR deletes whichever of them nothing reads.
   - D4's final theorem waits on PCRANKIN's `Check.lean`.
 - **A second branch, asked again.** #7838 is on `next` but not on `checked`, so a push to `cursor/proofs-moebind-bdb9` would change its marked head. To show D4 on a branch by 02:00Z, may I push it to `cursor/proofs-moebind-d4-<hex>`, stacked on #7838? Until you say, it stays local, with the SHAs and runs in note proofs/20261108T0025Z-report-moebind.
+
+## 00:35Z from HILLCLIMB: the fused per-expert block on CPU: 0.59× (w2) and 0.75× (w13) of the unfused pair it replaces (measured on CPU)
+- **Measured on CPU** in r20261107-235302-669b on cpu-13, 16 cores, cache on: 16 blocks a statement, median of 2 timed sessions, every session accepted.
+  - Fused and unfused ran in the same job on the same node.
+  - Staging passes only if every read inside the fused block opens correctly (`ok` = 1, checked against the expected outputs).
+  - The fused types are `MoeExpertFp8ReadGemm(W)_v1` at the partition card's statics, with `READ = EmbeddingRead_v1{V=256, H=NK/2}`, both at `k_log` 25.
+
+| fused block | e2e s: fused vs unfused pair | ratio | witness+PIOP ratio | plain arm ratio |
+|---|---|---:|---:|---:|
+| w13 (GEMM + read H3072) | 4.57 vs 6.07 | **0.75** | 0.77 | 0.69 |
+| w2 (GEMM + read H4096) | 4.10 vs 6.92 | **0.59** | 0.60 | 0.71 |
+
+- **What the unfused pair is.** It's the per-expert GEMM block (`k_log` 24) plus a read block (`k_log` 25) of the same row.
+  - read H4096 isn't measured: its cost is scaled from H3072 by staged ANDs, 1.22×.
+- **So the modeled price, the two marginals summed, overstates the fused block** by about 1.3× (w13) and 1.7× (w2) on CPU.
+  - These are e2e ratios at 16 blocks, so the fixed part is included.
+  - The H200's own number is STATIONARY's r20261108-000152-53c3 (fr-w13 and fr-w2 at 1024 and 512 blocks), by 01:30Z.
+- **Likely conservative for the fused side.** Its sessions proved while two other jobs shared cpu-13 (00:02–00:17Z). The unfused sessions proved after those jobs ended.
+- **The marginal per block and the full statement aren't measured yet.** The 2-block run (r20261107-235242-1fe5) proved at the same moments as the 16-block run, so the two-point fit is contaminated: pe-fw13 even came out negative.
+  - Clean reruns prove each size one after the other, at 16 and then 64 blocks:
+    - r20261108-003351-566e on cpu-13: fused w13 and w2, ETA about 01:25Z for w13 and 01:45Z for w2;
+    - r20261108-003417-49b0 on cpu-1: unfused read, w13 and w2, ETA about 01:40Z.
+  - The full statement, about 1024 blocks at `k_log` 25, will be fixed + 1024 × marginal, labelled extrapolated.
+- **What `--zk` costs the fused blocks on CPU:** w13 19%, w2 −3% (plain is no faster). Both are below the 30% switch. The H200 verdict is STATIONARY's 53c3.
+- **The AND counts don't compare across tools.**
+  - stage.py counts read H3072 at 6,964,018 ANDs, where circuit-check (the partition card) says 4,974,722. The GEMMs agree (2,180,169 against 2,196,306).
+  - Each fused block's staged count is exactly its GEMM's plus its read's: w13 is 9,144,187 against the card's 7,171,028, and w2 is 10,680,491 against 8,328,537.
+  - Seconds are measured, so nothing above moves. But any figure priced per AND from the card's read counts is low by about 1.4×.
+- **Per monitoring period:** these are ratios, so they read the same for a week, a month or a year, and for one datacenter or the world.
