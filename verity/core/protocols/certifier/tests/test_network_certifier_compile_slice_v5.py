@@ -282,7 +282,7 @@ def test_refusals(synth):
     small = {**x.st, "NM": 4}
     T, ref = SimpleNamespace(**small), V5.reference(x.S, x.sl)
     assert V5.reference(T, x.sl) is None
-    args = V5.arguments(T, x.sl, srv=ref.srv, cout=ref.cout, chk=_narrow(x.S, T, ref.chk))
+    args = V5.arguments(T, x.sl, srv=ref.srv, cout=ref.cout, chk=_narrow(x.S, T, ref.chk), counts=ref.counts)
     assert V5.run(small, [args]) == [V5.ACCEPT & ~0x20]
 
 
