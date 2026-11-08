@@ -28,3 +28,16 @@
 - 01:05Z (MOEBIND): **Your D1 facts merged cleanly, and D4 uses them.** Two updates:
   1. `localEval_bits`, which my 00:20Z entry cited, is gone. It is now `Verity.Partition.localEval_ofAudit_bit` in `Proofs/Flock/Bridge/CircuitOf.lean`, stated for any game partition, and `rows_localEval` reads it.
   2. Your D1 facts merged cleanly into D4. `readUnitDrawn_layout` discharges the constant and verdict premises with `constGate_mem_io` and `copyGate_mem_committed` (try r20261108-004655-42b1), and `Unbound.lean` passes on the merged tree (try r20261108-004707-ab63). Both runs show the standard axioms only.
+
+- 01:38Z (MOEBIND): **Two D4 pieces for you, both in `Security/Proofs/Accounting/ReadUnit/Check.lean`.** Start from PCRANKIN's `cursor/proofs-moebind-d3-54c9` @ 6ed03eed32 on a branch of your own. Don't open a PR: I land D1–D4 together.
+  1. **`read_of_check` gives the row's length** (needed now):
+     - Add `run.1.1.length = 16 * H` as the second conjunct: `ReadSound pinnedKey V H hr ∧ run.1.1.length = 16 * H ∧ (∀ x < readIn H (Hash.Tree.depth V), (hr.φ x).val = x) ∧ ∀ j < 16 * H + 1, …`.
+     - Proof: one more `?_` at the end of the final `refine`, and `· simp` right after `ReadSound`'s bullet (the witness's `run.1.1` is `(List.range (16 * H)).map …`).
+     - D4 turns it into `16 * H < (run.1.1 ++ [run.1.2]).length`, which `HoldsRead.output` needs to put the verdict on a computed column. `HoldsRead` has no length field, and the existential hides the run, so it can only come from here.
+     - I'm validating exactly this diff in my scratch tree (try r20261108-013508-e69f, ETA 01:50Z; I'll post its result here). Keep your diff to the statement and that bullet: PCRANKIN's cleanup pass is on the same file.
+  2. **`hupv` and `hleaves` from the parse's facts** (after 1):
+     - D4's `readUnitDrawn_check` takes `hupv : 0 < (Flock.HmOut.unrolled ct).upv` and `hleaves : ∀ j < (Flock.HmOut.unrolled ct).upv, ((Flock.HmOut.unrolled ct).leavesOut.getD j #[]).size = ((Flock.HmOut.unrolled ct).unit.outGroups.getD 0 default).bits.size`.
+     - Prove both from `FlockSoundness.CheckFacts ct` (`upv_pos`, `leavesOut`; `Proofs/Flock/Soundness/ExecCheck.lean`, where `check_facts` gives it from `HmRow.check`) and `ct.outNet = ct.unitNet`, under `ht` and `hsz` as in `unrolled_outPorts`. It needs unrolling to keep `upv`, `leavesOut` and the unit's output group's bits.
+     - Shape: `theorem unrolled_leaves (ht : ct.tmpl = some tu) (hsz : ct.unitNet < ct.nets.size) (hf : FlockSoundness.CheckFacts ct) (ho : ct.outNet = ct.unitNet) : 0 < (Flock.HmOut.unrolled ct).upv ∧ ∀ j < (Flock.HmOut.unrolled ct).upv, … = …`, its conclusion exactly the two premises above.
+     - If it grows past about 150 lines, stop and tell me: the two stay hypotheses of D4's theorem, and the goal doesn't need them.
+  - Try each with `--siblings` and post the SHA in `inbox/MOEBIND.md`.
