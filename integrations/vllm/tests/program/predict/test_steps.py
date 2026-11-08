@@ -67,7 +67,7 @@ SALT = bytes(range(64))
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
 SERVED = "served-model"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
-CLASS_G_ENGINE = {"max_model_len": 2048, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
+CLASS_G_ENGINE = {"max_model_len": 131072, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
                   "enable_prefix_caching": False}
 
 
@@ -896,13 +896,13 @@ def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
 
 
 def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(tmp_path):
-    """A class-G registration at the class's limits of 8,192 tokens a step and 32,768 positions: a request co-scheduled in a step
+    """A class-G registration at the class's limits of 8,192 tokens a step and 131,072 positions: a request co-scheduled in a step
     of 3,000 tokens builds no Program, since no captured all-reduce covers that launch, and `partial` refuses it by name, request by
     request, before writing any launch. (A prompt past INDEX_TOPK keys compiles: `test_dsa_long_rows`.)"""
     why = "an all-reduce of 3000 x 6144 on route 'symm_mem_comm'"
     advice, ingress = _session([(10, 1, {**GREEDY, "max_tokens": 1})] + [(230, 1, {**GREEDY, "max_tokens": 1})] * 13,
                                [[(0, 0, 10)] + [(i, 0, 230) for i in range(1, 14)]])
-    reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192, "max_model_len": 32768})
+    reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192})
     with pytest.raises(Unexpressible, match=re.escape(why)):
         compile_steps(reg, advice, ingress)
     with pytest.raises(Unexpressible, match=re.escape(f"every request is refused, request 0 first: request 0: its Program is refused: "
@@ -996,7 +996,7 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
-    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 32768"),
+    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),

@@ -1,7 +1,7 @@
 """Node 1's dispatcher handles each finished Job on its own. An exception while handling one (routing its next task, labelling it
 seen) is that Job's: an `item-failed` event is logged, the Job stays unseen for the next tick, and the tick goes on to the other
 Jobs and the ready files. The loop's tick line then says `tick failed`, so the steward's failed-tick alert still counts it.
-On 1-2 Oct three AlreadyExists stalls in 10 h each stopped every tick, so no Job after the failing one was handled."""
+One stuck Job (an AlreadyExists) never stops every tick, leaving every Job after it unhandled."""
 from __future__ import annotations
 
 import importlib.util

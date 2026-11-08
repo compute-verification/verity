@@ -32,7 +32,7 @@ only the fields `reads.READS` declares, each with its account in the output acco
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
   TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
-  8,192 tokens and 256 sequences, positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or
+  8,192 tokens and 256 sequences, positions at most 131,072, prefill chunks of at most 256 rows, the prefix cache stated on or
   off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
   graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
@@ -53,8 +53,7 @@ only the fields `reads.READS` declares, each with its account in the output acco
   schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
   reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
   statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
-  captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's `run` input (`dsa.run_field`), its own
-  (`batch`'s R1), and the Program returns the checks that order is the top-k set.
+  captures). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`).
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -110,6 +109,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
@@ -121,7 +121,7 @@ from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
-from .common import edge_config
+from .common import cyclic_gc_off, edge_config
 from .phi import Phi
 from .segment import edge_groups, edge_of, launch_of, segment_of
 
@@ -241,7 +241,8 @@ class Compiled:
         (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
         their place. No model-step template is among them."""
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
-        ids |= {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes if n.fn.id.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        callees = {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes}
+        ids |= {i for i in callees if i.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
         return tuple(sorted(ids))
 
     def summary(self) -> dict:
@@ -519,8 +520,9 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
-    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
-                         edge=unit.edge, stop=unit.stop)
+    r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
+                      edge=unit.edge, stop=unit.stop, with_desc=False)
+    return replace(r, digest=program_digest(r.program))
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: bytes | None = None, partial: bool = False,
@@ -530,7 +532,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
     compiles them or raises `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would
     otherwise refuse the session, a request whose Program the vocabulary refuses (a launch no capture covers) included.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
-    `Unexpressible` where the naming doesn't reach it."""
+    `Unexpressible` where the naming doesn't reach it. The cyclic collector is off throughout (`cyclic_gc_off`, at the end)."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
 
@@ -551,7 +553,6 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
     programs: dict[str, Any] = {}
     comps: dict[str, Any] = {}
     digests: dict[str, str] = {}
-    canon: dict = {}
     names: dict[str, Any] = {}
     for u in plan.distinct():
         r = built[u.key()]
@@ -562,7 +563,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
                                 f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
                                 f"Build's side and predict's alike (`program.prune.without_dead_units` drops a request wrapper's)")
         programs[r.digest], digests[u.key()] = r.program, r.digest
-        comps[u.key()] = request_component(r, canon)
+        comps[u.key()] = request_component(r)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
     adv = advice_of(registered, advice)
     edge = None if registered.phi.target_profile().batch_invariant else edge_of(registered.phi, adv, units, plan.idle)
@@ -793,3 +794,6 @@ def compare(summary: dict, root: str) -> dict:
                     **({} if traced or why is None else {"trace_error": why})})
     n = {k: sum(1 for x in out if x["outcome"] == k) for k in ("equal", "different", "no_trace")}
     return {"schema": SCHEMA + "/comparison", "compiler": summary["compiler"], "units": out, **n, "mismatches": n["different"] + n["no_trace"]}
+
+
+compile_steps = cyclic_gc_off(compile_steps)

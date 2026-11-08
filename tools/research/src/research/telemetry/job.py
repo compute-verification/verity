@@ -159,8 +159,8 @@ def build_job(*, project: str, task: str, job: str, attempt: int, lane: str, gen
             "computation": {"tree_sha": tree_sha, "tree_sha_reason": None if tree_sha else "not supplied", "release_tag": release_tag,
                             "workload_digest": workload_digest, "workload_digest_reason": None if workload_digest else "not supplied",
                             "stage": stage, "inputs": inputs, "profile": profile,
-                            # [R18 infra, F-r17-tp-06] resolved_path / repo_root / git_sha per imported package + sys.path[0], as the
-                            # runner's precheck recorded them (research-infra/source-identity/v1); None = "not supplied" (pre-r18-int-1 runner)
+                            # resolved_path / repo_root / git_sha per imported package + sys.path[0], as the
+                            # runner's precheck recorded them (research-infra/source-identity/v1); None = "not supplied" (an older runner)
                             "source_identity": source_identity, "source_identity_reason": None if source_identity else "not supplied"},
             "environment": env,
             "execution": {"command": argv, "command_redacted": redacted, "declared_outputs": declared_outputs, "timeout_s": timeout_s,
@@ -188,7 +188,7 @@ def input_ref(spec: str) -> dict[str, Any]:
         st = Path(path).stat()
         ref["sha256"], ref["sha256_reason"] = sha256_file(path)
         ref["bytes"] = st.st_size
-        # identity at launch even when the hash is deferred (rev d6 / F-r17-19 shape): size + mtime_ns + inode + device
+        # identity at launch even when the hash is deferred: size + mtime_ns + inode + device
         ref["stat"] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns, "ino": st.st_ino, "dev": st.st_dev}
         if ref["sha256"] is None:
             ref["sha256_deferred_to"] = "preserve.verify"   # the preserving step hashes it (hash_inputs below), so every preserved bundle ends fully hashed

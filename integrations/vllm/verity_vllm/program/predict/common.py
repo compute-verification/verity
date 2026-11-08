@@ -1,10 +1,13 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
-class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
+class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
+token select over a row's whole-vocabulary logits (`select_token`), a wrapper's forwards over a decoder (`drive`), and a compile's
+collector (`cyclic_gc_off`)."""
 
 from __future__ import annotations
 
+import functools
+import gc
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -55,34 +58,6 @@ def _arr_shape(t: Type) -> tuple[int, ...]:
 def _ptypes(spec) -> tuple:
     params, _ = spec.signature()
     return tuple(t for _, t in params)
-
-
-def reads_run(net, keys: int) -> bool:
-    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
-    return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
-
-
-def wrapper_keys(wrapper: str, M: int, LP: int | None, T: int | None) -> int:
-    """The most keys a row of the wrapper reads: a step's M rows attend among themselves, a request's last decode its LP + T."""
-    return int(M) if wrapper == "step" else int(LP) + int(T)
-
-
-def run_input(net, params: list, keys: int):
-    """`derive`'s `run` parameter (`registration.RunInputs`), declared at the end of `params`, where `net`'s rows of up to `keys`
-    keys read a value the served run decides (`reads_run`), else None."""
-    if not reads_run(net, keys):
-        return None
-    from verity_vllm.program.frontend.registration import RunInputs
-    return RunInputs.declare(params)
-
-
-def finish_run(run, params: tuple, B) -> tuple:
-    """The parameters once `run`'s record holds every field the forward read (`RunInputs.finish`), the Builder's too."""
-    if run is None:
-        return params
-    run.finish(final := list(params))
-    B.params = tuple(final)
-    return B.params
 
 
 def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
@@ -205,12 +180,10 @@ def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, po
 
 class _Peers:
     """A tensor-parallel rank's view of the other ranks' partials (`vllm_meta.WithPeers`): world - 1 peer Inputs per collective, in
-    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read.  `schedule` is the rank's schedule
-    Input (`CollectiveBus.schedule_key`, the MoE align's key per pair), read in call order; `k` counts the words read."""
+    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read."""
 
-    def __init__(self, inputs: list[Coll], world: int, rank: int, schedule: Coll | None = None) -> None:
+    def __init__(self, inputs: list[Coll], world: int, rank: int) -> None:
         self.inputs, self.world, self.rank, self.n = list(inputs), world, rank, 0
-        self.schedule, self.k = schedule, 0
 
     def take(self, own: list) -> list[list]:
         """One collective's rows per rank, in rank order: this rank's `own` rows (refs) and each of the next world - 1 peer Inputs'."""
@@ -228,12 +201,6 @@ class _Peers:
     def whole(self, own: list):
         """The operand of one collective over all rows: every rank's rows, rank-major (`collectives.AllReduceRule`'s parts)."""
         return concat([concat(r) for r in self.take(own)])
-
-    def key(self, n: int):
-        """The next n words of the schedule."""
-        out = self.schedule.refs.slice(self.k, self.k + n)
-        self.k += n
-        return out
 
 
 class _Launch:
@@ -380,3 +347,18 @@ def launch_seqlen_q(ctx: dict, own_rows: int, step: int, tp, accepted: bool) -> 
         return own_rows
     except TG.LaunchContextInvalid as e:
         raise Unexpressible(f"vocabulary cannot express: request step {step}: {e}") from None
+
+
+def cyclic_gc_off(f):
+    """`f` with the cyclic collector off while it runs: a compile frees its intermediates by reference counting, and the collector's
+    passes over the bodies it builds cost a quarter of the compile."""
+    @functools.wraps(f)
+    def run(*args, **kwargs):
+        on = gc.isenabled()
+        gc.disable()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            if on:
+                gc.enable()
+    return run

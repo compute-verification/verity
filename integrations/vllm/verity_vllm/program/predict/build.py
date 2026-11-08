@@ -42,9 +42,8 @@ from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, finish_run, in_launch, kind,
-                     launch_batch, launch_rows, launch_seqlen_q, request_passes, run_input, select_token, served_class, with_checks,
-                     with_edge, wrapper_keys)
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, in_launch, kind,
+                     launch_batch, launch_rows, launch_seqlen_q, request_passes, select_token, served_class, with_checks, with_edge)
 from .domain import check_phi
 from .phi import Phi
 
@@ -415,7 +414,6 @@ class BuildResult:
     n_root_nodes: int
     timings: dict = field(default_factory=dict)
     named: Any = None     # what a `build_program` `finish` says beside the Program (`naming.Named`)
-    run: dict | None = None      # its `run` parameter's layout (`RunInputs.layout`), where a row reads a value the served run decides
     checks: dict | None = None   # its checks output, as `derive`'s provenance states it (`common.with_checks`)
 
     def summary(self) -> dict:
@@ -636,8 +634,7 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
-    collective order, `schedule_words(rows)` (when it has one) the schedule words a pass reads, `model(B, W, peers)` the forward and
-    the sampler."""
+    collective order, `model(B, W, peers)` the forward and the sampler."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
     ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
     if ff.get("arch") == "dsa-moe":
@@ -724,9 +721,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
-    words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
-    if words:
-        params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
     history = len(params)
     if C:
         params += net.prefix_params(C)   # `vllm_meta.prefix_input`
@@ -738,12 +732,12 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         # nothing gathers no logits, the last of `peer_shapes`
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
-    n_peers, run = len(params) - n_user, run_input(net, params, wrapper_keys(wrapper, M, LP, T))
+    n_peers = len(params) - n_user
     params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
-    ids, W, schedule = inputs[0], inputs[-1], inputs[history - 1] if words else None
-    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank, schedule)
+    ids, W = inputs[0], inputs[-1]
+    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
@@ -751,7 +745,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
-    model.run = run
     batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
     in_launch(model, batch, net.model_class, chunks, T)
     if wrapper == "request" and isinstance(model, _Model):
@@ -762,9 +755,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
                  last=inputs[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
-    if peers.n != len(peers.inputs) or peers.k != words:
-        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
-    params, (out, checks) = finish_run(run, params, B), with_checks(model, out, B, stop)
+    if peers.n != len(peers.inputs):
+        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
+    out, checks = with_checks(model, out, B, stop)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None
@@ -775,10 +768,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C and dense else WRAPPERS[(wrapper, kind)]
     if world > 1:
-        src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
+        src_class = f"verity-vllm/with-peers/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
-                  "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
+                  "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
@@ -797,4 +790,4 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         timings["encode_digest_s"] = round(time.time() - t2, 3)
     timings["total_s"] = round(time.time() - t0, 3)
     return BuildResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id, timings=timings, named=names,
-                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, run=run and run.layout(), checks=checks)
+                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, checks=checks)

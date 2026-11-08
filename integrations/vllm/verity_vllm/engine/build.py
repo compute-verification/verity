@@ -159,11 +159,13 @@ def register_int8_parts(target: Any) -> None:
 
 
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
-                      engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                      engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None,
+                      env: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
     checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
-    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager, an Inductor that
-    read a fixed switch otherwise: `engine_env.require_inductor`) are the same."""
+    same environment knobs as `build_engine` (idempotent), ``env`` (an engine class's, `engine_classes.env`) last, over the process's.
+    Refusals (unknown execution, contradicting enforce_eager, an Inductor that read a fixed switch otherwise:
+    `engine_env.require_inductor`) are the same."""
     from verity_vllm.engine import engine_profile as prof
 
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
@@ -174,6 +176,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     env_flags = served.apply(execution)
     if target is not None:
         env_flags.update(engine_env.apply_target(target.env()))
+    if env:
+        env_flags.update(engine_env.apply_target(env))
     env_flags = {**prof.apply_env(), **env_flags}
     register_int8_parts(target)
     cp = prof.checkpoint_for(case, checkpoints)
@@ -200,7 +204,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
 
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
-                 execution: str | None = None) -> Engine:
+                 execution: str | None = None, env: dict[str, str] | None = None) -> Engine:
     from verity_vllm.engine import engine_profile as prof
 
     # `enforce_eager` comes from the workload's declared execution (`execution_of_workload`), not from a literal:
@@ -211,10 +215,12 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
     # `engine_kwargs_for` (the hot worker computes the same keyword set to decide reuse vs restart).
     env0 = engine_env.snapshot()
-    kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target, execution=execution)
+    kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target,
+                                          execution=execution, env=env)
     from vllm import LLM  # after apply_env
 
-    from verity_vllm.engine import sparse_mla, topp_pin
+    from verity_vllm.engine import moe_align, sparse_mla, topp_pin
+    moe_align.arm()
     sparse_mla.arm()
     topp_pin.arm()
 

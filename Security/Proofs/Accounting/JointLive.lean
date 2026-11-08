@@ -20,7 +20,7 @@ charged at its finder (`Live.sound_of_break`), not folded into its acceptance.
 A wipe's survivor bound (`Verity.Wipe.SurvivorBound`) is a bound in its own game. On a run whose coins at the
 boundary are the wipe's (`Verity.Wipe.OfRun.Preserves`), the run's event that the wipe accepts while foreign content
 past the survivor threshold survives is the preimage of the wipe's game's, so the survivor bound bounds it
-(`Verity.Wipe.OfRun.prob_kept_le`), and the horizon's union bound sums it (`JointHorizonBlocksLive`). Read with the bits
+(`Verity.Wipe.OfRun.prob_kept_le`), and the horizon's union bound sums it (`JointPooledBlocksLive`). Read with the bits
 a strategy gives back as what it keeps (`Live.kept`: all of the foreign content when it reads it back, none otherwise),
 the survivor bound at `foreignBits` is the survivor bound at a fraction `f` (at most `f · fill + 2λ` bits plus the
 unfilled state, `λ = 128`) whenever `foreignBits ≤ f · fill + 2λ` (`Live.survives_of_survivorBound`, and on the run
@@ -213,8 +213,8 @@ theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontr
     _ ≤ _ := prob_mono (fun _ _ => ⟨.sampled, trivial, hfail⟩) _ _
 
 /-- **The joint guarantee over a horizon of periods played as one causal game**
-(`Accounting.Guarantees.JointHorizonLive`). -/
-theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
+(`Accounting.Guarantees.JointPooledLive`). -/
+theorem JointPooledLive : Accounting.Guarantees.JointPooledLive := by
   intro ι α _ d m C O G r c err h s
   calc prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s
       ≤ ∑ j, prob (fun o => ∃ a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s :=
@@ -224,10 +224,10 @@ theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
     _ ≤ _ := Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun a _ => h j a s
 
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
-(`Accounting.Guarantees.JointHorizonBlocksLive`). -/
-theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
+(`Accounting.Guarantees.JointPooledBlocksLive`). -/
+theorem JointPooledBlocksLive : Accounting.Guarantees.JointPooledBlocksLive := by
   intro ι α _ _ d B C O G S c σ err δPous D sched Ω Ch _ _ _ _ W foreignBits εWipe R h hW hR hM s
-  have hA := JointHorizonLive ι α d B C O G S.block c err h s
+  have hA := JointPooledLive ι α d B C O G S.block c err h s
   have hW' : prob (fun o => ∃ b, (R b s).accepts o ∧ (R b s).Kept (foreignBits b) o) G s ≤
       ∑ b, εWipe b (R b s).S_φ (R b s).hold (R b s).keep :=
     (Live.prob_exists_univ_le _ G s).trans

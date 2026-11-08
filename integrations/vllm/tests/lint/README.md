@@ -100,7 +100,9 @@ or a data file), dated attributions and ISO dates, `note:` ids, Notion URLs, Lin
 timestamps and worker codenames (board ids, rounds, lanes, handles), against `tests/lint/allowlists/repo_lane_text.json`.
 AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills hold none. The gate fails a PR that adds one to a file it changes,
 naming each, with where the text goes: history to git, work to Linear, rulings to Notion, results to the store. It takes
-over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree.
+over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree. `tests/lint/test_repo_retired_terms.py`
+reads the whole text of the same files, identifiers included, for the terms `GLOSSARY.md`'s older names retire, against
+`tests/lint/allowlists/repo_retired_terms.json`, and the gate refuses a new one with the term to say.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too.** In `integrations/vllm`, a change may add no more

@@ -147,7 +147,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
             raise ValueError(f"{d}: peers parameter {ent.get('name')!r} has duplicate field ordinals")
         p.peer_fields[node] = flds
         p.peer_index[node] = int(ent["request_index"])
-    # a witness parameter (`witness_layout`: the Marlin align's `schedule`) is one homogeneous Input node, bound by its name as the rank
+    # a witness parameter (`witness_layout`) is one homogeneous Input node, bound by its name as the rank
     # Program's witness input of that name is (`load_derived`)
     for ent in pj.get("witness_layout") or []:
         node = int(ent["param"])
