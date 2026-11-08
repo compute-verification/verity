@@ -1308,7 +1308,7 @@ theorem acceptMeans_nontrivial :
         barePublic = publicOf bareParams bareEvidence law d n ∧
         bareProfile = profileOf bareParams nullCommitment bareEvidence d n ∧
         SeedSaltNamed bareParams nullCommitment bareEvidence) := by
-  rintro law d n ⟨⟨⟨hk, -⟩, -⟩, -⟩
+  rintro _ _ _ ⟨⟨⟨hk, -⟩, -⟩, -⟩
   simp [nullCommitment, keys?] at hk
 
 theorem digestIsRecord's : DigestIsRecord's := by

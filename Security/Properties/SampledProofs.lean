@@ -386,8 +386,9 @@ def BernoulliBounds : Prop :=
 
 /-- The verifier of the default program, holding no copies, at δ = 0 and with no challenger. -/
 def bareParams : Params :=
-  { verifier := { program := default, query := .null, law := .null, workTable := none, scheme := "", ports := #[],
-      leafLayer := none, anchors := #[], log := #[], partition := none },
+  { verifier :=
+      { program := default, query := .null, law := .null, workTable := none, scheme := "", ports := #[],
+        leafLayer := none, anchors := #[], log := #[], partition := none },
     delta := ⟨0, 1⟩ }
 
 /-- The commitment to the record `null`, which has no keys, so no registration keeps it (`R1`). -/
