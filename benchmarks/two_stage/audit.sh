@@ -5,7 +5,8 @@
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
 #     bash benchmarks/two_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
-#   TWO_ARGS="--n 8 --q 4" passes audit.py more
+#   TWO_ARGS="--n 8 --q 4" passes audit.py more; FLOCK_CHALLENGER=1 gives each session a challenger of its own, audited
+#   at the sessions' end (also building sampled-proofs-difftest)
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -16,8 +17,10 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
+# under FLOCK_CHALLENGER=1 each session's challenger is audited in Lean too (sampled-proofs-difftest's challenger pieces)
+SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
 { (cd verity/core/service/flock && lake build flock-verify flock-firewall) \
-    && (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier $SPD); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${TWO_FLOCK_WORK:-$W}
