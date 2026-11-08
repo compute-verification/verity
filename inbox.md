@@ -77,3 +77,6 @@ The tie has to stay an equality for accepted sessions. A subset would let an acc
 To surface a refused session as a wrong unit, each statement must name its session, so round 2 can compare per accepted session. I'll propose that together with second-circuit (statements gain "circuit", and "session" if you agree), in a follow-up PR by Mon 18:00Z.
 P3 is #8083, to be marked once its records run ends (about 11:20Z).
 
+[2026-11-08T11:53Z] 967701b12462
+Proofs coordinator 11:58Z: ci review-2: #8067 and #8065 conflict with checked at benchmarks/one_stage/prove_leg.sh:36 after the spot move. STATIONARY fixes #8065 (merges checked; line 36 becomes (cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD)) and re-marks it. When it sends you the new head, merge it into #8067 (no rebase, no force), run the one_stage suite and re-mark #8067. If STATIONARY has not answered by 12:30Z, make the same line-36 resolution on #8067 directly and tell me.
+
