@@ -38,12 +38,12 @@ import Proofs.Flock.Claims.Prob
 /-!
 # The nontrivial lemma of the leak bound over a carried pool
 
-`PooledLeakCarried`. At one run whose audit always accepts, `q = 1`, `Fmax = 1`, no error and no missed root, every row
-the empty pool's, and its observations empty where the horizon is one step: no run meets its leak relation, no opening
-collides (the two digests of the empty row hash one message, `poolColl_empty`), and the escape bound reads `1 ≤ 0`.
+`PooledLeakCarried`. At one run whose audit always accepts, `q = 1`, `Fmax = 1`, no error, every row the empty pool's,
+and its observations empty where the horizon is one step: no run meets its leak relation, no opening collides (the two
+digests of the empty row hash one message, `poolColl_empty`), and the escape bound reads `1 ≤ 0`.
 
-Its honest lemma is open: it needs a deployed check that pins its checked inputs (`CheckedUnique`) and its closing row
-(`CheckedClosing`).
+Its honest lemma is open: it needs a deployed check that pins its checked inputs (`CheckedUnique`), its closing row
+(`CheckedClosing`) and the roots it opens and leaves (`CarriedRoots`).
 -/
 
 @[expose] public section
@@ -72,7 +72,7 @@ theorem PooledLeakCarried_nontrivial :
         ¬PooledGoodCarried (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) (fun _ => [])
           (fun _ => []) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false)
           (fun _ _ _ _ => [false]) (fun _ => false) (fun _ => []) 1 (fun _ => ∅) (fun _ => [])) ≤
-      (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) +
+      (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) +
         ∑ i : Fin 1, Pr (fun _ : Fin 1 → Unit =>
           PoolColl (fun _ _ => 0) (fun _ => false) (fun _ => []) (fun _ => []) (fun _ => []) i) := by
   have hp : (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧

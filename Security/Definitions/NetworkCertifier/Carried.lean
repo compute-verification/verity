@@ -27,8 +27,9 @@ hashed. So a period's count charges no bit of an opened row, and its escape boun
 * `PooledGoodCarried`: a period's good event, the runs' observations accepted at rows that chain. Run `i`'s operator reads
   the runs before it (`runsBefore`): a request cut at a run's edge continues in the next run from its prompt and released
   outputs, both certified.
-* `PeriodLeaksCarried` and `PeriodRoots`: a period's inputs at each run's extracted rows. `PoolColl`: a collision at an
-  opening.
+* `CarriedRoots`: accepted runs open the root of the row the record rule names, which each run's check of its roots and
+  the record rule give, with no probability.
+* `PeriodLeaksCarried`: a period's input at each run's extracted rows. `PoolColl`: a collision at an opening.
 -/
 
 @[expose] public section
@@ -106,14 +107,20 @@ def PeriodLeaksCarried {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditSt
     ¬LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs z ω) i)) (rin z ω i)
       (rout z ω i) (W z ω i) (obs z ω i)) ≤ e' i
 
-/-- **Each run opens the root of the row it must open**: run `i`'s audit accepts while the root of its extracted opened
-row `rin z ω i` is not the root of the row `poolOpen` names (the row run `i - 1`'s extracted run left, or `genesis i`),
-with probability at most `eo i`. -/
-def PeriodRoots {m : ℕ} {Ω Z : Type} [Fintype Ω] (G : Hash.Msg → Hash.Digest) (Zs : Set Z)
-    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (chains : Fin m → Bool) (genesis : Fin m → Hash.Row)
-    (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (eo : Fin m → ℝ) : Prop :=
-  ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
-    Hash.RowSeg.digest G (rin z ω i) ≠ Hash.RowSeg.digest G (poolOpen chains genesis (rout z ω) i)) ≤ eo i
+/-- **Accepted runs open the root of the row the record rule names**: rows at which every run's observations are
+accepted with a valid run (`LeakAtCarried`) have, at each run, the opened row's root equal to the root of the row
+`poolOpen` names (the row run `i - 1` left, or `genesis i`). Each run's check holds its opened row's root to its `pin`
+and its closing row's to its `pout`, on runs whose faults avoid the proof blocks of classes sampled `all`, and the record
+rule makes run `i`'s `pin` run `i - 1`'s `pout` where it carries the pool, else the empty pool's root. -/
+def CarriedRoots {L K S m : ℕ} (G : Hash.Msg → Hash.Digest) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
+    (prow nrow : AuditStatement → List ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
+    (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
+    (chains : Fin m → Bool) (genesis : Fin m → Hash.Row) : Prop :=
+  ∀ (o : Fin m → List (Obs L K S)) (W : Fin m → Finset ℕ) (rin rout : Fin m → Hash.Row),
+    (∀ i, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (rin i) (rout i) (W i)
+      (o i)) →
+    ∀ i, Hash.RowSeg.digest G (rin i) = Hash.RowSeg.digest G (poolOpen chains genesis rout i)
 
 /-- **A collision at run `i`'s opening**: two different messages with one digest among those the digests of the row run
 `i` opened (`rin i`) and of the row it must open (`poolOpen`) hashed. -/
