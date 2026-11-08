@@ -3832,10 +3832,17 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
-    // hm96-sha512 leaf salts, read from the OS: the level-0 tree is id 0 (both reps bind one root), every later tree a fresh
-    // id (table j's from j << 32). The device takes the host's salts tree by tree, as a CPU proof does.
+    // hm96-sha512 leaf salts, read from the OS (FC_SALTS_PRG=1: SHA-512 in counter mode from 64 bytes the session reads from
+    // it, `LeafSalts::prg`; never under the ZK server, whose Lean draws them): the level-0 tree is id 0 (both reps bind one
+    // root), every later tree a fresh id (table j's from j << 32). The device takes the host's salts tree by tree, as a CPU
+    // proof does.
+    let prg = std::env::var("FC_SALTS_PRG").as_deref() == Ok("1");
+    if prg && (firewall_on(st) || plan.lean_frames.is_some()) {
+        let why = "FC_SALTS_PRG=1 under the ZK server, whose Lean draws the salts: unset it";
+        return Err((json!({"accepted": false, "why": why, "prover_stopped": why}), Vec::new()));
+    }
     let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
-        let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+        let s = if prg { flock_live::zk_hooks::LeafSalts::prg(&seed) } else { flock_live::zk_hooks::LeafSalts::for_seed(&seed) };
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
     // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
@@ -4293,7 +4300,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
         let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
         eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": held.len(),
-                                            "reused": reused, "threads": threads, "untaken": untaken}));
+                                            "reused": reused, "threads": threads, "untaken": untaken, "prg": prg}));
         if reuse {
             SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner).extend(held);
         } else {

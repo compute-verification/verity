@@ -17,8 +17,10 @@
 //! build can only sample from the OS: no fixed or test seed is reachable in a production build.
 //!
 //! The Merkle leaf salts of `hm96-sha512/v1` are [`LeafSalts`]'s: the OS's bytes too, read tree by tree (decision 4(a)). With an
-//! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. The hm96 key is not prover
-//! randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
+//! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. [`LeafSalts::prg`] (the
+//! prover's FC_SALTS_PRG=1, off by default) expands them from 64 bytes the session reads from the OS with SHA-512 in counter
+//! mode, which puts SHA-512 as a PRF under their hiding. The hm96 key is not prover randomness at all: it is the statement's
+//! constant (`circuit::leaf_scheme`).
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
 //! level, a permutation of the claim points, and the mask slot's fill. [`NoMask`] implements them as the identity, and
@@ -30,6 +32,7 @@ use rand_chacha::{
     rand_core::{RngCore, SeedableRng},
 };
 use serde_json::{Value, json};
+use sha2::{Digest, Sha512};
 
 /// An injected seed's ChaCha20 stream numbers, one per purpose (`STREAM_SALT` for its salt tape); a proving build reads the OS
 /// for every purpose.
@@ -72,7 +75,8 @@ impl ProverSeed {
 }
 
 /// The salts of one proof's `hm96-sha512/v1` Merkle leaves: every leaf's 192 bytes read from the OS (`getrandom`, the source of
-/// [`ProverSeed::from_os`]), a tree at a time in [`OS_PIECE`]-byte pieces on rayon's threads, never a stream generator's output.
+/// [`ProverSeed::from_os`]), a tree at a time in [`OS_PIECE`]-byte pieces on rayon's threads, never a stream generator's output
+/// unless [`LeafSalts::prg`] made it (SHA-512 in counter mode, [`salt_prg_block`]).
 /// Reading a tree at a time keeps the cost down: salts read with one call per leaf cost +96% prover time at m = 33. Trees are numbered: the level-0 tree is id 0 (both reps
 /// bind one root) and every later tree takes the next id. In a session of several tables, table `j` ([`LeafSalts::table`]) takes
 /// ids from `j << TABLE_SHIFT` instead. A tree's salts are read once, so no salt is used twice and every commitment to a tree
@@ -82,8 +86,8 @@ impl ProverSeed {
 /// injected seed (a test harness only) expands them with ChaCha20 instead, leaf `i` of tree `id` being blocks
 /// `3i, 3i + 1, 3i + 2` under its `STREAM_SALT` key with nonce `id` ([`chacha20_block`]), so a test proof repeats.
 pub struct LeafSalts {
-    /// an injected seed's salt key (on the heap, so moving a `LeafSalts` copies no key byte); `None` in every proving build
-    key: Option<Box<[u8; 32]>>,
+    /// the key the salts expand from: `None` (the OS's bytes) unless a seed was injected or [`Self::prg`] made it
+    key: Option<SaltKey>,
     /// the trees kept
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
     /// the trees read ahead
@@ -94,6 +98,35 @@ pub struct LeafSalts {
 
 /// Bytes per `getrandom` call when [`LeafSalts`] reads a tree's salts.
 pub const OS_PIECE: usize = 1 << 16;
+
+/// What a [`LeafSalts`]'s salts expand from, on the heap (so moving one copies no key byte) and zeroed when dropped.
+#[derive(Clone)]
+enum SaltKey {
+    /// an injected seed's ChaCha20 salt key (a test harness only)
+    ChaCha(Box<[u8; 32]>),
+    /// [`LeafSalts::prg`]'s seed of a SHA-512 counter-mode generator
+    Sha512(Box<[u8; 64]>),
+}
+
+impl Drop for SaltKey {
+    fn drop(&mut self) {
+        match self {
+            SaltKey::ChaCha(k) => zero(&mut k[..]),
+            SaltKey::Sha512(k) => zero(&mut k[..]),
+        }
+    }
+}
+
+/// [`salt_prg_block`]'s domain tag. Tag, seed and counter total 102 bytes, and a message of at most 111 fits one SHA-512
+/// block, so a salt block costs one compression.
+const SALT_PRG_TAG: &[u8; 22] = b"flock/hm96-salt-prg/v1";
+
+/// Block `block` (64 bytes) of tree `id`'s salts under [`LeafSalts::prg`]'s seed: SHA-512(tag ‖ seed ‖ id ‖ block), the
+/// integers little-endian. Leaf `i` is blocks `3i, 3i + 1, 3i + 2`.
+pub fn salt_prg_block(seed: &[u8; 64], id: u64, block: u64) -> [u8; 64] {
+    Sha512::new().chain_update(SALT_PRG_TAG).chain_update(seed).chain_update(id.to_le_bytes()).chain_update(block.to_le_bytes())
+        .finalize().into()
+}
 
 #[derive(Default)]
 struct Kept {
@@ -143,9 +176,24 @@ impl LeafSalts {
             let mut r = ChaCha20Rng::from_seed(seed.seed);
             r.set_stream(STREAM_SALT);
             r.fill_bytes(&mut key[..]);
-            key
+            SaltKey::ChaCha(key)
         });
         LeafSalts { key, kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
+    }
+
+    /// [`Self::for_seed`]'s trees with salts from a SHA-512 counter-mode generator instead of the OS ([`salt_prg_block`]),
+    /// seeded by 64 bytes read from the OS once (under an injected seed, the first 64 of its ChaCha20 salt stream). Their
+    /// hiding then rests on SHA-512 as a PRF keyed by that seed as well as on the OS's bytes.
+    pub fn prg(seed: &ProverSeed) -> Self {
+        let mut key = Box::new([0u8; 64]);
+        if seed.injected {
+            let mut r = ChaCha20Rng::from_seed(seed.seed);
+            r.set_stream(STREAM_SALT);
+            r.fill_bytes(&mut key[..]);
+        } else {
+            os_fill(&mut key[..]);
+        }
+        LeafSalts { key: Some(SaltKey::Sha512(key)), kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
     }
 
     /// Table `table`'s salts in a session of several tables: the level-0 tree `table << TABLE_SHIFT` and every later tree the
@@ -227,7 +275,7 @@ impl LeafSalts {
     }
 
     fn draw(&self, id: u64, leaves: usize) -> Vec<u8> {
-        draw_salts(self.key.as_deref(), id, leaves)
+        draw_salts(self.key.as_ref(), id, leaves)
     }
 
     /// A handle that reads this table's trees ahead of their first sample, from another thread ([`SaltsAhead::draw`]).
@@ -236,22 +284,24 @@ impl LeafSalts {
     }
 }
 
-fn draw_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
+fn draw_salts(key: Option<&SaltKey>, id: u64, leaves: usize) -> Vec<u8> {
     let mut b = vec![0u8; leaves * SALT_BYTES];
     fill_salts(key, id, &mut b);
     b
 }
 
 /// Writes every byte of `b`, whole leaves: tree `id`'s salts, on the current rayon pool.
-fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
+fn fill_salts(key: Option<&SaltKey>, id: u64, b: &mut [u8]) {
     use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
     assert_eq!(b.len() % SALT_BYTES, 0, "a tree's salts are whole {SALT_BYTES}-byte leaves");
+    let blocks = |block: &(dyn Fn(u64) -> [u8; 64] + Sync), b: &mut [u8]| b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
+        for j in 0..3 {
+            s[64 * j..64 * j + 64].copy_from_slice(&block(3 * i as u64 + j as u64));
+        }
+    });
     match key {
-        Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
-            for j in 0..3 {
-                s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
-            }
-        }),
+        Some(SaltKey::ChaCha(key)) => blocks(&|k| chacha20_block(key, k, id), b),
+        Some(SaltKey::Sha512(seed)) => blocks(&|k| salt_prg_block(seed, id, k), b),
         None => os_fill(b),
     }
 }
@@ -262,7 +312,7 @@ fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
 /// reads its own, and what was read for it goes unused. Under an OS source ([`set_os_source`], the Lean tap) nothing is read
 /// ahead, so the tap's reads keep the prover's order.
 pub struct SaltsAhead {
-    key: Option<Box<[u8; 32]>>,
+    key: Option<SaltKey>,
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
     ahead: std::sync::Arc<Ahead>,
     level0: u64,
@@ -284,7 +334,7 @@ impl SaltsAhead {
             if drawn.contains_key(&t) || !planned().contains(&t) {
                 continue;
             }
-            let b = buf(t.1 * SALT_BYTES, &mut |b| fill_salts(self.key.as_deref(), t.0, b));
+            let b = buf(t.1 * SALT_BYTES, &mut |b| fill_salts(self.key.as_ref(), t.0, b));
             assert_eq!(b.len(), t.1 * SALT_BYTES, "a tree's buffer holds its leaves");
             drawn.insert(t, b);
         }
@@ -293,14 +343,6 @@ impl SaltsAhead {
     /// Trees read ahead that no sample has taken.
     pub fn untaken(&self) -> usize {
         self.ahead.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len()
-    }
-}
-
-impl Drop for SaltsAhead {
-    fn drop(&mut self) {
-        if let Some(key) = self.key.as_mut() {
-            zero(&mut key[..]);
-        }
     }
 }
 
@@ -326,14 +368,6 @@ fn os_fill(out: &mut [u8]) {
 
 fn words(b: &[u8]) -> Vec<F128> {
     b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect()
-}
-
-impl Drop for LeafSalts {
-    fn drop(&mut self) {
-        if let Some(key) = self.key.as_mut() {
-            zero(&mut key[..]);
-        }
-    }
 }
 
 fn zero(b: &mut [u8]) {
@@ -663,6 +697,52 @@ mod tests {
         }
         assert_eq!(LeafSalts::for_seed(&seed).expand(7, 5), all);
         assert_eq!(*s.level0(3), LeafSalts::for_seed(&seed).expand(0, 3));
+    }
+
+    /// [`salt_prg_block`] is SHA-512(tag ‖ seed ‖ id ‖ block), the integers little-endian: Python's `hashlib` on the same bytes.
+    #[test]
+    fn salt_prg_block_is_sha512_of_its_counter() {
+        let seed: [u8; 64] = std::array::from_fn(|i| i as u8);
+        assert_eq!(crate::hex(&salt_prg_block(&seed, 7, 4)), concat!("7808dcd797aeed5b748ff62e3db3efaca9761111791418fab878c269e24fa4b5",
+                                                                   "a2e193e7fd20c5d003d728c3aaf7117ad4f942a88bdecc0c0d21d0a529de7133"));
+    }
+
+    /// [`LeafSalts::prg`]'s salts under a fixed test seed repeat byte for byte, read ahead into a reused buffer or not: leaf `i`
+    /// of tree `id` is blocks `3i..3i+2` of the counter mode under the first 64 bytes of the seed's ChaCha20 salt stream. Another
+    /// seed's differ, they are not the injected seed's ChaCha20 tape, and two OS-seeded sessions repeat no salt across trees.
+    #[test]
+    fn prg_salts_repeat_under_a_fixed_seed() {
+        let seed = ProverSeed::injected([9; 32]);
+        let mut key = [0u8; 64];
+        let mut r = ChaCha20Rng::from_seed([9; 32]);
+        r.set_stream(STREAM_SALT);
+        r.fill_bytes(&mut key);
+        let leaves = 2 * OS_PIECE / SALT_BYTES + 3;
+        let (mut a, b) = (LeafSalts::prg(&seed), LeafSalts::prg(&seed));
+        let id = a.next_id();
+        let t = a.expand(id, leaves);
+        for i in [0, 1, leaves - 1] {
+            let want: Vec<u8> = (0..3).flat_map(|j| salt_prg_block(&key, id, 3 * i as u64 + j)).collect();
+            assert_eq!(t[SALT_BYTES * i..SALT_BYTES * (i + 1)], want);
+        }
+        assert_eq!(b.expand(id, leaves), t, "a fixed seed's salts repeat");
+        let mut old = std::sync::Arc::new(vec![0xa5u8; leaves * SALT_BYTES]);
+        b.ahead().draw(&[(b.level0_id(), leaves)], &mut |n, fill| {
+            let x = std::sync::Arc::get_mut(&mut old).expect("a buffer nothing else holds");
+            assert_eq!(x.len(), n);
+            fill(x);
+            old.clone()
+        });
+        assert_eq!(*b.level0(leaves), *a.level0(leaves), "read ahead into a reused buffer, the same bytes");
+        assert_eq!(*a.table(1).level0(2), LeafSalts::prg(&seed).expand(1 << TABLE_SHIFT, 2), "one seed, the table's own trees");
+        assert_ne!(LeafSalts::prg(&ProverSeed::injected([8; 32])).expand(id, 4), t[..4 * SALT_BYTES]);
+        assert_ne!(LeafSalts::for_seed(&seed).expand(id, 4), t[..4 * SALT_BYTES], "not the injected seed's ChaCha20 tape");
+        let (mut os, os2) = (LeafSalts::prg(&ProverSeed::from_os()), LeafSalts::prg(&ProverSeed::from_os()));
+        let id = os.next_id();
+        let mut seen = std::collections::BTreeSet::new();
+        for s in [&os.level0(leaves)[..], &os.expand(id, leaves), &os2.level0(leaves)[..], &os2.expand(id, leaves), &os.table(1).level0(leaves)[..]] {
+            assert!(s.chunks(SALT_BYTES).all(|c| seen.insert(c.to_vec())), "a salt repeated");
+        }
     }
 
     /// Table 0 of a session of several tables reads a one-table session's words and salts; every other table reads none of
