@@ -16,13 +16,15 @@ every product, is a reference, not an answer.
   the onsite and the remote protocol compose. It decides each execution phase by `PouwCheck.check` and credits a closed
   credit period by `PouwCheck.Credit`; its executable is `pouw-check`, and the Python modules of the same names mirror it.
 - **The top-level guarantees**, stated under `Security/Definitions/` and proved as `SecurityProofs.G` under
-  `Security/Proofs/`. W is the credited reference work, t the work-weighted samples, ε_s the share of W a sample may
-  miss, and g = 1 − (1 − g₀)/Ω_max the scheme's gap:
-  1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): Pr[accept ∧ work done < (1 − g)(1 − ε_s)·W ∧ the run
-     doesn't break SHA-512] ≤ (1 − ε_s)^t + δ(q, N), for q ≤ 2^64 oracle calls. Assumes TT(g₀) (`Pouw.Assumptions.TT`),
-     the scheme's conjecture, through `Pouw.Guarantees.GapFromTT`.
-  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same bound as the compute
-     audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
+  `Security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
+  miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 units, a layout in the
+  domain D, int7 weight entries) under the Ω_max bound (each unit's reference work at most Ω_max times its matrix
+  products'), with at most 2^64 oracle calls:
+  1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
+     scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
+     (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
+  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
+     as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
      `Accounting.BudgetAbort`.
   3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): a credit period's openings
      fail to bind with probability at most |L|·√(q/2^256 + κ). Assumes `Claims.ExpectedCR`; κ is not yet bounded.
