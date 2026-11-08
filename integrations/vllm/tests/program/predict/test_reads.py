@@ -226,6 +226,11 @@ def _calls(program) -> list[str]:
     return [n.fn.id for n in program.fn.body.nodes if not n.fn.id.startswith("StopCheck_")]
 
 
+def _members(program) -> list[str]:
+    """`_calls`, a batch's once per member: the Calls a batched Program makes (`prune.batched_form`)."""
+    return [i for n in program.fn.body.nodes if not n.fn.id.startswith("StopCheck_") for i in [n.fn.id] * n.n]
+
+
 def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
     """Batch-invariant: a request's Program is its whole request's in every window, so its length sets its T ahead of its stop,
     and nothing else in the plan moves."""
@@ -315,7 +320,7 @@ def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_index
     stops, runs = (request_program(reg, plan_steps(reg, a, ingress).requests[1]).program for a in (cut, _running_on(cut, 1, 4)))
     left = iter(_calls(runs))
     assert all(f in left for f in _calls(stops))
-    assert Counter(_calls(runs)) - Counter(_calls(stops)) == Counter(
+    assert Counter(_members(runs)) - Counter(_members(stops)) == Counter(
         {"CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}": 9, "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}": 9})
     ret = [field_types(p.fn.signature()[1]) for p in (stops, runs)]
     assert ret[1][:len(ret[0])] == ret[0] and len(ret[1]) == len(ret[0]) + 2
