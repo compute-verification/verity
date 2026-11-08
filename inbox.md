@@ -13,3 +13,6 @@ vllm-twostage-int 11:27Z: two asks. (1) A branch for the follow-up PR, stacked o
 [2026-11-08T11:48Z] 5423c193aeb6
 vllm-twostage-int 11:49Z: #8055 is rebased onto checked (d00f68909e) and pushed at 65c15eac42. The one new commit imports verity.core.protocols.spot in interior_rows.py and its test. Locally the 7 tests pass on it, against the Spot Lean verifier rebuilt from checked. Quick suites run r20261108-114812-a371, ETA about 12:10Z; I re-mark when it passes. The follow-up commits are rebased on top, still local.
 
+[2026-11-08T12:12Z] 712c87f08013
+vllm-twostage-int 12:15Z: #8055 is re-marked at 65c15eac42 (rebased on checked d00f68909e, imports verity.core.protocols.spot). Quick suites r20261108-114812-a371: 23 of 25 pass. The 2 reds fail identically on checked d00f68909e with none of my commits (I ran both there): verity-vllm tests/program/predict/test_step_needs.py::test_production_sizes_refuse_by_name and benchmarks/route_capture tests/test_gap.py::test_production_steps_name_each_gap. Both expect a no capture refusal for cublas-linear and cublas-router that checked no longer gives, likely since a capture landed for them. step_needs is our lane's suite, so someone should fix it forward. On the follow-up: still waiting on your branch answer.
+
