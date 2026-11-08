@@ -14,8 +14,9 @@ prefix as external tokens, then `cache_blocks`). Block ids, runner slots, the pr
 engine state are the fresh engine's own. ``--tail`` sets what a re-added request's last, partial block holds past its
 prefix: the served bytes (``copy``), zeros (``zero``), or NaN, with every other slot of the fresh pool NaN too
 (``nan``: then nothing outside a computed prefix may be read). The served arm must have kept the K/V file of both edges
-(serve_tax's ``--save-kv FROM,TO``). The served generators are put back and each re-added request gets its served seed
-when the runner adds it (`carry_rng`), so unseeded sampling draws as serving drew.
+(serve_tax's ``--save-kv FROM,TO``). The served generators are put back, each re-added request gets its served seed
+when the runner adds it (`carry_rng`), and one the served engine had preempted is resumed rather than new
+(`keep_preempted`), so unseeded sampling draws as serving drew.
 
 The fresh engine's prefix cache holds only the re-added requests' pages, so a request the served engine served from a
 finished request's cached pages would miss. ``--hits forced`` (the default) takes each request's prefix-cache hit from
@@ -584,6 +585,14 @@ def carry_rng(runner: Any, st: dict[str, Any] | None = None, start: dict[str, An
     return {"from": "edge", "seeds": len(seeds)}
 
 
+def keep_preempted(q: Any, status: str) -> None:
+    """A re-added request the served engine had preempted keeps that status, so the fresh scheduler resumes it as serving
+    did: Model Runner V2 adds a step's resumed requests after its new ones, and an unseeded request draws its seed when
+    the runner adds it."""
+    if status == "PREEMPTED":
+        q.status = type(q.status).PREEMPTED
+
+
 def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], layers: list[Any], block_size: int,
           tail: str, shape: Dummies | None = None) -> dict[str, Any]:
     """Every request ``st`` (the served edge's state) holds, added to the fresh engine as `rebuild`'s docstring says;
@@ -628,6 +637,7 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
             a = shape.params(rid, a)
         eng.add_request(rid, {"prompt_token_ids": prompt}, R.params(a))
         q = sched.requests[rid]
+        keep_preempted(q, r.status.name)
         if outs:
             q.append_output_token_ids(outs)
         n = min(r.num_computed_tokens, q.num_tokens - 1)
@@ -716,6 +726,7 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
             a = shape.params(rid, a)
         eng.add_request(rid, {"prompt_token_ids": prompt}, R.params(a))
         q = sched.requests[rid]
+        keep_preempted(q, r["status"])
         if outs:
             q.append_output_token_ids(outs)
         n = min(r["computed"], q.num_tokens - 1)

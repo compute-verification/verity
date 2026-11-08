@@ -275,3 +275,15 @@ def test_hits_seed_poisons_a_dummy_s_missing_pages_and_never_lets_one_stand_in_f
     assert taken["pages_seeded_poisoned"] == 1 and h.loaded == 0
     h.seed(NS(request_id="t", block_hashes=[b"t0", b"t1"]), 8)
     assert taken["target_pages_unavailable"] == 2 and h.loaded == 0 and (b"t0", 0) not in pool.cache
+
+
+def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None:
+    import enum
+
+    class Status(enum.IntEnum):
+        WAITING = 1
+        PREEMPTED = 3
+
+    q, w = NS(status=Status.WAITING), NS(status=Status.WAITING)
+    RB.keep_preempted(q, "PREEMPTED"), RB.keep_preempted(w, "RUNNING")
+    assert (q.status, w.status) == (Status.PREEMPTED, Status.WAITING)
