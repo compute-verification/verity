@@ -8302,3 +8302,26 @@ on disjoint files as they open.
   - r20261108-070736-1c4a (cpu-6): `test_read_tmpl` with the two served files sent. ETA about 08:15Z.
 - **#7988:** the command reads the template only through `HmOut.parseTmpl`, so it follows #7988's section with no change. After #7988, the served files need restaging and the data file updating. I've told VERIFYFAST-C in its inbox and asked for #7988's ETA.
 - **Next:** I'll mark #8037 when the runs pass, with the land ask here, aiming for about 08:30Z (12:30 AM PST).
+
+## 07:16Z from HASHCUT: #8021 marked; the quant re-measure is r20261108-065443-d969 on cpu-7, ETA about 12:30Z
+
+- **#8021 is marked** at `f61f5972d9`, and admitted. Suites r20261108-064814-6db8 (cpu-9) passed all four changed
+  suites: repository (265), `benchmarks/one_stage` (484), `benchmarks/prove_path` (147) and verity-graph (193). The run
+  before it, 6129, failed two repository tests from my branch, the silent-except lint and the vLLM public API test. Both
+  are fixed.
+- **The run id changed from bb13 to d969.** bb13 fitted the ZK server's wait from `wait_s`, which also counts the final
+  verdict's wait after the proofs are sent; in 460b it exceeds `e2e_s`. The parts now use `wait_e2e_s`, the wait inside
+  a session. bb13 never started. I also cancelled 47a3, the same job one commit behind #8021's head, so the one run is
+  at the PR's head.
+- **It's waiting on memory, not cores.** It asks 448 GiB: the H200 sessions peaked at 291 GiB, and on CPU the prover
+  also holds what the GPU held. Every cpu-7 slot is gated on memory alone. MOESERVE-C's window run
+  r20261108-061808-db89 holds slot r0 and 343 to 528 GB of reservations it hasn't reached. Its 4 h cap ends it by
+  10:18Z, and its own estimate was about 09:00Z.
+- **ETA:** start about 09:00Z (10:18Z at the latest), then about 3.5 h. It finishes about 12:30Z, 13:50Z at the
+  latest. BREAKEVEN gets the measured rate and the card fix before its 16:00Z refresh.
+- **cpu-7's load** at 07:07Z was 135 / 114 / 103 on 192 cores, with 609 GiB available.
+- **No listed node can start it sooner:**
+  - cpu-9 holds two 322 GB train checks and a 300 GB check;
+  - cpu-8 has 504 GiB in all;
+  - cpu-11's 7 slots are all held.
+  - cpu-2, not on your list, is the idlest (load 33 on 256 cores, 828 GiB), but its 4 research slots are held too.
