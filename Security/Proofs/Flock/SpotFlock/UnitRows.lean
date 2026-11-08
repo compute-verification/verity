@@ -17,6 +17,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.Placed.Setup
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.SamplingBoundary
 
 @[expose] public section
 
@@ -40,6 +41,12 @@ one gate carry one value, since they have one source key (`aliased_keyProg`, as 
 witness the table's statement accepts, the values the unit's block decodes satisfy each of its gates
 (`UnitPlace.apply_decode`, with `UnitPlace.correct`'s premises), and Bridge's lowering computes them at each wire's
 position from committed values that carry them where the unit reads from outside (`runIn_unitPlace`).
+
+**The lowered unit is correct** (`Bridge.correct_unitGates_of`, `Bridge.lowers` at any values that hold the unit's gates
+rather than the circuit's evaluation): on committed values that carry such values at each wire position the unit computes
+or reads, and the constants the lowering fixes, the unit's lowered gates are correct (`Prog.Correct`). That is what
+`SpotFlock.Decodes` asks of a decoder, at values the decoder gives every position, with no value asked at a row's
+interior XORs.
 -/
 
 namespace SpotFlock
@@ -214,5 +221,59 @@ theorem runIn_unitPlace {κ : Fin ((Placed.keyProg c hU n).circuit outs).N → O
         (Bridge.posOf ((Placed.keyProg c hU n).circuit outs) w) =
       some ((unitPlace hU outs a hparse u hg o).decode z w) :=
   Bridge.runIn_posOf_of (κ := κ) _ u _ ((unitPlace hU outs a hparse u hg o).apply_decode hz) ref hread _ w rfl hw
+
+/-- **A unit's lowered gates are correct on values that hold its gates** (`Bridge.lowers` at such values rather than
+the circuit's evaluation): on committed values carrying `V` at the position of each wire the unit computes or reads,
+where `V` holds each of the unit's gates and each constant `κ` fixes that the unit reads. -/
+theorem _root_.Flock.Bridge.correct_unitGates_of {C : Audit.Circuit} {κ : Fin C.N → Option Bool} {n : ℕ}
+    (P : Audit.Partition C n) (u : Fin n) (V : Fin C.N → Bool) (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
+    (hκ : ∀ a b, κ a = some b → (∃ g, P.unit g = some u ∧ a ∈ (C.op g).args) → V a = b) (ref : ℕ → Option Bool)
+    (href : ∀ a : Fin C.N, (P.unit a = some u ∨ ∃ g, P.unit g = some u ∧ a ∈ (C.op g).args) →
+      ref (Bridge.posOf C a) = some (V a)) :
+    (Bridge.progOf C κ).Correct ref (Bridge.unitGates P u) := by
+  have hread : ∀ p ∈ Bridge.unitGates P u, ∀ x, (Bridge.progOf C κ).gates[p]? = some x → ∀ a : Fin C.N,
+      Bridge.posOf C a ∈ x.reads → Bridge.posOf C a ∉ Bridge.unitGates P u →
+      (Bridge.progOf C κ).read ref (Bridge.posOf C a) = some (V a) := by
+    intro p hp x hx a hr _
+    obtain ⟨g, hu, j, hj, rfl⟩ := Bridge.mem_unitGates.1 hp
+    rw [Bridge.gates_off g hj] at hx
+    obtain ⟨a', ha', he⟩ : ∃ a' ∈ (C.op g).args, Bridge.posOf C a = Bridge.posOf C a' := by
+      rcases Bridge.reads_lower_args hx hr with h | ⟨rfl, h⟩
+      · exact h
+      · exfalso
+        rcases h with h0 | h1
+        · exact Bridge.off_ne_posOf (g := g) (a := a) (j := 0) (by omega) (by rw [Nat.add_zero]; exact h0.symm)
+        · exact Bridge.off_ne_posOf (g := g) (a := a) (j := 1) (by omega) h1.symm
+    obtain rfl := Bridge.posOf_injective he
+    by_cases hc : ∃ b, (Bridge.progOf C κ).gates[Bridge.posOf C a]? = some (.const b)
+    · obtain ⟨b, hb⟩ := hc
+      rw [Bridge.read_const hb]
+      obtain ⟨a'', he', -, hk⟩ := Bridge.const_pos hb
+      obtain rfl := Bridge.posOf_injective he'
+      exact congrArg some (hκ a b hk ⟨g, hu, ha'⟩).symm
+    · push Not at hc
+      rw [Claims.Sampling.Boundary.read_eq _ hc]
+      exact href a (Or.inr ⟨g, hu, ha'⟩)
+  have hrun := Bridge.runIn_posOf_of P u V hV ref hread
+  intro p hp
+  refine ⟨fun x hx i hi hiU => ?_, fun hb => ?_⟩
+  · obtain ⟨g, hu, j, hj, rfl⟩ := Bridge.mem_unitGates.1 hp
+    have hx' := hx
+    rw [Bridge.gates_off g hj] at hx'
+    rcases Bridge.reads_lower_args hx' hi with ⟨a, -, rfl⟩ | ⟨rfl, h⟩
+    · rw [hread _ hp x hx a hi hiU]
+      simp
+    · exfalso
+      apply hiU
+      rcases h with rfl | rfl
+      · exact Bridge.mem_unitGates.2 ⟨g, hu, 0, by omega, rfl⟩
+      · exact Bridge.mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩
+  · obtain ⟨g, hu, j, hj, rfl⟩ := Bridge.mem_unitGates.1 hp
+    by_cases hjl : j + 1 < Bridge.gateSize (C.op g)
+    · rw [Bridge.boundary_inner hu hjl] at hb
+      exact absurd hb (by simp)
+    · have hpos : Bridge.off C g.val + j = Bridge.posOf C g := by rw [Bridge.posOf_eq]; omega
+      rw [hpos] at hp ⊢
+      exact ⟨_, href g (Or.inl hu), hrun g.val g rfl hu⟩
 
 end SpotFlock
