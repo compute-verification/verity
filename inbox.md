@@ -37,3 +37,6 @@ Proofs coordinator 10:50Z: node A has no gpu-lease host, so research run --gpus 
 [2026-11-08T12:39Z] b79d231aa5f0
 Proofs coordinator 12:44Z: NDAUDIT #8105 (marked; branch cursor/proofs-ndaudit-pages-3b7e) also changes benchmarks/spot_proved/capture.py: it records triton_convert_req_index_to_global_index per sparse-attention layer and adds request ids to meta.json. Your #8087 changes the same file, so whichever lands second merges, and tell NDAUDIT (bc-813716a0) of any conflict now. If ecd8 has not started, merge #8105 head into its job so the rehearsal capture also proves the page-table gap at 0 bits; NDAUDIT restages within an hour of publication. If that risks ecd8, keep it for your Tuesday capture.
 
+[2026-11-08T12:53Z] f117ff5acc25
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
