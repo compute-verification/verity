@@ -36,8 +36,8 @@ public import NetworkCheck.Period
 public import PousCheck.RunProtocol
 public import PouwCheck.Period
 public import RemoteAudit.P2Protocol
-public import SampledProofs.OneStage
-public import SampledProofs.OneStageZk
+public import Spot.OneStage
+public import Spot.OneStageZk
 public import VStarRecursive.Sampled
 meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
@@ -49,8 +49,8 @@ meta import NetworkCheck.Period
 meta import PousCheck.RunProtocol
 meta import PouwCheck.Period
 meta import RemoteAudit.P2Protocol
-meta import SampledProofs.OneStage
-meta import SampledProofs.OneStageZk
+meta import Spot.OneStage
+meta import Spot.OneStageZk
 meta import VStarRecursive.Sampled
 
 @[expose] public section
@@ -113,10 +113,10 @@ private def allRefused : Answer := answer (components.map refused)
   some "params: verity/inference-only/v0 is missing"
 #guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
 #guard (answer ((components.take 5).map refused ++
-    [refused SampledProofs.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+    [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 #guard (answer ((components.take 5).map refused ++
-    [refused SampledProofs.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+    [refused Spot.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 -- one-stage v1, whose verdicts are the evidence's, is refused by name: a one-stage statement naming no proofs is v1's,
 -- and onsite rejects on it with sampled proofs' refusal (`VStar.Recursive.Sampled.V1_REFUSED`)

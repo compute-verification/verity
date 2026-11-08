@@ -1,6 +1,6 @@
 /-
 Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
-(`SampledProofs.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
+(`Spot.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
 are its own run of the verifier. The recursive audit (`VStar.Recursive`) is refused too (`RECURSIVE_REFUSED`): sampled
 proofs' soundness covers the one-stage form only, and the verifier refuses every form its soundness doesn't cover.
 
@@ -28,7 +28,7 @@ namespace VStar.Recursive.Sampled
 
 open Lean (Json)
 open Flock (V)
-open SampledProofs
+open Spot
 
 def PROTOCOL : String := "verity/sampled-proofs/v1"
 
