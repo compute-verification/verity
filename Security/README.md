@@ -495,7 +495,7 @@ Each package's `lean-audit.json` is its lock. For each guarantee it records the 
 assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
 its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
 declared in `Definitions/Assumptions.lean` (`assumptions_module`); every other named premise is open, under `open` with
-the Linear issue that discharges it and its due date; `--update` adds none, so that list only shrinks. A
+the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
 hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
 with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
 Lean check (`tools/verity/lean/check.py`) builds every file, replays every declaration through Lean's kernel, and fails
@@ -510,7 +510,7 @@ when:
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
-- a record, or a deployed guarantee's `trust_gap` entry (`trust`), no longer matches the build.
+- a record, or a deployed guarantee's `trust_gap` entry, no longer matches the build.
 
 A changed record means a guarantee now says something else. When one lands, the statement before and after is shown
 with each changed definition's source; nothing waits on it, and a guarantee that only moved shows none.
@@ -523,7 +523,7 @@ remote's three, each subprotocol's target a hypothesis until its own proof disch
 `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
-conditions it places on its inputs and setup, which the lock also lists, are left out.
+conditions it places on its inputs and setup are left out (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
