@@ -39,6 +39,15 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
     assert target == (CPU5, "research"), "cpu-5's pool when cpu-1's is busy"
 
 
+def test_an_idle_nodes_research_pool_takes_a_job_while_the_busy_ones_queue():
+    """cpu-7, 8, 9 and 11 sat near load 0 while cpu-1, 5 and 6 queued 20 or more runs each, outside SPILL."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
+    for idle in ("vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-11"):
+        assert (idle, "research") in auto.SPILL
+        target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, idle: pool(slot("r0", cpus="12-33"))}, 4, 16)
+        assert target == (idle, "research") and why.endswith("a slot is free there now")
+
+
 def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
     """INF-281, 27 Oct 03:06Z: cpu-1 had 22 waiting and cpu-5 34 while cpu-3's research pool sat idle, outside SPILL."""
     cpu3 = "vy-nebius-cpu-3"
