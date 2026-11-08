@@ -1,4 +1,4 @@
-"""`frontend.seed_rule`: `ServedSeed_v1` is the body's seed where it names one and `served_seed.derived` of the window's coin and
+"""`predict.seed_rule`: `ServedSeed_v1` is the body's seed where it names one and `served_seed.derived` of the window's coin and
 the request's id where it doesn't, at a message of one SHA-512 block and of two (one `Sha512Compress_v1` Call a block); and
 `SeedCheck_v1`, from a body's bytes through ingress schema v1's parse (`boolean_io_shell.IngressSampled_v1`), passes the rule's
 seed and fails every forged one."""
@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity_vllm.engine import served_seed
-from verity_vllm.program.frontend import seed_rule as SR
+from verity_vllm.program.predict import seed_rule as SR
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
