@@ -44,7 +44,7 @@ BIT = Value(1)
 #: what a row past INDEX_TOPK calls that a row within it doesn't
 LONG = ("DsaTopKMask_v1", "DsaButterflySettings_v1", "DsaButterflyRows_v1")
 #: the relation form's calls, which no Program makes
-RELATION = ("DsaWaksmanOrder_v1", "DsaTopKLongRow_v1", "DsaWaksmanRows_v1", "DsaTopKOrder_v1")
+RELATION = ("DsaWaksmanOrder_v1", "DsaTopKLongRow_v1", "DsaWaksmanRows_v1")
 
 
 def _short(hf: dict) -> dict:
