@@ -1269,8 +1269,8 @@
   },
   {
    "probes": [
-    "verity/core/protocols/sampled_proofs",
-    "verity/core/protocols/sampled_proofs/one_stage"
+    "verity/core/protocols/spot",
+    "verity/core/protocols/spot/one_stage"
    ]
   },
   {
@@ -1958,7 +1958,7 @@
     "verity/core/protocols/certifier/warden.py",
     "verity/core/protocols/pouw/leaf_lanes.py",
     "verity/core/protocols/pouw/live_reads.py",
-    "verity/core/protocols/sampled_proofs/one_stage/produced.py",
+    "verity/core/protocols/spot/one_stage/produced.py",
     "verity/ml/circuits/evaluation",
     "verity/ml/circuits/silicon",
     "verity/ml/circuits/units.py",
@@ -2032,16 +2032,16 @@
     "verity/core/protocols/pouw/serving.py",
     "verity/core/protocols/profile.py",
     "verity/core/protocols/record.py",
-    "verity/core/protocols/sampled_proofs/challenger.py",
-    "verity/core/protocols/sampled_proofs/coins.py",
-    "verity/core/protocols/sampled_proofs/one_stage/audit.py",
-    "verity/core/protocols/sampled_proofs/one_stage/draw.py",
-    "verity/core/protocols/sampled_proofs/one_stage/hello.py",
-    "verity/core/protocols/sampled_proofs/one_stage/registration.py",
-    "verity/core/protocols/sampled_proofs/one_stage/verdict.py",
-    "verity/core/protocols/sampled_proofs/one_stage/verifier.py",
-    "verity/core/protocols/sampled_proofs/remote.py",
-    "verity/core/protocols/sampled_proofs/service.py",
+    "verity/core/protocols/spot/challenger.py",
+    "verity/core/protocols/spot/coins.py",
+    "verity/core/protocols/spot/one_stage/audit.py",
+    "verity/core/protocols/spot/one_stage/draw.py",
+    "verity/core/protocols/spot/one_stage/hello.py",
+    "verity/core/protocols/spot/one_stage/registration.py",
+    "verity/core/protocols/spot/one_stage/verdict.py",
+    "verity/core/protocols/spot/one_stage/verifier.py",
+    "verity/core/protocols/spot/remote.py",
+    "verity/core/protocols/spot/service.py",
     "verity/ml/commitments/coin_tree.py",
     "verity/ml/crypto/turboshake.py",
     "verity/ml/protocols/pouw/schemes/pearl_c4.py",
@@ -2612,10 +2612,10 @@
   },
   {
    "probes": [
-    "verity/core/protocols/sampled_proofs/__init__.py",
-    "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
-    "verity/core/protocols/sampled_proofs/one_stage/partition.py",
-    "verity/core/protocols/sampled_proofs/one_stage/registered.py"
+    "verity/core/protocols/spot/__init__.py",
+    "verity/core/protocols/spot/one_stage/__init__.py",
+    "verity/core/protocols/spot/one_stage/partition.py",
+    "verity/core/protocols/spot/one_stage/registered.py"
    ]
   },
   {
