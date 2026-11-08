@@ -96,11 +96,11 @@ class Certificate:
     """What a scheme's guarantee rests on.
 
     ``omega`` is Ω*, the largest W_ref over the work the conjecture credits, across the domain (m·k·n for TT, 3·m·k·n for
-    TT_NCP); ``gamma = 1 − (1 − gamma0)/omega`` is the conservative reduction (Lean `gammaFromTT`, `gammaFromTTNCP`).  A
-    scheme whose conjecture names no target has ``gamma0 = None`` and no gamma.  ``claims`` are `verity.core.claims` ids, or ids
+    TT_NCP); ``gamma = 1 − (1 − gamma0)/omega`` is the gap g of the conservative reduction (Lean `gapFromTT`,
+    `gapFromTTNCP`), an adversary's advantage ε = g/(1 − g), and ``gamma0`` the conjecture's target gap.  A scheme whose conjecture names no target has ``gamma0 = None`` and no gamma.  ``claims`` are `verity.core.claims` ids, or ids
     in the same format that no render cites yet; ``theorems`` are the Lean theorems it rests on, guarantees the lock pins
     and the lemmas their proofs use; ``allowances`` are gaps the scheme admits by design; ``parameters`` are the values
-    the theorems are instantiated at, including the domain bounds their γ holds on."""
+    the theorems are instantiated at, including the domain bounds their gap holds on."""
 
     conjecture: str
     gamma0: Fraction | None

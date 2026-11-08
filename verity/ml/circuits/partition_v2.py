@@ -98,7 +98,7 @@ WIDTH = 16
 #: the widest public size class of a proof block's bits out (the claims' `Claims.Sampling.unitClassMax`), provisional: at 16,
 #: `UNIT_CLASSES` is the literal 16-bit limit alone
 UNIT_CLASS_MAX = 262_144
-#: the public size classes, the powers of two from 16 to `UNIT_CLASS_MAX`, ascending (the claims' `unitClasses`)
+#: the public size classes, the powers of two from 16 to `UNIT_CLASS_MAX`, ascending (the claims' `sizeClasses`)
 UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length()))
 PARAM_MAX = PO.PARAM_MAX
 

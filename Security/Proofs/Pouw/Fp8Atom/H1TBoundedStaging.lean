@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.Fp8Atom.H1TGapStaging
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
-public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Data.Sym.Sym2.Init
@@ -10,7 +10,7 @@ import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.H100WProofs
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
-import Proofs.Pouw.Fp8Atom.H1TGammaProofs
+import Proofs.Pouw.Fp8Atom.H1TGapProofs
 import Proofs.Pouw.Fp8Atom.H1TProofs
 import Proofs.Pouw.Fp8Atom.H1TRunningProofs
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
@@ -18,15 +18,15 @@ import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 /-!
 # H-1T at bounded `k` (staging, unpinned)
 
-`h1tGamma` reads `DistinctLiveH1T` only at the units it is given (`h1tUnitsDistinct`), so a bound on `k` passes
-through. This file states the named assumptions and `H1TGamma` for the legal units with `k ≤ K`, and proves the
-bounded forms of `h1tDistinctLive`, `h1tRunningOfDistinct`, `h1tGamma` and `h1tGammaRunning`. At `K = 32,768`, which
+`h1tGap` reads `DistinctLiveH1T` only at the units it is given (`h1tUnitsDistinct`), so a bound on `k` passes
+through. This file states the named assumptions and `H1TGap` for the legal units with `k ≤ K`, and proves the
+bounded forms of `h1tDistinctLive`, `h1tRunningOfDistinct`, `h1tGap` and `h1tGapRunning`. At `K = 32,768`, which
 `Legal` already imposes, each bounded statement is the granted one (`*_iff`), so the family changes none of them.
 
 * **`DistinctLiveH1TUpTo K`**, **`H1TRunningWordsUpTo K`** and **`H1TCrossLateUpTo K`** are `DistinctLiveH1T`,
   `H1TRunningWords` and `H1TCrossLate` on the legal units with `k ≤ K`.
-* **`H1TGammaUpTo K`** is `H1TGamma` for families of legal units that all have `k ≤ K`. Both γ shapes (8,192³ and
-  16,384³) are units with `k ≤ 16,384`, so `H1TGammaUpTo 16384` under `DistinctLiveH1TUpTo 16384` is γ₀ = 0 there.
+* **`H1TGapUpTo K`** is `H1TGap` for families of legal units that all have `k ≤ K`. Both gap shapes (8,192³ and
+  16,384³) are units with `k ≤ 16,384`, so `H1TGapUpTo 16384` under `DistinctLiveH1TUpTo 16384` is g₀ = 0 there.
 * **`run_le`**: every running word of a legal unit is at most `T·6,881,792 − 256` in magnitude (`run_bound`). So
   `|R_p| < 2^31` (ulp at most 128) for `k ≤ 9,048` (`T ≤ 312`, which covers 8,192³), and `|R_p| < 2^32` (ulp at most
   256) for `k ≤ 18,096` (`T ≤ 624`, which covers 16,384³).
@@ -54,8 +54,8 @@ def H1TCrossLateUpTo (K : ℕ) : Prop :=
     a'.2.isRight = true → U.T ≤ posIdx a'.2 + 1 → ¬ OppLater a.1.val a'.1.val a.2 a'.2 →
     U.word (i, a) ≠ U.word (i, a')
 
-/-- `H1TGamma` for families of legal units that all have `k ≤ K`. -/
-def H1TGammaUpTo (K : ℕ) : Prop :=
+/-- `H1TGap` for families of legal units that all have `k ≤ K`. -/
+def H1TGapUpTo (K : ℕ) : Prop :=
   ∀ pr : Prices100, H32 pr → ∀ (N : ℕ) (Us : Fin N → Unit), (∀ u, (Us u).Legal ∧ (Us u).k ≤ K) →
     ∀ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (MSalt Us → ℚ)) (P : List (Op100 (MSalt Us))),
       (∀ f ∈ L, f ∈ mfree Us) → (∀ o ∈ P, o.WFw pr (mfree Us)) →
@@ -75,7 +75,7 @@ theorem runningWordsUpTo_iff : H1TRunningWordsUpTo 32768 ↔ H1TRunningWords :=
 theorem crossLateUpTo_iff : H1TCrossLateUpTo 32768 ↔ H1TCrossLate :=
   ⟨fun h U hU => h U hU (k_le_of_legal hU), fun h U hU _ => h U hU⟩
 
-theorem gammaUpTo_iff : H1TGammaUpTo 32768 ↔ H1TGamma :=
+theorem gapUpTo_iff : H1TGapUpTo 32768 ↔ H1TGap :=
   ⟨fun h pr hpr N Us hL => h pr hpr N Us fun u => ⟨hL u, k_le_of_legal (hL u)⟩,
    fun h pr hpr N Us hL => h pr hpr N Us fun u => (hL u).1⟩
 
@@ -89,7 +89,7 @@ theorem distinctLiveUpTo_mono {K K' : ℕ} (hK : K ≤ K') (h : DistinctLiveH1TU
 theorem runningWordsUpTo_mono {K K' : ℕ} (hK : K ≤ K') (h : H1TRunningWordsUpTo K') : H1TRunningWordsUpTo K :=
   fun U hU hk => h U hU (le_trans hk hK)
 
-/-! ## The bounded forms of the M4 and γ theorems -/
+/-! ## The bounded forms of the M4 and gap theorems -/
 
 theorem h1tDistinctLiveUpTo {K : ℕ} (hR : H1TRunningWordsUpTo K) : DistinctLiveH1TUpTo K := by
   intro U hU hk
@@ -164,7 +164,7 @@ theorem unitsDistinctUpTo {K N : ℕ} {Us : Fin N → Unit} (hD : DistinctLiveH1
         rw [← mword_place_self, e]
         simp [place, Function.update_of_ne hu, zeroSalt]
 
-theorem h1tGammaUpTo {K : ℕ} (hD : DistinctLiveH1TUpTo K) : H1TGammaUpTo K := by
+theorem h1tGapUpTo {K : ℕ} (hD : DistinctLiveH1TUpTo K) : H1TGapUpTo K := by
   intro pr hpr N Us hL fpSem L P hLf hP hout
   obtain ⟨hinj, hfree⟩ := unitsDistinctUpTo hD hL
   let ts : List (MSalt Us → ℚ) := (Finset.univ : Finset (Idx Us)).toList.map (mword Us)
@@ -194,8 +194,8 @@ theorem h1tGammaUpTo {K : ℕ} (hD : DistinctLiveH1TUpTo K) : H1TGammaUpTo K := 
   rw [hlen] at h
   simpa using h
 
-theorem h1tGammaRunningUpTo {K : ℕ} (hR : H1TRunningWordsUpTo K) : H1TGammaUpTo K :=
-  h1tGammaUpTo (h1tDistinctLiveUpTo hR)
+theorem h1tGapRunningUpTo {K : ℕ} (hR : H1TRunningWordsUpTo K) : H1TGapUpTo K :=
+  h1tGapUpTo (h1tDistinctLiveUpTo hR)
 
 /-! ## The running words' range at bounded `k` -/
 
