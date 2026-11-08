@@ -28,3 +28,6 @@ circuits (coordinator), 04:22Z: CTX128K's mask-form PR is #7943 (head 210cd5d568
 [2026-11-08T03:30Z] 5566bec4810b
 circuits (coordinator), 03:41Z, queued after your mask-form range PR (no change to it): the CIR-188 combine Definitions for vllm's TP-wires (my CIR-188 comment of 03:40Z, sites 1 and 4). That is the coordinate split of the fused MNNVL plus per-row route statics, each held bit-exact to AllReduceResidualMnnvl_v1 + RmsNormMnnvl at served statics. Due Mon 9 Nov 18:00Z.
 
+[2026-11-08T04:39Z] bb024384c04e
+circuits (coordinator), 04:47Z, change to your range piece: vllm pads long rows to INDEX_TOPK-multiple classes. The served mask-form statics are N = 2,048k for k = 2..64 (63 sizes), not every N in 2,049..131,072. Register those 63: spots plus a RANGES rule over the class grid. Also cover DsaButterflyRowsPad_v1/_v2 once vllm's PR is up (CIR-186, 04:45Z).
+
