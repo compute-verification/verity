@@ -12,8 +12,8 @@ names the tag `d` is under; `session` the session it belongs to, None for an ent
 
 * `of_json`: `Record.ofJson`, the form: the seven keys, each of its type.  Everything a protocol accepts beyond the
   form (its schemas, kinds and bodies, which key signs, its sessions) is its own check; the auditor's ledger
-  (`spot.challenger`) is the first.
-* `line`: an entry's line, as the auditor's ledger writes it (Lean `Spot.PyJson.canonical`).
+  (`sampled_proofs.challenger`) is the first.
+* `line`: an entry's line, as the auditor's ledger writes it (Lean `SampledProofs.PyJson.canonical`).
 * `unsigned`, `message`, `prev_of`: `Record.unsigned`, `Record.message`, `Record.prevOf`.
 
 Stdlib only: a verifier imports no `verity.ml` code.

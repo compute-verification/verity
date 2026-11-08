@@ -35,7 +35,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/core/protocols/record.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
-          # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
+          # the challenger's coins name their claim instance (sampled_proofs/challenger.py's `coin_claim`)
           "verity/core/claims/__init__.py",
           # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
           # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
@@ -50,7 +50,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
           "verity/core/protocols/bandwidth",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
-          "verity/core/protocols/spot",
+          "verity/core/protocols/sampled_proofs",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
           "verity/core/protocols/certifier", "verity/ml/protocols/__init__.py", "verity/ml/protocols/certifier",
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py

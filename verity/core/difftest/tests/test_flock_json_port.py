@@ -347,7 +347,7 @@ def test_parse_core(server):
 
 
 #: The public files Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
-#: (`fixtures/artifacts.json`), whose header line the sampled proofs verifier reads (`Spot.FilePart.header`).
+#: (`fixtures/artifacts.json`), whose header line the sampled proofs verifier reads (`SampledProofs.FilePart.header`).
 RECORDED = Path(__file__).resolve().parents[3] / "ml" / "flock" / "tests" / "fixtures"
 RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
 

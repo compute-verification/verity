@@ -1,7 +1,7 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
-`verity.core.protocols.spot.parties`) on a machine (`Machine`).
+`verity.core.protocols.sampled_proofs.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
@@ -25,8 +25,8 @@ from verity.core.deploy import runtime
 from verity.core.deploy.config import Component, Workload
 from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage.draw import parse_law
+from verity.core.protocols.sampled_proofs import parties as SP
+from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 from verity.core.wire import Refused
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.crypto import lms

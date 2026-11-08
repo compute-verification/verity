@@ -1,10 +1,10 @@
 module
 
 public import Proofs.Flock.Bridge.Defs
-public import Properties.Spot.Bits
+public import Properties.SampledProofs.Bits
 
 /-!
-# The bridge's lowering is Bits' (`Spot.Bits.prog`, `posOf`, `blockOf`)
+# The bridge's lowering is Bits' (`SampledProofs.Bits.prog`, `posOf`, `blockOf`)
 
 `LaysOut kp C`: the Bits key program `kp` lays out the circuit `C`. It has `C`'s gates, gate by gate an input where `kp`
 has no row and a row reading the same gates where it has one, and `C`'s outputs, ascending. At such a pair Bits'
@@ -26,25 +26,25 @@ Nothing here reads how `kp` or `C` is built: the key program's `LaysOut` and `Un
 namespace Flock.Bridge
 
 open FlockSoundness.Audit
-open Properties.Spot (bitsGate bitsProg)
+open Properties.SampledProofs (bitsGate bitsProg)
 
 /-- **The Bits key program `kp` lays out the circuit `C`**: as many gates; an input where `kp` has no row, and a row
 reading the same gates where it has one; and `C`'s outputs, in gate order. -/
-structure LaysOut (kp : Spot.Bits.KeyProg) (C : FlockSoundness.Audit.Circuit) : Prop where
+structure LaysOut (kp : SampledProofs.Bits.KeyProg) (C : FlockSoundness.Audit.Circuit) : Prop where
   size : kp.size = C.N
   input : ∀ g : Fin C.N, kp.row? g.val = none → C.op g = .input
   row : ∀ g : Fin C.N, ∀ a b, kp.row? g.val = some (a, b) →
     ∃ A B, C.op g = .row A B ∧ a = A.map Fin.val ∧ b = B.map Fin.val
   outs : kp.outs = ((List.finRange C.N).filter fun g => decide (g ∈ C.outputs)).map Fin.val
 
-variable {kp : Spot.Bits.KeyProg} {C : FlockSoundness.Audit.Circuit}
+variable {kp : SampledProofs.Bits.KeyProg} {C : FlockSoundness.Audit.Circuit}
 
 private theorem finRange_map_val (n : ℕ) : (List.finRange n).map Fin.val = List.range n :=
   List.ext_getElem (by simp) fun i _ _ => by simp
 
 theorem LaysOut.gateSize_eq (h : LaysOut kp C) (g : Fin C.N) :
-    gateSize (C.op g) = Spot.Bits.gateSize kp g.val := by
-  unfold Spot.Bits.gateSize
+    gateSize (C.op g) = SampledProofs.Bits.gateSize kp g.val := by
+  unfold SampledProofs.Bits.gateSize
   rcases hr : kp.row? g.val with _ | ⟨a, b⟩
   · rw [h.input g hr]
     rfl
@@ -52,23 +52,23 @@ theorem LaysOut.gateSize_eq (h : LaysOut kp C) (g : Fin C.N) :
     rw [hop]
     rfl
 
-theorem LaysOut.off_eq (h : LaysOut kp C) (g : ℕ) : off C g = Spot.Bits.off kp g := by
-  unfold off Spot.Bits.off
+theorem LaysOut.off_eq (h : LaysOut kp C) (g : ℕ) : off C g = SampledProofs.Bits.off kp g := by
+  unfold off SampledProofs.Bits.off
   rw [h.size, ← finRange_map_val, List.filter_map, List.map_map]
   exact congrArg List.sum (List.map_congr_left fun x _ => h.gateSize_eq x)
 
-theorem LaysOut.posOf_eq (h : LaysOut kp C) (g : Fin C.N) : posOf C g = Spot.Bits.posOf kp g.val := by
-  unfold posOf Spot.Bits.posOf
+theorem LaysOut.posOf_eq (h : LaysOut kp C) (g : Fin C.N) : posOf C g = SampledProofs.Bits.posOf kp g.val := by
+  unfold posOf SampledProofs.Bits.posOf
   rw [h.off_eq, h.gateSize_eq]
 
-theorem LaysOut.posOf_comp (h : LaysOut kp C) : (Spot.Bits.posOf kp ∘ Fin.val : Fin C.N → ℕ) = posOf C :=
+theorem LaysOut.posOf_comp (h : LaysOut kp C) : (SampledProofs.Bits.posOf kp ∘ Fin.val : Fin C.N → ℕ) = posOf C :=
   funext fun x => (h.posOf_eq x).symm
 
 /-- **Gate `g` lowers to the same gates**, at constants that agree. -/
 theorem LaysOut.lower_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) (g : Fin C.N) :
-    lower C κ' g = (Spot.Bits.lower kp κ g.val).map bitsGate := by
-  unfold lower Spot.Bits.lower
+    lower C κ' g = (SampledProofs.Bits.lower kp κ g.val).map bitsGate := by
+  unfold lower SampledProofs.Bits.lower
   rcases hr : kp.row? g.val with _ | ⟨a, b⟩
   · rw [h.input g hr, hκ g]
     cases κ g.val <;> rfl
@@ -79,7 +79,7 @@ theorem LaysOut.lower_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ 
 /-- **The bridge's program is Bits'**, at constants that agree. -/
 theorem LaysOut.progOf_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) : progOf C κ' = bitsProg kp κ := by
-  unfold progOf bitsProg Spot.Bits.prog
+  unfold progOf bitsProg SampledProofs.Bits.prog
   congr 1
   · rw [List.map_flatMap, h.size, ← finRange_map_val, List.flatMap_map]
     exact List.flatMap_congr fun g _ => h.lower_eq hκ g
@@ -88,9 +88,9 @@ theorem LaysOut.progOf_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ
 /-! ## Units and proof blocks -/
 
 /-- **`kp`'s units are `P`'s**: as many, and each gate in the same unit. -/
-structure UnitsOut (kp : Spot.Bits.KeyProg) {n : ℕ} (P : Partition C n) : Prop where
+structure UnitsOut (kp : SampledProofs.Bits.KeyProg) {n : ℕ} (P : Partition C n) : Prop where
   units : kp.units = n
-  unit : ∀ g : Fin C.N, Spot.Bits.unitOf kp g.val = (P.unit g).map Fin.val
+  unit : ∀ g : Fin C.N, SampledProofs.Bits.unitOf kp g.val = (P.unit g).map Fin.val
 
 variable {n : ℕ} {P : Partition C n}
 
@@ -104,8 +104,8 @@ private theorem decide_eq_map_beq {m : ℕ} (o : Option (Fin m)) (u : Fin m) :
   cases o <;> simp [Fin.ext_iff]
 
 theorem LaysOut.args_eq (h : LaysOut kp C) (g : Fin C.N) :
-    Spot.Bits.args kp g.val = (C.op g).args.map Fin.val := by
-  unfold Spot.Bits.args
+    SampledProofs.Bits.args kp g.val = (C.op g).args.map Fin.val := by
+  unfold SampledProofs.Bits.args
   rcases hr : kp.row? g.val with _ | ⟨a, b⟩
   · rw [h.input g hr]
     rfl
@@ -114,8 +114,8 @@ theorem LaysOut.args_eq (h : LaysOut kp C) (g : Fin C.N) :
 
 /-- **Unit `u`'s lowered gates are Bits'.** -/
 theorem unitGates_eq (h : LaysOut kp C) (hu : UnitsOut kp P) (u : Fin n) :
-    unitGates P u = Spot.Bits.unitGates kp u.val := by
-  unfold unitGates Spot.Bits.unitGates
+    unitGates P u = SampledProofs.Bits.unitGates kp u.val := by
+  unfold unitGates SampledProofs.Bits.unitGates
   rw [h.size, ← finRange_map_val, List.flatMap_map]
   refine List.flatMap_congr fun g _ => ?_
   rw [hu.unit g, h.gateSize_eq, h.off_eq]
@@ -126,8 +126,8 @@ theorem unitGates_eq (h : LaysOut kp C) (hu : UnitsOut kp P) (u : Fin n) :
 
 /-- **Gate `g`'s owner is Bits'.** -/
 theorem owner_eq (h : LaysOut kp C) (hu : UnitsOut kp P) (g : Fin C.N) :
-    Spot.Bits.owner kp g.val = (owner P g).map Fin.val := by
-  unfold Spot.Bits.owner owner
+    SampledProofs.Bits.owner kp g.val = (owner P g).map Fin.val := by
+  unfold SampledProofs.Bits.owner owner
   rw [hu.units, ← finRange_map_val n, List.find?_map]
   congr 1
   refine List.find?_congr fun u _ => ?_
@@ -157,8 +157,8 @@ theorem LaysOut.row_isNone (h : LaysOut kp C) (g : Fin C.N) : (kp.row? g.val).is
 /-- **Unit `u`'s owned inputs are Bits'**, at constants that agree. -/
 theorem insOf_eq (h : LaysOut kp C) (hu : UnitsOut kp P) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) (u : Fin n) :
-    (insOf P κ' u).map Fin.val = Spot.Bits.insOf kp κ u.val := by
-  unfold insOf Spot.Bits.insOf
+    (insOf P κ' u).map Fin.val = SampledProofs.Bits.insOf kp κ u.val := by
+  unfold insOf SampledProofs.Bits.insOf
   rw [h.size, ← finRange_map_val, List.filter_map]
   congr 1
   refine List.filter_congr fun g _ => ?_
@@ -167,8 +167,8 @@ theorem insOf_eq (h : LaysOut kp C) (hu : UnitsOut kp P) {κ' : Fin C.N → Opti
 /-- **Unit `u`'s proof block is Bits'**, at constants that agree. -/
 theorem blockOf_eq (h : LaysOut kp C) (hu : UnitsOut kp P) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) (u : Fin n) :
-    blockOf P κ' u = Spot.Bits.blockOf kp κ u.val := by
-  unfold blockOf Spot.Bits.blockOf
+    blockOf P κ' u = SampledProofs.Bits.blockOf kp κ u.val := by
+  unfold blockOf SampledProofs.Bits.blockOf
   rw [unitGates_eq h hu, ← insOf_eq h hu hκ, List.map_map, h.posOf_comp]
 
 end Flock.Bridge

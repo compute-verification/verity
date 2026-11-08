@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import elementwise

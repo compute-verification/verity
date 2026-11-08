@@ -1,6 +1,6 @@
 module
 
-public import Spot.Registration
+public import SampledProofs.Registration
 public import Proofs.Flock.Claims.Sampling.Code
 public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 
@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 # The registrations the samples of record read, and the code's round order
 
 What the deployed sampled verifier's samples read of a registration, and the code with its checked units and rounds set
-from them, with no proof module beneath: `Reg`, the registration `Spot.Run.run` hands `Select.select`, and its
+from them, with no proof module beneath: `Reg`, the registration `SampledProofs.Run.run` hands `Select.select`, and its
 sample of record (`Reg.checked`); `RegTwo`, a two-stage registration, its replay sample, the second stage's proof
 blocks and its checked units (`RegTwo.sample`, `RegTwo.blockAt`, `RegTwo.checked`); `codeTwo`, the code with those
 checked units, and `replayTwo`, the replay sample of record; and `Code.atOrder`, the code at its round order (`Order`):
@@ -21,28 +21,28 @@ its second stage the rounds after the first stage's coin, and its sessions' roun
 
 namespace SamplingDeploy
 
-open Claims Claims.Sampling Finset Properties.Spot
+open Claims Claims.Sampling Finset Properties.SampledProofs
 open Lean (Json)
 
 /-! ## The registrations and their samples -/
 
-/-- **A registration as the sample of record reads it**, what `Spot.Run.run` passes to `Select.select`: the
+/-- **A registration as the sample of record reads it**, what `SampledProofs.Run.run` passes to `Select.select`: the
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
 rule and the challenger's closure map. -/
 structure Reg where
-  verifier : Spot.Registration.Verifier
-  rule : Spot.Select.Rule
+  verifier : SampledProofs.Registration.Verifier
+  rule : SampledProofs.Select.Rule
   closure : Option (Array (Int × Array Int))
 
-def Reg.program (g : Reg) : Spot.Program := g.verifier.program
+def Reg.program (g : Reg) : SampledProofs.Program := g.verifier.program
 
 def Reg.query (g : Reg) : Json := g.verifier.query
 
 def Reg.table (g : Reg) : Option Json := g.verifier.workTable
 
 /-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
-def Reg.layout (g : Reg) : Spot.Slots.Layout :=
-  match Spot.Slots.layout g.program g.query with
+def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
+  match SampledProofs.Slots.layout g.program g.query with
   | .ok l => l
   | .error _ => default
 
@@ -65,7 +65,7 @@ structure RegTwo where
 /-- **The replay sample** on the bytes `src`: the units the first stage proves (`Select.select`'s), which `Run.run`
 hands the second stage; none where it is refused. -/
 def RegTwo.sample (g : RegTwo) (src : ByteArray) : Array ℕ :=
-  match Spot.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure src with
+  match SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure src with
   | .ok (_, proved, _) => proved
   | .error _ => #[]
 
@@ -76,9 +76,9 @@ def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ := g.blockO
 stage proves (`Select.selectSecond` on the replay sample) and those always checked; all of them where the second stage
 is refused. -/
 def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
-  match Spot.Select.selectSecond (g.sample src₁) g.n g.k src₂ with
+  match SampledProofs.Select.selectSecond (g.sample src₁) g.n g.k src₂ with
   | .ok (draw, _) => (List.range N).filter fun v =>
-      g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
+      g.always v || (SampledProofs.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
   | .error _ => List.range N
 
 /-- **The two-stage sampled verifier's code with its Lean samples**: `c` with `checked` the two stages' on the

@@ -18,8 +18,8 @@ import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S
-from verity.core.protocols.spot.one_stage import draw as D, partition as P
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

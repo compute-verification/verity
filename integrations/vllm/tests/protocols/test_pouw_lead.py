@@ -159,7 +159,7 @@ def test_the_lead_refuses_what_it_cannot_be():
     assert any("graph-capturable" in r for r in PO.refusals(eager))
 
 
-def test_the_lead_is_refused_beside_spot_and_pous():
+def test_the_lead_is_refused_beside_sampled_proofs_and_pous():
     """Sampled proofs would trace the lead's call as the stock computation, and under PoUS its GEMMs would read the
     backend's loaded weights, not what PoUS stores."""
     beside = PO.refusals(_ctx(enabled=(ENTRY, "sampled-proofs:rows-sha512"), backend=Backend()))

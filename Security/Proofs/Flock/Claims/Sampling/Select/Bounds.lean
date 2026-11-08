@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Sampling.ExecBernoulli
 public import Proofs.Flock.Claims.Sampling.Select.Layout
 public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Take
-public import Properties.Spot.Draw
+public import Properties.SampledProofs.Draw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -62,9 +62,9 @@ bound (`seqMiss_le`) multiplies them.
 
 @[expose] public section
 
-open Spot
+open SampledProofs
 
-namespace Properties.Spot.SecurityProofs
+namespace Properties.SampledProofs.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
 open scoped ENNReal
@@ -292,4 +292,4 @@ theorem strata_bound (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
   simp only [List.length_nil, List.flatMap_nil, Array.length_toList] at this
   exact seqMiss_imp _ _ this _ _ hs
 
-end Properties.Spot.SecurityProofs
+end Properties.SampledProofs.SecurityProofs

@@ -1,6 +1,6 @@
 /-
 Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
-(`Spot.OneStageZk`) or the recursive audit (`VStar.Recursive`), whichever the auditor's params name. One-stage
+(`SampledProofs.OneStageZk`) or the recursive audit (`VStar.Recursive`), whichever the auditor's params name. One-stage
 v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's are its own run of the verifier.
 
 `Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
@@ -25,7 +25,7 @@ namespace VStar.Recursive.Sampled
 
 open Lean (Json)
 open Flock (V)
-open Spot
+open SampledProofs
 
 def PROTOCOL : String := "verity/sampled-proofs/v1"
 

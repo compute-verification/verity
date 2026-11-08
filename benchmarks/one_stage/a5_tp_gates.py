@@ -85,8 +85,8 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402

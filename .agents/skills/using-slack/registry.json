@@ -118,7 +118,7 @@
         "Security/Proofs/Core/",
         "Security/Definitions/Core/",
         "verity/",
-        "verity/core/protocols/spot/",
+        "verity/core/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
         "benchmarks/serve_tax/",
         "benchmarks/replay_ladder/",
@@ -134,7 +134,7 @@
         "benchmarks/spot_figures/",
         "benchmarks/dsa_topk/",
         "benchmarks/spot_proved/",
-        "integrations/vllm/verity_vllm/protocols/spot.py",
+        "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
         "verity/core/protocols/interface/"

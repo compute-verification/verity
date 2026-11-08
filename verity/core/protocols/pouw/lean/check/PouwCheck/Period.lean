@@ -17,7 +17,7 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
     {"key": challenger key, "main": [commit, …], "name": period}
 
-the challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent
+the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`), its own copy of main's first-parent
 history (newest first) and the name of the period it credits, a string.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its

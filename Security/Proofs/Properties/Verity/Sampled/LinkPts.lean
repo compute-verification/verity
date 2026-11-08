@@ -11,7 +11,7 @@ public import Proofs.Properties.Verity.Sampled.LinkRead
 `MovesOf` asks that the link points written at the link (`linkBits fieldEnc pts`, the coins of the device's log's
 first opening) be those of the session v2's record decodes to. Where the sampled verdict accepts, the log v2's check
 read is the device's (`Binding.Logged Binding.readsV2`) and the device's first opening is of the stream
-`Spot.Challenger.TREE_SESSION` of the tree it opens (the order `SampleLinkFirst` states), they are
+`SampledProofs.Challenger.TREE_SESSION` of the tree it opens (the order `SampleLinkFirst` states), they are
 (`link_pts`):
 
 * **v2's read of that opening** (`link_read`): v2's read of the release log shows it as the read of the log's first
@@ -29,7 +29,7 @@ read is the device's (`Binding.Logged Binding.readsV2`) and the device's first o
 namespace Verity.Sampled
 
 open Lean (Json)
-open Spot.Challenger
+open SampledProofs.Challenger
 open FlockSoundness.Discharge
 open FlockSoundness.Refine (ptsOf)
 

@@ -1,11 +1,11 @@
 """Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof system's one challenger
-(`coins.SessionCoins`, `spot.challenger`):
+(`coins.SessionCoins`, `sampled_proofs.challenger`):
 
 - `Local`: a `LiveChallenger` in the verifier's process, sampling from `secrets.token_bytes`.
 - `Serve`: the challenger's own process, the command its caller hands in
   (`benchmarks/remote_session/verifier_process.py`'s is `benchmarks/live_challenger/serve.py`), started for the session
   on the verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by
-  `spot.remote`'s client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before
+  `sampled_proofs.remote`'s client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before
   it listens and its release log when the client closes the session. Not the auditor host: the verifier's machine is
   the audit's (never the prover's), but no ledger opens the session for its window, so the read is
   `challenger.session_of`'s, under the key the run wrote.
@@ -47,8 +47,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from verity.core.protocols.remote_bandwidth import audit, coins
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs import remote
 
 ROOT = Path(__file__).resolve().parents[5]
 KINDS = ("local", "serve", "gate")

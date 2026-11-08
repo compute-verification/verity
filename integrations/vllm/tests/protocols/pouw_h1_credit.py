@@ -32,8 +32,8 @@ import numpy as np
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.spot.one_stage import proofs as PF
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import served as SV

@@ -56,7 +56,7 @@ def _verify(fx: Path, coins: str | None, *sessions: Path) -> tuple[int, list[dic
 def test_the_sessions_coins_are_the_challengers(fx):
     """Its coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with one of its
     link points changed, it is refused at them."""
-    from verity.core.protocols.spot import challenger as C, remote as R
+    from verity.core.protocols.sampled_proofs import challenger as C, remote as R
 
     trees = C.coin_trees_of(R.log_lines(fx / "challenger" / R.RELEASES))
     rec = json.loads((fx / "session" / "session.json").read_text())

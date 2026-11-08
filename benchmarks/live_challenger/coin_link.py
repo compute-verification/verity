@@ -38,8 +38,8 @@ sys.path.insert(0, str(HERE))
 
 from serve import peer_ssh  # noqa: E402
 from verity.core.protocols.certifier.coin_link import CoinLink, CoinLinkParams  # noqa: E402
-from verity.core.protocols.spot import remote  # noqa: E402
-from verity.core.protocols.spot.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
+from verity.core.protocols.sampled_proofs import remote  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
 
 SUMMARY = "coin-link.json"
 TUNNEL = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",

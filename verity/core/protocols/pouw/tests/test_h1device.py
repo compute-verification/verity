@@ -17,7 +17,7 @@ from verity.ml.protocols.pouw.circuit import h1device as D
 from verity.ml.protocols.pouw.circuit import h1tile as H
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.ml.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
 ROOT = Path(__file__).resolve().parents[5]
 SHEET_90_LEAN = ROOT / "Security" / "Definitions" / "Accounting" / "Sheets" / "H200.lean"

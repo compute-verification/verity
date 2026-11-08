@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 #: the root X of an execution phase's operands (`root`, `core_check.values_root`): SHA-512 over this tag, the program, and each
 #: value's name, domain and root in name order

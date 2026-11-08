@@ -191,9 +191,9 @@ theorem foldlM_coins {f : ByteArray → Json → Option ByteArray} {g : Json →
 /-- **The bytes `recordCoins?` reads of a round's coins are those of the challenges `Record.f128s` decodes**, in
 order. -/
 theorem recordCoins_bytes {cs : Array Json} {coins : Array Flock.F128} {b : ByteArray}
-    (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.Spot.Challenger.recordCoins? (.arr cs) = some b) :
+    (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.SampledProofs.Challenger.recordCoins? (.arr cs) = some b) :
     b.data.toList = (coins.toList.map fun x => (f128Bytes x).data.toList).flatten := by
-  simp only [_root_.Spot.Challenger.recordCoins?] at hb
+  simp only [_root_.SampledProofs.Challenger.recordCoins?] at hb
   rw [← Array.foldlM_toList] at hb
   have h := foldlM_coins (fun acc x c b hf hg => ?_) cs.toList ByteArray.empty b coins.toList hb
     (mapM_toList_ok hf)
@@ -263,7 +263,7 @@ theorem bitsOfBytes_flatten :
 
 /-- **The bits of the bytes `recordCoins?` reads** are the decoded challenges' bits, in order. -/
 theorem bits_of_coins {cs : Array Json} {coins : Array Flock.F128} {b : ByteArray}
-    (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.Spot.Challenger.recordCoins? (.arr cs) = some b) :
+    (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.SampledProofs.Challenger.recordCoins? (.arr cs) = some b) :
     Verity.bitsOfBytes b = (coins.toList.map fun x => List.ofFn (fieldBits x)).flatten :=
   (congrArg (fun l => Verity.bitsOfBytes ⟨⟨l⟩⟩) (recordCoins_bytes hf hb)).trans (bitsOfBytes_flatten coins.toList)
 
@@ -333,7 +333,7 @@ theorem coins_of_flatten {n : ℕ} {coins : Array Flock.F128} {c : Fin n → �
 of a round's coins and `Record.f128s` decodes them, and `b`'s bits are `roundBits fieldEnc c`, the decoded coins are
 `c`. -/
 theorem coins_of_bits {cs : Array Json} {coins : Array Flock.F128} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
-    (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.Spot.Challenger.recordCoins? (.arr cs) = some b)
+    (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.SampledProofs.Challenger.recordCoins? (.arr cs) = some b)
     (hbits : Verity.bitsOfBytes b = roundBits fieldEnc c) :
     coins.size = n ∧ ∀ i : Fin n, (c i).val = coins[i.val]! :=
   coins_of_flatten ((bits_of_coins hf hb).symm.trans hbits)
@@ -359,7 +359,7 @@ theorem pts_of_bits {mP : ℕ} {points : Array (Array Flock.F128)} {P : Fin 2 �
 /-! ## The record's JSON as `recordRound` reads it -/
 
 theorem fld_getD {x v : Json} {k : String} (h : Flock.Record.fld x k = .ok v) :
-    _root_.Spot.getD x k = v := by
+    _root_.SampledProofs.getD x k = v := by
   unfold Flock.Record.fld at h
   show ((x.getObjVal? k).toOption).getD Json.null = v
   cases hx : x.getObjVal? k with
@@ -367,7 +367,7 @@ theorem fld_getD {x v : Json} {k : String} (h : Flock.Record.fld x k = .ok v) :
   | ok w => rw [hx] at h; exact Except.ok.inj h
 
 theorem arr_getD {x : Json} {k : String} {a : Array Json} (h : Flock.Record.arr x k = .ok a) :
-    _root_.Spot.getD x k = .arr a := by
+    _root_.SampledProofs.getD x k = .arr a := by
   unfold Flock.Record.arr at h
   obtain ⟨v, hv, h⟩ := ebind_ok h
   rw [fld_getD hv]
@@ -376,7 +376,7 @@ theorem arr_getD {x : Json} {k : String} {a : Array Json} (h : Flock.Record.arr 
   | _ => cases h
 
 theorem str_getD {x : Json} {k s : String} (h : Flock.Record.str x k = .ok s) :
-    _root_.Spot.getD x k = .str s := by
+    _root_.SampledProofs.getD x k = .str s := by
   unfold Flock.Record.str at h
   obtain ⟨v, hv, h⟩ := ebind_ok h
   rw [fld_getD hv]
@@ -403,7 +403,7 @@ theorem find?_congr {α : Type} {xs : Array α} {q q' : α → Bool} (h : ∀ a 
 
 /-- A rep stream is not the session stream, whose round 0 `recordRound` reads as the link points. -/
 theorem repStreamName_ne (t : String) (r : ℕ) :
-    (repStreamName t r == _root_.Spot.Challenger.TREE_SESSION) = false := by
+    (repStreamName t r == _root_.SampledProofs.Challenger.TREE_SESSION) = false := by
   refine beq_false_of_ne fun h => ?_
   have hm : '/' ∈ (repStreamName t r).toList := by
     unfold repStreamName
@@ -424,9 +424,9 @@ bytes, where any, have the recorded digest. -/
 theorem recordRound_decode {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {name : String}
     {y : StreamRec} {k : ℕ} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J)
-    (hn : (name == _root_.Spot.Challenger.TREE_SESSION) = false)
+    (hn : (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false)
     (hy : sess.streams.find? (·.name == name) = some y) (hk : k < y.rounds.size) :
-    ∃ cs, recordRound J name k = _root_.Spot.Challenger.recordCoins? (.arr cs) ∧
+    ∃ cs, recordRound J name k = _root_.SampledProofs.Challenger.recordCoins? (.arr cs) ∧
       Flock.Record.f128s cs = .ok y.rounds[k].coins ∧ ∀ b, y.rounds[k].bytes = some b → y.rounds[k].sha = spec.dg b := by
   obtain ⟨j, l, recs, hp, -, hrecs, -, -, hstr⟩ := decode_ok hd
   rw [hJ] at hp
@@ -457,8 +457,8 @@ then the second's. -/
 theorem link_coins {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json}
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
     (hp2 : spec.points = 2) :
-    ∃ cs, recordRound J _root_.Spot.Challenger.TREE_SESSION 0 =
-        _root_.Spot.Challenger.recordCoins? (.arr cs) ∧
+    ∃ cs, recordRound J _root_.SampledProofs.Challenger.TREE_SESSION 0 =
+        _root_.SampledProofs.Challenger.recordCoins? (.arr cs) ∧
       Flock.Record.f128s cs = .ok (sess.points[0]! ++ sess.points[1]!) := by
   obtain ⟨j, l, recs, hp, hl, -, -, ⟨ps, hps, hpts⟩, -⟩ := decode_ok hd
   rw [hJ] at hp
@@ -486,7 +486,7 @@ record's link points read as `P`. -/
 theorem pts_of_record {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {b : ByteArray}
     {mP : ℕ} {P : Fin 2 → Fin mP → 𝔽} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J) (hp2 : spec.points = 2)
-    (hb : recordRound J _root_.Spot.Challenger.TREE_SESSION 0 = some b)
+    (hb : recordRound J _root_.SampledProofs.Challenger.TREE_SESSION 0 = some b)
     (hbits : Verity.bitsOfBytes b = linkBits fieldEnc P) : ptsOf mP sess.points = P := by
   obtain ⟨cs, hrr, hf⟩ := link_coins hd hJ hp2
   rw [hrr] at hb
@@ -775,7 +775,7 @@ digest, `c`'s count and `c`, as `repsOf_stream` reads an answered submission. -/
 theorem answered_of_record {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {name : String}
     {y : StreamRec} {k : ℕ} {m : Claims.Msg} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
-    (hret : spec.retainRounds = true) (hn : (name == _root_.Spot.Challenger.TREE_SESSION) = false)
+    (hret : spec.retainRounds = true) (hn : (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false)
     (hy : sess.streams.find? (·.name == name) = some y) (hk : k < y.rounds.size)
     (hm : roundMsg record name k = some m) (hb : recordRound J name k = some b)
     (hbits : Verity.bitsOfBytes b = roundBits fieldEnc c) :

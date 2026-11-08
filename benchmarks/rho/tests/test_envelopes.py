@@ -65,7 +65,7 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
     assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["residual"], rel=1e-9)
 
 
-def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
+def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     ctx = tiers_context()
     p = tiers_params(ctx)
     sampled = envelopes.regime(REG, "remote-sampled")

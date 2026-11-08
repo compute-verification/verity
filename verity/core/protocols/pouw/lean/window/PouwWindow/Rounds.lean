@@ -1,12 +1,12 @@
 module
 
 public import PouwCommit.Draws
-public import Spot.Challenger
+public import SampledProofs.Challenger
 
 /-!
 # A live execution phase's round coins (`window.py`, "Live execution phases")
 
-PoUW's live execution phase is the proof system's challenger's first client (`Spot.Challenger`). The check item's
+PoUW's live execution phase is the proof system's challenger's first client (`SampledProofs.Challenger`). The check item's
 optional `coins` is the execution phase's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
 execution phase's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin and `R` round coins (`pouw/round`,
 rounds numbered from 0), all committed before the execution phase. Its sampling coin is a session of its own (`DRAW_FAMILIES`, which
@@ -21,7 +21,7 @@ A Pearl-C pass's live session is reserved for its salt coin alone (`SALT_FAMILIE
 
 namespace PouwWindow
 
-open Spot.Challenger (LiveCommitment LiveOpening)
+open SampledProofs.Challenger (LiveCommitment LiveOpening)
 
 def COINS : String := "coins"
 def LIVE_SCHEME : String := Domains.POUW_EPOCH_COINS_LIVE
@@ -89,7 +89,7 @@ def saltEpochReason (c : LiveCommitment) : Option String :=
 def roundsReason (c : LiveCommitment) (roots : List ByteArray) (openings : List LiveOpening) :
     Except String (Option String) := do
   if let some why := liveEpochReason c then return some why
-  Spot.Challenger.orderReason c ROUND roots openings
+  SampledProofs.Challenger.orderReason c ROUND roots openings
 
 /-- `round_key`: round `r`'s noise key from its opened coin and the round's root. -/
 def roundKey (c : LiveCommitment) (coin : ByteArray) (r : Nat) (root : ByteArray) : Except String ByteArray :=

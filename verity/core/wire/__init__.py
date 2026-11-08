@@ -8,7 +8,7 @@ head      canonical JSON (the commitments' rules: sorted keys, no whitespace, UT
 body      the message's bytes, never base64
 ~~~
 
-The frame is `spot.remote`'s, with a body. A message type is a tag and a version, and its `Schema` states its
+The frame is `sampled_proofs.remote`'s, with a body. A message type is a tag and a version, and its `Schema` states its
 head's fields, its body's bounds and its kind: one of the four public kinds (`structure`, `output`, `coins`,
 `commitment`) or `private`, which never enters a record. `MessageTypes.decode` parses every frame as adversarial and refuses
 by name (`Refused.name`, one of `REFUSALS`): a frame that isn't one (`malformed`), a head or body past its bound

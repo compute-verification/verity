@@ -41,7 +41,7 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch as HB
 from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, _uint
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 INST = hm96.SHA512
 KEY = INST.default_key

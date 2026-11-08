@@ -96,8 +96,8 @@ def session_audit(coin: dict, digest: str, d: Path, key_record: Path, main: Path
     its close, after the registration was in the ledger, so no hiding premise on the root is needed), run from a commit
     on main, whose signed log shows that digest as the only root it received and whose commitment opens the recorded
     coin after it."""
-    from verity.core.protocols.spot import challenger as Ch
-    from verity.core.protocols.spot import remote as R
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.sampled_proofs import remote as R
     sid, window = coin["reserve"]["session"], {"root": digest}
     out: dict = {"session": sid}
     try:

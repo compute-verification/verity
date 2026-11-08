@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_links as R
 
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-links"

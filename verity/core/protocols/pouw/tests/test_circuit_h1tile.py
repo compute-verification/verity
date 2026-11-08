@@ -204,7 +204,7 @@ def test_live_salt_is_the_round_key_stream():
     """A live execution phase's unit salt is round r's `window.round_key` stream's first 64 bytes, from the round's 64-byte coin and
     root; another round, root or coin gives another salt, and the unit's receipt follows it."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.spot import challenger as Ch
+    from verity.core.protocols.sampled_proofs import challenger as Ch
 
     count = iter(range(1 << 20))
     ch = Wd.live_challenger(7, 2, entropy=lambda n: hashlib.shake_256(next(count).to_bytes(8, "big")).digest(n))

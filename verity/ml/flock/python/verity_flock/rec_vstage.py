@@ -198,7 +198,7 @@ def message_rounds(public: dict, private: dict, sh: A.Shape, streams: list[str] 
 def messages(program: str, mrs: list[dict], ports: list[tuple[str, str]] | None = None) -> tuple[dict, dict]:
     """The prover's registrations of the message rounds and the verifier's own entries of them (from the ``c_k`` alone), by
     port: ``ports`` (port, value) a round, default ``m<i>`` as ``rec-c<i>``."""
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     regs, own = {}, {}
     for i, ((port, value), mr) in enumerate(zip(ports or [(f"m{i}", f"rec-c{i}") for i in range(len(mrs))], mrs, strict=True)):
@@ -504,8 +504,8 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     row, its openings honest. The prover keeps the outputs the verifier registers, which the unit's row then does not
     give, so no proof of the part holds."""
     import numpy as np
-    from verity.core.protocols.spot.one_stage import partition as P
-    from verity.core.protocols.spot.one_stage import registered as G
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
     from verity.ml.circuits.codec import canonical_json, encode_program
 
     from . import circuit as FC
@@ -637,7 +637,7 @@ def acc_salts(path: Path, n: int) -> list[bytes]:
 
 def forge_chain(chain: O.Chain, row: int) -> O.Chain:
     """The prover's running sums with row ``row`` one bit off (its first word), every other row and every salt honest."""
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     rows = [list(r) for r in chain.reg.rows]
     rows[row][0] ^= 1

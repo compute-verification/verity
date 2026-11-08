@@ -33,7 +33,7 @@ from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
-from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.sampled_proofs import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402

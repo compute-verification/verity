@@ -20,7 +20,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
 N = 32
 SEED = 20261025

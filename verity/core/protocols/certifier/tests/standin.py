@@ -16,9 +16,9 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.core.protocols.certifier import service as SVC, tie_service as TS, warden_rows as WR
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import proofs as PF, registered as G
-from verity.core.protocols.spot.one_stage.proofs import Finding
+from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF, registered as G
+from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 _INST = hm96.SHA512
 SALTS = {"pub": b"\x51" * 192, "wit": b"\x52" * 192, "o0": b"\x53" * 192}

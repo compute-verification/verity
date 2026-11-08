@@ -95,8 +95,8 @@ theorem mapM_entry {β γ : Type _} {f : β → Option γ} :
 v2's case in it accepts at the sample `dr`, the digests the commitment binds (`BindsAt`), keyed by distinct ids, give
 sampled proofs `dr`'s digest. -/
 theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
-    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
+    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
+    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
     (hcase : V2Case k s a b e) (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) :
     ∃ ds, BindsAt k s ds ∧ (ds.map Prod.fst).Nodup ∧ (VStar.Recursive.Sampled.PROTOCOL, dr.after) ∈ ds := by
   obtain ⟨-, hc, -, -, hdr, -⟩ := hacc
@@ -119,9 +119,9 @@ theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e 
   · obtain ⟨y, hy, hfy⟩ := mapM_entry hds' x hx
     have hdg : Properties.Composition.digestOf x.1 x.2.2.commitment = some c.digest := by
       rw [hx1]
-      show Properties.Composition.digestOf _root_.Spot.OneStage.protocol x.2.2.commitment = _
+      show Properties.Composition.digestOf _root_.SampledProofs.OneStage.protocol x.2.2.commitment = _
       unfold Properties.Composition.digestOf
-      rw [show _root_.Spot.OneStage.protocol.commitment x.2.2.commitment = .ok c from hc]
+      rw [show _root_.SampledProofs.OneStage.protocol.commitment x.2.2.commitment = .ok c from hc]
       rfl
     have hid : x.1.id = VStar.Recursive.Sampled.PROTOCOL := (congrArg (·.id) hx1).trans rfl
     simp only [hdg, Option.map_some, Option.some.injEq, hid] at hfy

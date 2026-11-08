@@ -14,7 +14,7 @@ from remote_bandwidth_fakes import Clock, Entropy
 from test_verifier_party import COINS
 from verity.core.protocols.pous import period as pous_period
 from verity.core.protocols.remote_bandwidth import period as P
-from verity.core.protocols.spot import challenger as C
+from verity.core.protocols.sampled_proofs import challenger as C
 
 KEY = C.ChallengerKey(4, 10, hashlib.sha512(b"the challenger key").digest() + bytes(16))
 LANE = "compute-accounting"

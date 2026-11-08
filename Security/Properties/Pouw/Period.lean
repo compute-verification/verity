@@ -66,10 +66,10 @@ check doesn't discharge it:
 * `RegisteredBeforeDraw`: protocol structure. The check reads only that the service's answer cites the registration's
   digest (`Evidence.commitment`), not when the sampling coin was released against it, so it doesn't discharge it.
 * `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
-  for one session) with one-stage's acceptance (`Properties.Spot.AcceptMeans`) and the check's
+  for one session) with one-stage's acceptance (`Properties.SampledProofs.AcceptMeans`) and the check's
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
   leg: the window's staged statement, `stagedAt`).
-* `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`Spot.Select.select`) read as
+* `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`SampledProofs.Select.select`) read as
   the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
   published sample `K′` distinct units below `N`; `Properties.Served.DrawMissesSubset` bounds its misses by the model's).
 * `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
@@ -197,7 +197,7 @@ def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 <
 level has the population `N_p` and the sample size `K_d`, and the units it publishes as sampled (`Public.drawn`, the
 service's) are the units of the model's sample at the window's sampling coin (`drawOf`). It holds when the model's
 permutation coin is read as the service's `subset:K′` sample from the challenger's sampling coin
-(`Spot.Select.select`), at one work level for every window. A named assumption in the lock: a
+(`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock: a
 protocol-code fact to prove. -/
 def SampleIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
     (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=

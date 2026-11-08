@@ -8,9 +8,9 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
 /-!
-# Bits' row map is the bridge's (`Spot.Bits.rowBit`, `outRowBit`)
+# Bits' row map is the bridge's (`SampledProofs.Bits.rowBit`, `outRowBit`)
 
-`Spot.Bits.rowBit c n g` is where source gate `g` of Bits' key program is read, and `outRowBit c u k j t` where
+`SampledProofs.Bits.rowBit c n g` is where source gate `g` of Bits' key program is read, and `outRowBit c u k j t` where
 unit `u`'s instance `k` commits bit `t` of its returned output leaf `j`. The bridge's row bits are `Layout.keyRowOf` at
 an input gate and `HiddenExec.outBitRow` at a returned output's bit; `rowPosOf` reads one as Bits' position: the port's
 name, the unit's leaf and the bit.
@@ -42,7 +42,7 @@ variable {c : Flock.Circuit} {n : ℕ}
 
 variable (c) in
 /-- **A bridge row bit as Bits' commitment position**: bit `k` of unit `u`'s leaf of row port `q`. -/
-def rowPosOf (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) : Spot.Bits.RowPos :=
+def rowPosOf (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) : SampledProofs.Bits.RowPos :=
   ⟨c.ports[r.2.1].name, r.1.val, r.2.2.val⟩
 
 /-- **Bits' leaf is the bridge's leaf map's** at a public file without shared rows (`LeafMap.ident`): unit `u` reads its
@@ -57,10 +57,10 @@ theorem rowPosOf_leaf {pub : Flock.Public} (ht : pub.tables = none) (nl : ℕ)
 
 /-! ## Source gates -/
 
-/-- **A key is its own key** (`Spot.Bits.keyIdx`): the first input of a source has that source. -/
-theorem keyIdx_self {B x b : ℕ} (h : Spot.Bits.keyIdx c B x = some b) :
-    Spot.Bits.keyIdx c B b = some b := by
-  unfold Spot.Bits.keyIdx at h ⊢
+/-- **A key is its own key** (`SampledProofs.Bits.keyIdx`): the first input of a source has that source. -/
+theorem keyIdx_self {B x b : ℕ} (h : SampledProofs.Bits.keyIdx c B x = some b) :
+    SampledProofs.Bits.keyIdx c B b = some b := by
+  unfold SampledProofs.Bits.keyIdx at h ⊢
   dsimp only at h ⊢
   split_ifs at h with h0
   have hb := List.find?_some h
@@ -68,8 +68,8 @@ theorem keyIdx_self {B x b : ℕ} (h : Spot.Bits.keyIdx c B x = some b) :
   rw [ite_eq_right (by rw [hb]; exact h0), hb]
   exact h
 
-theorem keyIdx_lt {B x b : ℕ} (h : Spot.Bits.keyIdx c B x = some b) : b < B := by
-  unfold Spot.Bits.keyIdx at h
+theorem keyIdx_lt {B x b : ℕ} (h : SampledProofs.Bits.keyIdx c B x = some b) : b < B := by
+  unfold SampledProofs.Bits.keyIdx at h
   dsimp only at h
   split_ifs at h
   exact List.mem_range.1 (List.mem_of_find?_eq_some h)
@@ -83,7 +83,7 @@ theorem wire_inGate {hU : Built c.unit} (outs : Finset (Fin (keyN c hU n))) {u :
     (hlt : ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val < 2 + n * keyB c hU) :
     x.val < ((Placed.keyProg c hU n).rows u).nIn ∧
       (((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val - 2) / keyB c hU = u.val ∧
-      Spot.Bits.keyIdx c (keyB c hU)
+      SampledProofs.Bits.keyIdx c (keyB c hU)
           ((((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val - 2) % keyB c hU) =
         some ((((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val - 2) % keyB c hU) ∧
       Aliased.srcKey c ((((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val - 2) % keyB c hU) =
@@ -137,7 +137,7 @@ theorem wire_inGate {hU : Built c.unit} (outs : Finset (Fin (keyN c hU n))) {u :
     have hd : (2 + u.val * keyB c hU + b.val - 2) / keyB c hU = u.val := by
       rw [show 2 + u.val * keyB c hU + b.val - 2 = b.val + u.val * keyB c hU by omega,
         Nat.add_mul_div_right _ _ hB, Nat.div_eq_of_lt b.isLt, Nat.zero_add]
-    have hk : Spot.Bits.keyIdx c (keyB c hU) x.val = some b.val := by
+    have hk : SampledProofs.Bits.keyIdx c (keyB c hU) x.val = some b.val := by
       rw [keyIdx_eq c hxB, hb]
       rfl
     exact ⟨hd, by rw [hm]; exact keyIdx_self hk, by rw [hm, Layout.keyIdx_some hb]⟩
@@ -147,12 +147,12 @@ and whose key is the zero or a row bit (`RowKey`), Bits' commitment position is 
 are none off the source gates. -/
 theorem rowBit_keyRowOf {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (g : Fin (keyN c hU n))
     (h : 2 ≤ g.val → g.val < 2 + n * keyB c hU →
-      Spot.Bits.keyIdx c (keyB c hU) ((g.val - 2) % keyB c hU) = some ((g.val - 2) % keyB c hU) ∧
+      SampledProofs.Bits.keyIdx c (keyB c hU) ((g.val - 2) % keyB c hU) = some ((g.val - 2) % keyB c hU) ∧
         RowKey c (portRowW c) ((g.val - 2) % keyB c hU)) :
-    Spot.Bits.rowBit c n g.val = (keyRowOf c hU n (portRowW c) g).map (rowPosOf c) := by
-  have hB : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn = keyB c hU :=
+    SampledProofs.Bits.rowBit c n g.val = (keyRowOf c hU n (portRowW c) g).map (rowPosOf c) := by
+  have hB : ((SampledProofs.Bits.Rows.ofNet c.unit).stack c.upv).nIn = keyB c hU :=
     (rowsAgree_circuitRows c hU hu).1
-  unfold Spot.Bits.rowBit keyRowOf
+  unfold SampledProofs.Bits.rowBit keyRowOf
   dsimp only
   rw [hB]
   by_cases hr : 2 ≤ g.val ∧ g.val < 2 + n * keyB c hU
@@ -161,14 +161,14 @@ theorem rowBit_keyRowOf {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (g : Fi
     rw [dite_eq_left hr, ite_eq_right]
     · unfold RowKey at hk
       rw [srcKey_eq] at hk ⊢
-      generalize Spot.Bits.srcKey c (Spot.Bits.Index.of c) ((g.val - 2) % keyB c hU) = s at hk ⊢
+      generalize SampledProofs.Bits.srcKey c (SampledProofs.Bits.Index.of c) ((g.val - 2) % keyB c hU) = s at hk ⊢
       cases s with
       | msg q byte bit =>
         obtain h0 | ⟨q', byte', bit', he, hq, hw, hb8⟩ := hk
         · exact absurd h0 (by simp [srcOf])
         · simp only [srcOf, Aliased.Src.msg.injEq] at he
           obtain ⟨rfl, rfl, rfl⟩ := he
-          simp only [srcOf, Spot.Bits.srcPos, hq, hw, hb8, and_self, ↓reduceDIte, Option.map_some, rowPosOf,
+          simp only [srcOf, SampledProofs.Bits.srcPos, hq, hw, hb8, and_self, ↓reduceDIte, Option.map_some, rowPosOf,
             Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hq, Option.getD_some]
           rfl
       | _ => rfl
@@ -198,7 +198,7 @@ theorem rowBit_wire {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (hkeys : La
     (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (i : Fin ((Placed.keyProg c hU n).rows u).nComp)
     (x : Fin ((Placed.keyProg c hU n).rows u).w)
     (hx : x ∈ ((Placed.keyProg c hU n).rows u).a i ++ ((Placed.keyProg c hU n).rows u).b i) :
-    Spot.Bits.rowBit c n ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val =
+    SampledProofs.Bits.rowBit c n ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val =
       (keyRowOf c hU n (portRowW c) ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x)).map (rowPosOf c) :=
   rowBit_keyRowOf hu _ fun h2 hlt => by
     obtain ⟨hxn, -, hself, hs⟩ := wire_inGate outs x h2 hlt
@@ -220,7 +220,7 @@ theorem outAt_mono {a b : ℕ} (h : a ≤ b) : Hidden.outAt c a ≤ Hidden.outAt
 /-- **Bits' output row of a word is its port's**: where each output row holds one output port (`outGroup_single`), the
 first output row whose run of words holds word `x` is `x`'s port (`outPortOf`), the last starting at or before it. -/
 theorem outPos_eq (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {x : ℕ} (hx : x < c.outWords) (u t : ℕ) :
-    Spot.Bits.outPos c u x t = some ⟨(c.ports.getD (HmOut.nIn c + outPortOf c x) default).name, u,
+    SampledProofs.Bits.outPos c u x t = some ⟨(c.ports.getD (HmOut.nIn c + outPortOf c x) default).name, u,
       16 * (x - Hidden.outAt c (outPortOf c x)) + t⟩ := by
   obtain ⟨hlt, hle, hw⟩ := outPortOf_spec c hx
   have hs : c.outRowPorts.size = c.outPorts.size := by rw [hr, Array.size_replicate]
@@ -240,7 +240,7 @@ theorem outPos_eq (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {x : 
           Option.getD_some]
       simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, Nat.not_le, Nat.not_lt]
       omega
-  unfold Spot.Bits.outPos
+  unfold SampledProofs.Bits.outPos
   simp only [hf, Option.map_some, Hidden.outGroup_single hr hlt]
 
 /-- **Bits' position of a returned output's bit is the bridge's**: where each output row holds one output port, at an
@@ -248,15 +248,15 @@ output leaf `j` of instance `k` whose word is an output word and whose bit `t` i
 theorem outRowBit_outBitRow (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) (u : Fin n) {k j t : ℕ}
     (hj : j < (c.leavesOut.getD k #[]).size) (hw : outWordOf c (k, j, t) < c.outWords)
     (hb : outBitRow c u (k, j, t) ≠ none) :
-    Spot.Bits.outRowBit c u.val k j t = (outBitRow c u (k, j, t)).map (rowPosOf c) := by
+    SampledProofs.Bits.outRowBit c u.val k j t = (outBitRow c u (k, j, t)).map (rowPosOf c) := by
   have ew : outWordOf c (k, j, t) = (c.leavesOut.getD k #[])[j] := getElem!_pos _ j hj
   obtain ⟨⟨u', q, b⟩, hs⟩ := Option.ne_none_iff_exists'.1 hb
   obtain ⟨rfl, hq, hk⟩ := outBitRow_spec hs
   rw [ew] at hq hk hw
   rw [hs, Option.map_some]
-  unfold Spot.Bits.outRowBit
+  unfold SampledProofs.Bits.outRowBit
   rw [Array.getElem?_eq_getElem hj, Option.bind_some, outPos_eq hr hw]
-  simp only [rowPosOf, Option.some.injEq, Spot.Bits.RowPos.mk.injEq, ← hk, ← hq, and_true]
+  simp only [rowPosOf, Option.some.injEq, SampledProofs.Bits.RowPos.mk.injEq, ← hk, ← hq, and_true]
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem q.isLt, Option.getD_some]
   rfl
 
@@ -267,7 +267,7 @@ theorem outRowBit_outRowOf {hU : Built c.unit} (hr : c.outRowPorts = Array.repli
     (hgu : (Placed.keyProg c hU n).unit ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x) = some u)
     (hxn : ((Placed.keyProg c hU n).rows u).nIn ≤ x.val) {u' j t : ℕ} (hoc : Layout.OutColAt c hU x.val u' j t)
     (hw : outWordOf c (u', j, t) < c.outWords) (hb : outBitRow c u (u', j, t) ≠ none) :
-    Spot.Bits.outRowBit c u.val u' j t =
+    SampledProofs.Bits.outRowBit c u.val u' j t =
       (HiddenExec.outRowOf c hU n outs ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x)).map
         (rowPosOf c) := by
   rw [HiddenExec.outRowOf_wire outs x hgu hxn, Layout.outDecode_of hoc]

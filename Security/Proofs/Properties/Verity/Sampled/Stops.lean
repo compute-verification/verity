@@ -1698,7 +1698,7 @@ theorem stream_eq {Lg m R₁ : List Release} (he : Lg = m ++ R₁) (hn : ∀ sp 
 
 /-- **No rep stream is named the session's.** -/
 theorem rep_ne_session {tables : Array String} {t r : ℕ} :
-    tables[t]?.map (repStreamName · r) ≠ some _root_.Spot.Challenger.TREE_SESSION := by
+    tables[t]?.map (repStreamName · r) ≠ some _root_.SampledProofs.Challenger.TREE_SESSION := by
   intro h
   cases hta : tables[t]? with
   | none =>
@@ -1706,7 +1706,7 @@ theorem rep_ne_session {tables : Array String} {t r : ℕ} :
     cases h
   | some a =>
     rw [hta] at h
-    have e : repStreamName a r = _root_.Spot.Challenger.TREE_SESSION := Option.some.inj h
+    have e : repStreamName a r = _root_.SampledProofs.Challenger.TREE_SESSION := Option.some.inj h
     have := repStreamName_ne a r
     rw [e] at this
     simp at this
@@ -1797,7 +1797,7 @@ theorem stream_logs (reg : Option Claims.Msg → Reg) {tables : Array String} {L
     (hS : LogServed Lg) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) {r₀ : Release} {i s₀ n₀ : ℕ}
     (hL₀ : Lg = L₀ ++ r₀ :: L') (hr₀ : r₀.frame = .opening i s₀ n₀) (h₀ : firstOpened L₀ = none)
     (hses : ((helloSpecs L₀)[i]?.bind fun sp => sp.streams[s₀]?) =
-      some _root_.Spot.Challenger.TREE_SESSION)
+      some _root_.SampledProofs.Challenger.TREE_SESSION)
     (t : Fin J) (r : Fin 2) {s : ℕ}
     (hs : ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = tables[t.val]?.map (repStreamName · r.val))
     (hcovL : ∀ k < openedOf Lg i s, ∃ j, L j = .rep t.val r k) :
@@ -1931,7 +1931,7 @@ theorem stream_rounds (reg : Option Claims.Msg → Reg) {tables : Array String} 
     (hS : LogServed Lg) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) {r₀ : Release} {i s₀ n₀ : ℕ}
     (hL₀ : Lg = L₀ ++ r₀ :: L') (hr₀ : r₀.frame = .opening i s₀ n₀) (h₀ : firstOpened L₀ = none)
     (hses : ((helloSpecs L₀)[i]?.bind fun sp => sp.streams[s₀]?) =
-      some _root_.Spot.Challenger.TREE_SESSION)
+      some _root_.SampledProofs.Challenger.TREE_SESSION)
     (t : Fin J) (r : Fin 2) {s : ℕ}
     (hs : ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = tables[t.val]?.map (repStreamName · r.val))
     (hcovL : ∀ k < openedOf Lg i s, ∃ j, L j = .rep t.val r k) (f : ℕ → Flock.Round)

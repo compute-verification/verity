@@ -425,7 +425,7 @@ def verifier_value(program: str, value: str, rows: list[list[int]]):
     """A value the verifier registers itself (`registered.Registered`): rows it computes from the inner session's public record,
     the inner statement and its own coins, under `verifier_salts`. Its entry is then a function of those rows alone, which the
     verifier's reads file names, and the prover's table rows and salts are the same registration's."""
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     return RG.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
 
@@ -434,7 +434,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
     from verity.ml.commitments.merkle import tree_levels
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     dom = RG.domain(program, value, words_, len(bcs))
     root = tree_levels(dom, [RG.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
@@ -445,7 +445,7 @@ def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace
     """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n``, ``S`` and
     ``holo`` decide. ``holo``: S is a part of a holo shape's spec, which META says (`HOLO_KEY`). With `rec_circuits`' cache
     the text is built once per (S, name, n, holo), and ``low`` is None when it was read back."""
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     from . import rec_circuits as RC
 
@@ -493,8 +493,8 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     of its ``v`` row (``v_words``; ``vrows``, which the verifier registers as ``st.v_value``) and of its one output row
     (``out_words``, the verifier's zero rows under ``st.zero_value``), and its reference ``st.ref(rows by name, v's words)``.
     Returns what every such statement costs and holds, with each instance's reference output (``ref``)."""
-    from verity.core.protocols.spot.one_stage import partition as P
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     n, low, sub, text, names = st.n, st.low, st.sub, st.text, st.names
     if set(reads) != set(names) or len(vrows) != n or any(len(pos) != n for _, pos in reads.values()):

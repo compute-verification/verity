@@ -15,13 +15,13 @@ import pytest
 
 from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 from verity.ml.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 
-_SERVICE_TESTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/spot/tests"
+_SERVICE_TESTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/sampled_proofs/tests"
 if str(_SERVICE_TESTS) not in sys.path:
     sys.path.insert(0, str(_SERVICE_TESTS))
 

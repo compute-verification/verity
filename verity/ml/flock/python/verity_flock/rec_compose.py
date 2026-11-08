@@ -9,7 +9,7 @@ is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each o
 input the compiled verifier's parts read at the composition's own inner shape and link table (``--rec-links``), and
 every part's is that one; and no two
 sessions share a coin key. Then the challenger's interactive-run record (``verity/rec-run/v1``, `RecCompose.runOf`,
-written by `verity.core.protocols.spot.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
+written by `verity.core.protocols.sampled_proofs.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
 C10 ``OneRun``): the staging first, at the composition's rows and the shared set every part read; exactly one session
 opened per part and none for another; every opened session a composed part's and every part's opened; the close last."""
 from __future__ import annotations

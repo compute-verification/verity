@@ -7,7 +7,7 @@ public import Definitions.Flock.Audit.Harm
 # A sampling design's targets
 
 The two targets a sampling design is planned for (`optimize.py`'s work and leak targets), which the partitioning
-guarantees (`Proofs.Flock.Soundness.Audit.Partitioning`) and the planner's checker (`Properties.Spot.PlanCheck`)
+guarantees (`Proofs.Flock.Soundness.Audit.Partitioning`) and the planner's checker (`Properties.SampledProofs.PlanCheck`)
 read:
 
 * `MeetsTarget L w C δ`, the free-compute target: every set of incorrect proof blocks whose work is at least `C` escapes

@@ -18,7 +18,7 @@ from verity.core.protocols.certifier.certificate import Direction, Issuer, param
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import PUBLIC_SERVED, LinkWindows
-from verity.core.protocols.spot import service as S
+from verity.core.protocols.sampled_proofs import service as S
 
 import signers
 import standin

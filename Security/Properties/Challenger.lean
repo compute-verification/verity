@@ -1,6 +1,6 @@
 module
 
-public import Spot.OneStageZk
+public import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a sample's coins are, stated against the code that reads them
@@ -13,7 +13,7 @@ what that record shows, for every input: the coins the challenger device drew, o
 * `CoinsFromLog`, the target: what a component that reads its coins through that reader (`ReadsChallenger`)
   accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`),
   and so does its v2 on the proofs (`oneStageZkReads`), which reads coins only under a challenger it names.
-* `DrawnByDevice`: what `Spot.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
+* `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a run of the device released after `after`, a run the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
@@ -30,7 +30,7 @@ role per key: a key also used for another role is outside the model, and a `forg
 only under that one-role reading.
 
 **The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a sample reads the concatenation
-of the coins it was released (`take`, in `Spot.Draw.drawUnits`), with no hash between: no SHA-512-expanded
+of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
 stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
 run's releases are those bits alone.
@@ -55,7 +55,7 @@ model.
 namespace Properties.Challenger
 
 open Lean (Json)
-open Spot Spot.Challenger
+open SampledProofs SampledProofs.Challenger
 
 /-! ## What `answer` accepts, at the coins -/
 
@@ -420,17 +420,17 @@ def CoinsFromLog : Prop :=
 
 /-- What one-stage's coins are read under (`OneStage.coinsOf`): with the parameters' challenger and window, its key, the
 window, its family, and the registration's digest. -/
-def oneStageSource (p : Spot.OneStage.Params) (c : Spot.OneStage.Commitment) : Option Draws :=
+def oneStageSource (p : SampledProofs.OneStage.Params) (c : SampledProofs.OneStage.Commitment) : Option Draws :=
   match p.challenger, p.verifier.windowRoot with
   | some (key, label), some w => some ⟨key, w, label, c.digest⟩
   | _, _ => none
 
-theorem oneStage_reads (p : Spot.OneStage.Params) (c : Spot.OneStage.Commitment) (d : Draws)
-    (h : oneStageSource p c = some d) (e : Spot.OneStage.Evidence) (ξ : Option ByteArray)
-    (hξ : Spot.OneStage.coinsOf p c e = .ok ξ) :
+theorem oneStage_reads (p : SampledProofs.OneStage.Params) (c : SampledProofs.OneStage.Commitment) (d : Draws)
+    (h : oneStageSource p c = some d) (e : SampledProofs.OneStage.Evidence) (ξ : Option ByteArray)
+    (hξ : SampledProofs.OneStage.coinsOf p c e = .ok ξ) :
     ∃ raw, drawCoins d.key d.window d.label d.after e.coins = .ok raw ∧ some raw = ξ := by
   unfold oneStageSource at h
-  unfold Spot.OneStage.coinsOf at hξ
+  unfold SampledProofs.OneStage.coinsOf at hξ
   rcases hch : p.challenger with _ | ⟨key, label⟩ <;> rcases hw : p.verifier.windowRoot with _ | w <;>
     simp only [hch, hw] at h hξ <;> try cases h
   cases hr : drawCoins key w label c.digest e.coins with
@@ -441,24 +441,24 @@ theorem oneStage_reads (p : Spot.OneStage.Params) (c : Spot.OneStage.Commitment)
 
 /-- **One-stage reads its coins through the challenger's reader** (`OneStage.live`), wherever its parameters name a
 challenger and a window. -/
-def oneStageReads : ReadsChallenger Spot.OneStage.protocol Spot.OneStage.live where
+def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProofs.OneStage.live where
   source := oneStageSource
-  record := Spot.OneStage.Evidence.coins
+  record := SampledProofs.OneStage.Evidence.coins
   decode := fun b => (some b : Option ByteArray)
   reads := oneStage_reads
 
 /-! ## One-stage v2 reads its coins through the challenger -/
 
 /-- What v2's coins are read under (`OneStageZk.coinsOf`): v1's, on its parameters' v1 part. -/
-def oneStageZkSource (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment) : Option Draws :=
+def oneStageZkSource (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment) : Option Draws :=
   oneStageSource p.base c
 
-theorem oneStageZk_reads (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment) (d : Draws)
-    (h : oneStageZkSource p c = some d) (e : Spot.OneStageZk.Evidence) (ξ : ByteArray)
-    (hξ : Spot.OneStageZk.coinsOf p c e = .ok ξ) :
+theorem oneStageZk_reads (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment) (d : Draws)
+    (h : oneStageZkSource p c = some d) (e : SampledProofs.OneStageZk.Evidence) (ξ : ByteArray)
+    (hξ : SampledProofs.OneStageZk.coinsOf p c e = .ok ξ) :
     ∃ raw, drawCoins d.key d.window d.label d.after e.base.coins = .ok raw ∧ raw = ξ := by
-  unfold Spot.OneStageZk.coinsOf at hξ
-  cases h1 : Spot.OneStage.coinsOf p.base c e.base with
+  unfold SampledProofs.OneStageZk.coinsOf at hξ
+  cases h1 : SampledProofs.OneStage.coinsOf p.base c e.base with
   | error r => simp [h1, bind, Except.bind] at hξ
   | ok o =>
     cases o with
@@ -470,9 +470,9 @@ theorem oneStageZk_reads (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitm
 
 /-- **One-stage v2 reads its coins through the challenger's reader** (`OneStageZk.live`), on any blobs. -/
 def oneStageZkReads (bs : Array ByteArray) :
-    ReadsChallenger (Spot.OneStageZk.protocol.on bs) (Spot.OneStageZk.live bs) where
+    ReadsChallenger (SampledProofs.OneStageZk.protocol.on bs) (SampledProofs.OneStageZk.live bs) where
   source := oneStageZkSource
-  record e := Spot.OneStage.Evidence.coins (Spot.OneStageZk.Evidence.base e)
+  record e := SampledProofs.OneStage.Evidence.coins (SampledProofs.OneStageZk.Evidence.base e)
   decode := id
   reads := oneStageZk_reads
 

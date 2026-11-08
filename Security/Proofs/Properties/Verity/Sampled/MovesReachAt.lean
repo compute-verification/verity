@@ -37,8 +37,8 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The sample's coins at `m` frames read the session's bytes** where the session reads `m` frames' bytes
 (`bytesOf_srcCoins`): `movesReach_layout`'s `hsrc` at `srcCoinsAt`. -/
 theorem bytesOf_srcCoinsAt {m : ℕ} {A : Live} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
-    _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoinsAt m A ω) 0) := by
+    _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (srcCoinsAt m A ω) 0) := by
   rw [srcCoinsAt, dite_eq_left hL]
   exact bytesOf_srcCoins A hL ω
 
@@ -54,7 +54,7 @@ coins `srcCoinsAt MAX_COINS`. It holds wherever:
 theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
+    (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -64,10 +64,10 @@ theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
     MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
-        (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A))
+        (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A))
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
   movesReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
-    (κ := srcCoinsAt _root_.Spot.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
+    (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
     rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hO c σ)
 
 /-- **The coupling at the deployment**: `couplingTarget_assembled_src` at the deployed device's history
@@ -83,13 +83,13 @@ theorem couplingTargetAt {V : Vocab d α} {k : Verity.Registration.Composite} (K
     (hε : ∀ c σ, couplesErr V θ F c A (readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c)) σ
       (decodersAt (reg A) A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c)) σ
-        (labelAt θ) (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A))
+        (labelAt θ) (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A))
       (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits fieldEnc : (Fin s.n → 𝔽) → List Bool) +
         openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits fieldEnc : (Fin s.n → 𝔽) → List Bool))
       (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits fieldEnc : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
         openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits fieldEnc : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
         A.hidingTerm)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
+    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -98,11 +98,11 @@ theorem couplingTargetAt {V : Vocab d α} {k : Verity.Registration.Composite} (K
     CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
       (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
       (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
-      (srcCoinsAt _root_.Spot.Challenger.MAX_COINS)) A θ F :=
+      (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS)) A θ F :=
   couplingTarget_assembled_src fieldEnc V k K (Device.dev (P.setupOf V.families))
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
-    _root_.Spot.Challenger.MAX_COINS A θ F (fun o _ => Device.printsLog_dev _ o)
+    _root_.SampledProofs.Challenger.MAX_COINS A θ F (fun o _ => Device.printsLog_dev _ o)
     (fun c => Device.signsPlay_dev V P θ F c hD) hL hε hA hDg (writesView_wrZP A rfl)
     (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO)
 

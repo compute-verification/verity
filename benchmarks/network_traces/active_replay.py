@@ -162,8 +162,8 @@ from verity.core.protocols.certifier.schedule import (
     run_shaper,
 )
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.service import WindowCommitmentRecord
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"

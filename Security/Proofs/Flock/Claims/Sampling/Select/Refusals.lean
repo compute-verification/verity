@@ -58,11 +58,11 @@ layouts (`DrawSlots`), `ScopeMatches` (`scopeMatches_of_refusals`) and, with `Ch
 
 @[expose] public section
 
-open Spot
+open SampledProofs
 
 namespace Claims.Sampling
 
-open Properties.Spot Properties.Spot.SecurityProofs
+open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
 
 variable {Coin Col T : Type}
 

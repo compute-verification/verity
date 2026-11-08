@@ -4,7 +4,7 @@ public import Definitions.WeightSecurity.Guarantees
 public import Proofs.Core.Game.Basic
 public import Proofs.Core.Game.Interleave
 public import Proofs.Core.Game.Union
-public import Proofs.Spot.ExfiltrationBound
+public import Proofs.SampledProofs.ExfiltrationBound
 public import Proofs.WeightSecurity.Theft
 
 /-! `WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed`, `Theft`'s leakage lemma at an

@@ -63,7 +63,7 @@ from verity.core.protocols.pouw.audit import HM96, HM96_KEY, HM96_SALT, ROW_SCHE
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT, draw_root
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.spot.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
 from verity.ml.commitments.hm96 import batch
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest

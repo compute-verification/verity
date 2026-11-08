@@ -35,7 +35,7 @@ import pytest
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Direction, Issuer
 from verity.core.protocols.pous.schemes import p2 as P2
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-tiny.json").read_text())

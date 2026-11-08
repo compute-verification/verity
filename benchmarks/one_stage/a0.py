@@ -32,8 +32,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.spot import challenger as Ch, coins as CC
-from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 

@@ -37,8 +37,8 @@ from verity.core.protocols.pouw.coins import coin_reason
 from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.ml.protocols.pouw.schemes import ncp
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.service import WindowCommitmentRecord
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 EGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512)
 INGRESS = GridParams(buckets=6, allocation=2, frame_bytes=512)

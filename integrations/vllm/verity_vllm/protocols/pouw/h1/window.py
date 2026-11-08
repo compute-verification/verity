@@ -1,5 +1,5 @@
 """H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
-(`verity.core.protocols.spot.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
+(`verity.core.protocols.sampled_proofs.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
 The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.connect_when_listening`) to a
@@ -37,8 +37,8 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
-from verity.core.protocols.spot import remote
-from verity.core.protocols.spot.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
+from verity.core.protocols.sampled_proofs import remote
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

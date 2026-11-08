@@ -18,7 +18,7 @@ import pytest
 from verity.core.protocols.certifier import service as SVC
 from verity.core.protocols.certifier.certificate import Direction, parameters_digest
 from verity.core.protocols.certifier.schedule import ClockSync
-from verity.core.protocols.spot.one_stage.proofs import Finding
+from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 import standin
 import test_network_certifier_served as served

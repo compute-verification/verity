@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.spot import challenger as C
-from verity.core.protocols.spot import remote as R
+from verity.core.protocols.sampled_proofs import challenger as C
+from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.crypto import lms
 
 SERVE = Path(__file__).resolve().parents[1] / "serve.py"

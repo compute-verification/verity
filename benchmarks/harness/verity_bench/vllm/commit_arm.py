@@ -3,7 +3,7 @@
 (``commit@compiled``, at vLLM's compiled serving defaults) in ``arm_modules`` and the arm's id in ``arms``.
 
 ``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
-proofs refuses (`protocol_options.spot.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
+proofs refuses (`protocol_options.sampled_proofs.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
 committer on the served engine themselves, configured as a row's Commit phase runs it (`config.CommitConfig`,
 `pipeline.commit.make_committer`): ``native_collect_v2b`` (gather windows, size-adaptive blocks, native worker, GPU tree, fast
 copy) over a ring of 8 x 256 MiB device windows, with bounded learning, under the committer's default scheme, which each arm

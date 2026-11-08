@@ -21,7 +21,7 @@ answer carries no salt. Every refusal is `core_check.py`'s.
 namespace PouwCheck
 
 open Lean (Json)
-open Spot.Challenger (Audited LedgerEntry LiveCommitment LiveOpening)
+open SampledProofs.Challenger (Audited LedgerEntry LiveCommitment LiveOpening)
 
 def WINDOW_SALT_KEYS : List String := ["coins", "epoch", "opening", "salt", "session"]
 def SEEDED_SALT : String := "the window's coins are seeded, and its service answer carries a live salt"
@@ -101,12 +101,12 @@ def saltEpoch (key ledger pins main session : Json) (r : ByteArray) : R (Audited
   let (some reserve, some opened, some ended) :=
       (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"), named.find? (·.kind == "end"))
     | throw ("salt", NO_RESERVE)
-  unless Spot.jeq (Spot.getD reserve.body "families")
-      (Spot.Challenger.familiesJson PouwWindow.SALT_FAMILIES) do throw ("salt", RESERVE_LAYOUT)
-  unless Spot.int? (Spot.getD opened.body "reserve") == some (reserve.seq : Int) do
+  unless SampledProofs.jeq (SampledProofs.getD reserve.body "families")
+      (SampledProofs.Challenger.familiesJson PouwWindow.SALT_FAMILIES) do throw ("salt", RESERVE_LAYOUT)
+  unless SampledProofs.int? (SampledProofs.getD opened.body "reserve") == some (reserve.seq : Int) do
     throw ("salt", NO_RESERVE)
-  unless jsonTrue (Spot.getD ended.body "complete") &&
-      Spot.jeq (Spot.getD ended.body "released")
+  unless jsonTrue (SampledProofs.getD ended.body "complete") &&
+      SampledProofs.jeq (SampledProofs.getD ended.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))]) do throw ("salt", INCOMPLETE)
   unless received == [(PouwWindow.SALT, [r])] do throw ("salt", LIVE_NOT_RECEIVED)
   pure (a, c, opened)
@@ -118,12 +118,12 @@ def windowSaltCheck (live : Json) (c : Registration) (s : Json) : R Unit := do
   let (w, x) ← (windowAnchors c).mapError (("salt", ·))
   let some k := (PouwWindow.natOf? (at? s "epoch")).filter (· < 2 ^ 64) | throw ("salt", WINDOW_EPOCH)
   let r := anchoredEpochRoot w x k
-  let g := Spot.getD live
+  let g := SampledProofs.getD live
   let (a, c, opened) ← saltEpoch (g "key") (g "ledger") (g "pins") (g "main") (g "session") r
   let claimed ← (LiveCommitment.ofJson (at? s "coins")).mapError fun e => ("coin", s!"the salt's coins are malformed: {e}")
   unless sameCommitment claimed c do coin WINDOW_NOT_SIGNED
   let o ← (LiveOpening.ofJson (at? s "opening")).mapError fun e => ("coin", s!"the salt's {e}")
-  if let some why ← port (Spot.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
+  if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
   let key ← port (PouwWindow.roundKey c o.coin 0 r)
   unless jsonStrIs (at? s "salt") (Flock.hexOf (FlockSoundness.Randomness.stream key [.int 0] SALT_BYTES)) do
     coin WINDOW_SALT

@@ -30,7 +30,7 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 
 | Subprotocol | Target | Compiled check | Remote | Onsite |
 |---|---|---|---|---|
-| sampled proofs | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`) or the recursive audit, as its parameters' `form` names; one-stage v1 is refused by name | yes | yes |
+| sampled proofs | `SampledProofsSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`SampledProofs.OneStageZk`) or the recursive audit, as its parameters' `form` names; one-stage v1 is refused by name | yes | yes |
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` | yes | yes |
 | the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` | | yes |
@@ -68,11 +68,11 @@ In this order:
 - **The five period subprotocols** (sampled proofs, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `Security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
-- **Sampled proofs** at the recursive configuration: `Verity.Recursive.spotRecursive`
+- **Sampled proofs** at the recursive configuration: `Verity.Recursive.sampledProofsRecursive`
   (`Security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
-  verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
+  verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `sampledProofsRecursive_of_ks`
   (`Security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
-  `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SpotSound`.
+  `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SampledProofsSound`.
 - **The others** are hypotheses of the theorem. Each subprotocol's own guarantee, in its own form, is in
   [the guarantees to read first](../../README.md#the-guarantees-to-read-first).
 

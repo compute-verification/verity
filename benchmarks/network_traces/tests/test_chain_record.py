@@ -326,7 +326,7 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
     ``case``'s."""
-    from verity.core.protocols.spot.one_stage import registration as R
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
@@ -648,7 +648,7 @@ def _record(c) -> dict:
 
 def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them():
     """A wire into a port cut ``k`` ways fills one ``p#j`` row a reader index, its port's words over ``k``
-    (`Spot.Wires`' ``wiredBits``), which `free_inputs` takes out as `interface.input_count` does: three
+    (`SampledProofs.Wires`' ``wiredBits``), which `free_inputs` takes out as `interface.input_count` does: three
     ``Gemm_v2{K=16, N=16}`` units reading their ``x`` cut in two from six ``N=8`` slices leave none of it free. Matching
     a cut row's element ports ``x[r]`` against the wire's ``x`` took out none. An external cut port stays free, and two
     wires filling one row are refused."""

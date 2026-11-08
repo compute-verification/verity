@@ -92,7 +92,7 @@ sorts them: the domain and labels are public constants and are dropped; a ``BYTE
 top), a proof-of-work nonce (8 bytes, `0`, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
 statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
 laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
-block zero-padded) and committed as a registered row is (``verity.core.protocols.spot.one_stage.registered``:
+block zero-padded) and committed as a registered row is (``verity.core.protocols.sampled_proofs.one_stage.registered``:
 ``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is that row's ``b || c``: one commitment a round, as
 one port of V*'s algebra reads it. A round with no free message has an empty ``c_k``. The row and salt are the prover's:
 V*'s algebra opens each round's row against the registered value the verifier builds from that round's ``c_k`` of both reps
@@ -548,8 +548,8 @@ def full_draw(program, query: dict) -> dict:
     """The verifier's sample for an inner session over its own program and partition query: the stratified sampling design at K = the
     population (`one_stage.draw.derive`), whose every stratum samples all its units (`stratum_k(N, size, N) = size`), so the
     sample is every unit, ascending. ``verify --stratified N --program --partition`` derives the same law."""
-    from verity.core.protocols.spot.one_stage import draw as D
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     n = sum(hi - lo for _, rs in P.strata(program, query) for lo, hi in rs)
     law = D.derive(program, query, {"law": "stratified", "k": n})
@@ -670,7 +670,7 @@ def on_schedule(record: dict, schedule: dict) -> None:
 
 class TreeSource(Protocol):
     """Where the challenger's live-coin part takes a session's coin tree from: the challenger's device (``--tree-from``,
-    `verity.core.protocols.spot.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` samples a tree of spec
+    `verity.core.protocols.sampled_proofs.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` samples a tree of spec
     ``spec`` (its JSON) under ``nonce`` (None: the source samples it) and returns its nonce, root and key; ``tree_open`` opens
     the first ``n`` coins of round ``rnd`` of stream ``stream`` of the tree under ``root``, once given ``after`` (64 bytes:
     what the round answers), and returns the coins and their opening words. Each stream's rounds open in order, each once.
@@ -730,10 +730,10 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
     link points that tree's ``session`` round 0, opened after `link_after` of the record's ``link.roots``; each round of
     its record its stream's round, opened after `round_after` of the round; and the log must show no tree and no opening
     that no session records, and no round read twice. `challenger.sessions_tree_reason` holds a `flock-circuit serve`
-    session to the log the same way, after what that server answers. It mirrors `Spot.Challenger.innerTreesReason`,
+    session to the log the same way, after what that server answers. It mirrors `SampledProofs.Challenger.innerTreesReason`,
     the verifier, which the recursive audit reads (`test_challenger_inner_trees.py` in the sampled proofs
     service's tests holds the two together)."""
-    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.sampled_proofs import challenger as C
 
     trees, used = C.coin_trees_of(log), []
     for name, tree, public in sessions:
@@ -749,7 +749,7 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
 
 
 def _tree_held(trees: dict, tree: dict, public: dict) -> str | None:
-    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.sampled_proofs import challenger as C
 
     root = tree.get("root") if isinstance(tree, dict) else None
     t = trees.get(root) if type(root) is str else None
@@ -793,7 +793,7 @@ def _integral(v) -> bool:
 
 
 def _inner_reads(public: dict) -> list[tuple[str, int, int, str, str]]:
-    """What the challenger's live-coin part's record ``public`` reads of its tree, in order (`Spot.Challenger.innerReads`): the
+    """What the challenger's live-coin part's record ``public`` reads of its tree, in order (`SampledProofs.Challenger.innerReads`): the
     link points as the tree's ``session`` round 0, then each round; each its stream, round, coin count, what it was
     opened after and its coins' SHA-512, in hex. TypeError or ValueError for a record rec_live doesn't write."""
     link, rounds = public["link"], public["rounds"]
@@ -975,7 +975,7 @@ def register_top(program: str, table: str, cap: bytes, fresh_salt: Callable[[], 
     (one-stage ``registered.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
     ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the circuit registration names
     (`verity_flock.inner_registered.bind`)."""
-    from verity.core.protocols.spot.one_stage import registered as G
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
     rows = top_rows(cap)
     salts = [fresh_salt() for _ in rows]
@@ -993,7 +993,7 @@ def top_entry(program: str, table: str, top: list[bytes]) -> dict:
 
 def registered_entry(registration: dict | None, table: str) -> dict | None:
     """The private circuit's ``verity/registration/v2`` record's one registered entry named ``table``, or None."""
-    from verity.core.protocols.spot.one_stage import registration as R
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
     if not isinstance(registration, dict) or registration.get("format") != R.FORMAT_V2:
         return None
@@ -1139,7 +1139,7 @@ class Proxy:
         """``table``'s registered top (`register_top`'s opening), before Hello and any coin: a table the schedule gives no
         root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the entry named
         ``table`` of the registration whose digest META binds (``bound``, `top_entry`)."""
-        from verity.core.protocols.spot.one_stage import registration as R
+        from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
         if self.hello is not None or self.coins.hello is not None or self.coins.committed is not None:
             raise ValueError(f"{table}: a top is registered before the session, never after Hello or a coin")
@@ -1579,7 +1579,7 @@ def tree_source(ap, a) -> TreeSource | None:
     if a.tree_secret_file and not a.tree_from:
         ap.error("--tree-secret-file is --tree-from's")
     if a.tree_from:
-        from verity.core.protocols.spot import remote
+        from verity.core.protocols.sampled_proofs import remote
         secret = bytes.fromhex(Path(a.tree_secret_file).read_text().strip()) if a.tree_secret_file else None
         return remote.RemoteChallenger.connect(a.tree_from, secret)
     return OsTree() if a.tree_test_os else None

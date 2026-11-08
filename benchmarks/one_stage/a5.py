@@ -184,9 +184,9 @@ from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E40
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
-from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
 from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
 from verity.ml.windows import wiring as WI  # noqa: E402
 
@@ -989,11 +989,11 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None) -> None:
-    """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
-    (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
+    (`v2_proof`), the case of the audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in
     ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
     ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
@@ -1025,7 +1025,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
     public file's, taken when it was staged before the sample, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
@@ -1033,7 +1033,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
     members' (``<member>/<port>``)."""
     import replay as RP
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
@@ -1063,7 +1063,7 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"

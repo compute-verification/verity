@@ -87,7 +87,7 @@ ALLOWED = {
     # samples with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     # SPOT[Flock]'s inference server, proof server and verifier, the core deployment's ZK server and workers, and the
     # challenger both run are parties of the deployment layer (`parties`), their messages the wire's.
-    "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+    "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
@@ -103,27 +103,27 @@ ALLOWED = {
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof system's one challenger's (`spot.challenger`).
+    # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.spot", "core.protocols.pous", "core.wire",
+                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
                                         "core.deploy"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
-                            "core.protocols.spot"},
+                            "core.protocols.sampled_proofs"},
     # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
     # What the protocols' provers build and their verifiers don't read, which no core unit imports.  PoUW's and the
     # certifier's are stated over their protocol's parameters and records in core (`ML_IMPORTS_CORE`), and PoUW's schemes
     # and circuits over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts).
     "ml.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                          "ml.randomness", "core.protocols.pouw", "core.protocols.profile", "core.protocols.spot"},
+                          "ml.randomness", "core.protocols.pouw", "core.protocols.profile", "core.protocols.sampled_proofs"},
     "ml.protocols.pous": {"ml.circuits", "ml.commitments"},
-    "ml.protocols.certifier": {"ml.circuits", "ml.commitments", "core.protocols.certifier", "core.protocols.spot"},
+    "ml.protocols.certifier": {"ml.circuits", "ml.commitments", "core.protocols.certifier", "core.protocols.sampled_proofs"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
@@ -166,7 +166,7 @@ ML_IMPORTS_CORE = {
                                                         "entry), and moves with them in the follow-up to T2",
     "ml/protocols/pouw/*": "PoUW's circuits and schemes, which its verifier doesn't read, are stated over the protocol's "
                            "parameters, records and Python references in core (`pouw.protocol`, `registration`, `window`, "
-                           "`spot.one_stage`, ...); they shrink as those references leave core",
+                           "`sampled_proofs.one_stage`, ...); they shrink as those references leave core",
     "ml/protocols/certifier/*": "the certifier's Boolean Definitions that core doesn't read extend the ones it does "
                                 "(`head_check`'s gates, `cache_step`, `compile_slice`, `replay_chain`, `arith_encode`, "
                                 "`io_tie`, ...) and are stated over its advice and link-window layout in core (`advice`, "
@@ -178,7 +178,7 @@ ML_IMPORTS_CORE = {
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
-    "core.protocols.spot": {"ml.circuits", "ml.commitments", "ml.randomness"},
+    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
@@ -196,13 +196,13 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units, the
 #: trees each of whose Python files (tests included) is checked, its Lean packages and its analysis (Security's Flock and
-#: Spot areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
+#: SampledProofs areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
 #: Security areas).
-SPOT_PYTHON = ("core.protocols.spot",)
-SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/core/service/flock",
+SPOT_PYTHON = ("core.protocols.sampled_proofs",)
+SPOT_TREES = ("verity/core/protocols/sampled_proofs", "verity/core/service/sampled_proofs", "verity/core/service/flock",
               "verity/ml/flock")
-SPOT_LEAN = ("verity/core/service/spot", "verity/core/service/flock")
-SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
+SPOT_LEAN = ("verity/core/service/sampled_proofs", "verity/core/service/flock")
+SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/SampledProofs", "Security/*/SampledProofs.lean",
                  "Security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
 CERTIFIER_MODULES = ("verity.core.protocols.certifier", "verity.ml.protocols.certifier", "verity.core.devices.certifier")

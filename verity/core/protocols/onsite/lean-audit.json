@@ -17,8 +17,8 @@
     "PousCheck.RunProtocol",
     "PouwCheck.Period",
     "RemoteAudit.P2Protocol",
-    "Spot.OneStage",
-    "Spot.OneStageZk",
+    "SampledProofs.OneStage",
+    "SampledProofs.OneStageZk",
     "VStarRecursive.Sampled"
    ],
    "except": [],

@@ -90,7 +90,7 @@ namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
 open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
-open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
+open SampledProofs.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
   leafOf liveReason pinnedSession sessionNamed)
 
 /-! ## The layout, the epoch's root and the salt -/
@@ -149,8 +149,8 @@ def entries (ledger : Json) : List LedgerEntry :=
 /-- The root an open entry names for its window, as `verifyLedger` reads it: `window.root` under v2, `window.commit`
 under v1. -/
 def openRoot (e : LedgerEntry) : Json :=
-  Spot.getD (Spot.getD e.body "window")
-    (if e.schema == Spot.Challenger.LEDGER_SCHEMA then "root" else "commit")
+  SampledProofs.getD (SampledProofs.getD e.body "window")
+    (if e.schema == SampledProofs.Challenger.LEDGER_SCHEMA then "root" else "commit")
 
 /-- What the auditor's ledger shows of session `s` and the epoch's root `r`, in its signed order:
 * a v2 reserve of `s`, of the salt-only layout;
@@ -160,28 +160,28 @@ def openRoot (e : LedgerEntry) : Json :=
 * no other open, v1 or v2, on `r` or of `s`. -/
 def LedgerShows (ledger : Json) (s : String) (r : ByteArray) (recordLeaf openSeq : Nat) : Prop :=
   ∃ rv o e : LedgerEntry, rv ∈ entries ledger ∧ o ∈ entries ledger ∧ e ∈ entries ledger ∧
-    (rv.kind = "reserve" ∧ rv.session = s ∧ rv.schema = Spot.Challenger.LEDGER_SCHEMA ∧
-      Spot.jeq (Spot.getD rv.body "families")
-        (Spot.Challenger.familiesJson SALT_FAMILIES) = true) ∧
-    (o.kind = "open" ∧ o.session = s ∧ o.schema = Spot.Challenger.LEDGER_SCHEMA ∧ rv.seq < o.seq ∧
-      o.seq = openSeq ∧ Spot.int? (Spot.getD o.body "reserve") = some (rv.seq : Int) ∧
+    (rv.kind = "reserve" ∧ rv.session = s ∧ rv.schema = SampledProofs.Challenger.LEDGER_SCHEMA ∧
+      SampledProofs.jeq (SampledProofs.getD rv.body "families")
+        (SampledProofs.Challenger.familiesJson SALT_FAMILIES) = true) ∧
+    (o.kind = "open" ∧ o.session = s ∧ o.schema = SampledProofs.Challenger.LEDGER_SCHEMA ∧ rv.seq < o.seq ∧
+      o.seq = openSeq ∧ SampledProofs.int? (SampledProofs.getD o.body "reserve") = some (rv.seq : Int) ∧
       openRoot o = .str (Flock.hexOf r)) ∧
     (e.kind = "end" ∧ e.session = s ∧ o.seq < e.seq ∧
-      Spot.getD e.body "closed" = .bool true ∧ Spot.getD e.body "complete" = .bool true ∧
-      Spot.jeq (Spot.getD e.body "released")
+      SampledProofs.getD e.body "closed" = .bool true ∧ SampledProofs.getD e.body "complete" = .bool true ∧
+      SampledProofs.jeq (SampledProofs.getD e.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))]) = true ∧
-      Spot.nat? (Spot.getD e.body "record_leaf") = some recordLeaf ∧
+      SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some recordLeaf ∧
       leafOf o.sig < recordLeaf ∧ recordLeaf < leafOf e.sig) ∧
     ∀ o' ∈ entries ledger, o'.kind = "open" → (openRoot o' = .str (Flock.hexOf r) ∨ o'.session = s) → o' = o
 
 /-- The manifest's `session`, the gate's open answer as the run carries it (`PHC.carried`), names the ledger's session
 `a`, the `seq` of its open, the root it was opened on and the commitment its end names, and carries no `secret`. -/
 def ManifestNames (m : Json) (a : Audited) (r : ByteArray) (openSeq : Nat) : Prop :=
-  Spot.getD (at? m "session") "session" = .str a.session ∧
-    Spot.int? (Spot.getD (at? m "session") "seq") = some (openSeq : Int) ∧
-    Spot.getD (at? m "session") "root" = .str (Flock.hexOf r) ∧
-    Spot.getD (at? m "session") "commitment" = .str a.commitment ∧
-    Spot.field? (at? m "session") "secret" = none
+  SampledProofs.getD (at? m "session") "session" = .str a.session ∧
+    SampledProofs.int? (SampledProofs.getD (at? m "session") "seq") = some (openSeq : Int) ∧
+    SampledProofs.getD (at? m "session") "root" = .str (Flock.hexOf r) ∧
+    SampledProofs.getD (at? m "session") "commitment" = .str a.commitment ∧
+    SampledProofs.field? (at? m "session") "secret" = none
 
 /-! ## The check -/
 
@@ -243,15 +243,15 @@ def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
 scheme, epoch and layout, the positions, and the domain's frame. -/
 def domainHashed (c : LiveCommitment) : List ByteArray :=
   let binding := Json.mkObj [("epoch", Lean.toJson c.epoch),
-    ("families", Spot.Challenger.familiesJson c.families), ("scheme", Json.str c.scheme)]
+    ("families", SampledProofs.Challenger.familiesJson c.families), ("scheme", Json.str c.scheme)]
   let positions := Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)),
-    ("stop", Lean.toJson (Spot.Challenger.total c.families))]
-  let tagged := taggedMessage Spot.Challenger.BINDING binding ++
+    ("stop", Lean.toJson (SampledProofs.Challenger.total c.families))]
+  let tagged := taggedMessage SampledProofs.Challenger.BINDING binding ++
     taggedMessage "veritor/indexed-domain/range/v1" positions
-  match Spot.Challenger.taggedSha512 Spot.Challenger.BINDING binding,
-      Spot.Challenger.taggedSha512 "veritor/indexed-domain/range/v1" positions with
+  match SampledProofs.Challenger.taggedSha512 SampledProofs.Challenger.BINDING binding,
+      SampledProofs.Challenger.taggedSha512 "veritor/indexed-domain/range/v1" positions with
   | .ok b, .ok p =>
-    tagged ++ [fv3Message "domain" [b, Flock.FV3.uint 1, p, Flock.FV3.uint (Spot.Challenger.total c.families)]]
+    tagged ++ [fv3Message "domain" [b, Flock.FV3.uint 1, p, Flock.FV3.uint (SampledProofs.Challenger.total c.families)]]
   | _, _ => tagged
 
 /-- The node frames `Flock.Registered.climbL dom cur idx d sibs` hashes, bottom first. -/
@@ -268,7 +268,7 @@ frame, and the frame of each node on the path. -/
 def liveHashed (c : LiveCommitment) (dom : ByteArray) (pos : Nat) (o : LiveOpening) : List ByteArray :=
   let inner := c.scheme.toUTF8.push 0 ++ o.coin
   let leaf := fv3Message "leaf" [dom, Flock.FV3.uint pos, Flock.FV3.uint pos, c.scheme.toUTF8,
-    Spot.Challenger.liveLeaf c.scheme o.coin o.salt]
+    SampledProofs.Challenger.liveLeaf c.scheme o.coin o.salt]
   [inner, Flock.Hm96.Default512.saltPrefix ++ o.salt,
     Flock.Hm96.Default512.leafPrefix ++ Flock.Hm96.Default512.commitString (Flock.Sha512.hash inner) o.salt, leaf] ++
     climbFrames dom (Flock.Sha512.hash leaf) pos 0 o.path
@@ -276,7 +276,7 @@ def liveHashed (c : LiveCommitment) (dom : ByteArray) (pos : Nat) (o : LiveOpeni
 /-- Everything SHA-512 hashes when `liveReason c o label index` checks `o` against `c`'s root: `c`'s domain, then the
 coin's climb from its position. -/
 def hashedBy (c : LiveCommitment) (o : LiveOpening) (label : String) (index : Int) : List ByteArray :=
-  match Spot.Challenger.liveDomain c.scheme c.epoch c.families, c.position label index with
+  match SampledProofs.Challenger.liveDomain c.scheme c.epoch c.families, c.position label index with
   | .ok dom, some pos => domainHashed c ++ liveHashed c dom pos o
   | _, _ => domainHashed c
 
@@ -308,7 +308,7 @@ def callIndices (m : Json) : List Int :=
 
 /-- The epoch the pass `m` names: its manifest's session's `root`. An accepted pass of epoch `k` over `w` names
 `epochOpenRoot w k` there (`ManifestNames`). -/
-def epochOf (m : Json) : Json := Spot.getD (at? m "session") "root"
+def epochOf (m : Json) : Json := SampledProofs.getD (at? m "session") "root"
 
 /-- The signature of the Pearl-C period's credit: the verifier's challenger key, the auditor's ledger, the host's pins
 log, the verifier's copy of main's first-parent history and the period (its name, its close and the passes it presents,

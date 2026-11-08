@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Properties.Composition
 public import Proofs.Flock.Claims.CanonEq
-public import Spot.ChallengerSession
+public import SampledProofs.ChallengerSession
 import all Lean.Data.Json.Basic
 
 /-!
@@ -15,7 +15,7 @@ escape of a text back (`Composition.Esc.unesc2`) and writes its character as `ca
 character as it is, so of a sorted value it turns `canon`'s text into `canonUtf8`'s (`utf8_canon`). Two sorted values
 with one `canon` text then have one `canonUtf8` text, and are equivalent by `CanonRead.canon_inj` (`canon_inj`).
 
-A line the release log's reader accepts (`Spot.Challenger.event`) is its parse's `canon` text, and the parse is
+A line the release log's reader accepts (`SampledProofs.Challenger.event`) is its parse's `canon` text, and the parse is
 sorted (`event_ok`). So a line that is a sorted value's `canon` text is read as a value equivalent to it
 (`event_equiv`), field by field (`CanonRead.getD_equiv`, `field?_equiv`): the same string, number, Boolean or null
 wherever it has one (`equiv_leaf`, `getD_str`, `int?_equiv`, `nat?_equiv`).
@@ -26,7 +26,7 @@ wherever it has one (`equiv_leaf`, `getD_str`, `int?_equiv`, `nat?_equiv`).
 namespace Properties.Challenger.CanonLine
 
 open Lean (Json JsonNumber)
-open Spot (sortedKeys getD field?)
+open SampledProofs (sortedKeys getD field?)
 open FlockDeploy (JsonEquiv jsonForm)
 open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff mapM_forall₂ forall₂_map_eq
   forall₂_imp qsort_keys)
@@ -393,7 +393,7 @@ theorem equiv_num {x : Json} {n : JsonNumber} (h : JsonEquiv x (.num n)) : x = .
 
 /-- **Equivalent values are the same string**, by the verifier's reducible match, or neither is it. -/
 theorem jsonStrIs_equiv {a b : Json} (h : JsonEquiv a b) (s : String) :
-    Spot.jsonStrIs a s = Spot.jsonStrIs b s := by
+    SampledProofs.jsonStrIs a s = SampledProofs.jsonStrIs b s := by
   by_cases hb : ∃ t, b = .str t
   · obtain ⟨t, rfl⟩ := hb
     rw [CanonRead.equiv_str h]
@@ -401,23 +401,23 @@ theorem jsonStrIs_equiv {a b : Json} (h : JsonEquiv a b) (s : String) :
     cases a <;> cases b <;> first | rfl | exact absurd ⟨_, rfl⟩ ha | exact absurd ⟨_, rfl⟩ hb
 
 /-- **Equivalent values are the same integer**, or neither is one. -/
-theorem int?_equiv {a b : Json} (h : JsonEquiv a b) : Spot.int? a = Spot.int? b := by
+theorem int?_equiv {a b : Json} (h : JsonEquiv a b) : SampledProofs.int? a = SampledProofs.int? b := by
   by_cases hb : ∃ n, b = .num n
   · obtain ⟨n, rfl⟩ := hb
     rw [equiv_num h]
   · have ha : ¬ ∃ n, a = .num n := fun ⟨n, hn⟩ => hb ⟨n, equiv_num (hn ▸ h.symm)⟩
     cases a <;> cases b <;> first | rfl | exact absurd ⟨_, rfl⟩ ha | exact absurd ⟨_, rfl⟩ hb
 
-theorem nat?_equiv {a b : Json} (h : JsonEquiv a b) : Spot.nat? a = Spot.nat? b := by
-  unfold Spot.nat?
+theorem nat?_equiv {a b : Json} (h : JsonEquiv a b) : SampledProofs.nat? a = SampledProofs.nat? b := by
+  unfold SampledProofs.nat?
   rw [int?_equiv h]
 
 /-! ## A release log line -/
 
 /-- **A line the release log's reader accepts is its value's `canon` text**, and the value is sorted. -/
-theorem event_ok {line : String} {j : Json} (h : Spot.Challenger.event line = .ok j) :
+theorem event_ok {line : String} {j : Json} (h : SampledProofs.Challenger.event line = .ok j) :
     Flock.canon j = .ok line ∧ sortedKeys j = true := by
-  unfold Spot.Challenger.event at h
+  unfold SampledProofs.Challenger.event at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw, beq_iff_eq] at h
   split at h
   · split at h
@@ -437,12 +437,12 @@ theorem event_ok {line : String} {j : Json} (h : Spot.Challenger.event line = .o
   · cases h
 
 /-- **A sorted value's `canon` line reads as a value equivalent to it.** -/
-theorem event_equiv {line : String} {j d : Json} (h : Spot.Challenger.event line = .ok j)
+theorem event_equiv {line : String} {j d : Json} (h : SampledProofs.Challenger.event line = .ok j)
     (hd : sortedKeys d = true) (hc : Flock.canon d = .ok line) : JsonEquiv j d :=
   canon_inj (event_ok h).2 hd (event_ok h).1 hc
 
 /-- **A sorted value's `canon` line reads with its fields**, each up to equivalence. -/
-theorem event_getD {line : String} {j d : Json} (h : Spot.Challenger.event line = .ok j)
+theorem event_getD {line : String} {j d : Json} (h : SampledProofs.Challenger.event line = .ok j)
     (hd : sortedKeys d = true) (hc : Flock.canon d = .ok line) (k : String) : JsonEquiv (getD j k) (getD d k) :=
   CanonRead.getD_equiv (event_ok h).2 hd (event_equiv h hd hc) k
 

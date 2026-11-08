@@ -23,8 +23,8 @@ from verity.core.protocols.certifier.active import VirtualClock
 from verity.core.protocols.certifier.coin_link import (COIN, COINS, COUNTED, REQUESTS, CoinLink, CoinLinkParams,
                                                        canonical, recut)
 from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.spot import remote as R
-from verity.core.protocols.spot.challenger import CoinError, LiveChallenger, LiveOpening, live_reason
+from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveChallenger, LiveOpening, live_reason
 
 SCHEME = "verity/test/coins/v1"
 FAMILIES = [("positions", 3), ("replay", 2)]

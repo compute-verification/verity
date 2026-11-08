@@ -21,7 +21,7 @@ within one run, `CoinTree.checkFresh`, and this across runs). `Accepts` states i
 **One run** (C10 `OneRun`). The keys alone don't show that the parts' sessions are one run of the compiled verifier: a
 prover could retry a part and hand over only the session that accepted. So `check` also reads the challenger's
 interactive-run record of the run (`verity/rec-run/v1`, `--rec-run`, written by
-`verity.core.protocols.spot.challenger.RunRecord`, read from the challenger's host, never from the prover's
+`verity.core.protocols.sampled_proofs.challenger.RunRecord`, read from the challenger's host, never from the prover's
 bundle): the staging of V*'s statements (the rows file's SHA-512 and the shared set), then every session the
 challenger opened for the run's parts, each logged at its `Hello` before the answer that carries its fresh coin key,
 then the close. It accepts only when the staging is the record's first event, at the composition's rows and the shared

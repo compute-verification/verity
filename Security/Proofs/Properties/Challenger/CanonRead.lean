@@ -17,7 +17,7 @@ import all Lean.Data.Json.Basic
 bracket is (`canon_starts`), and ends where it ends when a comma or a closing bracket follows (`canon_read`): a numeral
 at its first non-digit, a string at its first unescaped quote (`Canon.canonStr_split`), a list or an object at its
 closing bracket, item by item (`inter_read`). So two values whose objects hold their keys in order
-(`Spot.sortedKeys`, as every parse's do) and print the same text are equivalent (`canon_inj`): `canonUtf8`
+(`SampledProofs.sortedKeys`, as every parse's do) and print the same text are equivalent (`canon_inj`): `canonUtf8`
 sorts an object's fields by key, which leaves a sorted object's where they are (`qsort_keys`).
 
 A field read of a sorted object is a lookup of the field in its fields' list (`get?_lookup`), so equivalent sorted values
@@ -30,7 +30,7 @@ have equivalent fields (`getD_equiv`), every field of a sorted value is sorted (
 namespace Properties.Challenger.CanonRead
 
 open Lean (Json JsonNumber)
-open Spot (sortedKeys increasing getD field?)
+open SampledProofs (sortedKeys increasing getD field?)
 open FlockDeploy (JsonEquiv jsonForm jsonForms jsonForms_eq jsonForm_obj FieldForms JsonForm JsonForms)
 open Properties.Pouw.LiveSalt.Canon (canon_arr canon_obj canonStr_split canonStr_toList nat_split)
 open Std.DTreeMap.Internal (Impl)

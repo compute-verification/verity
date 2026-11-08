@@ -1,4 +1,4 @@
-"""The proof system's challenger on its auditor host (`verity.core.protocols.spot.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
@@ -64,10 +64,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.core.protocols.spot import remote  # noqa: E402
-from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+from verity.core.protocols.sampled_proofs import remote  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
                                                              served_claim)
-from verity.core.protocols.spot.one_stage import verifier as V  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"

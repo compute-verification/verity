@@ -23,8 +23,8 @@ theorem map_val_finRange (n : ℕ) : (List.finRange n).map Fin.val = List.range 
 /-- `keyIdx` as a number: none at the zero's key, else the first stacked input with the same key. -/
 theorem keyIdx_map_val (c : Flock.Circuit) (B : ℕ) (x : Fin B) :
     (Aliased.keyIdx c B x).map Fin.val =
-      if Aliased.srcKey c x.val = .zero then none else Spot.FilePart.firstKey c B x.val := by
-  unfold Aliased.keyIdx Spot.FilePart.firstKey
+      if Aliased.srcKey c x.val = .zero then none else SampledProofs.FilePart.firstKey c B x.val := by
+  unfold Aliased.keyIdx SampledProofs.FilePart.firstKey
   split
   · rfl
   · rw [← map_val_finRange, List.find?_map]
@@ -35,7 +35,7 @@ the zero's aside, holds the `b < B` some row's input column has as its key (`Ali
 theorem mem_srcs_iff (c : Flock.Circuit) (T : Rows) (rd : Array Bool)
     (hread : ∀ y < T.nIn, rd.getD y false = true ↔ ∃ j : Fin T.nComp, ∃ c₀ ∈ T.a j ++ T.b j, c₀.val = y)
     (S : List ℕ) (hS : ∀ b, b ∈ S ↔ ∃ x < c.upv * T.nIn, rd.getD (x % T.nIn) false = true ∧
-      Aliased.srcKey c x ≠ .zero ∧ Spot.FilePart.firstKey c (c.upv * T.nIn) x = some b) (b : ℕ) :
+      Aliased.srcKey c x ≠ .zero ∧ SampledProofs.FilePart.firstKey c (c.upv * T.nIn) x = some b) (b : ℕ) :
     b ∈ S ↔ b < (T.stack c.upv).nIn ∧ ∃ i : Fin (T.stack c.upv).nComp,
       ∃ col ∈ (T.stack c.upv).a i ++ (T.stack c.upv).b i, ∃ hc : col.val < (T.stack c.upv).nIn,
         (Aliased.keyIdx c (T.stack c.upv).nIn ⟨col.val, hc⟩).map Fin.val = some b := by

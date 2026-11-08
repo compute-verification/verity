@@ -23,7 +23,7 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
   release log reads as its coin commitment's (`releasedRootsOf`), the coins it released of a family after a root,
   `COIN_BYTES` bytes each in order, the family's coins in its log (`Holds`, `freshOf`). These are the properties the
   device's history at a play is to have.
-* **A line reads back** (`CanonLine.event_getD`): where v2's line reader (`Spot.Challenger.event`) accepts a
+* **A line reads back** (`CanonLine.event_getD`): where v2's line reader (`SampledProofs.Challenger.event`) accepts a
   line that is a sorted value's `canon` text, it reads the value's fields (`str_of`, `nat_of`, `spec_of`). The reader's
   parse can't be seen into, so that it accepts a printed line is what `readTail`'s success shows: a line it refuses is
   no tree's (`treeLine_error`), and a root's line it refuses is pending with no root (`rootOf_error`), which no read
@@ -47,7 +47,7 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
 namespace Verity.Sampled.Lines
 
 open Lean (Json)
-open Spot Spot.Challenger
+open SampledProofs SampledProofs.Challenger
 open FlockDeploy (JsonEquiv)
 open Properties.Challenger (History OpensOn)
 open Properties.Challenger.CanonLine (event_ok event_getD nat?_equiv)

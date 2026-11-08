@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled
-public import Spot.ChallengerSession
+public import SampledProofs.ChallengerSession
 public import Std.Tactic.Do
 
 /-!
@@ -27,7 +27,7 @@ namespace Verity.Sampled
 
 open Lean (Json)
 open Std.Do
-open Spot.Challenger
+open SampledProofs.Challenger
 
 /-! ## Reading the verifier's monadic functions -/
 
@@ -86,7 +86,7 @@ theorem opt_spec {α : Type} (x : Option α) : ⦃⌜True⌝⦄ x ⦃⇓? _ => �
 
 theorem specOf_spec (j : Json) : ⦃⌜True⌝⦄ specOf j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem toOption_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x.toOption ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
-theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ Spot.nat? j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
+theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ SampledProofs.nat? j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem findIdx_spec {α : Type} (p : α → Bool) (l : List α) : ⦃⌜True⌝⦄ l.findIdx? p ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem findIdxA_spec {α : Type} (p : α → Bool) (l : Array α) : ⦃⌜True⌝⦄ l.findIdx? p ⦃⇓? _ => ⌜True⌝⦄ :=
   opt_spec _
@@ -107,12 +107,12 @@ def chunks : Nat → ByteArray → List (List Bool)
 /-! ## The read with v2's own tests -/
 
 /-- **The device's log as v2's check reads it, with v2's own tests**: `coinsRead`'s read, with each coin tree's line
-read by the tests `Spot.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
-sessions' records as `Spot.OneStageZk.treesHeld` reads them (`recordsOn`). -/
+read by the tests `SampledProofs.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
+sessions' records as `SampledProofs.OneStageZk.treesHeld` reads them (`recordsOn`). -/
 def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let (p, c, e) ← (caseOf s).toOption
   let (_, label) ← p.base.challenger
-  let ξ ← (_root_.Spot.OneStageZk.coinsOf p c e).toOption
+  let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
   let lines ← (linesOf e).toOption
   readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
 

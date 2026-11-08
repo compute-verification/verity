@@ -46,7 +46,7 @@ namespace Verity.Sampled
 
 open Verity.Game
 open Lean (Json)
-open Spot.Challenger
+open SampledProofs.Challenger
 open FlockSoundness.Discharge
 open FlockSoundness.Discharge.Tables (LiveOutJ SubmitJ addRoundJ)
 open FlockSoundness.Refine (roundOf ebind_ok)
@@ -64,7 +64,7 @@ one line opening that round (`opensRound_unique`), so its `n` is that of the ope
 theorem opening_count {lines : List String} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     {t : LoggedTree} (ht : t ∈ trees) {name : String} {k : ℕ} {o : TreeOpening} (ho : t.opening name k = some o)
     {l : String} (hl : l ∈ lines) (hr : OpensRound l t.root name k) {d : Json} (hd : event l = .ok d) :
-    _root_.Spot.nat? (_root_.Spot.getD d "n") = some o.n := by
+    _root_.SampledProofs.nat? (_root_.SampledProofs.getD d "n") = some o.n := by
   have hp := Array.find?_some ho
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
   obtain ⟨l', hl', hr', d', hd', -, hn⟩ := opened_after hT t ht o (Array.mem_of_find?_eq_some ho)
@@ -76,7 +76,7 @@ theorem opening_count {lines : List String} {trees : Array LoggedTree} (hT : coi
 
 /-- A natural number `Record.nat` reads is the one `nat?` reads of the field. -/
 theorem nat?_of_recordNat {r : Json} {key : String} {n : ℕ} (h : Flock.Record.nat r key = .ok n) :
-    _root_.Spot.nat? (_root_.Spot.getD r key) = some n := by
+    _root_.SampledProofs.nat? (_root_.SampledProofs.getD r key) = some n := by
   unfold Flock.Record.nat at h
   obtain ⟨v, hv, h⟩ := ebind_ok h
   rw [fld_getD hv]
@@ -86,7 +86,7 @@ theorem nat?_of_recordNat {r : Json} {key : String} {n : ℕ} (h : Flock.Record.
     rw [hg] at h
     obtain rfl : a = n := Except.ok.inj h
     rw [FlockComplete.JsonRT.getNat_ok hg]
-    simp [_root_.Spot.nat?, _root_.Spot.int?]
+    simp [_root_.SampledProofs.nat?, _root_.SampledProofs.int?]
 
 /-- **The count the record gives a decoded stream's round is the decoded round's**: where `record` decodes to `sess`
 and parses as `J`, `Trees.recordCount` reads of round `k` of `J`'s stream `name`, not the session stream, the `n` of
@@ -409,9 +409,9 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
-    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
-    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
+    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     {o : A.Out × CoinTape (V.game θ F c) σ}
     (h : ReachesOff V θ F c A rd σ D M (linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
@@ -503,9 +503,9 @@ theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
-    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
-    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
+    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     (hN : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -525,7 +525,7 @@ and coins, its premises on the sample closed as `movesReachAt` closes them. -/
 theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
+    (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -536,9 +536,9 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
       (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
-        (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A)) :=
+        (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A)) :=
   countsReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
-    (κ := srcCoinsAt _root_.Spot.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
+    (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
     rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hO c σ)
 
 /-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTarget_assembled_at` at the
@@ -551,7 +551,7 @@ theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Compos
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hD : V.signer θ = P.signer V.families θ)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
+    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -560,11 +560,11 @@ theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Compos
     CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
       (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
       (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
-      (srcCoinsAt _root_.Spot.Challenger.MAX_COINS)) A θ F :=
+      (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS)) A θ F :=
   couplingTarget_assembled_at fieldEnc V k K (Device.dev (P.setupOf V.families))
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
-    (srcCoinsAt _root_.Spot.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)
+    (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)
     (fun c => Device.signsPlay_dev V P θ F c hD) (avg_srcCoinsAt hL) hA hDg (writesView_wrZP A rfl)
     (fun c σ => movesReach_at (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO c σ)
       (countsReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO c σ))

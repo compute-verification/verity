@@ -1,15 +1,15 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.Seq
-public import Spot.Draw
+public import SampledProofs.Draw
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
 @[expose] public section
 
-open Spot
+open SampledProofs
 
-namespace Properties.Spot.SecurityProofs
+namespace Properties.SampledProofs.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
@@ -304,4 +304,4 @@ theorem drawUnits_seq (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (units 
           obtain rfl := (Option.some.inj h1).symm
           exact stratifiedWith_take src _ 0 p D ho
 
-end Properties.Spot.SecurityProofs
+end Properties.SampledProofs.SecurityProofs

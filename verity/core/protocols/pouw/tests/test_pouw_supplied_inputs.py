@@ -21,7 +21,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.protocols.pouw.circuit import compile as C
 from verity.ml.protocols.pouw.circuit import h1tile as H
 from verity.ml.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.spot.one_stage import partition as P, registered as G, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 I8 = Array(8, BL.BIT)

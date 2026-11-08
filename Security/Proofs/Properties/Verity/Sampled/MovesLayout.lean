@@ -35,7 +35,7 @@ namespace Verity.Sampled
 
 open Verity.Game
 open Lean (Json)
-open Spot.Challenger
+open SampledProofs.Challenger
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Claims.Bridge.Custody (forall₂_getElem mapM_forall₂ mapIdxM_forall₂)
 open FlockSoundness.Refine (ebind_ok Ret)
@@ -52,7 +52,7 @@ one line opening that round (`opensRound_unique`), so its `after` is that of the
 theorem opening_after {lines : List String} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     {t : LoggedTree} (ht : t ∈ trees) {name : String} {k : ℕ} {o : TreeOpening} (ho : t.opening name k = some o)
     {l : String} (hl : l ∈ lines) (hr : OpensRound l t.root name k) {d : Json} (hd : event l = .ok d) :
-    _root_.Spot.getD d "after" = .str o.after := by
+    _root_.SampledProofs.getD d "after" = .str o.after := by
   have hp := Array.find?_some ho
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
   obtain ⟨l', hl', hr', d', hd', ha, -⟩ := opened_after hT t ht o (Array.mem_of_find?_eq_some ho)
@@ -146,7 +146,7 @@ theorem rep_answers {label : String} {after : ByteArray} {J : Json} {ξ : ByteAr
   rw [hstr] at hsr
   obtain rfl : streams = recs := Lean.Json.arr.inj hsr
   have hsn : st.name = name := by simpa using Array.find?_some hst
-  obtain ⟨x, hx, hxs, rs, hrs, hrds⟩ := Properties.Spot.SecurityProofs.forall₂_mem_right hdec st
+  obtain ⟨x, hx, hxs, rs, hrs, hrds⟩ := Properties.SampledProofs.SecurityProofs.forall₂_mem_right hdec st
     (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hst))
   have hkr : openedOf pre i s < rs.size := by
     have e := hrds.length_eq
@@ -198,9 +198,9 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
-    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
-    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
+    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     {o : A.Out × CoinTape (V.game θ F c) σ}
     (h : ReachesOff V θ F c A rd σ D M (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
@@ -262,9 +262,9 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
-    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
-    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
+    {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     (hN : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →

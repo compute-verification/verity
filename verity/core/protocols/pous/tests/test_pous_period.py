@@ -161,7 +161,7 @@ LANE, OTHER = "compute-accounting", "memory-accounting"
 
 
 def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_bytes: int) -> str:
-    """The auditor's next ledger line in its form (`spot.challenger.ledger_line`), under a stand-in signature of
+    """The auditor's next ledger line in its form (`sampled_proofs.challenger.ledger_line`), under a stand-in signature of
     `sig_bytes` bytes at leaf `seq`: `cite` reads the form, never the signature."""
     e = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else "0" * 128,
          "schema": period.LEDGER_SCHEMAS[1], "seq": len(lines), "session": session}

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_live as RL
 from verity.ml.commitments import coin_tree as CT
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 
 def _counter_rand():
@@ -380,7 +380,7 @@ class _Released(_Logged):
         self.log: list[str] = []
 
     def tree(self, spec, nonce=None):
-        from verity.core.protocols.spot import challenger as C
+        from verity.core.protocols.sampled_proofs import challenger as C
 
         nonce, root, key = super().tree(spec, nonce)
         self.log.append(C.canonical_json_text({"event": C.TREE_EVENT, "key": key.hex(), "nonce": nonce.hex(), "root": root.hex(),
@@ -388,7 +388,7 @@ class _Released(_Logged):
         return nonce, root, key
 
     def tree_open(self, root, stream, rnd, n, after):
-        from verity.core.protocols.spot import challenger as C
+        from verity.core.protocols.sampled_proofs import challenger as C
 
         coins, words = super().tree_open(root, stream, rnd, n, after)
         self.log.append(C.canonical_json_text({"after": after.hex(), "coins": C.coins_digest(coins), "event": C.OPEN_EVENT,
@@ -397,7 +397,7 @@ class _Released(_Logged):
 
 
 def test_the_challengers_release_log_holds_an_inner_session_on_its_tree_and_refuses_one_off_it():
-    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.sampled_proofs import challenger as C
 
     src = _Released(_counter_rand())
     coins = _tree_coins(src)
@@ -518,7 +518,7 @@ def test_the_coin_tree_names_one_source(argv, why, tmp_path, capsys):
 
 
 def test_tree_from_takes_the_trees_from_the_challengers_session_and_closes_it(tmp_path, monkeypatch):
-    from verity.core.protocols.spot import remote
+    from verity.core.protocols.sampled_proofs import remote
 
     class Device(RL.OsTree):
         closed = False

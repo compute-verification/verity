@@ -192,7 +192,7 @@ def measure(args) -> int:
     return 0
 
 
-PIECES = ROOT / "verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest"
+PIECES = ROOT / "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 
@@ -224,7 +224,7 @@ def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
 
 
 def partition(args) -> int:
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.circuits import partition_object as PO
 
     out = Path(args.out)

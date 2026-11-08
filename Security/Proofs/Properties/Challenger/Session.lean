@@ -36,7 +36,7 @@ namespace Properties.Challenger.Session
 
 open Lean (Json)
 open Std.Do
-open Spot Spot.Challenger
+open SampledProofs SampledProofs.Challenger
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be64_size_inj)
 open Properties.Pouw.LiveSalt.Coin (enc enc_length enc_split enc_inj taggedBytes tagged_ok taggedBytes_inj)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok except_spec none_spec

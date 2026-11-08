@@ -33,7 +33,7 @@ makes the opening's leaf digest the run's leaf at its position, and `Coin.coin_e
 namespace Properties.Challenger.Coins
 
 open Lean (Json)
-open Spot Spot.Challenger
+open SampledProofs SampledProofs.Challenger
 open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_depth lev_size hash_size)
 open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind)
 open Properties.Pouw.LiveSalt (jsonStrIs_eq)

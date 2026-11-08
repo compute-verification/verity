@@ -11,7 +11,7 @@ import pytest
 
 from test_appends import N, Run, honest_session, pages, salts, store
 from verity.core.protocols.remote_bandwidth import audit, codec, coins
-from verity.core.protocols.spot.challenger import CoinError
+from verity.core.protocols.sampled_proofs.challenger import CoinError
 
 
 def test_an_honest_session_opens_one_live_coin_an_append_and_each_page_decodes_under_its_own() -> None:

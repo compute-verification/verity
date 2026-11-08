@@ -9,7 +9,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import serving_rows as SRW
 

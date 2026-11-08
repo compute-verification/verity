@@ -17,7 +17,7 @@ import pytest
 from verity.core.protocols.pouw import core_check as CC
 from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
 spec = importlib.util.spec_from_file_location("h1_prove_live", H1 / "live.py")

@@ -212,10 +212,10 @@ from verity.core.protocols.pouw.leaf_lanes import LEAST_K
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
 from verity.core.protocols.profile import WINDOW_DELTA
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot.one_stage import produced as PR
-from verity.core.protocols.spot.one_stage import proofs as PF
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import produced as PR
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import _checked_refs
 from verity.ml.circuits.defs import _Widths
 from verity.ml.circuits.refs import Coll, Concat, refs_from_json

@@ -1,6 +1,6 @@
 module
 
-public import Spot.FilePart
+public import SampledProofs.FilePart
 public import Properties.Flock.Circuit.Keys
 public import Init.Internal.Order.While
 public import Std.Data.HashMap.Lemmas
@@ -8,15 +8,15 @@ public import Std.Data.HashMap.Lemmas
 /-!
 # The code's source keys are the claims'
 
-`srcKey_toA`: the key `Spot.FilePart.ofCircuit` reads for stacked input `x`,
-`Spot.FilePart.srcKey c (Index.of c) x`, is `Aliased.srcKey c x` under the constructor map `Src.toA`.
+`srcKey_toA`: the key `SampledProofs.FilePart.ofCircuit` reads for stacked input `x`,
+`SampledProofs.FilePart.srcKey c (Index.of c) x`, is `Aliased.srcKey c x` under the constructor map `Src.toA`.
 `lastLe`'s binary search is the last row-word start at most `x` on the ascending starts (`lastLe_spec`, `starts_mono`),
 and `Index.of`'s maps are the first leaf cut and the first wire into the unit net (`cuts_get`, `wires_get`).
 -/
 
 @[expose] public section
 
-namespace Spot.FilePart
+namespace SampledProofs.FilePart
 
 open Std FlockSoundness.Discharge
 
@@ -331,4 +331,4 @@ theorem srcKey_toA (c : Flock.Circuit) (x : ℕ) : (srcKey c (Index.of c) x).toA
     rw [if_neg hin]
     rfl
 
-end Spot.FilePart
+end SampledProofs.FilePart

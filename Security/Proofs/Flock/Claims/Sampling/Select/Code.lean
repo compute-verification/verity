@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
-public import Spot.Run
+public import SampledProofs.Run
 
 /-!
 # The sampled verifier's sessions at the code with its Lean sample
@@ -16,7 +16,7 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
   reveals, for every checked unit, openings that make it correct; it is `SessionOpens` (`sessionOpens_code_iff`).
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
 
-And of `Spot.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
+And of `SampledProofs.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
 the population and R1–R7 (`Registration.check`) under the sampling design of the rule over the population (`Select.Rule.over`), ran
 the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
 the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
@@ -101,7 +101,7 @@ theorem innerNumbers_code_iff :
 
 end SamplingDeploy
 
-namespace Spot.Run
+namespace SampledProofs.Run
 
 open Lean (Json)
 open Flock (V)
@@ -142,4 +142,4 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     | exact Or.inr ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, _,
         by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
 
-end Spot.Run
+end SampledProofs.Run

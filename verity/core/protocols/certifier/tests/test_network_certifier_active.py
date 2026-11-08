@@ -43,8 +43,8 @@ from verity.core.protocols.certifier.schedule import (
     handing_buckets,
     run_shaper,
 )
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.service import WindowCommitmentRecord
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 
 def test_frames_round_trip_and_padding_is_zero():

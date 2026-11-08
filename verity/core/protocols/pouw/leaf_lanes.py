@@ -4,7 +4,7 @@ reads and at which row, and the lane partials' layout, the after-draw value the 
 Serving keeps one CP-W receipt a 32 × 32 leaf. A sampled leaf's proof is its 32 lane statements and one combine statement
 (`circuit.h1zy`'s `PouwH1LaneZy_v1{TILE}`, lane l by its public index, and `PouwH1Combine_v1{TILE}`), each proved under the
 ZK server on its own. The statements share the leaf's lane partials (``partials``), which the prover recomputes after the
-sample from what it committed before it and commits once under hiding leaves (`spot.one_stage.produced`). A
+sample from what it committed before it and commits once under hiding leaves (`sampled_proofs.one_stage.produced`). A
 partial is never an output: outputs are public and at most 16 bits, and a partial is 2 (KS + m) u32. Only the
 statements' ok bits leave.
 
@@ -78,9 +78,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.core.protocols.pouw.weights import chunks
-from verity.core.protocols.spot.one_stage import produced as PR
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import produced as PR
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
 PARTIALS = "partials"

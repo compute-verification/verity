@@ -21,7 +21,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as RG, registration as R
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
@@ -883,7 +883,7 @@ def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_
     prover row opens. A prover that exchanges c0 and c1 (the two claims' ring switches, equal in size) registers round 1's row
     as c0 and round 0's as c1, and the verifier's per-row check refuses both; a record whose message sits at a round that
     absorbs none is refused before anything is registered."""
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     r = stacked_session.read
     program = O.session_program((stacked_session.d / "inner" / "public.json").read_bytes())

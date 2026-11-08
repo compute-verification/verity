@@ -143,7 +143,7 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 Lean to:
 
 - PoUW's period: `period_check.case`, with `credit.commit_of` reading each window's Commit record for remote's tie;
-- sampled proofs: its form's split (`spot`) over one-stage v2's decoders and checks before the proof check
+- sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and checks before the proof check
   (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage difftest's
   `check`, on v2's audits whose sample at the challenger's coins is empty, those with one break each (`V2_BREAKS`, among
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`
@@ -164,7 +164,7 @@ Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accept
 policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
 the case itself are often broken. Sampled proofs' cases are all refused (v1's audits, refused by name, and v1's audits
 with one or two changes), so every product's case rejects in the difftest and no tie decides a verdict there; the
-ties' refusals are pinned by each product's `#guard`s. `test_spot_refuses_one_stage_v1` shows remote and
+ties' refusals are pinned by each product's `#guard`s. `test_sampled_proofs_refuses_one_stage_v1` shows remote and
 onsite refusing v1 by name with every other subprotocol aimed at acceptance, in Lean and Python. Often the tied
 subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product refuses.
 On one record the policy declares the one-stage audit's own circuit on its record, which it accepts. An honest period's

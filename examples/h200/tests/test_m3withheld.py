@@ -13,7 +13,7 @@ sys.path.insert(0, str(HERE))
 import m3coin as COIN  # noqa: E402
 import m3reg as REG  # noqa: E402
 import m3withheld as MW  # noqa: E402
-from verity.core.protocols.spot import remote as R  # noqa: E402
+from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 
 PIN = "c0" * 20
 UTC = "2026-10-27T00:00:00Z"

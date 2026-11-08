@@ -144,44 +144,44 @@ end OneClass
 
 /-- `slotDesign`'s design: the population's first stage (`all` under the `All` rule, else the sampling design of record's), then
 the input class sampled `all`. -/
-theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Program}
+theorem slotDesign_rules {rule : _root_.SampledProofs.Select.Rule} {p : _root_.SampledProofs.Program}
     {q : Lean.Json} {t : Option Lean.Json} {d : Design}
-    (h : _root_.Properties.Spot.slotDesign rule p q t = .ok d) :
+    (h : _root_.Properties.SampledProofs.slotDesign rule p q t = .ok d) :
     ∃ first, d.rules = [first, .all] ∧ (rule = .all → first = .all) ∧
-      (rule ≠ .all → ∃ L, first = _root_.Properties.Spot.oneStageOf L) := by
-  unfold _root_.Properties.Spot.slotDesign at h
-  obtain ⟨_, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
-  obtain ⟨_, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
-  obtain ⟨derived, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+      (rule ≠ .all → ∃ L, first = _root_.Properties.SampledProofs.oneStageOf L) := by
+  unfold _root_.Properties.SampledProofs.slotDesign at h
+  obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
+  obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
+  obtain ⟨derived, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
   cases rule with
   | all =>
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, fun _ => rfl, fun h => absurd rfl h⟩
   | law _ | twoStage _ _ _ =>
-    obtain ⟨parsed, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+    obtain ⟨parsed, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
 
 /-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
-theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spot.Slots.Layout}
-    (h : _root_.Spot.Slots.layout p q = .ok l) :
+theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.Layout}
+    (h : _root_.SampledProofs.Slots.layout p q = .ok l) :
     ∃ pop ins, l.classes = #[pop, ins] ∧ (ins = #[] ∨ ∃ st, ins = #[st]) := by
-  unfold _root_.Spot.Slots.layout at h
-  obtain ⟨_, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
-  obtain ⟨_, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+  unfold _root_.SampledProofs.Slots.layout at h
+  obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
+  obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
   dsimp only at h
-  obtain ⟨pop, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+  obtain ⟨pop, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
   obtain rfl := (Except.ok.inj h).symm
   refine ⟨pop, _, rfl, ?_⟩
   split
   · exact Or.inl rfl
   · exact Or.inr ⟨_, rfl⟩
 
-theorem slotPartition_classes {l : _root_.Spot.Slots.Layout}
-    {pop ins : Array (Array _root_.Spot.Slots.ProofBlock)}
+theorem slotPartition_classes {l : _root_.SampledProofs.Slots.Layout}
+    {pop ins : Array (Array _root_.SampledProofs.Slots.ProofBlock)}
     (h : l.classes = #[pop, ins]) (hins : ins = #[] ∨ ∃ st, ins = #[st]) :
-    ∃ c ic, (_root_.Properties.Spot.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by
-  unfold _root_.Properties.Spot.slotPartition
+    ∃ c ic, (_root_.Properties.SampledProofs.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by
+  unfold _root_.Properties.SampledProofs.slotPartition
   rw [h]
   rcases hins with rfl | ⟨st, rfl⟩
   · exact ⟨_, _, rfl, Or.inl rfl⟩

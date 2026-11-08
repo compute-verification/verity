@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.remote_bandwidth.session import verifier
-from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import lms
 

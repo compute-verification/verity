@@ -27,8 +27,8 @@ from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as W
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.ml.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 V16, BIT = Value(16), Value(1)
 XOR1 = PrimitiveDefinition("H1WindowTestXor1", 1, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b, register=False)

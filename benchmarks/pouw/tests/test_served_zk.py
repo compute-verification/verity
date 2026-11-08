@@ -1,4 +1,4 @@
-"""served_zk's execution phase through the proof system (`served_zk/served_commit.py` over P1, `spot.service`): an
+"""served_zk's execution phase through the proof system (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): an
 execution phase of served calls' side rows committed as Flock commits a unit's rows, its tiles padded with filler tiles to a
 grid level, registered with exactly PoUW's public items, received by a `Stream`, sampled once, each sampled tile's proof
 opened against the execution phase root, delivered once, and the final outcome publishing exactly the public items."""
@@ -38,9 +38,9 @@ from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402

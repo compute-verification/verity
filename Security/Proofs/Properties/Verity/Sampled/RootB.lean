@@ -10,7 +10,7 @@ public import Proofs.Properties.Verity.Sampled.Link
 `MovesOf` asks that the roots the decoders read at the first stop, `D.root` of its modes, be the `root_B` of the session
 v2's record decodes to (its clause (ii)). At the readings and the decoders at the session's layout, where the first stop
 fixes the link's round, the play's sampled verdict accepts, the log v2's check read is the device's, and the device's
-first opening is of the stream `Spot.Challenger.TREE_SESSION` of the tree it opens (the order
+first opening is of the stream `SampledProofs.Challenger.TREE_SESSION` of the tree it opens (the order
 `SampleLinkFirst` states), they are (`firstStop_rootB`):
 
 * **The bytes the link answers** (`link_answers`): v2's read of the device's first opening is the read of the release
@@ -30,7 +30,7 @@ namespace Verity.Sampled
 
 open Lean (Json)
 open Verity.Game
-open Spot Spot.Challenger
+open SampledProofs SampledProofs.Challenger
 open FlockSoundness.Discharge
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
@@ -200,7 +200,7 @@ theorem logged_answers {r : Verity.Release} {L : List Verity.Release} :
 /-- **The session v2 sets up has the session's tables**: wherever v2 sets `A` up, the session v2's check verified is
 on the statement's one table. -/
 theorem v2_tables {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
-    {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
+    {p : _root_.SampledProofs.OneStageZk.Params} {e : _root_.SampledProofs.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
     spec.tables = A.tables := by
@@ -208,7 +208,7 @@ theorem v2_tables {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : L
   obtain rfl : tags0 = A.I.tags := Option.some.inj (ht0.symm.trans hA.tags)
   unfold Exec.setupOfP at hs
   rcases HiddenExec.setupTables_okHP ((ZkExec.zkTags_hiddenOutputs (Recursion.Witness.toExec
-      (_root_.Spot.OneStageZk.inputsOf A.I.tags p.own circuitB pubB bs))).trans A.hTags.1) hs with
+      (_root_.SampledProofs.OneStageZk.inputsOf A.I.tags p.own circuitB pubB bs))).trans A.hTags.1) hs with
     ⟨-, st, hst, rfl, -⟩ | ⟨h1, -⟩
   · obtain ⟨_, hP⟩ := Hidden.setupHidden_specP hst
     show #[st.tags.table] = #[A.I.tags.table]

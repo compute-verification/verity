@@ -44,7 +44,7 @@ kinds)
   ;;
 audit)
   setup
-  (cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   TARG=()
   if [ -n "${A11_LAYOUT:-}" ]; then

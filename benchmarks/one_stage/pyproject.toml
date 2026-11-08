@@ -50,7 +50,7 @@ untraced = [
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`). `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
-inputs = ["verity", "verity/core/service/spot/lakefile.toml", "benchmarks/live_challenger",
+inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",

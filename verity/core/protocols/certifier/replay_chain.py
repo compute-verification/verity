@@ -100,8 +100,8 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier.head_check import BIT, _part
-from verity.core.protocols.spot.one_stage import produced
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import produced
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 VALUE = "replay-state"
 WINDOW = "replay-window"

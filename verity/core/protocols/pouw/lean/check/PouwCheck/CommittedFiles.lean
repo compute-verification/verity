@@ -35,7 +35,7 @@ live: SHA-512}`: each template's circuit file, as the auditor's lowering built i
 has trusted, in the lanes form (`Lanes.lanesFiles`); else the refusal (`circuit`). -/
 def committedFiles (ledger : Json) (name : String) : R Json := do
   let .arr lines := ledger | throw ("period", "the period is not named")
-  let body := ((lines.filterMap Spot.Challenger.ledgerEntry?).find? fun e =>
+  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let files := (body.map (get · CIRCUIT_FILES)).getD .null
   unless isObj files && !(fields files).isEmpty && (fields files).all (fun (x, v) =>

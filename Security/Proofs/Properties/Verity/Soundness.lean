@@ -466,7 +466,7 @@ theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite 
 
 /-- **`Soundness`'s honest lemma**: its seven hypotheses hold at the idle deployment's compiled onsite composite. -/
 theorem soundness_of_subprotocols_honest :
-    Idle.unbounded.SpotSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
+    Idle.unbounded.SampledProofsSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
       Idle.unbounded.InferenceOnlySound .onsite ∧ Idle.unbounded.PousSound .onsite ∧
       Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkCertifierSound .onsite ∧
       Idle.unbounded.WipeSound .onsite :=
@@ -481,7 +481,7 @@ theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsit
 /-- **`RemoteSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled remote
 composite. -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
+    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
       Idle.unbounded.InferenceOnlySound .remote :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 

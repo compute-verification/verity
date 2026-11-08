@@ -47,7 +47,7 @@ ALLOWED: dict[str, str] = {
         "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
-    "verity/core/service/spot/Spot/PartitionRef.lean":
+    "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
     "verity/core/service/flock/Flock/RecCoins.lean":

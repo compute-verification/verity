@@ -13,7 +13,7 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
     after    on the device: step s's A tables (`commit.s8_table`'s format, labels a/<s>/<w>), admit tables (the T / 16 words of
              the slots < m, s/<s>/<w>), z tables (each slot row's N int32 LE, z/<s>/<w>, domain 'z-table'), the a-step,
              admit-step and z-step trees and the round over the three ('round'); step s - 1's receipt trees (r/<s-1>/<w>); the
-             round root read back, recorded through `spot.challenger.LiveRecord` before its coin opens
+             round root read back, recorded through `sampled_proofs.challenger.LiveRecord` before its coin opens
              (the execution phase's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
              step s + 1's launches read
 

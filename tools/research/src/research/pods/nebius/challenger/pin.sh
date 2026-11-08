@@ -4,7 +4,7 @@
 # /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
 # integrations/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
 # network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
-# unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
+# unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its sampled_proofs package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build sampled-proofs-verifier` (and
 # `network-records`, the certifier rehearsal's check) runs there as auditor, so a session's first coin doesn't wait on a build. The pin (COMMIT, the main it was checked against, UTC time) is
@@ -51,7 +51,7 @@ if [ ! -d "$T" ]; then
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/core/service/spot
+pkg=$T/verity/core/service/sampled_proofs
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then

@@ -186,7 +186,7 @@ def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(
     """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
     its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
-    from verity.core.protocols.spot.one_stage import registered as G
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
     _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),

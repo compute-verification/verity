@@ -51,7 +51,7 @@ noncomputable def _root_.Flock.Bridge.constWiresOf (c : Flock.Circuit) (hU : Bui
 open Classical in
 /-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1`, and its zero `zeroG` and every program input
 no unit reads (`Bridge.owner`) are `0`, public circuit structure, so `progOf` lowers them to constants (`.const`), which
-a proof block reads with no opening. They are Bits' (`Spot.Bits.consts`). -/
+a proof block reads with no opening. They are Bits' (`SampledProofs.Bits.consts`). -/
 noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
     (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
   if g = Discharge.Layout.oneG then some true

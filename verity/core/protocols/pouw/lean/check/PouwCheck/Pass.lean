@@ -2,7 +2,7 @@ module
 
 public import PouwWindow.Rounds
 public import PouwCheck.Inputs
-public import Spot.ChallengerSession
+public import SampledProofs.ChallengerSession
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
@@ -47,7 +47,7 @@ namespace PouwCheck
 
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
-open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
+open SampledProofs.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
   pinnedSession sessionNamed)
 
 def MANIFEST_SCHEMA : String := "verity-vllm/pouw-pearl-c-run/v2"
@@ -92,7 +92,7 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
-export Spot (jsonStrIs)
+export SampledProofs (jsonStrIs)
 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
@@ -382,18 +382,18 @@ def liveSaltCheck (key ledger pins main session m : Json) : R ByteArray := do
   let (some reserve, some opened, some ended) :=
       (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"), named.find? (·.kind == "end"))
     | throw ("salt", NO_RESERVE)
-  unless Spot.jeq (Spot.getD reserve.body "families")
-      (Spot.Challenger.familiesJson PouwWindow.SALT_FAMILIES) do throw ("salt", RESERVE_LAYOUT)
-  unless Spot.int? (Spot.getD opened.body "reserve") == some (reserve.seq : Int) do
+  unless SampledProofs.jeq (SampledProofs.getD reserve.body "families")
+      (SampledProofs.Challenger.familiesJson PouwWindow.SALT_FAMILIES) do throw ("salt", RESERVE_LAYOUT)
+  unless SampledProofs.int? (SampledProofs.getD opened.body "reserve") == some (reserve.seq : Int) do
     throw ("salt", NO_RESERVE)
-  unless jsonTrue (Spot.getD ended.body "complete") &&
-      Spot.jeq (Spot.getD ended.body "released")
+  unless jsonTrue (SampledProofs.getD ended.body "complete") &&
+      SampledProofs.jeq (SampledProofs.getD ended.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))]) do throw ("salt", INCOMPLETE)
   unless received == [(PouwWindow.SALT, [r])] do throw ("salt", LIVE_NOT_RECEIVED)
   let claimed ← (LiveCommitment.ofJson (at? m "coins")).mapError fun e => ("coin", s!"the pass's coins are malformed: {e}")
   unless sameCommitment claimed c do coin LIVE_NOT_SIGNED
   let o ← (LiveOpening.ofJson (at? m "salt_opening")).mapError fun e => ("coin", s!"the salt's {e}")
-  if let some why ← port (Spot.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
+  if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
   let seed ← port (PouwCommit.key? o.coin PouwCommit.EPOCH_SALT_DOMAIN
     [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes w)])
   let salt := FlockSoundness.Randomness.stream seed [.str "salt"] 32
@@ -413,8 +413,8 @@ def LIVE_UNHELD : String :=
 `{key, ledger, main, pins, session}`, its `salt` refusals `coin`'s. -/
 def livePassSalt (m live : Json) : R (ByteArray × String) := do
   if live == .null then coin LIVE_UNHELD
-  unless Spot.keys? live == some #["key", "ledger", "main", "pins", "session"] do coin LIVE_FORM
-  let g := Spot.getD live
+  unless SampledProofs.keys? live == some #["key", "ledger", "main", "pins", "session"] do coin LIVE_FORM
+  let g := SampledProofs.getD live
   let salt ← (liveSaltCheck (g "key") (g "ledger") (g "pins") (g "main") (g "session") m).mapError
     fun (code, e) => (if code == "manifest" || code == "error" then code else "coin", e)
   pure (salt, "live coin")
@@ -509,8 +509,8 @@ def SEEDED_PINNED : String :=
 (`PouwWindow.LIVE_SCHEME`, a certified execution phase's) are read only from its sample session's (`PouwWindow.DRAW_FAMILIES`)
 signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the execution phase's parameters pin (`coin-key`, so a
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
-it (`Spot.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
-`pouw/draw` coin 0 (`Spot.Challenger.liveReason`). -/
+it (`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
+`pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
 def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units key : Json) :
     R Unit := do
   let liveScheme := match PouwWindow.field? coins "scheme" with
@@ -519,15 +519,15 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
   let live := (PouwWindow.field? coins "record").isSome || liveScheme
   let malformed := fun (e : String) => ("coin", s!"the verifier's coins are malformed: {e}")
   let c : Coins ⊕ LiveCommitment ← if live then do
-      unless Spot.keys? coins == some #["key", "record"] do coin SIGNED_LIVE
-      let want ← (Spot.Challenger.ChallengerKey.ofJson key).mapError
+      unless SampledProofs.keys? coins == some #["key", "record"] do coin SIGNED_LIVE
+      let want ← (SampledProofs.Challenger.ChallengerKey.ofJson key).mapError
         fun e => ("coin-key", s!"{NO_PINNED_KEY}: {e}")
-      let got ← (Spot.Challenger.ChallengerKey.ofJson (Spot.getD coins "key")).mapError
+      let got ← (SampledProofs.Challenger.ChallengerKey.ofJson (SampledProofs.getD coins "key")).mapError
         fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
       unless got.toJson.compress == want.toJson.compress do throw ("coin-key", OTHER_KEY)
-      let record := Spot.getD coins "record"
-      if let some why ← port (Spot.Challenger.recordReason want record) then coin why
-      let c := (← port (Spot.Challenger.ChallengerRecord.ofJson record)).commitment
+      let record := SampledProofs.getD coins "record"
+      if let some why ← port (SampledProofs.Challenger.recordReason want record) then coin why
+      let c := (← port (SampledProofs.Challenger.ChallengerRecord.ofJson record)).commitment
       if let some why := PouwWindow.drawEpochReason c then coin why
       pure (.inr c)
     else match key with
@@ -554,7 +554,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
         pure (why, old, o.coin)
     | .inr c => do
         let o ← (LiveOpening.ofJson opening).mapError opened
-        pure ((← port (Spot.Challenger.liveReason c o PouwWindow.DRAW 0 after)), false, o.coin)
+        pure ((← port (SampledProofs.Challenger.liveReason c o PouwWindow.DRAW 0 after)), false, o.coin)
   if let some why := why then coin s!"the draw's {why}"
   let ctx := [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg),
     ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))]

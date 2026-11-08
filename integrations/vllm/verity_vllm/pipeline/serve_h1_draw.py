@@ -26,7 +26,7 @@ def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, s
     `pouw_h1_challenger.drawn_of` samples them), from its commitment ``commits``. ValueError when it opened no sampling coin or
     core refuses the sample."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.spot.challenger import LiveOpening
+    from verity.core.protocols.sampled_proofs.challenger import LiveOpening
 
     draw = commits.get("draw")                              # None: the window committed no sample root
     if draw is None or draw.get("coin") is None:

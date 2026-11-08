@@ -4468,7 +4468,7 @@
    {
     "tags": "verity/flock-circuit (registered reads: header registered, flock-verify --registered)",
     "pr83": "967b8d06",
-    "generator": "stage_registered.py and e2e.sh in the artifact (run r20261002-013624-153f: RegisteredRoPE's cs_table committed once with verity_spot' Registered.commit, its statements written by verity_flock.circuit.write with share_rows and registered, served and proved by flock-live at 967b8d06 with circuit-vectors-967b8d06.patch, --features sha512,seed-injection, CPU)",
+    "generator": "stage_registered.py and e2e.sh in the artifact (run r20261002-013624-153f: RegisteredRoPE's cs_table committed once with verity_sampled_proofs' Registered.commit, its statements written by verity_flock.circuit.write with share_rows and registered, served and proved by flock-live at 967b8d06 with circuit-vectors-967b8d06.patch, --features sha512,seed-injection, CPU)",
     "statement": {
      "circuit": "art:bf70d8eb/stage/circuit.txt",
      "public": "art:bf70d8eb/registered/pub-8.bin",

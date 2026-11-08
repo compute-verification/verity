@@ -57,18 +57,18 @@
     {"file": "Security/Proofs/NetworkCertifier/SampledAuditAccepted.lean", "count": 8},
     {"file": "Security/Proofs/NetworkCertifier/SampledCharge.lean", "count": 2},
     {"file": "Security/Proofs/NetworkCertifier/Witnesses.lean", "count": 1},
-    {"file": "Security/Proofs/Spot/JointPressure.lean", "count": 1},
+    {"file": "Security/Proofs/SampledProofs/JointPressure.lean", "count": 1},
     {"file": "Security/Proofs/Pous/Continuous.lean", "count": 1},
     {"file": "Security/Proofs/Pous/Continuous/Verdict.lean", "count": 1},
     {"file": "Security/Properties/Accounting/Compose.lean", "count": 2},
     {"file": "Security/Properties/Pouw.lean", "count": 1},
     {"file": "Security/Properties/Pouw/Period.lean", "count": 4},
-    {"file": "Security/Properties/Spot/Draw.lean", "count": 3},
+    {"file": "Security/Properties/SampledProofs/Draw.lean", "count": 3},
     {"file": "Security/Properties/Verity/Game.lean", "count": 1},
     {"file": "verity/core/primitives/identity/Identity/Domains.lean", "count": 1},
     {"file": "verity/core/protocols/interface/CoreProtocol/Profile.lean", "count": 1},
     {"file": "verity/core/protocols/network/lean/NetworkCheck/Period.lean", "count": 2},
     {"file": "verity/core/protocols/pous/check/PousCheck/Verdict.lean", "count": 1},
-    {"file": "verity/core/service/spot/Spot/SiteDifftest.lean", "count": 1}
+    {"file": "verity/core/service/sampled_proofs/SampledProofs/SiteDifftest.lean", "count": 1}
   ]
 }

@@ -87,12 +87,12 @@ def passOf (j : Json) : Except String Json := do
   let .str context ← get j "context" | throw "the input's context is not a string"
   refusal (fun how => Json.mkObj [("how", how)])
     (passEpoch (← get j "coins") raw context (← flag j "recorded") (← hexOrNull j "reveal") (← hexOrNull j "committed")
-      (← hexOrNull j "stream") (← hexOrNull j "prover") (Spot.getD j "live"))
+      (← hexOrNull j "stream") (← hexOrNull j "prover") (SampledProofs.getD j "live"))
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j
   refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
-    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (Spot.getD j "key"))
+    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (SampledProofs.getD j "key"))
 
 def saltOf (j : Json) : Except String Json := do
   let f := get j

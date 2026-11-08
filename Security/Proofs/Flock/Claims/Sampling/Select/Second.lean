@@ -3,8 +3,8 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Soundness.ExecDraw
-public import Properties.Spot.Second
-import all Spot.Draw
+public import Properties.SampledProofs.Second
+import all SampledProofs.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import Mathlib.Data.List.GetD
@@ -25,11 +25,11 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 
-open private Spot.Draw.stratum? Spot.Draw.natRanges from Spot.Draw
+open private SampledProofs.Draw.stratum? SampledProofs.Draw.natRanges from SampledProofs.Draw
 
-open Spot
+open SampledProofs
 
-namespace Properties.Spot.SecurityProofs
+namespace Properties.SampledProofs.SecurityProofs
 
 open Lean (Json)
 open Claims.Sampling Finset
@@ -64,17 +64,17 @@ theorem ranges_pair {a b : ℕ} {rs : Array (Int × Int)} (h : Draw.ranges? (Jso
   by_cases hab : a < b <;> simp [hab, int_toJson] at h
   exact h.symm
 
-private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Spot.Draw.natRanges #[(a, b)] = some rs) :
+private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : SampledProofs.Draw.natRanges #[(a, b)] = some rs) :
     rs = #[(a.toNat, b.toNat)] := by
-  unfold Spot.Draw.natRanges at h
+  unfold SampledProofs.Draw.natRanges at h
   by_cases ha : 0 ≤ a <;> simp [ha, Array.mapM_eq_mapM_toList] at h
   exact h.symm
 
 /-- A stratum object of `secondLaw` that parses is `[i·n, (i+1)·n)` sampling `k`. -/
 private theorem stratum_second {n k i r : ℕ} {ws : Flock.Draw.WorkStratum}
-    (h : Spot.Draw.stratum? false (secondObj n k i r) = some ws) :
+    (h : SampledProofs.Draw.stratum? false (secondObj n k i r) = some ws) :
     ws.units = #[(i * n, (i + 1) * n)] ∧ ws.k = k := by
-  unfold Spot.Draw.stratum? at h
+  unfold SampledProofs.Draw.stratum? at h
   simp only [getD_secondObj_template, getD_secondObj_units, getD_secondObj_k, nat_toJson, Bool.false_eq_true,
     ↓reduceIte] at h
   split at h
@@ -230,7 +230,7 @@ theorem strataPa_replicate (n k : ℕ) (W : Finset ℕ) : ∀ (S o : ℕ),
     · simp
 
 /-- **The second stage misses `X` no more often than the replay blocks' escapes**
-(`Properties.Spot.SecondMisses`). -/
+(`Properties.SampledProofs.SecondMisses`). -/
 theorem secondMisses : SecondMisses := by
   intro sample n k L X
   have hev : ∀ src : Fin L → Fin 256, ((Select.selectSecond sample n k (bytesOf src)).isOk = true ∧
@@ -274,4 +274,4 @@ theorem secondMisses : SecondMisses := by
     rw [Nat.succ_mul]
     omega
 
-end Properties.Spot.SecurityProofs
+end Properties.SampledProofs.SecurityProofs

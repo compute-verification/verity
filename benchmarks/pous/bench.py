@@ -259,7 +259,7 @@ class VllmGpu:
         impl_out = out / "impl"
         impl_out.mkdir(parents=True, exist_ok=True)
         paths = [tree / "integrations" / "vllm", tree, tree / "verity" / "core" / "protocols" / "pous",
-                 tree / "verity" / "core" / "protocols" / "spot", tree / "tools" / "research" / "src"]
+                 tree / "verity" / "core" / "protocols" / "sampled_proofs", tree / "tools" / "research" / "src"]
         env = {**os.environ, "PYTHONPATH": ":".join(map(str, paths)), "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
         cmd = [a.python, "-m", "verity_vllm.pipeline.cli", "pous-dense-bench", "--codec", a.scheme, "--out", str(impl_out),
                "--shapes", str(tree / "integrations/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,

@@ -39,7 +39,7 @@ or the empty string where they name none. -/
 noncomputable def labelAt (θ : ByteArray) : String :=
   if h : ∃ l p key, ParamsAt θ p ∧ p.base.challenger = some (key, l) then h.choose else ""
 
-theorem labelAt_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {key} {l : String}
+theorem labelAt_eq {θ : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params} {key} {l : String}
     (hp : ParamsAt θ p) (hc : p.base.challenger = some (key, l)) : labelAt θ = l := by
   have h : ∃ l p key, ParamsAt θ p ∧ p.base.challenger = some (key, l) := ⟨l, p, key, hp, hc⟩
   rw [labelAt, dite_eq_left h]
@@ -50,9 +50,9 @@ theorem labelAt_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {key} {l
 /-- **v2 samples at the parameters' family**: where composite `k` accepted what the prover sent and v2's case in it
 accepts at the sample `dr`, `dr`'s family is the one v2's parameters in what was sent name. -/
 theorem draw_label {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
-    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
-    {p₀ : _root_.Spot.OneStageZk.Params} (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
+    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
+    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
+    {p₀ : _root_.SampledProofs.OneStageZk.Params} (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
     (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) (hθ : ParamsAt s.params p₀) :
     dr.label = labelAt s.params := by
   obtain ⟨hp, -, -, -, hdr, -⟩ := hacc

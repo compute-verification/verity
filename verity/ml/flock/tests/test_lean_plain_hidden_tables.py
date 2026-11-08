@@ -78,7 +78,7 @@ def test_the_fixture_is_a_hidden_output_statement(root):
 def test_the_sessions_coins_are_the_challengers(root):
     """Each session's coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with the
     two sessions' trees swapped, every tree the log shows is still a session's, and the first is refused at its coins."""
-    from verity.core.protocols.spot import challenger as C, remote as R
+    from verity.core.protocols.sampled_proofs import challenger as C, remote as R
 
     trees = C.coin_trees_of(R.log_lines(root / "challenger" / R.RELEASES))
     records = [(s.name, json.loads((s / "session.json").read_text())) for s in _sessions(root)]

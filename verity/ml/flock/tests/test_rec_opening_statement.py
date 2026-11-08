@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.spot.one_stage import registered as RG
+from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock.rec_outer import CLAIM_VALUE

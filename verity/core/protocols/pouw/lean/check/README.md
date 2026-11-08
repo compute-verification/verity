@@ -40,7 +40,7 @@ execution phase of the credit period's close is credited.
 | `PouwCheck.PeriodMain` | `pouw-period`'s entry point |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified execution phase's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the execution phase's pass and its sample (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt execution phase's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
-| `PouwCheck.Rounds` | `salt`, `rounds`: a live execution phase's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the execution phase (`Spot.Challenger.auditedSession`, `sessionNamed`) |
+| `PouwCheck.Rounds` | `salt`, `rounds`: a live execution phase's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the execution phase (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
 | `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each sampled proof block's proof outcome in place of the proof files they verify themselves, until this runs the verifier in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served execution phase's credit bits fixed before its sampling coin, its round log the challenger's, its A trees tied to its round roots, its sampled proof blocks the sampling coin's over its committed circuit's layout, no partial credit over them, its entries and its sampled proof blocks' proofs its own registration's, its B rows the ones its credit period's open signed the weights' root of, its served rows the fixed length its credit period's open committed (`Internal.length`, `committedLength`), and a credit period counted only closed and complete |
@@ -91,9 +91,9 @@ receipt. The coin is a seeded execution phase's `draw` coin, or a live execution
 certified execution phase's). A live execution phase's coins are `{key, record}`, the challenger's signed record and the key it names,
 and its input carries the challenger key the execution phase's parameters pin (`key`): `drawCheck` refuses coins naming another
 key, a live sample with no pin, and seeded coins under a pin (`coin-key`), verifies the record's signature under the
-pinned key (`Spot.Challenger.recordReason`, `challenger.record_reason`) and reads the commitment from it,
+pinned key (`SampledProofs.Challenger.recordReason`, `challenger.record_reason`) and reads the commitment from it,
 refuses a bare commitment, and checks the opening against it
-(`Spot.Challenger.liveReason`). Both read the current coin version and, only
+(`SampledProofs.Challenger.liveReason`). Both read the current coin version and, only
 in a replay of a recorded pass, the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the
 first 32 bytes of `tagged`).
 
@@ -129,7 +129,7 @@ presented are exactly those the auditor's ledger lists in the credit period's cl
 so a credit period with no close or with an execution phase missing, out of order or not its own earns nothing; `periodCredit` also
 requires each of them to have run from a commit the host's pins log records on the auditor's first-parent list of main
 and to prove the circuit the credit period's open committed (its descriptor's SHA-512,
-`Spot.Challenger.creditedSession` over `pinnedSession`, the same bytes `layoutOf` reads) and credits it
+`SampledProofs.Challenger.creditedSession` over `pinnedSession`, the same bytes `layoutOf` reads) and credits it
 (`window`) sampled at the credit period's K, a refused one refusing
 the credit period. Every step that reads the challenger's session (`credited`, `roundsCheck`, `saltCheck`) reads it through
 `pinnedSession`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
@@ -140,7 +140,7 @@ subtrees and its domain's pads. `registration`: each sampled proof block's proof
 (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against and the session's registered finding,
 the Lean verifier's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
-SHA-512 and, for every value but the weights' `…/b/<K>`, the execution phase's open root (`Spot.Registered.domainAt`); and each proof was verified against that descriptor, opened only values the execution phase registers once, each at
+SHA-512 and, for every value but the weights' `…/b/<K>`, the execution phase's open root (`SampledProofs.Registered.domainAt`); and each proof was verified against that descriptor, opened only values the execution phase registers once, each at
 its registered root, and opened its unit's K's A value, the execution phase's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another execution phase or circuit, a proof verified against another registration, and an entry whose root
 is not the one its sessions opened are refused. `length`: the credit period's open commits each request's public max_tokens
 with the public-cap done source (`committedLength`, `{max_tokens, stop}`, stop `fixed`), and the

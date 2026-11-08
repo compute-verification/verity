@@ -20,8 +20,8 @@ name = "flock_verifier"
 path = "../../flock"
 
 [[require]]
-name = "core_spot"
-path = "../../spot"
+name = "core_sampled_proofs"
+path = "../../sampled_proofs"
 
 [[lean_lib]]
 name = "VStarRecursive"

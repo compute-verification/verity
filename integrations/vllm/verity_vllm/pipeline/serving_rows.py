@@ -121,7 +121,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -753,7 +753,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     plan, values = EX.Plan(list(dict.fromkeys(m.template for m in ms)), rows), dict(weight_values or {})
     reg = registered(ms, rows) if weight_values else EX.declarations(plan)
     if tables is not None:
-        from verity.core.protocols.spot.one_stage import registered as G
+        from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
         made = EX.commit_tables(plan, store, weights, arrivals, _slices, tables)
         values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest, module=G)

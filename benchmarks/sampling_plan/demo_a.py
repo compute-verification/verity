@@ -63,7 +63,7 @@ import h200 as H  # noqa: E402
 
 from verity.core.protocols.pouw.window import eps_at  # noqa: E402
 from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
-from verity.core.protocols.spot.optimize import (  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 

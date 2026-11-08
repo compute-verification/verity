@@ -1,6 +1,6 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
 format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
-labels the one-stage audit binds (``verity.core.protocols.spot.one_stage``).
+labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``verity.ml.windows.population``, over the builders core's ``one_stage.partition`` names too), its

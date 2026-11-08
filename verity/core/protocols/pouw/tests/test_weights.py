@@ -11,7 +11,7 @@ import pytest
 
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.audit import chacha20_block, hm96_salt
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import tree_levels

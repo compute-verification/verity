@@ -139,7 +139,7 @@ def cmd_commit(a) -> int:
     if a.program_sha512:
         prog = a.program_sha512
     else:
-        from verity.core.protocols.spot.one_stage import partition as P
+        from verity.core.protocols.sampled_proofs.one_stage import partition as P
         prog = P.program_digest(shape.window([(c["name"], c["n"]) for c in out_calls], m)[0])
     ZY = window_records(com, A, SA, B, SB)
     wa, nc = U.row_words(A, SA), len(out_calls)

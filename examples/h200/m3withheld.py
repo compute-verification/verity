@@ -34,8 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import m3check as CHECK
 import m3coin as COIN
 import m3gate as GATE
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote as R
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs import remote as R
 
 
 def _gate(out: Path, pin: str, utc: str, withholds: bool, name: str) -> GATE.LocalGate:

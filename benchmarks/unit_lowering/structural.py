@@ -135,7 +135,7 @@ def leaf_bind(U, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes
     lanes form): `h1window.leaf_program`'s one-call Program of its wrapper over the lane or combine, a population of one,
     bound as ``{partition: its partition object's digest, program: the descriptor's SHA-512}``."""
     from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
     win = window(U, k, r, c)
     program, query = HW.leaf_program(win, k, unit)
     if P.units(program, query) != 1:
@@ -261,7 +261,7 @@ def check(args) -> int:
     from verity.core.protocols.pouw import credit as Cr
     from verity.core.protocols.pouw import leaf_lanes as LL
     from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
     t0 = time.time()
     win = window(U, args.k, args.r, args.c)
     raw = _descriptor(win)

@@ -15,8 +15,8 @@ from types import SimpleNamespace
 import pytest
 
 import transformer as T
-from verity.core.protocols.spot.one_stage.draw import work_k
-from verity.core.protocols.spot.optimize import Candidate
+from verity.core.protocols.sampled_proofs.one_stage.draw import work_k
+from verity.core.protocols.sampled_proofs.optimize import Candidate
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G

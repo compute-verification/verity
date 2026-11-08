@@ -20,7 +20,7 @@ inner session's public record, and the prover's rows and salts are the same regi
 one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
 the verifier builds its own entry of that value from the recorded ``b || c`` alone (`rec_residuals.commits_entry`), and its
 reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
-``pos >> H``; `HmOut` "Registered reads", `verity.core.protocols.spot.one_stage.registered`). An
+``pos >> H``; `HmOut` "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
 instance is satisfiable only if its private rows climb, by the verifier's ``dirs``, to that registered row, whose ``b || c``
 the ZK server committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
@@ -152,7 +152,7 @@ class TopValue:
         """``tops``: each rep's top at the level (`rec_vstar.tops`); a top two reps share (level 0's ``root_B``) is one run of
         rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit. ``value``: another
         table's name for it (default `top_value_name`)."""
-        from verity.core.protocols.spot.one_stage import registered as G
+        from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
         runs: list[V.Top] = []
         first = {}
@@ -192,7 +192,7 @@ class Chain:
     @classmethod
     def build(cls, program: str, queries: list[V.Query], coefs: dict[tuple[int, int, int], list[int]],
               salts: list[bytes] | None = None) -> "Chain":
-        from verity.core.protocols.spot.one_stage import registered as G
+        from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
         by = {(q.rep, q.level, q.j): q for q in queries}
         order = chain_order(queries)
@@ -218,8 +218,8 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's
     (`partition.population_program`; 0 restages a level recorded before v1). The openings' positions are the ones the
     verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
-    from verity.core.protocols.spot.one_stage import partition as P
-    from verity.core.protocols.spot.one_stage import registered as G
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
     LANES, H, qs = level["LANES"], level["H"], level["queries"]
     n = len(qs)

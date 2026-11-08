@@ -18,7 +18,7 @@ carries a break (`eq_or_break`).
 namespace Properties.Challenger
 
 open Lean (Json)
-open Spot.Challenger
+open SampledProofs.Challenger
 
 local instance lawfulBEqByteArrayBreak : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)

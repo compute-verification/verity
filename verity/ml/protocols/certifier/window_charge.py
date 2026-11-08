@@ -77,7 +77,7 @@ from verity.ml.commitments.gates import sha512 as SG
 from verity.core.protocols.certifier import arith_encode as AE, charge_chain as CC
 from verity.core.protocols.certifier.arith_encode import CW, K_MAX, MAX_TOTAL, RUNS, Tally
 from verity.core.protocols.certifier.head_check import BIT, _part
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 VALUE = "window-charge"
 #: v1's registered caps on a hit (hit units), an order entry's gap and its rank (`v1.TABLE_CAPS`)

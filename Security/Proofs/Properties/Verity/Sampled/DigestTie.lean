@@ -12,7 +12,7 @@ SHA-512 (`SetsUp.spec_dg`, `Live.dg`). So the digests a record's rounds hold, as
 (`Flock.Record.decode`), are `A.dg` of their bytes, wherever v2's check reads the record.
 
 * **v2's statement has hm96-sha512 rows** (`statement_hm96Rows`): v2 hands flock-verify the statement
-  `Spot.OneStageZk.STATEMENT`, and the tags registered under it have them.
+  `SampledProofs.OneStageZk.STATEMENT`, and the tags registered under it have them.
 * **A one-table session of such a statement digests in SHA-512** (`setup_sha512Digests`): flock-verify's one-table
   session keeps the statement's tags, and its record's digests are SHA-512 exactly where they have hm96-sha512 rows
   (`Flock.Stmt.spec`).
@@ -26,10 +26,10 @@ open FlockSoundness.Discharge
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **v2's statement has hm96-sha512 rows**: the tags registered under `Spot.OneStageZk.STATEMENT`. -/
+/-- **v2's statement has hm96-sha512 rows**: the tags registered under `SampledProofs.OneStageZk.STATEMENT`. -/
 theorem statement_hm96Rows {t : Flock.Tags}
-    (h : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some t) : t.hm96Rows = true := by
-  have htg : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+    (h : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some t) : t.hm96Rows = true := by
+  have htg : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   obtain rfl := Option.some.inj (htg.symm.trans h)
   rfl
 

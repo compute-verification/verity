@@ -160,7 +160,7 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
     template (core's digest of its Program), the partition and the program; a round's header names the units it is given; the
     class is the unbound stager's; a round staged as another input set, on the one circuit, binds other frame domains; and
     only a bound stager's round takes indices."""
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.circuits.codec import descriptor_id, program_digest
     from verity.ml.circuits.program import Program
 
@@ -237,7 +237,7 @@ def test_the_stagers_circuit_renders_the_units_netlist_once_and_is_the_uncached_
 
 
 def _bound_toy() -> tuple:
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     args, rows, _kw = _toy(2)
     obj = P.partition(P.mixed_population_program([(TOY, 3), (TOY, 5)]), P.template_instances_query([TOY]))

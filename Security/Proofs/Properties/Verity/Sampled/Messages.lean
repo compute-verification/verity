@@ -22,7 +22,7 @@ square root of a two-continuation finder's success (`Core.Game.TwoRun`), one fin
   frames the prover sends.
 * **Where the messages are fixed** (`Reading`): round `j` at the first frame the prover sends that the reading's
   `round j` picks after the device's log before it, its digest the bytes the frame answers (an opening's `after`, the
-  SHA-512 of the round's message, `Spot.Challenger.linkAfter` and each rep round's `msg_sha512`); the record
+  SHA-512 of the round's message, `SampledProofs.Challenger.linkAfter` and each rep round's `msg_sha512`); the record
   at the play's start, its digest the reading's. Which opening is round `j` and what the evidence reveals for it are
   the rounds piece's, so everything here is at any reading.
 * **The cuts and the finders** (`roundCut`, `recordCut`, `msgFinder`, `recordFinder`): each cut reveals only messages

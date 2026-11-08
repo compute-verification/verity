@@ -43,11 +43,11 @@ build verity/core/protocols/remote remote || exit 3
 build verity/core/protocols/onsite onsite || exit 3
 build verity/core/protocols/pouw/lean/check pouw-check || exit 3
 build verity/core/protocols/pouw/lean/check pouw-period || exit 3
-build verity/core/service/spot sampled-proofs-one-stage-zk || exit 3
+build verity/core/service/sampled_proofs sampled-proofs-one-stage-zk || exit 3
 B=.lake/build/bin
 REMOTE=$TREE/verity/core/protocols/remote/$B/remote ONSITE=$TREE/verity/core/protocols/onsite/$B/onsite
 POUW=$TREE/verity/core/protocols/pouw/lean/check/$B/pouw-check PERIOD=$TREE/verity/core/protocols/pouw/lean/check/$B/pouw-period
-V2=$TREE/verity/core/service/spot/$B/sampled-proofs-one-stage-zk
+V2=$TREE/verity/core/service/sampled_proofs/$B/sampled-proofs-one-stage-zk
 P=$W/cases
 log() { "$@" 2>&1 | tee -a "$OUT/kept_composite.txt"; return "${PIPESTATUS[0]}"; }
 log "$PY" benchmarks/one_stage/pouw_piece.py v1 --serve-run "$SRC/serve" --window "$K" --out "$P/remote/pouw" --exe "$POUW"

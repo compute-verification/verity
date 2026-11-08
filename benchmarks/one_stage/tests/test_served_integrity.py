@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

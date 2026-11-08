@@ -34,7 +34,7 @@ namespace Properties.Pouw.LiveSalt.Coin
 
 open Lean (Json)
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be32_size)
-open Spot.Challenger (LiveCommitment LiveOpening liveReason liveDomain liveLeaf taggedSha512 familiesJson total
+open SampledProofs.Challenger (LiveCommitment LiveOpening liveReason liveDomain liveLeaf taggedSha512 familiesJson total
   BINDING)
 
 /-! ## Collisions -/
@@ -439,7 +439,7 @@ end Properties.Pouw.LiveSalt.Coin
 namespace Properties.Pouw.LiveSalt
 
 open Properties.NetworkCertifier.Bytes (hash_size)
-open Spot.Challenger (LiveCommitment LiveOpening liveReason)
+open SampledProofs.Challenger (LiveCommitment LiveOpening liveReason)
 open Coin (reason_ok hashedBy_eq same_commitment climb_eq coin_eq collides_mono top_mem leafMsg)
 
 /-- `LiveCoinBinding` of two commitments with one root. -/

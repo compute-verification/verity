@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Trees
 /-!
 # A `--zk` session's record counts the coins its tree's log shows opened
 
-`Spot.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where each round
+`SampledProofs.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where each round
 the record gives coins of is one the release log shows opened of its tree with as many coins as the record counts there
 (`session_counted`): its link's points, 16 bytes a coin, as the session stream's round 0 (`o.n == points.size / 16`),
 and each stream's round its `n` (`o.n == n`), every stream of the record counted (`streams_counted`,
@@ -18,7 +18,7 @@ and each stream's round its `n` (`o.n == n`), every stream of the record counted
 namespace Verity.Sampled.Trees
 
 open Lean (Json)
-open Spot Spot.Challenger
+open SampledProofs SampledProofs.Challenger
 
 /-- **The count a record gives round `k` of its stream `stream`**: the session stream's round 0 is its link's points,
 16 bytes a coin (`Verity.Sampled.recordRound`'s); each other round gives its `n`. -/

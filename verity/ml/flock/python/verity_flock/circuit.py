@@ -1114,7 +1114,7 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
 
     ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the rows whose table rows are rows of a
     registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3 path to the
-    registered root (``verity.core.protocols.spot.one_stage.registered``, committed in the port's row format: its
+    registered root (``verity.core.protocols.sampled_proofs.one_stage.registered``, committed in the port's row format: its
     ``schema``); the header's ``registered``. A port
     is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding

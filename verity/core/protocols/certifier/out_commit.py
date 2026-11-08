@@ -55,8 +55,8 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey,
                                                          Signer, SignerRefused, _text, _u)
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 OUT_TAG = "verity-network-certifier/out/v1"
 RECORD = "verity-network-certifier/out-record/v1"

@@ -10,7 +10,7 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: registration.sh N..." >&2; exit 2; }
-L=$PWD/verity/core/service/spot
+L=$PWD/verity/core/service/sampled_proofs
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
@@ -22,7 +22,7 @@ name = "registration_time"
 defaultTargets = ["registration-time"]
 
 [[require]]
-name = "core_spot"
+name = "core_sampled_proofs"
 path = "$L"
 
 [[lean_exe]]

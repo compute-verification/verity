@@ -156,7 +156,7 @@ def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_ans
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
 
 
-def test_remote_composes_spot_and_pouw_alone_its_other_legs_dropped() -> None:
+def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() -> None:
     """Remote's product: sampled proofs and PoUW accepted on the block's server, no onsite leg run, compose with the onsite
     legs named dropped, neither missing nor in the error sum, and are undecided until the remote check answers; as
     onsite's the same legs miss four. The remote check's answer decides it, and an onsite answer is refused. A record of

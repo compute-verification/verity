@@ -29,12 +29,12 @@ import all Lean.Data.Json.Basic
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open Spot
+open SampledProofs
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
-open private Spot.Draw.STRATUM_KEYS Spot.Draw.lawKeys Spot.Draw.stratum?
-  from Spot.Draw
+open private SampledProofs.Draw.STRATUM_KEYS SampledProofs.Draw.lawKeys SampledProofs.Draw.stratum?
+  from SampledProofs.Draw
 
-namespace Properties.Spot.SecurityProofs
+namespace Properties.SampledProofs.SecurityProofs
 
 open Lean (Json)
 open Claims.Sampling
@@ -295,8 +295,8 @@ well-founded sorts and canonical JSON, its `repeat` and its map are their fuelle
 theorem secondMisses_honest : (Select.selectSecond #[0] 2 1 ⟨Array.replicate 82 0⟩).isOk = true := by
   unfold Select.selectSecond Draw.drawFirstRead Draw.drawUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
     Draw.flockLaw Draw.strataProblem Flock.Draw.strataProblem Draw.checkDraw Draw.checkDrawFull
-    Draw.strataMessage Draw.sameLaw Draw.lawOf Spot.Draw.lawKeys Spot.Draw.stratum?
-    Spot.Draw.STRATUM_KEYS keys? sortStrings jeq
+    Draw.strataMessage Draw.sameLaw Draw.lawOf SampledProofs.Draw.lawKeys SampledProofs.Draw.stratum?
+    SampledProofs.Draw.STRATUM_KEYS keys? sortStrings jeq
   simp only [onWith_fuel _ _ _ 2, canon_fuel 16, qsort_fuel, subset_fn]
   decide +kernel
 
@@ -327,4 +327,4 @@ theorem secondMisses_nontrivial : ¬ Claims.Pr (fun src : Fin 0 → Fin 256 =>
   rw [h1, Finset.prod_congr rfl fun i hi => by rw [hc i hi], he]
   norm_num
 
-end Properties.Spot.SecurityProofs
+end Properties.SampledProofs.SecurityProofs

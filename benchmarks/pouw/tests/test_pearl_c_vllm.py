@@ -52,7 +52,7 @@ from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
 from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
-from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
 # the work sampling design and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name

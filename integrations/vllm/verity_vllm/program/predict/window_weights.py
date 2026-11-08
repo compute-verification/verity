@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.protocols.pouw.h1 import registered as H1R

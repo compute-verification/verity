@@ -49,7 +49,7 @@ import verity_difftest as D
 from verity_difftest import canonical
 
 from verity.core.deploy import config as K
-from verity.core.protocols.spot import parties as SPP
+from verity.core.protocols.sampled_proofs import parties as SPP
 from verity.ml.circuits.types import Array, Value
 
 PROTOCOLS = Path(__file__).resolve().parents[2]
@@ -155,7 +155,7 @@ def _with_form(x, br: str | None, side: str):
 
 def form_case(a: dict, br: str | None = None) -> dict:
     """An audit (`{"params", "record", "evidence"}`) as sampled proofs' case under the form ``one-stage`` (one-stage v2's,
-    `Spot.OneStageZk`, or v1's, which the form refuses), with `br`, one of `FORM_BREAKS`, when given."""
+    `SampledProofs.OneStageZk`, or v1's, which the form refuses), with `br`, one of `FORM_BREAKS`, when given."""
     return OS._case({"params": _with_form(a["params"], br, "params"), "record": a["record"],
                      "evidence": _with_form(a["evidence"], br, "evidence")})
 
@@ -532,7 +532,7 @@ def product_case(product: R.Product, cases: list[dict]) -> dict:
 
 
 @pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
-def test_spot_refuses_one_stage_v1(name, request):
+def test_sampled_proofs_refuses_one_stage_v1(name, request):
     """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, on an
     empty sample at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
     and v1's evidence under v2's params at the evidence. Remote and onsite, every other subprotocol aimed at acceptance

@@ -9,7 +9,7 @@ public import Proofs.Core.Circuit
 /-!
 # The target, proved: sampled proofs at the recursive configuration
 
-`spotRecursive` proves the target's bound at each strategy from the property `acc_of_accepts` states
+`sampledProofsRecursive` proves the target's bound at each strategy from the property `acc_of_accepts` states
 (`AccOfAccepts`, the statement of `acc_of_accepts` at the deployment), at `acc_of_accepts`.
 
 The proof, at a strategy `σ` whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the
@@ -225,8 +225,8 @@ open Claims (Ex Pr Ex_nonneg Ex_mono Ex_div Pr_nonneg Pr_mono Pr_le_one Pr_false
 blobs that a statement names, that show a run of the deployed recursive verifier with the component's staged rows, and
 whose records hold the run's live coins, the statement is dense and the run accepts. -/
 def AccOfAccepts (q : Dep) : Prop :=
-  ∀ (p : VStar.Recursive.Params) (c : Spot.OneStage.Commitment) (e : VStar.Recursive.Evidence)
-    (bs : Core.Blobs) (pub : Spot.OneStage.Public) (prof : Core.Integrity),
+  ∀ (p : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment) (e : VStar.Recursive.Evidence)
+    (bs : Core.Blobs) (pub : SampledProofs.OneStage.Public) (prof : Core.Integrity),
     VStar.Recursive.checkBlobs p c e bs = .accept pub prof → ∀ x, Names p e bs x →
     ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (q.D.V.k x) → Coin),
       Shows q.Bd.IVStar q.st x e.proofs bs (Claims.run FlockDeploy.sha512 P q.D.V x ω r).seen →
@@ -711,7 +711,7 @@ It takes these hypotheses:
 The proof, at a strategy whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the commit
 phase's check (elsewhere no play is accepted) and the claim fails (elsewhere the event is empty), is `ex_verdict_le`
 through the coupling's `prob_le`, at `acc_of_accepts`' property. -/
-theorem spotRecursive (q : Dep)
+theorem sampledProofsRecursive (q : Dep)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)
     (hdecI : Claims.Recursion.decOK q.Bd.deploy q.decI)

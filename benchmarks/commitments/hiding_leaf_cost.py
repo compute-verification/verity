@@ -42,7 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.spot.optimize import SHA512_ANDS
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
 from verity_vllm.commit import scheme

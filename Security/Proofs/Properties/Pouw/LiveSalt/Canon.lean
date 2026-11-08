@@ -2,7 +2,7 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Properties.Pouw.LiveSalt
-public import Spot.Challenger
+public import SampledProofs.Challenger
 public import Std.Data.String.ToNat
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.Int.Repr
@@ -29,7 +29,7 @@ open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.B
 namespace Properties.Pouw.LiveSalt.Canon
 
 open Lean (Json)
-open Spot.Challenger (familiesJson)
+open SampledProofs.Challenger (familiesJson)
 
 /-! ## Sorting three keys in order -/
 

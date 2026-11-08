@@ -21,7 +21,7 @@ from verity.core.protocols.certifier.grid import Reason, Record, Status
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
                                                                                  request, run)
 from verity.core.protocols.certifier.warden import cell
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 T, R, S = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots
 

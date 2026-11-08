@@ -29,7 +29,7 @@ from verity_difftest import protocol as P
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
-from verity.core.protocols.spot.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent

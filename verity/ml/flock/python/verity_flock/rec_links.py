@@ -91,7 +91,7 @@ def words(row: bytes) -> list[int]:
 def register(program: str, links: Sequence[LinkEntry], salts: Sequence[bytes] | None = None):
     """The table registered as `VALUE` at the link part's program SHA-512 ``program`` (`one_stage.registered.Registered`;
     ``salts``, one a row, default fresh); its root and row count are what goes public."""
-    from verity.core.protocols.spot.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     return RG.Registered.commit(program, VALUE, [words(r) for r in table(links)], salts)
 

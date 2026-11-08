@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
 

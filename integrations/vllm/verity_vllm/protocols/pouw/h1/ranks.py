@@ -44,7 +44,7 @@ from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.spot.challenger import LiveRecord
+from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks
