@@ -11,8 +11,10 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check`) on the
-second-stage sessions' statements over one and two templates' interiors, and for the `run` piece (a registration's whole
-run, `Run.run`) those references in a `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
+second-stage sessions' statements over one and two templates' interiors, for the `fits` piece v2's refusal of a length
+a session's statement can't hold (`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece
+(a registration's whole run, `Run.run`) those references in a `Stream`'s order.
+The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
 Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `X = 16` refuses, and `SHARED`, whose
@@ -991,6 +993,33 @@ def slots(j):
     proved = set(DR.proved(out["draw"]))
     blocks = [b for c in classes for s in c for b in s]
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+
+
+_LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+def _unhex(x) -> bytes:
+    if not (isinstance(x, str) and _LOWER_HEX.fullmatch(x)):
+        raise D.Reject("not lowercase hex of whole bytes")
+    return bytes.fromhex(x)
+
+
+def fits(j):
+    """`OneStageZk.fitsWhy` and `drawFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
+    the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and draw null
+    for none."""
+    j = _json(j)
+    if not (isinstance(j, dict) and _nat(j.get("limit"))):
+        raise D.Reject("limit is not a natural number")
+    circuit, public = _unhex(j.get("circuit")), _unhex(j.get("public"))
+    ts = j.get("tables")
+    if not (isinstance(ts, list) and all(isinstance(t, list) and len(t) == 2 and all(isinstance(x, str) for x in t)
+                                         for t in ts)):
+        raise D.Reject("tables is not a list of names and their hex")
+    tables = [(name, _unhex(b)) for name, b in ts]
+    program = None if j.get("program") is None else _unhex(j["program"])
+    return {"inputs": PF.fits_why(j["limit"], circuit, public, tables, program, j.get("partition"), j.get("registered")),
+            "draw": PF.draw_fits_why(j["limit"], j.get("draw"))}
 
 
 def _public_units(public) -> list:
@@ -3077,6 +3106,17 @@ TEMPLATE_CIRCUITS = D.Port(PIECES, "template_circuits", template_circuits,
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
+_FITS_HEX = st.binary(max_size=6).map(bytes.hex)
+_FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
+                          lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3),
+                          max_leaves=5)
+FITS = D.Port(PIECES, "fits", fits, st.one_of(
+    st.builds(lambda limit, c, p, ts, program, part, reg, draw: {
+        "circuit": c, "draw": draw, "limit": limit, "partition": part, "program": program, "public": p, "registered": reg,
+        "tables": ts}, st.integers(0, 24), _FITS_HEX, _FITS_HEX, st.lists(st.tuples(TEXT, _FITS_HEX).map(list), max_size=3),
+        st.none() | _FITS_HEX, _FITS_JSON, _FITS_JSON, _FITS_JSON),
+    JSON), package=PACKAGE)
+
 
 @st.composite
 def file_populations(draw) -> dict:
@@ -4297,7 +4337,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
-              (REPLAY_LINKS, 300), (TEMPLATE_CIRCUITS, 300)]
+              (REPLAY_LINKS, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
