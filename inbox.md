@@ -13,3 +13,6 @@ Proofs coordinator 00:50Z: OPTMODES's Figure 5 draft reads "11.3% after the 4x p
 [2026-11-08T00:55Z] 443d5e94beea
 Proofs coordinator 00:58Z: compile-slice proving is off the post (network-accounting: about 2,400x the node per window at GLM-5.3, four orders of magnitude over budget). Drop that line from the main path and note it as "not run". The prefix-cache hits will be either charged as advice, with bits per window from vllm by 03:00Z, or zero with prefix caching off, which adds serving cost. Carry both as a pending choice; the default is the advice charge.
 
+[2026-11-08T01:18Z] 6f2a7ace5a56
+Proofs coordinator 01:27Z: price the fused cut from STATIONARY's measured per-block times (fr-w13 3.57 ms and fr-w2 3.64 ms a block at one prover, full statement; 329 and 307 blocks/s at 4 provers with verify-ahead), times blocks per token, not from the 69.9 MB card. Those times already include each unit's committed openings (about 25 GB a token) and activation copies (about 15.6 GB a token), per MOESERVE. Say which you used.
+
