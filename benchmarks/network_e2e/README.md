@@ -1,10 +1,10 @@
 # network_e2e
 
-Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
+Network certification end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
 
 - N2's verdict of record on every execution phase, and the link's network verdict;
-- head checks proved with C-Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`
+- head checks proved with Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`
   (`benchmarks/network_traces/n2_zk.py`): every honest execution phase at both ends, and the egress ends of the tampered
   and extra runs;
 - the negatives, each refused: `late`, `extra` and a tampered head (the honest run's execution phase 0 egress head, one
@@ -19,7 +19,7 @@ reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodin
 ## The one command
 
 `verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs as a job on a CPU node, whose command
-and resources are in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall
+and resources are in `run.sh`'s header: it builds Flock's `flock-circuit`, the Lean `flock-verify`, the Lean ZK server
 and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the
 report in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. The job publishes the
 report with the run's outputs in the evidence store, where results are read.
@@ -54,12 +54,12 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   verdict, with late, extra and drop as its negatives (`e2e.CLAIM_ADVICE`). There a negative is refused only when the
   check names its own violation (`e2e.OWN_CODE`).
 - `--endpoint-run SERVE_DIR` is a `verity-vllm serve-openai` run's `out/serve`. Its records (`chain.ENDPOINT`) are
-  copied into `DIR/endpoint`, and `verity-vllm advice` writes one I1 v0 advice for each closed Commit window, bound to
+  copied into `DIR/endpoint`, and `verity-vllm advice` writes one I1 v0 advice for each closed Commit period, bound to
   the honest run and rebuilt from its certified I/O (`chain.served_advice`). `--advice FILE` (with `--serving-config`)
   gives an advice instead.
 - `--prove-path DIR` adopts a `prove_path.py audit` run's output. Each arm's committed advice must be the report's
-  advice of its Commit window by content (`chain.held_to`), and only a prove path bound to these runs counts in the OK.
-  `--prove-path-registered FILE` says who registered each audited Commit window's advice and where its serving record
+  advice of its Commit period by content (`chain.held_to`), and only a prove path bound to these runs counts in the OK.
+  `--prove-path-registered FILE` says who registered each audited Commit period's advice and where its serving record
   is; when it was registered is read off the record and the endpoint's trace (`chain.serve_record`, `chain.closes`).
 - The registry of negatives (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless
   `--no-negatives`; each row that ran must be refused by the code it names. On the advice profile the I/O tie
@@ -126,7 +126,7 @@ It does not cover:
 - **A real link, or an auditor's host.** The rehearsal runs over loopback, its check plays the ZK server and the
   challenger in one process, and it publishes witness (the records and the certifier's salts) so that its check can be
   replayed. Off the gate the certifier is a process on whatever host ran the rehearsal. Against an endpoint on that
-  host's loopback, that host is the prover's node, not an auditor host; the report's `where` says which. `n2_zk` runs the
+  host's loopback, that host is the developer's node, not an auditor host; the report's `where` says which. `n2_zk` runs the
   prover, the ZK server and the verifier on one node.
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut.
 

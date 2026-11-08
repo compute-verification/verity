@@ -1,5 +1,5 @@
-"""serve-openai's PoUW H1 arm's draw (`serve_h1`): how many tile units a window Program holds (`units`), which proof
-blocks a closed window's draw coin draws (`drawn_units`), and what each opens of the server's Commit, as the draw-gated
+"""serve-openai's PoUW H1 arm's sample (`serve_h1`): how many tile units a window Program holds (`units`), which proof
+blocks a closed window's sampling coin samples (`drawn_units`), and what each opens of the server's Commit, as the draw-gated
 release keeps them (`drawn_reads`)."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def units(shapes: Any, rows: int, steps: int) -> int:
     """The tile units of the window Program `served.declared` builds over ``shapes`` (each ``(n, K)``) at T ``rows`` and S
     ``steps``: the members of its batches, one a call (S × the linears), so the descriptor, the declare and the digest
     grow with the calls, not the units."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
 
     from verity_vllm.protocols.pouw import h1 as PH
 
@@ -21,14 +21,14 @@ def units(shapes: Any, rows: int, steps: int) -> int:
 
 
 def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, stream: str) -> list[int]:
-    """The proof blocks a closed window's draw coin draws at K ``k`` (`credit.drawn` over the window Program's
-    ``layout``, `credit.layout_of`'s, on stream ``stream``, registration the draw root and receipt its receipts, as
-    `pouw_h1_challenger.drawn_of` draws them), from its commitment ``commits``. ValueError when it opened no draw coin or
-    core refuses the draw."""
+    """The proof blocks a closed window's sampling coin samples at K ``k`` (`credit.drawn` over the window Program's
+    ``layout``, `credit.layout_of`'s, on stream ``stream``, registration the sample root and receipt its receipts, as
+    `pouw_h1_challenger.drawn_of` samples them), from its commitment ``commits``. ValueError when it opened no sampling coin or
+    core refuses the sample."""
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.sampled_proofs.challenger import LiveOpening
 
-    draw = commits.get("draw")                              # None: the window committed no draw root
+    draw = commits.get("draw")                              # None: the window committed no sample root
     if draw is None or draw.get("coin") is None:
         raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
     got, why = CR.drawn(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
@@ -45,7 +45,7 @@ def drawn_reads(tap: Any, layout: Mapping[str, Any], drawn: Sequence[int],
     of its call, I = t // (n/C) its row block (`h1window.table_reads`), which are the Commit's x_q (K bytes a row) and s_a
     (``s_a_bytes`` a row) rows of the call's site at the engine step its step maps to, as H1's tap ``tap`` registered them
     (``where``), under the member names the Commit acquired them by (``acquired``), cut to the rows it acquired; a call of
-    an empty step opens none. KeyError on a drawn call the Commit registered no rows of."""
+    an empty step opens none. KeyError on a sampled call the Commit registered no rows of."""
     (r, cw), m = layout["tile"], int(layout["m"])
     ks = {name: (int(k), int(n)) for name, k, n in layout["linears"]}
     firsts, at = [0], 0

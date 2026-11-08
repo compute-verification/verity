@@ -3,7 +3,6 @@ module
 public import Definitions.Pouw.PearlC.Defs
 public import Definitions.Pouw.Basic.Prob
 public import Definitions.Pouw.Basic.QTree
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Pearl-C's γ-gap game and accounting (trusted)
@@ -82,7 +81,7 @@ its domain rules on committed activations and on each weight row, and its costs.
   the transcript's claimed ticket or useful words.
 - `capOK H s U u act`: the unit's replayed debit is within the cap. It is part of `Correct`: a unit above the cap is
   rejected, so it is in neither TT_OUT's credit sum nor `Gγ`'s win sum. `Correct` is the game's idealized check of every
-  unit; a verifier that checks drawn tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GγSampled`).
+  unit; a verifier that checks sampled tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GγSampled`).
 - `Wref`: the honest reference's cost of the unit, read from the layout (excluding hash calls; the model's own clean
   quantizer is outside the unit, so neither program is charged for it). -/
 structure Protocol (Q R S : Type) where
@@ -217,7 +216,7 @@ def debitOf (p : Params) (c : Costs) (d : Debit) : ℚ :=
 
 /-- The honest reference's work: the credited work plus the forming that depends on the activations alone. Neither this
 nor `creditOf` has a weight-side term (`B̃·F_A`, `P_B`, the forming of B̃), whether that work runs per call or once per
-weight and epoch, so a verifier's `W_ref` and its draw's tickets must use exactly `wrefOf`. -/
+weight and epoch, so a verifier's `W_ref` and its sample's tickets must use exactly `wrefOf`. -/
 def wrefOf (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s + (c.qa : ℚ) * s.m * s.k
 
 /-- The credited work when forming is not credited at all. -/
@@ -236,14 +235,14 @@ def PearlCAccounting (P : Protocol Q R S) (p : Params) (c : Costs) (ρ : ℚ) : 
 /-- Pearl-C's shape domain: positive dimensions, a whole number of promotion groups, `k ≤ 2^16`, and promotion every
 4 atoms, which confines freezing to one group (P1). What freezing remains is debited per unit, and the cap on the debit is
 in `Correct`, since it depends on the activations and the noise (the aligned-spike census). The
-noise law, the seeds and the chain live in the protocol's reference functions.
+noise distribution, the seeds and the chain live in the protocol's reference functions.
 
 **The channel split** is part of the model's own FP8 path, adopted as `Costs.adopted` adopts Pearl's α.
 - **The set.** Each linear layer ℓ has a fixed set `S_ℓ` of input channels, at most 1% of its k. They are computed by the
   model's BF16 side GEMM with PoUW on and off, so they are the model's work (glue), outside the unit and outside `W_ref`.
 - **The unit's k channels** are the kept channels, padded with zero channels to a whole number of promotion groups.
 - **How `S_ℓ` is chosen.** Once per model, before any salt or request, by one pinned implementation of the greedy rule:
-  `split_channels` in `benchmarks/pouw/pearlc_headline.py` (at `f6f05bd8`), with its batch of 4 channels per
+  `split_channels` in `f6f05bd8:benchmarks/pouw/pearlc_headline.py` (git's `REV:PATH`), with its batch of 4 channels per
   step, its tie-break (equal offence counts go to the lower channel index) and its budget of `⌊k/100⌋` channels, which S
   never exceeds. It moves the input channels that offend the most failing rows until every row of the calibration
   activations and of the weights passes Π's rules, or the budget is spent. The input is the committed calibration data: a

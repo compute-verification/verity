@@ -13,7 +13,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
-  warden's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
+  network certifier's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
   link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
   4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); and ``test``
@@ -26,16 +26,16 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and
   its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
-* **A warden's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
-  the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule (w63's:
-  ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads ``deployment.json`` (the
-  warden's public key, the session, the schedule and its digest) and each link's registration of each execution phase of
-  the group in ``cells.jsonl``, its head's signature verified under that key; the prover's rows are the records under
-  ``cells.salts``, held to that head. Each is refused by name where it doesn't hold, as is a schedule the class doesn't
-  serve and a response that isn't id-form.
+* **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory
+  (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
+  (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
+  ``deployment.json`` (the network certifier's public key, the session, the schedule and its digest) and each link's
+  registration of each execution phase of the group in ``cells.jsonl``, its head's signature verified under that key;
+  the prover's rows are the records under ``cells.salts``, held to that head. Each is refused by name where it doesn't
+  hold, as is a schedule the class doesn't serve and a response that isn't id-form.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
   link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
-* **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
+* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.ml.commitments.advice`, each
   tree's root in the registration): ``state``, G·T leaves, leaf t S_{t−1} and leaf 0 the empty state, the rows a
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog``, the slot entries (`slot_entries`),
@@ -49,7 +49,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   the anchored Programs' `SlotEntry_v1` units, whose outputs the slot entries are. Its entries, read bit included, are
   the prover's: the stand-in copies its input. The ``prog`` tree is committed under the binding of the block's o0
   frame domain (`block_binding`, over the block's statement's input set `block_set`, bound to the session and the
-  group's ingress heads), so its root is the o0 frame root C-Flock commits under the same salts, and `stage` refuses a
+  group's ingress heads), so its root is the o0 frame root Flock commits under the same salts, and `stage` refuses a
   block whose o0 frame root and domain aren't the tree's: the registration's ``SlotEntry_v1{…}/c0/o0`` (its ports
   named as one-stage names a template's first chunk's, `entries_port`) and the honest round's ``scan/prog`` are one
   root and domain, the tie `NetworkCheck.Period`'s rows form checks (`progTied`, `wired`). Its registration also names
@@ -61,7 +61,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
-  unit, whose o1 has no leaf to open), every unit drawn by the verifier's Lean. `program` refuses a Program whose
+  unit, whose o1 has no leaf to open), every unit sampled by the verifier's Lean. `program` refuses a Program whose
   one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
@@ -78,9 +78,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
-  group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
-  W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
-  certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
+  group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
+  for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
+  certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o0 is the
   scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
   slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
@@ -100,28 +100,28 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for that slot's entry at U's
   boundary, its read bit cleared (no Program reads the request): every registered read holds, since the read bit
   enters the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens
-  to 0, so the link-window is refused. Every unit (the one) is drawn. A prover that sets the bit with n 0 and no
+  to 0, so the link-window is refused. Every unit (the one) is sampled. A prover that sets the bit with n 0 and no
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
-* **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
+* **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
   rehearsal's live coins), each template's stratum its share and at least one unit; only the sampled proof blocks are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
   with probability δ), its charge terms (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain
-  and tampered rounds draw too and are refused all the same: Lean holds every table row of a registered port, drawn or
+  and tampered rounds sample too and are refused all the same: Lean holds every table row of a registered port, sampled or
   not, an output port's table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
-  K drawn as prove_path's records audit draws (`a5_coins`): one session of the auditor's challenger on the group's root
+  K sampled as prove_path's records audit samples (`a5_coins`): one session of the auditor's challenger on the group's root
   (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
   (`spec_of`) on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the
-  registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the session has
+  registration's digest, and its select samples once (Lean's `Select.select` on the bytes read). Once the session has
   ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
   the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
   this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's
   challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
-  ``--challenger-key``. The gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations
+  ``--challenger-key``. The gate opens a root once, ever: a run's group is sampled once (the synthetic run's registrations
   carry fresh salts, so each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own
-  coins: one session serves one draw, and their refusal is Lean's registered reads, whatever the coins.
+  coins: one session serves one sample, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
   entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
@@ -166,7 +166,8 @@ from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
-from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
+from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS  # noqa: E402
+from verity.core.protocols.certifier import io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
@@ -183,10 +184,10 @@ _spec.loader.exec_module(traffic)
 
 
 class Setup(NamedTuple):
-    """A class the scan is proved at, the warden's schedule it serves and the synthetic run's traffic: request i's
-    prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]`` and is
-    answered ``responses[i]``, and the warden serves ``windows`` execution phases, every connection ended by the last's
-    end; the chain round swaps S_A and S_{A+1}."""
+    """A class the scan is proved at, the network certifier's schedule it serves and the synthetic run's traffic:
+    request i's prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]``
+    and is answered ``responses[i]``, and the network certifier serves ``windows`` execution phases, every connection
+    ended by the last's end; the chain round swaps S_A and S_{A+1}."""
 
     name: str
     cls: IS.Class
@@ -239,7 +240,7 @@ BLOCK = ("block",)
 #: the templates whose o0 is a committed row the verifier never opens (the slot entries'), every other's its public word
 ROWS_O0 = frozenset(BLOCK)
 #: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
-#: compression before its last block at any length, as C-Flock's statement needs of one row (`verity_flock.circuit.
+#: compression before its last block at any length, as Flock's statement needs of one row (`verity_flock.circuit.
 #: compose`); at the test class every block row is shorter than a block (NE = 176 bits)
 ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
@@ -250,7 +251,7 @@ ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chai
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0")}
 #: each round Program's directory, by its templates
 PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block"}
-#: C-Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which the block's o0 rows are
+#: Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which the block's o0 rows are
 #: committed and so the scan's `prog` tree (`block_binding`; `stage` refuses a block whose o0 root isn't the tree's)
 FRAME_BINDING = "verity/flock-circuit/binding/v2"
 VALUES = {k: f"verity/certifier/scan-{k}/v1" for k in ("state", "prog", "view")}
@@ -431,9 +432,9 @@ def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | 
 # --- the run --------------------------------------------------------------------------------------------------------
 
 def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
-    """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the warden
-    and its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back by the
-    verifier."""
+    """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the network
+    certifier and its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back
+    by the verifier."""
     setup.cls.serves(setup.params)
     reqs = [_request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses,
@@ -465,8 +466,8 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A warden run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/`` (the gate's
-    `warden-rehearse --scan`)."""
+    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
+    (the gate's `warden-rehearse --scan`)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
             return d / name
@@ -476,7 +477,8 @@ def _found(run: Path, name: str) -> Path:
 def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
     """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
-    each execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the warden's
+    each execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the
+    network certifier's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the slot entries' ids) are each connection's ids
     as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
@@ -663,8 +665,8 @@ def header_refusal(ports: dict, entries: dict) -> str | None:
 
 def registered_file(mr: SimpleNamespace) -> dict:
     """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
-    verdict's `registered` reports its roots): each warden port at the head `warden_rows.check_registration` read
-    under the deployment's key, never a root of the prover's."""
+    verdict's `registered` reports its roots): each network certifier port at the head `warden_rows.check_registration`
+    read under the deployment's key, never a root of the prover's."""
     return WR.reads_file(mr.ports)
 
 
@@ -798,8 +800,8 @@ def wired(members) -> list[str]:
 def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
          start: int = 0) -> SimpleNamespace:
     """The run (`link`'s, of `run` when given) and every round's members as the host reads them (no lowering, no
-    proof): what the test holds. A sampled draw (`draw`) changes no round: each is refused by Lean's registered reads,
-    which hold every table row, drawn or not."""
+    proof): what the test holds. A sampled sample (`draw`) changes no round: each is refused by Lean's registered reads,
+    which hold every table row, sampled or not."""
     at = link(out, run, setup, group, start)
     got = {}
     for name, (templates, outcome) in rounds_of(at).items():
@@ -1075,11 +1077,11 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
 def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: dict, stream: S.Stream, draw: S.Draw,
                   rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
                   verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The honest draw's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
+    """The honest sample's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
     its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
     its window `window_root`) held to the Python's, the audit failing ``coins`` where
     `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, and the evidence for another window)
-    as its own stream's outcome on the honest draw's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
+    as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
     the Lean's run refuses at its select. -> (the audit record, None where the stream refused or holds the outcome; the
     negatives; the coins' record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
@@ -1130,10 +1132,11 @@ def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
 def warden_roots(members) -> list[dict]:
-    """The registration's ``rows/<direction>/<w>`` roots: each warden row registration its members' warden ports read
-    (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the warden registered
-    them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A period check
-    (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and domain.
+    """The registration's ``rows/<direction>/<w>`` roots: each network certifier row registration its members' network
+    certifier ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
+    network certifier registered them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A
+    period check (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
+    domain.
 
     A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
     the audit takes a root port named as a value for a registered value of the record (`audit.session_registered`),
@@ -1158,14 +1161,14 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
+    warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
     on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
-    on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
+    on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's sampled proof blocks proved --zk behind the ZK server and
     held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
-    entries', `ROWS_O0`) opened under the salt the prover sends. A member with no unit drawn runs no session. Member j's
+    entries', `ROWS_O0`) opened under the salt the prover sends. A member with no unit sampled runs no session. Member j's
     session listens on ``port + j``, or with ``port`` 0 on a port the OS picks free. Writes what the verifier received
     under ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per
-    drawn unit; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`)."""
+    sampled proof block; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`)."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1365,7 +1368,7 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) 
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
     `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming
+    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0); else a reject naming
     ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
@@ -1653,7 +1656,7 @@ def main(argv=None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
-                                        "flags (serve, rehearse): the warden runs --warden-run reads")
+                                        "flags (serve, rehearse): the network certifier runs --warden-run reads")
     s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
     a = ap.parse_args(argv)
     if a.command == "schedule":

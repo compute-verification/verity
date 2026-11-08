@@ -20,7 +20,7 @@ through a few run-level facts. Their files sit below `DeployVK`, so their forms 
   through `keep` and the checks (`nextK_decide_sha512`);
 * an accepted run of `VK keep` decides within its own log (`accK_within`), opens a column only as a Merkle opening
   (`plainK_opening_raw`), so a self-clash among its columns collides (`plainK_selfClash_tied`); a statement it accepts
-  is in scope (`accK_inScope`) and sets up at a draw (`accK_draw`);
+  is in scope (`accK_inScope`) and sets up at a sample (`accK_draw`);
 * the simulation the plain mixture reads (`PlainSimRunK`, `PlainSimK`).
 -/
 
@@ -52,10 +52,6 @@ theorem deployPlainK_true (rel : Readable.Parsed → Readable.Relation) :
     deployPlainK (fun _ => true) rel = deployPlainE rel :=
   congrArg (fun W => ({ deployPlain rel with V := W } : Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace))
     VK_true
-
-theorem deployPlainTrimK_id (rel : Readable.Parsed → Readable.Relation) :
-    deployPlainTrimK id rel = deployPlainTrim rel :=
-  congrArg (fun D => Claims.Flock.Deploy.mapCols D trimCol) (deployPlainK_id rel)
 
 /-- **`VK keep`'s decision at SHA-512**: it accepts exactly when the verdict read through `keep` accepts the record and
 proof files at the statement's setup and the custody checks pass (`next_decide_sha512`'s form). -/
@@ -163,7 +159,7 @@ theorem plainK_selfClash_tied (keep : Bool → Bool) {Ω : Type} {P : Claims.Pro
   cases hlink'
   exact tiedColl_of_append_self (tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e]))
 
-/-! ## Scope and draw -/
+/-! ## Scope and sample -/
 
 /-- **The verdict read through `keep` accepts only served tables** (`servedE`'s proof, at `keep`). -/
 theorem servedK (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array Flock.Stmt}
@@ -229,7 +225,7 @@ theorem nextK_acc_draw (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims
     obtain ⟨d, hd⟩ := checks_draw hc
     exact ⟨s, spec, sts, d, act_decide ha, hd⟩
 
-/-- **A statement some run of `VK keep` accepts at SHA-512 sets up at a draw** (`acc_draw` at `keep`). -/
+/-- **A statement some run of `VK keep` accepts at SHA-512 sets up at a sample** (`acc_draw` at `keep`). -/
 theorem accK_draw (keep : Bool → Bool) {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
@@ -261,7 +257,7 @@ def PlainSimRunK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : 
             (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f →
         liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r' = viewOf 1 mPts spec link c₁ f
 
-/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the law of uniform coins,
+/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the sampling design of uniform coins,
 and `P'` simulates `P` on them (`PlainSimRun`). -/
 def PlainSimK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]

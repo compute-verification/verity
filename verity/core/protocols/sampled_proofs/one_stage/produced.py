@@ -9,7 +9,7 @@ most 16 bits, and a partial is 8,320 bits at K = 4096. It stays hidden: the stat
 hiding salts, and only their check bits leave.
 
 * **The domain** (`domain`) is a registered value's (`registered.domain`) with ``"produced": D`` in its binding, D the
-  digest of the registration record whose draw the values follow (`registration.digest`): a produced tree opens under no
+  digest of the registration record whose sample the values follow (`registration.digest`): a produced tree opens under no
   other registration's domain, so a leaf's partials are refused in any other leaf's, window's or prover's session, and a
   registered value's root (whose binding never has ``produced``) opens under none.
 * **The record** (`record`, `FORMAT`), fixed after the sample and before any session that reads the values or flips the

@@ -1,9 +1,49 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Json.Live
+public import Proofs.Flock.Claims.Complete.Json.Session
 public import Proofs.Flock.Claims.Complete.Json.Stmt
-public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 public import Proofs.Flock.Claims.Complete.Json.Text
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Data.UInt
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.Complete.Encode
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # B's record checks at the honest run
@@ -17,8 +57,8 @@ verifier's parser reads back of the honest prover's printer `printJ` is proved, 
   table's extra claims, records a round, each of at most `65536` coins (`RepOk`); it holds at `Out64`
   (`Replay.proverOk`).
 
-What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable draw that decodes, and the
-statement's draw), holds at every good case (`stmtOk`, `Stmt`).
+What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable sample that decodes, and the
+statement's sample), holds at every good case (`stmtOk`, `Stmt`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
 first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
@@ -209,7 +249,7 @@ theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   | arr hs _ ih => exact (jsonEquiv_arr_iff _ _).2 ⟨hs, ih⟩
   | obj hm hn hk _ ih => exact (jsonEquiv_obj_iff hm hn).2 ⟨hk, ih⟩
 
-/-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
+/-- **The record's sample is the statement's**: the goal `DrawMatches`. -/
 theorem drawMatches_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     DrawMatches H rel := by
   intro o

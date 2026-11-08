@@ -36,19 +36,19 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     assumption (`Proofs.Properties.Verity.Recursive.Assumptions`), is `live-verifier`'s content at the recursive
     session (`Assumptions.Zk.RecordCustodyZKJ`).
   - `live-verifier` is admissible here only until the component reads the session's coins through the
-    coin server's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
+    challenger's live-coin part's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
 * **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
   proofs at the recursive configuration, in `Vocab.Target k .sampled`'s form (`Properties.Verity.Game`) with the
   recursive component's verdict (`RecVerdict`).
   - The game is causal (R5): the parameters, the registered circuit file and the commitment come first; then the
     device's releases, each after the bytes it answers; and the evidence last.
   - The claim reads one fixed extractor's transcript (R4′, `Vocab.extract`): `Dep.extract`, at each bit of each gate
-    the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the draws and the accepted
-    runs that draw the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
+    the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the samples and the accepted
+    runs that sample the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
   - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
     the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
-    finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session
-    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus the
+    finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: Flock's at each session
+    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the sample's miss plus the
     knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-174.95}, t' · 2^{-λ})` at a statement at the
     deployment's tables, `t' · 2^{-λ}` elsewhere) plus the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a
     defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
@@ -56,12 +56,12 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
-  session's projection) with the draw's miss, the deployment's reading of a witness (`hread`) and its collision from
+  session's projection) with the sample's miss, the deployment's reading of a witness (`hread`) and its collision from
   two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
   states it with `RecursiveKS`, the call bounds and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
-here rather than in `Properties` until C-Flock's spec is extracted.
+here rather than in `Properties` until Flock's spec is extracted.
 -/
 
 @[expose] public section
@@ -82,7 +82,7 @@ noncomputable def boundAt (wE w : Msg → ℝ) :
     rowInDeployed DeployedR.finalR w
 
 /-- **The deployed recursive record** that `RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w
-(deployedB b) aux nOf hd recRest` is stated over: `recBoundAt` at the deployed brings, with the coin server's record
+(deployedB b) aux nOf hd recRest` is stated over: `recBoundAt` at the deployed brings, with the challenger's live-coin part's record
 `recTr aux nOf hd recRest`, at V\*'s layout `DeployedR.layR OpenRows.elemR`, whose inner view runs `IVStar`. -/
 noncomputable def recordAt (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) :
@@ -90,7 +90,7 @@ noncomputable def recordAt (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ 
   (recBoundAt _root_.Flock.Readable.relation { deployedB b with tr := recTr aux nOf hd recRest }
     (DeployedR.layR OpenRows.elemR)).record (boundAt wE w).IVStar
 
-/-- The staged inputs of `recordAt`'s verifier: the coin server's record `recTr aux nOf hd recRest` read as
+/-- The staged inputs of `recordAt`'s verifier: the challenger's live-coin part's record `recTr aux nOf hd recRest` read as
 `Stage.ofMsg` reads it. -/
 noncomputable def stageAt (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Stage :=
@@ -109,7 +109,7 @@ def repName (w : String) : String := s!"{w.replace "/" "."}.bin"
 
 /-- **The blobs show the run.** In the run's view `v` at statement `x`, the recursive session's files that the compiled
 component reads are:
-* the coin server's transcript, its record of the inner rounds (`Stage.transcript`, `recTr`);
+* the challenger's live-coin part's transcript, its record of the inner rounds (`Stage.transcript`, `recTr`);
 * the inner session's record and each part's public file, off the staging message (`Stage.record`, `Stage.pub`);
 * and, for each part `s`, session `s`'s link message, its first, which the record's live session is checked against
   (`FlockDeploy.linkOf`); and the record and the rep files of session `s`'s last message, whose statement is session
@@ -158,7 +158,7 @@ theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω
 
 /-- **What the compiled component refuses, as the model states it**: Flock's own checks on the inner
 statement (`InnerOkAt`, the compiled `innerOk`) and files too long for their length words (its `fits` at `2^56`):
-`x` with each part's public file, the inner session's record, the coin server's transcript and V\*'s staged rows, at the inner rounds
+`x` with each part's public file, the inner session's record, the challenger's live-coin part's transcript and V\*'s staged rows, at the inner rounds
 `ms`. -/
 structure Refusals (x : Msg) (st : Stage) (ms : List (Msg × Out)) : Prop where
   innerOk : InnerOkAt x
@@ -238,12 +238,11 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
   obtain rfl : q.base.circuit = circuitB := Except.ok.inj (hP.circuit.symm.trans hcB)
   obtain rfl : st.pub x ms j = pubB := Except.ok.inj ((get_what hSp).symm.trans hpB)
   obtain ⟨hregC, hregB⟩ := regC_of_part hPR
-  have hhm' : (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-      (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
+  have hhm' : (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
   have hdraw := hP.draw tags0 recordB record hT hrecB hrec
   rw [if_pos hhm', hrd] at hdraw
   have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT hplain
-    hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
+    hregC hbind hI.circuit hI.pub hI.statement hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
     hI.registration hI.links hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
   obtain ⟨-, hbset, hregs, -, hfull⟩ := baseSetup_of_build (tags0 := tags0) (circuitB := q.base.circuit)
     (pubB := st.pub x ms j) (draw := some d) (partition := some po.partition) (program := some po.program)
@@ -482,27 +481,26 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
      RefusalsOf.transcript_of_compiled hacc hshow.1,
      RefusalsOf.rows_of_compiled hacc hrows⟩
 
-/-- **Sampled proofs' one-stage form is v1**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
-accepts, the evidence is one-stage too and v1's live check (`SampledProofs.OneStage.protocol`'s, `checkLive`) accepts the
-same commitment and evidence with the same public output and profile, whatever the blobs. So what is proved of v1's
-acceptance (`Properties.Challenger.oneStage_check_of_accept`, `acceptMeans`, the sampled proofs bound) holds of the
-composed component's one-stage branch. -/
-theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+/-- **Sampled proofs' one-stage form is v2**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
+accepts, the evidence is one-stage too and v2 (`SampledProofs.OneStageZk.checkBlobs`) accepts the same commitment,
+evidence and blobs with the same public output and profile. So what is proved of v2's acceptance (`acceptMeans` at the
+coins it read, the sampled proofs bound) holds of the composed component's one-stage branch. -/
+theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
     {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStage.protocol.check p₀ c e₀ = .accept pub prof := by
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
   cases e with
   | inl e₀ => exact ⟨e₀, rfl, h⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
-theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStage.Params}
+theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params}
     {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
     {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.protocol.checkBlobs
       (show VStar.Recursive.Sampled.protocol.Params from Sum.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStage.protocol.check p₀ c e₀ = .accept pub prof :=
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
   sampled_oneStage_accepts h
 
 /-! ## The target -/
@@ -542,7 +540,7 @@ theorem recVerdict_verdict (V : Vocab d α) (k : Verity.Registration.Composite) 
   refine ⟨hreg, hrec, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
   cases k <;> rfl
 
-/-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the coin server's record), with the
+/-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the challenger's live-coin part's record), with the
 inner decoder `decI` and the outer decoder `decO` that fix its extractor. -/
 structure Dep where
   wE : Msg → ℝ
@@ -597,13 +595,13 @@ end Dep
 def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
 
 /-- **The recursive session inside the causal game** at composite `k`, `θ`, `F`, `c` and the strategy `σ`: the
-coupling of the device log (`Vocab.rounds`, `Vocab.coinsRead`) with the session.
-* The device's releases before the session, its draw among them, are `ξ`, uniform on `Ξ`.
+coupling of the device log (`Vocab.families`, `Vocab.coinsRead`) with the session.
+* The device's releases before the session, its sample among them, are `ξ`, uniform on `Ξ`.
 * At `ξ` the strategy plays the recursive session at the statement `x ξ` as the prover `P ξ`, against the session's
   live coins. `P ξ`'s tape in `Ω` holds every other release.
 * `out ξ s` is the play's outcome at `ξ`, at the tape and the session's coins `s`. The play's outcome under the
   device's uniform releases is distributed so (`prob_le`).
-* `drawOf ξ` is the units `ξ` draws.
+* `drawOf ξ` is the units `ξ` samples.
 * Wherever sampled proofs' component accepts its case in what the prover sent `k`, at the recursive form, the
   parameters and evidence it decodes name `x ξ`, and the blobs sent show the run and its staged rows are the
   component's (`names_shows`).
@@ -646,8 +644,8 @@ variable (q : Dep) (V : Vocab d α) {k : Verity.Registration.Composite} {θ c : 
 abbrev Sample (S : SessionIn V q k θ F c σ) (ξ : S.Ξ) : Type :=
   S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) × q.E.C (S.x ξ)
 
-/-- **The weight of bit `i` of gate `g` reading `bit`** at the session `S`: the probability, over the draw and a run with
-the extractor's seed, that the run accepts, `g` is a wire of a unit `ξ` draws, and the extractor returns a witness in
+/-- **The weight of bit `i` of gate `g` reading `bit`** at the session `S`: the probability, over the sample and a run with
+the extractor's seed, that the run accepts, `g` is a wire of a unit `ξ` samples, and the extractor returns a witness in
 the recursive relation whose reading (`readX`) has `bit` there. -/
 noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) : ℝ :=
@@ -659,14 +657,14 @@ noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims
 
 /-- **The recursive configuration's extracted transcript** at the session `S` (R4′, `XplurZC`'s plurality at the
 recursive session): each bit of each gate is the value the extractor's witnesses read there most often, over the
-draws and the accepted runs that draw the gate's unit (`false` on a tie). It is one transcript per strategy, a
+samples and the accepted runs that sample the gate's unit (`false` on a tie). It is one transcript per strategy, a
 construction applied to `S`, never chosen per strategy. -/
 noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) :
     (V.circuitOf θ F).Transcript := fun g =>
   BitVec.ofNat ((V.circuitOf θ F).w g) (∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
     if q.weight V S readX g i false < q.weight V S readX g i true then 2 ^ i else 0)
 
-/-- **The binding finder at the draws `ξ₁` and `ξ₂`**: it plays the session twice, at `ξ₁` and at `ξ₂`, with
+/-- **The binding finder at the samples `ξ₁` and `ξ₂`**: it plays the session twice, at `ξ₁` and at `ξ₂`, with
 independent tapes, coins and seeds, runs the extractor on both, and outputs `collOf`'s pair from the two witnesses.
 Its cost is the two runs' SHA-512 calls, the two extractions' and `collOf`'s `dColl`. -/
 noncomputable def bindAt (Se : SessionIn V q k θ F c σ)
@@ -686,7 +684,7 @@ noncomputable def bindAt (Se : SessionIn V q k θ F c σ)
       (q.E.eval FlockDeploy.sha512 (Se.P ξ₂) (Se.x ξ₂) s.2.1 s.2.2.1 s.2.2.2).2.1 +
       (q.E.eval FlockDeploy.sha512 (Se.P ξ₂) (Se.x ξ₂) s.2.1 s.2.2.1 s.2.2.2).2.2 + dColl
 
-/-- **C-Flock's SHA-512 premises at one session's prover**, asked only of the finders `BitsLin2On` builds from it, at
+/-- **Flock's SHA-512 premises at one session's prover**, asked only of the finders `BitsLin2On` builds from it, at
 the inner and setup call bounds `n` and `v`: `StrictBirthday` at `B`, and `ExpectedCR` at the inner, device,
 forked-coin and first-coin finders at their charged costs. -/
 def SessionCR (n v : ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) : Prop :=
@@ -711,7 +709,7 @@ def SessionCR (n v : ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : 
 Every finder budget below is a defined function of it and of public counts. -/
 def tCost (_ : SessionIn V q k θ F c σ) : ℕ := max 1 (V.cost θ F c σ)
 
-/-- **The binding finder's budget at the draws `ξ₁`, `ξ₂`**, a defined function of the strategy's cost `t'`: two runs,
+/-- **The binding finder's budget at the samples `ξ₁`, `ξ₂`**, a defined function of the strategy's cost `t'`: two runs,
 and two extractions of `runs` reruns each in expectation (every rerun a run of the session, so at most `t'` calls),
 plus each extraction's rerun count and `collOf`'s `dColl`: `(2 + r₁ + r₂) · t' + r₁ + r₂ + dColl`, the expected calls
 `ecr/sha-512` reads. -/
@@ -719,7 +717,7 @@ noncomputable def bindBudget (S : SessionIn V q k θ F c σ) (dColl : ℕ) (ξ�
   (2 + q.runs (S.x ξ₁) + q.runs (S.x ξ₂)) * q.tCost V S + q.runs (S.x ξ₁) + q.runs (S.x ξ₂) + dColl
 
 /-- **`FinderCR`: the named SHA-512 premises at the strategy, asked only of the finders built from it.** Each session
-prover's finders meet C-Flock's premises (`SessionCR`, at the inner and setup call bounds `nI` and `vS`; `B`'s runs are
+prover's finders meet Flock's premises (`SessionCR`, at the inner and setup call bounds `nI` and `vS`; `B`'s runs are
 the session's, at most `t'` calls each). Each binding finder (`bindAt`) outputs a SHA-512 collision with probability at
 most its budget over `2^256`: `ecr/sha-512` (`Claims.ExpectedCR`) asked at `bindBudget`, a defined function of the
 strategy's cost parameter `t' = tCost` (`Vocab.cost`), as `qF` and `qS` are of `t' τ`. Quantitative, so `⊤` is the
@@ -732,7 +730,7 @@ def FinderCR (S : SessionIn V q k θ F c σ)
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
 
 open Classical in
-/-- **The knowledge-soundness term at a draw's statement `x`**, from `t'`: `BitsLin2On`'s `t' · 2^{-λ}`, and where `x`
+/-- **The knowledge-soundness term at a sample's statement `x`**, from `t'`: `BitsLin2On`'s `t' · 2^{-λ}`, and where `x`
 is at the deployment's tables (`OneTable`) the least of it and route 2C's split bound `κ + t' · ε` (`BitsLin2KOn`), with
 `κ = 2^{-167.7}` once a session and `ε = 2^{-174.95}` once per SHA-512 call (`RecDeploy.kappa_eps_oneTable_cap`, at the
 call caps every accepted statement meets). -/
@@ -740,10 +738,10 @@ noncomputable def ksAt (S : SessionIn V q k θ F c σ) (lam : ℝ) (x : Msg) : �
   if q.OneTable x then min (2 ^ (-(167.7 : ℝ)) + q.tCost V S * 2 ^ (-(174.95 : ℝ))) (q.tCost V S * 2 ^ (-lam))
   else q.tCost V S * 2 ^ (-lam)
 
-/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus the
-knowledge-soundness term averaged over the draws (`ksAt`), plus the binding term
+/-- **The error's number at the strategy**, from `t'` and public parameters: the sample's miss `δs`, plus the
+knowledge-soundness term averaged over the samples (`ksAt`), plus the binding term
 `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its units and the budget averaged over
-pairs of draws. -/
+pairs of samples. -/
 noncomputable def delta (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (δs + Claims.Ex (fun ξ => q.ksAt V S lam (S.x ξ)) +
     Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
@@ -766,13 +764,13 @@ theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ)
-    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty, #[]⟩)
+    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], .empty, #[]⟩)
     (hcr : q.FinderCR V S collOf dColl nI vS) (hlt : q.delta V S dColl δs lam < 1) :
     ¬ Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
       q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.rounds θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
+    prob_play_eq_one (V.families θ) (D := V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
       (fun _ _ => ⟨trivial, hbad⟩) σ
   rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)

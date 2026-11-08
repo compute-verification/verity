@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.TS
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) from its pieces

@@ -9,12 +9,15 @@ from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Refs, Strided
 
 
 def _scattered(p: Refs) -> bool:
-    """A `Strided` whose runs are O(count) leaves: per-leaf iteration (`inner != 1` with a non-unit inner stride) or
-    single-leaf rows (`inner == 1` with a non-unit outer stride). A transposed weight read is the common case: at
-    GLM-5.3 scale one such argument is >1e6 runs, so substituting it run by run never finishes."""
+    """A `Strided` whose runs are O(count) leaves or O(count / inner) rows: per-leaf iteration (`inner != 1` with a non-unit
+    inner stride), single-leaf rows (`inner == 1` with a non-unit outer stride) or one row repeated (`outer_stride == 0`,
+    more than one row). A transposed weight read is the common case: at GLM-5.3 scale one such argument is >1e6 runs, so
+    substituting it run by run never finishes; an embedding's backward reads its gradient row once per vocabulary row."""
     if not isinstance(p, Strided) or (p.outer_stride == 0 and p.inner_stride == 0):
         return False
-    return p.outer_stride not in (0, 1) if p.inner == 1 else p.inner_stride != 1
+    if p.inner == 1:
+        return p.outer_stride not in (0, 1)
+    return p.inner_stride != 1 or (p.outer_stride == 0 and p.count > p.inner)
 
 
 def _rebase(p: Strided, env: dict[tuple[str, int], Any]) -> Strided | None:
@@ -34,7 +37,7 @@ def _rebase(p: Strided, env: dict[tuple[str, int], Any]) -> Strided | None:
 
 def _substitute_scattered(refs, env: dict[tuple[str, int], Any]):
     """Partwise substitution when some part of `refs` is a scattered `Strided` that rebases in O(1); None otherwise
-    (every other shape takes the run path below, whose output is bit-identical to before). A `Concat` cut from a
+    (every other shape takes the run path below). A `Concat` cut from a
     `PartLog` keeps the memoised run path: its parts are attention prefixes, never scattered."""
     if isinstance(refs, Concat):
         if refs.prefix is not None:

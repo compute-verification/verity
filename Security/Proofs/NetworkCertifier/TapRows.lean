@@ -2,18 +2,57 @@ module
 
 public import Definitions.NetworkCertifier.TapRows
 public import Proofs.NetworkCertifier.SampledLeakReg
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Binding
+import Proofs.NetworkCertifier.SampledAuditAccepted
+import Proofs.NetworkCertifier.SampledCharge
+import Proofs.NetworkCertifier.SampledLeak
 
 /-!
 # The leak bound at the network certifier's rows
 
 The network certifier registers its records at the transfer gates (`TapOpens`). On the sampling relation (`R δ`), every
-proof block outside the faulty set is correct on the trace's committed values, so the trace opens every transfer gate
+proof block outside the incorrect set is correct on the trace's committed values, so the trace opens every transfer gate
 there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network
 certifier, unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves
 unopened (`fill`): a correct proof block stays correct (`correct_mono`, it reads only opened values), and the filled
-trace carries the network certifier's records at every transfer gate (`carries_fill`), the faulty proof blocks'
+trace carries the network certifier's records at every transfer gate (`carries_fill`), the incorrect proof blocks'
 included, since the trace's own value there, where it has one, is the network certifier's. So `accepted_of` gives
-`Accepted` with the faulty proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
+`Accepted` with the incorrect proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
 over `faultySets`). A held gate's input value is never read, any other input in a proof block is opened, and no egress
 gate depends on an input in none (an unread input, `Prog.Unread`), so the inputs move back to the trace's own values
 (`valOver_congr_held`): the network certifier's records are among the sequences `AccSeqsSampled` counts at the trace's

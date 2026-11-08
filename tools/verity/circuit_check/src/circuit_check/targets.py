@@ -237,11 +237,25 @@ def _record(text: str) -> Any:
     return _RECORDS[text]
 
 
+def _lift(fam: str) -> None:
+    """Register ``Lifted[<composite>]_v2``, the lift a body that calls the composite makes (`lifted.lift_composite`), where no body
+    has yet: unregistered, `word.specialization` takes it for a lifted primitive.  An id whose composite is lifted otherwise (by hand,
+    `lifted.register_hand_lift`, or at another version) names no Definition, and is refused by name."""
+    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+    from verity.ml.definitions.registry import lifted as L
+
+    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fam)
+    inner = REGISTRY.defs.get(m[1]) if m else None
+    if isinstance(inner, CompositeDefinition) and (made := L.lift_composite(inner).id) != fam:
+        raise LookupError(f"{fam} names no Definition: {inner.id}'s lift is {made}")
+
+
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
-    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else the suite's target of
-    that id: a Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers,
-    or one whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
+    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way; a composite's lift, `_lift`, the
+    one a body calling it binds), or else the suite's target of that id: a Definition that only tracing the catalog's roots
+    registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its digest, such as
+    `gf2k.GfResiduals`'s schema."""
     from verity.ml.definitions import word as W
 
     load_registries()
@@ -250,6 +264,7 @@ def definition(spec: str) -> Any:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
     statics = {k: _static(v) for k, v in _split(body).items()} if body else {}
+    _lift(fam)
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
@@ -264,7 +279,7 @@ def definition(spec: str) -> Any:
 
 def subcircuit(spec: str) -> tuple[Any, list[dict]]:
     """The subcircuit ``spec`` names and the instance-statics bindings it is checked at."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     load_registries()
     tid, _, rest = spec.partition(":")
@@ -291,7 +306,7 @@ def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
 def kind_of(spec: str) -> str:
     from pathlib import Path
 
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     try:
         if Path(spec).exists():
@@ -385,7 +400,7 @@ def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: lis
 def templates() -> list[tuple[str, Any, list[dict]]]:
     """(label, subcircuit, instance statics) for every template in the catalogue: its ``TEMPLATE_PARAMS`` (`template_params`),
     else its example."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     load_registries()
     params_of = template_params()
@@ -436,6 +451,59 @@ def table_probe(fn: Any) -> Any:
     """The `vectors.TableProbe` of the registered table ``fn`` reads (`TABLE_PROBES`), or None."""
     make = TABLE_PROBES.get(fn.id)
     return None if make is None else make()
+
+
+#: the parameters over `checks.Options.input_budget` leaves that are operands, not a registered table, by the id of their
+#: Definition without statics: each takes the vectors' edge and random words like any other parameter, sampled one vector at a
+#: time and read lazily (`checks._wide_correspondence`, `vectors.wide_words`); a wide parameter in neither this nor
+#: `TABLE_PROBES` fails ``correspondence/unprobed-table``
+LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
+    # weights: a linear's or a GEMM's [N][K], an MoE launch's every expert's (with Marlin's per-32 group scales), and the
+    # vocabulary's rows
+    "CublasSplitKGemmF32Out_v1": ("w",),
+    "DeepGemmFp8Linear_v1": ("w",),
+    "Embedding_v1": ("table",),
+    "EmbeddingShard_v1": ("table",),
+    "FlashInferFp8Linear_v1": ("w",),
+    "GemmF32Out_v1": ("w",),
+    "Gemm_v2": ("w",),
+    "MarlinMoeExpertGemm_v1": ("wq", "ws"),
+    "MarlinMoeExpertGemmW_v1": ("wq", "ws"),
+    "MoeExpertFp8Gemm_v1": ("w",),
+    "MoeExpertFp8GemmW_v1": ("w",),
+    "ScaledMmFp8BlockGrouped_v1": ("w",),
+    # activations: every rank's partial sums
+    "AllReduceMultimem_v1": ("parts",),
+}
+
+
+#: the index values, by the id of a Definition without statics and a function of its statics, at which a `LAZY_OPERANDS`
+#: Definition reads its operand's first and last rows: one more vector each, the index parameters at these values and every
+#: other parameter at random words, since an edge index (0, 1, the sign bit, ...) lies outside a shard or past an expert
+#: count, and no vector would read the rows between
+OPERAND_PROBES: dict[str, Callable[[dict], list[dict[str, int]]]] = {
+    "Embedding_v1": lambda S: [{"tok": 0}, {"tok": S["V"] - 1}],
+    "EmbeddingShard_v1": lambda S: [{"tok": S["START"]}, {"tok": S["START"] + S["VS"] - 1}],
+    "MarlinMoeExpertGemm_v1": lambda S: [{"e": S["E"] - 1}],
+    "MarlinMoeExpertGemmW_v1": lambda S: [{"e": S["E"] - 1}],
+    "MoeExpertFp8Gemm_v1": lambda S: [{"e": S["E"] - 1}],
+    "MoeExpertFp8GemmW_v1": lambda S: [{"e": S["E"] - 1}],
+}
+
+
+def lazy_operands(fn: Any) -> tuple[str, ...]:
+    """The names of ``fn``'s parameters `LAZY_OPERANDS` lists."""
+    from verity.ml.circuits.evaluation.reference import key_of
+
+    return LAZY_OPERANDS.get(key_of(fn), ())
+
+
+def operand_probes(fn: Any) -> list[dict[str, int]]:
+    """``fn``'s `OPERAND_PROBES` at its statics."""
+    from verity.ml.circuits.evaluation.reference import key_of, statics_of
+
+    make = OPERAND_PROBES.get(key_of(fn))
+    return [] if make is None else make(statics_of(fn))
 
 
 #: roots the catalog could not build: (label, error); the suite requires none
@@ -675,7 +743,7 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
     """The Boolean version's family of each word Call family made on demand, by its id (`verity.ml.definitions.boolean.
-    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`).  No module registers such a family's members ahead,
+    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
     from verity.ml.definitions.boolean import made_on_demand
@@ -921,7 +989,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     subcircuit, instance statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose
     members here are all over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a
     smaller one and it has no pin."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     from . import sidecars as SC
 

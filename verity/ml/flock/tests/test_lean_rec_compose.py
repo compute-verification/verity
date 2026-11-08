@@ -32,8 +32,7 @@ INNER = {"format": "verity/rec-inner/v2", "m": 25, "k_log": 22, "claims": 8, "re
 ROWS = b'{"ports":{"acc0":{}}}'
 FILES = {"inner_circuit": b"circuit", "inner_public": b"public", "inner_partition": b"{}", "inner_session": b"session",
          "inner_transcript": b"transcript", "inner_registration": b"registration",
-         "inner_statement": "verity/flock-circuit+plain-leaves", "inner_statement_coins": "os",
-         "inner_tables": [("range8", b"table")], "inner_draw": b"draw"}
+         "inner_statement": "verity/flock-circuit+plain-leaves", "inner_tables": [("range8", b"table")], "inner_draw": b"draw"}
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +84,7 @@ def _cases(n: int, inner: bytes) -> dict[str, list[tuple[str, str]]]:
     h = _honest(n, inner)
     v = lambda j, **kw: RC.verdict(j, kw.pop("rows", ROWS), kw.pop("shared", _shared(inner)), kw.pop("key", key(j)), **kw)  # noqa: E731
     other = {k: (b"other" if isinstance(x, bytes) else [("range8", b"other")] if k == "inner_tables" else
-                 "seed" if k == "inner_statement_coins" else "verity/flock-circuit") for k, x in FILES.items()}
+                 "verity/flock-circuit") for k, x in FILES.items()}
     cases = {"honest": h}
     for k in ("rec_inner", *FILES, "inner_coins"):
         sh = _shared(inner, **{k: other.get(k, b"other")}) if k != "rec_inner" else RC.shared(**{**FILES, "rec_inner": b"x"})

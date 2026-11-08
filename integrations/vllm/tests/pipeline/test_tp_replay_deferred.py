@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.research_outputs import KEPT_APART
@@ -76,7 +76,6 @@ def test_a_tp_ranks_bundle_is_its_own_and_never_published():
     assert RB.path("/o", 1, rank=3).name.startswith(KEPT_APART) and TPR.result_path("/o", 1, 3).name == "sampled_replay_p1_rank3.json"
 
 
-CHUNK = 16
 RNG = np.random.default_rng(11)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
          "model.layers.0.self_attn.k_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
@@ -96,7 +95,7 @@ def _rank_shards(rank):
 
 @pytest.fixture
 def rank_weights(tmp_path):
-    from tests.pipeline.test_cpu_replay import _shard
+    from tests.pipeline.test_cpu_replay import _shard, weights_tree
 
     ckd = tmp_path / "ck"
     ckd.mkdir()
@@ -104,14 +103,7 @@ def rank_weights(tmp_path):
     _shard(ckd / "model.safetensors", PARTS)
 
     def tree(rank):
-        names, roots = [], []
-        for name, a in _rank_shards(rank).items():
-            raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
-            names.append([name, "bfloat16", list(a.shape), int(raw.size)])
-            roots.append(CPU.tensor_root(raw, CHUNK))
-        geo = bytes(32)
-        return {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
-                "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+        return weights_tree({name: ("bfloat16", a) for name, a in _rank_shards(rank).items()}) | {"extra": {}}
 
     return ckd, tree
 
@@ -148,6 +140,7 @@ def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_a
     requantised kv_b_proj (`fp8_ue8m0`).  Composed as the Build's roles name them (its Program fields less the index's wrapper prefix),
     every registered tensor of the rank opens against the committed root; without the roles the four requantised fields differ from
     the checkpoint's words and the absorbed two have no checkpoint tensor (GLM-5.3 B1 TP8's rank 0: 978 and 156 of 2275)."""
+    from tests.pipeline.test_cpu_replay import weights_tree
     from verity_vllm.check import fp8_ue8m0 as FU
 
     G, NH, DN, DV, L, Q, rank = 128, 2, 128, 128, 256, 256, 1
@@ -181,14 +174,7 @@ def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_a
               f"{A}.W_UK_T": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UK_T")),
               f"{A}.W_UV": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UV")),
               "model.norm.weight": ("bfloat16", ckt["model.norm.weight"][1])}
-    names, roots = [], []
-    for name, (dt, a) in served.items():
-        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
-        names.append([name, dt, list(a.shape), int(raw.size)])
-        roots.append(CPU.tensor_root(raw, CHUNK))
-    geo = bytes(32)
-    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
-            "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+    tree = weights_tree(served) | {"extra": {}}
 
     pre = "inner.model."
     wr = {f"{pre}{A}.q_b_proj.weight": {"role": "fp8_w_requant_ue8m0"}, f"{pre}{A}.q_b_proj.weight_scale_inv": {"role": "fp8_ws_requant_ue8m0"},
@@ -213,6 +199,8 @@ def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_a
     hc_attn_fn_broadcast the sum of hc_attn_fn's four streams in f32 (`derived_weights`).  Composed by the Build's roles, both open
     against the committed root; without them the sink is no shard of the checkpoint's and the broadcast has no checkpoint tensor
     (DeepSeek-V4-Pro B1 TP8's rank 0: every layer's sink unopened, so its 2,033 sampled FlashMlaDecode picks not evaluated)."""
+    from tests.pipeline.test_cpu_replay import weights_tree
+
     HEADS, NH, M, H, rank = 8, 16, 6, 32, 1
     rng = np.random.default_rng(9)
     sink = rng.standard_normal(HEADS).astype(np.float32)
@@ -228,14 +216,7 @@ def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_a
     streams = fn.reshape(M, 4, H)
     broadcast = ((np.float32(0) + streams[:, 0] + streams[:, 1]) + streams[:, 2]) + streams[:, 3]
     served = {f"{L0}.attn.attn_sink": padded, f"{L0}.hc_attn_fn": fn, f"{L0}.hc_attn_fn_broadcast": broadcast}
-    names, roots = [], []
-    for name, a in served.items():
-        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
-        names.append([name, "float32", list(a.shape), int(raw.size)])
-        roots.append(CPU.tensor_root(raw, CHUNK))
-    geo = bytes(32)
-    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
-            "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+    tree = weights_tree({name: ("float32", a) for name, a in served.items()}) | {"extra": {}}
 
     pre = "inner.model."
     wr = {f"{pre}{L0}.attn.attn_sink": {"role": "dsv4.attn_sink", "NH": NH}, f"{pre}{L0}.hc_attn_fn_broadcast": {"role": "mhc.fn_broadcast", "HC": 4, "H": H}}
@@ -318,19 +299,17 @@ def _in_process(fins):
                                   "query_population": C2.query_population_component(rows, True)}, default=str))
 
 
-def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
+def _seal_deferred(tmp_path):
     """A one-run TP2 Commit (the config run's only-arm form) as `tp-commit --replay-deferred` leaves it: every rank PENDING, its bundle
     sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them.  Every
-    rank commits under `commit_scheme` and the TP run root is that scheme's form (rows-sha512: v2; vllm-v1: an old record's v1)."""
+    rank commits under rows-sha512 and the TP run root is its v2 form."""
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
 
     out = tmp_path / "commit"
     out.mkdir()
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
-                           commit_scheme=commit_scheme if commit_scheme == step_rows.NAME else None)
-    tag = RT.TP_ROOT_TAG if commit_scheme == step_rows.NAME else RT.TP_ROOT_TAG_V1
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     root = rc.run_root.hex()
     man = tmp_path / "manifest.json"
     man.write_text(json.dumps({"identities": [], "ranks": WORLD}))
@@ -340,7 +319,7 @@ def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
         part = RB.partial(out, 0, rank=r)
         SD.dump(com, rc, part / "store")
         (part / "weights").mkdir()
-        (part / "weights" / "tree.json").write_text(json.dumps({"names": [], "tensor_roots": [], "root": "ab" * 32, "chunk": CHUNK, "extra": {}}))
+        (part / "weights" / "tree.json").write_text(json.dumps({"names": [], "tensor_roots": [], "root": "ab" * 32, "chunk": step_rows.ROW_BYTES, "extra": {}}))
         (part / "binding_map.json").write_text(json.dumps(bmap))
         f = _deferred_fin(r, out)
         cb = _cblock(r, root, bmap)
@@ -350,7 +329,7 @@ def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
         fins.append({k: v for k, v in f.items()})
     vec = {r: rc.run_root for r in range(WORLD)}
     rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "wall_s": 1.0,
-             "commit": {"tp_run_root": RT.combine(tag, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
+             "commit": {"tp_run_root": RT.combine(RT.TP_ROOT_TAG, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
                         "commitment_vector": [{"rank": r, "run_root": root} for r in range(WORLD)], "commit_pass": None, "commit_fail_reason": RB.PENDING}}]
     sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
     qp_comp = C2.query_population_component(rows, True)
@@ -365,7 +344,7 @@ def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
     (out / "summary.json").write_text(json.dumps(summ, default=str))
-    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": tag.decode()}))
+    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": RT.TP_ROOT_TAG.decode()}))
     (out / "finalize_pair0.json").write_text(json.dumps(fins, default=str))
     (out / "coverage.json").write_text(json.dumps({"verdict": "PASS", "identity_coverage": True, "reason": None, "replay_pending_ranks": [0, 1],
                                                    "value_correspondence": vc}))
@@ -541,15 +520,6 @@ def test_a_bundle_that_is_not_the_records_is_refused_before_any_replay(deferred,
     assert "evaluate" not in stubbed and not TPR.result_path(deferred.out, 0, 1).exists()
     with pytest.raises(TPR.Refused, match=named):
         TPR.replay_rank(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck"), deferred.out, deferred.dd, 0, 1)
-
-
-def test_an_old_vllm_v1_record_replays_under_its_v1_tag_and_never_as_v2(tmp_path, stubbed):
-    d = _seal_deferred(tmp_path, "vllm-v1")
-    assert len(d.rc.run_root) == 32 and len(bytes.fromhex(RB.open_bundle(d.dd["bundles"][1]["path"])["context"]["tp_run_root"])) == 32
-    assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck", ranks="1")) == 4 and stubbed["evaluate"][2]["run_root"] == d.rc.run_root
-    _tamper_versions(d.out, root_tag=RT.TP_ROOT_TAG.decode())
-    with pytest.raises(TPR.Refused, match="rank 0 root is 32 bytes, a vllm-v1"):
-        TPR.replay_rank(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck"), d.out, d.dd, 0, 0)
 
 
 def test_a_manifest_that_is_not_the_commits_is_refused(deferred, stubbed, tmp_path):

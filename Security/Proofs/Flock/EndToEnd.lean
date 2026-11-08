@@ -1,18 +1,36 @@
 module
 
 public import Proofs.Flock.EndToEnd.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
-# Proof of C-Flock's end-to-end guarantee
+# Proof of Flock's end-to-end guarantee
 
 `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd` is `zk_session_soundJ_custody_reg` with its first and last
 terms in closed form:
-* `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset draw, is
+* `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset sample, is
   sound against the public file, `Pr[flock-verify accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + δ_link`;
 * `Audit.Law.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
 * `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `δ_link` is its closed form.
 
-`EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every draw flock-verify accepts
+`EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample flock-verify accepts
 gives one, at any number of tables.
 -/
 
@@ -22,7 +40,7 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- **C-Flock's one-stage audit, end to end.** -/
+/-- **Flock's one-stage audit, end to end.** -/
 theorem EndToEnd : Flock.Guarantees.EndToEnd := by
   intro n Reg I ht c hc hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
@@ -33,11 +51,11 @@ theorem EndToEnd : Flock.Guarantees.EndToEnd := by
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed in
-/-- **`EndToEnd`'s reference setup exists at every draw flock-verify accepts, at any number of tables.** At the record's
-draw file (`DrawFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript flock-verify `--zk`
-accepts under `TagsOkZJ` whose record's draw is `dj S`, table 0 has a `DrawSetupZJ` at `mPtsOf c.g (kd / nTab I)` link
-points, at its part of `S` and its draw: `EndToEnd`'s `y₀`, at `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`.
-A setup of the whole draw at those link points, the binder `y₀` had before, exists only where `mPtsOf c.g kd` is the
+/-- **`EndToEnd`'s reference setup exists at every sample flock-verify accepts, at any number of tables.** At the record's
+sample file (`DrawFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript flock-verify `--zk`
+accepts under `TagsOkZJ` whose record's sample is `dj S`, table 0 has a `DrawSetupZJ` at `mPtsOf c.g (kd / nTab I)` link
+points, at its part of `S` and its sample: `EndToEnd`'s `y₀`, at `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`.
+A setup of the whole sample at those link points, the binder `y₀` had before, exists only where `mPtsOf c.g kd` is the
 same number, which fails once `nTab I ≥ 2` and `⌈kd / c.g⌉ > 8`. -/
 theorem EndToEnd_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : Flock.HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)

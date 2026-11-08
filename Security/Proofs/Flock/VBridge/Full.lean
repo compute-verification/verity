@@ -1,24 +1,37 @@
 module
 
 public import Proofs.Flock.Recursive.Stage
-public import Flock.Registered
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `VFull` and the verifier's U4
 
-`VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s law draws. V*'s laws are the full
-draw (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
-PROTOCOL.md §16.10) refuses a drawn statement unless every unit its own registered reads name for a round's commitment
-(`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is drawn
-in full; under a stratified draw that is the stratum holding it.
+`VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s law samples. V*'s laws are the full
+sample (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
+`Flock.HmRow`) refuses a sampled statement unless every unit its own registered reads name for a round's commitment
+(`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is sampled
+in full; under a stratified sample that is the stratum holding it.
 
 * `mem_unit`: a unit in one of a stratum's ranges is one of its `size` units (`Stratum.unit`).
-* `drawsInFull_of_checkFull`: U4's pass draws in full each unit that reads a round's commitment.
+* `drawsInFull_of_checkFull`: U4's pass samples in full each unit that reads a round's commitment.
 * `roundCommitment_indexed`, `roundCommitment_named`: the values `Registered.roundCommitment` names are a round's
-  commitment, a prefix of `roundIndexed` followed by any index; `drawsInFull_of_checkFull_round`: U4's pass draws in full
+  commitment, a prefix of `roundIndexed` followed by any index; `drawsInFull_of_checkFull_round`: U4's pass samples in full
   each unit that reads one of them.
-* `full_stratum`: a unit a stratified draw draws in full is in a stratum it draws whole.
-* `vFull_of_whole`: `VFull` under the full draw (`--draw subset:N`), without U4.
+* `full_stratum`: a unit a stratified sample samples in full is in a stratum it samples whole.
+* `vFull_of_whole`: `VFull` under the full sample (`--draw subset:N`), without U4.
 -/
 
 @[expose] public section
@@ -86,8 +99,8 @@ theorem mem_unit (s : Flock.Draw.Stratum) (u : ℕ) (h : s.units.any (fun (lo, h
   obtain ⟨i, hi, h1, h2⟩ := h
   exact ⟨s.units[i], Array.getElem_mem_toList hi, h1, h2⟩
 
-/-- **U4's pass draws in full each unit that reads a round's commitment**: when `checkFull` passes on the verifier's reads
-`own` and a draw `j` that parses as `d`, every unit a port of `own` of a round's commitment reads is one `d` draws in
+/-- **U4's pass samples in full each unit that reads a round's commitment**: when `checkFull` passes on the verifier's reads
+`own` and a sample `j` that parses as `d`, every unit a port of `own` of a round's commitment reads is one `d` samples in
 full. -/
 theorem drawsInFull_of_checkFull {own : Array Flock.Registered.Port} {j : Lean.Json} {d : Flock.Draw.UnitDraw}
     (hok : Flock.Registered.checkFull (some own) (some j) = .ok ()) (hd : Flock.Draw.UnitDraw.ofJson j = .ok d)
@@ -145,7 +158,7 @@ theorem roundCommitment_named {v : String} (h : v ∈ Flock.Registered.roundName
   unfold Flock.Registered.roundCommitment
   exact Bool.or_eq_true_iff.mpr (Or.inl (List.contains_iff_mem.mpr h))
 
-/-- **U4's pass draws in full each unit that reads one of the round commitments `roundCommitment` names**: V*'s
+/-- **U4's pass samples in full each unit that reads one of the round commitments `roundCommitment` names**: V*'s
 `rec-c<i>` and `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's `rec-sparse-pre<j>`
 and `rec-sparse-sc<j>` (each a prefix of `roundIndexed` and an index), and its `rec-sparse-v2`, `rec-sparse-u` and
 `rec-sparse-vt` (`roundNamed`). -/
@@ -160,8 +173,8 @@ theorem drawsInFull_of_checkFull_round {own : Array Flock.Registered.Port} {j : 
   · rw [hn]; exact roundCommitment_indexed hpre n
   · exact roundCommitment_named hn
 
-/-- **The executable stratum of a unit a stratified draw draws in full**: one of `St`'s strata holds `u` in its ranges and
-draws all of its units. -/
+/-- **The executable stratum of a unit a stratified sample samples in full**: one of `St`'s strata holds `u` in its ranges and
+samples all of its units. -/
 theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Draw.UnitDraw} {Kd u : ℕ}
     (hlaw : d.law = .stratified Kd (Array.ofFn St)) (hu : Flock.Registered.drawsInFull d u = true) :
     ∃ t : Fin m, (St t).units.any (fun (lo, hi) => lo ≤ u && u < hi) = true ∧ (St t).k = (St t).size := by
@@ -174,7 +187,7 @@ theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Dr
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **`VFull` under the full draw** (`--draw subset:N`): V*'s laws draw every unit, so `VFull` needs only that each wire
+/-- **`VFull` under the full sample** (`--draw subset:N`): V*'s laws sample every unit, so `VFull` needs only that each wire
 of `Sk i j` (`i < r`) is a wire of some unit. -/
 theorem vFull_of_whole (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hio : ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →

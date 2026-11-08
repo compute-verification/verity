@@ -1,11 +1,50 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
-public import Proofs.Flock.Soundness.CompiledLock
-public import Proofs.Flock.Soundness.Refine.Ligerito
-import all Init.Data.List.Control
+import Batteries.Recycling.MonadSatisfying.Array
+import Flock.With.Eq
 import all Init.Data.Array.Basic
+import all Init.Data.List.Control
 import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.LawfulXor.Basic
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Session
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Every level's Merkle opening passes at every honest rep
@@ -21,7 +60,7 @@ Merkle check passes at its query coins (`MerkleOk`), given that the table's sche
   verifier's check (`merkleCheckWith`) against its cap: each query's siblings climb from its leaf to its cap entry
   (`climb_ok`).
 * **The honest openings** (`ligeritoP_opens`, `Opens`): the honest prover's Ligerito, run from round `k`, opens level
-  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier draws them; the
+  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier samples them; the
   rounds are counted by `KRuns`, every run of a step from round `k` ending `d` rounds on.
 -/
 
@@ -562,7 +601,7 @@ theorem KRuns.absorbAll {L : ℕ} (ws : Array F128) (k : ℕ) :
 
 /-! ## The honest openings -/
 
-/-- Level `j`'s query positions, drawn at round `k + qOff sch j`. -/
+/-- Level `j`'s query positions, sampled at round `k + qOff sch j`. -/
 def posAt (sch : Schedule) (cf : ℕ → ℕ → F128) (k j : ℕ) : Array ℕ :=
   positions (sch.levels.getD j default) ((Array.range (sch.levels.getD j default).q).map (cf (k + qOff sch j)))
 

@@ -2,11 +2,55 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishFwRows
 public import Proofs.Flock.Claims.ZK.FinishSwRep
+public import Proofs.Flock.Claims.ZK.SimLig
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.FinishRank
+import Proofs.Flock.Claims.ZK.FinishSwBit
+import Proofs.Flock.Claims.ZK.FinishSwFw
+import Proofs.Flock.Claims.ZK.FinishSwPts
+import Proofs.Flock.Claims.ZK.FinishSwSv
+import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.PiopSrcSv
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
-# A deployed rep's rows from the firewall's run
+# A deployed rep's rows from the ZK server's run
 
-`Composed.rowsAt_of_fw` decides table `j`'s rows at its base from what the firewall's run on each rep fixes. Here that
+`Composed.rowsAt_of_fw` decides table `j`'s rows at its base from what the ZK server's run on each rep fixes. Here that
 is read off the deployed rep: `repFwC` on table `j`'s rep `r`, answered by the opened coins (`ligCoin`) from the rep's
 base, on the packed table of the witness's trace (`ligTab`), at pads with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the
 layout's length.
@@ -27,7 +71,7 @@ fold is the model's (`folded_unique`), the ring switch's `ŝ`s are the view's (`
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -37,7 +81,7 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's rows from the firewall's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
+/-- **A deployed rep's rows from the ZK server's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`), with as many extra claims `xs` as the
 statement's (`hxsz`), returns at pads `pads` with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the layout's length, the pads
 and the run's seven constraints are `rowsAt_of_fw`'s at rep `r`, at the clear values `v` and the tape's mask and level
@@ -235,7 +279,7 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the firewall's
+    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)

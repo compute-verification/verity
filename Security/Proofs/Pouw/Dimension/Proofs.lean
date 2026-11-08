@@ -1,10 +1,13 @@
 module
 
-public import Definitions.Pouw.Dimension.Defs
 public import Definitions.Pouw.Assumptions.Dimension.Pinned
+public import Proofs.Pouw.NCP.ChainProofs
 public import Proofs.Pouw.NCP.RelationProofs
 public import Proofs.Pouw.NCP.RelationWitness
-public import Proofs.Pouw.NCP.ChainProofs
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Exact
+import Proofs.Pouw.NCP.Proofs
 
 /-!
 # Theorem D: proofs

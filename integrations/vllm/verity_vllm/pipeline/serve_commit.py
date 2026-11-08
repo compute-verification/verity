@@ -24,7 +24,7 @@ run and before its seal, names its row dir (``seal``); what its seal wrote is it
 in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`) writes only each seal's store files on its thread,
 and the rest of the seal runs in that spawned process. With ``release`` (`serve_release.Draws`, ``--retain device
 --release-after``) a window's seal, on either path, first waits for its draw-gated release, which keeps only the leaves its
-subprotocols' drawn blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
+subprotocols' sampled blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
 where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the
 worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and ``close_phases_s``. ``window_bytes``
 closes a window once its steps have committed that many
@@ -246,7 +246,8 @@ class CommitWindows:
     ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
     opens on each window once its committer is installed and closes first at its close, before the committer comes off,
     its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
-    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on."""
+    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
+    with ``sealed`` hears each window's seal line, or why it has none."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -443,6 +444,8 @@ class CommitWindows:
             self.mirror()
         if isinstance(job, tuple):
             self._land(rec, job)
+        else:
+            self._no_seal(rec, job)
         return rec
 
     def _close_off_loop(self, laps: list[tuple[str, float]], lap: Callable[[str], None]) -> None:
@@ -510,6 +513,19 @@ class CommitWindows:
             self.mirror()
         if isinstance(job, tuple):
             self._land(rec, job, here=(c.t_close, c.seal_wait))
+        else:
+            self._no_seal(rec, job)
+
+    def _no_seal(self, rec: Mapping[str, Any], job: Any) -> None:
+        """A window that reaches no seal: the arm hears why (`_sealed`)."""
+        why = rec.get("error") or (job or {}).get("error") or "the window has no seal"
+        self._sealed({"window": rec["window"], "error": f"not sealed: {why}"})
+
+    def _sealed(self, line: Mapping[str, Any]) -> None:
+        """The arm's ``sealed(window, line)``, when it has one: the window's seals.jsonl line once written, or why it has none
+        (``error``), so a release that reads the sealed window (`serve_tie.WindowTie`) waits on the event, not the disk."""
+        if callable(sealed := getattr(self.arm, "sealed", None)):
+            sealed(int(line["window"]), dict(line))
 
     def _record(self, c: _Closed, rc: Any, readback: Any, lap: Callable[[str], None]) -> tuple[dict[str, Any], Any]:
         """The closed window's line of windows.jsonl as its finalize and readback make it, with its served rows and its seal's
@@ -650,6 +666,7 @@ class CommitWindows:
                 self.seals.append(line)
             with open(self.out / "seals.jsonl", "a") as fh:
                 fh.write(json.dumps(line) + "\n")
+            self._sealed(line)
             if self.mirror is not None:
                 self.mirror()
 

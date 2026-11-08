@@ -3,11 +3,11 @@ module
 public import Proofs.Flock.Recursive.FirewallRun
 
 /-!
-# `flock-firewall live` is the firewall's run
+# `flock-firewall live` is the ZK server's run
 
 `flock-firewall live` (`Flock.Firewall.liveWith`) is a live session's send check: `rec_live --lean` relays each request
-to it, and the coin server receives only what it sends. Its loop takes each request with the fresh salts read for it
-(`liveStep`), keeps the salts a request didn't draw for the next, and stops at the first refusal; `liveRun` is that loop.
+to it, and the challenger's live-coin part receives only what it sends. Its loop takes each request with the fresh salts read for it
+(`liveStep`), keeps the salts a request didn't sample for the next, and stops at the first refusal; `liveRun` is that loop.
 
 * `run_live`: a live session that doesn't stop sends what `Flock.Firewall.run` sends on its requests at the salts it
   read, in order, and finishes where `run` does.
@@ -15,7 +15,7 @@ to it, and the coin server receives only what it sends. Its loop takes each requ
 
 `Flock.SecurityProofs.liveSends` puts them together with `FirewallSends`. The proof is one frame lemma, `stepOf_grow`:
 a request that returns at a state returns at it with more salts after its own and more messages before its own,
-drawing and sending the same (`Grow`).
+sampling and sending the same (`Grow`).
 -/
 
 @[expose] public section
@@ -111,7 +111,7 @@ theorem Grow.send (m : Sent) : Grow r acc (Firewall.send m) (Firewall.send m) fu
       { u with salts := u.salts ++ r, sent := acc ++ u.sent.push m }
     rw [Array.push_append]
 
-/-- A computation the firewall's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted. -/
+/-- A computation the ZK server's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted. -/
 theorem Grow.lift {α : Type} {x : V α} : Grow r acc (liftM x : Fw α) (liftM x) Eq := by
   intro u a t hm
   cases x with
@@ -120,7 +120,7 @@ theorem Grow.lift {α : Type} {x : V α} : Grow r acc (liftM x : Fw α) (liftM x
     cases hm
     exact ⟨_, rfl, rfl⟩
 
-/-- **Salting a row**: at more salts after, the same salt is drawn, so the same commit string. -/
+/-- **Salting a row**: at more salts after, the same salt is sampled, so the same commit string. -/
 theorem Grow.salted (row : Array Nat) : Grow r acc (Firewall.salted row) (Firewall.salted row) Eq := by
   intro u a t hm
   rw [run_salted] at hm
@@ -333,7 +333,7 @@ theorem step_grow (s : Schedule) (req : Req) : Grow r acc (step s req) (step s r
   | prime => exact step_prime s
 
 /-- **A request grows**: one that returns at a state returns at it with more salts after its own and more messages
-before its own, drawing and sending the same. -/
+before its own, sampling and sending the same. -/
 theorem stepOf_grow (s : Schedule) (b : ByteArray) : Grow r acc (stepOf s b) (stepOf s b) Done := by
   unfold stepOf
   refine Grow.bind Grow.lift fun req req' h => ?_
@@ -379,7 +379,7 @@ theorem loop_grow (s : Schedule) (r : List ByteArray) : ∀ (reqs : List ByteArr
       rw [body_ok hm, body_ok hm']
       exact loop_grow s r l t acc h
 
-/-- **A finished run draws nothing past its salts**: at the salts `ys` then any `zs`, it is the run at `ys`. -/
+/-- **A finished run samples nothing past its salts**: at the salts `ys` then any `zs`, it is the run at `ys`. -/
 theorem run_append (s : Schedule) (reqs ys zs : List ByteArray) (h : (run s reqs ys).2 = true) :
     run s reqs (ys ++ zs) = run s reqs ys := by
   rw [run_eq] at h
@@ -472,7 +472,7 @@ theorem loop_live (s : Schedule) : ∀ (L : List (ByteArray × List ByteArray)) 
     refine (loop_live s rest { t₁ with sent := #[] } (acc ++ t₁.sent) more t rfl h2).trans ?_
     rw [← List.append_toArray, Array.toArray_toList, Array.append_assoc]
 
-/-- **`flock-firewall live` is the firewall's run**: a live session that doesn't stop, its requests each with the fresh
+/-- **`flock-firewall live` is the ZK server's run**: a live session that doesn't stop, its requests each with the fresh
 salts read for it, sends what `run` sends on its requests at those salts in order, and finishes where `run` does. -/
 theorem run_live (s : Schedule) (L : List (ByteArray × List ByteArray)) (sent : List Sent) (t : State)
     (h : liveRun s { salts := [] } L = .ok (sent, t)) :

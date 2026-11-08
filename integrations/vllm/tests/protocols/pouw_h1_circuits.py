@@ -1,9 +1,9 @@
 """Each stratum's circuit file of a period's declared window Program, built with the auditor's own lowering, and the
 ``--circuit-files`` its period-open commits (core's `credit.committed_files`).
 
-A drawn proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
+A sampled proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
 `weights.chunks` (K) chunks past `weights.CHUNK_MAX`, `h1window._chunked`, as the Program declares it), one of the declared
-Program's ``TILES``. It is lowered by C-Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
+Program's ``TILES``. It is lowered by Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
 lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
 its templates by ascending K, the object core's credit verifies a statement under (`credit.partition_of`). The file's
@@ -20,7 +20,7 @@ what core's credit verifies each round's ``live@<s>`` on (``circuit_files["live"
 window's rounds. Past T = `live.PIECE_ROWS` it is the piece's, `live.template_rows(T, PIECE_ROWS)` bound to
 `live.program_rows` (a V3 prefill round at T 8,192 is 128 pieces of 64 rows). It takes seconds.
 
-With ``--lanes K,...`` each listed K is committed in credit's lanes form (`credit.form_of`) instead of ``k<K>``: a drawn
+With ``--lanes K,...`` each listed K is committed in credit's lanes form (`credit.form_of`) instead of ``k<K>``: a sampled
 leaf at K is proved as its lanes and combine (`leaf_lanes.statements`), each statement on its own file, ``lane<K>`` and
 ``combine<K>``, the flat statement of `h1window.leaf_unit` of the declared window Program at K (rebuilt from the
 descriptor's layout, `rebuilt`, its templates held to the descriptor's) on `drawn.leaf_rows`, bound to that statement's
@@ -79,8 +79,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     neither is one of the descriptor's definitions, or (with core's credit) the partition is not the one core's credit
     verifies statements under."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.codec import descriptor_id
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
@@ -157,7 +157,7 @@ def rebuilt(descriptor: bytes) -> Any:
     """The declared window Program rebuilt from its descriptor's layout (`credit.layout_of`, its prefix `credit.shape_of`'s),
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity.ml.circuits.codec import descriptor_id
     layout, why = CR.layout_of(descriptor)
     if why is not None:
@@ -178,7 +178,7 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     """K's leaf statement ``kind`` of the window Program `win`: its Definition (`h1window.leaf_unit`), its leaf Program's
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity_vllm.protocols.pouw.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)

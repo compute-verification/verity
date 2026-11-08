@@ -1,6 +1,38 @@
 module
 
 public import Proofs.Flock.Claims.ZK.PrefixLive
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A cut rep stopped at body `n` is the one stopped later, up to its stop (`CutPrefix.repCut_cut_agree`)
@@ -146,6 +178,7 @@ theorem piopCut_cut_agree (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap 
   sim_walk [zerocheckCut_cut_agree coin hnN, lincheckCut_cut_agree coin hnN, rankCheckP_agree,
     ringSwitchCut_cut_agree coin hnN]
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_cut_agree (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) :
@@ -312,6 +345,7 @@ theorem piopCut_shift (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root
   unfold piopCut
   sim_walk [zerocheckCut_shift coin N, lincheckCut_shift coin N, rankCheckP_shift, ringSwitchCut_shift coin N]
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_shift (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) :

@@ -19,7 +19,7 @@ def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_st
     e = get("cr/turboshake128")
     assert (e.name, e.label, e.standing) == ("Collision resistance of TurboSHAKE128", "CR · TurboSHAKE128", "standard")
     assert get("uniform/python-secrets").name == "Independent uniform output of Python's secrets"
-    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's coin server"
+    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's challenger"
     e = get("euf-cma/lms-sha512-n64")
     assert (e.label, e.standing) == ("EUF-CMA · LMS over SHA-512", "standard")
     assert "lms-sha512-n32" not in INSTANCES
@@ -75,6 +75,12 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
+def test_the_min_cut_bounds_cut_conjectures_are_cited_separately() -> None:
+    hardness, exports = get("training-cut-hardness"), get("training-cut-exports")
+    assert all((e.kind, e.standing) == ("assumption", "conjectured") for e in (hardness, exports))
+    assert "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S)" in hardness.name and "κ(B → E(B)) ≥ b |E(B)|" in exports.name
+
+
 def test_the_sm120_headlines_claims_name_what_their_statements_assume() -> None:
     """HEADLINE-R2's restatement: FOLD-OPT at π*, binding's fork form, A2's catch-all and A1 assumed at the driver's
     report."""
@@ -120,7 +126,7 @@ def test_the_honest_clock_says_which_form_is_proved() -> None:
 
 
 def test_the_session_premises_state_their_scope() -> None:
-    """No served path verifies with --registered, and the window's law also needs the audit coins."""
+    """No served path verifies with --registered, and the window's sampling design also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
     assert live.standing == "standard"
     assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
@@ -141,10 +147,18 @@ def test_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
 
 
 def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
-    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof service's named premises, as sm_120's."""
+    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof system's named premises, as sm_120's."""
     for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
         assert "the H200's and the B200's" in get(e).name, e
     assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
+
+
+def test_the_relay_trusts_are_standard_assumptions() -> None:
+    for i in ("flock-relay-serves", "flock-worker-deterministic"):
+        e = get(i)
+        assert (e.kind, e.standing) == ("assumption", "standard"), i
+    assert "auditor's connection" in get("flock-relay-serves").name
+    assert "LiveChallenger::round" in get("flock-worker-deterministic").name
 
 
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:

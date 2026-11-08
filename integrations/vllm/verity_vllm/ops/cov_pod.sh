@@ -156,7 +156,7 @@ regate() {  # <run-name> [--census]: re-run the cheap check stages (+ the census
 }
 
 holdouts() {  # <primary-run> <holdout-run>...: the replicate runs' gates.json assembled into the primary's holdouts.json (G7), then gates again.
-  # Campaign holdouts = the campaign's replicate workloads (same seeded length draws, other prompts / request ids; generated apart from
+  # Campaign holdouts = the campaign's replicate workloads (same seeded length samples, other prompts / request ids; generated apart from
   # the runs they hold out).  They cover fresh token values, not fresh lengths -- the card says so (holdouts.json lists the runs).
   local n=$1; shift
   local hd="$OUT/$n/holdouts"; mkdir -p "$hd"

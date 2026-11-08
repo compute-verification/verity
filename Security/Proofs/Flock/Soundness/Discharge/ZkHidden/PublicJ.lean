@@ -1,7 +1,24 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # `zk_session_soundHJ_custody`, "wrong" measured against the public file
@@ -18,7 +35,7 @@ transcript.
 * `rsZHJ_wrongRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `wrongRegZ` is one set at every registration.
 * `zk_session_soundHJ_custody_drawn_reg`: `Composed.zk_session_soundJ_custody_drawn_reg` under hidden outputs, the
-  drawn units' form: `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3;
+  sampled proof blocks' form: `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3;
   `zk_session_soundHJ_custody_drawn_at` is the same at the value layer of any values, with the binding errors against
   them for `δ_link`.
 -/
@@ -49,7 +66,7 @@ theorem rsZHJ_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts :
   intro p
   rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the coin server's
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's
 custody.** `zk_session_soundHJ_custody` with "wrong" `wrongRegZ` at the prover's registration `reg σ`, read through the
 rows' value binding (`rsZHJ`): the registered commit strings are the public file's `b ‖ c` at rows. -/
 theorem zk_session_soundHJ_custody_reg
@@ -103,9 +120,9 @@ theorem zk_session_soundHJ_custody_reg
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it draws.**
-`zk_session_soundHJ_custody_reg`'s event at the drawn units: the executable verifier accepts and some unit the session
-drew is in `wrongRegZ`. The draw is the session's, so no law over it is assumed (no A3, no `kd ≤ n`). -/
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples.**
+`zk_session_soundHJ_custody_reg`'s event at the sampled proof blocks: the executable verifier accepts and some unit the session
+drew is in `wrongRegZ`. The sample is the session's, so no sampling design over it is assumed (no A3, no `kd ≤ n`). -/
 theorem zk_session_soundHJ_custody_drawn_reg
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -163,7 +180,7 @@ theorem zk_session_soundHJ_custody_drawn_reg
   exact add_le_add (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR) le_rfl
 
 /-- **`zk_session_soundHJ_custody_drawn_reg` at the value layer of any values `Xv`**: "wrong" is `wrongRegZ` at
-`XlayerZC (Xv R τ)`, and the link term is the binding errors' against `Xv` (`errBoundZC`), with no hypothesis on the
+`XlayerZC (Xv R τ)`, and the binding error is the binding errors' against `Xv` (`errBoundZC`), with no hypothesis on the
 link finders. -/
 theorem zk_session_soundHJ_custody_drawn_at
     (I : Inputs) (ht : I.tags.typed = false)

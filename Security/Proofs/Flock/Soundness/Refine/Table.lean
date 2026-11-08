@@ -1,11 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Refine.Rep
 public import Proofs.Flock.Soundness.Refine.Seam
 public import Proofs.Flock.Soundness.Session
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
-# The verifier refines the model's table (PROTOCOL.md §3, §5)
+# The verifier refines the model's table (`Flock.Verify`, `Flock.Record`)
 
 `verify_refines`: when the executable's `Flock.verify` accepts a session record and its two proof files, under the
 unsalted SHA-512 scheme, the record and both proofs decode. Then at the proofs' openings (`opensOf`), each rep's
@@ -211,7 +214,7 @@ theorem verify_one_ok {spec : SessionSpec} {st : Setup} {record : String} {proof
   rw [bytes_eq_of_beq hb] at h0
   exact ⟨sess, sch, c1', hsess, hf, h0, h1⟩
 
-/-- The proof files' openings (§14): rep `r`'s opened rows and siblings, level by level. -/
+/-- The proof files' openings (`Flock.Merkle`): rep `r`'s opened rows and siblings, level by level. -/
 def opensOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Opens 𝔽 Dig :=
   fun r ℓ j => if r = 0 then openRow p₀.ligerito sch ℓ j else openRow p₁.ligerito sch ℓ j
 
