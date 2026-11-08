@@ -71,13 +71,17 @@ def stacked(rows: list[Refs]) -> Refs:
     return concat(rows)
 
 
+#: False: `each` writes a call a row (the flat form), for a measurement against it
+BATCHED = True
+
+
 def each(B, fn, *args) -> list[Coll]:
     """`fn` over a launch's rows, a member a row: each argument a list of the rows' `Refs` (mapped) or one `Refs` every row reads
     -> each row's output.  One row is a call, more one batch node (`Builder.batch`) over them."""
     params = _ptypes(fn)
     n = next(len(a) for a in args if isinstance(a, list))
-    if n == 1:
-        return [B.call(fn, *(Coll(t, a[0] if isinstance(a, list) else a) for t, a in zip(params, args)))]
+    if n == 1 or not BATCHED:
+        return [B.call(fn, *(Coll(t, a[m] if isinstance(a, list) else a) for t, a in zip(params, args))) for m in range(n)]
     colls = [Coll(Array(n, t), stacked(a)) if isinstance(a, list) else Coll(t, a) for t, a in zip(params, args)]
     out = B.batch(fn, *colls, axes=tuple(0 if isinstance(a, list) else None for a in args))
     return [out[m] for m in range(n)]
