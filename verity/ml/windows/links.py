@@ -1,5 +1,6 @@
-"""Link ports: a later window's units reading a port of an earlier window's record, as a two-stage audit's link templates read
-the boundary registration's ports from inside the interior registration's proof blocks.
+"""Registered ports: a statement's table rows read as the rows of a port of a registered window's record, as a two-stage
+audit's sessions read every row they prove: the link templates' at the boundary registration, from inside the interior
+registration's proof blocks, and every other at the interior registration.
 
 A committed window's port (`rows.Committed`) is a tree of hiding row leaves under its window domain, each leaf framed as a
 registered value's (`rowleaf.row_leaf` of the row's ``b || c`` under the port's schema), so a later statement reads its rows as

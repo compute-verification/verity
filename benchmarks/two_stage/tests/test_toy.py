@@ -1,8 +1,9 @@
 """The two-stage toy before anything is lowered or proved (`audit.py` proves it, on a node): each template and the replay
 block are their numpy models; the replay block is its templates' instances; the interior is template-major and wired as
 the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
-its salts, and open its root there, as the verifier's own reads (from the boundary record and S alone) name them; both
-registrations pass the verifier's check; and a link row one bit off, a read of another leaf and a broken wire are refused."""
+its salts, and open its root there, and every other port's rows open the interior record's at their own leaves, as the
+verifier's own reads (from the two records and S alone) name them; both registrations pass the verifier's check; and a link
+row one bit off, a read of another leaf and a broken wire are refused."""
 
 from __future__ import annotations
 
@@ -80,7 +81,7 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
 def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_boundary_root(run):
     bc, it, brec = run["bc"], run["it"], run["brec"]
     win, names = it.window, T.boundary_ports(bc.window)
-    reads = T.link_reads(brec, win, SAMPLE)
+    reads = T.reads(brec, run["irec"], win, SAMPLE)
     roots = {r["port"]: r for r in brec["roots"]}
     head = json.loads((run["tmp"] / "interior" / "window.json").read_text())
     for t, (p, b) in T.LINKS.items():
@@ -88,7 +89,7 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         port, value = it.ports[m.key], names[b]
         assert port.root == bc.roots[value] and port.root.hex() == roots[value]["root"]
         file = reads[m.key]
-        assert file["format"] == REG.READS_V1 and list(file["ports"]) == [p]
+        assert file["format"] == REG.READS_V1 and list(file["ports"]) == [x for x, _ in m.all_rows]
         e = file["ports"][p]
         assert e["value"] == value and e["reads"] == list(SAMPLE) and e[REG.READS_FROM] == m.base
         assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
@@ -99,6 +100,26 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         assert mine == [rows_bc(bc, value, N)[s] for s in SAMPLE]
         assert all(REG.verify_read(bc.domains[value], port.root, s, x, bytes.fromhex(path), T.V2)
                    for s, x, path in zip(SAMPLE, mine, header["paths"]))
+
+
+def test_every_other_port_reads_the_interior_record_at_its_own_leaves(run):
+    it, irec = run["it"], run["irec"]
+    c, win = it.committed, it.window
+    reads = T.reads(run["brec"], irec, win, SAMPLE)
+    roots = {r["port"]: r for r in irec["roots"]}
+    head = json.loads((run["tmp"] / "interior" / "window.json").read_text())
+    for t, m in enumerate(win.members):
+        assert m.tables == tuple((p, m.n) for p, _ in m.rows)
+        for p, words in m.all_rows:
+            if p == T.link(t):
+                continue
+            value = m.port(p)
+            e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
+            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], m.n,
+                                                                         roots[value]["domain"])
+            assert e["reads"] == header["positions"] == list(range(m.n)) and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert all(REG.verify_read(c.domains[value], c.roots[value], i, x, bytes.fromhex(path), T.V2)
+                       for i, (x, path) in enumerate(zip(rows_bc(c, value, m.n), header["paths"], strict=True)))
 
 
 def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):
@@ -145,4 +166,4 @@ def test_the_link_reads_refuse_a_port_the_boundary_record_does_not_name_or_a_lea
     with pytest.raises(ValueError, match="names port"):
         T.LK.reads(brec, "nobody/row", 16, T.V2, SAMPLE, 0, registered=REG)
     with pytest.raises(ValueError, match="outside"):
-        T.link_reads(brec, win, (N, 0, 1))
+        T.reads(brec, run["irec"], win, (N, 0, 1))

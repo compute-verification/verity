@@ -11,11 +11,13 @@ proves them (`audit.py`).
 * **The interior registration** (`interior_window`, `interior`): the replay sample S's Q·n_rho proof blocks, template-major,
   span S[i]'s j-th instance of template t at slot off_t + i·n_t + j (off_t = Q·Σ_{t'<t} n_t'), one member a template, under
   the interior run (`interior_run`). Each internal edge is a wire (`rows.Member.wired`): a reader's row is its writer's
-  output row under that row's salt. Each span is replayed from its ingress, the boundary record's row at S[i]. Each link
-  member is a shared-row member whose boundary port's rows (b_in's input, b_out's output) are committed under the
-  boundary's salts at S[i], so an honest replay's ``b || c`` are the boundary's, its header naming the boundary port, the
-  leaves S and each one's path to the boundary root (`verity.ml.windows.links.Port`).
-* **The verifier's reads** (`link_reads`): each link member's ``--registered`` file from the boundary record and S alone.
+  output row under that row's salt. Each span is replayed from its ingress, the boundary record's row at S[i]. Every
+  member is a shared-row member and every port of it a registered read (`verity.ml.windows.links.Port`), so Lean opens
+  every row a session proves: a link port (b_in's input, b_out's output) at the boundary record, its rows committed under
+  the boundary's salts at S[i] so an honest replay's ``b || c`` are the boundary's, its header naming the boundary port,
+  the leaves S and each one's path to the boundary root; every other port at the interior record, unit i reading its own
+  leaf i.
+* **The verifier's reads** (`reads`): each member's ``--registered`` file from the two registration records and S alone.
 """
 from __future__ import annotations
 
@@ -169,18 +171,22 @@ def interior_window(boundary_digest: str, sample: Sequence[int], law: Mapping | 
     program, query = CS.population_program([(t, q * n) for t, n in zip(TEMPLATES, N_T)])
     ids = [tid for tid, _, _ in P.ranges(program, query)]
     members = []
-    for t, (tid, n_t, (rows, outs), wired, base) in enumerate(zip(ids, N_T, LAYOUT, wires(q), offsets(q))):
-        shared = {"tables": ((rows[0][0], q * n_t),)} if t in LINKS else {}
+    for tid, n_t, (rows, outs), wired, base in zip(ids, N_T, LAYOUT, wires(q), offsets(q)):
         members.append(CS.Member(tid, rows=rows, outs=outs, n=q * n_t, base=base, wired=wired,
-                                 schemas=tuple((p, V2) for p, _ in rows + outs), **shared))
+                                 tables=tuple((p, q * n_t) for p, _ in rows), schemas=tuple((p, V2) for p, _ in rows + outs)))
     return CS.Binding(program, query, dict(law or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
                       tuple(members))
+
+
+def link(t: int) -> str | None:
+    """Template ``t``'s port that opens the boundary record, if it is a link template."""
+    return LINKS[t][0] if t in LINKS else None
 
 
 @dataclass(frozen=True)
 class Interior:
     """The interior as the proof server committed it: the window, its commitment, the link members' boundary ports
-    (`links.Port`, by member key) and their header entries (`rows.write`'s ``registered``)."""
+    (`links.Port`, by member key) and every member's header entries (`rows.write`'s ``registered``)."""
 
     window: CS.Binding
     committed: CS.Committed
@@ -200,30 +206,31 @@ def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], law:
     ports = {win.members[t].key: LK.Port.of(bc, names[b]) for t, (_p, b) in LINKS.items()}
     r = replay(ports[win.members[0].key].rows_at(at) if replayed is None else replayed)
     flips = np.stack([r["flip0"], r["flip1"]], axis=1).reshape(2 * q, -1)
-    refs = {"refs": np.arange(q, dtype=np.int64)[:, None]}
-    data = [{"rows": {"row": r["ingress"]}, "outs": {"o0": r["ingress"]}, **refs},
+    data = [{"rows": {"row": r["ingress"]}, "outs": {"o0": r["ingress"]}},
             {"rows": {"x": r["ingress"]}, "outs": {"o0": r["fold"]}},
             {"rows": {"x": np.stack([r["fold"], r["flip0"]], axis=1).reshape(2 * q, -1)}, "outs": {"o0": flips}},
-            {"rows": {"row": r["flip1"]}, "outs": {"o0": r["egress"]}, **refs}]
-    salts_of, registered = {}, {}
-    for t, (p, _b) in LINKS.items():
-        m = win.members[t]
-        salts_of[m.port(p)] = ports[m.key].salts_at(at)
-        registered[m.key] = {p: ports[m.key].header(at)}
+            {"rows": {"row": r["flip1"]}, "outs": {"o0": r["egress"]}}]
+    for d, m in zip(data, win.members):
+        d["refs"] = np.tile(np.arange(m.n, dtype=np.int64)[:, None], (1, len(m.rows)))
+    salts_of = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
     c = CS.commit(win, data, salt_key=salt_key, salts_of=salts_of)
+    registered = {m.key: {p: ports[m.key].header(at) if p == link(t) else LK.Port.of(c, m.port(p)).header(range(m.n))
+                          for p, _ in m.all_rows} for t, m in enumerate(win.members)}
     return Interior(win, c, ports, registered)
 
 
-def link_reads(boundary_record: Mapping, window: CS.Binding, sample: Sequence[int]) -> dict[str, dict]:
-    """The verifier's own ``--registered`` file of each link member (by member key), from the boundary registration and
-    the replay sample alone: its boundary port at the root, leaves and domain the boundary record names, unit off_t + i
-    reading leaf S[i]."""
+def reads(boundary_record: Mapping, interior_record: Mapping, window: CS.Binding, sample: Sequence[int]) -> dict[str, dict]:
+    """The verifier's own ``--registered`` file of each member (by member key), from the two registration records and the
+    replay sample alone: a link port at the root, leaves and domain the boundary record names for its boundary port, unit
+    off_t + i reading leaf S[i]; every other port at the interior record's, unit base + i reading its own leaf i."""
     names = boundary_ports(boundary_window(int(boundary_record["population"]), len(sample)))
     out = {}
-    for t, (p, b) in LINKS.items():
-        m = window.members[t]
-        port = LK.reads(boundary_record, names[b], dict(m.all_rows)[p], m.schema(p), sample, m.base, registered=REG)
-        out[m.key] = LK.reads_file({p: port}, registered=REG)
+    for t, m in enumerate(window.members):
+        out[m.key] = LK.reads_file({
+            p: LK.reads(boundary_record, names[LINKS[t][1]], words, m.schema(p), sample, m.base, registered=REG)
+            if p == link(t) else
+            LK.reads(interior_record, m.port(p), words, m.schema(p), range(m.n), m.base, registered=REG)
+            for p, words in m.all_rows}, registered=REG)
     return out
 
 

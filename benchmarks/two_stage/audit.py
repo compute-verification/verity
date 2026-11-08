@@ -13,9 +13,9 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The second stage**: `a5.audit` of the interior on its own Lean sample (its law ``subset:K``, ``--k``, every unit by
   default) on a development challenger's coins opened after the interior registration: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
-  ``--firewall`` behind the ZK server), Lean's verdicts on each, the link members' against the verifier's own
-  ``--registered`` reads of the boundary record (`toy.link_reads`), the audit record, the wires of the sampled proof blocks,
-  and a5's negatives (the registered reads' three on b_in's session among them).
+  ``--firewall`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
+  port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
+  wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them).
 * **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off, so b_in's row and b_out's output
   are not the boundary's at S[0], every circuit and wire holding: Lean's registered reads refuse both link members ("does not
   open"), the fold and flips accepted.
@@ -142,14 +142,14 @@ def main(argv=None) -> int:
         replayed = port.rows_at(sample).copy()
         replayed[0, -1] ^= 1
     it = T.interior(bc, bd, sample, {"law": "subset", "k": k}, replayed=replayed)
-    T.write(it.committed, out / "interior", {"interior": True, "boundary": bd, "replay_sample": sample}, previous=bd,
-            registered=it.registered)
+    irec = T.write(it.committed, out / "interior", {"interior": True, "boundary": bd, "replay_sample": sample}, previous=bd,
+                   registered=it.registered)
     sets = {m.template: (composer(t, *rows[0]), t) for m, t, (rows, _outs) in zip(it.window.members, T.TEMPLATES, T.LAYOUT)}
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec]}
     port = a.port or RA.free_ports(a5.RANK_PORTS)
     s, ok = a5.audit(a, sets, out / "audit", it.window, out / "interior", source_of(it.window, bd, sample), port,
-                     {"toy": "two-stage interior", "altered": a.altered}, registered=T.link_reads(brec, it.window, sample))
+                     {"toy": "two-stage interior", "altered": a.altered}, registered=T.reads(brec, irec, it.window, sample))
     summary.update(interior={"population": it.window.population, "law": it.window.law, "run": it.window.run,
                              "members": [{"key": m.key, "n": m.n, "base": m.base, "links": T.LINKS.get(t)}
                                          for t, m in enumerate(it.window.members)]},
