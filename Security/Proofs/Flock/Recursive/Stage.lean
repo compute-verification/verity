@@ -1,6 +1,22 @@
-import Proofs.Flock.Recursive.Transfer
-import Proofs.Flock.Recursive.Flock
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+module
+
+public import Proofs.Flock.Recursive.Flock
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: V*'s stages, with one set of openings at every history
@@ -18,7 +34,7 @@ only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s ses
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
   finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackIf` where the session's
   knowledge finders satisfy `cr/sha-512`, else `1`);
-* `vCovers_full`: V*'s live law, the full draw, draws every unit (`execOS_subset_full_mem`), so every unit's wires are
+* `vCovers_full`: V*'s live law, the full sample, samples every unit (`execOS_subset_full_mem`), so every unit's wires are
   covered;
 * `sessions_stage_le`: at V*'s sessions in a row, a layer that disagrees on a wire of a session's commit strings with
   the values `wv` is at most the sessions' expected slack plus each commit string's weight times its trial's chance of
@@ -35,6 +51,8 @@ only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s ses
   session's (`SessionFork`), or the bound with no finder budgets: the sessions' `ZkOuter.boundCR`, `r` times their
   `ZkOuter.slackCR` (`ZkOuter.slackIf_le`) and the inner error.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -96,16 +114,16 @@ noncomputable def idxK (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)
 noncomputable def bitK (v : ValK c) (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) : Bool :=
   v.2 (idxK c hU n g)
 
-/-- A draw of `Lv` reads commit string `pos`: a drawn unit reads a wire it holds. -/
+/-- A sample of `Lv` reads commit string `pos`: a sampled proof block reads a wire it holds. -/
 def ReadsDrawK (Lv : Law n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
   ∃ u ∈ Lv.draw ω, ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u, posK c hU n g = pos
 
-/-- **Every draw of `Lv` reads every wire of the commit strings `Sk`**: each is a wire of a drawn unit. -/
+/-- **Every sample of `Lv` reads every wire of the commit strings `Sk`**: each is a wire of a sampled proof block. -/
 def VCovers (Lv : Law n) (Sk : Finset (PosK c hU n)) : Prop :=
   ∀ (ω : Lv.Ω) g, posK c hU n g ∈ Sk → ∃ u ∈ Lv.draw ω, g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u
 
 open Classical in
-/-- **Commit string `pos`'s weight** at the stage's commit strings `Sk`: on `Sk`, the fraction of `Lv`'s draws reading
+/-- **Commit string `pos`'s weight** at the stage's commit strings `Sk`: on `Sk`, the fraction of `Lv`'s samples reading
 it over `1 − ρ`. -/
 noncomputable def candWeightK (Lv : Law n) (Sk : Finset (PosK c hU n)) (ρ : ℝ) (pos : PosK c hU n) : ℝ≥0∞ :=
   if pos ∈ Sk then
@@ -114,7 +132,7 @@ noncomputable def candWeightK (Lv : Law n) (Sk : Finset (PosK c hU n)) (ρ : ℝ
 
 end Fixed
 
-/-- **An event of the live audit's outcomes at the law's draws**: implications that hold at every outcome
+/-- **An event of the live audit's outcomes at the sampling design's samples**: implications that hold at every outcome
 `(R, L.draw ω, t)` bound probabilities. -/
 theorem prob_auditLive_mono {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
     (τ : Strategy (auditLive L Reg live)) {p q : Reg × Finset (Fin n) × Exec.Transcript → Prop}
@@ -136,7 +154,7 @@ theorem openingsOf_vb :
     openingsOf execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
       (tabZHJ zo.dj zo.y₀) zo.vb = obK c hU nv := rfl
 
-/-- **A transcript V*'s session writes at the registration `R'`**: `wr`'s at some draw of the law and some output of
+/-- **A transcript V*'s session writes at the registration `R'`**: `wr`'s at some sample of the sampling design and some output of
 the live session, the transcript of every outcome of its game at `R'` (`prob_auditLive_liveOfZJ_mono`). -/
 def Writes (R' : Reg') (tr : Exec.Transcript) : Prop := ∃ ω x, tr = zo.wr (Lv.draw ω) R' x
 
@@ -168,7 +186,7 @@ open Classical in
 noncomputable def slackIf (k Rw M : ℕ) (ρ t' qF qS : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   if zo.TabCR dg N qF qS τ then zo.stageSlack dg N k Rw M ρ t' qF qS τ else 1
 
-/-- **A stage's slack in fork form**: the drawn units' statistical errors, the tables' (`tableErrZ`), the link's
+/-- **A stage's slack in fork form**: the sampled proof blocks' statistical errors, the tables' (`tableErrZ`), the link's
 (`linkErrZC`) and the waits' (`waitErrZC`); `stageSlack` with no finder budgets and no SHA-512 evaluations to count. -/
 noncomputable def slackCR (k Rw M : ℕ) (ρ : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   tableErrZ (planZHJ zo.dj zo.y₀) Lv k (reg (zo.sim dg N τ)) +
@@ -251,7 +269,7 @@ section Covers
 
 variable {nv : ℕ} {c : Flock.Circuit} {hU : Built c.unit}
 
-/-- **Coverage by the full draw**: when every wire of `Sk` is a wire of a unit, every draw of the live full draw reads
+/-- **Coverage by the full sample**: when every wire of `Sk` is a wire of a unit, every sample of the live full sample reads
 every wire of `Sk` (`execOS_subset_full_mem`). -/
 theorem vCovers_full {Ω : Type} [Fintype Ω] [Nonempty Ω] {Lb : Fin 1 → ℕ}
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (Sk : Finset (PosK c hU nv))
@@ -363,7 +381,7 @@ theorem trialS_le (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → B
 strings `Sk j` satisfies `Q`, the sessions accept with `Q` failing at most the sessions' expected `slackIf` plus, at
 each session's commit string, its weight times the chance its trial opens the session's registered digest `cs j pos`
 off `wv j pos` (`ZkOuter.candTransfer` at each session, `prob_seqC_exists_le`). Every wire of `Sk j` is a unit's, so it
-is read at every draw (`hfull`, `vCovers_full`). The registered digest is `cs j pos` at the registrations where the
+is read at every sample (`hfull`, `vCovers_full`). The registered digest is `cs j pos` at the registrations where the
 session accepts a transcript it writes (`hcs`): at any other the session accepts with probability `0`
 (`ZkOuter.prob_unwritten`). -/
 theorem sessions_stage_le
@@ -508,7 +526,7 @@ def VDecodes (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ �
     Option.Rel (same i ρs) (wmsg Xt)[i]? (some (msg i v))
 
 /-- **The stages are read from units' wires**: each wire of `Sk i j` (`i < r`) is a wire of some unit, so session `j`'s
-law, the full draw, draws it. -/
+law, the full sample, samples it. -/
 def VFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
   ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
     ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
@@ -594,7 +612,7 @@ theorem zk_sessions_recursive_full
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
     mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
 
-/-- **A round fork**: at some round `i < r`, draw `ω` and tagged commit string `pos`, the fork finder of round `i`'s
+/-- **A round fork**: at some round `i < r`, sample `ω` and tagged commit string `pos`, the fork finder of round `i`'s
 commitment (`forkAt`: two continuations of the prover's own strategy after its round-`i` commitment, each running the
 trial for `pos` at the outer proof) outputs a SHA-512 collision at an outcome it reaches. -/
 def RoundFork (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -603,7 +621,7 @@ def RoundFork (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin
   ∃ i < I.r, ∃ ω pos,
     (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).Finds H512
 
-/-- **A session fork**: at some leaf the prover reaches (a draw `ω`, a transcript `t` and its strategy `s` of V*'s outer
+/-- **A session fork**: at some leaf the prover reaches (a sample `ω`, a transcript `t` and its strategy `s` of V*'s outer
 proof there), at some outcome of V*'s sessions that `s` reaches, the strategy `s` names for some session `j` has a fork
 (`ZkOuter.Fork`). -/
 def SessionFork (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

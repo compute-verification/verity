@@ -1,4 +1,19 @@
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Registered
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G at V*'s family: `rec-acc`'s rows at the openings and at the reps' ends
@@ -18,6 +33,8 @@ the registrant's row at `rec-acc`'s root, so each comes from three facts:
 from `HResL` and the three facts. `hAccRows_of_keys` gives `HAccRows`' `acc` half from them and takes its `acc_out` half
 as `AccOutL`, the openings' outputs in the layer.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

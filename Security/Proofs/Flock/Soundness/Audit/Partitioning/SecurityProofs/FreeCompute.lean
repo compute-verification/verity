@@ -1,11 +1,17 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Optimal partitioning against free compute: the proofs
 
 The proofs of the free-compute statements of `Partitioning.Guarantees`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 

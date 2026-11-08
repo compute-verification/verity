@@ -9,10 +9,17 @@ reference to it), and the private track's registration predicate proves it on th
 parser checks hold by construction here: a call binds exactly its callee's inputs, and a caller reads only wires, so never a
 bit inside a callee.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.Library
+module
+
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.Library
+public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -241,7 +248,7 @@ def cmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
     let base := fun (i : Nat) => [("file", Json.str path), ("index", Lean.toJson i)]
-    match Json.parse text >>= fun j => j.getObjValAs? (Array Json) "types" with
+    match JsonParse.parse text >>= fun j => j.getObjValAs? (Array Json) "types" with
     | .error e =>
       IO.println s!"CIRCUITTYPE {(Json.mkObj [("file", Json.str path), ("ok", Json.bool false), ("error", Json.str s!"not a types file: {e}")]).compress}"
     | .ok ts =>

@@ -27,7 +27,7 @@ requests that committed those ids (`RequestRecord.prefix_cover`), and the run th
 prefix in its records and requires both requests' checks to fail (`prefix_negative`); with the cache on, a run with no
 hit fails.
 
-A Commit window closes after ``--window-steps`` committed steps or when the engine is idle; `served_record.Record` reads it
+A Commit window closes after ``--window-steps`` committed steps or when the engine is idle; `served_record.BlockValues` reads it
 back. Each finished request is checked (`RequestRecord.check`) against what the engine streamed for it (the
 ``RequestOutput`` deltas an HTTP server sends), with the seed it carried. Under ``--out``: ``run.json`` (the engine, the
 traffic's parameters, the scheduler's resolved configuration), ``windows.jsonl`` (each window's Commit verdict and
@@ -116,10 +116,9 @@ class Options:
 
 
 def committer_opts(opts: Options) -> SimpleNamespace:
-    """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row: the
-    vllm-v1 committer's own knobs are unset, since commit-arb serves no recorded vllm-v1 run again."""
-    return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, of_record=None, commit=True,
-                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False, retention=SS.RetentionOptions())
+    """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row."""
+    return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, commit=True, seal=False,
+                           retention=SS.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
@@ -191,7 +190,7 @@ def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], m
     text around a user turn in place of CERT-VARLEN's (`template_frame`).
 
     With ``system_prompts`` N, each request opens with one of N system prompts (`system_prompt`, the user turn's prompt length
-    then as drawn). With ``turns``, each conversation goes on for 0 … ``turns`` more turns, listed after the ``n`` first turns:
+    then as sampled). With ``turns``, each conversation goes on for 0 … ``turns`` more turns, listed after the ``n`` first turns:
     a turn ``follows`` the one before it, and arrives ``gap`` steps after it finished, its prompt that turn's prompt, its
     streamed ids and ``suffix`` (the user's next question, framed), which `run` puts together then. With both 0, the samples
     and the requests are the same as without them."""
@@ -262,7 +261,7 @@ def build(opts: Options) -> tuple[Any, Any]:
 
 
 class Windows:
-    """The committer's windows over the stepped engine, each read back into one `served_record.Record`."""
+    """The committer's windows over the stepped engine, each read back into one `served_record.BlockValues`."""
 
     def __init__(self, com: Any, record: Any, out: Path, window_steps: int) -> None:
         self.com, self.record, self.out, self.window_steps = com, record, out, int(window_steps)
@@ -335,13 +334,13 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
     from vllm import SamplingParams
     from vllm.sampling_params import RequestOutputKind
 
-    from verity_vllm.commit.served_record import Record
+    from verity_vllm.commit.served_record import BlockValues
     from verity_vllm.engine import served_seed
 
     engine = llm.vllm.llm_engine
     seed_hooks = served_seed.install(engine)
     by_id = {q["request_id"]: q for q in requests}
-    record = Record(known=by_id)
+    record = BlockValues(known=by_id)
     windows = Windows(com, record, out, window_steps)
     streamed: dict[str, list[int]] = {rid: [] for rid in by_id}
     finish: dict[str, dict[str, Any]] = {}

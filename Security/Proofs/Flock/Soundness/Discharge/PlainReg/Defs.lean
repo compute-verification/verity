@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 
 /-!
 # `verify --registered F` without `--zk`, as an event of the audit
@@ -8,9 +10,11 @@ every table's statement to the verifier's own registered reads `own` (F's ports,
 `Stmt.setupTables`, `Main.buildSessionOf` runs `Flock.checkRegistered` on each statement, the library's definition, which
 `AcceptsR` reads as it is. `AcceptsR` is that verdict; it implies `Exec.Accepts` (`accepts_of_R`).
 
-What its registered check reads at a hidden-output drawn statement is what it reads under `--zk`: `ZkReg.OwnReadsH` and
+What its registered check reads at a hidden-output sampled statement is what it reads under `--zk`: `ZkReg.OwnReadsH` and
 `ZkReg.regPathsH`, which read the circuit, the population's public file and the record, and no `--zk` input.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainReg
 
@@ -18,7 +22,7 @@ open Flock
 open FlockSoundness.Discharge.Exec (Inputs setupOf Accepts LiveAccepts)
 
 /-- **flock-verify `--registered F` accepts the transcript without `--zk`**, `own` F's ports: the session's statements set
-up from `I` and the record's draw, each passes the registered check against `own`, and `Flock.verify` accepts the
+up from `I` and the record's sample, each passes the registered check against `own`, and `Flock.verify` accepts the
 record and the proof files. -/
 def AcceptsR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧ sts.forM (checkRegistered · (some own)) = .ok () ∧
@@ -35,9 +39,5 @@ theorem accepts_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transc
     Accepts I t :=
   let ⟨spec, sts, hs, _, hv⟩ := h
   ⟨spec, sts, hs, hv⟩
-
-theorem liveAccepts_of_R {I : Inputs} {own : Array Registered.Port} {o : Reg × Finset (Fin n) × Exec.Transcript}
-    (h : LiveAcceptsR I own o) : LiveAccepts I o :=
-  accepts_of_R h
 
 end FlockSoundness.Discharge.PlainReg

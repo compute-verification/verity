@@ -1,8 +1,18 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
-import Proofs.Flock.Soundness.SoundnessPad
+module
+
+public import Definitions.Flock.Defs
+public import Definitions.Flock.LigeritoPad
+public import Mathlib.CategoryTheory.Category.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+public import Proofs.Flock.Soundness.SoundnessPad
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!
-# C-Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
+# Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
 
 Under `--zk` the prover sends level 0's out-of-domain value, its lane rounds' messages and the rep's extra-lane sums
 `e^r` masked: `v' = v + h` with `h` a pad (§2: one `F` pad for the OOD value, four per lane message
@@ -21,6 +31,8 @@ acceptance probability (`ligeritoPadZK_couple`). Unmasking each message at `h` t
 the claim forms evaluate at `h` to the clear claims (`fold_couple`), and when the row vanishes `T'` is the clear
 restart, after which the two games are the same game.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 
@@ -145,7 +157,7 @@ structure Pads0 (np e : ℕ) where
 /-- A round polynomial whose coefficients are forms. -/
 abbrev QuadL (K : Type) (np : ℕ) := LinK K np × LinK K np × LinK K np
 
-/-- `from(msg, s)` (§13.2) on forms. -/
+/-- `from(msg, s)` (`Flock.Ligerito`) on forms. -/
 def fromMsgL {np : ℕ} (m : LinK K np × LinK K np) (s : LinK K np) : QuadL K np := (m.1, s + m.2, m.2)
 
 /-- `q(x) = q₀ + q₁·x + q₂·x²` on forms. -/
@@ -237,7 +249,7 @@ def ligTail (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ) (b
         (padColumn A lv₀.logLen lv₀.logCols t c₀ initial ρ (extraLane sch.k0 e r) ybar C₀) 0 st
       recursiveRounds A n b initial sch.ext rest { st with prev := C₁, prevLevel := lv₁ }
 
-/-- **C-Flock ZK's masked level 0** for rep `r` (§1, §7): `Model.ligeritoPad` with the OOD value, the lane messages and
+/-- **Flock ZK's masked level 0** for rep `r` (§1, §7): `Model.ligeritoPad` with the OOD value, the lane messages and
 `e^r` masked by the pads `P`, the claim carried as a form, and the restart `T'` received after `ρ` and before `ybar`.
 Returns the lane-phase row `claim_k + Σ_i ρ_i·e_i − T'` and the verdict of levels 1+, run from `T'`. -/
 def ligeritoPadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Schedule) (t : ℕ) (c₀ : F) (r : ℕ) (T : F)

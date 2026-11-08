@@ -1,9 +1,25 @@
-import Proofs.Flock.VBridge.OfVStar
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.Soundness.Discharge.Hm.Salt
+module
+
+public import VStar.Link
+public import Flock.RecLinkRef
+public import Proofs.Flock.Soundness.Discharge.Hm.Fresh
+public import Proofs.Flock.VBridge.Climb
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
-import VStar.Link
-import Flock.RecLinkRef
 
 /-!
 # The gadgets and the row check of V*'s `RecLink{UB, PB}` unit
@@ -18,6 +34,8 @@ import Flock.RecLinkRef
   XOR zero exactly when they are equal (`allZero_xor`).
 * Freshness: each gadget adds rows only as `fresh` does (`fresh_okForms`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.RecLink
 

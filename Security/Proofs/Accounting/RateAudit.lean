@@ -1,26 +1,28 @@
-import Proofs.Accounting.RateAudit.Audit
-import Proofs.Accounting.RateAudit.Chain
-import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.RateAudit.DeployedSketch
-import Proofs.Accounting.RateAudit.DeployedSketchSum
-import Proofs.Accounting.RateAudit.DeployedRelay
-import Proofs.Accounting.RateAudit.DeployedRun
-import Proofs.Accounting.RateAudit.Honest
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.RateAudit.Interactive
-import Proofs.Accounting.RateAudit.Joint
-import Proofs.Accounting.RateAudit.Named
-import Proofs.Accounting.RateAudit.Partial
-import Proofs.Accounting.RateAudit.PartialJoint
-import Proofs.Accounting.RateAudit.Relay
-import Proofs.Accounting.RateAudit.Session
-import Proofs.Accounting.RateAudit.Sketch
-import Proofs.Accounting.RateAudit.SketchHonest
-import Proofs.Accounting.RateAudit.SketchInteractive
-import Proofs.Accounting.RateAudit.SketchRank
-import Proofs.Accounting.RateAudit.SketchTable
-import Proofs.Accounting.RateAudit.Windows
+module
+
+public import Proofs.Accounting.RateAudit.Audit
+public import Proofs.Accounting.RateAudit.Chain
+public import Proofs.Accounting.RateAudit.Conservation
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.RateAudit.DeployedSketch
+public import Proofs.Accounting.RateAudit.DeployedSketchSum
+public import Proofs.Accounting.RateAudit.DeployedRelay
+public import Proofs.Accounting.RateAudit.DeployedRun
+public import Proofs.Accounting.RateAudit.Honest
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.RateAudit.Interactive
+public import Proofs.Accounting.RateAudit.Joint
+public import Proofs.Accounting.RateAudit.Named
+public import Proofs.Accounting.RateAudit.Partial
+public import Proofs.Accounting.RateAudit.PartialJoint
+public import Proofs.Accounting.RateAudit.Relay
+public import Proofs.Accounting.RateAudit.Session
+public import Proofs.Accounting.RateAudit.Sketch
+public import Proofs.Accounting.RateAudit.SketchHonest
+public import Proofs.Accounting.RateAudit.SketchInteractive
+public import Proofs.Accounting.RateAudit.SketchRank
+public import Proofs.Accounting.RateAudit.SketchTable
+public import Proofs.Accounting.RateAudit.Windows
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows
@@ -45,7 +47,7 @@ are ground against the Fiat–Shamir seed (`Accounting.SecurityProofs.RateGrindP
 bound over the monitoring period on the samples (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the
 route `Sampled` it gives a window (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation
 with the compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`),
-with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a
+with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled sample of a window and of a
 session of windows, over the monitoring period and in every window (`Accounting.SecurityProofs.RateWindowDraw`,
 `RateSessionDraw`), with its route `Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote
 bandwidth audit as deployed, one guarantee over a session of ground, chained windows of devices with partial completion
@@ -58,3 +60,5 @@ and the composed verbatim-sector tensor-sketch session (`RemoteSessionConservati
 parameters, under the per-pass hash budget, `RemoteSessionConservationSketchDeployed`, with the budgeted session bound
 `RemoteSessionConservationSketchSum` and the product form kept as
 `RemoteSessionConservationSketchDeployedProduct`). -/
+
+@[expose] public section

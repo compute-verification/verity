@@ -1,6 +1,42 @@
-import Proofs.Flock.Claims.KS.ZkAlign
-import Proofs.Flock.Claims.KS.RepDistDeploy
+module
+
+public import Proofs.Flock.Claims.KS.RepDistDeploy
+public import Proofs.Flock.Claims.KS.ZkAlign
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.RepDistZ
 import Proofs.Flock.Claims.KS.ZkStep
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # The masked fork round of a cap, split at the schedule
@@ -18,6 +54,8 @@ node comes after the tables in front's coins, rep 0's if `r = 1`, and a distance
 * `ZkFrontAlign`, `zkSlotAlign_of_front`: so `ZkSlotAlign` is the slot at that split count.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -29,7 +67,7 @@ open Claims.Bridge.Live
 /-! ## A masked rep's caps at `capRound` -/
 
 /-- A masked rep's coins to its level-`ℓ + 1` cap, with four lanes after level 0: the zerocheck's, the lincheck's, the
-opening's of its `2 · regions + 2` claims, level 0's two first coins and `e` extra draws, then `capRound`. -/
+opening's of its `2 · regions + 2` claims, level 0's two first coins and `e` extra samples, then `capRound`. -/
 def zkCapDist {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (T : TabZK F mPts) (ℓ : ℕ) : ℕ :=
   capRound T.sch.k0 (ℓ + 1) + T.e + (2 * T.S.regions.length + 2 + 1) + (T.S.kLog - 6 + 3) + (T.S.m - 6 + 3)
 
@@ -78,7 +116,7 @@ theorem schedOf_lanes {s : Flock.Schedule} (hd : Refine.DimSeam s) :
   simp only [Refine.schedOf, List.getElem_tail, List.getElem_map, Array.getElem_toList, Refine.levelOf]
   exact h4
 
-/-- **A deployed table's numbers**: its extra draws, its statement's `m`, `kLog` and regions, its schedule's `k0`, and
+/-- **A deployed table's numbers**: its extra samples, its statement's `m`, `kLog` and regions, its schedule's `k0`, and
 four lanes after level 0. -/
 theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])

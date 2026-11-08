@@ -1,5 +1,20 @@
-import Proofs.Flock.VBridge.AccChain
-import Proofs.Flock.VBridge.Decode
+module
+
+public import Proofs.Flock.VBridge.AccChain
+public import Proofs.Flock.VBridge.Decode
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G item 4: the running sums' unit facts, from the units' decoded columns
@@ -23,6 +38,8 @@ facts about one copy of one unit in a layer agreeing with the registrant, the de
   `acc0`, `acc1` carry the rep's message elements and are registered reads of `rec-acc`'s rows at the rep's ends, the
   elements are those rows' (`ReadsEnds`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.AccChain
 

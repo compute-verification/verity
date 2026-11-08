@@ -1,5 +1,51 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+import all Init.Data.Repr
+import all Init.Data.String.Defs
+public import Proofs.Flock.Claims.Recursion.CoinTie
+public import Proofs.Flock.Claims.Recursion.RestRead
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.CoinPos
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.InnerForm
+import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # Check 5's inner session at a staged part is the inner statement at the coins
@@ -13,10 +59,10 @@ readers take it off `x` and the coins alone:
 * each rep `r`'s rounds, where its stream has any, are `canonRounds` of the coins after the link, up to rounds of no
   coins (`CoinSource.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
 
-`staged_innerAt` proves it from the verifier's checks. The rounds are the coin server's record's (`coinTie_sized`, the
+`staged_innerAt` proves it from the verifier's checks. The rounds are the challenger's live-coin part's record's (`coinTie_sized`, the
 coin tie with `repCoins`' round counts); `checkReads` holds that record to the schedule of the verifier's inner shape,
 which at the dense form is the table's two reps at `repRounds` (`scheduleOf_dense`, `two_reps`), so the record's
-round of rep `r`'s stream at round `j` is its round `1 + r R + j` after the link, drawn by that coin (`showsTr`); the
+round of rep `r`'s stream at round `j` is its round `1 + r R + j` after the link, sampled by that coin (`showsTr`); the
 record's rounds are the transcript's, but for the one round of no coins `repCoins` lets it skip
 (`filter_of_places`).
 
@@ -24,6 +70,8 @@ record's rounds are the transcript's, but for the one round of no coins `repCoin
 claims at the first coin's link points (`innerCoinsR_of`), and `rep_canon` gives a rep's verifier rows at
 `canonRounds`, the coin side of `VVTie`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerAt
 
@@ -453,7 +501,7 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
   obtain ⟨ps, hps, hdrawn⟩ := hc
   rw [hshow] at hps
   cases hps
-  -- each round of `R` drew its coins from its coin
+  -- each round of `R` flipped its coins from its coin
   have hdr : ∀ g (hg : g < R.rounds.length), Drawn (c (g + 1)) R.rounds[g].coins.toArray := by
     intro g hg
     have hlen : g + 1 < (R.msgs.map fun mc => (mc.1, mc.2.toArray)).length := by
@@ -606,7 +654,7 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
   revert h
-  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := some f.partition)
       (program := f.program) with
   | error e => intro h; cases h
   | ok q =>

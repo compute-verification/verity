@@ -1,6 +1,6 @@
 """The call-boundary source (`acquire.sources.call_boundary_source`) on CPU tensors with a recording committer, on request Programs written
 as Build dirs: a Gemma-2-style dense Program (the ATen norm chains, one input and x + residual, and the soft-capped logits) and the
-block-scaled FP8 linear (`Fp8GroupQuant_v1 -> ScaledMmFp8Block_v1`).  Every `call_boundaries` identity of the manifest is committed once
+block-scaled FP8 linear (`Fp8GroupQuant_v1 -> ScaledMmFp8BlockSharedScale_v1`).  Every `call_boundaries` identity of the manifest is committed once
 per step over its element range with the words a row-by-row `verity.ml.circuits.evaluation.evaluate` of the Program gives -- on edge words too (NaN
 payloads, +-inf, +-0, subnormals, the largest finite); a manifest naming none attaches nothing and a forced attach refuses; a body the
 rule cannot evaluate is refused by name; an argument of another shape is a collector error naming the site; and the consuming GEMM's
@@ -318,7 +318,7 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
     op = "model.layers.0.mlp.gate_up_proj/per_token_group_fp8_quant_1"
     w_lo, w_hi = fp8.woff["model.model.layers.0.mlp.gate_up_proj.weight"]
     s_lo, s_hi = fp8.woff["model.model.layers.0.mlp.gate_up_proj.weight_scale_inv"]
-    mm = specialization("ScaledMmFp8Block_v1", {"K": fp8.H, "N": 2 * fp8.I, "G": fp8.G})
+    mm = specialization("ScaledMmFp8BlockSharedScale_v1", {"K": fp8.H, "N": 2 * fp8.I, "G": fp8.G})
     out = np.array(evaluate(mm, *[[int(v) for v in a] for a in (host[f"{op}/0"], host[f"{op}/1"], fp8.fields["model.model.layers.0.mlp.gate_up_proj.weight"],
                                                                  fp8.fields["model.model.layers.0.mlp.gate_up_proj.weight_scale_inv"])]), dtype=np.uint16)
     assert (w_hi - w_lo, s_hi - s_lo) == (fp8.fields["model.model.layers.0.mlp.gate_up_proj.weight"].size, 4)

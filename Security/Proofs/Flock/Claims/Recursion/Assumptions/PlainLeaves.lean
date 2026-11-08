@@ -1,5 +1,38 @@
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Complete.Walk
+module
+
+public import Proofs.Flock.Claims.Complete.Walk
+public import Proofs.Flock.Claims.DeployCode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Flock's admission of plain leaves
@@ -9,6 +42,8 @@ some concrete inner statement passes the checked reader, is small enough for Flo
 scope and true. `DeployChecked.lean` proves what follows from it.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Claims (Msg)
@@ -17,12 +52,12 @@ open Lean (Json)
 /-- **Flock admits a plain-leaves statement of the inner shape**: some inner
 statement passes every check the checked reader makes of it (it decodes, its partition reads, the inner setup at the
 recursion's inner tags accepts it, `RecVStar.innerOf`, and Flock's plain verifier sets it up, its statement check
-passes and it carries a draw, `innerOk`), is under `2^56` bytes with fewer than `2^128` zerocheck outer coins, has
+passes and it carries a sample, `innerOk`), is under `2^56` bytes with fewer than `2^128` zerocheck outer coins, has
 tables whose regions fit (`FlockComplete.RegionsFit`) and an honest record that fits (`FlockComplete.RecordFitsAt`)
 (so Flock's completeness error is below 1 there, `FlockComplete.δc_sha512_lt_one`), is in Flock's scope, where its
 soundness headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`). Every conjunct is a fact about one
-concrete inner statement and its witness: the recursion's drawn inner session is one, as a recorded run measured
-(Lean `verify` without `--zk` accepts it, its record holding the full stratified draw), and none is proved here. Only
+concrete inner statement and its witness: the recursion's sampled inner session is one, as a recorded run measured
+(Lean `verify` without `--zk` accepts it, its record holding the full stratified sample), and none is proved here. Only
 an inner statement whose public file holds each instance's own rows can be one: Flock's statement check refuses a
 shared-row public file at plain leaves (`ProvedScope.sharedRowsOk` passes one only at `hm96-sha512/v1` leaves under
 `--registered F`), which `RecVStar.innerOf` sets up. -/

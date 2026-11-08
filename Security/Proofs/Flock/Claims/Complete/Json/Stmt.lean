@@ -1,29 +1,79 @@
-import Proofs.Flock.Claims.Complete.Json.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Claims.Complete.Json.Parse
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Batteries.Tactic.OpenPrivate
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the record needs of the statement, from its setup
 
-`stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes
-to the statement's instances (`DrawOk`), and the statement's draw is the one it was set up at: `StmtOk`, from the case's
+`stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable sample that decodes
+to the statement's instances (`DrawOk`), and the statement's sample is the one it was set up at: `StmtOk`, from the case's
 setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
 tree its coins name.
 
-* The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
+* The plain verifier's coins are a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
   keeps the coins' tree (`Stmt.coinTree`, `setupOne_stmt`), so it names none (`tree?_none`). The scope check
   (`ProvedScope.check`) reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain
   verifier's statements.
 * `Σ` is a SHA-512 digest (`setupH_stmt`, `Hidden.setupHidden_spec'`).
-* The public header is the population's, rebuilt (`loadPublic_header`), with the draw put in (`HmRow.drawn`), so its
-  `unit_draw` is the draw (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
-* The draw is the statement's parsed JSON (`jsonOf`) and stratified or, at hidden outputs, a subset (the setup's
-  `ProvedScope.drawLaw`, `Ins.setup_drawLaw`, `law_of_lawWhy`), and a stratified or subset draw that decodes has exactly
+* The public header is the population's, rebuilt (`loadPublic_header`), with the sample put in (`HmRow.drawn`), so its
+  `unit_draw` is the sample (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
+* The sample is the statement's parsed JSON (`jsonOf`) and stratified or, at hidden outputs, a subset (the setup's
+  `ProvedScope.drawLaw`, `Ins.setup_drawLaw`, `law_of_lawWhy`), and a stratified or subset sample that decodes has exactly
   the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
   printable.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -35,10 +85,9 @@ open private stratumOfJson from Flock.Draw
 
 /-! ## The statement's inputs -/
 
-/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (the OS's or a seed's), and the
-draw. -/
+/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (a seed's), and the sample. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
-    s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .os ∨ s.read.I.coins = .seed) ∧
+    s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .seed) ∧
       ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   refine ⟨Raw.ins_zk h, ?_, Raw.ins_draw h⟩
   unfold Raw.ins at h
@@ -48,7 +97,7 @@ theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     | (cases h; done)
     | (cases h; exact fun hz => by simp_all)
 
-/-- The draw is well formed: the verifier rebuilt it (`Flock.norm`, `wf_norm`). -/
+/-- The sample is well formed: the verifier rebuilt it (`Flock.norm`, `wf_norm`). -/
 theorem draw_wf {w : Raw} {draw : Option Json}
     (h : ∃ dr, w.draw.mapM (jsonOf "draw") = .ok dr ∧ draw = dr.map Flock.norm) {d : Json} (hd : draw = some d) :
     Claims.Json.Wf d := by
@@ -175,7 +224,7 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array �
 
 /-! ## What the setup checked -/
 
-/-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
+/-- A sampled session's setup checked its sample's law (`ProvedScope.drawLaw`). -/
 theorem Ins.setup_drawLaw {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
     ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by
@@ -196,7 +245,7 @@ theorem hmOut_loadPublic {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Publ
     assumption
 
 set_option maxHeartbeats 4000000 in
-/-- What `Stmt.setupH` set up: its public file loaded (at a draw, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
+/-- What `Stmt.setupH` set up: its public file loaded (at a sample, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
 its instances, Σ and its hello. -/
 theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
@@ -227,7 +276,7 @@ theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
 
 open Discharge in
 /-- **What a table's setup set up** (`setupOne`, either output mode): the public file a public-file load returned, at a
-draw that file's `HmRow.drawn`; the header's draw decodes to the statement's instances; a SHA-512 Σ; and the hello. -/
+sample that file's `HmRow.drawn`; the header's sample decodes to the statement's instances; a SHA-512 Σ; and the hello. -/
 theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -252,10 +301,10 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     obtain ⟨u, hu, -, hn'⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [hn, hn']⟩
 
-/-! ## The public header's draw -/
+/-! ## The public header's sample -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
@@ -271,7 +320,7 @@ theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Pub
     exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
 set_option maxHeartbeats 4000000 in
-/-- `HmRow.drawn` puts the draw in the population's header. -/
+/-- `HmRow.drawn` puts the sample in the population's header. -/
 theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
     (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') :
     pub'.header.getObjVal? "unit_draw" = .ok d := by
@@ -291,7 +340,7 @@ theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeM
       Std.TreeMap.Raw.getElem?_insert hm]
     simp
 
-/-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
+/-- **The statement's header names its sample**: a sample's statement over a loaded public file has that sample as its
 `unit_draw`. -/
 theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray}
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
@@ -325,12 +374,12 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
 
-/-- **The plain verifier's coins name no coin tree**: the OS's coins or a seed's (`Coins.tree?`), which the statement
-keeps as its `coinTree`. -/
-theorem tree?_none {coins : Coins} (hc : coins = .os ∨ coins = .seed) : coins.tree? = none := by
-  rcases hc with rfl | rfl <;> rfl
+/-- **The plain verifier's coins name no coin tree**: a seed's (`Coins.tree?`), which the statement keeps as its
+`coinTree`. -/
+theorem tree?_none {coins : Coins} (hc : coins = .seed) : coins.tree? = none := by
+  subst hc; rfl
 
-/-! ## A stratified draw that decodes is printable -/
+/-! ## A stratified sample that decodes is printable -/
 
 theorem getObj_ok {j : Json} {m : Std.TreeMap.Raw String Json compare} (h : j.getObj? = .ok m) : j = .obj m := by
   cases j with
@@ -421,7 +470,7 @@ theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stratumOfJso
       exact asNat_good hn
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified draw that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
+/-- **A stratified sample that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, a string, natural numbers, an array of them, and strata that decode. -/
 theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : Good j := by
@@ -459,7 +508,7 @@ theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.Uni
       | arr ha => exact good_stratum (ha x hx) hy
 
 set_option maxHeartbeats 4000000 in
-/-- **A subset draw that decodes is printable**: an object of exactly `law`, `population`, `units` and `k`, a string,
+/-- **A subset sample that decodes is printable**: an object of exactly `law`, `population`, `units` and `k`, a string,
 natural numbers and an array of them. -/
 theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
     (hl : D.law = .subset k) : Good j := by
@@ -490,7 +539,7 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
     · exact ⟨_, arr_ok ‹J.arr _ "units" _ = _›, good_of_asNat_mapM ‹Array.mapM _ _ = Except.ok _›⟩
     · exact ⟨_, nat_ok ‹J.nat _ "k" _ = _›, .num _⟩
 
-/-- A draw a soundness claim draws by is stratified or a subset (a subset only where `lawWhy`'s form covers it). -/
+/-- A sample a soundness claim samples by is stratified or a subset (a subset only where `lawWhy`'s form covers it). -/
 theorem law_of_lawWhy {zk : Bool} {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy zk tags false D = none) :
     (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
   revert h
@@ -504,11 +553,11 @@ theorem law_of_lawWhy {zk : Bool} {tags : Tags} {D : Draw.UnitDraw} (h : ProvedS
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **What the record needs of the statement**, at every good case: no keyed coin tree, a non-empty `Σ`, a printable
-draw that decodes to the statement's instances, and the statement's draw the one it was set up at. -/
+sample that decodes to the statement's instances, and the statement's sample the one it was set up at. -/
 def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
 
-/-- **The case's one table**: its statement is `setupOne`'s, at the statement's tags, coins and draw. -/
+/-- **The case's one table**: its statement is `setupOne`'s, at the statement's tags, coins and sample. -/
 theorem _root_.FlockComplete.Case.one (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
       Discharge.HiddenExec.setupOne c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins
@@ -536,8 +585,8 @@ theorem _root_.FlockComplete.Case.one (c : Case H rel) :
     omega
 
 /-- **What the record needs of the statement holds at every good case** (`StmtOk`): the plain verifier's coins name no
-coin tree, Σ is a SHA-512 digest, the draw is printable and decodes to
-the statement's instances, and the session's draw is the statement's. -/
+coin tree, Σ is a SHA-512 digest, the sample is printable and decodes to
+the statement's instances, and the session's sample is the statement's. -/
 theorem stmtOk : StmtOk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one

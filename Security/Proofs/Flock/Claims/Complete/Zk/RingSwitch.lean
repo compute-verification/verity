@@ -1,6 +1,45 @@
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
-import Proofs.Flock.Claims.Complete.Zk.ReplayPos
-import Proofs.Flock.Claims.Complete.Zk.Replay
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Zk.Replay
+public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Walk
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The masked ring switch replays (`RingSwitchZk`)
@@ -17,6 +56,8 @@ check, and the extra claims returns, given the extra claims' algebra (`RsExtrasZ
   (`ringSwitchWith_of`, `rs_of`): the two checked claims meet their values by definition (`Zk.claimCheck`), the extra
   claims by `RsExtrasZk`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -378,12 +419,12 @@ def RsExtrasZk : Prop :=
 variable {H rel}
 
 /-- **The masked ring switch replays** (`RingSwitchZk`) at every honest masked run, given the extra claims' algebra. -/
-theorem ringSwitchZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem ringSwitchZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) (hX : RsExtrasZk H rel) : RingSwitchZk H rel := by
   intro o i hi r hr
-  have hRp := replay_goal S h64 hS hP hR o i hi r hr
+  have hRp := replay_goal h64 hS hP hR o i hi r hr
   obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, hext, h25, hrep⟩ :=
-    JsonRT.RunZk.walk S h64 hS hP hR o
+    JsonRT.RunZk.walk h64 hS hP hR o
   have hi₀ := hi
   rw [htabs] at hi₀
   obtain rfl : i = 0 := by simpa using hi₀

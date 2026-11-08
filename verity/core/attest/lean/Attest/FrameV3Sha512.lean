@@ -1,11 +1,13 @@
-import Flock.Public
-import Randomness
+module
+
+public import Randomness
+public import Flock.FV3
 
 /-!
 # frame-v3-sha512 over a range of positions
 
 `verity.ml.commitments.merkle.CommitmentDomain` with `hash = "sha512"` and `positions = RangeIndexedDomain(0, count)` or
-`RangeU64Domain(0, count)`, and `tree_levels`, `verify_opening` over it. Every hash is C-Flock's frame (`Flock.FV3.hash`)
+`RangeU64Domain(0, count)`, and `tree_levels`, `verify_opening` over it. Every hash is Flock's frame (`Flock.FV3.hash`)
 through SHA-512. Integers are `_uint`'s minimal big-endian bytes (`FlockSoundness.Randomness.natBytes`), of any size:
 `Flock.FV3.uint` is 8 bytes at most.
 
@@ -20,6 +22,8 @@ through SHA-512. Integers are `_uint`'s minimal big-endian bytes (`FlockSoundnes
 The memory challenger's session records and every auditor party's period tree (`Attest.Period`) are trees of this
 frame; a later shared package of core's commitments takes it as it is.
 -/
+
+@[expose] public section
 
 namespace FrameV3Sha512
 

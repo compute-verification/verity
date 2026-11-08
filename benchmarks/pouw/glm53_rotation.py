@@ -16,7 +16,7 @@ kv_b's columns, so into the absorbed W_UK_T and W_UV.
 
 The key is `registration.rotation_key` over an epoch started from a challenger's salt coin; the weights' root is a stand-in
 (SHA-512 over the checkpoint's index), since this measures the transform and not a commitment.  S and the blocks are
-calibrated on `--tokens` tokens of README.md through layers 0 … max(--layers) in FP64.
+calibrated on `--tokens` tokens of ARCHITECTURE.md through layers 0 … max(--layers) in FP64.
 
 Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP layer, every TP8 rank's slice):
   registration   `PearlC.check_registration` on every adopted stack and the refused ones
@@ -34,7 +34,7 @@ Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP lay
   cast           how far Pearl-C's v1 cast (e4m3(α·x) per row, both operands, per rank's k on row-parallel linears) moves
                  each layer's update, unrotated and under `STACK` (the measure registration's docstring states: 158% / 4%)
   lm_head        n = 19360 padded to whole 64-column tiles with zero rows, the last tile's rows voluntary: the domain, that
-                 no other tile goes undrawn, V-EX's cap, and the credit on the full tiles' real columns
+                 no other tile goes unsampled, V-EX's cap, and the credit on the full tiles' real columns
   shares         the credit map's shares (`--map`, glm53_credit_map's JSON), then per registered stack with its unreached
                  linears uncredited under Pearl-C and lm_head padded
 
@@ -69,9 +69,9 @@ import run_result  # noqa: E402
 from verity.core.protocols.pouw import registration as REG  # noqa: E402
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root  # noqa: E402
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
 
 SNAP = "/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42"
 TP = 8
@@ -930,7 +930,7 @@ def main() -> int:
     else:
         from tokenizers import Tokenizer
         tok = Tokenizer.from_file(str(Path(a.snapshot) / "tokenizer.json"))
-        ids = torch.tensor(tok.encode((ROOT / "README.md").read_text()).ids[: a.tokens])
+        ids = torch.tensor(tok.encode((ROOT / "ARCHITECTURE.md").read_text()).ids[: a.tokens])
     T = len(ids)
     pos = torch.arange(T)
     cal = calibrate(ck, D, ids, max(layers), log, 2 if a.synthetic else None)

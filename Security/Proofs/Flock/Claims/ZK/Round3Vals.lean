@@ -1,6 +1,38 @@
-import Proofs.Flock.Claims.ZK.FirstRefusal
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner
+module
+
+public import Proofs.Flock.Claims.ZK.FirstRefusal
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The masked zerocheck's first round, the model's values against the executable's
@@ -12,12 +44,14 @@ Round `3` of the masked session absorbs the padded `round1_ab` and `round1_c`, w
   of `Replay.Zc.r1c_eq`.
 * `Zerocheck.honest_round1ab_congr`, `honest_round1c_congr`: the honest first round reads its tables below `64 · 2^n`
   only (`skipAt_congr`).
-* `Composed.zcH_round1ab`, `zcH_round1c`: so the draw's clear first round is the executable's on a trace whose bits are
-  the model's tables, at the draw's zerocheck vector `rF`; `honestAt_r1ab_exe`, `honestAt_r1c_exe`: the clear values a
+* `Composed.zcH_round1ab`, `zcH_round1c`: so the sample's clear first round is the executable's on a trace whose bits are
+  the model's tables, at the sample's zerocheck vector `rF`; `honestAt_r1ab_exe`, `honestAt_r1c_exe`: the clear values a
   cut masks at `round1_ab`'s and `round1_c`'s layout indices (`innerOf`'s `vals`).
 * `Masked.outerAt_eq`: a rep's outer coin at the opened coins is the coin of the round after its first
   (`repBase + 1`), the one the session's second zerocheck squeeze reads.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Zc
 
@@ -86,8 +120,8 @@ theorem sixtyFour_mul_pow {mPts : ℕ} (Tz : TabZK 𝔽 mPts) : 64 * 2 ^ (Tz.S.m
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
   (zw : Witness Tz.S.m)
 
-/-- **The draw's clear `round1_ab` is the executable's** on a trace whose `A·z`, `B·z` bits are the model's A- and
-B-side tables, at the draw's zerocheck vector. -/
+/-- **The sample's clear `round1_ab` is the executable's** on a trace whose `A·z`, `B·z` bits are the model's A- and
+B-side tables, at the sample's zerocheck vector. -/
 theorem zcH_round1ab (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (ha : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.az i = aT Tz zw i)
     (hb : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.bz i = bT Tz zw i) :
@@ -98,7 +132,7 @@ theorem zcH_round1ab (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.
     (fun i hi => (ha i (hi.trans_eq (sixtyFour_mul_pow Tz))).symm)
     (fun i hi => (hb i (hi.trans_eq (sixtyFour_mul_pow Tz))).symm)
 
-/-- **The draw's clear `round1_c` is the executable's** on a trace whose `z` bits are the model's witness table. -/
+/-- **The sample's clear `round1_c` is the executable's** on a trace whose `z` bits are the model's witness table. -/
 theorem zcH_round1c (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (hz : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.z i = cT Tz zw i) :
     (zcH Tz st c r zw).round1c = FlockComplete.Replay.Zc.r1c tr (Tz.S.m - 6) (rF Tz st c r) := by

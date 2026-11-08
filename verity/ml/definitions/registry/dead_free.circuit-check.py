@@ -12,9 +12,16 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `GumbelTopPTokenSelect_v2` has 6,034 dead gates), and FA2's attention with a first block of 16 keys below kBlockN 32 (where
     `Attention_v5` has 2 dead gates a head), v19's head also at a first block of 8 keys (whose V rows `AttnBlockFirst_v1` pads to
     a k-step), and `AttnBlockFirst_v2` at those two first blocks with a key's value in 4 slices of 4 columns, also at Ampere's
-    k16 step (FA2's on sm_80 and sm_89)."""
+    k16 step (FA2's on sm_80 and sm_89).  GLM-5.3's served selects: the greedy `TokenSelect_v4` and the seeded top-p
+    `GumbelTopPTokenSelect_v3` at its vocabulary (V = 154,880), the latter at the H200's registered split count
+    (`topp_geometry.registered_splits(132)` = 32, the S every served top-p launch is pinned to), the two the step compiler emits.
+    Both are over `targets.MAX_GATES`, so ``--all`` checks the greedy one's combine at the served V and builds the top-p one,
+    whose keep word's `live_replay` holds V-sized liveness sets (heavy.json): a build that fails only at the served V fails here."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF, hopper, prims as P
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
+
+    glm53_v, glm53_s = 154880, registered_splits(132)
 
     fa2 = {"D": 16, "BN": 32, "MASKED_FROM": 1, "DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
     return [
@@ -40,4 +47,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("TopPMask_v4", lambda: bind(DF.TopPMaskV4, V=16, S=32)),
         ("GumbelSelectF32_v3", lambda: bind(DF.GumbelSelectF32V3, V=16)),
         ("GumbelTopPTokenSelect_v3", lambda: bind(DF.GumbelTopPTokenSelectV3, V=64, S=32)),
+        ("TokenSelect_v4-glm53", lambda: bind(DF.TokenSelectV4, V=glm53_v)),
+        ("GumbelTopPTokenSelect_v3-glm53", lambda: bind(DF.GumbelTopPTokenSelectV3, V=glm53_v, S=glm53_s)),
     ]

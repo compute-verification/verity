@@ -3,7 +3,7 @@
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries
-draws T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
+samples T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
 a scope's gain is L − κ·U (lucky and unlucky savings); outside δ every seed group realizes at most
 
     π* = ln(T·M/δ) / θ
@@ -38,7 +38,7 @@ and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 wit
 `verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
-the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
+the (query head, request) pairs a decode seed must cover. A seed over several query heads samples a KV head's K rows' and
 V columns' noise once, read by its heads/kv query heads (GQA). At decode the query's rows bind, so that moves nothing and
 a decode seed's cover counts every (query head, request) pair; at prefill K's rows bind, so a call's floor divides by the
 KV heads, not the query heads, and a prefill seed's cover counts (KV head, request) pairs.
@@ -112,7 +112,7 @@ def y_star(c: int, kappa: float, q: float = Q_BIT, wmax: int = SEG, p: float = P
 
 
 @dataclass(frozen=True)
-class Site:
+class SeedGroup:
     """One seed group: a matmul of one layer at one step (every head, the step's batch)."""
     kind: str        # "linears", "qk", "pv"
     name: str
@@ -130,19 +130,19 @@ class Site:
         return self.macs / self.tile_macs
 
 
-def sites(shape: EB.Shape, regime: str, n: int, ctx: int) -> list[Site]:
+def sites(shape: EB.Shape, regime: str, n: int, ctx: int) -> list[SeedGroup]:
     """A layer's seed groups: prefill of one n-token sequence (ctx = n), or a decode step of batch n at context ctx."""
     r_lin = TILE[0] if regime == "prefill" else min(n, TILE[0])
     tokens = n
-    out = [Site("linears", name, tokens * k * nn, r_lin, min(nn, TILE[1]), k) for name, k, nn in shape.linears]
+    out = [SeedGroup("linears", name, tokens * k * nn, r_lin, min(nn, TILE[1]), k) for name, k, nn in shape.linears]
     att = shape.heads * shape.d * (ctx * (ctx + 1) / 2 if regime == "prefill" else n * ctx)
     r_att = TILE[0] if regime == "prefill" else 1
-    out.append(Site("qk", "qk", att, r_att, TILE[1], shape.d))
-    out.append(Site("pv", "pv", att, r_att, min(shape.d, TILE[1]), ctx))
+    out.append(SeedGroup("qk", "qk", att, r_att, TILE[1], shape.d))
+    out.append(SeedGroup("pv", "pv", att, r_att, min(shape.d, TILE[1]), ctx))
     return out
 
 
-def premium(site: Site, t_bits: int, kappa: float, q: float = Q_BIT, y: float | None = None) -> float:
+def premium(site: SeedGroup, t_bits: int, kappa: float, q: float = Q_BIT, y: float | None = None) -> float:
     """π* in products for one seed group at the template's θ = y/r (y = y* unless given; inf when θ = 0)."""
     if y is None:
         y = y_star(site.c, kappa, q)
@@ -151,7 +151,7 @@ def premium(site: Site, t_bits: int, kappa: float, q: float = Q_BIT, y: float | 
     return math.inf if y == 0 else ln_t_over_delta(t_bits) * site.r / y
 
 
-def eps_by_kind(ss: list[Site], t_bits: int, kappa: float, q: float = Q_BIT,
+def eps_by_kind(ss: list[SeedGroup], t_bits: int, kappa: float, q: float = Q_BIT,
                 y: float | None = None) -> dict[str, float]:
     """ε_grind per kind and for the whole layer (the model's, since layers repeat): Σ π* / Σ products."""
     out = {}
@@ -163,7 +163,7 @@ def eps_by_kind(ss: list[Site], t_bits: int, kappa: float, q: float = Q_BIT,
     return out
 
 
-def eps_at_h(ss: list[Site], t_bits: int, h: float) -> dict[str, float]:
+def eps_at_h(ss: list[SeedGroup], t_bits: int, h: float) -> dict[str, float]:
     """ε at h bits a tile: log₂(T/δ)/h tiles a seed group."""
     pi_tiles = (t_bits + DELTA_BITS) / h
     out = {}
@@ -173,7 +173,7 @@ def eps_at_h(ss: list[Site], t_bits: int, h: float) -> dict[str, float]:
     return out
 
 
-def best_kappa(ss: list[Site], t_bits: int, eps_luck: float, q: float = Q_BIT) -> tuple[float, float, float]:
+def best_kappa(ss: list[SeedGroup], t_bits: int, eps_luck: float, q: float = Q_BIT) -> tuple[float, float, float]:
     """(κ*, its excess on ε_luck, the model's ε_grind there) minimizing their sum."""
     best = None
     for kappa in KAPPAS:
@@ -201,7 +201,7 @@ def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "
     seed a head and request (`head`, as deployed), one a call (`call`: the layer's heads and the step's whole batch),
     one over every layer's call of the kind in a step (`step`, which no seed binding the call's roots allows: see
     `decode_lever`), or an int g: g (query head, request) pairs of one layer under one seed, each reading its own K
-    rows. A call's or a step's seed draws a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
+    rows. A call's or a step's seed samples a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
     heads."""
     if isinstance(group, int):
         return _h1_rows(regime, ctx, shape.d, group, 1)

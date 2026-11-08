@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Reps.WithReads
+module
+
+public import Proofs.Flock.C3.Reps.WithReads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `wKey` from w's names: the Bool check `(keys m).all (wKey sh)` by the keys' construction
@@ -10,6 +25,8 @@ counts: the zerocheck's (`ab`, `c`, `g1`, `ginf`, `fa`, `fb`, at `m`), the linch
 at the rep's own shape: the zerocheck's at `m` (`zcKeys_all`), the lincheck's at `k_log` and a holo shape
 (`lcKeys_all`), and each claim's ring switch (`rsKeys_all`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -118,7 +118,7 @@ class Session(audit.AuditRun):
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
-        """Window t's verdict from check 3's outcome on each of its draws, in the order drawn: the first failure (one of
+        """Window t's verdict from check 3's outcome on each of its draws, in the order sampled: the first failure (one of
         `audit.FAILURES`) rejects it, and a window with no draws is `malformed`, as `verify` has it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
@@ -204,7 +204,7 @@ def check(d: PositionSample, args: dict, codec_seed: bytes, S, values: Values, p
 
 
 def reference(session: Session, store: Store, passes: dict, c3) -> list[audit.Verdict]:
-    """Every window of a session whose draws are drawn, decided by `check` on the honest prover's witness: the stand-in
+    """Every window of a session whose draws are sampled, decided by `check` on the honest prover's witness: the stand-in
     for the units' proofs. Stops at the first rejected window. ``c3`` holds the codec, the plan row's P and the depths DR,
     DP and DV, each step's plan row (``plan_rows``), its salt (``plan_salts``) and certified ``b || c`` (``plan_bcs``), and
     the value commitment (``values``)."""

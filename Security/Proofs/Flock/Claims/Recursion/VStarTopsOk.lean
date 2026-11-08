@@ -1,7 +1,45 @@
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.VStarCapL
-import Proofs.Flock.Claims.Recursion.SlotsCalls
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarDense
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.PartsVStar
+import Proofs.Flock.Claims.Recursion.SlotsCalls
+import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.VStarCap0
+import Proofs.Flock.Claims.Recursion.VStarCapL
+import Proofs.Flock.Claims.Recursion.VStarFitHeld
 
 /-!
 # Every level's tops are read and every cap accepts, at the honest run (`hT_honest`, `hC_honest`)
@@ -21,6 +59,8 @@ reps' stream rounds and the two reps' tops differ at each later level (the tape 
 
 `hok_honest` is `hok_shaped` with both discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -230,8 +270,8 @@ theorem capIn_later_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
 /-! ## `hok_shaped`'s `hT` and `hC` -/
 
 /-- **Each cap's `capIn` accepts** at the honest run (`hok_shaped`'s `hC`): where the history holds both reps' stream
-rounds (`hH`) and the two reps' tops differ at each later level (`hTops`, the tape exception: it fails only where two
-192-byte salts collide, `sameTop_false_of_salt`). -/
+rounds (`hH`) and the two reps' tops differ at each later level (`hTops`, the tape exception, a hypothesis: that it
+fails only where two 192-byte salts collide is not proved here). -/
 theorem hC_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
     {s : ℕ} (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ hist.length)
     (hTops : ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ l, 0 < l → ∀ a b,

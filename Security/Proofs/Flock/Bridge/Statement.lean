@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEndHidden.Statement
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Bridge.Deployed
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Bridge.Deployed
 
 /-!
 # The sampled audit's knowledge soundness, live (stated, not proved)
@@ -8,15 +10,18 @@ import Proofs.Flock.Bridge.Deployed
 `SampledKSLive` is `EndToEndHidden`'s setting with its event read in the sampling claims' relation, at the deployed
 trace commitment: for every live prover, the probability that flock-verify accepts and the committed transcript fixed
 at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`
-at the circuit's constants `Bridge.constsOf`, `Bridge.partOf`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is
-at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
+at the circuit's constants `Bridge.constsOf` and the design `subset kd`, `Bridge.partOf` at the population's strata
+`ns`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
 file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep`, whose layout is the game's rows read
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
 
-**Input rows.** `Bridge.partOf P κ` puts each input row in the proof block of the unit that owns it, its first reader
+**Strata.** `Bridge.partOf P κ ns` lays the population in strata of sizes `ns`, each a run of consecutive units, as the
+deployed `Slots.layout` lays one stratum per template; `subset kd`'s miss doesn't read them.
+
+**Input rows.** `Bridge.partOf P κ ns` puts each input row in the proof block of the unit that owns it, its first reader
 (`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
-opens only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
+opens only the rows its sampled proof blocks read, while registration opens none. So a unit whose owned input row doesn't open is a
 faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
 `Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
 partition.
@@ -27,6 +32,8 @@ partition.
 (`Bridge.AssemblyTarget`).
 -/
 
+@[expose] public section
+
 namespace Flock.Guarantees
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
@@ -36,15 +43,26 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`, public circuit
-structure, so `progOf` lowers them to constants (`.const`), which a proof unit reads with no opening. -/
-noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+/-- **The circuit's constant wires**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`. -/
+noncomputable def _root_.Flock.Bridge.constWiresOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
     (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
   if g = Discharge.Layout.oneG then some true else if g = Discharge.Layout.zeroG then some false else none
 
 open Classical in
-/-- **The sampled audit's knowledge soundness, live.** `EndToEndHidden`'s setting: for every live prover `τ`, descriptor
-bytes `desc` and query `q` (which `RelS` doesn't read), at SHA-512, the registration's roots and the deployed commitment,
+/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1`, and its zero `zeroG` and every program input
+no unit reads (`Bridge.owner`) are `0`, public circuit structure, so `progOf` lowers them to constants (`.const`), which
+a proof block reads with no opening. They are Bits' (`SampledProofs.Bits.consts`). -/
+noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+    (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
+  if g = Discharge.Layout.oneG then some true
+  else if g = Discharge.Layout.zeroG ∨ (g.val < 2 + n * Discharge.Layout.keyB c hU ∧
+      Bridge.owner ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)) g = none) then some false
+  else none
+
+open Classical in
+/-- **The sampled audit's knowledge soundness, live.** `EndToEndHidden`'s setting: for every live prover `τ`, strata
+`ns` of the population, descriptor bytes `desc` and query `q` (which `RelS` doesn't read), at SHA-512, the
+registration's roots and the deployed commitment,
 $$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \delta + \varepsilon_{ks} + \delta_{link}, \qquad \delta = \binom{n-K_0}{kd} / \binom{n}{kd},$$
 `X` the committed transcript fixed at registration (`XplurZC`), `ε_ks` and `δ_link` `EndToEndHidden`'s. -/
@@ -70,6 +88,8 @@ def SampledKSLive : Prop :=
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ)
+    -- the population's strata
+    (ns : List ℕ) (_hns : ns.sum = n)
     -- what the sampling statement carries and `RelS` doesn't read
     (desc : Claims.Msg) (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
@@ -100,8 +120,8 @@ def SampledKSLive : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
@@ -110,13 +130,10 @@ def SampledKSLive : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **The registered openings open the deployed commitment** (the bridge's `Transports`, at `SampledKSLive`'s
-commitment, roots, hash and registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of
-`u` and every opening `o` of `g`'s registered commit string at the prover's registration, some data opens `g`'s claims
-position to `o`'s bit there, under the registration's roots at SHA-512. With `tr i o := ⟨i, vb.bit (vb.val o) (φ i), d⟩`,
-`d` chosen by it, it is `WrongSet.Transports execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb sha512Msg Cd
-(stmtOf P κ kd desc q roots) (reg σ) u φ tr` at every `u`, `kd`, `desc`, `q` and every `φ` that maps into `P.io u` only
-committed positions, its wire's (`φ i ∈ P.io u → posOf Cc (φ i) = i`). -/
+/-- **The registered openings open the deployed commitment** (at `SampledKSLive`'s commitment, roots, hash and
+registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o`
+of `g`'s registered commit string at the prover's registration, some data `d` opens `g`'s claims position
+(`posOf Cc g`) to `o`'s bit there, `vb.bit (vb.val o) g`, under the registration's roots at SHA-512 (`Cd.Opens`). -/
 def _root_.Flock.Bridge.TransportsLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)

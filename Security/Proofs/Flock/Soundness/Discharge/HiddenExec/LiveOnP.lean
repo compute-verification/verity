@@ -1,5 +1,24 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The execution refinement for one-table sessions at the verifier's public inputs
@@ -10,6 +29,8 @@ the same bound. At `own = none` each is the deployed one (`acceptsP_none`). The 
 the refinement (`exec_le_of_refines`), so `flock_headline_live_onXP` is `Prog.flock_headline_LX` at the simulated
 prover, carried to the live audit by `execRefines_onP`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -35,7 +56,7 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts at `own`, at the law's draws** (`DecodesOn` at
+/-- **The decoder is right on the sessions flock-verify accepts at `own`, at the sampling design's samples** (`DecodesOn` at
 `AcceptsP I own`). -/
 def DecodesOnP (L : Law n) : Prop :=
   ∀ ω R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
@@ -86,7 +107,7 @@ variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 
 /-- **The headline at the executable at the verifier's public inputs, for one-table sessions**
 (`Prog.flock_headline_live_onX` at `AcceptsP I own`): against any live prover `τ`, flock-verify accepts at `own` with
-at least `K` wrong units of the simulated prover's committed values with probability at most
+at least `K` incorrect proof blocks of the simulated prover's committed values with probability at most
 `miss(K) + ε_ks + δ_link`, under `Prog.flock_headline_live_onX`'s hypotheses with `hdec` at `own` (`DecodesOnP`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_onXP
     {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}

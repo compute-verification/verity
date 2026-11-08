@@ -1,3 +1,8 @@
+module
+
+public import Proofs.Pous.Chain.Flat
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Chain.Family
 
 /-!
@@ -25,6 +30,8 @@ pinned forms, `BandMultiMeetsFamilyD2` and `BandMultiMeetsFamilyD1`.
 
 `N = 1` sets `k` at both points: `N ≥ 2` alone needs 96 at `D = 2` and 92 at `D = 1`.
 -/
+
+@[expose] public section
 
 namespace Pous.BandMulti.Rounds
 

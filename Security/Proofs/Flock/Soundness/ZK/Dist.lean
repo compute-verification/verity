@@ -1,9 +1,9 @@
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Zero knowledge: equal distributions of functions of uniform randomness
@@ -19,6 +19,8 @@ the same probability under both, written without division as the fiber counts of
 * `SameDist.of_card_fiber_eq`: on one randomness space, equal fiber counts, which is `card_fiber_eq_of_triShift`'s
   conclusion.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

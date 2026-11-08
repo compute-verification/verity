@@ -1,18 +1,20 @@
-import Definitions.Pouw.H1Zy.LaneChunk
-import Definitions.Pouw.H1Zy.Tile
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.H1Zy.LaneChunk
+public import Definitions.Pouw.H1Zy.Tile
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # A lane's fx1 chain on words: `h1tile._chain` at a 32 × 32 leaf (trusted)
 
-Lane `l` of a drawn leaf over `PouwH1Tile_v1` folds `KS + m` sets of 32 words into an fx1 state keyed from σ_R, and its
+Lane `l` of a sampled leaf over `PouwH1Tile_v1` folds `KS + m` sets of 32 words into an fx1 state keyed from σ_R, and its
 partial is the state's two receipt words after each set (`h1tile.fold`, `h1zy.lane_partial` before the admit mask). This
 states that chain as the step machine `ChainSteps` (`h1Chain K`), so a lane's chain words are `chainOf (h1Chain K)` and a
 chunk's carry is its state. On the primitives' word views:
 
 * **Seeds and noise** (`seeds.py`). seed_j and σ_R are SHA-512 of the position's 8 big-endian bytes, then the tag, salt
   and roots, each byte XORed with byte `i mod 8` of the position (`tagged`); block `t` of a seed's noise stream is
-  SHA-512 of `NOISE_TAG ‖ seed ‖ u64(t)` (`noiseBlock`), and its bit `β` is bit `β mod 32` of big-endian half
+  SHA-512 of `NOISE_TAG ‖ seed ‖ u64(t)` (`noiseChunk`), and its bit `β` is bit `β mod 32` of big-endian half
   `⌊(β mod 512) / 32⌋` of block `⌊β / 512⌋` (`streamBit`). The salt, position and roots are the `pub` port's fields
   (`SeedIn`): field bit `t` is bit `t mod 32` of the field's 32-bit half `⌊t / 32⌋`, halves big-endian (`seeds.leaves`).
 * **The lane's noise** (`h1tile.noise`, `fold_keys`, at the layout `h1tile.Layout(32, 32, K)`, `laneNoise`): row `i`'s
@@ -29,6 +31,8 @@ chunk's carry is its state. On the primitives' word views:
   `D_d = PouwSegDot(0, U, A_d)` for `d = 1 .. m - 1`, each absorbed as a set. The partial's word `w` is the chain's word
   `w`, `0` past its `2 (KS + m)` words.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 
@@ -65,13 +69,13 @@ def seedJ (x : SeedIn) : List ℕ := tagged seedTag x
 def sigmaR (x : SeedIn) : List ℕ := tagged receiptTag x
 
 /-- Block `t` of a seed's noise stream (`seeds.noise_block`). -/
-def noiseBlock (seed : List ℕ) (t : ℕ) : List ℕ := digest (noiseTag ++ seed ++ beBytes 8 t)
+def noiseChunk (seed : List ℕ) (t : ℕ) : List ℕ := digest (noiseTag ++ seed ++ beBytes 8 t)
 
 /-- Bit `β` of a block's 512 bits: bit `β mod 32` of its big-endian half `⌊β / 32⌋`. -/
 def blockBit (blk : List ℕ) (β : ℕ) : Bool := beNat ((blk.drop (4 * (β / 32))).take 4) / 2 ^ (β % 32) % 2 = 1
 
 /-- Bit `β` of a seed's noise stream from block `first` (`seeds.stream`, `h1tile._stream`). -/
-def streamBit (seed : List ℕ) (first β : ℕ) : Bool := blockBit (noiseBlock seed (first + β / 512)) (β % 512)
+def streamBit (seed : List ℕ) (first β : ℕ) : Bool := blockBit (noiseChunk seed (first + β / 512)) (β % 512)
 
 /-- The value of `n` stream bits from bit `β`, least significant first (`h1tile._value`). -/
 def streamVal (seed : List ℕ) (first β n : ℕ) : ℕ :=

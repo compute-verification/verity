@@ -8,8 +8,9 @@
 `verity tasks ...` runs these.  The schema and what each field means is the "Tasks" section of this directory's README.md.
 
 `list` prints the task graph of this checkout, uncommitted files included: one task per part of the shard planner's
-(`check.auto_parts`), so each test suite (`pytest:SUITE`, `lean-suites:SUITE`; one measured past `--split-s` seconds, default
-`shards.SPLIT_S`, in M parts by test file, `pytest:SUITE:K/M`), each Lake package's audit (`lean-audit:PKG`), circuit-check's
+(`check.auto_parts`), so each test suite (`pytest:SUITE`, `lean-suites:SUITE`; one that declares `[tool.verity.tests] parts =
+P` in its P parts by test id, `lean-suites:SUITE:K/P`; one measured past `--split-s` seconds, default `shards.SPLIT_S`, in M
+parts by test file, `pytest:SUITE:K/M`), each Lake package's audit (`lean-audit:PKG`), circuit-check's
 `circuit-check:K/M`, the builds (`lean-build`, `flock-circuit-build`) and the other jobs whole.  `--kind
 after-landing` (the default) is every job, `--kind preflight` those on the merge gate.  Each task's argv is the one `check.py`
 builds for that part alone (`check.groups`), with this tree's path, the check's cache and the run's output directory written
@@ -82,7 +83,10 @@ VERIFIER = C.FLOCK_LEAN.relative_to(ROOT).as_posix()
 #: what each build makes, under the artifact name its readers' `needs` list
 OUTPUTS = {"lean-build": [f"lean-build:{VERIFIER}/.lake/build"],
            "flock-circuit-build": ["flock-circuit-build:$FLOCK_CHECKOUT"]}
-#: the inputs of the jobs that run whole, as paths and globs from the root; "." (the whole tree) where none are declared
+#: the inputs of the jobs that run whole, as paths and globs from the root; "." (the whole tree) where none are declared.  A job
+#: in `check.STEP_KEYS` is keyed by their git ids, which cover what its step key reads of the tree, under the environment a
+#: suite's key reads; what its step key reads of the machine (the kernel release, `rustc -vV`, the slot's paths) check's own
+#: cache keys where the task runs, as `PLACED` is set there
 STEP_INPUTS = {
     "lean-build": [VERIFIER],
     "flock-circuit-build": ["verity/ml/flock/check_build.sh", "verity/ml/flock/live", "verity/ml/flock/flock-*-b684b12.patch"],
@@ -194,11 +198,11 @@ class Facts:
         #: the suites split by test file (`check.suite_splits`), with the timing records their partitions are of
         self.splits = splits or {}
         e = C.env()
+        #: the steps' environment as a suite's key reads it (`suites.environment`), which `pytest` and the jobs run whole run in
         with PLAN.environ(e):
             self.env = {"pytest": S.environment()}
         with PLAN.environ(PLAN.lean_env(e)):
             self.env["lean-suites"] = S.environment()
-        self.step_env = e
         self.pkgs, self.suites = S.members(), {s.name: s for s in S.discover()}
         self.tree, self.lock = S.worktree(), S.locked()
         self.inputs = {n: S.inputs_of(s, self.pkgs) for n, s in self.suites.items()}
@@ -217,15 +221,25 @@ class Facts:
         return c
 
     def part_key(self, name: str, spec: str, step: str) -> str:
-        """`suites.part_key` of suite ``name``'s parts ``spec`` (K/M) under ``step``'s environment, as check's run of it keys it."""
+        """`suites.part_key` of suite ``name``'s parts ``spec`` (K/M) under ``step``'s environment, as check's run of it keys it: by
+        file of the partition ``splits`` names, or by test id where it declares `parts`."""
         s, paths = self.suites[name], self.inputs[name]
         cut = S.dropped(s, paths)
         ids = S.input_ids(self.tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s), cut)
         ids.update({f"fixture:{p}": art for p, art in self.fixtures.items() if S.covered(p, paths, cut)})
         k, m = (int(x) for x in spec.split("/"))
-        part = S.part_of(s, (k,), m, self.tree, cut, self.splits[name]["timings"])
+        part = S.part_of(s, (k,), m, self.tree, cut, {} if s.parts else self.splits[name]["timings"])
         mods, own, keep = S.part_context(s, part, self.tree, cut)
         return S.part_key(s, part, keep, mods, ids, own, self.env[step], [], S.resolved(S.roots(s, self.pkgs), self.lock, s.path))
+
+    def path_ids(self, paths: list[str]) -> dict[str, str]:
+        """The git object ids in this tree of what ``paths`` (paths and globs from the root, "." the tree) cover: a path's own (a
+        directory's tree id), a glob's each file it matches."""
+        globs = [p for p in paths if any(c in p for c in "*?[")]
+        ids = S.object_ids(self.tree, [p for p in paths if p not in globs])
+        for g in globs:
+            ids.update({f: i for f, i in S.own_ids(self.tree, g.rpartition("/")[0] or ".").items() if fnmatch.fnmatchcase(f, g)})
+        return ids
 
     def circuit_closure(self) -> list[str]:
         s = next((s for s in self.suites.values() if s.path == "tools/verity/circuit_check"), None)
@@ -272,11 +286,10 @@ def record(part: str, facts: Facts, all_parts: list[str], costs: dict[str, float
     else:
         resources = SLOT
         inputs = {"closure": None, "paths": STEP_INPUTS.get(job, ["."])}
-        if job in C.STEP_KEYS and (k := C.STEP_KEYS[job](facts.step_env)):
-            key_doc = {"step": k}
+        if job in C.STEP_KEYS:
+            key_doc = {"step": {"inputs": facts.path_ids(inputs["paths"]), "environment": facts.env["pytest"]}}
         else:
-            unkeyed = (f"{job} keeps no verdict of its own" if job not in C.STEP_KEYS
-                       else f"{job}'s key can't be computed here (`check.STEP_KEYS`)")
+            unkeyed = f"{job} keeps no verdict of its own"
             if kind == "build":
                 unkeyed = f"a build's outputs are keyed by nothing yet: {job} has no declared inputs or read guard"
     argv, cwd, why = command(part, resources["cores"], facts.splits)

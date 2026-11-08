@@ -1,7 +1,8 @@
-import Definitions.Core.Accel.Isa
-import Definitions.Accounting.Device
-import Mathlib.Algebra.Field.Rat
-import Mathlib.Data.NNRat.Floor
+module
+
+public import Definitions.Core.Accel.Isa
+public import Definitions.Accounting.Device
+public import Mathlib.Data.NNRat.Floor
 
 /-!
 # A card's numbers (trusted)
@@ -19,6 +20,8 @@ a slot and, a word, an access at each end; a branch `1/32` of a slot. A word an 
 registers is a lane of the `alu`, as a register-to-register copy is. An MMA's operands read from a store other than the
 registers pay their reads.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

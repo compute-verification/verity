@@ -1,6 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # What `Stmt.setupHidden` checked and produced (`Spec`)
@@ -8,6 +25,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 `setupHidden_spec` walks `Stmt.setupHidden` as `setupH_spec` walks `Stmt.setupH`: every return is the statement its
 checks built. `Facts.lean` reads off it what `Discharge/HiddenExec` reads.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)
@@ -67,6 +86,7 @@ theorem regions_noPorts {c : Circuit} {pi : HmIn.Ports} {pub : Public} {r : Arra
   simp only [he, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
   exact h.symm
 
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` accepted** is its `Spec`. -/
 theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :

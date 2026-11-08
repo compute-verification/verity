@@ -1,26 +1,30 @@
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
-# `Select.select`'s subset draw is the live draw's (`Law.runOS`) on the same bytes
+# `Select.select`'s subset sample is the live sample's (`Law.runOS`) on the same bytes
 
-`Select.select` draws a law's units with `Draw.drawUnits`, which is `Flock.Draw.drawWith` reading the coins in order
+`Select.select` samples a sampling design's units with `Draw.drawUnits`, which is `Flock.Draw.drawWith` reading the coins in order
 through `Draw.take`, one position for every stream, in `StateT ℕ (Except String)`. `Law.runOS` is the same `drawWith`
-reading through `Law.tapeGet`, one position per stream, in `StateT (ℕ → ℕ) Option`. A subset draw reads stream `0` only,
+reading through `Law.tapeGet`, one position per stream, in `StateT (ℕ → ℕ) Option`. A subset sample reads stream `0` only,
 so on stream `0`'s bytes the two runs agree step for step (`TapeSim`), the code erring where the model reads past the
 tape.
 
-* `drawUnits_subset_runOS`: the code's subset draw on the bytes `f 0` is `runOS`'s on `f`, and fails exactly where it is
+* `drawUnits_subset_runOS`: the code's subset sample on the bytes `f 0` is `runOS`'s on `f`, and fails exactly where it is
   `none`.
-* `select_subset_runOS`: an accepted `Select.select` at a rule whose law over the population C-Flock reads as
-  `.subset k` proves every unit `runOS` draws.
+* `select_subset_runOS`: an accepted `Select.select` at a rule whose sampling design over the population Flock reads as
+  `.subset k` proves every unit `runOS` samples.
 * `select_subset_escape_le`: so on bytes uniform by A3 (`Assumptions.UniformRandomBytes`) it misses `B` no more often
   than the uniform `k`-subset does (`Law.drawOS_subset_escape_le`).
 
-A stratified or work draw reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
-from a tape each, so the agreement here is the subset law's, which a rate law resolves to (`Select.Rule.over`).
+A stratified or work sample reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
+from a tape each, so the agreement here is the subset sampling design's, which a rate law resolves to (`Select.Rule.over`).
 -/
+
+@[expose] public section
 
 open SampledProofs
 
@@ -136,15 +140,15 @@ theorem tapeSim_onWith (T : ℕ → ByteArray) (N : ℕ) (hN : 0 < N) (run : Byt
   · obtain ⟨r, s⟩ := r
     cases r <;> exact tapeSim_pure _
 
-/-- **The subset draw on the code's reader is the one on stream `0` of the tapes.** -/
+/-- **The subset sample on the code's reader is the one on stream `0` of the tapes.** -/
 theorem tapeSim_drawWith (T : ℕ → ByteArray) (k n : ℕ) :
     TapeSim (Flock.Draw.drawWith (fun _ need => Draw.take (T 0) need) (.subset k) n)
       (Flock.Draw.drawWith (Law.tapeGet T) (.subset k) n) := by
   unfold Flock.Draw.drawWith
   exact tapeSim_bind (tapeSim_onWith T _ (by omega) _) fun u => tapeSim_pure _
 
-/-- **The code's subset draw is the live draw's** (`Law.runOS`, `Flock.Draw.drawOS`'s `drawWith`): on the bytes `f 0`,
-`Draw.drawUnits` draws the units `runOS` draws on `f`, and fails exactly where `runOS` is `none`. -/
+/-- **The code's subset sample is the live sample's** (`Law.runOS`, `Flock.Draw.drawWith`): on the bytes `f 0`,
+`Draw.drawUnits` samples the units `runOS` samples on `f`, and fails exactly where `runOS` is `none`. -/
 theorem drawUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) :
     (Draw.drawUnits (.subset k) n (Law.streamOf (f 0))).toOption.map Prod.fst =
       (Law.runOS f (.subset k) n).map (·.units) := by
@@ -163,7 +167,7 @@ theorem drawUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) 
     obtain ⟨r, read⟩ := x
     cases r <;> rfl
 
-/-- A law object `flockLaw` reads as a subset law is of kind `subset`, drawing no more than the population. -/
+/-- A sampling design object `flockLaw` reads as a subset sampling design is of kind `subset`, sampling no more than the population. -/
 theorem flockLaw_subset (law : Json) (n k : ℕ) (h : Draw.flockLaw law n = .ok (.subset k)) :
     kindOf law = "subset" ∧ k ≤ n := by
   unfold Draw.flockLaw at h
@@ -189,7 +193,7 @@ theorem flockLaw_subset (law : Json) (n k : ℕ) (h : Draw.flockLaw law n = .ok 
       | split at h)
   next => exact absurd h (throw_ne _ _)
 
-/-- `deriveLaw` expands no law of kind `subset`. -/
+/-- `deriveLaw` expands no sampling design of kind `subset`. -/
 theorem deriveLaw_subset (d : Program) (query law : Json) (table : Option Json) (derived : Option Flock.Draw.Law)
     (hk : kindOf law = "subset") (h : Draw.deriveLaw d query law table = .ok derived) : derived = none := by
   unfold Draw.deriveLaw at h
@@ -208,9 +212,9 @@ theorem deriveLaw_subset (d : Program) (query law : Json) (table : Option Json) 
     rw [hk] at h0
     exact absurd h0 (by decide)
 
-/-- **An accepted subset draw of `Select.select` proves `runOS`'s draw**: at a rule other than `All` whose law over the
-population C-Flock reads as `.subset k`, with no closure map, an accepted draw on the bytes `f 0` proves every unit that
-the live draw (`Law.runOS`) draws on `f`, which therefore runs. -/
+/-- **An accepted subset sample of `Select.select` proves `runOS`'s sample**: at a rule other than `All` whose sampling design over the
+population Flock reads as `.subset k`, with no closure map, an accepted sample on the bytes `f 0` proves every unit that
+the live sample (`Law.runOS`) samples on `f`, which therefore runs. -/
 theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
     (table : Option Json) (n : ℕ) (named : Json) (k : ℕ) (hn : Partition.units d query = .ok n)
     (hnamed : rule.lawOver n = .ok named) (hk : Draw.flockLaw named n = .ok (.subset k))
@@ -243,8 +247,8 @@ theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Prog
       have hud : units = dr.units := by simpa [Except.toOption] using heq
       exact ⟨dr, rfl, fun x hx => hsub x (by rw [hud]; exact hx)⟩
 
-/-- **`Select.select`'s subset draw misses `B` no more often than the uniform `k`-subset**, on coins uniform by A3
-(`Assumptions.UniformRandomBytes`), through the live draw's bound (`Law.drawOS_subset_escape_le`). -/
+/-- **`Select.select`'s subset sample misses `B` no more often than the uniform `k`-subset**, on coins uniform by A3
+(`Assumptions.UniformRandomBytes`), through the live sample's bound (`Law.drawOS_subset_escape_le`). -/
 theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
     (table : Option Json) (n : ℕ) (named : Json) (k : ℕ) (hn : Partition.units d query = .ok n)
     (hnamed : rule.lawOver n = .ok named) (hk : Draw.flockLaw named n = .ok (.subset k)) (hkn : k ≤ n)

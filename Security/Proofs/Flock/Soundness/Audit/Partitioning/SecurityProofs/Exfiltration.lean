@@ -1,17 +1,18 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 
 /-!
 # Optimal partitioning against exfiltration: the proofs
 
 The proofs of the exfiltration statements of `Partitioning.Guarantees`.
 
-* `ExfiltrationOptimum`. A law certifying `ℓ` below the `(K+1)`-th rung has `miss (K + 1) ≤ δ`
+* `ExfiltrationOptimum`. A sampling design certifying `ℓ` below the `(K+1)`-th rung has `miss (K + 1) ≤ δ`
   (`Exfil.miss_le_of_certifies`), so `ConverseExact` at `K + 1` gives the lower bound; when `K ≥ n` it is at most `0`.
-  Independent draws just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_law`).
+  Independent samples just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_law`).
 * `RefinementRule`. The unsplit side is `ExfiltrationOptimum`'s law at `ε / (c(s) + 1)`. On the split partition, the
   width condition and the counting of `Exfil.locBits_succ_le` and `Exfil.locBits_succ_ge` put `ℓ` below the `(K+1)`-th
   rung of `r·n` units of width `b'`, so `ConverseAsymptotic` at `K + 1` applies there, and
@@ -20,6 +21,8 @@ The proofs of the exfiltration statements of `Partitioning.Guarantees`.
 The statements of their witnesses, `Witness.exfiltration` and `Witness.refinement`, are `Exfil.witness_exfiltration`
 and `Exfil.witness_refinement`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 

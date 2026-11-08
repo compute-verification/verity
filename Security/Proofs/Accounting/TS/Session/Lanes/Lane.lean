@@ -1,7 +1,45 @@
-import Proofs.Accounting.TS.Session.Lanes.Combine
+module
+
+public import Definitions.Pouw.H1Zy.Chain
+public import Definitions.Pouw.H1Zy.LaneBits
+public import Proofs.Accounting.TS.Session.Lanes.Combine
+public import Proofs.Accounting.TS.Session.Lanes.Decode
+public import Proofs.Pouw.H1Zy.LaneBits
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneBits
-import Definitions.Pouw.H1Zy.Chain
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # A lane's part of `LeafChecks` from its Definition
@@ -33,6 +71,8 @@ at their lowerings (`Pouw.H1Zy.laneBits`: the s8 multiply's Baugh–Wooley steps
 each restated piece's lowering computes its word view, and so their composition the body on words, is proved
 (`Pouw.H1Zy.laneBits_bv`). The two are equivalent (`laneLowers_iff`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

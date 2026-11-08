@@ -1,7 +1,48 @@
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Flock.With.VerifyE
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.DeployRoundsZk
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Flock.With.VerifyE
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `Deploy.V`'s round count is the rounds the shipped verifier reads
@@ -11,13 +52,15 @@ through `keep`) wherever their proofs read none of those digests, so they hold a
 (`keep := fun _ => true`) too. The shipped verdict's (`verifyWithM`, `keep := id`) follow by `rfl`.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy
 
 open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
 /-! ## `fast100`'s schedules -/
 
-/-- Every `fast100` schedule is for `22 ≤ m`, draws a nonempty first point, has at least two levels, and queries each. -/
+/-- Every `fast100` schedule is for `22 ≤ m`, samples a nonempty first point, has at least two levels, and queries each. -/
 theorem fast100_rounds_ok {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
     22 ≤ m ∧ sch.n ≠ 0 ∧ 2 ≤ sch.levels.size ∧ ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0 := by
   have hm : m < 40 := by
@@ -309,7 +352,7 @@ def StreamR (s : Lean.Json) (x : StreamRec) : Prop :=
 theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
@@ -351,7 +394,7 @@ theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
 theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
@@ -363,7 +406,7 @@ theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : Stri
 order, the first stream record of its name and that record's rounds' coin counts and coins. -/
 theorem liveOf_parts {spec : SessionSpec} {text : String} {lv : Live} (h : liveOf spec text = .ok lv) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok lv.points ∧

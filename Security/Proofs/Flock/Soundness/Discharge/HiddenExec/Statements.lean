@@ -1,4 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The statements: flock-verify's acceptance under either tag, hidden outputs included
@@ -17,6 +36,8 @@ tag; where it doesn't, the conclusion is the original's.
 * `TableAtHOfAccepts`: Integrate's `tableAt_of_accepts` for the hidden tables (`tableAtH`, `Tables.lean`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Refine Game Transcript Model Accounting
@@ -26,8 +47,8 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **`setupTables` sets up each table with `setupOne`**, under any tag (`Exec.setupTables_ok` without `hh`): for one
-table, at the inputs and the session's draw, and the session's spec is the table's; for `count > 1`, `count` tables,
-table `j` under `Tags.tableIdentity count j` at a subset draw of its part. -/
+table, at the inputs and the session's sample, and the session's spec is the table's; for `count > 1`, `count` tables,
+table `j` under `Tags.tableIdentity count j` at a subset sample of its part. -/
 def SetupTablesOkAny : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
@@ -157,10 +178,10 @@ def AcceptsVerdictHm96Any : Prop :=
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
             true
 
-/-- **At a draw flock-verify accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
+/-- **At a sample flock-verify accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
 accepted** (Integrate's `tableAt_of_accepts` for `tableAtH`): for a one-table session under a tag with hidden outputs
 whose circuit file parses (untyped) to a circuit whose unit returns the outputs, when the session's record carries the
-challenger's draw `dj S`, that draw proves `S`, and setupHidden's statement at it has link points `mPts`. -/
+challenger's sample `dj S`, that sample proves `S`, and setupHidden's statement at it has link points `mPts`. -/
 def TableAtHOfAccepts : Prop :=
   ∀ {I : Exec.Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}, I.tags.typed = false →
     HmOut.parse I.tags I.circuitFile I.tables = .ok c → c.outNet = c.unitNet →

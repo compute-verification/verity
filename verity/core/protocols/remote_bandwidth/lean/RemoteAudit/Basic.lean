@@ -1,10 +1,11 @@
-import Flock.Hash
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # Bytes, SHA-512 and frame-v3-sha512
 
-The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`), C-Flock's SHA-512, and
+The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`), Flock's SHA-512, and
 `verity.ml.commitments.merkle.verify_opening` over a `CommitmentDomain` with `hash = "sha512"` and positions
 `RangeIndexedDomain(start, stop)`: a receipt tree and the payload tree start at 0, an append's tree at its first index.
 
@@ -17,6 +18,8 @@ The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_byt
 `frame` is the merkle frame v3, `FRAME ‖ u32be |tag| ‖ tag ‖ (u64be |part| ‖ part)*`, and `uint` `_uint`'s minimal
 big-endian bytes (`FlockSoundness.Randomness.natBytes`).
 -/
+
+@[expose] public section
 
 namespace RemoteAudit
 

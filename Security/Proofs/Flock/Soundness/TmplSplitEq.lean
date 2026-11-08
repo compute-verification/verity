@@ -1,5 +1,16 @@
-import Proofs.Flock.Soundness.TmplSplitWalk
-import Proofs.Flock.Soundness.TmplFoldLayout
+module
+
+public import Proofs.Flock.Soundness.TmplFoldLayout
+public import Proofs.Flock.Soundness.TmplSplitOk
+public import Proofs.Flock.Soundness.TmplSplitWalk
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldRef
+import Proofs.Flock.Soundness.TmplLayOk
+import Proofs.Flock.Soundness.TmplWf
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The split fold is the template fold
@@ -10,6 +21,8 @@ reading no inputs that sum is `tabExp`, which `walk_ok` values as the root copy'
 `fold_eq_foldRef_wf` the split fold is the reference (`foldSplit_eq_foldRef_wf`). Beside the lane counts `fold` already
 needs, the split fold needs the root's chunk, `2^log2ceil(size)`, to hold 64 slots inside the point.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

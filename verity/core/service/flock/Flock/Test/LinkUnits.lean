@@ -1,10 +1,15 @@
 /-
 `HmLinks.check` reads each unit and each gate's unit from the root body's nodes (`unitAt`, `ownerAt`); on
 `Flock.Test.RegProgram`'s program (a call, batches, a scan and primitives) those lookups are the unrolled units' (`unitRef`,
-`ownerRef`) at every unit and gate, the check over the population is the reference walk's (`checkRef`), and a draw that
+`ownerRef`) at every unit and gate, the check over the population is the reference walk's (`checkRef`), and a sample that
 proves a unit reads only its wires.
 -/
-import Flock.Test.RegProgram
+module
+
+public import Flock.Test.RegProgram
+meta import Flock.Test.RegProgram
+
+@[expose] public section
 
 namespace Flock.Test.LinkUnits
 
@@ -41,7 +46,7 @@ def res (r : Except String Nat) : String :=
 #guard res (HmLinks.check lane (at_ [0, 13]) none plain) == res (HmLinks.checkRef lane (at_ [0, 13]) plain)
 #guard (res (HmLinks.check lane (at_ [0, 13]) none plain)).startsWith "links: cut wire: unit 13's parameter leaf 0 reads unit 0's output"
 
--- a draw that proves only the first unit checks only its wires; one that proves the scan iteration refuses
+-- a sample that proves only the first unit checks only its wires; one that proves the scan iteration refuses
 #guard res (HmLinks.check lane (at_ [0, 13]) (some #[0]) plain) == "ok 0"
 #guard res (HmLinks.check lane (at_ [0, 13]) (some #[1]) plain) == res (HmLinks.check lane (at_ [0, 13]) none plain)
 #guard (res (HmLinks.check lane (at_ [0, 13]) (some #[2]) plain)).startsWith "links: unit 2 of the draw is outside"

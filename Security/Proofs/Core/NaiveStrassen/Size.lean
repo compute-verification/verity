@@ -1,4 +1,6 @@
-import Proofs.Core.NaiveStrassen.Sound
+module
+
+public import Proofs.Core.NaiveStrassen.Sound
 
 /-!
 # Dominance and the size form (NaiveStrassen)
@@ -7,6 +9,8 @@ The other three instances reach the RTX PRO 6000 sheet's table through `Dom`: ea
 the sheet's, no heavier and holding wherever it holds (`covers`). The size form follows from `bound`: Theorem 1 to
 `thmL = 12`, the least cost above `8^13` at depth 13, and `cost ≥ 7^l` from depth 14 on, where `7^14 > 2^39`.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 

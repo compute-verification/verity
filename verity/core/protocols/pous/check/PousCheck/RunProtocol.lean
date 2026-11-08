@@ -1,7 +1,13 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import PousCheck.Certificate
-import PousCheck.Run
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import PousCheck.Certificate
+public import PousCheck.Run
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import PousCheck.Certificate
+meta import PousCheck.Run
 
 /-!
 # A PoUS run as a core protocol
@@ -14,9 +20,9 @@ import PousCheck.Run
   the verifier's list of memory-challenger keys, which never comes from the run's record;
 * the commitment: the setup's public outputs (`SetupProtocol.Public.toJson`), which the prover published before any
   challenge; its digest SHA-512 of those bytes;
-* the evidence: `{"digests": hex, "session": Run.Session.toJson, "setup": {"commitment": hex, "evidence": hex}}`, the
-  memory challenger's table of `C*`, the session it signed, and the setup's own commitment and evidence as its case
-  carries them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*` framed);
+* the evidence: `{"digests": hex, "session": Run.ChallengePhaseRecord.toJson, "setup": {"commitment": hex,
+  "evidence": hex}}`, the memory challenger's table of `C*`, the session it signed, and the setup's own commitment and
+  evidence as its case carries them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*` framed);
 * the check: `accepts`, the verifier's whole decision, its first refusal the reason: setup accepts `C*` against the
   server's commitment and salt at the point's parameters and publishes exactly the commitment (`tie`), and `checkAt`
   accepts the run against it. A run committed to any other setup, or to outputs no accepted setup published, is refused.
@@ -39,6 +45,10 @@ and `wide320Certificate`'s `2^-20` (`Pous.SecurityProofs.ObligationWide320`, fro
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.RunProtocol
 
@@ -99,7 +109,7 @@ def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
 
 structure Evidence where
   digests : ByteArray
-  session : Run.Session
+  session : Run.ChallengePhaseRecord
   setup : SetupEvidence
 
 def Evidence.toJson (e : Evidence) : Json :=
@@ -109,7 +119,8 @@ def Evidence.toJson (e : Evidence) : Json :=
 `C*`'s hex inside it, so its text is kept to compare the evidence's encoding against rather than written again. -/
 def decodeEvidence (b : ByteArray) : V Evidence := do
   let (j, s) ← Core.Canonical.read b
-  let e : Evidence := ⟨← hexAt j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
+  let e : Evidence := ⟨← hexAt j "digests" "evidence",
+    ← Run.ChallengePhaseRecord.ofJson (← J.get j "session" "evidence"),
     ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
   if !(← Core.Canonical.writes e.toJson s) then
     throw "not the canonical JSON of what it holds (a field extra, or a constant not the protocol's)"
@@ -124,7 +135,7 @@ def digest (pub : SetupProtocol.Public) : ByteArray :=
 /-- `p2.family_certificate`: `P2SlackFamilyUncond`'s `λ = 128` row for a store at the registered width and prime of any
 block count from `2^8` to `2^23` (`p2.CERT_FAMILY_BLOCKS`), in any number of segments: the theorem is about
 `m1p B 16448 (2^16448 − 21065) b` for every such `B`. -/
-def familyCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+def familyCertificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 8 ≤ blocks && blocks ≤ 2 ^ 23 then
     some { k := Certificate.CERT_K, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
            theoremName := "Pous.SecurityProofs.P2SlackFamilyUncond", segments := none, claims := Certificate.P2_CLAIMS }
@@ -138,7 +149,7 @@ def WIDE_CLAIMS : List String :=
 /-- `p2.wide_certificate`: `Pous.Period.SecurityProofs.periodHeldAt` for a store at the registered width and prime of
 any block count from `2^19` to `2^27` (`p2.CERT_WIDE_BLOCKS`), in any number of segments: an accepted period with no
 break while the node held fewer than `⌊ρ·N·16448⌋` bits has probability at most `δ + ε_max`, read at `N` = the blocks. -/
-def wideCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+def wideCertificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := Certificate.CERT_K, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
            theoremName := "Pous.Period.SecurityProofs.periodHeldAt", segments := none, claims := WIDE_CLAIMS }
@@ -151,7 +162,7 @@ def CERT_K_WIDE320 : Nat := 320
 any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
 state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
 beside `2^eps_log2 = 2^-128`. `certificate` doesn't take it. -/
-def wide320Certificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+def wide320Certificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
            theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (2 ^ 108 - 1, 2 ^ 128), segments := none,
@@ -160,7 +171,7 @@ def wide320Certificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
 
 /-- `period.certificate`: P2's registered certificate (`Certificate.p2`) when the store is its point, segment count and
 all, else P2's proved family's (`familyCertificate`), else the per-period guarantee's (`wideCertificate`), else none. -/
-def certificate (q : Run.Point) : Option Certificate.Certificate :=
+def certificate (q : Run.Point) : Option Certificate.CapacityBound :=
   let p := q.params
   let rest := (familyCertificate p.w p.c0 p.blocks).orElse fun _ => wideCertificate p.w p.c0 p.blocks
   match Certificate.p2 p.w p.c0 p.blocksPerSegment with
@@ -168,14 +179,14 @@ def certificate (q : Run.Point) : Option Certificate.Certificate :=
   | none => rest
 
 /-- What an accepted run certifies at `pt`: the certificate when it covers the point, and why it doesn't otherwise. -/
-def gaps (pt : Run.Point) : Option Certificate.Certificate × List String :=
+def gaps (pt : Run.Point) : Option Certificate.CapacityBound × List String :=
   let q := pt.params
   match certificate pt with
   | none => (none, [s!"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"])
   | some c => (some c, c.refusals pt.k pt.limitNs)
 
 /-- `δ + 2^eps_log2`, a certificate's error, exactly. -/
-def Certificate.eps (c : Certificate.Certificate) : Core.Ratio :=
+def CapacityBound.eps (c : Certificate.CapacityBound) : Core.Ratio :=
   let e := 2 ^ (-c.epsLog2).toNat
   (Core.Ratio.mk' (c.delta.1 * e + c.delta.2) (c.delta.2 * e)).getD ⟨1, 1⟩
 
@@ -187,7 +198,7 @@ structure Public where
 
 def certify (pt : Run.Point) : Public :=
   match gaps pt with
-  | (some c, []) => ⟨true, Certificate.eps c, pt.params.blocks * pt.params.w * c.rho.1 / c.rho.2⟩
+  | (some c, []) => ⟨true, CapacityBound.eps c, pt.params.blocks * pt.params.w * c.rho.1 / c.rho.2⟩
   | _ => ⟨false, ⟨0, 1⟩, 0⟩
 
 def Public.toJson (p : Public) : Json :=
@@ -221,7 +232,7 @@ def tie (pt : Run.Point) (c : SetupProtocol.Commitment) (C : Array (Array ByteAr
 
 /-- The verifier's whole decision on a run at `pt` under `schemes`: the setup tie, then the composed check. -/
 def accepts (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
     (sid : ByteArray) : Except String Unit := do
   tie pt c C pub
   Run.checkAt schemes pt trusted pub digests r sid
@@ -233,7 +244,7 @@ def check (schemes : Schemes) (p : Params) (pub : SetupProtocol.Public) (e : Evi
   | .error reason => .reject reason
 
 theorem accepts_iff (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
     (sid : ByteArray) :
     accepts schemes pt trusted c C pub digests r sid = .ok () ↔
       SetupProtocol.protocol.check pt.params c C = .accept pub () ∧
@@ -264,7 +275,7 @@ theorem accepts_iff (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArr
 and publishes `pub`, and `Run.check` accepts the run against `pub`, word for word that definition's body
 (`q = P2.Params.deployed`). -/
 theorem accepts_deployed (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) :
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) :
     accepts SCHEMES Run.DEPLOYED trusted c C pub digests r sid = .ok () ↔
       SetupProtocol.protocol.check P2.Params.deployed c C = .accept pub () ∧
         Run.check trusted pub digests r sid = .ok () :=

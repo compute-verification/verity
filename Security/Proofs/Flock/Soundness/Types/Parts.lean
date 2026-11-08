@@ -1,4 +1,13 @@
+module
+
+public import Aesop.BuiltinRules
+public import Flock.DeriveCheck
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToDual
 import Proofs.Flock.Soundness.Types.Dag
+import Std.Data.HashSet.Lemmas
 
 /-!
 # The unit's parts, as `deriveChecked` checks them (the rows a template statement reads, for 1e's T3)
@@ -21,6 +30,8 @@ checks the part structure that reading needs (`partsChecked`), and these lemmas 
    shifted, cover the callee's rows. A covered callee row is a product row `a · []`, and its read's low minterms are
    callee rows. Both are about part rows only, so a flat unit's inline reads over its own rows are untouched.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Types.Dag
 

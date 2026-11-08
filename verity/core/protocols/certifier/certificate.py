@@ -35,7 +35,7 @@ fresh for each record (`Issuer`'s `coins`), never the prover's:
 The certifier hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord`). N2's head check
 (`head_check`) links the two: R is the digest of the head it opened, and the salted digest of R is the one the
 certificate signs. So the signature check reads only the certificate's public fields and its signed digest
-(`Certificate.verify`), never a hash of witness. Until N2's proof block is proved, its verifier of record checks that
+(`Certificate.verify`), never a hash of witness. Until N2's proof block is proved, its verifier checks that
 link on the host too, over the opening (`CertifiedRecord.verify`).
 
 **The certificate** signs a 64-byte message that binds the signed digest to the key, the certifier session and the
@@ -657,7 +657,8 @@ class Issuer:
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
         """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
-        `salted_clock` a window's salted sync, and the warden's cell rows their head's digest (`warden_rows`)."""
+        `salted_clock` a window's salted sync, and the network certifier's cell rows their head's digest
+        (`warden_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:

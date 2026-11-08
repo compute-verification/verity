@@ -1,5 +1,35 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+import all Init.Data.Array.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game.Prob
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -29,7 +59,7 @@ variable {mPts n : ℕ} {Reg : Type}
 
 /-- **The registered reads are checked at every accepted hidden-output outcome of `J` tables, at `instProg`.** At an
 outcome `verify --zk --registered F` accepts (`own` F's ports), each registered read of `layShHJI` that is the
-verifier's own at the draw of the table its unit is drawn into (`OwnReadsHJ`) has its registered leaf open the root
+verifier's own at the sample of the table its unit is sampled into (`OwnReadsHJ`) has its registered leaf open the root
 `own` holds at the position `own` gives, through `regPathsHJ`. -/
 theorem checked_of_acceptsHJI (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -153,9 +183,9 @@ theorem zk_session_soundHJR_custody_regI
     (zk_session_soundHJ_custody_regI I ht hc hU hpub hrf hpr hw kd hkd hdiv dj y₀ wr dg N Lb src hA3 hTags hCust
       hk hRw hM hρ hr ht' K₀ τ hCR)
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it draws, and its
+/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it samples, and its
 registered reads are checked, at `instProg`.** `zk_session_soundHJR_custody_drawn_reg` with the template instance's
-program. The draw is the session's, so no law over it is assumed (no A3, no `kd ≤ n`). -/
+program. The sample is the session's, so no sampling design over it is assumed (no A3, no `kd ≤ n`). -/
 theorem zk_session_soundHJR_custody_drawn_regI
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

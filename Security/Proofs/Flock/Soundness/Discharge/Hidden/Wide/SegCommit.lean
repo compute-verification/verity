@@ -1,5 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
-import Proofs.Flock.Soundness.Binding.RowSeg
+module
+
+public import Proofs.Flock.Soundness.Binding.RowSeg
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
+import all Init.Data.String.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A segmented row's commit string from its chains
@@ -11,6 +28,8 @@ bytes reach its last block (`SegFits`). `seg_commit` is the outer chain: under `
 string of `RowSeg.enc l row`, the bytes `ExplicitLeaf.rowSeg l` binds. The outer message's digests always reach its last
 block, so it needs no such condition.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

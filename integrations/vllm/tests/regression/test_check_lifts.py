@@ -2,7 +2,7 @@
 
 `replay_partition.recompute` re-derives the sampled-replay PARTITION from a `sampled_replay` record's stated parameters + the Programs; over
 the synthetic worlds of `tests.check.test_sampled_replay` it must lift to exactly what `sampled_replay` itself recorded
-(population, strata, draw, picks per (request, step), lifetime, phase anchors) -- and a changed seed / a changed Program must not.
+(population, strata, sample, picks per (request, step), lifetime, phase anchors) -- and a changed seed / a changed Program must not.
 `decomp_hashes.lift` is the contract over `match_decomp.json`-shaped documents: the fields the check compares, and only those.
 """
 from __future__ import annotations

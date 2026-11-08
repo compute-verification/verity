@@ -1,5 +1,8 @@
-import Definitions.Pouw.PearlC.W1Stop
-import Proofs.Pouw.PearlC.W1BudgetAbort
+module
+
+public import Definitions.Pouw.PearlC.W1Stop
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.Prob
 
@@ -13,13 +16,15 @@ machine that stops a run at its budget (`CostModel.withStop`, by ruling) it hold
 - `withStop_budgetAbort`: any model with nonnegative costs truncates on the stopping machine. The copy of a program at
   budget `b` is the same program with budget `b` (or the smaller of `b` and its own).
 - `w1Stop_budgetAbort`: so does the priced W1 at positive prices.
-- `gγ_withStop_iff`: the γ-gap property over the stopping machine is the γ-gap property with the budget per coin
-  (`GγPerCoin`), for `γ ≤ 1`. A stopped run commits nothing, so it never wins.
-- `gγ_of_withStop`: it implies the property over the model itself, since a program with no budget runs as before.
+- `gGap_withStop_iff`: the gap property over the stopping machine is the gap property with the budget per coin
+  (`GGapPerCoin`), for `g ≤ 1`. A stopped run commits nothing, so it never wins.
+- `gGap_of_withStop`: it implies the property over the model itself, since a program with no budget runs as before.
 
-So the stop does not make the per-run bound free. `GγPerCoin` is stronger than `Gγ`, whose budget holds on every coin, and
+So the stop does not make the per-run bound free. `GGapPerCoin` is stronger than `GGap`, whose budget holds on every coin, and
 it is the conjecture a per-run bound over W1 rests on.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Stop
 
@@ -70,21 +75,21 @@ theorem w1Stop_budgetAbort (dv : W1Device) (hdv : Positive dv) (salt : S → Lis
     BudgetAbortPearlC (w1Stop dv salt : CostModel Q R S) :=
   withStop_budgetAbort _ (w1Priced_nonneg dv hdv salt)
 
-/-- A run that commits nothing never wins, for `γ ≤ 1`. -/
-theorem not_wins_blank (P : Protocol Q R S) (U : Workload) {γ T : ℝ} (hγ : γ ≤ 1) (hT : 0 ≤ T) (H : Q → R) (s : S) :
-    ¬ Wins P U γ T (fun _ => none) H s := by
+/-- A run that commits nothing never wins, for `g ≤ 1`. -/
+theorem not_wins_blank (P : Protocol Q R S) (U : Workload) {g T : ℝ} (hg : g ≤ 1) (hT : 0 ≤ T) (H : Q → R) (s : S) :
+    ¬ Wins P U g T (fun _ => none) H s := by
   intro h
   have hK : correctSet P U H s (fun _ => none) = ∅ := by
     ext u
     simp [correctSet]
   rw [Wins, hK, Finset.sum_empty] at h
-  have : 0 ≤ T / (1 - γ) := div_nonneg hT (by linarith)
+  have : 0 ≤ T / (1 - g) := div_nonneg hT (by linarith)
   linarith
 
-/-- **The γ-gap property over the stopping machine is the γ-gap property with the budget per coin.** -/
-theorem gγ_withStop_iff [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) {γ : ℝ} (hγ : γ ≤ 1) (η : ℕ → ℕ → ℝ) :
-    Gγ CM.withStop P D γ η ↔ GγPerCoin CM P D γ η := by
+/-- **The gap property over the stopping machine is the gap property with the budget per coin.** -/
+theorem gGap_withStop_iff [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
+    (P : Protocol Q R S) (D : Layout → Prop) {g : ℝ} (hg : g ≤ 1) (δ : ℕ → ℕ → ℝ) :
+    GGap CM.withStop P D g δ ↔ GGapPerCoin CM P D g δ := by
   constructor
   · intro h U hU T hT q hq A hA
     let A' : Adversary CM.withStop := ⟨A.pre, (A.online, some T), A.act⟩
@@ -97,7 +102,7 @@ theorem gγ_withStop_iff [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM
       · exact max_le le_rfl hT
     refine le_trans (pr_mono fun x hx => ?_) (h U hU T hT q hq A' hb)
     obtain ⟨hc, hw⟩ := hx
-    show Wins P U γ T (if CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T then
+    show Wins P U g T (if CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T then
       CM.run A.online x.1 U A.act (A.pre.eval x.1) x.2 else fun _ => none) x.1 x.2
     rw [if_pos hc]
     exact hw
@@ -113,19 +118,19 @@ theorem gγ_withStop_iff [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM
     | some b =>
       change (if CM.cost p x.1 U act (pre.eval x.1) x.2 ≤ b then CM.cost p x.1 U act (pre.eval x.1) x.2
         else max b 0) ≤ T at hcost
-      change Wins P U γ T (if CM.cost p x.1 U act (pre.eval x.1) x.2 ≤ b then
+      change Wins P U g T (if CM.cost p x.1 U act (pre.eval x.1) x.2 ≤ b then
         CM.run p x.1 U act (pre.eval x.1) x.2 else fun _ => none) x.1 x.2 at hx
       by_cases hc : CM.cost p x.1 U act (pre.eval x.1) x.2 ≤ b
       · rw [if_pos hc] at hcost hx
         exact ⟨hcost, hx⟩
       · rw [if_neg hc] at hx
-        exact (not_wins_blank P U hγ hT x.1 x.2 hx).elim
+        exact (not_wins_blank P U hg hT x.1 x.2 hx).elim
 
-/-- **The stopping machine's γ-gap property gives the model's**: a program with no budget runs as before. -/
-theorem gγ_of_withStop [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (h : Gγ CM.withStop P D γ η) :
-    Gγ CM P D γ η :=
-  W1Priced.gγ_of_cost_le CM.withStop CM (fun p => (p, none)) (fun _ _ _ _ _ _ => rfl) (fun _ _ _ _ _ _ => le_rfl)
-    (fun _ _ _ _ _ _ => le_rfl) P D γ η h
+/-- **The stopping machine's gap-gap property gives the model's**: a program with no budget runs as before. -/
+theorem gGap_of_withStop [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
+    (P : Protocol Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) (h : GGap CM.withStop P D g δ) :
+    GGap CM P D g δ :=
+  W1Priced.gGap_of_cost_le CM.withStop CM (fun p => (p, none)) (fun _ _ _ _ _ _ => rfl) (fun _ _ _ _ _ _ => le_rfl)
+    (fun _ _ _ _ _ _ => le_rfl) P D g δ h
 
 end Pouw.PearlC.W1Stop

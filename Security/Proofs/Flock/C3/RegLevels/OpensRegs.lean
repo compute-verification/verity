@@ -1,5 +1,23 @@
-import Proofs.Flock.C3.RegLevels.SrcOpened
-import Proofs.Flock.C3.RegLevels.StackedReg
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcOpened
+public import Proofs.Flock.C3.RegLevels.StackedReg
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # n11: `OpensTopAt`'s registered ports, from the unit's registered columns and the verifier's check
@@ -24,6 +42,8 @@ import Proofs.Flock.C3.RegLevels.StackedReg
   VBridge's `RowsRegistered` at the unit, which acceptance does not give): the reads file names `acc` (`checkAcc`,
   `acc_of_checkStmt`) and `coef` and `dirs` (`checkStackedLevel`'s `checkValue`s, `own_of_checkValue`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

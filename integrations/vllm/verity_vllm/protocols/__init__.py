@@ -39,7 +39,7 @@ Program describes: POUS's decode is bit-identical and leaves the circuit untouch
 protocol package has a circuit for its scheme (``traced_as``).
 
 **Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity.core.protocols.pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
+`verity.ml.protocols.pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
 executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.
 """
@@ -74,7 +74,7 @@ ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-CIRCUITS = {"pouw": "verity.core.protocols.pouw.circuit"}
+CIRCUITS = {"pouw": "verity.ml.protocols.pouw.circuit"}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
 parse = config.parse_protocols
@@ -222,7 +222,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             executors.setdefault(site, entry)
         if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
+                       f"SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")

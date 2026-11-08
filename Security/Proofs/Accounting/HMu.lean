@@ -1,6 +1,9 @@
-import Proofs.Accounting.HMu.Luck
-import Proofs.Accounting.HMu.Persist
-import Proofs.Accounting.HMu.Gaps
+module
+
+public import Proofs.Accounting.HMu.Luck
+public import Proofs.Accounting.HMu.Persist
+public import Proofs.Accounting.HMu.Gaps
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # (H-μ⁺)'s guarantees
@@ -13,6 +16,8 @@ Each statement of `Definitions/Accounting/Guarantees/HMu.lean`, proved:
 * `HMu/Gaps.lean`: why the rest stays a premise: a view that reads the coin is lucky on every deficient round, and two
   words in one unit cancel under a step injective in both arguments.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.HMu
 

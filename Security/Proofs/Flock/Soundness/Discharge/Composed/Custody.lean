@@ -1,15 +1,34 @@
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.Sound
-import Proofs.Flock.Soundness.Assumptions.Zk
 
 /-!
 # One `--zk` sampled session is sound, under the record's custody
 
 `zk_session_sound_custody`: `zk_session_sound` with its two premises about the record, `hRec` (`RecordsLiveZK`) and
-`hDraw` (`DrawOkZK` at each of `Law.execOS`'s draws), replaced by one named assumption, `RecordCustodyZK`
-(`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points flock-verify sets up at each of the law's draws
+`hDraw` (`DrawOkZK` at each of `Law.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
+(`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points flock-verify sets up at each of the sampling design's samples
 (`drawOkZK_of_exec`). It rests on five: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and
 `live-verifier` (`hCust`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -18,25 +37,25 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One `--zk` sampled session is sound, under `live-verifier`.** `zk_session_sound` at the link points of the law's
-own draws, `mPtsOf c.g (∑ s, ks s)`, with the record's custody (`RecordCustodyZK`) in place of `hRec` and `hDraw`:
-`hRec` is its first half, and `hDraw` at every draw of `Law.execOS` is `drawOkZK_of_exec` from its second. -/
+/-- **One `--zk` sampled session is sound, under `live-verifier`.** `zk_session_sound` at the link points of the sampling design's
+own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody (`RecordCustodyZK`) in place of `hRec` and `hDraw`:
+`hRec` is its first half, and `hDraw` at every sample of `Law.execOS` is `drawOkZK_of_exec` from its second. -/
 theorem zk_session_sound_custody
     (I : Inputs) (ht : I.tags.typed = false)
     -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the law's draws
+    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its draw file are the live session's
+    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOk I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

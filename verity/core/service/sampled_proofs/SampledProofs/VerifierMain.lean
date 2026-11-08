@@ -1,16 +1,20 @@
-import Difftest
-import SampledProofs.Pieces
+module
+
+public import Difftest
+public import SampledProofs.Pieces
 
 /-!
-# `sampled-proofs-verifier`: the verifier of record, and the challenger's coins
+# `sampled-proofs-verifier`: the verifier, and the challenger's coins
 
 The verifier's functions (`Pieces.verifier`) behind `Difftest.respond`'s line protocol, and one more request,
 `{"fn": "coins", "input": n}`: `n` bytes of the operating system's randomness (`IO.getRandomBytes`, A3's
 `uniform/io-getrandombytes`), answered `{"output": HEX}`: the entropy a challenger flips its coins from
 (`LiveChallenger`, through `one_stage.verifier.coins`), on the challenger's own host, so the Python never reads it from the
-operating system itself. The verifier reads no coins from here: its draws read the challenger's coins from its log
+operating system itself. The verifier reads no coins from here: its samples read the challenger's coins from its log
 (`Run.coinsHold`).
 -/
+
+@[expose] public section
 
 namespace SampledProofs.VerifierMain
 
@@ -31,7 +35,7 @@ def coins (input : Json) : IO String := do
 
 /-- The response line to one request line: `coins`, or the verifier's (`Difftest.respond`). -/
 def respond (request : String) : IO String :=
-  match Json.parse request with
+  match Flock.JsonParse.parse request with
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
     | .ok "coins", .ok input => coins input

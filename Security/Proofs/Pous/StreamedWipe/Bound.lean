@@ -1,5 +1,9 @@
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipe
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
 import Proofs.Pous.StreamedWipe.Count
-import Definitions.Pous.Guarantees.StreamedWipe
 
 /-!
 # The streamed-label wipe: the bound
@@ -7,6 +11,8 @@ import Definitions.Pous.Guarantees.StreamedWipe
 `win_count` divided by the number of runs `2^q · N^k · 2^(b·N)` is `bound` (`win_ideal_le`); the real game is the
 ideal one plus the PRF's advantage against the game's distinguisher (`streamed_wipe`).
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

@@ -1,6 +1,21 @@
-import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.Opening.SessionPartsL
-import Proofs.Flock.C3.Opening.SessionAcc
+module
+
+public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.Opening.SessionPartsL
+public import Proofs.Flock.C3.Opening.SessionAcc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n4 from V*'s sessions: `OpeningRead` but the claim tie and the tape prefix
@@ -21,6 +36,8 @@ coins', with no decoder (`SessionAt`):
 `openingRead_of_session` keeps the other two as hypotheses: the claim tie (item 3, at the claims `RecCoins.opening`
 builds, `coinClaim`) and the tape prefix (item 4, at the messages w holds with those consistency sums).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

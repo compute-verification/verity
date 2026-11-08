@@ -1,6 +1,7 @@
 """`tasks.py` (`verity tasks`): the task graph of a synthetic checkout, and one task run in it.  The checkout holds a copy of the
-check's tooling (this directory, `tools/verity/lean`'s jobs, and the handle registry `ci.toml`'s owners are checked against)
-beside two suites and a Lake package, and `tasks.py` runs in a process of its own there, as it runs on the repository's tree."""
+check's tooling (this directory, `tools/verity/lean`'s jobs and the task graph's contract they key with, and the handle registry
+`ci.toml`'s owners are checked against) beside two suites and a Lake package, and `tasks.py` runs in a process of its own there,
+as it runs on the repository's tree."""
 from __future__ import annotations
 
 import json
@@ -32,6 +33,9 @@ def tree(tmp_path: Path) -> Path:
     (t / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in (ROOT / "tools" / "verity" / "lean").glob("*.py"):
         shutil.copy2(f, t / "tools" / "verity" / "lean" / f.name)
+    contract = Path("tools") / "verity" / "graph" / "verity_graph" / "contract.py"
+    (t / contract).parent.mkdir(parents=True)
+    shutil.copy2(ROOT / contract, t / contract)
     registry = Path(".agents") / "skills" / "using-slack" / "registry.json"
     (t / registry).parent.mkdir(parents=True)
     shutil.copy2(ROOT / registry, t / registry)
@@ -46,30 +50,32 @@ def tree(tmp_path: Path) -> Path:
     (t / "lean" / "P" / "lakefile.toml").write_text('name = "P"\n')
     (t / "lean" / "P" / "lean-audit.json").write_text("{}\n")
     (t / "lean" / "P" / "P.lean").write_text("theorem t : True := trivial\n")
-    # its own `verity`, without the twins `check.PREBUILD` loads, so a run's prebuild builds nothing
-    (t / "verity").mkdir()
-    (t / "verity" / "__init__.py").write_text("")
+    # its own `verity`, whose twins (`check.PREBUILD`) build nothing
+    (t / "verity" / "ml" / "definitions" / "numerics").mkdir(parents=True)
+    for d in ("verity", "verity/ml", "verity/ml/definitions", "verity/ml/definitions/numerics"):
+        (t / d / "__init__.py").write_text("")
+    (t / "verity/ml/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
     _git(t, "init", "-q")
     _git(t, "add", "-A")
     _git(t, "commit", "-q", "-m", "tree")
     return t
 
 
-def _tasks(tree: Path, *args: str) -> subprocess.CompletedProcess:
+def _tasks(tree: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     env = {**os.environ, "HOME": str(tree.parent / "home"), "CHECK_CACHE": str(tree.parent / "check-cache"),
-           "VERITY_TEST_CACHE": str(tree.parent / "test-cache")}
+           "VERITY_TEST_CACHE": str(tree.parent / "test-cache"), **(env or {})}
     return subprocess.run([sys.executable, str(tree / "tools" / "verity" / "check" / "tasks.py"), *args], cwd=tree, env=env,
                           capture_output=True, text=True)
 
 
-def _graph(tree: Path, *args: str) -> tuple[dict, str]:
-    r = _tasks(tree, "list", "--json", *args)
+def _graph(tree: Path, *args: str, env: dict[str, str] | None = None) -> tuple[dict, str]:
+    r = _tasks(tree, "list", "--json", *args, env=env)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout), r.stdout
 
 
-def _keys(tree: Path) -> dict[str, str | None]:
-    return {t["id"]: t["key"] for t in _graph(tree)[0]["tasks"]}
+def _keys(tree: Path, env: dict[str, str] | None = None) -> dict[str, str | None]:
+    return {t["id"]: t["key"] for t in _graph(tree, env=env)[0]["tasks"]}
 
 
 def test_list_is_a_tasks_v1_graph_closed_under_its_deps_and_the_same_each_time(tree):
@@ -147,6 +153,35 @@ def test_a_suites_key_moves_with_its_inputs_and_with_nothing_else(tree):
     after = _keys(tree)
     assert after["pytest:a"] != before["pytest:a"]
     assert {i: k for i, k in after.items() if i != "pytest:a"} == {i: k for i, k in before.items() if i != "pytest:a"}
+
+
+def test_a_kept_steps_key_is_its_inputs_not_the_slot_or_the_toolchain_it_is_listed_on(tree):
+    """A job run whole whose pass check keeps (`check.STEP_KEYS`) lists one key on every slot and host: keyed by its step key,
+    which reads the slot's test cache, the kernel release and `rustc -vV`, `flock-rust-tests` passed on a worker's slot under
+    another key than the lister's, so its verdict was never labelled."""
+    flock = tree / "verity" / "ml" / "flock"
+    (flock / "live").mkdir(parents=True)
+    (flock / "check_build.sh").write_text("RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.0.0}\n")
+    (flock / "live" / "lib.rs").write_text("pub fn f() {}\n")
+    (flock / "flock-a-b684b12.patch").write_text("a\n")
+    _git(tree, "add", "-A")
+    _git(tree, "commit", "-q", "-m", "flock")
+
+    def slot(name: str, rustc: str) -> dict[str, str]:
+        home, tmp = tree.parent / f"home-{name}", tree.parent / f"tmp-{name}"
+        (home / ".cargo" / "bin").mkdir(parents=True)
+        tmp.mkdir()
+        (home / ".cargo" / "bin" / "rustc").write_text(f"#!/bin/sh\necho 'rustc {rustc}'\n")
+        (home / ".cargo" / "bin" / "rustc").chmod(0o755)
+        return {"HOME": str(home), "VERITY_TEST_CACHE": str(tree.parent / f"tests-slot-{name}"), "TMPDIR": str(tmp)}
+
+    key = _keys(tree, slot("x3", "1.0.0 (one build)"))["flock-rust-tests"]
+    assert key and _keys(tree, slot("c4la0", "1.0.0 (another build)"))["flock-rust-tests"] == key, \
+        "a lister and a worker on other slots, with other homes and toolchains, list one key"
+    (tree / "a" / "tests" / "test_a.py").write_text("def test_a():\n    assert 1\n")
+    assert _keys(tree)["flock-rust-tests"] == key, "a file outside its inputs leaves its key"
+    (flock / "flock-a-b684b12.patch").write_text("b\n")
+    assert _keys(tree)["flock-rust-tests"] != key, "a file its inputs' glob matches moves its key"
 
 
 def test_changed_keeps_the_tasks_whose_inputs_the_change_touches(tree):

@@ -1,6 +1,8 @@
-import CoreProtocol.Protocol
-import MemoryChallenger.Records
-import MemoryChallenger.SignedMessage
+module
+
+public import CoreProtocol.Protocol
+public import MemoryChallenger.SignedMessage
+public import Lms.Verify
 
 /-!
 # The verdict on a signed session
@@ -14,6 +16,8 @@ reasons are the Python's, word for word.
 A scheme is an LMS parameter set under its id (`SCHEMES`: S1's, `LMS` at `Lms.deployed`, and nothing else). The test
 signers' schemes (`TEST_SCHEMES`, `pous_test_signer.SCHEMES`) are accepted only where a caller passes them.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger
 
@@ -57,7 +61,7 @@ def KNOWN_SCHEMES : Schemes := SCHEMES ++ TEST_SCHEMES
 
 /-- Python's `repr` of a string, for the scheme in a reason: single quotes unless the string holds `'` and no `"`; `\`,
 the quote, `\t \n \r` escaped, other ASCII controls and DEL as `\xhh`. Characters past ASCII are written as they are,
-which is Python's `repr` for the printable ones (all a difftest draws). -/
+which is Python's `repr` for the printable ones (all a difftest samples). -/
 def pyRepr (s : String) : String := Id.run do
   let q := if s.contains '\'' && !s.contains '"' then '"' else '\''
   let hex2 := fun (n : Nat) =>

@@ -1,13 +1,18 @@
-import Properties.Pouw.Commit
+module
+
+public import Properties.Pouw.Commit
+import all Init.Data.String.Defs
 
 /-!
 # Proofs of PoUW's commitment properties (`Properties.Pouw.Commit`)
 
 The sizes and numbers by unfolding and evaluation in the kernel, the refusals and the accepted coins by unfolding the
-port's definitions case by case, and the draws' shape from `Flock.Draw.uniform`'s range and the tickets' running sums.
+port's definitions case by case, and the samples' shape from `Flock.Draw.uniform`'s range and the tickets' running sums.
 The binding statements from the frame's injectivity (its lengths are big-endian, so a frame parses back to its tag and
 parts) and, down an accepted coin's path, one step per hash: each pair of hashed messages is equal, or it is the collision.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Commit
 
@@ -213,7 +218,7 @@ theorem coinRaises : CoinRaises := by
   rw [List.any_eq_true]
   exact ⟨p, hp, by simp [hs.1, hs.2]⟩
 
-/-! ## Salts, keys and draws -/
+/-! ## Salts, keys and samples -/
 
 open FlockSoundness.Randomness in
 theorem derive_size (source : ByteArray) (domain : String) (context : List (String × Part)) :
@@ -303,7 +308,7 @@ theorem epochSalt_iff (c : CoinCommitment) (o : CoinOpening) (wr s : ByteArray) 
 
 theorem epochSaltAccepts : EpochSaltAccepts := fun c o wr s => (epochSalt_iff c o wr s).1
 
-/-- `draw_coin` gives a coin exactly when the opening is the epoch's draw coin opened after what the verifier recorded,
+/-- `draw_coin` gives a coin exactly when the opening is the epoch's sampling coin opened after what the verifier recorded,
 and the coin is the opened one; an epoch without a coin commitment gives none. -/
 theorem drawCoin_iff :
     (∀ c o after coin, drawCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧

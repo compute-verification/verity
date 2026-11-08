@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Properties.RemoteAudit.Schedule
+module
+
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Properties.Accounting.Remote.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
@@ -14,6 +16,8 @@ stated here because it reads the verifier's code, which the spec doesn't; its th
 `Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.RemoteAudit.steered_of_checked`.
 -/
+
+@[expose] public section
 
 namespace Properties.DeclaredCircuit
 
@@ -59,7 +63,7 @@ def ScheduledRequirement : Prop :=
     (appended sent : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Array (ℕ × ℕ))
     {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
     (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
-    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Layout V)
+    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store.Placement V)
     (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
     (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
     (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)

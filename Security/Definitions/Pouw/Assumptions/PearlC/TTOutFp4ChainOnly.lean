@@ -1,14 +1,18 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
-import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
 
 /-!
 # TT_OUT under the chain-only reading at an FP4 record (staged, nothing pinned)
 
 The two chain-only forms of `TTOutFp4`: `TTOut` and `TTOutTile` at the chain-only protocol and tiles
 (`DeviceFp4ChainOnly`), unit and per audit tile. Each is implied by the record's own TT_OUT
-(`Fp4ChainOnlyGamma`'s `…ChainOnly_of_ttOut`) at non-negative `fs`, so neither is a new assumption. They sit in an
+(`Fp4ChainOnlyGap`'s `…ChainOnly_of_ttOut`) at non-negative `fs`, so neither is a new assumption. They sit in an
 assumptions module as the bundle's named `Prop`s do.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 
@@ -20,12 +24,12 @@ variable {Q R S : Type}
 out the forming. It is weaker than `TTOutFp4` (`ttOutFp4ChainOnly_of_ttOut`). -/
 def TTOutFp4ChainOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
     (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolFp4ChainOnly d sem ρ) (pearlCDomainFp4 sem) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocolFp4ChainOnly d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at an FP4 record, chain-only.** -/
 def TTOutTileFp4ChainOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
     (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
   TTOutTile CM (pearlCProtocolFp4ChainOnly d sem ρ) (pearlCTilesFp4ChainOnly d sem ρ) (pearlCDomainFp4 sem) (1 / 400)
-    εPearlC
+    δPearlC
 
 end Pouw.PearlC.Assumptions

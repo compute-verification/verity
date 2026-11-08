@@ -1,6 +1,6 @@
 """The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
 the one-stage audit, with a stub verifier, a challenger of the test's own (`fake_challenger`) and an injected clock. A
-stream asked to draw from coins other than a challenger's refuses: the verifier draws no coins of its own."""
+stream asked to sample from coins other than a challenger's refuses: the verifier flips no coins of its own."""
 
 from __future__ import annotations
 
@@ -29,15 +29,15 @@ SCHEMA = "hm96-sha512/row/v2"
 RUN = "r-service-test"
 SESSION = "5e" * 64
 DELTA = 2.0 ** -40
-#: What one-stage's record shows besides the salted roots, declared as step 0 declares it.
-STEP0 = tuple(S.Public(i, "structure", r) for i, r in (
-    ("population", "N, the draw's range"), ("window", "provenance: served, on test prompts (step 0)"),
-    ("leaves:x", "x's leaf count (step 0)"), ("domain:x", "x's served domain (step 0)"),
-    ("leaves:out", "out's leaf count (step 0)"), ("domain:out", "out's served domain (step 0)")))
+#: What one-stage's record shows besides the salted roots, each declared with its reason.
+RECORD_ITEMS = tuple(S.Public(i, "structure", r) for i, r in (
+    ("population", "N, the draw's range"), ("window", "provenance: served, on test prompts"),
+    ("leaves:x", "x's leaf count"), ("domain:x", "x's served domain"),
+    ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain")))
 VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 
 
-def _spec(selection=S.Law("subset:2"), public=STEP0, proof_deadline=60.0, public_outputs=(), values=VALUES,
+def _spec(selection=S.Law("subset:2"), public=RECORD_ITEMS, proof_deadline=60.0, public_outputs=(), values=VALUES,
           registration_deadline=None) -> S.Spec:
     return S.Spec(values, selection, S.Check(P.program_digest(Program(PAIR)), QUERY, public_outputs=public_outputs,
                                              proof_deadline=proof_deadline, registration_deadline=registration_deadline),
@@ -54,7 +54,7 @@ class Clock:
 
 class _Bytes(T.ChallengerCoins):
     """A select-only test's bytes, read as a challenger's coins: no session opens them, so a run of the verifier on a
-    draw from them has no evidence and refuses it."""
+    sample from them has no evidence and refuses it."""
 
     def __init__(self, source) -> None:
         super().__init__(None)
@@ -154,7 +154,7 @@ def test_a_stream_draws_no_coins_of_its_own():
     """A stream whose selection reads coins takes only the auditor's challenger's (`coins.ChallengerCoins`): asked for
     none, the operating system's bytes as the Lean reads them (`verifier.coins`), or any other source of bytes, it
     refuses (`NO_OWN_COINS`), and a salt from any coins but a challenger's is refused the same way before a byte is read.
-    A stream that reads no coins (`All`, or one a sampler draws for) needs none."""
+    A stream that reads no coins (`All`, or one a sampler samples for) needs none."""
     for coins in (None, V.coins, lambda n: b"\x07" * n, random.Random(0).randbytes):
         for spec in (_spec(), _spec(S.Law("bernoulli:1/2"))):
             with pytest.raises(ValueError) as e:
@@ -199,7 +199,7 @@ def test_the_rule_refuses_a_per_call_root_in_the_clear():
 
 
 def test_the_rule_refuses_a_leaf_count_unless_declared():
-    spec = _spec(public=tuple(p for p in STEP0 if p.item != "leaves:x"))
+    spec = _spec(public=tuple(p for p in RECORD_ITEMS if p.item != "leaves:x"))
     v = S.check_public(spec, _record())
     assert v.codes == ("undeclared",) and v.detail["undeclared"] == ["leaves:x"]
     with pytest.raises(S.Refused) as e:
@@ -216,7 +216,7 @@ def test_the_rule_refuses_a_template_population_unless_declared():
     assert rec["law"]["strata"][0]["template"] == PAIR.id
     v = S.check_public(_spec(S.Law("stratified:2")), rec)
     assert v.codes == ("undeclared",) and v.detail["undeclared"] == [f"population:{PAIR.id}"]
-    declared = _spec(S.Law("stratified:2"), public=(*STEP0, S.Public(f"population:{PAIR.id}", "structure", "a stratum")))
+    declared = _spec(S.Law("stratified:2"), public=(*RECORD_ITEMS, S.Public(f"population:{PAIR.id}", "structure", "a stratum")))
     assert S.check_public(declared, rec).ok
     stream = _stream(declared)
     draw = stream.select(stream.register(rec, _ports(6)))
@@ -268,18 +268,18 @@ def test_the_rule_refuses_the_rest():
     reg = [{"value": "W", "root": "ab" * 64, "leaves": 4, "words": 4, "domain": "cd" * 64}]
     assert S.check_public(_spec(), _record(registered=reg)).detail["roots"] == ["W"]
     spec = _spec(values=(*VALUES, S.Value("W", None, "epoch", registered=True)),
-                 public=(*STEP0, S.Public("W", "commitment", "the weights' salted root")))
+                 public=(*RECORD_ITEMS, S.Public("W", "commitment", "the weights' salted root")))
     assert S.check_public(spec, _record(registered=reg)).detail["undeclared"] == ["domain:W", "leaves:W", "words:W"]
     assert S.check_public(_spec(), "a record").codes == ("keys",)
 
 
 def test_a_spec_states_each_public_item_once_with_its_reason():
     with pytest.raises(ValueError, match="distinct"):
-        _spec(public=(*STEP0, STEP0[0]))
+        _spec(public=(*RECORD_ITEMS, RECORD_ITEMS[0]))
     with pytest.raises(ValueError, match="commitment"):
-        _spec(public=(*STEP0, S.Public("W", "commitment", "a root")))
+        _spec(public=(*RECORD_ITEMS, S.Public("W", "commitment", "a root")))
     with pytest.raises(ValueError, match="window"):
-        _spec(public=(*STEP0, S.Public("credited", "output", "credited work", source="window")))
+        _spec(public=(*RECORD_ITEMS, S.Public("credited", "output", "credited work", source="window")))
     with pytest.raises(ValueError, match="output"):
         _spec(public_outputs=("credited",))
     with pytest.raises(ValueError, match="distinct"):
@@ -305,15 +305,6 @@ def test_a_stream_refuses_what_isnt_built_and_another_unit():
             S.Stream(_spec(), PAIR, **{"budget": 1, "delta": DELTA, "challenger": "c", **bad})
 
 
-def test_a_two_stage_rule_is_refused_as_retired():
-    """Two-stage sampling is retired: a Spec whose selection rule names it fails closed, saying so."""
-    for rule in ({"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
-        with pytest.raises(ValueError, match="two-stage sampling is retired") as e:
-            _spec(rule)
-        assert str(e.value) == S.RETIRED_TWO_STAGE
-    assert not hasattr(S, "TwoStage")
-
-
 def test_one_stage_refusals_come_through_register():
     stream = _stream()
     with pytest.raises(S.Refused) as e:
@@ -327,22 +318,28 @@ def test_one_stage_refusals_come_through_register():
     assert stream.register(_record(), _ports(6)).order == 0
 
 
-def test_a_law_whose_count_varies_is_refused_at_register():
-    """A Bernoulli sampling design at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
-    different shapes: `register` refuses it (`shapes`) after R1-R7, and logs nothing. At p = 0 or 1 it registers."""
-    for p in ("1/2", "2/3", "2/4"):
+def test_a_bernoulli_law_is_refused_at_register():
+    """A Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
+    count varies; at p = 0 it samples nothing, so a stream would accept having verified nothing): `register` refuses it
+    (`bernoulli`, with `BERNOULLI`) after R1-R7, and logs nothing. Subset, stratified, work and All register."""
+    for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
-        assert _refused(lambda: stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))) == ("shapes",)
+        with pytest.raises(S.Refused) as e:
+            stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))
+        assert e.value.verdict.codes == ("bernoulli",), p
+        assert e.value.verdict.detail["bernoulli"]["reason"] == S.BERNOULLI
         assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
         assert stream.log == () and stream.records == ()
-    for p in ("0/1", "1/1", "3/3"):
-        stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
-        assert stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6)).order == 0
+    for selection, law, table in ((S.Law("subset:2"), {"law": "subset", "k": 2}, None),
+                                  (S.Law("stratified:2"), D.parse_law("stratified:2"), None),
+                                  (S.Law("work:2"), D.parse_law("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
+        stream = _stream(_spec(selection, public=(*RECORD_ITEMS, STRATUM)))
+        assert stream.register(_record(law=law, work_table=table), _ports(6), work_table=table).order == 0, law
 
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
-    """`rate:1/3:2` draws `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
-    a registration padded tenfold (N = 60 for 6) draws K = 20 and every proof block is still drawn with probability K/N ≥ 1/3,
+    """`rate:1/3:2` samples `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
+    a registration padded tenfold (N = 60 for 6) samples K = 20 and every proof block is still sampled with probability K/N ≥ 1/3,
     where `subset:2` falls to 2/60. The sample, the Lean verifier's sample of record and the outcome's run (`verifier.run`,
     which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
@@ -357,8 +354,8 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
-    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks draws 8 (not 7) and
-    `rate:1/5:4` over 12 draws 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
+    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks samples 8 (not 7) and
+    `rate:1/5:4` over 12 samples 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
     over 6 proof blocks, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
     tables, in ASCII digits."""
     for text, n, k in (("rate:1/3:4", 20, 8), ("rate:1/5:4", 12, 4)):
@@ -629,10 +626,10 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
 
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
-    """A one-stage outcome on a draw from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
-    from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
-    accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
-    the round, its audit record failing `run`; a sampler's draw isn't run."""
+    """A one-stage outcome on a sample from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
+    from the registration, the bytes the sample read, the sessions and the verdicts: one run per outcome, agreeing on an
+    accepted and a rejected round. A run the Python doesn't make alike (here, a sample said to read one byte more) rejects
+    the round, its audit record failing `run`; a sampler's sample isn't run."""
     run, ran = S.V.run, []
 
     def spy(python, *a, **kw):
@@ -654,7 +651,7 @@ def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monk
 
 
 def test_public_outputs_come_from_the_verifier_of_record():
-    spec = _spec(public=(*STEP0, S.Public("credited", "output", "the credited work")), public_outputs=("credited",))
+    spec = _spec(public=(*RECORD_ITEMS, S.Public("credited", "output", "the credited work")), public_outputs=("credited",))
     stream = _stream(spec)
     draw = stream.select(stream.register(_record(), _ports(6)))
     stream.deliver(draw, [SESSION])
@@ -686,50 +683,39 @@ def _refused(call) -> tuple[str, ...]:
 
 WORK = {PAIR.id: 10}
 STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
-#: The challenger's closure map: each proof block is proved with the next.
+#: A closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 
 
-def test_a_work_draw_carries_its_closure_and_the_proof_proves_it():
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    draw = stream.select(reg, closure=NEXT)
-    assert draw.draw["closure"] == T.closure_of(NEXT, draw.units) and draw.draw["closure"]
-    assert D.check_draw(draw.draw, reg.record, draw.law).ok
-    assert draw.proved == sorted({*draw.units, *((u + 1) % 6 for u in draw.units)})
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {}, proved_units=draw.units)
-    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["proved"]
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    draw = stream.select(stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
-                                         work_table=WORK), closure=NEXT)
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {})
-    assert out.accepted and stream.records[0]["audit"]["proved_units"] == draw.proved
-
-
-def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
+def test_a_closure_map_is_refused_before_any_coin_is_read():
+    """A closure map widens a work sample to a set whose size varies with the sample, which the sampled audit's soundness
+    statement doesn't cover: `select` refuses any, empty or not, under any sampling design (`closure`), before any coin
+    is read, so the sample sampled after the refusals is the one a fresh stream on the same challenger samples, and it is
+    accepted."""
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
-    reads: list[int] = []
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)), coins=lambda n: reads.append(n) or b"\x07" * n)
+    work = _spec(S.Law("work:2"), public=(*RECORD_ITEMS, STRATUM))
+    stream = _stream(work)
     reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    for bad in ({u: [6] for u in range(6)}, {6: [0]}, {u: [-1] for u in range(6)}, {u: ["1"] for u in range(6)},
-                [[1]] * 6):
+    for bad in (NEXT, {}, {u: [6] for u in range(6)}, {6: [0]}, [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
-    assert reads == []
-    assert "closure" not in stream.select(reg, closure={}).draw and reads
+    draw = stream.select(reg)
+    fresh = _stream(work)
+    assert draw.draw == fresh.select(fresh.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
+                                                    work_table=WORK)).draw
+    assert "closure" not in draw.draw and draw.proved == draw.units
+    stream.deliver(draw, [SESSION])
+    assert stream.outcome(draw, _lean(), {}).accepted
 
 
-@pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
+@pytest.mark.parametrize("text", ["subset:2", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same proof blocks; a work sample's closure is the same too."""
+    samples the same proof blocks."""
     table = WORK if text.startswith("work") else None
-    closure = NEXT if table else None
     for seed in range(8):
-        stream = _stream(_spec(S.Law(text), public=(*STEP0, STRATUM)), coins=random.Random(seed).randbytes)
+        stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)
         reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
-        draw = stream.select(reg, closure=closure)
-        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6, closure)
+        draw = stream.select(reg)
+        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

@@ -1,10 +1,12 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Definitions.Pous.Model.M1
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Definitions.Pous.Model.M1
 
 /-!
 # Model M1 on P2's exact domain `[0, p)`
 
-P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. `permsp B w p` draws `B` independent uniform permutations of
+P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. `permsp B w p` samples `B` independent uniform permutations of
 `Fin p`. They act on `w`-bit strings through the numeric value (bit `i` has weight `2^i`): values `< p` move, and
 values `≥ p` (the tail `[p, 2^w)`) are fixed. Queries and answers are `w`-bit strings, so `Scheme`, the audit game and
 `Meets` apply unchanged.
@@ -14,6 +16,8 @@ lies in `[0, p)` whenever `2^b ≤ p`. Block `j` of the code is `Π_j⁻¹` of t
 forward query per block and reduces the answer mod `2^b`. The definitions are total. The side conditions
 (`2^b ≤ p ≤ 2^w`, `b ≤ w`, `20·w ≤ 21·b`) are hypotheses of the theorems that need them.
 -/
+
+@[expose] public section
 
 namespace Pous
 

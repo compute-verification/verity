@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.ZK.Cut
+module
+
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.ZK.Cut
 
 /-!
 # A run in parts with a public stop
@@ -23,15 +25,13 @@ transcript there (`censorSim`).
   prover with the stop.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims Claims.ZKServer
 
 /-! ## A public stop -/
-
-/-- **The stop has fired** at the history `h`: `s` holds at one of `h`'s prefixes of at most `k` rounds. -/
-def fired (s : List (Msg × Msg) → Bool) (k : ℕ) (h : List (Msg × Msg)) : Bool :=
-  (List.range (min h.length k + 1)).any fun i => s (h.take i)
 
 /-- Past the first `k` rounds, the stop reads only them. -/
 theorem fired_take {s : List (Msg × Msg) → Bool} {k j : ℕ} (h : List (Msg × Msg)) (hj : k ≤ j) :
@@ -58,19 +58,9 @@ theorem fired_of_take {s : List (Msg × Msg) → Bool} {k : ℕ} (h : List (Msg 
   refine ⟨i, by omega, ?_⟩
   rwa [List.take_take, Nat.min_eq_left (by omega)] at h'
 
-/-- **The prover with the stop**: `P`, except that it sends the empty message once `s x` has fired within the first
-`k x` rounds. -/
-def stopP {Ω : Type} (P : Prover Ω) (s : Msg → List (Msg × Msg) → Bool) (k : Msg → ℕ) : Prover Ω :=
-  ⟨fun x h ω => if fired (s x) (k x) h then .ret [] else P.next x h ω⟩
-
 /-- The message function `pm` with the stop. -/
 def censor (s : List (Msg × Msg) → Bool) (k : ℕ) (pm : List (Msg × Msg) → Msg) (h : List (Msg × Msg)) : Msg :=
   if fired s k h then [] else pm h
-
-open Classical in
-/-- **Where the stop fires on the run `τ`**: the first round `i ≤ k` at whose history `s` holds, else `n`. -/
-noncomputable def stopIdx (s : List (Msg × Msg) → Bool) (k n : ℕ) (τ : List (Msg × Out)) : ℕ :=
-  if h : ∃ i, i ≤ k ∧ s (histOf (τ.take i)) = true then Nat.find h else n
 
 theorem stopIdx_min {s : List (Msg × Msg) → Bool} {k n : ℕ} {τ : List (Msg × Out)} {i : ℕ}
     (hi : i < stopIdx s k n τ) (hk : i ≤ k) : s (histOf (τ.take i)) = false := by
@@ -176,13 +166,6 @@ theorem ZKmalAt.post {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
   have := h w hw Θ Vs θ hk fun τ => Ev (f Θ Vs θ τ)
   simpa using this
 
-/-- **A simulator with the stop**: `S`'s transcript at `x`, cut where the stop fires within `k x` rounds, the rounds
-from there asked of the verifier with the empty message. -/
-noncomputable def censorSim (S : Simulator) (s : Msg → List (Msg × Msg) → Bool) (k : Msg → ℕ) : Simulator where
-  C := S.C
-  prog x c := spBind (S.prog x c) fun τ =>
-    spRun (fun h => .ret (cutMsg [] (stopIdx (s x) (k x) (k x) τ) τ h)) (k x) []
-
 theorem censorSim_out {Θ : Type} (H : Msg → Msg) (S : Simulator) (s : Msg → List (Msg × Msg) → Bool)
     (k : Msg → ℕ) (Vs : VStar Θ) (θ : Θ) (x : Msg) (c : S.C x) :
     spOut H Vs θ x ((censorSim S s k).prog x c) =
@@ -260,9 +243,6 @@ theorem ZKmalAt.tag {WS N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
   simp only [hrun, hf, hs]
   exact h w₀ hw₀ Θ Vs₀ θ hk Ev
 
-/-- The silent simulator of `n` rounds: the empty message every round. -/
-def silentSP (n : ℕ) : SP (List (Msg × Out)) := spRun (fun _ => .ret []) n []
-
 /-- **A session with no witness is silent, and simulated exactly** by the empty message every round, on any coins. -/
 theorem zkmalAt_silent {WS N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : ℕ)
     (PS : WS → Prover (N × Ω)) (RB : Rel WS) (C : Type) [Fintype C] [Nonempty C] {ε γ : ℝ} (hε : 0 ≤ ε)
@@ -300,14 +280,6 @@ theorem histOf_runStar_getElem {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) 
 namespace Layout
 
 variable {W WS T TS : Type}
-
-/-- **The parts with the stop `s`**: session `j` at a history where the stop has fired within the first part is at
-the empty statement with no witness; elsewhere at its statement tagged `1 ::`, with its witness. -/
-def stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bool) : Layout W (Option WS) T where
-  k₀ := L.k₀
-  n := L.n
-  xs x j u := if fired (s x) (L.k₀ x) u then [] else 1 :: L.xs x j u
-  ws j w t x u := if fired (s x) (L.k₀ x) u then none else some (L.ws j w t x u)
 
 theorem stopped_start (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bool) : (L.stopped s).start = L.start := by
   funext x j
@@ -360,12 +332,6 @@ theorem prover_stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bo
           rfl
 
 end Layout
-
-/-- The sessions' programs with the stop: silent where the stop has fired, else `progB`. -/
-def stopProgB (s : Msg → List (Msg × Msg) → Bool) (k : Msg → ℕ) (n : Msg → ℕ → ℕ) {CB : ℕ → Msg → Type}
-    (progB : (j : ℕ) → (x : Msg) → List (Msg × Msg) → CB j x → SP (List (Msg × Out))) :
-    (j : ℕ) → (x : Msg) → List (Msg × Msg) → CB j x → SP (List (Msg × Out)) :=
-  fun j x u c => if fired (s x) (k x) u then silentSP (n x j) else progB j x u c
 
 /-- **`m` sessions after a first part, with a public stop, at one statement**: the prover with the stop `s` (read at
 the first part's rounds) is `ZKmalAt` at the stopped composition (the first part's simulator cut where the stop fires,

@@ -1,4 +1,6 @@
-import Definitions.Core.Circuit
+module
+
+public import Definitions.Core.Circuit
 
 /-!
 # Partitions, committed wires, and the correctness of a unit
@@ -13,6 +15,8 @@ it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, readin
 (`localEval`), and compare with `X` on `u`'s committed gates. Only committed values are bound, and `wrong X` is the set
 of units that are not correct.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -43,7 +47,7 @@ def Correct (X : C.Transcript) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
-/-- The faulty proof blocks of a trace. -/
+/-- The incorrect proof blocks of a trace. -/
 noncomputable def wrong (X : C.Transcript) : Finset (Fin n) :=
   univ.filter fun u => ¬ P.Correct X u
 

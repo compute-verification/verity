@@ -1,5 +1,22 @@
-import Proofs.Flock.C3.Opening.SessionParts
-import Proofs.Flock.VBridge.ResLayer
+module
+
+public import Proofs.Flock.C3.Opening.SessionParts
+public import Proofs.Flock.VBridge.ResLayer
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.VBridge.AlgHolds
+import Proofs.Flock.VBridge.OpeningUnit
 
 /-!
 # n4's session (a) at the columns the rows read: `OpeningZeroAtL`
@@ -14,6 +31,8 @@ computed row of the part's unit reads (at `m = 22`, `m24`'s first four elements)
 * `OpeningZeroAtL`, `partCols_of_openingZeroAtL`: `OpeningZeroAt` with the row ports registered at the read columns,
   and the part's residuals, zero, from it as from `OpeningZeroAt`; `openingZeroAtL_of` weakens `OpeningZeroAt` to it.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

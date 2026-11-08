@@ -1,15 +1,19 @@
 /-
-PROTOCOL.md §16.5: the circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
+The circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
 `<keyword> <name> <lines>` blocks, each an expanded circuit in `flock-ir-unit/v2` form (format and keyword are the
 statement's `Tags`). The parser refuses every part the verifier would have to evaluate (a `CUT` line; the META keys `tail`,
 `cut`, `cut_words`, `public_ports`, `public`, `native`, `outputs_by_tail`), and checks the layout's generic shape; the row
 leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from their pinned tables (`Flock.Lookup`).
 -/
-import Lean.Data.Json
-import Flock.Lookup
-import Flock.TmplAt
-import Flock.Tags
-import Flock.Typed
+module
+
+public import Flock.Lookup
+public import Flock.TmplAt
+public import Flock.Typed
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -128,7 +132,7 @@ structure Circuit where
   leafCuts : Array (Nat × Nat × Nat) := #[]
   /-- a typed template's block (item 1e): the unit is its instance's root, beside its parts -/
   typed : Option TypedBlock := none
-  /-- a typed statement's unit class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
+  /-- a typed statement's size class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
   cls : Option Typed.Class := none
   /-- a templated unit: its template, layouts and committed net (`Tmpl.unitNet`, its rows built only when read),
   which `Stmt.partialRangesT` folds from the template at the net's range -/
@@ -245,7 +249,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then

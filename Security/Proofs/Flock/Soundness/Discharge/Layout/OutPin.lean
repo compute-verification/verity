@@ -1,7 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Properties.Flock.Circuit.Outs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Mathlib.Combinatorics.Matroid.Init
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -15,7 +20,7 @@ is bit `t` of the population's output word `lo[j]` of the unit, for the copy's l
 proves `hout` for it, in an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), from:
 
 * the stacked column's place in the block (`Layout.col_val_comp`, `col_val_comp`): the template instance's slot
-  `vu · upv + u'` at column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each drawn unit's site,
+  `vu · upv + u'` at column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each sampled proof block's site,
   `BcSite`);
 * `OutsOut`: every committed gate a unit computes is on such a column (a condition on the circuit's outputs `outs`: the
   returned outputs' bits, and nothing else a unit computes);
@@ -116,7 +121,7 @@ variable {c hU n outs popOf} {mPts : ℕ} {plan : Finset (Fin n) → Reg → Lis
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
 
 include hparse in
-/-- **`hout` at `keyProg`'s places**: in an untyped circuit whose unit returns the outputs, at each drawn unit's site
+/-- **`hout` at `keyProg`'s places**: in an untyped circuit whose unit returns the outputs, at each sampled proof block's site
 (`BcSite`, as `keyProg_bcPinned` takes it), a satisfying witness holds at every committed gate the unit computes the
 registration's bit `outBitOf`, the population's returned output's, when those gates are returned outputs' bits
 (`OutsOut`); the shape region "out" packs is the parse's (`outShape_of_parse`). -/

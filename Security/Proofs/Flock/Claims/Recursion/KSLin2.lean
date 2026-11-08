@@ -1,4 +1,44 @@
-import Proofs.Flock.Claims.Recursion.VCalls
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundMerged
+public import Proofs.Flock.Claims.Recursion.VCalls
+public import Proofs.Flock.Claims.Recursion.VCallsAt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Cost
+import Proofs.Flock.Claims.Recursion.Gap
 
 /-!
 # Route 2C: `KSLin2` from `KSFlockLin` at `DE`
@@ -7,25 +47,27 @@ import Proofs.Flock.Claims.Recursion.VCalls
 Here the inner stage reads `KSFlockLin` at `DE` instead, against `P_O`'s aborting runs, and each of its terms is carried
 to the composite with no root:
 
-* `B` at `P_O`'s aborting runs is at most `B_I` over the draws' evaluations (`Bound.PrBAbort_le_PrBinnerV`), so
-  `4k_I·Pr[B]` is at most `4k_I·Pr[B_I]`, and a rejecting judged draw one more `Pr[B_I]`
+* `B` at `P_O`'s aborting runs is at most `B_I` over the samples' evaluations (`Bound.PrBAbort_le_PrBinnerV`), so
+  `4k_I·Pr[B]` is at most `4k_I·Pr[B_I]`, and a rejecting judged sample one more `Pr[B_I]`
   (`Pr_innerRejects_le_PrBinnerV_at`).
-* The caps' link `FC` at `P_O`'s aborting runs is the composite's `FCI` over `E_O`'s draws, but where the loop meets a
-  draw `P_O`'s runs don't show (`BadO`) (`Bound.PrFC_le_FCI`). A run that opens is kept, so its draw isn't bad; off the
-  bad draws a run opens exactly where its draw's inner view accepts and its inner coins query the position
+* The caps' link `FC` at `P_O`'s aborting runs is the composite's `FCI` over `E_O`'s samples, but where the loop meets a
+  sample `P_O`'s runs don't show (`BadO`) (`Bound.PrFC_le_FCI`). A run that opens is kept, so its sample isn't bad; off the
+  bad samples a run opens exactly where its sample's inner view accepts and its inner coins query the position
   (`Bound.opensAt_iff`), the loop's picks are the same (`firstPick_map_of_loopCost_zero`), and the runs' calls are
-  among the draws' witnesses' or those collide (`Bound.findColl_cover`). The loop meets a bad draw at most as often as
-  one draw is bad (`Pr_gate_loop_fork_le`, Wald's bound on the loop with the forked coins uniform).
-* Level 0's conflict `F0` is `F0I` the same way, its `k_I` waits each meeting a bad draw at most as often as one draw
+  among the samples' witnesses' or those collide (`Bound.findColl_cover`). The loop meets a bad sample at most as often as
+  one sample is bad (`Pr_gate_loop_fork_le`, Wald's bound on the loop with the forked coins uniform).
+* Level 0's conflict `F0` is `F0I` the same way, its `k_I` waits each meeting a bad sample at most as often as one sample
   is bad (`Bound.PrF0_le_F0I`).
 
-So the bad draws cost `N_I + 4·W_I + 4·k_I` draws' worth, each at most `k_I·(Pr[FdevV] + 1/(M+1))`
+So the bad samples cost `N_I + 4·W_I + 4·k_I` samples' worth, each at most `k_I·(Pr[FdevV] + 1/(M+1))`
 (`Bound.Pr_badO_le_PrFdevV`), within `β₂·(Pr[FdevV] + 1/(M+1))` (`Bound.innerLin2_of_flockLin_binds`). A V\* part's
 check escapes to a collision with the compiled verifier's own evaluations at its V\* statement, so the facts read of
-V*'s parts are `InnerAcceptsCollAtV` and `ForksBindAtV`, and `B_I` and `Fdev` search the draws' evaluations
+V*'s parts are `InnerAcceptsCollAtV` and `ForksBindAtV`, and `B_I` and `Fdev` search the samples' evaluations
 (`BinnerV`, `FdevV`).
 `Bound.ksLin2_of_flockLin_binds` is the recursion's bound from it, as `KSLin_of` (`PrBad_le_of_inner`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -35,8 +77,8 @@ section Loops
 
 variable {U : Type}
 
-/-- Where `c` is `0` on every draw the loop makes, and `g` agrees with `g'` through `f` wherever `c` is `0`, the loops
-pick the same draw. -/
+/-- Where `c` is `0` on every sample the loop makes, and `g` agrees with `g'` through `f` wherever `c` is `0`, the loops
+pick the same sample. -/
 theorem firstPick_map_of_loopCost_zero {U' : Type} (f : U → U') (g : U → Prop) (g' : U' → Prop) (c : U → ℕ)
     (h : ∀ u, c u = 0 → (g u ↔ g' (f u))) :
     ∀ (M : ℕ) (us : Fin M → U), loopCost g c M us = 0 →
@@ -58,8 +100,8 @@ theorem optionGetD_map {α β : Type} (f : α → β) (o : Option α) (a : α) :
   cases o <;> rfl
 
 open Classical in
-/-- **Wald's bound on a gated loop**: the loop's expected `c`, where the first draw passes `g`, is at most one
-draw's. -/
+/-- **Wald's bound on a gated loop**: the loop's expected `c`, where the first sample passes `g`, is at most one
+sample's. -/
 theorem Ex_gate_loopCost_le [Fintype U] [Nonempty U] (g : U → Prop) (c : U → ℕ) (M : ℕ) :
     Ex (fun p : U × (Fin M → U) => if g p.1 then (loopCost g c M p.2 : ℝ) else 0) ≤ Ex (fun u => (c u : ℝ)) := by
   have h1 : Ex (fun p : U × (Fin M → U) => if g p.1 then (loopCost g c M p.2 : ℝ) else 0) =
@@ -82,7 +124,7 @@ theorem Ex_gate_loopCost_le [Fintype U] [Nonempty U] (g : U → Prop) (c : U →
   nlinarith [mul_nonneg hc ht, he]
 
 open Classical in
-/-- A gated loop makes a draw of positive `c` at most as often as one draw's expected `c`. -/
+/-- A gated loop makes a sample of positive `c` at most as often as one sample's expected `c`. -/
 theorem Pr_gate_loop_le [Fintype U] [Nonempty U] (g : U → Prop) (c : U → ℕ) (M : ℕ) :
     Pr (fun p : U × (Fin M → U) => g p.1 ∧ loopCost g c M p.2 ≠ 0) ≤ Ex (fun u => (c u : ℝ)) := by
   rw [← Ex_ind]
@@ -95,7 +137,7 @@ theorem Pr_gate_loop_le [Fintype U] [Nonempty U] (g : U → Prop) (c : U → ℕ
     · exact Nat.cast_nonneg _
     · exact le_rfl
 
-/-- A draw forked at `j` from a uniform prefix is uniform. -/
+/-- A sample forked at `j` from a uniform prefix is uniform. -/
 theorem unifMap_forkPair {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] {n : ℕ} (j : ℕ) :
     UnifMap (fun p : (Fin n → Coin) × ((Fin n → Coin) × A) => ((fork j p.1 p.2.1, p.2.2) : (Fin n → Coin) × A)) := by
   let e : (Fin n → Coin) × ((Fin n → Coin) × A) ≃ ((Fin n → Coin) × (Fin n → Coin)) × A :=
@@ -107,8 +149,8 @@ theorem unifMap_forkPair {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Fintype
     fun G => Ex_fork (off := fun _ => j) (fun _ _ _ => rfl) G
   exact (UnifMap.equiv e).comp (hf.prod UnifMap.self)
 
-/-- **Wald's bound on a gated loop over forked draws**: the loop's draws, forked at `j` from the first, make a draw of
-positive `c` at most as often as one draw's expected `c`. -/
+/-- **Wald's bound on a gated loop over forked samples**: the loop's samples, forked at `j` from the first, make a sample of
+positive `c` at most as often as one sample's expected `c`. -/
 theorem Pr_gate_loop_fork_le {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] [Nonempty A] {n : ℕ}
     (j : ℕ) (g : (Fin n → Coin) × A → Prop) (c : (Fin n → Coin) × A → ℕ) (M : ℕ) :
     Pr (fun p : ((Fin n → Coin) × A) × (Fin M → (Fin n → Coin) × A) =>
@@ -208,7 +250,7 @@ theorem PrBad_le_of_inner [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : In
 
 end Outer
 
-/-! ## `P_O`'s aborting runs, as the composite's draws -/
+/-! ## `P_O`'s aborting runs, as the composite's samples -/
 
 section Coupling
 
@@ -217,7 +259,7 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   {DO : Flock.Deploy Coin Col' T'} {decO : List (ℕ × Col') → List T'} {Ω : Type} {P : Prover Ω} {x : Msg}
 
 omit [DecidableEq Col'] in
-/-- `P_O`'s run at a draw accepts exactly where it is kept. -/
+/-- `P_O`'s run at a sample accepts exactly where it is kept. -/
 theorem Bound.innerFO_acc_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) :
@@ -241,7 +283,7 @@ theorem Bound.innerFO_acc_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, dec
     exact (Bound.runO decC hdec hV ω d hws hacc hk'.2.2).2.1
 
 omit [DecidableEq Col] [DecidableEq Col'] in
-/-- A kept draw is not bad. -/
+/-- A kept sample is not bad. -/
 theorem Bound.not_badO_of_keepDO {ω : Ω}
     {d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x}
     (h : Bd.keepDO decI H D DO decO P x ω d = true) : ¬ Bd.BadO decI H D DO decO P x ω d := fun hb => by
@@ -249,7 +291,7 @@ theorem Bound.not_badO_of_keepDO {ω : Ω}
   exact hb.2 h.2.2
 
 omit [DecidableEq Col] [DecidableEq Col'] in
-/-- Off the bad draws, a draw is kept exactly where its inner view accepts. -/
+/-- Off the bad samples, a sample is kept exactly where its inner view accepts. -/
 theorem Bound.keepDO_iff_accAtI {ω : Ω}
     {d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x}
     (hb : ¬ Bd.BadO decI H D DO decO P x ω d) :
@@ -267,7 +309,7 @@ theorem Bound.keepDO_iff_accAtI {ω : Ω}
     exact ⟨hs, h, Classical.byContradiction fun hn => hb ⟨hs, hn⟩⟩
 
 omit [DecidableEq Col'] in
-/-- **Off the bad draws, `P_O`'s aborting run accepts exactly where its draw's inner view does.** -/
+/-- **Off the bad samples, `P_O`'s aborting run accepts exactly where its sample's inner view does.** -/
 theorem Bound.accAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hn : Bd.DE.V.k (xI D x) ≤ D.V.k x) (ω : Ω)
     (t : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
@@ -279,8 +321,8 @@ theorem Bound.accAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (B
   rw [Bound.abortRun_eqO decC hn, Bound.innerFO_acc_iff decC hdec hV, Bound.keepDO_iff_accAtI hb]
 
 omit [DecidableEq Col'] in
-/-- **Off the bad draws, `P_O`'s aborting run opens a cap position exactly where its draw does**: the run's coins are
-the draw's inner coins (`innerCoins_extend`). -/
+/-- **Off the bad samples, `P_O`'s aborting run opens a cap position exactly where its sample does**: the run's coins are
+the sample's inner coins (`innerCoins_extend`). -/
 theorem Bound.opensAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hn : Bd.DE.V.k (xI D x) ≤ D.V.k x)
     (Cp : Caps Coin) (q : Fin (Cp.width (xI D x))) (ω : Ω)
@@ -296,8 +338,8 @@ theorem Bound.opensAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
   exact and_congr (Bound.accAt_iff decC hdec hV hn ω t hb) Iff.rfl
 
 omit [DecidableEq Col'] in
-/-- **A collision among `P_O`'s aborting runs' calls is one among the calls searched at the draws**, where every run's
-call is among some draw's searched calls (`Deploy.callsAt`) that the list holds: each run's calls are among its draw's
+/-- **A collision among `P_O`'s aborting runs' calls is one among the calls searched at the samples**, where every run's
+call is among some sample's searched calls (`Deploy.callsAt`) that the list holds: each run's calls are among its sample's
 or those collide (`innerFO_vLog_subBy`, `CallsLogCollAt`). -/
 theorem Bound.findColl_cover (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -316,7 +358,7 @@ theorem Bound.findColl_cover (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC
   exact ⟨u, v, huv, findColl_spec H _ ht u v huv⟩
 
 omit [DecidableEq Col] [DecidableEq Col'] in
-/-- A run's coins forked at a cap's round, extended, are the draws forked at that round (capped at the inner
+/-- A run's coins forked at a cap's round, extended, are the samples forked at that round (capped at the inner
 rounds). -/
 theorem Bound.extendDraw_capFork (Cp : Caps Coin) (q : Fin (Cp.width (xI D x)))
     (d₀ v : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
@@ -327,7 +369,7 @@ theorem Bound.extendDraw_capFork (Cp : Caps Coin) (q : Fin (Cp.width (xI D x)))
 
 omit [DecidableEq Col] [DecidableEq Col'] in
 open Classical in
-/-- One extended draw is bad as often as one draw. -/
+/-- One extended sample is bad as often as one sample. -/
 theorem Bound.Ex_badO (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] (ω : Ω) :
     Ex (fun u : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
         (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
@@ -342,10 +384,10 @@ theorem Bound.Ex_badO (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Finty
   by_cases hb : Bd.BadO decI H D DO decO P x ω (extendDraw u) <;> simp [hb]
 
 omit [DecidableEq Col'] in
-/-- **The caps' link at `P_O`'s aborting runs is `FCI`, but where its loop meets a bad draw**: the first run, opening,
-is kept, so its draw isn't bad; off the bad draws the loop opens where the draws do and picks the same draw
-(`opensAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the draws' (`findColl_cover`). The loop
-meets a bad draw at most as often as one draw is bad (`Pr_gate_loop_fork_le`). -/
+/-- **The caps' link at `P_O`'s aborting runs is `FCI`, but where its loop meets a bad sample**: the first run, opening,
+is kept, so its sample isn't bad; off the bad samples the loop opens where the samples do and picks the same sample
+(`opensAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the samples' (`findColl_cover`). The loop
+meets a bad sample at most as often as one sample is bad (`Pr_gate_loop_fork_le`). -/
 theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
@@ -458,10 +500,10 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     hbad))
 
 omit [DecidableEq Col'] in
-/-- **Level 0's conflict at `P_O`'s aborting runs is `F0I`, but where a wait meets a bad draw**: the first run,
-accepting, is kept; off the bad draws each wait accepts where the draws do and picks the same draw
-(`accAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the draws' (`findColl_cover`). Each of the
-`k_I` waits meets a bad draw at most as often as one draw is bad (`Pr_gate_loop_le`). -/
+/-- **Level 0's conflict at `P_O`'s aborting runs is `F0I`, but where a wait meets a bad sample**: the first run,
+accepting, is kept; off the bad samples each wait accepts where the samples do and picks the same sample
+(`accAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the samples' (`findColl_cover`). Each of the
+`k_I` waits meets a bad sample at most as often as one sample is bad (`Pr_gate_loop_le`). -/
 theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
@@ -606,8 +648,8 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
 /-- **The inner stage at the bound record from `KSFlockLin` at `DE`, with no root**: at most
 `κ_I + (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`.
 `E^rep` at `DE` against `P_O`'s aborting runs is `KSFlockLin`'s bound (`PrBadGood_le_merged`), its `B` at most `B_I`
-(`PrBAbort_le_PrBinnerV`), its `FC` and `F0` at most `FCI` and `F0I` but for bad draws (`PrFC_le_FCI`, `PrF0_le_F0I`); a
-rejecting judged draw is at most `Pr[B_I]` over the draws' evaluations (`Pr_innerRejects_le_PrBinnerV_at`); and the bad draws, `N_I + 4·W_I + 4·k_I` draws' worth, are each at most
+(`PrBAbort_le_PrBinnerV`), its `FC` and `F0` at most `FCI` and `F0I` but for bad samples (`PrFC_le_FCI`, `PrF0_le_F0I`); a
+rejecting judged sample is at most `Pr[B_I]` over the samples' evaluations (`Pr_innerRejects_le_PrBinnerV_at`); and the bad samples, `N_I + 4·W_I + 4·k_I` samples' worth, are each at most
 `k_I·(Pr[FdevV] + 1/(M+1))` (`Pr_badO_le_PrFdevV`), within `β₂`. -/
 theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg → Msg → Coin) (Cp : Caps Coin)
     (hKS : KSFlockLin H Bd.DE Cp) (hdI : decOK Bd.deploy decI) (hdec : ∀ x c, decC x (Bd.ans c) = c)

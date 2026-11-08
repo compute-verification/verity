@@ -1,6 +1,12 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import RemoteAudit.Verifier
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Protocol
+public import CoreProtocol.Ratio
+public import RemoteAudit.Verifier
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Verifier
 
 /-!
 # A session over PoUS's P2 store as a core protocol
@@ -28,6 +34,10 @@ their span, and the error they hold at, ε = δ + S/2^64 for S the draws, `Remot
 the sketch's term at units, `SketchBoundP2`, which is drafted). The profile is the rest of the session's answer.
 No property states yet what this check accepts; `p2_case.py`'s tests hold it to the live process's answer.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2Protocol
 

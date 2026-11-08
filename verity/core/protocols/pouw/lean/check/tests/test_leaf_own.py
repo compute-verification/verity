@@ -1,13 +1,13 @@
-"""`pouw-leaf-own-window` (`PouwCheck.LeafOwn`): a window unit's leaf statements read their values at the unit's
-placement in the window's tables, which the verifier takes from the window's committed descriptor (`credit.layout_of`'s
+"""`pouw-leaf-own-window` (`PouwCheck.LeafOwn`): an execution phase unit's leaf statements read their values at the unit's
+placement in the execution phase's tables, which the verifier takes from the execution phase's committed descriptor (`credit.layout_of`'s
 reading, `pouw_credit_cases.window_desc`'s encoding) and its round log alone.
 
 The placement here is the spec's arithmetic, written again (`placement`): unit u, tile t = ti·(n/C) + tj of call c, the
 j-th call of its K in its round s, reads its A rows from row M·j + R·ti of ``<prefix>a/<K>@<s>``, its B rows from row
 b0 + C·tj of ``<prefix>b/<K>`` (b0 the call's linear's first row there), and its z and receipt rows at row t of
 ``<prefix>zy@<c>`` and ``<prefix>receipt@<c>``; the partials are the leaf's own. The file is `leaf_lanes.registered_file`
-at that placement. The check accepts it for each statement of several units of a window whose calls span two rounds and
-two linears of one K, and refuses a file of another unit, one read at another round count, and a unit past the window.
+at that placement. The check accepts it for each statement of several units of an execution phase whose calls span two rounds and
+two linears of one K, and refuses a file of another unit, one read at another round count, and a unit past the execution phase.
 """
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def _known(rng: random.Random, name: str) -> dict:
 
 
 def _window(rng: random.Random) -> tuple[dict, dict]:
-    """The window's registration (each of its tables once, every call's) and a leaf's produced record."""
+    """The execution phase's registration (each of its tables once, every call's) and a leaf's produced record."""
     tables = sorted({tb for u in range(12) for tb, _ in placement(LAYOUT, PREFIX, STEPS, u)[2]
                      .values()})
     reg = {"format": "verity/registration/v2", "program": rng.randbytes(64).hex(),
@@ -80,7 +80,7 @@ def _file(rng: random.Random, reg: dict, prod: dict, place: dict, ln: int | None
     kind = LL.COMBINE if ln is None else LL.LANE
     ent, roots = LL.verifier_entries(reg, prod, LL.lanes(R, C), 2 * LL.words(K))
     known = {nm: _known(rng, nm) for nm in ((LL.PUB, LL.ADMIT, LL.OK) if ln is not None else (LL.OK,))}
-    return LL.registered_file(LL.reads(R, C, kind, ln), ent, roots, {v: G.SCHEMA_V2 for v in ent}, known, True, place)
+    return LL.registered_file(LL.reads(R, C, kind, ln), ent, roots, {v: G.SCHEMA_V2 for v in ent}, known, place)
 
 
 def _own(tmp: Path, reg: dict, prod: dict, file: dict, u: int, ln: int | None, steps: int = STEPS) -> tuple[int, dict]:
@@ -106,7 +106,7 @@ def _own(tmp: Path, reg: dict, prod: dict, file: dict, u: int, ln: int | None, s
 @pytest.mark.parametrize("u", [0, 3, 5, 9, 11])
 @pytest.mark.parametrize("ln", [0, 17, 31, None])
 def test_the_unit_s_file_at_its_placement_passes(u: int, ln: int | None, tmp_path: Path) -> None:
-    """Each statement's file at its unit's placement in the window's tables is accepted, its reads at the tables' base
+    """Each statement's file at its unit's placement in the execution phase's tables is accepted, its reads at the tables' base
     rows plus the leaf's rows."""
     rng = random.Random(u * 64 + (ln or 0))
     reg, prod = _window(rng)
@@ -118,8 +118,8 @@ def test_the_unit_s_file_at_its_placement_passes(u: int, ln: int | None, tmp_pat
 @pytest.mark.parametrize("ln", [4, None])
 def test_another_unit_s_file_is_refused(ln: int | None, tmp_path: Path) -> None:
     """A file at another unit's placement (another tile of its call, a call of the other round, the other linear) is
-    refused by name, and so is a lane's read as though the window had one round (its A table another round's, from
-    another row); a unit past the window is refused."""
+    refused by name, and so is a lane's read as though the execution phase had one round (its A table another round's, from
+    another row); a unit past the execution phase is refused."""
     rng = random.Random(5)
     reg, prod = _window(rng)
     for u, other in ((11, 10), (11, 5), (9, 11)):

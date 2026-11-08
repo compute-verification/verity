@@ -1,6 +1,43 @@
-import Proofs.Flock.Claims.ZkQueryRound
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.ZkQueryRound
+import Flock.With.Eq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # Level 0's query round in the plain verifier over the hash oracle
@@ -12,13 +49,15 @@ the plain verifier's own transcript, `verifyRepWith hs` run in `V` with any hash
 * zerocheck consumes `m − 3` rounds (`zerocheckWith_moves`), and lincheck `kLog − 3` on a circuit fold that refuses a
   point of the wrong length (`lincheckWith_moves`; the statement's fold, `Stmt.folded_size`), the ring switch
   `claims + 1` (`ZkQuery.ringSwitchWith_moves`);
-* Ligerito draws level 0's query coins after `k0 + 6` rounds of its own: the OOD point and its coin, the `k0` lane
+* Ligerito flips level 0's query coins after `k0 + 6` rounds of its own: the OOD point and its coin, the `k0` lane
   challenges, and level 1's two OOD intros (`plainLigeritoWith_query`);
 * so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `plainQueryRound` of
   its stream, against the committed `root_B` (`plainQueryRound_verifyRepWith`), and the reader's columns
   (`plainRepColsOf`) are those positions with those rows, for every rep of every table of an accepted session
   (`plainQueryRound_verifyWithM`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

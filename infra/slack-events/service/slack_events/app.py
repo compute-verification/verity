@@ -24,7 +24,9 @@ HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a col
                "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since; "
                "last_done_at is the consumer's alone (last_success_at counts the crons too), and a last_enqueued_at "
                "after it means events wait; canary_* is the watchdog's hourly synthetic event and its consumption; "
-               "notes_token_source is where the notes token comes from now: broker, env (RESEARCH_NOTES_TOKEN) or null")
+               "notes_token_source is where the notes token comes from now: broker, agent-broker (a Cursor agent's), "
+               "env (RESEARCH_NOTES_TOKEN) or null, and "
+               "notes_token_why why it isn't the broker: no OIDC identity, or the broker's refusal")
 
 
 def signed(secret: str | None, ts: str | None, sig: str | None, body: bytes, now: float) -> str | None:
@@ -124,7 +126,7 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
             age = round(max(0.0, d.clock() - float(oldest["ts"])), 3) if oldest["ts"] else 0.0
         dead = dead if isinstance(dead, dict) else {}
         notes = await run_in_threadpool(d.rs.notes_token_source)
-        return JSONResponse({"notes_token_source": notes, "oldest_unprocessed_age_s": age, "dead_letter_count": dead.get("count"),
+        return JSONResponse({"notes_token_source": notes, "notes_token_why": d.rs.notes_token_why(), "oldest_unprocessed_age_s": age, "dead_letter_count": dead.get("count"),
                              "dead_letter_since": dead.get("since"),
                              "last_success_at": float(last) if isinstance(last, (int, float)) else None,
                              "last_done_at": float(done) if isinstance(done, (int, float)) else None,

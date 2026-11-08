@@ -1,7 +1,7 @@
-"""`circuit.h1window`: a window's Program derives one unit per tile under its templates' instance query, one template per K,
-numbered call by call and row block major, and `unit_reads` gives each unit's rows of the window's parameters from the
+"""`circuit.h1window`: an execution phase's Program derives one unit per tile under its templates' instance query, one template per K,
+numbered call by call and row block major, and `unit_reads` gives each unit's rows of the execution phase's parameters from the
 Program's references: its call's A block of its K, its linear's B rows (the same in every step), its z/y record, the salt,
-its position and the roots, keyed by its K's template's parameters, so a mixed-K window registers in one `registered.reads`.
+its position and the roots, keyed by its K's template's parameters, so a mixed-K execution phase registers in one `registered.reads`.
 A stand-in tile of the zy unit's parameter shape (`h1zy`: rows of K codes and a scale, the record, a receipt as wide as K
 makes it and ``ok``) keeps the Program small; `benchmarks/pouw/tests/test_h1_prove.py` runs the real one."""
 from __future__ import annotations
@@ -25,8 +25,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as W
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -100,7 +100,7 @@ CALLS = tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj", "down_p
 
 
 def _expected(linears, calls, m, tile=TILE):
-    """Each tile's (K, first A row of a/K, first B row of b/K) in the window's numbering, written out independently of the
+    """Each tile's (K, first A row of a/K, first B row of b/K) in the execution phase's numbering, written out independently of the
     Program: each K's linears' B rows once, linear after linear, and every call of a linear reading them."""
     (r, c), k_of, n_of, b0, at = tile, {}, {}, {}, {}
     for name, k, n in linears:
@@ -176,11 +176,11 @@ def test_the_windows_descriptor_grows_with_its_calls_and_row_blocks_never_its_ti
 
 
 def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds_them():
-    """A window of J10-R units (their parameters ending in `h1window.J10R`) takes one row of ``call`` and one of
+    """An execution phase of J10-R units (their parameters ending in `h1window.J10R`) takes one row of ``call`` and one of
     ``blocks`` a unit, and each unit reads its own row of each; its statement's public row is `PUBLIC_J10R`, and
-    `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the window's slot and
-    its K. Every K's unit is in one form: a window mixing J10-R's and today's is refused."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the execution phase's slot and
+    its K. Every K's unit is in one form: an execution phase mixing J10-R's and today's is refused."""
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit_j10r)
     tp = P.evaluate(prog, HW.query(prog))
@@ -206,7 +206,7 @@ def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds
 
 
 def test_a_mixed_k_window_registers_in_one_read_each_k_under_its_own_ports():
-    """One `registered.reads` over a window of K = 32 and K = 64 (a/K and b/K each a registered value, a row K/2 + 2 words,
+    """One `registered.reads` over an execution phase of K = 32 and K = 64 (a/K and b/K each a registered value, a row K/2 + 2 words,
     and zy one of 3 R C words): every unit's A and B rows under its K's template's keys and its record under ``zy``, exactly
     the rows `unit_reads` gives, and no row for a unit of the other K; and in the ``--registered`` file each K's ports carry
     their own value's width and domain."""
@@ -315,7 +315,7 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
 
 
 def _roots(prog, steps: int) -> dict[str, str]:
-    """A root for every table and weight any call of the window reads, each its name's SHA-512."""
+    """A root for every table and weight any call of the execution phase reads, each its name's SHA-512."""
     names = {HW.table(prog, kind, c, *([steps] if kind == "a" else [])) for c in range(len(HW.call_units(prog)))
              for kind in ("a", "zy", HW.RECEIPTS)}
     names |= {f"{prog.fn.S().PREFIX}b/{k}" for k in dict(prog.fn.bindings["TILES"])}
@@ -323,9 +323,9 @@ def _roots(prog, steps: int) -> dict[str, str]:
 
 
 def _v0_reads(prog, tp, call: int, steps: int, file: dict) -> dict[str, list[int | None]]:
-    """Each port of call ``call``'s file as a v0 file held its reads, from unit 0, written out from the window's own
+    """Each port of call ``call``'s file as a v0 file held its reads, from unit 0, written out from the execution phase's own
     reads (`table_reads` under `window_ports`) and the verifier's rows: unit u0 + t reads row t of the call's receipt
-    and public tables and row u0 + t of the window's ok rows; a unit of another call reads none, and the list ends at
+    and public tables and row u0 + t of the execution phase's ok rows; a unit of another call reads none, and the list ends at
     the call's last unit."""
     u0, n = HW.call_units(prog)[call]
     key_of = {port: key for key, port in HW.window_ports(prog).items()} | {"zy": "zy"}
@@ -345,7 +345,7 @@ def _v0_reads(prog, tp, call: int, steps: int, file: dict) -> dict[str, list[int
 
 
 def _v1_files(prog, tp, steps: int, window: str, salt: str) -> list[dict]:
-    """Each call's ``--registered`` file of the window, every port present (its tables, weights, receipts, public rows
+    """Each call's ``--registered`` file of the execution phase, every port present (its tables, weights, receipts, public rows
     and ok rows), held to its v0 reads: each port's reads start at the call's first unit and are as long as the call,
     and the reads from unit 0 they give (`core_check.port_reads`, Flock's `Registered.Port.reads`) are the v0 file's,
     so every unit, in the call or not, reads the same row (or none) in either."""
@@ -362,9 +362,9 @@ def _v1_files(prog, tp, steps: int, window: str, salt: str) -> list[dict]:
 
 
 def test_a_calls_v1_file_reads_what_its_v0_file_did_at_every_step_count():
-    """Registered reads v1 (`registered.READS_V1`, ``reads_from``): over a mixed-K window whose steps each hold several
+    """Registered reads v1 (`registered.READS_V1`, ``reads_from``): over a mixed-K execution phase whose steps each hold several
     calls of one K (each step's A table of K holds each of them, call after call), at every step count that divides
-    the calls, each call's file gives every unit of the window the read the v0 file gave it, at every port, from a
+    the calls, each call's file gives every unit of the execution phase the read the v0 file gave it, at every port, from a
     file as long as the call."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, prefix="h1/w/", unit=unit)
@@ -376,7 +376,7 @@ def test_a_calls_v1_file_reads_what_its_v0_file_did_at_every_step_count():
 
 @pytest.fixture(scope="module")
 def window_448():
-    """The real 32 × 32 window at K = 448 (`tile_unit`): two linears of K = 448 over two steps, so each step's A table
+    """The real 32 × 32 execution phase at K = 448 (`tile_unit`): two linears of K = 448 over two steps, so each step's A table
     of K = 448 holds two calls' blocks."""
     prog = HW.program((("q_proj", 448, 64), ("k_proj", 448, 32)),
                       tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj")), 32, (32, 32), prefix="h1/w/")
@@ -402,9 +402,9 @@ def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_cr
 
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
-    """Under a served window's open root, `table_reads_file` gives the call's A and z tables the domains that bind it, the
-    window's own rows, and the weights' b/32 the one that binds none: the domains credit gives them
-    (`credit.domain_of`), and the same reads as with no window."""
+    """Under a served execution phase's open root, `table_reads_file` gives the call's A and z tables the domains that bind it, the
+    execution phase's own rows, and the weights' b/32 the one that binds none: the domains credit gives them
+    (`credit.domain_of`), and the same reads as with no execution phase."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
     tp, digest, window = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), "ab" * 64
@@ -426,7 +426,7 @@ def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
 def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered():
     """With call c's receipt table ``receipt@<c>`` among the roots, `table_reads_file` reads its units' receipts there as the
     statement's output row o0 (`RECEIPT_PORT`), unit u0 + t at row t, one row of the tile's receipt width in 16-bit words
-    under the window-bound domain the served path commits it under, and every read opens that tree; without it the file
+    under the execution phase-bound domain the served path commits it under, and every read opens that tree; without it the file
     has no o0, and a tile whose receipt is no whole 16-bit words is refused rather than read at a truncated width."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
@@ -457,7 +457,7 @@ def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered()
 
 
 def test_a_window_at_k_32_and_322_reads_each_row_under_its_own_port():
-    """`window_ports` gives each A and B read of a window of K = 32 and K = 322 its own port: without the separator, A row
+    """`window_ports` gives each A and B read of an execution phase of K = 32 and K = 322 its own port: without the separator, A row
     20 at K = 32 (``a_k32[20]``) and A row 0 at K = 322 (``a_k322[0]``) would both be ``a_k3220``, and the ``--registered``
     file would hold one port for two reads. A tile of one B row reads it under the parameter's name, port row 0's."""
     tile = (32, 32)
@@ -514,10 +514,10 @@ def test_a_lone_row_is_read_under_its_parameters_name_as_registered_reads_keys_i
 
 
 def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_that_window():
-    """``window``: with the window's open root W, `table_reads_file` gives the call's A and z tables the registered domain
+    """``window``: with the execution phase's open root W, `table_reads_file` gives the call's A and z tables the registered domain
     that binds W (`registered.domain`'s ``window``), as the served path commits them, and the weights' b/32 the one that
     binds none; without it every domain binds none, as before. Every read opens the trees committed so, and the call's A
-    table committed in another window, of the same rows under the same salts, opens none of them at its own root."""
+    table committed in another execution phase, of the same rows under the same salts, opens none of them at its own root."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
     tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(11)
@@ -549,7 +549,7 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
 
 
 def _operations(steps: int) -> int:
-    """The function calls of building a window of `LINEARS` over ``steps`` steps (`program`, `query`, `P.evaluate`) and
+    """The function calls of building an execution phase of `LINEARS` over ``steps`` steps (`program`, `query`, `P.evaluate`) and
     reading every unit's rows (`unit_reads`)."""
     calls = tuple((lin, s) for s in range(steps) for lin in ("q_proj", "k_proj", "down_proj"))
     profile = cProfile.Profile()
@@ -563,9 +563,9 @@ def _operations(steps: int) -> int:
 
 def test_a_window_and_its_units_reads_cost_linearly_in_its_calls():
     """Eight times the calls cost at most 8 × 1.5 times the function calls, counted rather than timed. It fails when the
-    window's build re-derives a per-call fact for each tile (the Builder's E_REINTERPRET check of the window's result
-    summing its fields' leaves at each read, `types.field_starts`), or `unit_reads` scans the window's nodes for each unit
-    (`h1window._scan`): either alone grows this window's count 15 to 23 times, and it took an 8B served window of 2,304
+    execution phase's build re-derives a per-call fact for each tile (the Builder's E_REINTERPRET check of the execution phase's result
+    summing its fields' leaves at each read, `types.field_starts`), or `unit_reads` scans the execution phase's nodes for each unit
+    (`h1window._scan`): either alone grows this execution phase's count 15 to 23 times, and it took an 8B served execution phase of 2,304
     calls about an hour."""
     _operations(1)
     small, large = _operations(8), _operations(64)
@@ -595,7 +595,7 @@ def test_the_parameters_take_the_names_a_served_path_gives_them():
 
 
 def test_the_windows_result_is_a_sink_so_the_window_is_no_seed():
-    """With the salt its coin port and the positions its position port, a window whose return held no sink would be a
+    """With the salt its coin port and the positions its position port, an execution phase whose return held no sink would be a
     seed, whose body no port rule follows (`ports._coin_role`), and the tiles' coin flow would go unchecked: its whole
     result, the Program's outputs, is declared one sink run, so its declaration is no function of the tile count. A tile
     that returns its receipt without declaring it a sink is refused by the port rules at the tile."""
@@ -628,7 +628,7 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
     assert [n for n, _t in smoke.signature()[0]] == list(HW.TILE_PARAMS)
     assert [n for n, _t in smoke.signature()[1].fields] == list(HW.OUTPUTS) and smoke.signature()[1].fields[1][1].leaves == 1
     assert HW.tile_unit(14336, (32, 32)).bindings["TILE"].bindings["EXACT"].bindings["K"] == 14336
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     for d in (H.PouwH1Tile5, H.PouwH1Tile6):
         j10r = HW.tile_unit(64, (4, 8), d)
         assert [n for n, _t in j10r.signature()[0]] == list(HW.TILE_PARAMS_J10R)
@@ -637,9 +637,9 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
 
 @pytest.mark.slow
 def test_the_real_tile_composes_at_mixed_k_and_at_the_served_32_by_32():
-    """The H1 tile unit itself (`tile_unit`): a two-step window of K = 64 and K = 128 linears derives each call's tiles
+    """The H1 tile unit itself (`tile_unit`): a two-step execution phase of K = 64 and K = 128 linears derives each call's tiles
     under its two templates, and the served path's 32 × 32 tile one unit a 32 × 32 block. What the stand-in can't show is
-    that the real tile's bit-leaf rows and K-wide receipts compose into the window's parameters and result. The Program
+    that the real tile's bit-leaf rows and K-wide receipts compose into the execution phase's parameters and result. The Program
     traces the tile's seed and noise circuits, about 35 s at any K or tile, and each partition about 7 s."""
     linears = (("q_proj", 64, 16), ("k_proj", 64, 8), ("down_proj", 128, 8))
     calls = tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj", "down_proj"))
@@ -661,8 +661,8 @@ def test_the_real_tile_composes_at_mixed_k_and_at_the_served_32_by_32():
 
 @pytest.mark.slow
 def test_the_catalogs_window_over_the_real_tile_passes_the_port_rules():
-    """The window `h1window.circuit-check.py` registers unbuilt (`window`) is a Program's root under the port rules: each
-    tile's salt a coin and its position a position, the window's result one sink. The catalog makes its roots unbuilt, so
+    """The execution phase `h1window.circuit-check.py` registers unbuilt (`window`) is a Program's root under the port rules: each
+    tile's salt a coin and its position a position, the execution phase's result one sink. The catalog makes its roots unbuilt, so
     this is where its Program is checked. About 35 s, the real tile's seed and noise circuits."""
     linears = (("q_proj", 64, 16), ("k_proj", 64, 8))
     calls = tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj"))
@@ -710,7 +710,7 @@ def _z_alone(r: int, c: int) -> RecordType:
     ("H1WindowTestZOut", lambda S: _tile_sig(S, out=("z", "receipt")), "not \\('receipt', 'ok'\\)"),
 ])
 def test_a_unit_that_doesnt_prove_its_record_against_its_scaled_rows_is_refused(name, sig, why):
-    """The window's unit reads its record as z then y and its rows with their scales, and returns its receipt and ``ok``: a
+    """The execution phase's unit reads its record as z then y and its rows with their scales, and returns its receipt and ``ok``: a
     unit whose record port carries z alone (the y it would leave unproved is the served one), or y alone, or whose rows have
     no scale to dequantize by, or that returns z (the record's z, not a unit output, is the served value), is refused."""
     with pytest.raises(ValueError, match=why):
@@ -719,7 +719,7 @@ def test_a_unit_that_doesnt_prove_its_record_against_its_scaled_rows_is_refused(
 
 def test_a_window_whose_receipts_padding_spills_into_another_block_is_staged():
     """The H1 tile's receipt is an output row of 8 (KS + m) bytes, and the Lean verifier takes a v2 row of any length:
-    a window of the real tile unit at K = 384, 416, 896 and 928, whose receipts end past byte 111 of a block, is
+    an execution phase of the real tile unit at K = 384, 416, 896 and 928, whose receipts end past byte 111 of a block, is
     staged."""
     ks = (384, 416, 896, 928)
     assert [HW.tile_unit(k, TILE).signature()[1].fields[0][1].leaves // 8 for k in ks] == [112, 120, 240, 248]
@@ -737,7 +737,7 @@ def _leaf_window():
 
 
 def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
-    """Each of a drawn leaf's statements reads its value's leaf-local row (`leaf_lanes.reads`) past the leaf's `place` in
+    """Each of a sampled leaf's statements reads its value's leaf-local row (`leaf_lanes.reads`) past the leaf's `place` in
     that value, proofs' ``place`` in `PouwWindow.Lanes.ownOf`: lane l's A row at slot s is the tile's A row
     ``rowOf l s`` where `table_reads` has it, its B row at slot t the tile's ``colOf l t``, its record the tile's, and its
     partial row l of the leaf's produced partials; the combine's p<x> row x of them and its receipt row t of the call's
@@ -767,9 +767,8 @@ def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
 
 
 def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
-    """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), the file says so
-    (``complete``), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
-    the call's A, z and receipt tables bind the window's open root and the weights' b/<K> none, each at its table's rows
+    """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
+    the call's A, z and receipt tables bind the execution phase's open root and the weights' b/<K> none, each at its table's rows
     and width (`_shapes`: the receipts one row a unit of the call, a row the tile's receipt); the partials take the given
     entry. A value whose root the verifier doesn't hold, or a port both read and known, is refused."""
     prog, window = _leaf_window(), "cd" * 64
@@ -786,7 +785,7 @@ def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_win
         known = {p: {"value": v, "row": w} for p, (v, w) in rows.items()}
         file = HW.leaf_reads_file(prog, u, kind, ln, roots, partials, known, window=window, steps=steps)
         ports = file["ports"]
-        assert file["format"] == G.READS and file[LL.COMPLETE] is True and set(ports) == LL.own(r, c, kind, ln)
+        assert file["format"] == G.READS and set(ports) == LL.own(r, c, kind, ln)
         assert known[LL.OK]["value"] == f"ok{i}" and (kind == LL.COMBINE or rows[LL.ADMIT][1] == LL.bits_words([1] * r))
         for port, (value, row) in HW.leaf_reads(prog, u, kind, ln, steps=steps).items():
             e = ports[port]
@@ -812,8 +811,8 @@ def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_win
 
 
 def test_a_windows_leaves_have_no_lanes_but_over_h1zys_unit():
-    """The lanes and the combine are derived from the window's own template at K, whose unit must be h1zy's zy unit over
-    an H1 tile: a window of another unit, or a K it has no template at, derives none."""
+    """The lanes and the combine are derived from the execution phase's own template at K, whose unit must be h1zy's zy unit over
+    an H1 tile: an execution phase of another unit, or a K it has no template at, derives none."""
     prog = _leaf_window()
     with pytest.raises(ValueError, match="no lanes"):
         HW.leaf_unit(prog, 32, LL.LANE)
@@ -826,11 +825,11 @@ def test_a_windows_leaves_have_no_lanes_but_over_h1zys_unit():
 @pytest.mark.slow
 def test_a_windows_lanes_and_combine_are_derived_from_its_template_one_unit_each():
     """At the real zy unit (16 × 8, K = 384, the least the combine takes): K's lane and combine are `h1zy.lane` and
-    `h1zy.combine` over the TILE of the window's own template at K, each the one unit of its one-call Program under its
+    `h1zy.combine` over the TILE of the execution phase's own template at K, each the one unit of its one-call Program under its
     instance query, with its ports (the salt a coin, the position a position, ok a sink) and its statement rows
-    `h1zy.statement_rows`'; each Program is its wrapper's over that TILE alone, whatever the window's layout or prefix, so
-    a period has one of each; and the receipts' row is the combine's ``receipt``, 2 (KS + m) u32. What the stand-in can't show is
-    that the wrappers of the real lane and combine are single-unit Programs: the window traces the tile's seed and noise
+    `h1zy.statement_rows`'; each Program is its wrapper's over that TILE alone, whatever the execution phase's layout or prefix, so
+    a credit period has one of each; and the receipts' row is the combine's ``receipt``, 2 (KS + m) u32. What the stand-in can't show is
+    that the wrappers of the real lane and combine are single-unit Programs: the execution phase traces the tile's seed and noise
     circuits (about 30 s), and each leaf Program's descriptor takes about 6 s."""
     k, tile = 384, (16, 8)
     prog = HW.program((("q_proj", k, 16), ("k_proj", k, 8)), (("q_proj", 0), ("k_proj", 0)), 16, tile, prefix="h1/w/")
@@ -874,7 +873,7 @@ LLAMA_CALLS = tuple((lin, s) for s in range(2) for lin in ("o_proj", "up_proj", 
 
 
 def test_a_llama_window_at_k_4096_and_14336_reads_each_14336_row_as_its_4_chunk_leaves():
-    """A window of K = 4096 and K = 14336 (Llama's mixed contractions): every a/14336 and b/14336 row is
+    """An execution phase of K = 4096 and K = 14336 (Llama's mixed contractions): every a/14336 and b/14336 row is
     `weights.chunks` (14336) = 4 leaves of `weights.leaf_words` (14336) = 1794 words, so those values hold 4 times their
     rows, a unit reads its 4 R A and 4 C B chunk rows at leaf 4·row + i of them (`unit_reads`), of its step's A table
     (`table_reads`) and at `place`'s 4·row bases, while K = 4096 keeps whole rows; at one and two steps each call's
@@ -920,7 +919,7 @@ def test_a_llama_window_at_k_4096_and_14336_reads_each_14336_row_as_its_4_chunk_
 def test_at_a_chunked_k_the_program_wraps_the_zy_unit_and_refuses_whole_rows_and_a_leafs_whole_row_lanes():
     """At K = 14336 `program` wraps the bare zy unit in `h1zy.PouwH1TileZyChunks` at 4 chunks (4 R and 4 C rows of
     3584 codes) and leaves K = 4096's bare; it refuses a unit over whole rows there and a K `weights.chunks` refuses; and
-    a drawn leaf's lanes (`leaf_unit`, `leaf_reads`), which read whole rows, are refused at a chunked K: its lanes are the
+    a sampled leaf's lanes (`leaf_unit`, `leaf_reads`), which read whole rows, are refused at a chunked K: its lanes are the
     chunk lanes."""
     real = HW.tile_unit(14336, (32, 32))
     wrapped = HW._chunked(14336, real)
@@ -951,7 +950,7 @@ def _chunk_sig_j10r(S):
 
 
 ChunkTileJ10r = _test_tile("H1WindowTestChunkTileJ10r", sig=_chunk_sig_j10r)
-#: a J10-R window of a leaf of four lanes at K = 8192, its rows 2 chunk leaves each, and a whole K = 64
+#: a J10-R execution phase of a leaf of four lanes at K = 8192, its rows 2 chunk leaves each, and a whole K = 64
 J10R_LINEARS = (("q_proj", 64, 32), ("down_proj", 8192, 16))
 J10R_CALLS = tuple((lin, s) for s in range(2) for lin in ("q_proj", "down_proj"))
 
@@ -962,7 +961,7 @@ def _j10r_window():
 
 
 def test_a_j10r_windows_drawn_leaf_reads_its_chunk_rows_carries_and_ok_rows_at_its_place():
-    """Under J10-R a drawn leaf at a chunked K is its lanes' chunks (`leaf_lanes`' J10-R leaf): chunk c of lane l reads
+    """Under J10-R a sampled leaf at a chunked K is its lanes' chunks (`leaf_lanes`' J10-R leaf): chunk c of lane l reads
     its A and B rows' chunk c, the tile's own chunk rows (`table_reads`' leaf n row + c), what chunk c - 1 handed on, and
     its statement's ok row, and the combine every ok row; the carries and ``oks`` are the leaf's own from row 0, like
     the partials. At a whole K a lane reads whole rows and its ok row."""
@@ -1012,7 +1011,7 @@ def test_a_j10r_windows_leaf_files_and_known_rows():
         ch = st[2] if st[0] == LL.CHUNK else None
         file = HW.leaf_reads_file(prog, u, st[0], st[1], roots, partials, known, window=window, steps=steps, ch=ch,
                                   produced=produced)
-        assert set(file["ports"]) == LL.own(r, c, *st, j10r=k) and file[LL.COMPLETE] is True
+        assert set(file["ports"]) == LL.own(r, c, *st, j10r=k)
         for port, (value, _row) in LL.reads(r, c, *st, j10r=k).items():
             e = file["ports"][port]
             assert e.get(HW.READ_IN_FULL, False) is (LL.read_in_full(value) and port != LL.OK), (st, port)
@@ -1028,7 +1027,7 @@ def test_a_j10r_leafs_statements_are_v5s_lane_chunks_and_combine_v2():
     """Over J10-R's PouwH1Tile_v5 at a chunked K, `leaf_unit` derives each lane chunk (`h1zy.lane_chunk` at
     `weights.chunks`(K)) and the combine (`PouwH1Combine_v2`), and refuses a whole lane there and a chunk past the
     lane's; at a whole K a lane and no chunk. v1's leaf stays refused at a chunked K."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
 
     def fake(k, d):
         unit = HW._chunked(k, HW.tile_unit(k, (32, 32), d))

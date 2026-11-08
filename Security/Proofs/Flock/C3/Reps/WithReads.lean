@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Reps.WRead
+module
+
+public import Proofs.Flock.C3.Reps.WRead
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # C3's rep decoder with its reads: `RepMaps.withReads`
@@ -17,6 +32,8 @@ info). At it:
   (`resZeroAtLH_wRead`, the layers agreeing with their registrants at an accepted proof), `w`'s size S's
   (`wRead_size`, `nwOf_eq`) and the verifier rows at the reads.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

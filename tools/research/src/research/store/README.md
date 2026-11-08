@@ -31,8 +31,8 @@ reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identit
 attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
-task:<sha512 hex of a tasks/v1 task's key>              a check's task: the executor's verdicts on it; only labels target it
-commit:<40-hex commit>                                  a commit: the executor's task graph of it and drive's shadow record of its check; only labels target it
+task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts (pass, fail or error; a fail stands until an error after it, else the newest is the key's) and results on it; only labels target it
+commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -154,8 +154,9 @@ string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whol
 
 `research data reindex` wipes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
 from the remote listing too (manifests and attempts the remote has and we lack are fetched and cached first). Deleting the
-file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; add columns freely,
-the file is disposable):
+file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; the file is
+disposable, but every worktree on the machine writes it, older code included, so no shipped table gains a column; a new column
+goes in a side table keyed like its table, as `replica_checks` is for `replicas`):
 
 ~~~text
 artifacts(id, kind, bytes, payload_type, manifest_json, local INTEGER, remote INTEGER, repo_path TEXT)
@@ -171,6 +172,11 @@ labels(target, key, value, by, ts, ref, path)
 replicas(id, location, verified_utc, detail)            verifications, which a rebuild keeps (not a local fact)
 replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
 ~~~
+
+Every write finds the rows it reads, replaces or deletes through an index (each `attempt_*` table is indexed on `attempt`;
+tested). A write holds the file's lock until it commits and every process on the machine writes this one file, so a write that
+scanned a table would hold all the others off for the pass, and a refresh's run of writes (`research queue ready`'s records
+gate) would starve them until it ended.
 
 Flattening: nested objects get dotted keys, lists numeric indices (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
@@ -442,9 +448,11 @@ prints the table; the groups are:
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
-  carries no verdict — ignored; `verdict` (enum: pass | fail) on `task:<key>`, by the executor's worker, `tasks_graph` on
-  `commit:<sha>`, by the executor (the `art:` id of the `tasks-graph/v1` graph it listed on a worker), and `executor_shadow`
-  on `commit:<sha>`, by drive (`research.executor`).
+  carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
+  executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
+  `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
+  (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
+  agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
   `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).

@@ -1,5 +1,12 @@
-import Proofs.Flock.Verifier.Registered
-import Proofs.Flock.Soundness.Refine.Paths
+module
+
+public import Proofs.Flock.Verifier.Registered
+public import Proofs.Flock.Soundness.Refine.Paths
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The registered top root binds its commit strings
@@ -10,6 +17,8 @@ that computation level by level.  If two unequal arrays of commit strings give
 one root, one of the hm96 leaf inputs, row frames, or node frames hashed while
 recomputing those roots is an explicit SHA-512 collision.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

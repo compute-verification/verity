@@ -14,6 +14,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_lanes.py", "tests/test_reg_file.py"]
 # Test-only: the harness (`verity_difftest`, which the workspace installs, and the Lean `lake` builds through the path require);
 # the Python held to the Lean: `window.py` (with the switch, `verifier.py`, and its pinned vectors), `h1zy.py`
 # (`test_lanes.py`), and h1_lanes' known rows (`test_known_rows.py`: `benchmarks/pouw/h1_lanes/run.py` with
@@ -27,9 +29,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/record.py",
           "verity/core/claims/__init__.py",
-          "verity/core/protocols/pouw", "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs",
+          "verity/core/protocols/pouw", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
+          "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/ml/flock/python",
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/ml/flock/python", "verity/ml/windows",
           "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/service/sampled_proofs/lake-manifest.json",

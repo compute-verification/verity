@@ -1,4 +1,27 @@
-import Proofs.Flock.Claims.ZK.FrameParse
+module
+
+public import Proofs.Flock.Claims.ZK.FrameParse
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # What the frame releases of a round: the device's frames, masked
@@ -11,7 +34,7 @@ folds over:
 * **The absorbed order** (`absorbed_toList`, `absorbed_getElem!`): the frame masks under every pad below `h_ab` but
   `final_c`'s, ascending, so absorbed value `p` takes pad `p` up to `final_b`'s and pad `p + 1` after, the indices the
   masked prover pads its sent values under (`zerocheckPZk`, `lincheckPZk`: `r1ab i = i`, `r1c i = 64 + i`, …). Every
-  such pad is among a rep's draws (`ofDraws_order`), and a rep's pad there is its draws' (`padAt_ofDraws`).
+  such pad is among a rep's samples (`ofDraws_order`), and a rep's pad there is its samples' (`padAt_ofDraws`).
 * **The release in a phase** (`maskFrames`, `maskVal`): the frames with each absorbed value through `maskVal` from the
   state's position on, or unchanged outside a masked phase; labels that neither end nor start a phase (`plainLabel`)
   go through as they came (`label_plain`).
@@ -23,9 +46,11 @@ folds over:
   device's plain value is `v' + h_i` (`unmaskFrames`), and the frame's release of the device's round is the masked
   prover's round (`maskFrames_unmask`, characteristic 2) without its domain frames (`dropDoms`): a rep's first round
   carries its stream's domain, which the masked prover's ask sends and the frame never releases. Its pads are the
-  masked prover's: the frame's pad at pad `j`'s absorbed position (`absPos`) is the draws' pad `j`
+  masked prover's: the frame's pad at pad `j`'s absorbed position (`absPos`) is the samples' pad `j`
   (`padAt_ofDraws_absPos`), which on `tapeOfDraws` is the masked prover's (`padsOf_tapeOfDraws`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -173,12 +198,12 @@ theorem absorbed_lt_len (l : _root_.Flock.Zk.PadLayout) {p : ℕ} (hp : p < (abs
     _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc, _root_.Flock.Zk.PadLayout.fc, nLig] at hp ⊢
   split <;> split at hp <;> omega
 
-/-- The draws' pads are the layout's `len`. -/
+/-- The samples' pads are the layout's `len`. -/
 theorem ofBytes_h_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     (_root_.Flock.Firewall.Frame.Draws.ofBytes l b).h.size = l.len := by
   simp [_root_.Flock.Firewall.Frame.Draws.ofBytes, _root_.Flock.Firewall.Frame.words]
 
-/-- **A rep's configuration masks under its draws' pads**: each pad of its order is among its draws'. -/
+/-- **A rep's configuration masks under its samples' pads**: each pad of its order is among its samples'. -/
 theorem ofDraws_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
     (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
     ∀ p, p < (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).order.size →
@@ -813,7 +838,7 @@ theorem roundFree_honest (c : Cfg) (s : Masker) (F : List Frame) (k : UInt8) (n 
 /-- The absorbed position of pad `j`: `j` up to `final_b`'s, then `j − 1` (`final_c`'s is never absorbed). -/
 def absPos (l : _root_.Flock.Zk.PadLayout) (j : ℕ) : ℕ := if j < l.fa + 2 then j else j - 1
 
-/-- **The frame's pad at pad `j`'s absorbed position is the draws' pad `j`**, for each pad the frame absorbs under:
+/-- **The frame's pad at pad `j`'s absorbed position is the samples' pad `j`**, for each pad the frame absorbs under:
 any below `h_ab` but `final_c`'s. So the pad the masked prover adds to a sent value at its layout index (`h[lay.r1ab
 i]`, `h[lay.lc j t]`, …) is the one the frame adds at that value's place in the absorbed order. -/
 theorem padAt_ofDraws_absPos (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.Firewall.Frame.Draws)

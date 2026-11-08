@@ -1,4 +1,16 @@
-import Proofs.Flock.Soundness.ExecFlatCopies
+module
+
+public import Proofs.Flock.Level3.Placed
+public import Properties.Flock.Circuit.Keys
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.ExecSetup
+import Proofs.Flock.Soundness.SparseRows
+import VCVio.Prelude.Core
 
 /-!
 # The unit net's rows at its input port bits and past its useful rows
@@ -9,6 +21,8 @@ Two facts about the unit net that the forced-zero rows and the input copies read
 - `portBits_nodup`, `port_self`: a built net's input port bits are distinct columns (its groups ascend, `Net.inputsOk`,
   and each group's ports fit its words), and each is a self row `[x]·[x]` (`Net.inputsOk`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -45,7 +59,7 @@ theorem parse_rows {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   have ho : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net := by
     by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
     · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
-      rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+      rcases hj : Flock.JsonParse.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
       · rw [hj] at h; exact absurd h throw_bind_ne
       · rw [hj] at h
         exact ite_throw_ok (ite_throw_ok h)

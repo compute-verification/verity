@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Binding.Layout
-import Proofs.Flock.Level3.RowV2
+module
+
+public import Proofs.Flock.Soundness.Binding.Layout
+public import Proofs.Flock.Level3.RowV2
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`
@@ -20,6 +23,8 @@ string of its row and salt, and its leaf is the registered one. So the value bin
 `HmRowComputes` and the layout's facts, and nothing cryptographic.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Binding
 
 open Game Model Accounting Refine Audit
@@ -32,7 +37,7 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
 /-- **A layout's `hm96-sha512/row/v1` or `/row/v2` rows**: which commit strings are rows (`isRow`), the bytes the row
 digest hashes for a row (`enc`, injective: `sha512/row/v1`'s row prefix then its words, or `sha512/row/v2`'s `P(ℓ)` then
 its bits, `v2`), the leaf scheme of the other commit strings (`other`), and
-where a drawn unit's table's witness holds a row's commit string `b ‖ c`: the addresses of its `hm96` slot's 128 output
+where a sampled proof block's table's witness holds a row's commit string `b ‖ c`: the addresses of its `hm96` slot's 128 output
 bytes, bit by bit (`bcAt`). Two facts about the layout:
 * `bc_registered`: in a satisfying witness, at each of the unit's wires held by a row, `SHA-512(leaf_prefix ‖ b ‖ c)` of
   the `b ‖ c` the witness holds there is the registered leaf: the statement's regions pin the `hm96` slots' outputs to
@@ -74,7 +79,7 @@ def HmRows.v2 {lay : Layout P plan tab decode} (isRow : lay.Pos → Prop) [Decid
   bc_registered := bc_registered
   other_registered := other_registered
 
-/-- A place the circuit hashes a row: a drawn unit `u` of the draw `S` under the registration `R`, a message of its
+/-- A place the circuit hashes a row: a sampled proof block `u` of the sample `S` under the registration `R`, a message of its
 table, and one of the unit's wires. -/
 structure RowSite (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) (N : ℕ) where
@@ -92,7 +97,7 @@ variable {lay : Layout P plan tab decode} (rs : HmRows lay)
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
   if rs.isRow p then ExplicitLeaf.hm96 rs.enc rs.enc_inj else rs.other p
 
-/-- **`HmRowComputes` at the drawn units' rows**: at each wire of a drawn unit held by a row, in a satisfying witness of
+/-- **`HmRowComputes` at the sampled proof blocks' rows**: at each wire of a sampled proof block held by a row, in a satisfying witness of
 the unit's table, the `b ‖ c` the row's `hm96` slot outputs (the witness's bytes at `bcAt`) is the commit string of the
 row's bytes and the salt the witness holds, under SHA-512 and the executable's key (`K512`). -/
 def Computes : Prop :=

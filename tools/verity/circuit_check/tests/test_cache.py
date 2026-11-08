@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from circuit_check import entries as E
+from verity.ml.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -314,19 +316,20 @@ def _set_pin(root: Path, key: str, counts: dict | None) -> None:
         p.write_text(json.dumps({"pieces": {key: counts}}))
 
 
-def _tree(tmp_path: Path) -> Path:
+def _tree(tmp_path: Path, extra: dict[str, str] | None = None) -> Path:
+    """A git repository at ``tmp_path`` holding `FILES` and ``extra`` (by path; ``extra`` wins)."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    for rel, text in FILES.items():
+    for rel, text in {**FILES, **(extra or {})}.items():
         p = tmp_path / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text.lstrip("\n"))
     return tmp_path
 
 
-def _run(root: Path, harness: str = HARNESS) -> dict:
+def _run(root: Path, harness: str = HARNESS, cwd: Path = REPO, env: dict[str, str] | None = None) -> dict:
     # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})}
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=cwd, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -340,9 +343,9 @@ def _edit(root: Path, rel: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1))
 
 
-def _values(root: Path, target: str) -> list:
-    """The values every stored entry of ``target`` reported."""
-    return sorted(e["report"]["value"] for p in (root / "cache").glob("*/*/*.json")
+def _values(root: Path, target: str, field: str = "value") -> list:
+    """The ``field`` every stored entry of ``target`` reported."""
+    return sorted(e["report"][field] for p in (root / "cache").glob("*/*/*.json")
                   if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == target)
 
 
@@ -369,6 +372,22 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(other["pins"]) == {f"{_pin('SynOther_v1')}#pieces#SynOther_v1"}
     assert "targets.py" not in top["files"] and not [f for f in top["files"] if f.startswith("pins/")]
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
+
+
+def test_a_copy_of_the_tree_at_another_path_reuses_every_target(tmp_path):
+    """Nothing of where the tree is or where the run starts is in a key or a read: a copy of the tree at another path, run from
+    its own root once the first is gone (as each of drive's checks runs in a tree of its own, removed after it), finds every
+    target's key among the first run's entries and reuses it, storing nothing."""
+    import shutil
+
+    first, second = tmp_path / "a", tmp_path / "elsewhere" / "b"
+    assert _run(_tree(first), cwd=first)["hits"] == []
+    entries = sorted(p.relative_to(first / "cache") for p in (first / "cache").glob("*/*/*.json"))
+    shutil.copytree(first, second)
+    shutil.rmtree(first)
+    out = _run(second, cwd=second)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0, out["stats"]
+    assert sorted(p.relative_to(second / "cache") for p in (second / "cache").glob("*/*/*.json")) == entries
 
 
 def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeypatch):
@@ -496,6 +515,116 @@ def test_a_package_in_the_tree_that_shadows_a_loaded_distribution_reruns_what_ho
         assert CC._dist(root, top) == "tree"
     finally:
         sys.path.remove(str(root))
+
+
+#: the harness with a module object made by hand whose ``__file__`` is a bare name, as torch makes `torch.ops` (``_ops.py``),
+#: imported by every check
+BARE = HARNESS.replace("CC.trace(root)", "import types\n"
+                                         "sys.modules['syn_bare'] = types.ModuleType('syn_bare')\n"
+                                         "sys.modules['syn_bare'].__file__ = '_bare.py'\n"
+                                         "CC.trace(root)")
+
+
+def test_a_module_whose_file_is_a_bare_name_names_no_file_wherever_the_check_runs(tmp_path):
+    """Resolved against the working directory, a bare ``__file__`` would be a module imported from outside the tree for a check
+    run outside it (storing nothing) and a file of the tree for one run at its root, so where a check ran would decide whether
+    its verdict is stored and what it holds.  It names no file: stored from either and reused from the other, each target
+    holds the same reads from both, and none of them is it, nor where `inspect` looked for its source from the tree's root."""
+    root, elsewhere = _tree(tmp_path / "tree"), tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import reg\n    import syn_bare  # noqa: F401")
+    assert BARE != HARNESS
+    held = []
+    for first, then in ((elsewhere, root), (root, elsewhere)):
+        shutil.rmtree(root / "cache", ignore_errors=True)
+        assert _run(root, BARE, cwd=first)["hits"] == [], first
+        held.append({t: _entry(root, t)["reads"] for t in ("SynTop_v1", "SynOther_v1")})
+        assert _run(root, BARE, cwd=then)["hits"] == ["SynOther_v1", "SynTop_v1"], then
+    assert held[0] == held[1], "what a check holds depends on where it ran"
+    assert not [f for r in held[0].values() for f in [*r["files"], *r["probes"]] if "_bare" in f or "<" in f], held[0]
+
+
+#: a C++ model of the synthetic tree, loaded as `_jit.Model` (its library built on first use, in `_jit.lib_path`)
+NATIVE_PY = """
+from pathlib import Path
+
+from verity.ml.definitions.numerics import _jit
+
+SRC = Path(__file__).resolve().parents[1] / "cpp" / "m.cpp"
+_lib = []
+
+
+def answer():
+    if not _lib:
+        lib = _jit.atomic_build(_jit.lib_path("libsyn_model.so"), [SRC], lambda out: _jit.cxx_compile(out, SRC))
+        _lib.append(_jit.Model(lib, [SRC]))
+    return _lib[0].answer()
+"""
+#: the harness with the model built and loaded before tracing, as a process's first check of it would leave it
+NATIVE = HARNESS.replace("CC.trace(root)", "import syn.native\nsyn.native.answer()\nCC.trace(root)")
+
+
+@pytest.mark.skipif(shutil.which(_jit.cxx()) is None, reason="no C++ compiler")
+def test_editing_a_cpp_models_source_reruns_the_check_that_called_it_whatever_its_build_directory(tmp_path):
+    """SynTop's check calls a C++ model whose library was built in ``VERITY_NUMERICS_BUILD_DIR`` and loaded before the check, so
+    no read of its source picks the library or happens in the check: the call itself says the source (`_jit.Model`,
+    `cache.MODEL`).  Its entry holds the source by content, SynOther's (checked before it) doesn't, and an edit reruns SynTop
+    alone."""
+    from circuit_check import cache as CC
+
+    assert CC.MODEL == _jit.CALLED
+    root = _tree(tmp_path / "tree")
+    (root / "cpp").mkdir()
+    (root / "cpp" / "m.cpp").write_text('extern "C" int answer() { return 7; }\n')
+    (root / "syn" / "native.py").write_text(NATIVE_PY.lstrip("\n"))
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import native, reg")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}',
+          '"kind": reg.KINDS.get(fn.id), "native": native.answer() if fn.id == "SynTop_v1" else None}')
+    env = {"VERITY_NUMERICS_BUILD_DIR": str(tmp_path / "libs")}
+    assert _run(root, NATIVE, env=env)["hits"] == []
+    assert "cpp/m.cpp" in _entry(root, "SynTop_v1")["reads"]["files"] and _values(root, "SynTop_v1", "native") == [7]
+    assert "cpp/m.cpp" not in _entry(root, "SynOther_v1")["reads"]["files"]
+    assert _run(root, NATIVE, env=env)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "cpp/m.cpp", "return 7", "return 8")
+    out = _run(root, NATIVE, env=env)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1 and _values(root, "SynTop_v1", "native") == [7, 8]
+
+
+#: `syn.native` with the model's answer memoized process-wide, as `functools.cache` does: a check it serves calls no model
+MEMO_PY = NATIVE_PY.replace("from pathlib import Path", "import functools\nfrom pathlib import Path") + """
+
+@functools.cache
+def remembered():
+    return answer()
+"""
+
+
+@pytest.mark.skipif(shutil.which(_jit.cxx()) is None, reason="no C++ compiler")
+@pytest.mark.parametrize("forked", [False, True], ids=["one-process", "forked-after-a-build"])
+def test_editing_a_cpp_models_source_reruns_every_check_a_memo_of_its_result_served(tmp_path, forked):
+    """Both checks read the model's answer from a process-wide memo, filled by the process's first call: SynOther's check, the
+    first of the two in the process that checks both, or SynOther's binding's build, in the process each target's own is forked
+    from (as `circuit-check` runs).  SynTop's check is served from it and calls no model, so no call in its check says the source;
+    it holds it all the same (`cache._CALLED`), and an edit of the source reruns both checks with the model's new answer."""
+    root = _tree(tmp_path / "tree")
+    (root / "cpp").mkdir()
+    (root / "cpp" / "m.cpp").write_text('extern "C" int answer() { return 7; }\n')
+    (root / "syn" / "native.py").write_text(MEMO_PY.lstrip("\n"))
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import native, reg")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}', '"kind": reg.KINDS.get(fn.id), "native": native.remembered()}')
+    harness = NATIVE
+    if forked:
+        _edit(root, "syn/catalog.py", "    from syn import other\n", "    from syn import native, other\n    native.remembered()\n")
+        harness = NATIVE.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
+        assert harness != NATIVE
+    env = {"VERITY_NUMERICS_BUILD_DIR": str(tmp_path / "libs")}
+    assert _run(root, harness, env=env)["hits"] == []
+    assert _run(root, harness, env=env)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "cpp/m.cpp", "return 7", "return 8")
+    out = _run(root, harness, env=env)
+    assert out["hits"] == [], f"reused with the model's old answer: {out['hits']}"
+    assert out["stats"]["stored"] == 2
+    assert {t: _values(root, t, "native") for t in ("SynOther_v1", "SynTop_v1")} == {"SynOther_v1": [7, 8], "SynTop_v1": [7, 8]}
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
@@ -1271,10 +1400,67 @@ def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
     assert norm("from a import *\nfrom b import y\n") != norm("from b import y\nfrom a import *\n")
 
 
+def _builds_a_name(v) -> bool:
+    """`v` only builds a string from names: an f-string, `+`, a literal's `join`/`format`, or a conditional of those."""
+    import ast
+
+    if isinstance(v, (ast.Constant, ast.Name)):
+        return True
+    if isinstance(v, ast.Attribute):
+        return isinstance(v.value, ast.Name)
+    if isinstance(v, ast.JoinedStr):
+        return all(isinstance(x, ast.Constant) or (isinstance(x, ast.FormattedValue) and _builds_a_name(x.value))
+                   for x in v.values)
+    if isinstance(v, ast.BinOp) and isinstance(v.op, ast.Add):
+        return _builds_a_name(v.left) and _builds_a_name(v.right)
+    if isinstance(v, ast.IfExp):
+        return isinstance(v.test, ast.Compare) and _builds_a_name(v.body) and _builds_a_name(v.orelse)
+    if isinstance(v, ast.Call) and isinstance(v.func, ast.Attribute) and v.func.attr in ("join", "format"):
+        return isinstance(v.func.value, ast.Constant) and not v.keywords and all(_builds_a_name(a) for a in v.args)
+    return False
+
+
+def _enumerator_misuses(tree) -> list[str]:
+    """Each `pkgutil` listing loop in `tree` whose names (or names only built from them) are used other than compared,
+    imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``) whose entries are
+    popped and only imported; and the listing loops' count, so a body with none is caught."""
+    import ast
+
+    loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
+    bad = [] if loops else ["no pkgutil listing loop"]
+    for loop in loops:
+        allowed: set[int] = set()
+        tracked = {loop.target.id}
+        for n in ast.walk(loop):
+            if (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                    and any(isinstance(x, ast.Name) and x.id in tracked for x in ast.walk(n.value))
+                    and _builds_a_name(n.value)):
+                tracked.add(n.targets[0].id)
+                allowed |= {id(x) for x in ast.walk(n.value)}
+        for n in ast.walk(loop):
+            if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append", "todo.append"):
+                allowed |= {id(x) for a in n.args for x in ast.walk(a)}
+            elif isinstance(n, ast.Compare):
+                allowed |= {id(x) for x in ast.walk(n)}
+        uses = [n for s in loop.body for n in ast.walk(s)
+                if isinstance(n, ast.Name) and n.id in tracked and isinstance(n.ctx, ast.Load)]
+        if not uses or not all(id(n) in allowed for n in uses):
+            bad.append(ast.unparse(loop))
+    if "todo.append" in ast.unparse(tree):
+        pops = [n for n in ast.walk(tree) if isinstance(n, ast.Assign) and ast.unparse(n.value) == "todo.pop()"]
+        popped = {ast.unparse(t.elts[0] if isinstance(t, ast.Tuple) else t) for p in pops for t in p.targets}
+        imported = {ast.unparse(c.args[0]) for c in ast.walk(tree)
+                    if isinstance(c, ast.Call) and ast.unparse(c.func) == "importlib.import_module"}
+        if not pops or not popped <= imported:
+            bad.append(f"work list: popped {sorted(popped)}, imported {sorted(imported)}")
+    return bad
+
+
 def test_each_enumerator_only_imports_what_it_lists():
     """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
-    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields is only compared, imported
-    (``importlib.import_module``) or written into an error."""
+    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
+    only compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``)
+    whose entries are popped and only imported."""
     import ast
     import importlib
     import inspect
@@ -1286,18 +1472,45 @@ def test_each_enumerator_only_imports_what_it_lists():
         fn = importlib.import_module(mod)
         for part in qual.split("."):
             fn = getattr(fn, part)
-        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-        loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
-        assert loops, (mod, qual)
-        for loop in loops:
-            allowed: set[int] = set()
-            for n in ast.walk(loop):
-                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append"):
-                    allowed |= {id(x) for a in n.args for x in ast.walk(a)}
-                elif isinstance(n, ast.Compare):
-                    allowed |= {id(x) for x in ast.walk(n)}
-            uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
-            assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))
+        assert not _enumerator_misuses(ast.parse(textwrap.dedent(inspect.getsource(fn)))), (mod, qual)
+
+
+def test_the_enumerator_rule_refuses_a_listed_name_used_for_anything_else():
+    """The rule `test_each_enumerator_only_imports_what_it_lists` holds bodies to: a work list of names built from the
+    listing passes, and a read keyed by a listed name, directly or through a name derived from it, fails."""
+    import ast
+
+    ok = """
+def load(pkg):
+    todo = [(pkg, True)]
+    while todo:
+        name, is_package = todo.pop()
+        importlib.import_module(name)
+        for m in pkgutil.iter_modules([]):
+            child = f"{name}.{m.name}" if name == "x" else name + "." + m.name
+            if m.name != "tests" and child != __name__:
+                todo.append((child, m.ispkg))
+"""
+    assert not _enumerator_misuses(ast.parse(ok))
+    for body in ("data = open(path_for(m.name)).read()",
+                 "path = f'{m.name}.json'\n        data = open(path).read()",
+                 "path = path_for(m.name)\n        importlib.import_module(path)"):
+        src = f"""
+def load(pkg):
+    for m in pkgutil.iter_modules([]):
+        {body}
+        importlib.import_module(m.name)
+"""
+        assert _enumerator_misuses(ast.parse(src)), body
+    stray = """
+def load(pkg):
+    todo = []
+    for m in pkgutil.iter_modules([]):
+        todo.append(m.name)
+    for name in todo:
+        open(name).read()
+"""
+    assert _enumerator_misuses(ast.parse(stray))
 
 
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
@@ -1485,9 +1698,8 @@ CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, 
 def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (so adding a peak never makes
-    `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
-    which decide only the summary) or to the checker's docstrings and comments (`cache.version`), while an edit to the
-    checker's code still reruns them all."""
+    `circuit-check --all` run cold), and so does an edit to the checker's docstrings and comments (`cache.version`), while an
+    edit to the checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1497,10 +1709,6 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
     assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
     (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
-    out = _run(root, CHECKER)
-    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    for p in (checker / "known.py", *sorted((checker / "known").rglob("*.toml"))):
-        p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
     checks = checker / "checks.py"
@@ -1530,6 +1738,38 @@ def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
     assert CC.version() == here
     data.write_text('{"a": 1}')
     assert CC.version() != here
+
+
+def test_the_checker_s_version_is_read_once_until_a_file_of_it_changes(tmp_path, monkeypatch):
+    """`cache.version`, which `key` asks for once for each target, reads the checker's files once a process: again only when one
+    of them or a directory of them has another stat (an edit, a new file), and on every call while one of them changed within
+    `cache.RACY_NS` of the reading, when another write in the same timestamp tick could leave its stat as it was."""
+    from circuit_check import cache as CC
+
+    mod, code, read = tmp_path / "checks.py", CC._code, []
+    mod.write_text("def f(x):\n    return 2 * x\n")
+    now = [mod.stat().st_ctime_ns + 86400 * 10**9]
+    monkeypatch.setattr(CC, "_HERE", tmp_path)
+    monkeypatch.setattr(CC, "_VERSION", [])
+    monkeypatch.setattr(CC, "_clock", lambda: now[0])
+    monkeypatch.setattr(CC, "_code", lambda p: read.append(p.name) or code(p))
+    here = CC.version()
+    assert CC.version() == here and read == ["checks.py"]
+    mod.write_text("def f(x):\n    return 2 * x + 1\n")
+    edited = CC.version()
+    assert edited != here and CC.version() == edited and read == ["checks.py"] * 2
+    (tmp_path / "data.json").write_text("{}")
+    # a tick of its own for the new entry: in the first write's tick the directory's stat could stay as it was (the race
+    # RACY_NS covers, which this test's clock, a day on, leaves out)
+    os.utime(tmp_path, ns=(0, 0))
+    added = CC.version()
+    assert added != edited and CC.version() == added and read == ["checks.py"] * 3 + ["data.json"]
+    mod.write_text("def f(x):\n    return 3 * x\n")
+    now[0] = mod.stat().st_ctime_ns
+    racy = CC.version()
+    assert CC.version() == racy != added and read[4:] == ["checks.py", "data.json"] * 2
+    now[0] += CC.RACY_NS + 1
+    assert CC.version() == CC.version() == racy and read[8:] == ["checks.py", "data.json"]
 
 
 def _walked(fn) -> str:

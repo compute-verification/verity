@@ -1,7 +1,7 @@
 """run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448 by default; `h1zy.combine` takes K >= 384,
-the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
+the least whose partial row compresses before its last SHA-512 block, which Flock's circuit needs of a combine row)
 proved as its 32 lanes and its combine (option A:
-`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
+`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the sample (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
@@ -10,9 +10,10 @@ statement reading the leaf's lane partials, a value committed after the sample (
   its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
   `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
-  is what the prover's ``flock-tmpl-unit`` places). The soundness proof covers a templated statement only without the
-  verifier's registered reads, so the Lean verifier refuses these, once every other check has passed (`TMPL_WHY`).
-  Such a check is labelled `TEMPLATED`, never ACCEPT, and
+  is what the prover's ``flock-tmpl-unit`` places). The statement check and the soundness proof cover a templated
+  statement with the verifier's registered reads, but the sampled audit's knowledge-soundness form (`KsScope`) reads the
+  circuit as `HmOut.parse` does, which refuses a templated one, so the Lean verifier refuses these, once every other check
+  has passed (`TMPL_WHY`). Such a check is labelled `TEMPLATED`, never ACCEPT, and
   counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
@@ -34,7 +35,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
   window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
-  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
+  sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -50,9 +51,9 @@ statement reading the leaf's lane partials, a value committed after the sample (
   3 whose ``pub`` row holds index 4, which opens no root but lane 4's (REJECT). ``ok-from-public``: the combine whose
   ``o0`` the prover commits afresh, the public file stating it, which the verifier's own reads refuse (REJECT).
   ``lane3-index-from-public``: lane 3 whose ``pub`` row (its index, 3) the prover commits afresh and the public file
-  states, checked against a verifier's file that leaves ``pub`` out and says it is complete: refused by the verifier's
-  `Registered.checkComplete` by name (REJECT, ``WHY``); ``lane3-index-from-public-open``, the same session against that
-  file without ``complete``, which nothing else refuses (ACCEPT, by design: the control).
+  states, checked against a verifier's file that leaves ``pub`` out: refused by the verifier's
+  `Registered.checkComplete`, which flock-verify runs on every statement of a ``--registered`` file, by name (REJECT,
+  ``WHY``).
   ``combine-skips-p5-bit``: the combine over a circuit that reads bit i of ``p5`` in place of its last bit j, two bits the
   honest row holds equal (`lazy_combine`, its own Program), so its ok is 1 on the honest rows and it depends on no bit j:
   the verifier's file marks every A, B and partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
@@ -100,9 +101,9 @@ from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import Coll, concat  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as H  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
@@ -120,15 +121,13 @@ STEPS = 1
 EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEPT", "lane3-reads-row4": "REJECT",
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
           "lane5-partial-off-tree": "REJECT", "receipt-mismatch": "REJECT", "lane3-index4": "REJECT",
-          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT", "lane3-index-from-public-open": "ACCEPT",
+          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT",
           "combine-skips-p5-bit": "REJECT", "combine-skips-p5-bit-unmarked": "ACCEPT", "other-registration-file": "REJECT",
           "other-registration-file-held": "ACCEPT"}
 #: the refusal a negative's verdict names
 WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's",
        "combine-skips-p5-bit": "registered reads: known port p5: no computed row of the circuit reads bit",
        "other-registration-file": "registered reads: port a0 is not the layout's read of "}
-#: a check of another check's statement against its registered file without ``complete``
-OPEN = {"lane3-index-from-public-open": "lane3-index-from-public"}
 #: a check of another check's statement against its registered file with one port's ``read_in_full`` mark removed
 UNMARKED = {"combine-skips-p5-bit-unmarked": ("combine-skips-p5-bit", "p5")}
 #: the world whose records the verifier holds at a check, where it is not the statement's own
@@ -138,13 +137,13 @@ HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
 #: the templated statement (`circuit.TMPL_STATEMENT`), and the Lean verifier's verdict on one whose every other check
-#: passed: the soundness proof covers a templated statement only without the verifier's registered reads
-#: (`ProvedScope.scopeOkT`), so it refuses these, which read ``--registered``, for their form (`ProvedScope.scopeWhyT`)
+#: passed: the knowledge-soundness form (`KsScope.checkOf`) reads the circuit as `HmOut.parse` does, which refuses a
+#: templated statement's (`HmOut.parse`'s `Tags.isTmpl` refusal), so it refuses these for their form
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
-TMPL_WHY = ("refused: a templated statement with the verifier's registered reads (--registered): a statement form the "
-            "soundness proof does not cover")
+TMPL_WHY = (f"refused: a circuit that does not parse ({TMPL_STATEMENT}: a templated statement's circuit is read from its "
+            "template): a statement form the soundness proof does not cover")
 #: the verdict word of a templated check refused only for its form (`TMPL_WHY`): never ACCEPT
-TEMPLATED = "templated: Lean refuses this form with --registered"
+TEMPLATED = "templated: Lean's knowledge-soundness form refuses a templated statement"
 
 
 def tile(k: int):
@@ -402,8 +401,7 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     `known_opening`); the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows and registers
     its known ports (`known_rows`, `produced.known_port`), ``o0`` among them. ``free``: output ports the prover commits
     afresh, which the public file states (``o0`` in ``ok-from-public``). ``dropped``: known input ports committed afresh
-    and left out of the verifier's file too, which still says it is complete (``pub`` in ``lane3-index-from-public``),
-    written beside it without ``complete`` as well. ``lane_index``: the index the lane's ``pub`` row holds, when not
+    and left out of the verifier's file too (``pub`` in ``lane3-index-from-public``). ``lane_index``: the index the lane's ``pub`` row holds, when not
     ``ln``. ``variant``: the stager and Program of ``combine-skips-p5-bit`` (``lazy``), when not ``kind``'s. The lowered
     ok is held to the word reference (`expected`) in place of `UnitStager.reference_check`, as h1_prove's stage does."""
     st = ctx.stagers[variant or kind]
@@ -446,8 +444,6 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     vd = ctx.work / "verifier"
     (vd / f"{tag}.pub.bin").write_bytes(pub)
     (vd / f"{tag}.registered.json").write_text(json.dumps(reads))
-    if dropped:
-        (vd / f"{tag}.open.registered.json").write_text(json.dumps({x: v for x, v in reads.items() if x != LL.COMPLETE}))
     return {"tag": tag, "kind": kind, "lane": ln, "world": w.name, "stmt": "combine" if ln is None else str(ln),
             "dir": str(d), "pub": str(vd / f"{tag}.pub.bin"),
             "registered": str(vd / f"{tag}.registered.json"), "program": str(vd / f"{variant or kind}.program.json"),
@@ -606,8 +602,6 @@ def prepare(args) -> None:
     with mp.get_context("fork").Pool(args.jobs) as pool:
         recs = list(pool.imap_unordered(run_job, js))
     by = {r["tag"]: r for r in recs}
-    for tg, of in OPEN.items():
-        by[tg] = {**by[of], "tag": tg, "registered": by[of]["registered"].replace(".registered.json", ".open.registered.json")}
     for tg, (of, port) in UNMARKED.items():
         reads = json.loads(Path(by[of]["registered"]).read_text())
         if reads["ports"][port].pop(LL.READ_IN_FULL, None) is not True:
@@ -621,7 +615,7 @@ def prepare(args) -> None:
         r["holds"] = HOLDS.get(tg, r["world"])
     honest = [jb[0] for jb in js if jb[0] not in EXPECT]
     proved = [jb[0] for jb in js]
-    checks = proved + list(OPEN) + list(UNMARKED) + list(HELD)
+    checks = proved + list(UNMARKED) + list(HELD)
     vd = work / "verifier"
     with open(work / "plan.tsv", "w") as f:
         for tg in proved:

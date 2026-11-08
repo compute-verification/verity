@@ -1,9 +1,44 @@
-import Proofs.Flock.Claims.Complete.Shaped.Hoare
-import Proofs.Flock.Soundness.Refine.Ligerito
-import Proofs.Flock.Soundness.LigeritoMid
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Verifier.Hash
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Soundness.Discharge.ZkView.Wire
+public import Proofs.Flock.Soundness.Refine.Schedule
+import Batteries.Recycling.MonadSatisfying.Array
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A level's commitment and opening, by their shapes
@@ -17,6 +52,8 @@ import Proofs.Flock.Verifier.Hash
 * `openP_ok`: an opening at such positions of a commitment of that shape has the shape the decoder reads
   (`ZkView.LevelOk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

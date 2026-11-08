@@ -1,5 +1,37 @@
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+module
+
+public import Proofs.Flock.Bridge.Canon
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The deployed commitment at a leaf map (shared rows)
@@ -22,11 +54,13 @@ digests are the tables' rows), so the leaf map is the verifier's, at every accep
   `sha512/row-seg/v1`). At a `RowsV2` file that is every port at row/v2 (`leavesL_v2`, `commitDepL_v2`).
 * `RootFixesDomainL c L`: `PortRoots.RootFixesDomain` at `rootsOfL` (`rootFixesDomainL_ident`).
 * `Bridge.TransportsLiveCR`: `TransportsLiveC` with or without shared rows (no `pub.tables = none`), at the binding
-  `ZkReg.rsZHJS` and the public file's leaf map, at every file whose ports are rows the verifier of record reads
+  `ZkReg.rsZHJS` and the public file's leaf map, at every file whose ports are rows the verifier reads
   (`RowsOk`). At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`, `TransportsRefs.lean`).
 
 No unit's ref is pinned to `⌊u / G⌋` here: these hold at every ref the verifier accepts.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -202,7 +236,7 @@ open Classical in
 `TransportsLiveC` without `pub.tables = none`, at the binding with or without shared rows (`ZkReg.rsZHJS`) and the
 public file's leaf map (`LeafMap.ofPublic`): unit `u`'s row at port `q` is leaf `ref q u` of `q`'s tree, under the
 roots `rootsOfL` over each port's own leaves, and some data opens each canonical opening's position to its bit under
-`commitDepL`. It holds at every circuit file whose ports are rows the verifier of record reads (`RowsOk`: all
+`commitDepL`. It holds at every circuit file whose ports are rows the verifier reads (`RowsOk`: all
 `sha512/row/v1`, or each `sha512/row/v2` or `sha512/row-seg/v1`), each port's leaves at its own schema and each row in
 its own format. At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`). -/
 def _root_.Flock.Bridge.TransportsLiveCR : Prop :=

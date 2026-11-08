@@ -66,6 +66,22 @@ def _window(src: Path, n: int, part: dict, d: Path) -> bytes:
     return body
 
 
+def test_an_inner_statement_past_the_verifiers_rows_is_refused_before_staging(tmp_path):
+    """`stage` and `stage_window` refuse a population of more than `rec_budget.MAX_INNER_ROWS` units with
+    `RecBudget.innerRows`'s message, before they sample or write anything."""
+    from verity_flock import rec_budget as RB
+
+    ri, n = _rec_inner(), RB.MAX_INNER_ROWS + 1
+    why = f"refused: the inner statement's public file holds {n} instances, more than {RB.MAX_INNER_ROWS}"
+    with pytest.raises(ValueError, match=why):
+        ri.stage(n, tmp_path / "sets", tmp_path / "stage")
+    (tmp_path / "window").mkdir()
+    (tmp_path / "window" / "window.json").write_text(json.dumps({"members": [{"n": n}]}))
+    with pytest.raises(ValueError, match=why):
+        ri.stage_window(tmp_path / "window", 0, "silu-mul-v2/i256/bf16", tmp_path / "sets", tmp_path / "stage")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["window"]
+
+
 @pytest.mark.slow
 def test_a_served_windows_member_stages_as_the_inner_statement_over_its_own_bytes(tmp_path):
     """`stage_window` composes the member's circuit itself (plain leaves, and hm96 for ``--zk-out``) and takes the bodies

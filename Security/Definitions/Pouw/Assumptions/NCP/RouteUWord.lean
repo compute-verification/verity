@@ -1,5 +1,8 @@
-import Definitions.Pouw.Assumptions.NCP.Chain
-import Definitions.Pouw.NCP.RouteU
+module
+
+public import Definitions.Pouw.Assumptions.NCP.Chain
+public import Definitions.Pouw.NCP.Relation
+public import Definitions.Pouw.NCP.RouteU
 
 /-!
 # The word layer on route U (trusted statements)
@@ -21,6 +24,8 @@ of the route-U values as their own hypothesis: NzNCP of `C` does not give NzNCP 
 `C^U` is not a rule's event for `C` (the shift is random through `F₁`). NzNCP itself is satisfiable
 (`Word.WordNzWitness`), and the floors' other hypotheses hold at the lead (`RelationWitness.IndependentWitness`).
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP
 

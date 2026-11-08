@@ -1,8 +1,51 @@
+module
+
+public import Proofs.Accounting.RemoteHeld.Meets
+public import Definitions.Accounting.Assumptions.RemoteDraw
+public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Bandwidth.Chip
+import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.RemoteHeld.Draw
-import Proofs.Accounting.RemoteHeld.Meets
+import Proofs.Pouw.Prob
 
 /-!
-# The drawn guarantees' premises meet, and their conclusions bite
+# The sampled guarantees' premises meet, and their conclusions bite
 
 Each guarantee of `RemoteHeld.Draw` (`PooledDraw`, `LiveCoinsDrawn`, `HeldDrawn`, `HeldOverTimeDrawn`,
 `HeldOverTimeLinksDrawn`) has its premises met at an honest instance (`*_honest`) and its conclusion false for an audit
@@ -13,13 +56,15 @@ that accepts everything (`*_nontrivial`).
   `openings_zero_subset`), `Counted` on any trace that finds nothing wrong, and its distinguishers gain nothing
   (`Draw.prfAdvantage_honest`). Over `Meets.burst` on its coins (a node bringing absent blocks back by every route) it
   meets every premise of the memory-line forms too, at any rates, W2's measured ones among them (`Meets.w2_meets`).
-* **Bites.** The toy (`toy`): one window of one receipt, none correct, drawn once, on an audit that accepts every
+* **Bites.** The toy (`toy`): one window of one receipt, none correct, sampled once, on an audit that accepts every
   outcome with that receipt wrong (`acceptAll`), its node holding nothing and bringing nothing in, inside the device
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
   receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its draw always opens the wrong receipt,
   so every advantage is `0`; and its pooled bound is `0`. Each conclusion then claims probability at most
   `δ + 2^-64` (and `δs`) for an event of probability `1`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote.DrawMeets
 
@@ -150,7 +195,7 @@ theorem heldOverTimeLinksDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (p
 
 /-! ## The toy that an audit accepting everything gets wrong -/
 
-/-- One window of one receipt, none correct, drawn once. -/
+/-- One window of one receipt, none correct, sampled once. -/
 def toy : Session 1 1 (fun _ => 1) 1 Unit where
   size _ _ := ⟨1, by norm_num⟩
   correct _ _ := ∅

@@ -1,7 +1,28 @@
-import Proofs.Flock.Claims.DeployRounds
+module
+
+public import Aesop.BuiltinRules
+public import Flock.With.Zk
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Claims.DeployRounds
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Flock.With.Zk
 
 /-!
 # The rounds the shipped masked verifier reads
@@ -10,6 +31,8 @@ import Flock.With.Zk
 on the hash. The masked replay reads `m + (kLog − 6)` rounds, Ligerito `k0 + 7 + 11 R` (the plain count and the lane
 phase's `ρ` pair), and the inner proof four; a masked rep reads all of its stream's rounds (`zkVerifyRepWith_rounds`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

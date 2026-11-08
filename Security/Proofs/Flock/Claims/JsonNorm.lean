@@ -1,25 +1,66 @@
+module
+
+public import Flock.Norm
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.JsonEq
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
 import Flock.Canon
-import Flock.Norm
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
-import Definitions.Claims.Json
-import Proofs.Flock.Claims.JsonEq
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The rebuilt draw: one value per equivalence class
+# The rebuilt sample: one value per equivalence class
 
-`Json.parse` builds an object's tree in the order its keys arrived, and no proof sees into it (`parse` is a `partial
-def`), so two draws that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
-(`FlockDeploy.KS.drawEq_ne`). Where the verifier keeps a draw, the record's (`Exec.recordDraw`) and the statement's
+`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two samples that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
+(`FlockDeploy.KS.drawEq_ne`). Where the verifier keeps a sample, the record's (`Exec.recordDraw`) and the statement's
 (`Raw.ins`), it keeps `Flock.norm` of what it parsed: every object rebuilt by inserting its fields into an empty map,
 and that map's fields into another. So:
 
 * `norm_congr`: `norm` is the same on equivalent values;
-* `norm_norm`: `norm` is idempotent, so `eq_of_jsonEquiv_norm`, `eq_of_rel_norm`: two rebuilt values the draw check
+* `norm_norm`: `norm` is idempotent, so `eq_of_jsonEquiv_norm`, `eq_of_rel_norm`: two rebuilt values the sample check
   passes on are equal, with no premise on the parser;
 * `wf_norm`: a rebuilt value is well formed (`Claims.Json.Wf`) by construction;
-* `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's draw,
+* `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's sample,
   parsed, is the statement's up to `JsonEquiv`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -210,7 +251,7 @@ theorem eq_of_jsonEquiv_norm {a b : Json} (ha : Flock.norm a = a) (hb : Flock.no
   rw [← ha, ← hb]
   exact norm_congr _ _ h
 
-/-- **Two rebuilt optional values the draw check passes on are equal.** -/
+/-- **Two rebuilt optional values the sample check passes on are equal.** -/
 theorem eq_of_rel_norm {a b : Option Json} (h : Option.Rel JsonEquiv a b) (ha : ∀ d, a = some d → Flock.norm d = d)
     (hb : ∀ d, b = some d → Flock.norm d = d) : a = b := by
   cases h with

@@ -1,5 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.HdecCor.Headlines
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.HdecCor.Headlines
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The non-ZK headlines, over what flock-verify accepts
@@ -16,6 +34,8 @@ under hidden outputs whether the circuit's wires feed its unit or its outputs (`
 feed neither, so the unit returns the outputs (`Layout.outNet_of_wiresFeed`); where they feed either, the headline is
 `FailClosed.General`'s, at the template instance's program. The original headlines remain, as lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

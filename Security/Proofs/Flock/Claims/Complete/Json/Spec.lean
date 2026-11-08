@@ -1,23 +1,63 @@
-import Flock.Canon
-import Std.Data.TreeMap.Raw.Lemmas
-import Definitions.Claims.Json
-import Definitions.Claims
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Flock.Claims.Complete.Prover.Print
+module
+
+public import Definitions.Claims
+public import Definitions.Core.Interaction
+public import Flock.Canon
+public import Proofs.Flock.Claims.Complete.Json.RoundTrip
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.Claims.JsonEq
+public import Std.Data.TreeMap.Raw.Lemmas
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # What the record's round trip needs from the JSON library
 
-`Json.parse` and `Json`'s `==` are `partial` definitions: Lean runs them, and no proof unfolds them (the verifier's
-`canon` is total, and the spec's two fields on it are proved: `Canon.lean`). So the session record's round trip (the
-prover's `printJ`, a total printer of `Json.compress`'s bytes, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s
-`parse`) is proved from their specification, the spec's `Claims.JsonSpec printJ canon`, a named assumption the record's
-theorems take as a hypothesis, over alike (`Same`), printable (`Good`) and well-formed (`Wf`) values
-(`Definitions/Claims/Json.lean`). Here are the lemmas on alike values the proofs read: alike leaves are equal, and alike
-objects have alike values at each key (`Same.getObjVal`) and the same missing keys (`Same.getObjVal_none`), and alike
-values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`) passes on them. The record's numbers
-are all `Lean.toJson` of naturals, so printable.
+Nothing the session record's round trip reads is assumed (the prover's `printJ`, a total printer of
+`Json.compress`'s bytes, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`): the verifier's parser
+`Flock.JsonParse.parse` and its `canon` are total, the parser reads back what `printJ` and `canon` print
+(`RoundTrip.lean`: `parse_print`, `parse_canon`), builds well-formed trees (`Parse.lean`), and `canon` is the same on
+alike values (`Canon.lean`). The verifier reads no `Json` `==` (a `partial` definition no proof unfolds): it tests
+flags by `matches`. Alike (`Same`), printable (`Good`) and well-formed (`Wf`) values are `Value.lean`'s. Here are the
+lemmas on alike values the proofs read: alike
+leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
+(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's sample check (`drawEq`)
+passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -98,12 +138,8 @@ theorem _root_.Claims.Json.Same.getObjVal_none {j j' : Json} (h : Same j j') {k 
 
 /-! ## The masked proofs' names
 
-The masked completeness proofs (`Zk/`, `ZkTables/`) name the JSON library's specification at the honest prover's
-printer and the oracle's 64-byte outputs by these; a statement the lock lists reads `Claims.JsonSpec printJ Flock.canon`
-and `Claims.Out64`. -/
-
-/-- `Claims.JsonSpec` at the honest prover's printer `printJ` and the verifier's `canon`. -/
-abbrev JsonSpec : Prop := Claims.JsonSpec printJ Flock.canon
+The masked completeness proofs (`Zk/`, `ZkTables/`) name the oracle's 64-byte outputs by this; a statement the lock lists
+reads `Claims.Out64`. -/
 
 /-- `Claims.Out64`: the oracle's outputs are 64 bytes. -/
 abbrev Out64 (H : Claims.Msg → Claims.Msg) : Prop := Claims.Out64 H

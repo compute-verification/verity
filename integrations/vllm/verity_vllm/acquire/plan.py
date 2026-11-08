@@ -18,7 +18,7 @@ Sites (`SITE_KINDS`):
                     (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
   registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match phase
                     dumps and checks analytically (`analytic_table_of_buffer`)
-  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
+  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities)
 
 Policy (`POLICY`): a Value with one legal site takes it; with several, producer output first; consumer input when the producer is a
 PROMOTED interior Call (a pre-flip v1 manifest's row: its output is no module's return, `manifest_format.promoted_observation`); a Value with no legal site is
@@ -51,13 +51,15 @@ ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "modu
                    "moe_block_stream": "moe_tap", "tp_rank_partials": "tp_tap",
                    "sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy",
                    "weights": "registered_input", "norm_scales": "norm_tap", "router_softmax": "router_tap", "vocab_range": "vocab_tap",
-                   "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap"}
+                   "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap", "run_values": "run_tap"}
+#: the routes whose members are one per (layer, step) geometry or position: one Value class per op_path, member `*`
+FOLDED_ROUTES = ("hidden_tap", "run_tap")
 MODULE_ROUTES = ("module_output", "module_input")                        # the routes whose sites are module boundaries (confirm_modules)
 HIDDEN_TAP_OF_FAMILY = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}   # hidden_tap route -> the kernel tap
 MOE_FAMILY = "moe_block_stream"
 TP_FAMILY = "tp_rank_partials"
 WEIGHTS_FAMILY = "weights"
-#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer" (padding_steps)
+#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer"
 PRESCRIBED_ENABLEMENT = frozenset({"padding", "inactive"})
 
 
@@ -74,7 +76,7 @@ def analytic_table_of_buffer(name: str) -> str | None:
 
 
 @dataclass(frozen=True)
-class Site:
+class AcquisitionSite:
     kind: str
     module: str                  # module path / tap path / runner path / weight name
     slot: str                    # `out` | `0` | `1` | `in[0]` | `.sampled_token_ids` | plane | `weight` | `*`
@@ -99,9 +101,9 @@ class ValuePlan:
     spec: list[str] = field(default_factory=list)
     anchor: str | None = None                                # the runtime module a tap Value is anchored on (`attention_module` / `moe_module`)
     prescribed_identities: int = 0                           # identities materialised by rule (padding steps: no runtime producer)
-    sites: list[Site] = field(default_factory=list)          # the LEGAL sites
+    sites: list[AcquisitionSite] = field(default_factory=list)  # the LEGAL sites
     rejected: list[dict[str, str]] = field(default_factory=list)   # candidates the structure refuses, with the reason
-    chosen: Site | None = None
+    chosen: AcquisitionSite | None = None
     status: str = "unsupported"                              # chosen | unsupported
     why: str = ""
 
@@ -151,14 +153,14 @@ class AcquisitionPlan:
     def complete(self) -> bool:
         return not self.unsupported
 
-    def chosen_sites(self) -> list[Site]:
-        seen: dict[tuple, Site] = {}
+    def chosen_sites(self) -> list[AcquisitionSite]:
+        seen: dict[tuple, AcquisitionSite] = {}
         for v in self.values:
             if v.chosen is not None:
                 seen.setdefault(v.chosen.key(), v.chosen)
         return [seen[k] for k in sorted(seen)]
 
-    def hooks(self) -> list[Site]:
+    def hooks(self) -> list[AcquisitionSite]:
         """The sites `install_from_plan` installs: (module path -> hook kind -> slot), sorted, unique."""
         return [s for s in self.chosen_sites() if s.kind in HOOK_KINDS]
 
@@ -168,7 +170,7 @@ class AcquisitionPlan:
             out.setdefault(s.kind, []).append(s.key())
         return out
 
-    def values_at(self, site: Site) -> list[str]:
+    def values_at(self, site: AcquisitionSite) -> list[str]:
         return [v.value_id for v in self.values if v.chosen is not None and v.chosen.key() == site.key()]
 
     def _values_by_site(self) -> dict[tuple[str, str, str], list[str]]:
@@ -236,7 +238,7 @@ def _identity_key(r: Mapping[str, Any]) -> tuple:
 
 def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapping[str, Any]] = ()) -> list[ValuePlan]:
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
-    prefix of record (`padding_steps.padding_steps_of_record`, a runtime fact known at finalize): those are PRESCRIBED -- materialised by
+    prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
     rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
     padded = {_identity_key(p) for p in padding_identities}
@@ -245,8 +247,8 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         fam = str(r.get("family") or "")
         op = str(r.get("op_path"))
         member = str(r.get("output_member", "out"))
-        if ROUTE_OF_FAMILY.get(fam) == "hidden_tap":
-            member = "*"                                          # the geometry name is per (layer, step); one Value class per tap site
+        if ROUTE_OF_FAMILY.get(fam) in FOLDED_ROUTES:
+            member = "*"
         key = (op, member, fam)
         v = out.get(key)
         if v is None:
@@ -277,12 +279,12 @@ def _slot_label(rs: ReturnSlot | None) -> str:
     return "in" if rs is None else rs.label()
 
 
-def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], list[dict[str, str]]]:
+def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[AcquisitionSite], list[dict[str, str]]]:
     """The legal sites of one Value class and the refused candidates (each with its reason).  Structure only."""
     rt: RuntimeTree = corr.runtime
     call = {"op_path": v.op_path, "output_member": v.output_member}
     module = corr.owning_module(call)
-    legal: list[Site] = []
+    legal: list[AcquisitionSite] = []
     refused: list[dict[str, str]] = []
     fam = v.family
 
@@ -291,7 +293,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
 
     if v.prescribed_identities:
         n = v.prescribed_identities
-        legal.append(Site("prescribed", module, v.output_member, "n/a", f"{n} of {v.identities} identities are padding-step materialisations (enablement, no runtime producer)"))
+        legal.append(AcquisitionSite("prescribed", module, v.output_member, "n/a", f"{n} of {v.identities} identities are padding-step materialisations (enablement, no runtime producer)"))
         if v.prescribed:
             return legal, refused                                # every identity is prescribed: no runtime site needed; else the executed steps' site follows
 
@@ -300,7 +302,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
         rs = corr.return_slot(call)
         if rs is not None and not v.promoted:
             if rt.has_module(module):
-                legal.append(Site("producer_output", module, rs.label(), corr.output_lifetime(module),
+                legal.append(AcquisitionSite("producer_output", module, rs.label(), corr.output_lifetime(module),
                                   f"the Value is return slot `{rs.label()}` of the owning module's forward (manifest op_path, member)"))
             else:
                 refuse("producer_output", module, rs.label(), "the owning module is not a module of the runtime tree")
@@ -310,7 +312,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             # the Value is an INPUT of the module (`<module>/in`: the ids the embedding reads): the module's own pre-hook, arg 0
             a = corr.arg_slot(call, 0)
             if rt.has_module(module):
-                legal.append(Site("consumer_input", module, a.label(), corr.input_lifetime(module), "the Value is positional argument 0 of the module's forward (manifest member `in`)"))
+                legal.append(AcquisitionSite("consumer_input", module, a.label(), corr.input_lifetime(module), "the Value is positional argument 0 of the module's forward (manifest member `in`)"))
             else:
                 refuse("consumer_input", module, a.label(), "the consuming module is not a module of the runtime tree")
         for i, c in enumerate(v.consumers):
@@ -318,24 +320,35 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             if not rt.has_module(c):
                 refuse("consumer_input", c, a.label(), f"consumer {i} is not a module of the runtime tree")
                 continue
-            legal.append(Site("consumer_input", c, a.label(), corr.input_lifetime(c),
+            legal.append(AcquisitionSite("consumer_input", c, a.label(), corr.input_lifetime(c),
                               f"the Program's dataflow reads the Value as positional argument 0 of consumer {i} (manifest `consumers`)"))
         return legal, refused
 
     if route == "hidden_tap":
         anchor = v.anchor
         if anchor and rt.has_module(anchor):
-            legal.append(Site("native_tap", module, "*", "n/a", f"the attention hidden stream of module {anchor}: the {HIDDEN_TAP_OF_FAMILY[fam]} kernel tap (manifest `attention_module`)"))
+            legal.append(AcquisitionSite("native_tap", module, "*", "n/a", f"the attention hidden stream of module {anchor}: the {HIDDEN_TAP_OF_FAMILY[fam]} kernel tap (manifest `attention_module`)"))
         elif anchor:
             refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
         else:
             refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the tap on")
         return legal, refused
 
+    if route == "run_tap":
+        anchor = v.anchor
+        if anchor and rt.has_module(anchor):
+            legal.append(AcquisitionSite("native_tap", module, "*", "n/a", f"a value the served run decides for the Calls of module {anchor}: the "
+                              "attention source at its indexer (`commit.committer.run_values`; manifest `attention_module`)"))
+        elif anchor:
+            refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
+        else:
+            refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the run values on")
+        return legal, refused
+
     if fam == MOE_FAMILY:
         anchor = v.anchor
         if anchor and rt.has_module(anchor):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", f"a fused-MoE block-stream plane of module {anchor} (manifest `moe_module`)"))
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", f"a fused-MoE block-stream plane of module {anchor} (manifest `moe_module`)"))
         elif anchor:
             refuse("native_tap", module, v.output_member, f"MoE module {anchor} is not a module of the runtime tree")
         else:
@@ -344,14 +357,14 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
 
     if fam == TP_FAMILY:
         if rt.has_module(module):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", "a rank-local collective operand: the TP partial source at the module's collective"))
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", "a rank-local collective operand: the TP partial source at the module's collective"))
         else:
             refuse("native_tap", module, v.output_member, "the owning module is not a module of the runtime tree")
         return legal, refused
 
     if route == "norm_tap":
         if rt.has_module(module):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", "the scale of the module's norm: the norm-scale source inside the module "
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", "the scale of the module's norm: the norm-scale source inside the module "
                               "(a tapped kernel, or the rsqrt of an ATen-chain norm)"))
         else:
             refuse("native_tap", module, v.output_member, "the norm module is not a module of the runtime tree")
@@ -360,7 +373,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
     if route == "router_tap":
         anchor = v.anchor
         if anchor and rt.has_module(anchor):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", f"the router softmax of MoE module {anchor}: the router-softmax tap "
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", f"the router softmax of MoE module {anchor}: the router-softmax tap "
                               "(tapped topk_softmax inside the module; manifest `moe_module`)"))
         elif anchor:
             refuse("native_tap", module, v.output_member, f"MoE module {anchor} is not a module of the runtime tree")
@@ -370,7 +383,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
 
     if route == "vocab_tap":
         if rt.has_module(module):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", "the rank's vocabulary-range values: the vocabulary-range source at the "
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", "the rank's vocabulary-range values: the vocabulary-range source at the "
                               "module's fused embedding launch (computed from its token ids)"))
         else:
             refuse("native_tap", module, v.output_member, "the embedding site is not a module of the runtime tree")
@@ -378,14 +391,14 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
 
     if route == "scale_tap":
         if rt.has_module(module):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", "the module's FP8 GEMM scale products: the scale-products source at "
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", "the module's FP8 GEMM scale products: the scale-products source at "
                               "the module's cutlass_scaled_mm launch (computed from its scales)"))
         else:
             refuse("native_tap", module, v.output_member, "the linear module is not a module of the runtime tree")
     if route == "call_boundary_tap":
         owner = module.rsplit("/", 1)[0]
         if rt.has_module(owner):
-            legal.append(Site("native_tap", module, v.output_member, "n/a", f"a Value two Calls of module body {owner} exchange: the call-boundary "
+            legal.append(AcquisitionSite("native_tap", module, v.output_member, "n/a", f"a Value two Calls of module body {owner} exchange: the call-boundary "
                               "source, evaluated on the host from the module's forward arguments"))
         else:
             refuse("native_tap", module, v.output_member, f"the module body {owner!r} is not a module of the runtime tree")
@@ -395,7 +408,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
         kind = route
         rs = corr.return_slot(call)
         if rt.runner.get("sample"):
-            legal.append(Site(kind, module, _slot_label(rs), "n/a", f"the runner's sample() ({fam})"))
+            legal.append(AcquisitionSite(kind, module, _slot_label(rs), "n/a", f"the runner's sample() ({fam})"))
         else:
             refuse(kind, module, _slot_label(rs), "the runtime has no runner with sample()")
         return legal, refused
@@ -404,19 +417,19 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
         owner = module.rsplit(".", 1)[0] if "." in module else module
         leaf = module.rsplit(".", 1)[-1]
         if rt.has_module(owner) or module in rt.buffers:
-            legal.append(Site("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
+            legal.append(AcquisitionSite("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
             refuse("registered_input", module, "weight", f"neither the weight's owning module {owner!r} nor a buffer of that name is in the runtime tree")
         table = analytic_table_of_buffer(module)
         if table is not None:
-            legal.append(Site("analytic_table", module, table, "n/a", f"a derived table the Match stage dumps and checks analytically ({table})"))
+            legal.append(AcquisitionSite("analytic_table", module, table, "n/a", f"a derived table the Match stage dumps and checks analytically ({table})"))
         return legal, refused
 
     refuse("?", module, v.output_member, f"family {fam!r} has no site rule")
     return legal, refused
 
 
-def choose(sites: list[Site], v: ValuePlan) -> tuple[Site | None, str]:
+def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite | None, str]:
     """POLICY.  Returns (chosen, why)."""
     if not sites:
         return None, "no legal site"
@@ -510,12 +523,12 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
         tabs = tables if tables is not None else _lifetime_tables()
         for v in values:                                     # lifetime of a module-output site from the table when the annotations carry none
             if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
-                v.chosen = Site(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
+                v.chosen = AcquisitionSite(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
                 v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
         residuals = residuals_of(values, rt, tabs)
     else:
         residuals = []
-    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (padding_steps: enablement, no runtime producer); "
+    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
              "the plan's runtime sites are for the executed steps"]
     pdig = str(manifest.get("program_digest") or "")
     mdig = str(manifest.get("manifest_digest") or "")

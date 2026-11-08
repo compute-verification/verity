@@ -6,9 +6,8 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 
 * `required_manifest` -- the required-value manifest (`verity-sweep/required-manifest/v1`), as the replay's coverage reads it.
 * `query_checks` -- the sampled replay's reconciliation against Q(P) (`population.query_checks`), as the C2 rules read it.
-* `served_tokens` -- the driver's served tokens of one run (`capture/tokens.json`), as the global match's chronology check and the padded
-  conversion (`commit.padding_steps`) read them.
-* `declared_stop` -- the workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the same two read them.
+* `served_tokens` -- the driver's served tokens of one run (`capture/tokens.json`), as the global match's chronology check reads them.
+* `declared_stop` -- the workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the same check reads them.
 * `workload` -- the workload (`verity-vllm/workload/v2`, and the v1 layout older runs hold), as the stochastic replay and
   the global match's declared side (`check.match.declaration`) read it;
   its `load` also refuses a field no writer writes (`fields.UnknownField`), and `dump` writes it back.
@@ -22,6 +21,9 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
   past the stop and the population, as the Commit's rules and the not-executed class's facts read them.
 * `weights_registration` -- the committer's weights registration (`verity-vllm/weights-registration/v1`): each weight
   parameter's hiding root, as the verifier's pins and a window's registration read it; its `of` refuses an unknown field
+  and `dump` writes it back.
+* `expert_tables` -- the committer's registration of a TP rank's per-expert tables (`verity-vllm/expert-tables/v1`): each
+  table's entry and salt nonce, as the verifier's pins and a window's committer read it; its `of` refuses an unknown field
   and `dump` writes it back.
 * `inference_blocks` -- the inference-block table's public statement (`verity-vllm/inference-blocks/v1`): its budgets, padded
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an

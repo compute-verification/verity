@@ -1,6 +1,25 @@
-import Proofs.Flock.VBridge.Family.OutCols
+module
+
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.VBridge.Family.PartReads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.VBridge.Family.PartReads
+import Proofs.Flock.C3.Reps.ReadWhole
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.VBridge.Family.Names
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # A part's input keys, from V*'s META
@@ -21,6 +40,8 @@ so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the
   element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit`), and two
   parts' keys of one element's bit are one bit of rows of one name (`starts_inj`, `partRowBits_holds`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

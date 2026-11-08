@@ -1,9 +1,12 @@
-import Properties.Accounting.Served
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Flock.Claims.Sampling.Select.Bounds
+module
+
+public import Properties.Accounting.Served
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Flock.Claims.Sampling.Select.Bounds
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
-# The served window's draw misses a set no more often than a uniform permutation's subset (`DrawMissesSubset`)
+# The served window's sample misses a set no more often than a uniform permutation's subset (`DrawMissesSubset`)
 
 `Properties.Served.DrawMissesSubset` from two bounds that meet at `C(N − |B|, K)/C(N, K)`, `B` the tiles of `U` below
 `N`:
@@ -16,6 +19,10 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
   tiles that must miss a set of at most `|B|` of them (`card_rest_le`), and `(m + 1)·C(m, K) = C(m + 1, K + 1)·(K + 1)`
   (`Nat.add_one_mul_choose_eq`) turns the product into the ratio.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Properties.Served.SecurityProofs
 
@@ -122,7 +129,7 @@ def tilesOf (N : ℕ) (U : Finset ℕ) : Finset (Fin N) := Finset.univ.filter fu
 theorem mem_tilesOf {N : ℕ} {U : Finset ℕ} {t : Fin N} : t ∈ tilesOf N U ↔ t.val ∈ U := by
   simp [tilesOf]
 
-/-- **`DrawMissesSubset`**: the code's subset draw misses `U` with probability at most `C(N − |B|, K)/C(N, K)`, `B`
+/-- **`DrawMissesSubset`**: the code's subset sample misses `U` with probability at most `C(N − |B|, K)/C(N, K)`, `B`
 the tiles of `U` (`one_bound` on `B`'s numbers), which the permutation's subset misses `B` with at least
 (`miss_ge`). -/
 theorem drawMissesSubset : DrawMissesSubset := by

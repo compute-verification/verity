@@ -1,5 +1,25 @@
-import Proofs.Flock.VBridge.OfVStar
-import VStar.InnerRepCheck
+module
+
+public import Proofs.Flock.VBridge.OfVStar
+public import VStar.InnerRepCheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # V*'s `InnerRepCheck{S}` unit
@@ -16,6 +36,8 @@ ports (port `i` of `nᵢ` elements is `portWordsOf nᵢ` words) and then `v`'s; 
   value at `w`, `vv` (`resVal`), 128 bits each, then zeros (`ResCols`). `unit_innerUnit`: the same of a copy of the unit in
   a unit of any partition.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

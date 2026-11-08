@@ -1,5 +1,10 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Placed.Keyed
-import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 /-!
 # The circuit's program on Δ's source keys with public inputs
@@ -9,6 +14,8 @@ one public word share one gate, its other inputs are on `keyProg`'s gates. Two i
 when they have one key (`keyProgP_wire_key`), which `HiddenExec.aliased_of_keyP` reads; without a public leaf map it is
 `keyProg` (`keyProgP_empty`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

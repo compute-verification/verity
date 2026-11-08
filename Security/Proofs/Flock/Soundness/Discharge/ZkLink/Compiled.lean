@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.ExtractAcc
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.ExtractAcc
 
 /-!
 # The compiled `--zk` table and session (live/PROTOCOL.md §1, §3, §5, §7; PROTOCOL.md §5, §14)
@@ -9,8 +11,8 @@ import Proofs.Flock.Soundness.ExtractAcc
 `Commit` sends each table's level-0 oracle, each rep receives its pads as two words, level 1's oracle as a table, and
 the inner proof's `τ` in the clear. Here is the protocol as run, with every oracle a commitment:
 
-* `Commit` sends each table's **witness cap**, the 68-lane level-0 tree (`2^k₀` witness lanes and the reps' `2e` extra
-  lanes, one tree);
+* `Commit` sends each table's **witness cap**, the level-0 tree of 68 lanes (`2^k₀` witness lanes and the reps' `2e`
+  extra lanes, one tree);
 * each rep (`repZC`) starts with the **pads root** (`recv D`, §3), runs the masked algebraic phase as in `repMaskedZK`,
   and level 0 masked with Ligerito's levels compiled (`ligeritoPadZC`: level 1 onward commit by caps, and level 0's
   consistency value is computed from the opened 68-lane rows, `padColumnO`), then `final_c'`;
@@ -25,13 +27,15 @@ identity at every query, and every pads path to the pads root), and every row pa
 its salt, level 0's rows being 68 lanes wide (`OpensOKZ`).
 
 `sessionZG` is `Exec.sessionG` over `--zk` tables: `sessionZK` is its instance at `TabZK.after` (`sessionZK_eq`), and the
-compiled session `sessionZC` its instance at `tabAfterZC`. `batchedSessionZC` is the compiled session on a draw, as
+compiled session `sessionZC` its instance at `tabAfterZC`. `batchedSessionZC` is the compiled session on a sample, as
 `batchedSessionZK` is the interactive-oracle one.
 
 **Extraction** (as `SessionBatchAcc.lean` at M0): table `j`'s extractor fills its level-0 oracle from the verifying
 level-0 openings of `k` reruns of everything after `Commit` in which the session accepts (`extractTableZ`), and
 `extractProbAccZ` is the probability of an event of that oracle over those reruns.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -186,8 +190,8 @@ def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.
 /-! ## The table -/
 
 /-- **The commitments' hash and leaf schemes**: `H` and its node encoding `E` for every tree, the row leaf `Lf` (the
-68-lane level-0 rows and every level's rows), the pads-pair leaf `Lp` (with `Ep`, its tree's encoding) and `τ`'s leaf
-`Lτ`. Under `--zk` all three leaves are `hm96-sha512/v1` (`Merkle.Leaf.hm96`). -/
+level-0 rows of 68 lanes and every level's rows), the pads-pair leaf `Lp` (with `Ep`, its tree's encoding) and `τ`'s
+leaf `Lτ`. Under `--zk` all three leaves are `hm96-sha512/v1` (`Merkle.Leaf.hm96`). -/
 structure Hashes (F D Sl : Type) where
   H : List UInt8 → D
   E : Merkle.Enc (List F) D
@@ -275,8 +279,8 @@ def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
 
 /-! ## The session -/
 
-/-- **A batched session over `--zk` tables and any table run** (PROTOCOL.md §5; `Exec.sessionG` over `TabZK`): `Commit`
-sends every table's commitment `Cm`, then one link-point draw, then every table's run `tab` after them, concurrently. -/
+/-- **A batched session over `--zk` tables and any table run** (`Flock.Record`; `Exec.sessionG` over `TabZK`): `Commit`
+sends every table's commitment `Cm`, then one link-point sample, then every table's run `tab` after them, concurrently. -/
 def sessionZG {Cm Out : Type} (tab : TabZK F mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
     (ts : List (TabZK F mPts)) : Game (List Out) :=
   Game.send (Fin ts.length → Cm) fun cms =>
@@ -295,12 +299,12 @@ noncomputable def gamesZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK
     List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)) :=
   List.ofFn fun i => tabAfterZC A Hs (ts.get i) (caps i)
 
-/-- After `Commit`: one link-point draw, then the games concurrently. -/
+/-- After `Commit`: one link-point sample, then the games concurrently. -/
 noncomputable def sessAfterZC (fs : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) :
     Game (List (OutZC F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
-/-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point draw, then
+/-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point sample, then
 every table's compiled reps and openings concurrently. -/
 noncomputable def sessionZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
     Game (List (OutZC F D Sl)) :=
@@ -322,7 +326,7 @@ variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
 
 open Classical in
-/-- **The compiled batched `--zk` session on a draw**: the plan's tables in one compiled session; it accepts when every
+/-- **The compiled batched `--zk` session on a sample**: the plan's tables in one compiled session; it accepts when every
 table accepts. -/
 noncomputable def batchedSessionZC (S : Finset (Fin n)) (R : Reg) : Game Bool :=
   (sessionZC A Hs (planZ S R)).map fun outs => decide (acceptedZC (planZ S R) outs)
