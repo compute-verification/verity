@@ -86,17 +86,23 @@ def verified_of(verdicts: Mapping[str, Any]) -> tuple[Checked, ...]:
                  and v.get("of_record") and v.get("accepted") is True)
 
 
+def _integral(j: Any) -> bool:
+    """Whether JSON value `j` holds no non-integer number, the one value Lean's `canon` refuses."""
+    if isinstance(j, float):
+        return False
+    if isinstance(j, Mapping):
+        return all(_integral(v) for v in j.values())
+    return not isinstance(j, (list, tuple)) or all(_integral(v) for v in j)
+
+
 def _sha512(j: Any) -> str | None:
-    """`canonSha512`: the SHA-512 of `j`'s canonical JSON, None where it isn't JSON."""
-    try:
-        return hashlib.sha512(canonical_json(j)).hexdigest()
-    except (TypeError, ValueError):
-        return None
+    """`canonSha512`: the SHA-512 of JSON value `j`'s canonical JSON, None where it holds a non-integer number."""
+    return hashlib.sha512(canonical_json(j)).hexdigest() if _integral(j) else None
 
 
 def _checked(s: Stmt) -> Checked | None:
     """`Stmt.checked`: what a verdict of record that checked statement `s`'s session names of it, None when its header
-    or registered reads aren't JSON."""
+    or registered reads hold a non-integer number."""
     h = _sha512(s.header)
     r = None if s.registered is None else _sha512(s.registered)
     return None if h is None or (s.registered is not None and r is None) else Checked(h, r, s.draw)

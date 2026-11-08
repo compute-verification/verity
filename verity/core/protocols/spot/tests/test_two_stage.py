@@ -310,6 +310,14 @@ def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(checked):
     assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-verified"]
 
 
+def test_round_two_reads_no_statement_holding_a_fraction():
+    """A statement whose header holds a non-integer number, which Lean's `canon` refuses, is refused (`second-verified`)
+    though its verdict names the digest `json.dumps` writes of it: Lean's verifier names no header it can't write."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [{**s, "header": {**s["header"], "fraction": 0.5}}])
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-verified"]
+
+
 def test_only_an_accepted_verdict_of_record_names_what_was_checked():
     v = {"of_record": True, "accepted": True, "public_header_sha512": "ab" * 64, "unit_draw": {"units": [1]}}
     assert SS.verified_of({"lean": v, "upstream": {"of_record": False, "accepted": True}}) == (
