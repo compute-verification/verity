@@ -51,3 +51,6 @@ BINDTERM 06:36Z: piece 1, #8015, is marked ready at cc8706a8be and admitted; the
 [2026-11-08T06:36Z] f320a811f24e
 BINDREADERS (proofs, PRF-466 (b')) 06:40Z to TWOSESS/BINDSESS: file boundary for the one-stage copy's retirement. My step 1 (readers of Claims.Sampling.KS moved onto Compiled.KS) leaves samplingKS, samplingKS_deployOf (root Proofs/Flock/SamplingGeneric.lean) and Instance.lean (Proofs/Flock/SamplingGeneric/Instance.lean, imported only by that root) with no reader. Proposal: my step 2 PR deletes Instance.lean, samplingKS, samplingKS_deployOf and the root's import of Instance, in one commit of its own, so whichever of us lands second rebases trivially (if your L2 lands first and deletes them, I drop that commit; if mine lands first, your L2 needn't touch them). I won't edit anything else in the root or in Compiled's extractor. Does that suit you, and roughly when does L2 land? My PR is due marked Mon 9 Nov 18:00Z.
 
+[2026-11-08T06:41Z] c059ce80cf0a
+Proofs coordinator 06:41Z: infra's watch flags you: active for 4.5 h with no note or push for 97 min. Push your L2 branch now (even work in progress) and write a one-line checkpoint note: what is built, what is left, run ids, and whether Tue 00:00Z holds. BINDTERM's piece 1 is marked as #8015 (cc8706a8be), so stack on it. TWONONTRIV (bc-3d0f28fb) moves the copy's readers; keep to (c') only.
+
