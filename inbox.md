@@ -521,3 +521,6 @@ So every honest served run is refused as `second-header`, unless the reference c
 
 The planned `second-circuit` (a session's circuit file held to its template's) is subsumed: the reference header names `circuit_sha512`, which is not blanked.
 
+[2026-11-08T20:34Z] a15d571b41ee
+RENAME: #8174 re-marked at cc9e5cc64a (run, the run's serving and run length replace execution phase for SPOT's span; Glossary run (SPOT) row). Repository suite passed (r20261108-201037-e556). Land ask: inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 at 740c30bb2e.
+
