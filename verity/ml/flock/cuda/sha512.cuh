@@ -176,6 +176,8 @@ __global__ void hm96_midstates(const uint8_t* prefixes, uint64_t* mid) {
 
 // the most threads a block of hm96_finish_leaves has
 static constexpr int HM96_TPB = 256;
+// the block sizes hm96_finish_leaves takes
+inline bool hm96_tpb_fits(int tpb) { return tpb >= 32 && tpb <= HM96_TPB && tpb % 32 == 0; }
 
 // Leaves [base, n) of `tree`, leaf i's salt at salts[48 (i - base)] (little-endian words, the host's bytes); blocks of at most
 // HM96_TPB threads, a multiple of 32, block b finishing the blockDim.x leaves from base + b blockDim.x.
@@ -348,6 +350,11 @@ inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long n
     if (!g_hm96.tree_cb) {
         leaves(0, num_leaves);
     } else {
+        if (!hm96_tpb_fits(tpb)) {
+            fprintf(stderr, "hm96: launch_merkle512 at %d threads a block, which hm96_finish_leaves can't take: pass a multiple of 32 "
+                            "up to HM96_TPB (%d), such as the default 256\n", tpb, HM96_TPB);
+            abort();
+        }
         const uint8_t* h = hm96_tree_salts(g_hm96.trees++, num_leaves);
         // piece j's salts go into buffer j % HM96_RING once that buffer's last piece is finished, and are copied beside piece
         // j - 1's leaves and finishing and piece j's leaves; the default stream finishes piece j once they are on the device
