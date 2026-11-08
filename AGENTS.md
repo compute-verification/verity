@@ -109,8 +109,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
   blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
   (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
-  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
-  unique, and it is still a function.
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its outputs are
+  unique: a Lean lemma, once per Definition and for all its other inputs, that any two witnesses it accepts give the
+  same value on every output wire. Its witness then carries no bits; until the lemma holds, it counts as free input at
+  its width.
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
