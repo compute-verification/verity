@@ -107,6 +107,25 @@ def test_server_env_names_the_changes(tmp_path: Path):
         S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0)
 
 
+def test_the_boundary_rows_arm_holds_the_server_until_its_commits_account_for_every_finished_request(tmp_path: Path):
+    """`await_commits` polls the sink lines (a failed class's line counts its spans too) until they hold the finished
+    requests' spans, or its wait runs out."""
+    sink, now = tmp_path / "boundary.7.jsonl", [0.0]
+    sink.write_text('{"window":0,"spans":8}\n')
+
+    def sleep(s: float) -> None:
+        now[0] += s
+        if now[0] == 3.0:
+            with sink.open("a") as fh:
+                fh.write('{"window":1,"spans":7}\n{"window":1,"spans":1,"error":"OSError: full"}\n')
+
+    got = S.await_commits(tmp_path, 16, 60.0, clock=lambda: now[0], sleep=sleep)
+    assert got == {"spans": 16, "finished": 16, "waited_s": 3.0, "complete": True}
+    later = [0.0]
+    out = S.await_commits(tmp_path, 17, 5.0, clock=lambda: later[0], sleep=lambda s: later.__setitem__(0, later[0] + s))
+    assert out == {"spans": 16, "finished": 17, "waited_s": 5.0, "complete": False}
+
+
 def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)

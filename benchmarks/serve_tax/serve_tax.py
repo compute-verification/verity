@@ -47,7 +47,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``) ``--boundary-rows``'s JSON, at ``--window-s``.
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``) ``--boundary-rows``'s JSON, at ``--window-s``; the server is
+  held after its loads until its windows' commits account for every finished request (`await_commits`).
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -487,6 +488,20 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
     return meta
 
 
+def await_commits(d: Path, n: int, wait_s: float, clock: Callable[[], float] = time.monotonic,
+                  sleep: Callable[[float], None] = time.sleep) -> dict:
+    """Hold the server until the boundary-rows arm's sink lines in ``d`` (``boundary.PID.jsonl``, one a class, committed or
+    failed) account for ``n`` spans, the requests its loads finished, or ``wait_s`` passes: each window commits on a thread
+    of the engine core's own, and the server's stop leaves the engine core seconds."""
+    t0 = clock()
+    while True:
+        got = sum(int(json.loads(x).get("spans", 0)) for f in sorted(d.glob("boundary.*.jsonl"))
+                  for x in f.read_text().splitlines() if x.strip())
+        if got >= n or clock() - t0 >= wait_s:
+            return {"spans": got, "finished": n, "waited_s": round(clock() - t0, 1), "complete": got >= n}
+        sleep(1.0)
+
+
 def open_files() -> int:
     """Raise this process's open-file limit to its hard limit and return it: a saturated load holds a connection open for
     each request in the server's queue, past the usual soft limit of 1,024."""
@@ -591,9 +606,11 @@ def run(a: argparse.Namespace) -> int:
         wait_ready(server, port, a.startup_s)
         meta["startup_s"] = round(time.monotonic() - t, 1)
         print(f"[serve-tax] {a.arm}: up in {meta['startup_s']} s", flush=True)
+        finished = 0
         if a.warm_s > 0:
             w = drive_load(port, model.served, plan, min(rates.values()), a.warm_s, "warm", out / "warm", a.drain_s, tick,
                            sampling=arm.sampling)
+            finished += w["requests"] - w["unfinished"]
             print(f"[serve-tax] warm-up: {w['requests']} requests, unfinished {w['unfinished']}", flush=True)
         for rep in range(1, a.reps + 1):
             for name, rate in rates.items():
@@ -610,6 +627,10 @@ def run(a: argparse.Namespace) -> int:
                 (out / "meta.json").write_text(json.dumps(meta, indent=1))
                 print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests at {rate:g}/s, wall {m['wall_s']} s, "
                       f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
+                finished += m["requests"] - m["unfinished"]
+        if "boundary_rows" in arm.plugin:
+            meta["boundary_commits"] = await_commits(srv, finished, a.commit_wait_s)
+            print(f"[serve-tax] boundary commits: {meta['boundary_commits']}", flush=True)
     except Exception as e:  # noqa: BLE001 -- the record says why the arm stopped
         meta["error"] = f"{type(e).__name__}: {e}"
         print(f"[serve-tax] {a.arm}: FAILED {meta['error']}", flush=True)
@@ -998,6 +1019,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--span-s", type=float, default=90.0, help="each load's arrivals span")
     r.add_argument("--requests", type=int, help="each load's request count instead of --span-s's")
     r.add_argument("--warm-s", type=float, default=20.0, help="a warm-up load at the lowest rate first (0: none)")
+    r.add_argument("--commit-wait-s", type=float, default=900.0,
+                   help="the boundary-rows arm: how long the server is held after its loads for its commits (await_commits)")
     r.add_argument("--drain-s", type=float, default=600.0)
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
