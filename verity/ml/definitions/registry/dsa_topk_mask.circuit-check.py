@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The mask and the long row over 20 keys selecting 16 (reaching the threshold, slot and key accelerators), and the
     concentrator at small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaButterflyRoute_v1` and the tags' scan),
-    with picks (N 33, K 8) and in the rows' read (N 7, K 3)."""
+    with picks (N 33, K 8) and in the rows' read (N 7, K 3); the rows' read of 6 rows padded to 9."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_topk_mask
 
@@ -19,4 +19,5 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaButterflySettings_v1-pick", lambda: bind(dsa_topk_mask.DsaButterflySettings, N=33, K=8)),
         ("DsaButterflyRows_v1", lambda: bind(dsa_topk_mask.DsaButterflyRows, N=9, K=8, W=3, E=16)),
         ("DsaButterflyRows_v1-pick", lambda: bind(dsa_topk_mask.DsaButterflyRows, N=7, K=3, W=2, E=16)),
+        ("DsaButterflyRowsPad_v1", lambda: bind(dsa_topk_mask.DsaButterflyRowsPad, T=6, N=9, K=8, W=3, E=16)),
     ]
