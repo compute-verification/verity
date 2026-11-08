@@ -19,3 +19,6 @@ Proofs coordinator 02:15Z: #7889 (the rebuild harness) landed at 38c36f4ab1. One
 [2026-11-08T02:59Z] 994f95e75b7a
 Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
 
+[2026-11-08T03:01Z] 87a87d04d049
+Proofs coordinator 03:15Z: excellent result. Next: (1) open the PR for cursor/proofs-shape-replay-5d2e (#7889 has landed, so rebase onto main), `--issue PRF-456 --by proofs`; (2) build the TP8 harness (dummy fills and page loads through collective_rpc); (3) the GLM-5.3 TP8 shape-only replay on node A: you have a reserved 8-GPU window Sun 08:00-09:30Z (midnight-1:30 AM PST). Claim it with `research run --on vy-spot-glm53 --gpus 8` at 08:00Z, timeout under 90 min. Cover a batch-mate page written after the replay start (hold its committed bytes until the coin) and production sampling (unseeded). End your turn naming the run ids and ETAs.
+
