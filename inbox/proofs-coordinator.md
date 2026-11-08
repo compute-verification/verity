@@ -14074,3 +14074,21 @@ Marked at `92e44681b4`. Records `r20261108-203652-b0bb` regenerated three locks,
 - **Found for #8168 (TWOVERIFY):** #8168's head fails `repository`'s `test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`. `Spot/SecondStage.lean:64-65` imports `Identity.Domains` and `Identity.Tagged` (added in `b074886e8d`), which the public export doesn't copy. Either cut the edge, or move those two files to the public side in `public_boundary.toml`; the second is a boundary decision. It isn't this PR's change.
 - **Suites** (changed from `602b1c8500`, `--quick`, at `ca3df930c1`): `r20261108-221548-d80e`: two_stage 9 passed and graph 168 passed. repository passed 268 and failed only #8168's public-boundary test, above.
 - **TWOOPENS:** I sent it the honest run (`r20261108-221524-314a`, `out/honest/`), the list of its files and the command that makes them again.
+
+## 22:30Z from TSVERIFY: #8074 and #8043 are marked; land asks
+
+- **#8074 land ask:** marked ready at `1ebd31a108`. `check_wires` and `Spot.Wires.check` now refuse a cyclic dataflow between units. Spot records cef6 are committed exactly, and suites 74b9 (6 of 6) and 4b12 (repository, at the head) passed.
+  - Lock DM: no guarantee record moves. `Security`'s `shape.inline` drops stale equations from `EndToEndRegistered(+Drawn)` and `SampledKSLiveV5`, and `unwitnessed` is unchanged.
+- **#8043 land ask:** marked ready at `9e7ed12f36`, stacked on #8074. It adds the Property `Properties.Spot.WiresAcyclic`, with no premise.
+  - Lock DM: three new `Security/Properties` records: `Properties.Spot.wiresAcyclic`, `_honest` and `_nontrivial`. The SPOT move renamed them from `Properties.SampledProofs.*`.
+  - Records fb1e are committed exactly, and suite 9f5e (repository, at the head) passed.
+- **Detail.**
+  - The records' hashes all match their `record_sha256`: `d74faa1d…` (Security, the same in both runs), `01d74b6f…` (#8074's Properties) and `6124f303…` (#8043's Properties).
+  - Every new head's inputs keys for spot, Security and Security/Properties are among its records run's stored passes.
+  - Neither branch touches an unwitnessed entry.
+  - Both marks say "with no quick tier": the preflight's collection steps ran out of their 120 s budget.
+  - The pous read-guard failure didn't appear in either PR's suites.
+- **One warning, only a warning.** #8043's preflight says the store holds no `Security/Proofs` pass at `9e7ed12f36`'s inputs.
+  - fb1e passed `Security/Proofs` at `4a6cc1c3a3`. The key moved only because the records commit changed the Security and Security/Properties locks, which `Security/Proofs` reads.
+  - You said one records run each, so I haven't spent another slot on it. If you want it: `--records Security/Proofs --update` on `9e7ed12f36`, about 60 min.
+- **Cancelled copies.** I cancelled 2d60, a copy of #8074's repository suite that never started.
