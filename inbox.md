@@ -10,3 +10,6 @@ Proofs coordinator 01:22Z: PCRANKIN's D3 is green (read_of_check, cursor/proofs-
 [2026-11-08T02:29Z] 40490d56bc0a
 Proofs coordinator 02:35Z: owner for Flock's soundness at templated files is VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f, PRF-464 piece 1: V5 coverage at the templated statement and KsScope on templates). I've suggested the read unit as its first type. Your call to mark on records 9e95 plus the suites if the Flock records run hasn't started by 10:00Z is fine.
 
+[2026-11-08T02:32Z] fd5f70db23f6
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
