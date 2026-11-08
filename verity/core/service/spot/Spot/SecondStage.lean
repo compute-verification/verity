@@ -573,7 +573,7 @@ theorem mem_verifiedOf {verdicts : Array (String × Json)} {c : Checked} (h : c 
     · next ha =>
       cases hv
       simp only [Bool.and_eq_true] at ha
-      exact ⟨hg, ha.1, ha.2, rfl, rfl⟩
+      exact ⟨rfl, ha.1, ha.2, rfl, rfl⟩
     · cases hv
   | _ => simp at hv
 
@@ -586,7 +586,12 @@ theorem verifiedOk_some {own : Own} {s : Stmt} (h : verifiedOk own s = true) :
   unfold verifiedOk at h
   cases hc : s.checked with
   | none => simp [hc] at h
-  | some c => exact ⟨c, rfl, by simpa [hc, Bool.and_eq_true, beq_iff_eq] using h⟩
+  | some c =>
+    have h' : ∃ (i : Nat) (_ : i < own.verified.size), (own.verified[i].header = c.header ∧
+        jeq own.verified[i].registered c.registered = true) ∧ jeq own.verified[i].draw c.draw = true := by
+      simpa [hc, Bool.and_eq_true, beq_iff_eq] using h
+    obtain ⟨i, hi, ⟨h1, h2⟩, h3⟩ := h'
+    exact ⟨c, rfl, own.verified[i], Array.getElem_mem hi, h1, h2, h3⟩
 
 private def exRoot (i : Nat) : String := String.ofList (List.replicate 128 (Char.ofNat (48 + i)))
 
