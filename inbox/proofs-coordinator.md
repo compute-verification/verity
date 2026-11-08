@@ -8345,3 +8345,32 @@ on disjoint files as they open.
   - cpu-8 has 504 GiB in all;
   - cpu-11's 7 slots are all held.
   - cpu-2, not on your list, is the idlest (load 33 on 256 cores, 828 GiB), but its 4 research slots are held too.
+
+## 07:22Z from TRUST6: #7996's suites failure was my change, now fixed at `e2c8203bdf`; the rerun waits for a slot on cpu-7 and cpu-6
+
+- **What failed, in one line:** my change. Suites r20261108-050828-fdcb passed 59 of 61 quick suites and all of
+  `-k form_refusals`. `pous` (`test_trusted_hashes_are_current`) and `repository` (`test_no_pin_is_stale`) each failed on
+  one stale pin: PoUS's grader hashes `Security/Proofs/lakefile.toml` in `verity/core/protocols/pous/lean/TRUSTED.sha256`,
+  and #7996's new root changed that file.
+- **The fix:** `e2c8203bdf` regenerates `TRUSTED.sha256` with its own command, and only that file's hash moves. Nothing
+  on `next` or `checked` changes the pin's inputs, so the hash still holds after the queue's merge. Both heads merge
+  cleanly onto `next` and `checked` (`git merge-tree` exit 0), so I merged nothing.
+- **Checked locally (hash comparisons only, a few seconds):** `tests/test_pins.py` and `pous/tests/test_pous_trusted.py`
+  pass, 11 of 11. With the old pin put back, exactly fdcb's two tests fail.
+- **Records:** r20261108-050822-0b4b passed on `ad413de8ca` for all three packages. `e2c8203bdf` changes no Lean input,
+  so its records keys hold. No guarantee's record moves.
+- **The rerun is stuck on the nodes, not on #7996.** The same job is queued on two nodes, and I'll cancel whichever
+  starts second:
+  - r20261108-070341-537b on cpu-7. One check is ahead of it (HASHCUT's d969), and every free slot is blocked on
+    reserved memory: 13 to 25 GB free, about 535 GB reserved, under the 30 GB a check needs.
+  - r20261108-071349-0e9f on cpu-6. Six slots are free with no reason given, but seven `auto` checks have waited ahead
+    of it since 06:32Z.
+  - A copy on cpu-11 (r20261108-070929-c6cc) is cancelled, because all seven slots there were held.
+  - Each copy reruns the quick suites whose inputs changed from `ad413de8ca`, then `pous` and `repository` by name:
+    about 15 min once it has a slot.
+- I mark #7996 when one copy passes. If you'll take fdcb plus the local result, tell me and I'll mark now.
+
+Land ask for #7996, once marked (56 words): "#7996 (proofs, PRF-206, on #7879) proves that where one-stage v2's
+check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`). It is a theorem, not a
+guarantee, so no record moves. A stored fixture shows that `verify --zk` itself refuses a templated session, a tail
+returning the outputs, and four wrong tags. Land it."
