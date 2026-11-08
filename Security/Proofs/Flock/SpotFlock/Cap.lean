@@ -25,7 +25,7 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
 open Properties.Spot (slotPartition bytesOf)
-open Properties.Spot.SecurityProofs (bind_ok bind_eq_ok lawObj mem_checked flockLaw_subset deriveLaw_subset)
+open Properties.Spot.SecurityProofs (bind_eq_ok lawObj mem_checked flockLaw_subset deriveLaw_subset)
 open Lean (Json)
 
 /-! ## The first stage's count -/
@@ -194,10 +194,11 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     | true => rfl
   have hc0 : coinSeq r' 0 = r (order h x).first := by
     have h0 : 0 < ((base h).atOrder (order h)).V.k x := by show 0 < 3 + k₀ h; omega
-    have hf0 : (order h x).first = ⟨0, h0⟩ := rfl
-    rw [hf0, hr']
-    simp [coinSeq, h0, forkOn, Code.atOrder, hf0]
-  -- the second stage accepted the replay sample, so it is not empty
+    have e0 : coinSeq r' 0 = r' ⟨0, h0⟩ := dif_pos h0
+    have hnot : (⟨0, h0⟩ : Fin _) ∉ ((base h).atOrder (order h)).stage2 x := fun hm =>
+      lt_irrefl _ (mem_filter.1 hm).2
+    rw [e0, hr']
+    exact if_neg hnot
   have hr : readsOk h s m₁ xS (coinSeq r' 0) (coinSeq r' 1) = true := by
     simp only [stmtOk, hs', Bool.and_eq_true] at hok
     exact hok.2
@@ -214,7 +215,6 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     | error e => simp [hq] at hd₂
     | ok q => exact ⟨q, rfl⟩
   have hne0 := (selectSecond_sample hq).1
-  -- so the first stage accepted, and the sample of record is the slots of the units it proved
   obtain ⟨draw₁, proved, read₁, hS⟩ : ∃ draw proved read,
       Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
         h.reg.first.closure (src (coinSeq r' 0)) = .ok (draw, proved, read) := by
@@ -222,11 +222,6 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
         h.reg.first.closure (src (coinSeq r' 0)) with
     | error e => exact absurd (by simp [RegTwo.sample, hS]) hne0
     | ok t => exact ⟨t.1, t.2.1, t.2.2, rfl⟩
-  have hslots : Spot.Slots.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
-      h.reg.first.closure (src (coinSeq r' 0)) = .ok (l, Spot.Slots.checked l proved) := by
-    unfold Spot.Slots.select
-    rw [hl, bind_ok, hS]
-    rfl
   have hreg : reg h x = some h.reg := by
     unfold reg
     unfold parse at hs'
@@ -240,8 +235,7 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
       h.reg.first.layout (src (r (order h x).first))).toList = _
     rw [← hc0]
     unfold drawChecked
-    rw [hslots]
-  -- its proof blocks: `n` per replay block it proves, and the always checked ones
+    simp only [slots_select_of _ _ _ _ _ _ hl hS]
   have hN : nBlocks h = Pt.blocks.length := by
     rw [hPteq]
     unfold nBlocks
@@ -261,13 +255,12 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
       intro v hv
       obtain ⟨hvN, ρ, hρ, hvρ⟩ := mem_filter.1 hv
       rw [hrs, Array.mem_toList_iff] at hρ
-      obtain ⟨hρl, hall⟩ := (mem_checked l proved ρ).1 hρ
+      obtain ⟨hρl, -⟩ := (mem_checked l proved ρ).1 hρ
       have hvc : v ∈ cell Pt d.part ρ (Pt.stratumOf v) := mem_filter.2 ⟨hvN, hvρ, rfl⟩
       rcases cellsOk_sound hcells ρ l.blocks[ρ] (Array.getElem?_eq_getElem hρl) with
         ⟨hu, -, t₀, -, -, hcell⟩ | ⟨-, halw⟩
       · refine mem_union_left _ (mem_biUnion.2 ⟨ρ, ?_, ?_⟩)
-        · rw [hu] at hall
-          simpa [Array.contains_iff_mem] using hall
+        · simpa using mem_slots_checked hρ (Array.getElem?_eq_getElem hρl) hu
         · rw [hcell] at hvc
           split_ifs at hvc
           · exact hvc
