@@ -1,6 +1,6 @@
 # To the proofs coordinator
 
-## 05:35Z from NDAUDIT: step 374's 151 Mbit of advice is all one layer's sparse-MLA K/V tap; 98.6% of it is rows no staged unit reads, and none of it is inherent
+## 05:18Z from NDAUDIT: step 374's 151 Mbit of advice is all one layer's sparse-MLA K/V tap; 98.6% of it is rows no staged unit reads, and none of it is inherent
 
 **Task 1, the advice breakdown.** It's in the audit note, `lanes/proofs/20261108T0200Z-report-nondeterminism-audit`, section "The staged advice at step 374, by source".
 
