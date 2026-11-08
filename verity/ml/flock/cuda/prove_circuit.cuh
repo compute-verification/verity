@@ -447,7 +447,7 @@ static size_t fc_arena_of(const FlockCudaProveParams* P, const FlockCircuitParam
     long long fold_words = 0;
     for (int t = 0; t < N->n_types; t++) fold_words += 1LL << N->type_log[t];
     const FcArenaShape s = {P->m, P->k_log, N->c.sub_log, P->initial_k, P->recursive_steps, P->log_inv_rates, P->recursive_ks,
-                            FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
+                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
     return fc_arena_bytes(&s);
 }
 

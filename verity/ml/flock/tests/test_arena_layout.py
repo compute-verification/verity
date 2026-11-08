@@ -1,5 +1,5 @@
 """``cuda/arena_bytes.h``, the circuit prover's device arena, against ``arena_layout.py``'s replay of every allocation a
-session makes: over every shape the prover accepts (m 21 to 37, k_log 20 to 27, M1 and M0, keep on and off) and each one's
+session makes: over m 21 to 37 (the prover takes 22 to 35), k_log 20 to 27, M1 and M0, keep on and off, and each shape's
 statement extremes, the arena it sizes holds the session with at least half of FC_ARENA_MARGIN to spare. The header is
 compiled by the host's C compiler, so the sizes checked are the prover's own."""
 from __future__ import annotations
@@ -23,7 +23,8 @@ size_t fc_arena_margin_c(void) { return FC_ARENA_MARGIN; }
 class CShape(ctypes.Structure):
     _fields_ = [("m", ctypes.c_int), ("k_log", ctypes.c_int), ("sub_log", ctypes.c_int), ("initial_k", ctypes.c_int),
                 ("recursive_steps", ctypes.c_int), ("log_inv_rates", ctypes.POINTER(ctypes.c_int)),
-                ("recursive_ks", ctypes.POINTER(ctypes.c_int)), ("hash_bytes", ctypes.c_int), ("zk", ctypes.c_int),
+                ("recursive_ks", ctypes.POINTER(ctypes.c_int)), ("queries", ctypes.POINTER(ctypes.c_int)),
+                ("hash_bytes", ctypes.c_int), ("zk", ctypes.c_int),
                 ("t_pad", ctypes.c_longlong), ("fold_words", ctypes.c_longlong)]
 
 
@@ -46,7 +47,8 @@ def lib(tmp_path_factory: pytest.TempPathFactory) -> ctypes.CDLL:
 def arena(lib: ctypes.CDLL, s: Shape) -> int:
     ik, rates, ks, _ = s.lig()
     r, k = (ctypes.c_int * len(rates))(*rates), (ctypes.c_int * max(len(ks), 1))(*ks)
-    c = CShape(s.m, s.k_log, s.sub_log, ik, len(ks), r, k, HB, int(s.zk), s.t_pad if s.zk else 0,
+    q = (ctypes.c_int * len(s.queries))(*s.queries)
+    c = CShape(s.m, s.k_log, s.sub_log, ik, len(ks), r, k, q, HB, int(s.zk), s.t_pad if s.zk else 0,
                sum(1 << t for t in s.types))
     return lib.fc_arena_bytes_c(ctypes.byref(c))
 

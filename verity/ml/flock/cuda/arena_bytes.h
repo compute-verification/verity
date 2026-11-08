@@ -12,6 +12,7 @@ typedef struct {
     int initial_k, recursive_steps;  // Ligerito's ladder: level 0's 2^initial_k lanes, then its recursive levels
     const int* log_inv_rates;        // [recursive_steps + 1]
     const int* recursive_ks;         // [recursive_steps]
+    const int* queries;              // [recursive_steps + 1]: level 0's is M1's own count under M1
     int hash_bytes;                  // a Merkle node
     int zk;                          // M1: level 0's hiding
     long long t_pad;                 // M1: level 0's padding words per lane
@@ -43,18 +44,24 @@ static inline size_t fc_arena_bytes(const FcArenaShape* s) {
     const size_t lincheck = 2 * W + l0 + 5 * fca_al(K) + fca_al(F << s->sub_log) + fca_al(F << (s->m - s->k_log)) +
                             fca_max(fca_al(K), fca_al(F * (size_t)s->fold_words)) + (K > W ? W : 0);
     // Ligerito, beside z and the ring switch's combination: its two ping-pong tables, the induce basis over the largest
-    // opened block, the level-OOD eq table, and two consecutive levels' codewords and trees
-    size_t max_block = n, levels = 0, prev = 0;
+    // opened block and its weights and positions over the most queries, the level-OOD eq table, and at each level's query
+    // phase that level's codeword and tree (level 0's are l0), the next level's, and the opened rows
+    size_t max_block = n, opening = 0, prev = 0, rows = fca_al((size_t)s->queries[0] * lanes * F), max_q = 0, max_al = 1;
+    for (int i = 0; i <= s->recursive_steps; i++) max_q = fca_max(max_q, (size_t)s->queries[i]);
+    while (max_al < max_q) max_al <<= 1;
     int dim = log_n - ik + 1;
     for (int i = 0; i < s->recursive_steps; i++) {
         const int log_cols = dim - s->recursive_ks[i];
-        const size_t bl = (size_t)1 << (log_cols + s->log_inv_rates[i + 1]);
-        const size_t level = fca_al((bl << s->recursive_ks[i]) * F) + fca_al((2 * bl - 1) * s->hash_bytes);
-        levels = fca_max(levels, prev + level);
+        const size_t bl = (size_t)1 << (log_cols + s->log_inv_rates[i + 1]), cols = (size_t)1 << s->recursive_ks[i];
+        const size_t level = fca_al(bl * cols * F) + fca_al((2 * bl - 1) * s->hash_bytes);
+        opening = fca_max(opening, prev + level + rows);
         max_block = fca_max(max_block, bl);
         prev = level;
+        rows = fca_al((size_t)s->queries[i + 1] * cols * F);
         dim = log_cols + 1;
     }
-    const size_t ligerito = 4 * W + l0 + fca_al(max_block * F) + fca_al(F << (log_n - ik + 1)) + levels;
+    opening = fca_max(opening, prev + rows);
+    const size_t ligerito = 4 * W + l0 + fca_al(max_block * F) + fca_al(max_al * F) + fca_al(max_q * 8) +
+                            fca_al(F << (log_n - ik + 1)) + opening;
     return fca_max(fca_max(commit, zerocheck), fca_max(lincheck, ligerito)) + FC_ARENA_MARGIN;
 }

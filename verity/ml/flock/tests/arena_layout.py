@@ -48,6 +48,7 @@ class Shape:
     #: the statement's slot types' log2 columns (fc_fold holds one 2^log-word fold per type)
     type_logs: tuple[int, ...] = ()
     sub_log: int = 14
+    #: M1: level 0's padding words per lane, twice its query count (zk_veil::level0_t_pad)
     t_pad: int = 512
     #: the ring switch's extra claims' free coordinates (each gathers 2^n_free words)
     extra_free: tuple[int, ...] = (0,)
@@ -65,6 +66,12 @@ class Shape:
     @property
     def types(self) -> tuple[int, ...]:
         return self.type_logs or (self.k_log,)
+
+    @property
+    def queries(self) -> tuple[int, ...]:
+        """Each level's query count: under M1 level 0's is half its padding."""
+        q = tuple(self.lig()[3])
+        return (self.t_pad // 2,) + q[1:] if self.zk else q
 
 
 def zf_packed(m: int) -> bool:
@@ -93,11 +100,10 @@ def rep_events(s: Shape, mode: str) -> Iterator[tuple]:
         yield a("z_copy", W)
     k_code = log_n - ik + rates[0]
     n = 1 << k_code
-    l0 = ["d_cw0", "d_tree0"]
+    l0 = ["d_cw0", "d_tree0", "d_zk_pads", "d_zk_extra"] if s.zk else ["d_cw0", "d_tree0"]
     if take:
         pass
     elif s.zk:
-        l0 = ["d_cw0", "d_tree0", "d_zk_pads", "d_zk_extra"]
         l = 1 << (log_n - ik)
         yield a("d_zk_pads", (w + 4) * s.t_pad * F128)
         yield a("d_zk_extra", 4 * l * F128)
@@ -192,7 +198,8 @@ def ligerito_events(s: Shape, l0_bl: int, l0_lanes: int) -> Iterator[tuple]:
     """run_ligerito_f256's arena calls (ligerito_f256.cuh, with ligerito_zk.cuh's lane phase under M1)."""
     log_n = s.m - 7
     ln = 1 << log_n
-    ik, rates, ks, queries = s.lig()
+    ik, rates, ks, _ = s.lig()
+    queries = s.queries
     steps = len(ks)
     a = lambda name, n: ("a", name, n)  # noqa: E731
     r = lambda name: ("r", name)  # noqa: E731
@@ -372,7 +379,7 @@ def shapes(ms=range(21, 38), k_logs=range(20, 28)) -> Iterator[Shape]:
 
 def worst(s: Shape) -> list[Shape]:
     """s and its statement-dependent extremes: twelve slot types of 2^(k_log - 4) columns and one of K (fc_fold's folds), an
-    extra claim of the whole witness (the ring switch's gather), level 0's padding at its cap (t_pad = L)."""
+    extra claim of the whole witness (the ring switch's gather), level 0's padding at its cap (t_pad = L, so L/2 queries)."""
     log_l = s.m - 7 - s.lig()[0]
     return [s, replace(s, type_logs=(s.k_log - 4,) * 11 + (s.k_log,)), replace(s, extra_free=(s.m - 7,)),
             replace(s, t_pad=1 << log_l)]
