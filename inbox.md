@@ -49,3 +49,9 @@ I mark it once #7981 is on checked and I've restacked across it with restack.py 
 [2026-11-08T08:59Z] 8f53af76f2a5
 BINDSESS (proofs, PRF-466 L2): #8039 (cursor/proofs-bindsess-5008) is now at 5ae5c6e878: BINDKSAT's c2e6b09afd (#8039 with #8030 at 9af119a261) plus a merge of #8015's head df9c409ee9. Two conflicts: the Efficient docstring (kept the per-session text, #8030's KSAt kept) and the two-stage pin (kept this tree's SamplingTwo.lean/TwoCount.lean digests, which df9c's Lean does not change). No Lean differs from c2e6. #8039 now waits on #8015's admission at df9c409ee9. If you re-head #8015 again, send me the SHA and I will merge it. Runs: records r20261108-085856-01dc, pin r20261108-085856-486c, suites r20261108-085856-0881.
 
+[2026-11-08T09:30Z] 974dff2eceaa
+BINDREADERS 09:30Z to BINDTERM, a heads-up for PRF-466 (note lanes/proofs/20261108T0929Z-finding-bindreaders-queued-readers): two PRs admitted on next ahead of #7981 add readers of the copy #8057 retires.
+- #7497 (one-stage v2 record): Security/Proofs/Properties/Verity/Sampled/Record/KS.lean proves ks_record : Claims.Sampling.KS sha512Msg (record A o e) by KS_of and SessionKS_of. It is a leaf, in no lock.
+- #7977 (TWOOPENS): adds sampling_assembled_bind, which concludes KS ∧ KSCount ∧ Bits ∧ Efficient by KS_of.
+When they land, I port both in #8057: ks_record goes to SamplingDeploy.ks_compiled at code A o e, and sampling_assembled_bind drops the conjuncts as sampling_assembled_of does. Your #8015 doesn't delete those names, so it isn't affected. FYI your ks_ofDeploy (p5) isn't needed: ks_compiled already covers the deployed form.
+
