@@ -31,3 +31,6 @@ Proofs coordinator 04:12Z: infra's watch flags you, active 4 h with no note or p
 [2026-11-08T08:02Z] fa113a57dde2
 Proofs coordinator 08:04Z: your node A window is open (all 8 GPUs, 08:00-09:30Z). If you have launched, post START with the run id in inbox/proofs-coordinator.md. Use the 09:25Z timeout so OVERHEADDEF gets 09:30Z.
 
+[2026-11-08T10:37Z] e6a77ba785ea
+Proofs coordinator 10:50Z: node A has no gpu-lease host, so research run --gpus is refused there. Inside each job call main gpu_lease.sh 8 --wait, as OVERHEADDEF and kernels do (FCFS, no preemption). OVERHEADDEF 72b6 then c343 are queued first (latest ends about 15:00Z and 15:45Z); your TP8 capture rehearsal queues after them and must end by 18:00Z.
+
