@@ -8,6 +8,8 @@ import json
 import os
 import random
 import re
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -23,13 +25,14 @@ from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.domain import check_phi
 from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict.steps import (
-    NO_CHUNKED_TRACE,
     Registered,
     RowRef,
     compare,
     compile_steps,
     dead_gates_of,
+    launch_class,
     plan_steps,
     policy_of,
     request_program,
@@ -613,8 +616,8 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
     """The B8 row's requests scheduled under a long-prefill threshold of 64 and a step budget of 160 (no recorded class-G window
     chunks a prefill, so its advice is this scheduler's): each request's prefill chunks are its prompt rows in the steps that ran
     them, each at most 64, the budget cutting some; its launch context is, per chunk and then per decode, every row of that step;
-    alone (R2's solo advice, each row a launch of its own) it plans to the same chunks; and a chunked unit has no Build to trace,
-    which `compare` counts `no_trace`, saying so."""
+    alone (R2's solo advice, each row a launch of its own) it plans to the same chunks; and each unit's trace is the Build at its
+    launch context, a chunked unit's with its chunks (the chunked request wrapper), which the Build parses back."""
     advice, ingress, steps = _chunked_b8(160, 64)
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 64, "max_num_batched_tokens": 160})
     plan = plan_steps(reg, advice, ingress)
@@ -633,12 +636,20 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
                                                          (33, 64, 4)]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}"} for u in plan.requests]}
+    (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
+    assert long[long.index("--max-model-len") + 1] == "2316"
     cmds = trace_commands(summary, reg, str(tmp_path))
-    assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests if not u.chunks]
+    assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests]
     assert trace_dir(plan.requests[2]) == trace_dir(summary["requests"][2]) != trace_dir({**summary["requests"][2], "chunks": []})
+    for u, c in zip(plan.requests, cmds):
+        assert c[c.index("--device-name") + 1] == reg.phi.target["device_name"] == "NVIDIA H200"
+        assert c[c.index("--max-model-len") + 1] == str(max(2048, u.LP + u.T))
+        ctx = parse_launch_context(c[c.index("--launch-context") + 1])
+        assert (ctx.get("chunks", []), len(ctx["batch_by_step"])) == (list(u.chunks), len(u.launch))
+        assert LC.bad_chunks(ctx, "request", u.LP, u.T, u.C) is None
+    assert LC.bad_chunks({**ctx, "chunks": [1, *ctx.get("chunks", [u.LP])]}, "request", u.LP, u.T, u.C)["reason"] == "launch_context"
     got = compare(summary, str(tmp_path))
-    assert (got["no_trace"], [x.get("trace_error") for x in got["units"]]) == (8, [NO_CHUNKED_TRACE if u.chunks else None
-                                                                                   for u in plan.requests])
+    assert (got["no_trace"], [x.get("trace_error") for x in got["units"]]) == (8, [None] * 8)
 
 
 def test_a_chunked_request_forwards_each_chunk_at_its_launch_step_and_samples_after_the_last():
@@ -663,6 +674,41 @@ def test_a_chunked_request_forwards_each_chunk_at_its_launch_step_and_samples_af
                                        ("forward", 3, 20, 1), ("sample", 3, 1, 20), ("forward", 4, 21, 1), ("sample", 4, 2, 21)]
 
 
+def test_the_builds_chunked_request_wrapper_runs_drives_forwards_at_its_launch_steps():
+    """The Build's `vllm_meta.ChunkedGreedyRequest` under the launch context `trace_commands` gives a chunked unit: one forward a
+    chunk at its launch step and positions, the sample after the last chunk only, then each decode at the step after, as `drive`
+    builds it; a chunked request with a cached prefix or another policy is refused by name."""
+    import torch
+    from verity_vllm.program.frontend import vllm_meta as vm
+    from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
+    seen = []
+
+    class Toy(torch.nn.Module):
+        def forward(self, ids, positions):
+            seen.append(("forward", OB._OBSERVED["launch_region"], int(positions[0]), len(ids)))
+            return torch.zeros((len(ids), 4))
+
+        def compute_logits(self, hidden):
+            seen.append(("sample", OB._OBSERVED["launch_region"], len(hidden)))
+            return torch.zeros((len(hidden), 8))
+
+    OB.observe_launch_context(parse_launch_context({"batch": [[[8, 0]], [[8, 8]], [[4, 16]], [[1, 20]], [[1, 21]]], "chunks": [8, 8, 4]}))
+    try:
+        mod, (prompt,) = vm.make_wrapper("request", Toy(), LP=20, T=2, chunks=[8, 8, 4])
+        toks = mod(torch.zeros(prompt.shape, dtype=torch.int32))
+    finally:
+        OB.clear_observations()
+    assert type(mod) is vm.ChunkedGreedyRequest and mod.DERIVE_SOURCE == vm.GreedyRequest.DERIVE_SOURCE and len(toks) == 3
+    assert seen == [("forward", (0, "tokens"), 0, 8), ("forward", (1, "tokens"), 8, 8), ("forward", (2, "tokens"), 16, 4),
+                    ("sample", (2, "sampled"), 1), ("forward", (3, "tokens"), 20, 1), ("sample", (3, "sampled"), 1),
+                    ("forward", (4, "tokens"), 21, 1), ("sample", (4, "sampled"), 1)]
+    for kw in ({"C": 4}, {"sampling": {"kind": "stochastic"}}):
+        with pytest.raises(ValueError, match="a prefill in chunks for the greedy request without a cached prefix only"):
+            vm.make_wrapper("request", Toy(), LP=20, T=2, chunks=[8, 8, 4], **kw)
+    with pytest.raises(ValueError, match=re.escape("prefill chunks [8, 8]: a chunked request's chunks are its 20 prompt rows")):
+        vm.make_wrapper("request", Toy(), LP=20, T=2, chunks=[8, 8])
+
+
 def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
     """A request's chunks cover its prefill rows, each at least one; one chunk is the request wrapper; and a prefill in chunks is a
     Program only where the kernels read the launch (a batch-invariant target's chunked prefill is the request wrapper's)."""
@@ -675,18 +721,13 @@ def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
         build_program(phi, "request", LP=8, T=1, chunks=(3, 5))
 
 
-@pytest.mark.parametrize("reqs,steps,why", [
-    ([(10, 1, {**GREEDY, "max_tokens": 1})] + [(230, 1, {**GREEDY, "max_tokens": 1})] * 13,
-     [[(0, 0, 10)] + [(i, 0, 230) for i in range(1, 14)]], "an all-reduce of 3000 x 6144 on route 'symm_mem_comm'"),
-    ([(2100, 1, {**GREEDY, "max_tokens": 1})], [[(0, 256 * k, min(256, 2100 - 256 * k))] for k in range(9)],
-     "a row of 2100 keys > TOPK 2048 (the top-k kernels' radix selection)"),
-])
-def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(reqs, steps, why, tmp_path):
+def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(tmp_path):
     """A class-G registration at the class's limits of 8,192 tokens a step and 32,768 positions: a request co-scheduled in a step
-    of 3,000 tokens builds no Program, since no captured all-reduce covers that launch, nor does a prompt of 2,100 tokens (nine
-    chunks), since its last rows read more than INDEX_TOPK keys, and `partial` refuses each by name, request by request, before
-    writing any launch."""
-    advice, ingress = _session(reqs, steps)
+    of 3,000 tokens builds no Program, since no captured all-reduce covers that launch, and `partial` refuses it by name, request by
+    request, before writing any launch. (A prompt past INDEX_TOPK keys compiles: `test_dsa_long_rows`.)"""
+    why = "an all-reduce of 3000 x 6144 on route 'symm_mem_comm'"
+    advice, ingress = _session([(10, 1, {**GREEDY, "max_tokens": 1})] + [(230, 1, {**GREEDY, "max_tokens": 1})] * 13,
+                               [[(0, 0, 10)] + [(i, 0, 230) for i in range(1, 14)]])
     reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192, "max_model_len": 32768})
     with pytest.raises(Unexpressible, match=re.escape(why)):
         compile_steps(reg, advice, ingress)
@@ -744,6 +785,40 @@ def test_class_g_compiles_a_request_alone_at_its_launch_context(tmp_path):
         assert all(len(step) == 1 for step in a.launch) and any(len(step) > 1 for step in u.launch)
 
 
+def _async_window() -> tuple[I1.Advice, dict]:
+    """Two requests under async scheduling: r0 (LP 8) stops on EOS after 3 kept outputs, and the scheduler, a step ahead of its
+    sample, ran one row of it past them (step 3), beside r1's decode; r1 (LP 5) keeps its max_tokens of 4."""
+    return _session([(8, 3, {**GREEDY, "max_tokens": 16}), (5, 4, GREEDY)],
+                    [[(0, 0, 8)], [(0, 8, 1), (1, 0, 5)], [(0, 9, 1), (1, 5, 1)], [(0, 10, 1), (1, 6, 1)], [(1, 7, 1)]])
+
+
+def test_class_g_admits_async_scheduling_and_plans_the_row_it_discards_into_the_launch_it_ran_in(tmp_path):
+    """A class-G registration under async scheduling (LAG 1) passes `launch_class`; in a window where the scheduler ran a row past
+    r0's stop, r0 plans to its kept outputs with that row discarded, and r1's launch at that step holds it, since it ran."""
+    reg = _class_g(tmp_path, target={"async_scheduling": True})
+    assert reg.phi.target_profile().lag() == 1
+    launch_class(reg.phi)
+    plan = plan_steps(reg, *_async_window())
+    assert not plan.refused and plan.discarded == [(3, 0, 10, 1)] and [u.T for u in plan.requests] == [2, 3]
+    assert plan.requests[0].batch() == [[[8, 0]], [[1, 8], [5, 0]], [[1, 9], [1, 5]]]
+    assert plan.requests[1].batch() == [[[1, 8], [5, 0]], [[1, 9], [1, 5]], [[1, 10], [1, 6]], [[1, 7]]]
+    assert plan.steps[3] == [(1, 6, 1, 1)]
+
+
+@pytest.mark.slow
+def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discarded(tmp_path):
+    """`_async_window` compiled whole under a class-G registration with async scheduling, on GLM-5.3's first four layers: both
+    request Programs at their launch contexts (r1's holding r0's discarded row), GP-01 at LAG 1, the discarded row in no Program,
+    and the batch rules pass. What no cheaper test can: that the Build builds a class-G Program at a launch holding a row async
+    scheduling discarded, and that `compile_steps` composes them."""
+    reg = _class_g(tmp_path, layers=4, target={"async_scheduling": True})
+    advice, ingress = _async_window()
+    c = compile_steps(reg, advice, ingress)
+    assert c.batch_rule is None and not c.refused and len(c.programs) == 2 and c.discarded == [(3, 0, 10, 1)]
+    assert [u.launch for u in c.requests] == [u.launch for u in plan_steps(reg, advice, ingress).requests] and c.workload.lag == 1
+    assert c.steps[3] == [RowRef(1, c.requests[1].digest, 6, 1, 1)]
+
+
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
     ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 32768"),
@@ -772,6 +847,10 @@ A_BODY = {"a": {**GREEDY, "prompt": [1, 2, 3]}}
 A_WHOLE = WA.Advice((A,), (_wrow(0, 3), _wrow(3, 1), _wrow(4, 1), _wrow(5, 1)), (0, 0, 1, 1))
 A_OUT = WA.Advice((A,), (_wrow(0, 3), _wrow(3, 1)), (0, 1))
 A_IN = WA.Advice((A,), (_wrow(4, 1), _wrow(5, 1)), (0, 1), (WA.Carried(0, 4, 2, ((0, 4),)),))
+#: A prefilled in chunks of 2 and 1, whole, and split inside its prompt: the first window leaves it at position 2, no output kept
+A_CHUNKED = WA.Advice((A,), (_wrow(0, 2), _wrow(2, 1), _wrow(3, 1), _wrow(4, 1), _wrow(5, 1)), (0, 0, 1, 1))
+A_MID_OUT = WA.Advice((A,), (_wrow(0, 2),), ())
+A_MID_IN = WA.Advice((A,), (_wrow(2, 1), _wrow(3, 1), _wrow(4, 1), _wrow(5, 1)), (0, 0, 1, 1), (WA.Carried(0, 2, 0, ((0, 2),)),))
 CACHE_ON = {"enable_prefix_caching": True}
 
 
@@ -798,8 +877,6 @@ def _past_its_outputs() -> tuple[WA.Advice, dict]:
      "step 0 runs 3 sequences, over the registered max_num_seqs 2"),
     (_session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]]), {},
      "request 0: step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"),
-    ((WA.Advice((A,), (_wrow(0, 2),), ()), A_BODY), {},
-     "request 0: the window leaves it at position 2, inside its 3-token prompt, so its Program here would sample nothing"),
     (_past_its_outputs(), CACHE_ON, "request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
                                     "are past its last kept output)"),
 ])
@@ -823,13 +900,17 @@ def _hit_chunked() -> tuple[I1.Advice, dict]:
     (_hit_chunked(), [(24, 3, 0, 4, (), False, False, None, ()), (24, 1, 16, 2, (0,), False, False, {"rows": 16, "producers": [0]}, (4, 4))]),
     ((A_OUT, A_BODY), [(3, 1, 0, 2, (), False, True, None, ())]),
     ((A_IN, A_BODY), [(3, 3, 4, 2, (), True, False, {"rows": 4, "carried": True}, ())]),
+    ((A_MID_OUT, A_BODY), [(3, -1, 0, 0, (), False, True, None, ())]),
+    ((A_MID_IN, A_BODY), [(3, 3, 2, 4, (), True, False, {"rows": 2, "carried": True}, ())]),
 ])
 def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, tmp_path):
     """Class G with the prefix cache on: a request's unit is its rows in the window alone after its history C (`segment_of`), and so
     is the unit R2 plans it alone at (`batch._solo`). r1's hit of r0's first block has C 16, its prefill the 8 uncached rows and
     r0 the block's producer, and with those rows prefilled in two launches it is the chunked wrapper after that history; the
     window that leaves A after its prefill and first decode has A to position 3 (T 1, 2 samples); the next carries it in at C 4,
-    its rows and last token there its history, and holds its last 2 decodes."""
+    its rows and last token there its history, and holds its last 2 decodes. The window that leaves A inside its prompt, at
+    position 2, has A to there (T -1, no sample) and the next carries it in at C 2, its rows there its history, the rest of its
+    prefill and all 4 samples its own."""
     reg = _class_g(tmp_path, engine=CACHE_ON)
     advice, ingress = session
     plan = plan_steps(reg, advice, ingress)
@@ -839,7 +920,7 @@ def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, 
         solo, bodies, k = B._solo(advice, ingress, r)
         a = plan_steps(reg, solo, bodies).requests[k]
         assert B._unit(a) == B._unit(u) and (a.carried_in, a.carried_out, a.prefix() is None) == (u.carried_in, u.carried_out, not u.C)
-    assert WA.follows(A_OUT, A_IN) is None
+    assert WA.follows(A_OUT, A_IN) == [(0, 0)] and WA.follows(A_MID_OUT, A_MID_IN) == [(0, 0)]
 
 
 def _traced_form(reg: Registered, u) -> str:
@@ -891,27 +972,41 @@ def _history_params(p) -> list[tuple[str, int]]:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("body", [GREEDY, {**STOCH, "max_tokens": 4, "seed": 5}])
-def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(body, tmp_path):
+@pytest.mark.parametrize("body,split", [(GREEDY, (A_WHOLE, A_OUT, A_IN)), ({**STOCH, "max_tokens": 4, "seed": 5}, (A_WHOLE, A_OUT, A_IN)),
+                                        (GREEDY, (A_CHUNKED, A_MID_OUT, A_MID_IN))], ids=["greedy", "seeded", "mid-prefill"])
+def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(body, split, tmp_path):
     """Class G on GLM-5.3's first four layers (three indexer layers and one sharing the last one's indices, as in the model): A whole
     in one window is, call for call in the registered compiler's form, its Program in the window that leaves it after two outputs,
     then its Program in the next, which carries it in at position 4 with its 4 rows of every layer (latent rows and indexer keys and
-    scales) and its last token as Inputs; each window's batch rules pass, R1 holding that history A's own. What no cheaper test
-    can: that carrying a request across a Commit window neither drops nor repeats a call, nor moves a sample's position. The seeded
-    case takes about two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler
-    state (the seed, each sample's position) across the window."""
+    scales) and its last token as Inputs; so is A prefilled in chunks of 2 and 1, split inside its prompt at position 2 (its 2 rows
+    its history, no last token). Each window's batch rules pass, R1 holding that history A's own, and its GP-01 carries the edge:
+    the window that leaves A returns its latent rows so far (and past its prompt its last sample) as out-ports after its samples,
+    and the next takes ports of those types as registered parameters, A's history reading them; the indexer's keys and scales,
+    which no row reads below INDEX_TOPK keys, stay A's own unread Inputs. What no cheaper test can: that carrying a request across
+    a Commit window neither drops nor repeats nor adds a call, nor moves a sample's position. The seeded case takes about
+    two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler state (the seed,
+    each sample's position) across the window."""
+    from verity.ml.circuits.types import field_types
     reg = _class_g(tmp_path, engine=CACHE_ON, layers=4)
     ingress = {"a": {**body, "prompt": [1, 2, 3]}}
-    calls_of, params = [], []
-    for advice in (A_WHOLE, A_OUT, A_IN):
+    calls_of, params, wls = [], [], []
+    for advice in split:
         c = compile_steps(reg, advice, ingress)
         (p,) = c.programs.values()
         assert c.batch_rule is None
         calls_of.append([n.fn.id for n in p.fn.body.nodes])
         params.append(_history_params(p))
+        wls.append(c.workload)
+    C = split[2].carried[0].computed
     own = [("prompt", 3)] + [("seed", 1)] * (body is not GREEDY)
-    assert params == [own, own, own + [("prefix", 4 * 4 * 576), ("prefix_ik", 3 * 4 * 128), ("prefix_iks", 3 * 4), ("last_token", 1)]]
+    assert params == [own, own, own + [("prefix", 4 * C * 576), ("prefix_ik", 3 * C * 128), ("prefix_iks", 3 * C)] + [("last_token", 1)] * (C >= 3)]
     assert calls_of[0] == calls_of[1] + calls_of[2]
+    sig = [w.fn.signature() for w in wls]
+    assert wls[0].edge is None and wls[1].edge.outs == wls[2].edge.ins and wls[2].ports == wls[2].registered[-len(wls[2].ports):]
+    assert [t for n, t in sig[2][0] if n in wls[2].ports] == list(field_types(sig[1][1])[1:])
+    assert wls[2].ports == ("edge.kv", "edge.last")[:1 + (C >= 3)]
+    assert [n for n, _ in sig[2][0] if n.startswith("request[") and ".peers_" not in n] == [
+        f"request[{wls[2].requests[0].request_id}].{g}" for g in [*(g for g, _ in own), "prefix_ik", "prefix_iks"]]
 
 
 @pytest.mark.slow
@@ -946,7 +1041,8 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
     seen, tokens, keys = [], CM._Launch.tokens, CM._Launch.keys
     monkeypatch.setattr(CM._Launch, "tokens", lambda self, own, sampled=False: (
         seen.append((self.step, own, sampled)), tokens(self, own, sampled))[1])
-    monkeypatch.setattr(CM._Launch, "keys", lambda self, own: (seen.append((self.step, tuple(own), "keys")), keys(self, own))[1])
+    monkeypatch.setattr(CM._Launch, "keys", lambda self, own, without=(): (
+        seen.append((self.step, tuple(own), "keys")), keys(self, own, without))[1])
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.chunks, u.T, sorted(c.refused), c.batch_rule) == ((8, 8, 4), 2, [1], None)
@@ -957,6 +1053,27 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
         a, n = own[s]
         assert x == (tuple(range(a + 1, a + n + 1)) if how == "keys" else 1 if how else n), (s, x, how)
     assert sum("TokenSelect" in fn.id for _, fn in calls(c.programs[u.digest])) == 3
+
+
+@pytest.mark.slow
+def test_a_class_g_chunked_prompts_traced_build_is_its_compiled_program(tmp_path):
+    """The chunked prompt above (q0's 20 prompt tokens in chunks of 8, 8 and 4 beside q1, then two decodes), compiled at rank 0,
+    and its trace: the command `trace_commands` gives it (the Build's chunked request wrapper at its launch context, as a served
+    window's trace runs it), run on the pinned vLLM with GLM-5.3's config of record and no CUDA device visible, as the row driver
+    runs a Build (`gpu_lease.hide_devices`; vLLM keeps Triton then). `compare` finds the two digests equal. What no cheaper test
+    can: that the Build's chunked request wrapper traces the Program the compiler predicts. It needs the pinned vLLM (a pod's
+    venv), so it skips without it; its Build takes minutes on one core."""
+    pytest.importorskip("vllm")
+    advice, ingress = _session([(20, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}),
+                                (6, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})], _scheduled([(0, 20, 3), (1, 6, 2)], 16, 8))
+    reg = _class_g(tmp_path / "hub", engine={"long_prefill_token_threshold": 8, "max_num_batched_tokens": 16})
+    s = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True).summary()
+    (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
+    assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [8, 8, 4]
+    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], check=True,
+                   env={**os.environ, "HF_HUB_CACHE": str(tmp_path / "hub"), "CUDA_VISIBLE_DEVICES": ""})
+    got = compare(s, str(tmp_path / "traces"))
+    assert (got["equal"], got["mismatches"]) == (1, 0), got["units"]
 
 
 @pytest.mark.slow
