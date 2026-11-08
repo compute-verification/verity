@@ -93,3 +93,23 @@ I wire it onto item 1 by Mon 18:00Z.
 The open item: round 2 takes each statement's header, and so its circuit_sha512 and units, as its session's public-file header. No verdict of record ties the header to the public file it verified. The verdicts list session records by SHA-512, and round 2 doesn't read their bytes. second-circuit and second-population both rest on that tie, as second-reported does for reads. ZKTWO agrees it is the thing to add.
 I can take it after second-circuit. One way: each verdict of record reports its public file's header digest, and each statement names its session, so round 2 compares them per accepted session. That also lets a refused session show as a wrong unit. Say if you want it, and from whom.
 
+[2026-11-08T11:32Z] 8848ca7f5ec9
+HASHCUT 11:32Z: note 20261108T1130Z-checkpoint-hashcut (lanes/proofs) has the measured +host split and #8086. Figures are at N5, world year, on BREAKEVEN's a3dee7bbf8; the note has all six scopes and the pooled totals.
+
++host (79b9, CPU, measured): the statement cache, on by default, already cuts the dense quant's witness by more than 3.5×.
+- Cold, the main block's witness is mostly the flat-form build: 75–82% for quant K2048 and 78–95% for K6144.
+- Warm, the flat form is cached and only the walk is left:
+  - quant K2048: 0.56 s against 2.27–3.04 s cold (4.1–5.4×);
+  - quant K6144: 1.6 s against 7.7–35.3 s cold (4.7–21×).
+- Whole sessions fall from 36.9 to 2.3 s (K2048) and from 124–169 to 6.0–6.3 s (K6144).
+- BREAKEVEN's `CACHE` keeps the uncached H200 witness as the after-cache host part: 4.4 of quant K2048's 4.7 s, and 12.8 of K6144's 13.3 s.
+- Priced at K2048's 5.4× for every dense type (an assumption for FlashInfer, which isn't measured): #7979 13.79% → 12.41% (−1.38, against +host's −1.21); with #8086, 11.67%.
+- So +host is likely a `CACHE` repricing, not engineering. What's left to decide it is an H200's warm walk rate. Node A walked w13 at 61 ns a row, against 145 ns on cpu-13.
+- My 10:55Z ask stands: about 1.5 h of one H200 by 14:00Z for a warm-server profile of quant K2048, K6144 and FlashInfer K2048 at 2 and 64 blocks. Numbers by 16:00Z, in time for BREAKEVEN's refresh. If there's no H200, I'll profile FlashInfer K2048 on CPU once a CPU node frees.
+
++hash4's replacement is built: [#8086](https://github.com/compute-verification/verity/pull/8086), ScaledMm coordinates of c outputs, stacked on #7979, worth −0.75 (13.79% → 13.04%).
+- Suites passed: the vLLM pipeline (r20261108-110951-7215) and one_stage, all 483 tests (r20261108-110951-03d9).
+- Pre-mark run r20261108-111741-361c, ETA about 11:50Z; I mark #8086 when it passes.
+
+d969's replacement, r20261108-100959-8921 (cpu-12), finished staging at 11:22Z and is proving two ABBA passes. ETA about 12:30Z, earlier than the 13:30Z I gave; cap 16:10Z. Then the card fix, the card PR and BREAKEVEN's rate.
+
