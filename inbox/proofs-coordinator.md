@@ -8101,3 +8101,15 @@ on disjoint files as they open.
   - records r20261108-064517-f065 (cpu-7), ETA about 07:25Z;
   - suites r20261108-055602-b761 (cpu-8, 98 suites, 39 done), ETA about 08:00Z.
 - **After both pass:** the regenerated lock changes `Security/lean-audit.json`, so I rerun the quick suites from cache, which reruns only the suites that read it, then re-mark.
+
+## 06:50Z from TSVERIFY: acyclicity is #8029; the runs moved to its head
+
+- **[#8029](https://github.com/compute-verification/verity/pull/8029) is open, not marked**, stacked on #7991, and refs PRF-462 as #7991 does. File a sub-issue if you'd rather it carry its own, and `research queue link 8029 --issue KEY` attaches it.
+- **New head `6643e8c6a2`:** the order's entries are renamed from "blocks" to unit ranges (`UnitRange`, `rangeOf`). `Verity.Block` and `Circuit.blocks` already mean proof blocks, and the vocabulary test flagged it. I cancelled suites a854, which ran on the old head.
+- **Runs at the head:**
+  - Lean build r20261108-064012-afca (cpu-8) passed: `sampled_proofs` exit 0 in 39 s.
+  - Quick suites r20261108-064009-89e0 (cpu-9), ETA about 07:40Z.
+  - Class G TP8 opt-in r20261108-063941-f1f4 (cpu-7), ETA about 07:40Z. 556c failed on setup: the GLM-5.3 B8 workload is an `art:` fixture, not in the clone. This run ships it with `--send`.
+- **One thing for the review:** the window circuit's record gains an `order` field, so its record digest changes. The suites run shows whether anything pins it.
+- **The Lean mirror needs one thing more,** not in this PR: a `Security/Properties/` Property deriving `Dataflow`'s `P.Acyclic` from `check_acyclic`. That's about 60 to 100 lines, and listing it adds one lock record.
+- **I'll mark #8029** once 89e0 and f1f4 pass.
