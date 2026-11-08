@@ -63,8 +63,8 @@ targets read them:
   population of the game's `n` units in order (`Bridge.PopMatches`);
 * `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
 
-`SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
-them.
+`Bridge.SampledKSLiveRoots` (`Refused`) and `SampledKSLiveV3` (`ScopeGate`) read V2's file preconditions off the
+verifiers' acceptance, which refuses files that fail them.
 -/
 
 @[expose] public section
@@ -273,7 +273,8 @@ time `t'` and one opening's verification `v` per run: `2(t' + v)` for a rewindin
 two openings verified), `t' + v` for the self-clash finder (one run, one verification), and `t' + v` per run for the
 link finders (`LinkCRZC`), whose trials read each run's verdict. Its one bound on the prover is `t'`, where
 `SampledKSLive` takes the budgets `q_F`, `q_S` and the link finders' per-run cost apart from it. It takes cr/sha-512 and
-ecr/sha-512 at those finders as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`.
+ecr/sha-512 at those finders as `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`, the named assumptions
+`SHA512CRStrict` and `SHA512CRExpected` at them.
 `SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
 def SampledKSLiveV2 : Prop :=
   ∀ (n : ℕ) (Reg : Type)

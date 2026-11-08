@@ -5,6 +5,7 @@ to the routes `ROUTES` stands in for that GPU's cuBLAS, and the structure is der
 shapes."""
 from __future__ import annotations
 
+import collections
 import importlib.util
 import sys
 from pathlib import Path
@@ -21,11 +22,15 @@ LF_PATH = Path(__file__).resolve().parents[4] / "integrations" / "vllm" / "tests
 STEP, STRUCTURE = (2, 17), (3, 5)
 #: the compute capability a step's bf16 products may be derived at, and the routes its cuBLAS stands in to take for the tiny
 #: step's linears' GEMMs at M = 2 x 16 tokens (its capture covers the workloads' shapes, not these): unsplit, but for a split-K
-#: over a bf16 workspace and a serial split-K, one route of each kind the grader reads
+#: over a bf16 workspace, a serial split-K and the three over grid.z (an f32 workspace and none, their slices' residue tiles
+#: padded, and a bf16 workspace, its slices whole tiles), one route of each kind the grader reads
 CC = CB.TRAIN_CC
 ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for role in CB.TRAIN_LINEAR_ROLES},
           (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
-          (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3}}
+          (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3},
+          (32, 64, 64, "fwd"): {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
+          (32, 192, 64, "fwd"): {"kernel": "serialk", "SPLIT_K": 5, "align": 8, "tile_k": 32},
+          (32, 64, 192, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16", "align": 8, "tile_k": 16}}
 
 
 def _lf():
@@ -87,3 +92,23 @@ def dot_alone(monkeypatch, program) -> dict:
     none = {"and": 0, "xor": 0, "not": 0, "gates": 0}
     monkeypatch.setattr(G, "boolean_prices", lambda ps: {p: price if p == dot else {"boolean": p, **none} for p in ps})
     return price
+
+
+def k16_steps(handover) -> collections.Counter:
+    """Each occurrence's k16 steps in a hand-over's step, the calls of its route cells' tensor-core dot: N for each 16 words
+    of K, a grid.z slice's words with its residue tile padded whole (`cublas_bf16.residue_first`)."""
+    nodes, calls = handover.step.root.body.nodes, handover.step.annotations["correspondence"]["calls"]
+    got: collections.Counter = collections.Counter()
+    for nd, c in zip(nodes[len(nodes) - len(calls):], calls):
+        if getattr(nd.fn, "base_id", G.CELL) in set(G.ROWS) - {G.CELL}:
+            b = nd.fn.bindings
+            k = (sum(hi - lo + CB.residue_first(lo, hi, b["TILE_K"])[1]
+                     for lo, hi in CB.aligned_bounds(b["K"], b["SPLIT_K"], b["ALIGN"])) if "ALIGN" in b else b["K"])
+            got[c["occ"]] += (nd.n if nd.form in ("batch", "scan") else 1) * b["N"] * k // 16
+    return got
+
+
+def route_factor(k16: collections.Counter, products: list[dict]) -> float:
+    """The mm `products`' k16 steps (`k16_steps`) over 1/16 of their MACs: the dots their routes take per a trace's MAC."""
+    mm = [r for r in products if r["op"] == "mm"]
+    return sum(16 * k16[r["occ"]] for r in mm) / sum(r["macs"] for r in mm)

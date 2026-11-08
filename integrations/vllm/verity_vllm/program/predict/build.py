@@ -634,8 +634,7 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
-    collective order, `schedule_words(rows)` (when it has one) the schedule words a pass reads, `model(B, W, peers)` the forward and
-    the sampler."""
+    collective order, `model(B, W, peers)` the forward and the sampler."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
     ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
     if ff.get("arch") == "dsa-moe":
@@ -722,9 +721,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
-    words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
-    if words:
-        params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
     history = len(params)
     if C:
         params += net.prefix_params(C)   # `vllm_meta.prefix_input`
@@ -740,8 +736,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
-    ids, W, schedule = inputs[0], inputs[-1], inputs[history - 1] if words else None
-    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank, schedule)
+    ids, W = inputs[0], inputs[-1]
+    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
@@ -759,8 +755,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
                  last=inputs[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
-    if peers.n != len(peers.inputs) or peers.k != words:
-        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
+    if peers.n != len(peers.inputs):
+        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
     out, checks = with_checks(model, out, B, stop)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
@@ -772,7 +768,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C and dense else WRAPPERS[(wrapper, kind)]
     if world > 1:
-        src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
+        src_class = f"verity-vllm/with-peers/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],

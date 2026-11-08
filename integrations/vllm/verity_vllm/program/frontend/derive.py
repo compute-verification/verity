@@ -101,9 +101,7 @@ class WeightLeaf:
     def to_json(self) -> dict:
         d = {"name": self.name, "aliases": list(self.aliases), "kind": self.kind, "shape": list(self.shape), "dtype": self.dtype,
              "field": self.index}
-        if self.derivation is not None:
-            d["derivation"] = self.derivation
-        return d
+        return d if self.derivation is None else {**d, "derivation": self.derivation}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -494,7 +492,7 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None, theta: Sequence[str] = (),
-                  registered_values: bool = False, session: list | None = None, dead_free: bool = False, correspondence: bool = True) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None, dead_free: bool | str = False, correspondence: bool = True) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
@@ -502,7 +500,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`:
     the inputs that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds
     (`relabel.rank_report` reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the
-    units no output reads, each Definition with dead gates swapped for its version without them), and the correspondence's Calls with it.
+    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps), and the
+    correspondence's Calls with it.
     `correspondence=False`: no runtime correspondence (for a graph no serving runtime executes, a training step's); the Program is unchanged."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
@@ -542,7 +541,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool, dead_free: bool = False, correspondence: bool = True, theta: tuple[str, ...] = ()) -> DeriveReport:
+                   check_registry: bool, dead_free: bool | str = False, correspondence: bool = True, theta: tuple[str, ...] = ()) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -798,8 +797,10 @@ def _translate(ctx: Ctx) -> Coll:
                 refuse("side_input", node, None, f"placeholder {node.name} is neither a user input nor a parameter/buffer")
         elif node.op == "output":
             out_node = node
-        elif node.op == "get_attr":
-            refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+        elif node.op == "get_attr":  # a tensor constant of a traced graph (`make_fx`), as export lifts one
+            if not isinstance(getattr(ep, "constants", {}).get(node.target), torch.Tensor):
+                refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+            ctx.env[node] = _LiftedConstant(node, node.target, node.meta.get("val", ep.constants[node.target]))
         elif node.op == "call_function":
             if node in ctx.env:
                 continue  # absorbed by a pattern rule that fired at an earlier node of its chain
@@ -818,7 +819,7 @@ def _translate(ctx: Ctx) -> Coll:
         v = ctx.val(a)
         if isinstance(v, (int, float, bool)):
             refuse("side_input", out_node, None, f"returned Python scalar {v!r}; outputs must be values")
-        outs.append(ctx.coll(a, "returned value"))
+        outs.append(v.returned(ctx, a) if hasattr(v, "returned") else ctx.coll(a, "returned value"))
     if not outs:
         refuse("shape", out_node, None, "the source returns nothing")
     # returned inputs / repeated returns are representable (a return is a reference sequence) — record them explicitly

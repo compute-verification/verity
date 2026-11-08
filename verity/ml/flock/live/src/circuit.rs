@@ -1863,10 +1863,17 @@ impl Instances {
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512,
                                   public_file_sha512, population, tables: Some(RowTables { refs, ..t.clone() }), public });
         }
+        let gather = |src: &[u8], w: usize| -> Vec<u8> {
+            let mut out = Vec::with_capacity(units.len() * w);
+            for &u in &units {
+                out.extend_from_slice(&src[u * w..(u + 1) * w]);
+            }
+            out
+        };
         Ok(Instances {
             header, n: units.len(),
-            rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
-            salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
+            rows: self.rows.as_ref().map(|r| gather(r, rb)),
+            salts: self.salts.as_ref().map(|s| gather(s, np * SALT_BYTES)),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
             public_sha512,
             public_file_sha512,
@@ -3534,6 +3541,8 @@ mod tests {
         assert_eq!((again.rows.as_ref(), again.salts.as_ref(), &again.bcs, &again.public), (inst.rows.as_ref(), Some(&salts), &inst.bcs, &inst.public));
         assert_eq!(again.public_file().unwrap(), inst.public_file().unwrap());
         let mut d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        let (rb, sb) = (c.row_bytes(), np * SALT_BYTES);
+        assert_eq!((d.rows.as_deref(), d.salts.as_deref()), (Some(&inst.rows.as_deref().unwrap()[rb..2 * rb]), Some(&salts[sb..2 * sb])));
         assert!(d.prover_file().is_err() && d.set_salts(np, vec![0; SALT_BYTES * np]).is_err());
     }
 

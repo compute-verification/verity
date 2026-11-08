@@ -9,7 +9,7 @@ checked by `research pods create`.  A line is the approval: committing it replac
     exempt = ["vy-control-"]           # never counted, never terminated (the guard's own host is exempt without this)
 
     [budgets]
-    "vy-circuit-checks-" = { cap_usd = 5, expires = "2026-09-30T06:00Z", max_pod_hours = 12, by = "daniel 2026-09-29" }
+    "vy-circuit-checks-" = { cap_usd = 5, expires = "2026-09-30T06:00Z", max_pod_hours = 12, by = "daniel: circuit checks" }
     "vy-coord-" = { cap_usd_per_day = 65, expires = "2026-10-31T00:00Z", max_pod_hours = 168, by = "daniel: the CI pool" }
 
 A line covers every pod whose RunPod name starts with its prefix; when several do, the longest prefix covers it.

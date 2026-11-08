@@ -11,8 +11,9 @@ to the Build's rules in `_forward_impl`'s order:
                                                   and is_padding, when given, is the step's False prefix (`transparent.SCRATCH_INT_FILLS`)
   a scored layer's: `_dsv4_topk_kernel` (DSV4_TOPK_PINS) -> MoeRouterSqrtSoftplus_v1{E,SCALE} per token (`Dsv4TopkRule`)
   `_moe_C.moe_align_block_size(ids, E, BM, sorted!, experts!, ntpp!)`
-                                               -> MoeAlignRanks_v1{E,P,BM} over the ids, the request's `schedule` witness (a key per
-                                                  pair) and the pair indices as constants, then MoeAlignBlocks_v1{P,BM} (`MarlinMoeAlignRule`):
+                                               -> MoeAlignRanks_v1{E,P,BM} over the ids, keyed and indexed by the pair indices as
+                                                  constants (each expert's pairs in pair-index order, as the served align ranks
+                                                  them), then MoeAlignBlocks_v1{P,BM} (`MarlinMoeAlignRule`):
                                                   (blk [P], par), which no served buffer holds, in fold-private scratch
   `_moe_C.moe_wna16_marlin_gemm` (w13)         -> MarlinMoeExpertGemm_v1{E,K=H,N=2I,TK,TN,GRID,DOT} per pair (`MarlinMoeGemmRule`)
   `_C.silu_and_mul_with_clamp`                 -> SiluMulClamp_v1{I,LIMIT} per pair
@@ -43,7 +44,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SCRATCH_INT_FILLS, SiluAndMulWithClamp, as_float, bound_args, find_descendants, is_row_major,
                                                op_name, target_of, triton_name, unsupported, vocab_kind)
 from verity_vllm.observe.fold.resolver import (Compute, Const, Gather, PerRow, Pieces, Resolution, Shared, StepContext, Unsupported, WeightField,
-                                               WitnessParam, scratch_view)
+                                               scratch_view)
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_ALIGN_KERNELS, K_SUM, _contig, _flat, _same
 from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (K_DYN_MM, SHARED_OP, _weight_root, scope_gate, scope_group, scope_hidden,
@@ -60,7 +61,6 @@ MXFP4_TYPE_ID = 562949953487106
 MARLIN_NONE = ("b_bias_or_none", "a_scales", "global_scale", "b_zeros_or_none", "g_idx_or_none", "perm_or_none")
 MARLIN_FLAGS = {"b_type_id": MXFP4_TYPE_ID, "is_full_k": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
                 "thread_k": -1, "thread_n": -1, "blocks_per_sm": -1}
-SCHEDULE = "schedule"
 LAYER = re.compile(r"model\.layers\.(\d+)\.")
 
 
@@ -124,7 +124,7 @@ class MoEMarlinSharedExperts:
                           hint, C["NUM_EXPERTS"], C["H"], self.gate_spec, self.name)
         if isinstance(gate, Unsupported):
             return gate
-        routed = self._routed(node, ctx, sc, hidden, outs, weights, ids, reqs[0], hint)
+        routed = self._routed(node, ctx, sc, hidden, outs, weights, ids, hint)
         if isinstance(routed, Unsupported):
             return routed
         kernels = [*sc.mms, sc.silu, sc.router, sc.align, sc.up, sc.rsilu, sc.down, sc.msum] + ([sc.gate] if sc.gate is not None else [])
@@ -242,7 +242,7 @@ class MoEMarlinSharedExperts:
         return [(at, Compute(spec, M, (PerRow(x), Shared(b)), (PerRow(w), PerRow(ids)), (at,), hint=f"{hint}/router", kernels=(K_TOPK,),
                              attribution=tuple(ctx.start.rows), pattern=self.name, roots=(None, bname)))], (x, bname, w, ids)
 
-    def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, weights: ViewDesc, ids: ViewDesc, req: str,
+    def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, weights: ViewDesc, ids: ViewDesc,
                 hint: str) -> list[tuple[int, Any]] | Unsupported:
         """The align's schedule, w13, the clamped activation, w2 and moe_sum over the (token, slot) pairs."""
         C = self.config
@@ -263,9 +263,9 @@ class MoEMarlinSharedExperts:
             ranks, blocks = vocab_kind(ctx, "marlin_moe_rank", E=E, P=P, BM=BM), vocab_kind(ctx, "marlin_moe_align", P=P, BM=BM)
         except ValueError as e:
             return unsupported(node, str(e))
-        at = sc.align.id
+        at, ix = sc.align.id, Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(P)),))
         out: list[tuple[int, Any]] = [
-            (at, Compute(ranks, 1, (Shared(ids_flat), WitnessParam(SCHEDULE, (req,)), Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(P)),))),
+            (at, Compute(ranks, 1, (Shared(ids_flat), ix, ix),
                          (Shared(rank), Shared(start)), (at,), hint=f"{hint}/moe_align_block_size/rank", kernels=K_ALIGN_KERNELS, pattern=self.name)),
             (at, Compute(blocks, 1, (Shared(ids_flat), Shared(rank), Shared(start)), (Shared(blk), Shared(par)), (at,),
                          hint=f"{hint}/moe_align_block_size", kernels=K_ALIGN_KERNELS, pattern=self.name))]
@@ -348,4 +348,4 @@ class MoEMarlinSharedExperts:
         return spec, A, y, *names
 
 
-__all__ = ["MARLIN_FLAGS", "MARLIN_NONE", "MXFP4_TYPE_ID", "MoEMarlinSharedExperts", "SCHEDULE"]
+__all__ = ["MARLIN_FLAGS", "MARLIN_NONE", "MXFP4_TYPE_ID", "MoEMarlinSharedExperts"]

@@ -46,7 +46,7 @@ model's linears in call order, each its `(K, N)`. Call `(s, w)` is step `s`'s ca
 The unit is the proof block: SERVE-H1 receipts 32 × 32 units, which Flock can't prove at `K` = 4096 (about 5 G ANDs),
 while W2 proves 4 × 8 ones; the shape takes the size as a parameter, and the receipts must be per proof block.
 
-Three forms have one live round a step (`window.live_challenger`, `sampled_proofs.challenger.LiveRecord`) and one has a
+Three forms have one live round a step (`window.live_challenger`, `spot.challenger.LiveRecord`) and one has a
 live round a call; they differ in the served output and in what a receipt unit reads of it (`Form`):
 * `beside`, today's SERVE-H1: the tile proves receipts over the call's committed A rows and the registered B, beside
   the served linear's own GEMM (`int8_ops.scaled_mm`: `y = dequantize(torch._int_mm(A, B), s_a, s_w)`, cuBLASLt's s8
@@ -633,7 +633,7 @@ def Llama31Shape : Prop :=
 
 /-- **An epoch of `W` served windows of one salt is tied**: each window's declared circuit is shape `L`'s in form `F`
 (`Tie`, which fixes its live rounds at `F.rounds L`), and each window's timed run
-starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `sampled_proofs.service`), so
+starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `spot.service`), so
 every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epoch's windows (`SaltWindows`,
 `PouwCheck.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use:
 * a call's A rows and their scales go under its round's root before that round's live coin, and so do its `z` and `y`

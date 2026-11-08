@@ -85,13 +85,6 @@ RUN: dict[str, Kind] = {}
 
 #: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
 ALLOWED: dict[str, str] = {
-    "schedule":
-        "the Marlin MoE decoder's `MoeAlignRanks` key of each (token, slot) pair, the position serving's atomicAdd gave it, "
-        "which no check holds. The key puts the pair in one of its expert's moe blocks, and the block sets the Marlin split-K "
-        "cut bits (`MarlinMoeSchedule`), so it moves output bits: at most sum_e log2(c_e! / prod_b s_b!) bits a MoE layer a "
-        "step, c_e the expert's pairs and s_b its blocks' sizes. `predict.batch.check_compiled` refuses it (R1) in every "
-        "compiled session. Fix: serve the align in pair order and key `MoeAlignRanks` by the pair index, or charge the key "
-        "as advice",
     "splits":
         "a derived top-p split count, SplitsFor_v1 of the batch's live rows, per sampling event, at most log2 6 bits an event; "
         "`predict.batch.check_compiled` refuses it (R3) in every compiled session, and serving pins `registered_splits`. Fix: "

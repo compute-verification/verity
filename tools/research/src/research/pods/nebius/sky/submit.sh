@@ -122,7 +122,7 @@ fi
 # At most VY_MAX_WAITING_CELLS vLLM deployments' tasks (default 4) and VY_MAX_WAITING jobs in all (default 6) wait in Kueue: a job waiting for
 # quota still holds one of the SkyPilot controller's 8 launch slots (provision_timeout: -1), and with every slot held no other job
 # reaches Kueue. Only SkyPilot's own pods count: the dispatcher's, the lease holders' and commit-pack's Kueue Jobs hold no launch
-# slot (they refused every Sky submission for 2 h, 4:10 PM PDT Sep 30). A queue it can't read doesn't block: this caps throughput
+# slot (counting them would refuse every Sky submission). A queue it can't read doesn't block: this caps throughput
 # loss, it guards no spend.
 wl=$(mktemp)
 research pods ssh "$machine" -- sudo k3s kubectl get workloads -A -o json > "$wl" 2> /dev/null || true

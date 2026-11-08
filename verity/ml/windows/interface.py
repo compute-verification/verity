@@ -39,7 +39,7 @@ past 111 bytes, or past a Flock block of 2^27 bits). A Boolean-profile port's le
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
 the wiring check holds on the sampled proof blocks (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
 writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
-form, the wire cut (``cuts``, `SampledProofs.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
+form, the wire cut (``cuts``, `Spot.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
 is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
 (`Wire.cut`). A unit that reads one row gathered from several writers' outputs reads it through a gather unit
 (``AllGather_v1``) whose ``parts`` are cut.
@@ -450,7 +450,7 @@ def _of(cls: Any, d: Any, fields: Sequence[str], what: str) -> Any:
 @dataclass(frozen=True, init=False)
 class Wire(_Pattern):
     """A wiring pattern (`_Pattern`): each reader row it covers is the ``out`` row of unit ``base + sum(d[k] * step[k])`` of
-    template ``writer``, each index counting its own template's units (the wire cut's form, `SampledProofs.Wires`). With no cut
+    template ``writer``, each index counting its own template's units (the wire cut's form, `Spot.Wires`). With no cut
     it reads the port's one row, a whole-port wire."""
     writer: str
     out: str
@@ -644,7 +644,7 @@ class Ingress:
 
 def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
                 cuts: Mapping[str, Mapping[str, int]] | None = None) -> None:
-    """Refuse (ValueError) the circuit's cuts and wires as `SampledProofs.Wires.check` does, in its order (``templates``: by
+    """Refuse (ValueError) the circuit's cuts and wires as `Spot.Wires.check` does, in its order (``templates``: by
     descriptor id, its layout and units): a cut naming no template's parameter or not dividing its outer length and words
     (``cuts``); then wire by wire, a reader or writer that is no template (``template``), a port no parameter of the reader
     or an output no output of the writer (``port``), rows not among the port's or a last digit that isn't ``C`` (``cut``),
@@ -1368,7 +1368,8 @@ def circuit_record(w: CS.Binding, name: str, templates: Sequence[tuple[str, int]
                    blocks: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``circuit.json``: everything the verifier's window is (`of_records`), none of its values. ``templates``: each
     ``(descriptor id, units)`` in the program's order; ``statements``: by template, how its unit's statement reads its rows
-    (``in_rows``, ``out_rows``, ``reads``, as Flock's `UnitStager` takes them), for a template whose members are bit rows.
+    (``in_rows``, ``out_rows``, and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``, as Flock's
+    `UnitStager` takes them), for a template whose members are bit rows.
     The members are listed, or with ``cap`` stated: the verifier derives them from the templates, ``cap``, ``wires``, cuts
     and server blocks (`members`), so the record grows with its templates and wires, not its units. ``boundary``: the
     circuit's I/O layout (`Circuit.boundary`), carried as given; ``declared``: its cuts, registered reads and ingress
@@ -1395,7 +1396,9 @@ def _record(name: str, templates: Sequence[tuple[str, int]], statements: Mapping
             "row_tables": [{"segment": t.segment, "name": t.name, "template": t.template, "words": t.words,
                             "keys": [list(k) for k in t.keys], "label": [[k, v] for k, v in t.label]} for t in row_tables],
             "statements": {t: {"in_rows": [[p, s, b, list(ps)] for p, s, b, ps in st["in_rows"]],
-                               "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]], "reads": st.get("reads", "inline")}
+                               "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]],
+                               **({"layout": st["layout"], "structural": bool(st.get("structural"))} if st.get("layout")
+                                  else {"reads": st.get("reads", "inline")})}
                            for t, st in sorted((statements or {}).items())}}
 
 
@@ -1683,7 +1686,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     """A circuit record's inputs by what fills them, in bits, from its description alone (a stated record's templates, wires
     and declarations, `Circuit.description`; per template, wire and declaration, never per unit, and never its program):
     every unit's input rows (``inputs``), the rows its wires fill (``wired``, a wire's reader rows times its writer row's
-    bits, `SampledProofs.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none,
+    bits, `Spot.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none,
     `Read`), table reads and openings of a held parameter (``registered``) and its ingress (``ingress``); ``free`` the rest,
     which only the prover chose. A record that lists its members is counted from them, per member: each input row's bits
     once per unit or once per row of its shared-row table, a wired row's ``wired``, a row its registered reads of a held
