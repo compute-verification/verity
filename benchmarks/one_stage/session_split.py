@@ -30,6 +30,7 @@ import json
 import os
 import random
 import re
+import signal
 import statistics
 import sys
 import threading
@@ -111,6 +112,17 @@ def main() -> int:
     wall0 = time.time() - t0
     ps = ProofServer(a.bin, out, devices=[a.device], provers=K, verify_ahead=a.ahead, verdicts=1,
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
+
+    def stop(sig, _frame) -> None:
+        # the server's processes run in sessions of their own, so a lease's SIGTERM to this one alone would leave them on the GPU
+        for pid in ps.pids.values():
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        os._exit(128 + sig)
+
+    signal.signal(signal.SIGTERM, stop)
     host = SR.Host(ps)
 
     def wait(s, i: int, k: int, phase: str, t_sub: float) -> None:
