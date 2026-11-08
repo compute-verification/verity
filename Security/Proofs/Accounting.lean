@@ -37,6 +37,7 @@ public import Proofs.Accounting.ReadUnit.Sha
 public import Proofs.Accounting.ReadUnit.RowSeg
 public import Proofs.Accounting.ReadUnit.Leaf
 public import Proofs.Accounting.ReadUnit.Select
+public import Proofs.Accounting.ReadUnit.Check
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
 public import Proofs.Accounting.DeclaredCircuit
