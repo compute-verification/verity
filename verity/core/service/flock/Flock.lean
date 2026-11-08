@@ -114,6 +114,7 @@ public import Flock.With.SetupEq
 public import Flock.With.SimSetup
 public import Flock.RecOpeningCmd
 public import Flock.RecLinksCmd
+public import Flock.ReadTmplCmd
 public import Flock.RecRecord
 
 @[expose] public section
