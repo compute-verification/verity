@@ -101,6 +101,7 @@ public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
+public import Definitions.NetworkCertifier.Guarantees.PoolRoots
 public import Definitions.NetworkCertifier.Witness
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
