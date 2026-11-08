@@ -313,6 +313,7 @@
   },
   "WeightSecurity.Served.UndetectedLe": {
    "owner": "@proofs",
+   "digest": "2c7e1138e7bbc4840bff376fd43d2c0fc3d466c38d3ff020a6a41feaddcaf198",
    "why": "The bound δ on what the audit leaves undetected at the budget M, which the bound is stated at; the deployed audit gives it (TheftServedDeployed)."
   }
  },
@@ -23826,13 +23827,43 @@
    "unfolded_hash": "8c615bde1cdacd4dac5a22f58ecda777d30d4f11db7b56f1ea2a1681043f506b"
   },
   "WeightSecurity.SecurityProofs.TheftServed": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["WeightSecurity.Served.UndetectedLe"],
+    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "reads": []
+   },
+   "type_hash": "3ba016bf392579018f28901a3762edbef405dcdecdff27caaccb6e9b4dcf4dd2",
+   "unfolded_hash": "2e49826602520730f7642f1db884c63d3a1e6caea2ef295234b2e1ccaf21481b"
   },
   "WeightSecurity.SecurityProofs.TheftServedHonest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedHonest : WeightSecurity.Guarantees.TheftServedHonest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"]
+   },
+   "type_hash": "cfa7b06985b5c8b8dec6f97915559bea807da289d4b8050472bd09ed583cafdc",
+   "unfolded_hash": "8128d94e5bc857b76f22960f2d1e6add20aa06fcb4cb5b15b9a941f9f7e4f4d7"
   },
   "WeightSecurity.SecurityProofs.TheftServedNontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedNontrivial : WeightSecurity.Guarantees.TheftServedNontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d0365c6e6738345a9b26f7ac02c1b660bbf5438d5402f5573146a12746f0aa98",
+   "unfolded_hash": "19def6b961b3508805908e2f18b83ad426efa871aab2635785f321499cf97571"
   },
   "WeightSecurity.SecurityProofs.TheftTight": {
    "owner": "@proofs",
@@ -37259,12 +37290,36 @@
    }
   },
   "Definitions.WeightSecurity.Guarantees": {
-   "digest": "dbe45cc6df383e1c463ff849bdc29546129da988d52877400e33188fb895abec",
+   "digest": "92e19d8655de5ab23dc5326eb9c9125398c93e747a0f10b859fa29026237ffd6",
    "definitions": {
     "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
     "WeightSecurity.Guarantees.TheftHonest": "edcebe0ece71b890e6f3ba54fd3daf68deef830b9bcf824f8453dd5b347b07c3",
     "WeightSecurity.Guarantees.TheftNontrivial": "01c971f2461b56cc999f6f851dd87a4be69c2c8c9d0692e56f2f452ce42fff75",
+    "WeightSecurity.Guarantees.TheftServed": "3001e1613e4c171768f8231c43f04b9da48f65e1c192a23c70253af21ae82447",
+    "WeightSecurity.Guarantees.TheftServedHonest": "17ba31b29ff8739852838079165e4ead570e5cd1a6a04ff05c73f02008c9ebf7",
+    "WeightSecurity.Guarantees.TheftServedNontrivial": "0712e05191e0bfc872041259073ddc2fd6e4adb433e46e953ac9849a58c6650a",
     "WeightSecurity.Guarantees.TheftTight": "2296f0698d7e1ec1bf28bbbaccc1aa43192b428a061a9655fc914627c43af5ac"
+   }
+  },
+  "Definitions.WeightSecurity.Served": {
+   "digest": "9c3c654bdc94ac481a8791018cba08abfd02e291601f73edfa2d904b61630dad",
+   "definitions": {
+    "WeightSecurity.Served": "f2e335906c7443ef8a8ba3e8852804b26236819caac95e6f636260dbe13e1e95",
+    "WeightSecurity.Served.Local": "31551f1b7e8ce007c714a1512ee4575217a40c7635f0dc6d2d1a4cb136c43bd9",
+    "WeightSecurity.Served.Undetected": "9ed8853e48e07f7a988fa3ac523c9ecca7435f218c7a784b28d4906b7d899d1f",
+    "WeightSecurity.Served.UndetectedLe": "2c7e1138e7bbc4840bff376fd43d2c0fc3d466c38d3ff020a6a41feaddcaf198",
+    "WeightSecurity.Served.accepted": "6ba621195397ffc7bf6a08140b8201ccf68a75da7d9bf330e8fa7d2ff8dc3f71",
+    "WeightSecurity.Served.adv": "0bed20d375b2c98533a99c0f975c567c99fa9e1f3e958f66f481ec2264a34f15",
+    "WeightSecurity.Served.changed": "033219056c1b8d36bcbe0bce0c4490a75c1bc9f803f101d55ab54e9b963278dd",
+    "WeightSecurity.Served.count": "d8adf81d59bccd9c9d5fc2812fe62c0c9c188ec229f2d83b0b0faccffe1f3e55",
+    "WeightSecurity.Served.egress": "ae399124ad38ad8a594769be4f80cf708e3e083d82c1d0b14d13a2a55d20727c",
+    "WeightSecurity.Served.incorrect": "f4f10bf3213d963d38b752c20239a7785c014681732357021dd92c7533d6ff6f",
+    "WeightSecurity.Served.lead": "3b6979a5d94387f047757e4b1fba48c2341c3d41a375370f07a199108270c5f5",
+    "WeightSecurity.Served.reply": "7a6155704038ef48f1d396fec306b801b3bad22ad8e3b98bd46f536644ed8d0a",
+    "WeightSecurity.Served.sampledIncorrect": "1887dc4fa4406626a64ddf89d77758fb83c426c5054e1804b86067740c857fc4",
+    "WeightSecurity.Served.tick": "84f0fd09edc8555fef5dcc42df74bf2925e6ee1406976d579cefaa06ae6a497c",
+    "WeightSecurity.Served.view": "9502eba9ec773763689c4be6a67556c1820e3866bf985a7d7a6605c990d66561",
+    "WeightSecurity.servedChannel": "9d82402645753e6c721739e0d2ec3d795a9b45ca2e73b7763cb4814dbcbc7e0a"
    }
   },
   "Definitions.WeightSecurity.Toy": {
@@ -37281,6 +37336,20 @@
     "WeightSecurity.Toy.silent": "b0b616e206663a6e8094b9a7b6a568306c8544a6490464c898cbc8a97812a48a",
     "WeightSecurity.Toy.thief": "f4c89279c043eba1b9034f27e3ae0cf393472af02867fd1e3f8d528d693db865",
     "WeightSecurity.Toy.user": "c0800da2e0d99641faf805d0b95e7ab038074cc2c43e192b5c6d739fd27034b2"
+   }
+  },
+  "Definitions.WeightSecurity.ToyServed": {
+   "digest": "fad39b7f110534300262bf07d8f6bfee97e1824aebaadfd2ee248d8c585f7537",
+   "definitions": {
+    "WeightSecurity.ToyServed.C": "d419a93d6c78b99a01b868bc9ea77db4f91312e68619daa90c73c040bc8764be",
+    "WeightSecurity.ToyServed.Stolen": "c3fae429ed32799f0e9ddc0c712f08f5d00c91d9e65e677e8ced29448f7bab3a",
+    "WeightSecurity.ToyServed.W": "ff3fdb2f7d71db155ed8b94ea446c09385b73b1103af60c0bad173a780495d4a",
+    "WeightSecurity.ToyServed.anyone": "0bdcff9d4cb80583faf937a18d9a9c6f2a88f71b9963b5667f715e80bf5a98e7",
+    "WeightSecurity.ToyServed.gen": "11feebb16e8bcc79b4f751cde95c5ebaab071d4887f03306a978b11b72a97b5c",
+    "WeightSecurity.ToyServed.honestRun": "da34fdcc145f4e7eb2929309277abf88ef84ede760f43fc8e360fcbc33494b2a",
+    "WeightSecurity.ToyServed.leakRun": "8c7302ed0cc2deca1b9bf81b187b5fc72db9bef9b693a37763980ac9b7433b3e",
+    "WeightSecurity.ToyServed.thief": "2b0a929b76a4dbeab0b2e4343a090c8fb4412393ec7685a4271a52177795b704",
+    "WeightSecurity.ToyServed.user": "3bed128ed8f9057d5fb5efb70d0cbb9036f3ccdfb0253467f31dd4e5fdbdf1ee"
    }
   },
   "Flock.Bytes": {
