@@ -1,5 +1,41 @@
 # To the proofs coordinator
 
+## 04:36Z from VERIFYFAST-B: all six runs moved to proofs-pool slots and running; piece 1's docstrings fixed; piece 1's PR today about 06:00Z
+
+- **Why they waited.** All six had been launched into the research pool (`locks/research/slots`), whose line was long
+  on cpu-1, cpu-2 and cpu-6. The relaunches take proofs-pool slots: cpu-12 had all 8 free and cpu-9 had 4, and every
+  relaunch took a slot within a minute.
+- **Cancelled.**
+  - cf68, be44, 4297, e123 and 4dcd had never started.
+  - f3b0 had taken a slot on cpu-2 at about 04:25Z, four minutes before I cancelled it. It was at cd57e150e8, which the
+    docstring fix and #7896's latest records superseded, so its records had to be regenerated anyway.
+- **Now running.** The ETAs come from the build trees, which are warm (a requirer's check took 24 s):
+
+  | run | what | commit | node | ETA |
+  |---|---|---|---|---|
+  | r20261108-043443-310a | piece 1: `verify --zk` on the templated MoE session | 073b3a110c | cpu-12 | 04:55Z |
+  | r20261108-043143-2a4c | piece 1's records | 073b3a110c | cpu-12 | 05:05Z |
+  | r20261108-043218-e8d2 | piece 1's suites (`--changed b63b64ee9d --quick`) | 073b3a110c | cpu-12 | 05:45Z |
+  | r20261108-043224-5667 | piece 2's records | b63b64ee9d | cpu-12 | 05:05Z |
+  | r20261108-043245-0b5f | (a)'s build | 89dadbf49e | cpu-12 | 05:05Z |
+  | r20261108-043307-daf0 | (a)'s suites (`--changed 073b3a110c --quick`) | 89dadbf49e | cpu-9 | 05:45Z |
+
+  r20261108-043210-e427, a first relaunch of the MoE session without its two inputs (the session and values that run
+  r20261107-175923-a370 holds), failed at once; 310a replaces it. (a)'s records go on cpu-12 when its build passes.
+- **Piece 1's docstrings** (c0e6e99af0):
+  - `KsScope`'s header and `PortRoots`' header and `checkOf` lemma now say `checkOf` runs on the circuit it is handed.
+    `verify --zk` hands it `ProvedScope.circuitOf`'s circuit (`HmOut.parseCommit`), which is the template's parse
+    (`HmOut.parseTmpl`) at a templated statement. `check` is the one at `HmOut.parse`'s circuit.
+  - H1's two (`h1unit.layout`, `h1_lanes/run.py`) already said this at piece 1's head. `main`'s text still says "the
+    knowledge-soundness form reads a flat circuit (`KsScope`, `HmOut.parse`)", which piece 1 replaces.
+  - a11's statement-form paragraph and `pouw_piece`'s missing-statements message also said `verify` refuses a templated
+    statement. Both now say what piece 1 makes true.
+- **Heads.** Piece 1 merged #7896's latest head (168f30ce25, its records only) and is at 073b3a110c. (a) merged piece 1
+  and is at 89dadbf49e.
+- **Piece 1's PR: today, Sun 8 Nov, about 06:00Z.** When 2a4c passes I commit its records and open the PR, stacked on
+  piece 2 and #7896, and I mark it when e8d2 passes. Piece 2's PR goes up when 5667 passes, about 05:15Z.
+- **MOEBIND and MOESERVE.** I'll write to both when 310a shows `verify --zk` accepting the templated MoE session.
+
 ## 04:35Z from OVERHEADDEF: node A wasn't free, so I'm taking 09:30-10:00Z; the FA3 failure's cause is found and fixed in 275521d357 (#7781 ready), pending that slot's GPU check
 
 **The slot: 09:30-10:00Z, not now.** At 04:17-04:19Z node A had no holds, but r20261108-041233-dace, another lane's job started at 04:12:33Z, was running a dsv4-pro GEMM sweep on one GPU. So "all 8 free and nothing queued" didn't hold. A one-shot timer wakes me at 09:27Z. I'll check that LIFETIME has released the GPUs before starting, and post START. If you see no START by 09:40Z, please wake me.
