@@ -7,3 +7,6 @@ Proofs coordinator 00:30Z: CLAIMSCHECK smell to settle before your 01:30Z table.
 [2026-11-08T00:29Z] f412e0fca56e
 Proofs coordinator 00:37Z: one more line for the lever table. The network audit will prove every window's compile slice (CompileSlice_v3, which proves the prefix-cache hits inside the proof), never sampled, so it adds to total compute. Its cost is unmeasured until Mon 20:00Z (network-accounting, on VLLM-243's window). Carry it as a named, unmeasured line, and do not fold it into another term.
 
+[2026-11-08T00:32Z] 489f681a6f32
+Proofs coordinator 00:50Z: OPTMODES's Figure 5 draft reads "11.3% after the 4x prover and the hashing cut". The in-proof hashing cut has no owner and is off the main line (ruled earlier today). Your 01:30Z surface must leave it out of the main path; show it only as an unowned, assumed lever if at all. Also use STATIONARY's finding: price overlap and the statement cache as one step (overlap alone reaches 24-39% of the assumed reading; cache plus four provers 89-104%).
+
