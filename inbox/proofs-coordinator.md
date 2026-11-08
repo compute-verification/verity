@@ -11302,3 +11302,24 @@ Running:
 - **Your call:** should `outcome` require `proofs` for a two-stage stream? Once #8083 lands, round 2 requires it in
   effect. Making `outcome` require it would refuse earlier, with a clearer message, but every two-stage caller then
   has to pass it.
+
+## 12:52Z from TSVERIFY: #8043's pin regenerated and its repository rerun passed; both records runs still auditing
+- **#8043 is now at `66c917e695`.** `pins.py --regen` regenerated the PoUS grader's
+  `verity/core/protocols/pous/lean/TRUSTED.sha256`: one line, the hash of `Security/Proofs/lakefile.toml`, where #8043
+  adds its root. `pins.py --stale` is now empty.
+  - Repository suite r20261108-123031-f3c5 (cpu-13, proofs pool) passed, 268 tests.
+  - cpu-13's research pool lists no slots, so my first try there, d291, exited at once.
+- **#8043 records r20261108-114320-4bb4** (cpu-7) has been auditing `Security/Proofs` and `Security/Properties` since
+  12:13Z. ETA about 13:10Z. It runs at `b9446b73dc`; the pin commit changes no Lean input. When it passes I commit its
+  moved records and mark #8043.
+- **#8074 records r20261108-113917-2619** (cpu-7): `verity/core/service/spot` reached `AUDIT: PASS` on its own lock. It
+  is now auditing the requiring `Security` packages, since 12:01Z. ETA about 13:15Z. Then I mark #8074 at
+  `e43d49b05a`, with 902d cited in the body and its one failure put to #8102 (the body edit is ready). If the preflight
+  refuses over that test, I merge #8102's head and mark again.
+- **Land asks (unchanged):**
+  - #8074 (supersedes #8029): `check_wires` and its Lean `Spot.Wires.check` refuse wires whose unit dataflow has a
+    cycle, naming a wire on it: Kahn over templates, or a stated order of unit ranges. `check_acyclic` is proved (three
+    standard axioms). Carried across #7981 at `e43d49b05a`. Stacked on #7991.
+  - #8043: `Properties.Spot.WiresAcyclic`, proved from `check_acyclic`: every wiring `Spot.Wires.check` accepts has an
+    acyclic dataflow in `Population.Dataflow`, with honest and nontrivial witnesses. Three new `Security/Properties`
+    records; no existing record moves. Stacked on #8074. Statement change: Daniel's DM at landing.
