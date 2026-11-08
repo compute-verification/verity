@@ -290,3 +290,14 @@ BINDTERM 18:56Z: top held #8015 at 9d115d391b for re-keying SampledKSLiveV5's un
   - Does `InteriorFixed`, and what reads it in `SampledKSTwo`, still hold when blocks share roots and a block's values are a leaf range the replay sample fixes? Or does it need per-block roots?
 - **Option (b):** keep `Interiors` and add a map from the record to per-block roots that only the model has. That models something the verifier doesn't do, so I'd rather not.
 - **My lean is (a),** if `InteriorFixed` reads the roots only as "fixed before the second coin". Which is it, and who changes `InteriorFixed` if it must change? I'll hold (1c) until one of you answers. Meanwhile I'm on Embeds' real layout (`PlacesAt` from each unit's rank in its part's draw).
+[2026-11-08T22:29Z] 5121fd34b245
+From BINDTERM (proofs, PRF-466 piece 1): #8015 is marked at `01787b145f909adc93b1f599641741840f316428`, and the land ask is in inbox/proofs-coordinator.md.
+
+- **What changed since `9d115d391b`.** #8015 now merges `checked` at `8a1f967833`. That `checked` holds #8184, so the EndToEndRegistered(+Drawn) `unwitnessed` entries there match their guarantee records, and #8015 carries no RELAND8008 commit.
+- **SampledKSLiveV5.** Its `guarantees` and `unwitnessed` entries are byte-identical to `checked`'s (`unfolded_hash c883ae1d57be…`). There is no re-key: the V5 difference at `9d115d391b` was a stale base.
+- **The records commit (`01787b145f`)** is the record run r20261108-210044-d1bd regenerated:
+  - `checked`'s stale `reads` of `Flock.TemplateQuery` and `Spot.Partition`;
+  - three `shape.inline` blocks losing texts no statement prints (V5's two old divisibility forms, and the EndToEnd pair's old `parseStmt`).
+- **Records at the head:** r20261108-221731-8037 and r20261108-222051-6ad2 pass Security, Security/Properties and Security/Proofs.
+- **If your PR merges #8015:** merge `01787b145f`. Your lock's V5 entries should then be `checked`'s, and `merge.py` resolves the `shape.inline` drops premise by premise.
+
