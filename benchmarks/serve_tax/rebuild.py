@@ -675,9 +675,9 @@ class Dummies:
 
     def stopper(self, trace: Any) -> Callable[[Any], Any]:
         """A wrapper of the scheduler's ``update_from_output`` that finishes each dummy in ``stops`` once the step that
-        stopped it in serving has its output, as serving's scheduler finished it on reading the stop token. Under async
-        scheduling that scheduler had already given it a row in the next step, which a length the scheduler can see
-        ahead would not."""
+        stopped it in serving has its output, as serving's scheduler finished it on reading the stop token, and lists it
+        in that step's record as finished there. Under async scheduling that scheduler had already given it a row in the
+        next step, which a length the scheduler can see ahead would not."""
         def update_from_output(orig: Callable[..., Any]) -> Callable[..., Any]:
             def wrapped(so: Any, mro: Any, *a: Any, **kw: Any) -> Any:
                 step = trace._pending.get(id(so))
@@ -688,6 +688,9 @@ class Dummies:
 
                     self.sched.finish_requests(due, RequestStatus.FINISHED_STOPPED)
                     self.taken["stops_forced"] += len(due)
+                    rec = next((r for r in reversed(trace.records) if r.get("kind") == "step" and r.get("step") == step), None)
+                    if rec is not None:
+                        rec["finished"].update({rid: {"reason": "stop", "stop_reason": None} for rid in due})
                 return got
             return wrapped
         return update_from_output

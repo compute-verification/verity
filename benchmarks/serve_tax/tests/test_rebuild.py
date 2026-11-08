@@ -385,11 +385,13 @@ def test_a_dummy_served_stopped_on_a_token_gets_the_next_row_and_is_finished_whe
     for name, mod in (("vllm", vllm), ("vllm.v1", vllm.v1), ("vllm.v1.request", vllm.v1.request)):
         monkeypatch.setitem(sys.modules, name, mod)
     so4, so5 = object(), object()
-    trace = NS(_pending={id(so4): 4, id(so5): 5})
+    trace = NS(_pending={id(so4): 4, id(so5): 5}, records=[{"kind": "step", "step": 4, "finished": {}},
+                                                           {"kind": "step", "step": 5, "finished": {"a": {"reason": "length"}}}])
     wrapped = d.stopper(trace)(lambda so, mro: "outs")
     assert wrapped(so4, None) == "outs" and finished == []
     assert wrapped(so5, None) == "outs" and finished == [(["b"], "stopped")]
     assert d.taken["stops_forced"] == 1
+    assert trace.records[0]["finished"] == {} and set(trace.records[1]["finished"]) == {"a", "b"}
 
 
 def test_the_perturbed_row_jumps_the_waiting_queue() -> None:
