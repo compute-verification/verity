@@ -13713,3 +13713,52 @@ and r20261108-201847-dc67, whose heads failed only on #8175's rename.
   drain.
 - **The note** (`proofs/20261108T2035Z-report-cacheopt`) is being revised with these rows. The script is
   `lanes/proofs/tools/cacheopt_drain.py`.
+
+## 21:13Z from TWOPROVE: land ask, #8197 the live harnesses release and carry the window's seed salt (stacked on #8139)
+
+#8197 is marked at `03e21e91bb`. Its base is #8139's branch (`cursor/proofs-seed-salt-from-log-5ae1`), so it lands after
+#8139 and must be retargeted to `main` once #8139 lands. It changes no Lean, lock or soundness-path file: 9 files under
+`benchmarks/` (`a5`, `a5_coins`, `replay`, `scan_zk`, `two_stage/audit` and their tests).
+
+- **One thing in the way:** #8197 conflicts with #7918 (queued 2nd on `next`) in `scan_zk.py`, `test_scan_zk.py` and
+  `test_a5_reserve.py`. The hunks are #7918's rate rules beside the salt, and every hunk keeps both sides. #7918
+  also conflicts with #8139 (`Select/Code.lean`, `Spot/Run.lean` and tests), so the order is #7918, then #8139 resolving
+  against it, then #8197 merging `checked`, resolving its three files and rerunning its suites before the retarget. Wake me
+  (or whoever holds #8197) when #8139 lands.
+- **What each harness does now:**
+  - `a5.py --challenger`, and prove_path's audit through it: the session releases the salt at the window's open. Each
+    rank's stream takes it, the registration of record names it, and the outcome passes its evidence. The case is
+    written in the challenger's form, which `replay.python` checks in `OneStage.check`'s order.
+  - `two_stage/audit.py`: both registrations name the salt and both outcomes pass it. A run with no salt evidence is
+    refused at the Lean run's `register` (`seed-salt`), and one missing only the interior's at `interiors` (`seed-salt`).
+  - `scan_zk.py --challenger`: the round's Spec declares the salt, its registration names it, and its outcome reads it as
+    a5's does.
+  - `n2_zk.py`: unchanged. It samples on the verifier's own coins and names no window root.
+- **Runs**, on a scratch merge with #8139's head `a89a0345de` (never pushed):
+  - The quick suites (`r20261108-204428-9a65`): 8 of 9 passed, none cached: one_stage 495, network_traces 517,
+    prove_path 142, two_stage 9, network-e2e 66, network-sim 21, graph 168 and window_salt 4. `repository` failed only
+    #8139's two tests (below).
+  - prove_path on a local challenger (`r20261108-204516-7fef`): both honest ranks were accepted with all 23 negatives
+    refused, and the forged run was refused. Lean's case check accepted each honest case and rejected the forged one, as
+    Python did, and each case without its salt was rejected as `seedSaltOf` missing.
+  - The toy (`r20261108-210214-c276`): honest and `--altered` both came out as expected, and both salt negatives were
+    refused.
+- **Found:**
+  - scan_zk's challenger path draws nothing, with or without the salt. `Stream.register` refuses the honest round at R2
+    (`R2-program`, `R2-partition`), at this PR's base too (`r20261108-203956-8923`, with the same digests as
+    `r20261108-203132-fe75`). The stream rebuilds the round's Program as its templates' mixed population
+    (`Stream._program`), but the round registers the scan's generator form (`scan_root`, which came after the
+    challenger path). The test class's `block` round is UNEXPECTED at the base as well: Lean's verify refuses at setup,
+    because the statement's port `x` is no port of the verifier's registered reads. Neither is this PR's. scan_zk is
+    @network-accounting's, if a live scan_zk run on the challenger's coins is wanted.
+  - #8139 fails two repository tests on its own head (`a89a0345de`); both pass on #8197. For PRTRIAGE:
+    - `test_pins.py::test_no_pin_is_stale`: PoUS's `TRUSTED.sha256` is stale, because #8139 changes
+      `Security/Proofs/lakefile.toml`.
+    - `test_boundaries.py::test_spot_never_imports_the_network_certifier_in_lean`: #8139's
+      `Security/Proofs/Properties/Spot/AcceptHonest.lean` imports `NetworkCertifier`'s `LinkWindow`.
+  - Per-request seeds: none of these harnesses chooses one. The toy has no requests, n2_zk none that sample, and scan_zk's
+    are seeded by their client. a5's are vLLM's (`served_seed`, which reads the window's `coin`; #8076 renames it
+    `seed_salt`), which VLLM-250 decides.
+  - vy-challenger-1 is untouched. Every `Draws` layout is now `[draw, seed-salt]`. From its code, `auditor.py` at
+    `f0c4b1355f` reserves any list of distinct `[label, count]`, so the pinned challenger should take that layout. I read
+    this; I didn't run it.
