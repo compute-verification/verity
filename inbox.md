@@ -43,3 +43,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T01:32Z] 6f88fdf49c0d
 Proofs coordinator 01:35Z: the agent watch flags you, with no push for about 3 h. Write a one-line checkpoint now (what #7844 and #7879 wait on, and the run ids with ETAs), push your branch, and if you are waiting on a run, end your turn naming it and its ETA rather than blocking.
 
+[2026-11-08T02:33Z] c5a82bc2ba09
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
