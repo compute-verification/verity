@@ -221,41 +221,45 @@ theorem byte_ascii {s : String} (h : ∀ c ∈ s.toList, c.utf8Size = 1) (P R : 
   simp only [hb, List.getElem_toByteArray, List.getElem_map]
   simp [hs]
 
-/-- The numbers of `s` from byte `i` on, read as `numsL` reads chars: decimal digits and whitespace only, else
+/-- The numbers of `s`'s bytes from `i` to `e`, read as `numsL` reads chars: decimal digits and whitespace only, else
 `none`. -/
-def nums (s : String) : Nat → Nat → Bool → Nat → Array Nat → Option (Array Nat)
+def nums (s : String) (e : Nat) (he : e ≤ s.utf8ByteSize) : Nat → Nat → Bool → Nat → Array Nat → Option (Array Nat)
   | 0, _, _, _, _ => none
   | fuel + 1, i, inTok, acc, out =>
-    if h : i < s.utf8ByteSize then
-      let c := Char.ofUInt8 (s.getUTF8Byte ⟨i⟩ (String.Pos.Raw.lt_iff.mpr (by simpa using h)))
-      if c.isDigit then nums s fuel (i + 1) true (acc * 10 + (c.toNat - 48)) out
-      else if c.isWhitespace then nums s fuel (i + 1) false 0 (if inTok then out.push acc else out)
+    if h : i < e then
+      let c := Char.ofUInt8 (s.getUTF8Byte ⟨i⟩ (String.Pos.Raw.lt_iff.mpr (by simp only [String.byteIdx_rawEndPos]; omega)))
+      if c.isDigit then nums s e he fuel (i + 1) true (acc * 10 + (c.toNat - 48)) out
+      else if c.isWhitespace then nums s e he fuel (i + 1) false 0 (if inTok then out.push acc else out)
       else none
     else some (if inTok then out.push acc else out)
 
-/-- On an ASCII string, `nums` from a char's index reads what `numsL` reads off the chars from it. -/
-theorem nums_eq {s : String} (ha : ∀ c ∈ s.toList, c.utf8Size = 1) : ∀ (R P : List Char) (fuel : Nat)
-    (inTok : Bool) (acc : Nat) (out : Array Nat), s.toList = P ++ R → R.length < fuel →
-    nums s fuel P.length inTok acc out = numsL R inTok acc out := by
+/-- On an ASCII string, `nums` from a char's index to `e` reads what `numsL` reads off the chars between them. -/
+theorem nums_eq {s : String} (ha : ∀ c ∈ s.toList, c.utf8Size = 1) (e : Nat) (he : e ≤ s.utf8ByteSize) :
+    ∀ (R P T : List Char) (fuel : Nat) (inTok : Bool) (acc : Nat) (out : Array Nat), s.toList = P ++ R ++ T →
+    P.length + R.length = e → R.length < fuel →
+    nums s e he fuel P.length inTok acc out = numsL R inTok acc out := by
   have hsz := size_ascii ha
   intro R
   induction R with
   | nil =>
-    intro P fuel inTok acc out hs hf
+    intro P T fuel inTok acc out _ he' hf
     obtain ⟨fuel, rfl⟩ : ∃ k, fuel = k + 1 := ⟨fuel - 1, by omega⟩
-    have : ¬ P.length < s.utf8ByteSize := by rw [hsz, hs]; simp
+    have : ¬ P.length < e := by simp at he'; omega
     simp [nums, this, numsL]
   | cons c R ih =>
-    intro P fuel inTok acc out hs hf
+    intro P T fuel inTok acc out hs he' hf
     obtain ⟨fuel, rfl⟩ : ∃ k, fuel = k + 1 := ⟨fuel - 1, by omega⟩
-    have hlt : P.length < s.utf8ByteSize := by rw [hsz, hs]; simp
+    have hle : P.length < e := by simp at he'; omega
+    have hlt : P.length < s.utf8ByteSize := by omega
+    have hs' : s.toList = P ++ c :: (R ++ T) := by simp [hs]
     have hb : Char.ofUInt8 (s.getUTF8Byte ⟨P.length⟩ (String.Pos.Raw.lt_iff.mpr (by simpa using hlt))) = c := by
       rw [String.getUTF8Byte_eq_getElem]
-      rw [byte_ascii ha P R c hs (by simpa [String.size_toByteArray] using hlt)]
-      exact ofUInt8_val (ha c (by simp [hs]))
-    have ih' := fun inTok acc out => ih (P ++ [c]) fuel inTok acc out (by simp [hs]) (by simp at hf; omega)
+      rw [byte_ascii ha P (R ++ T) c hs' (by simpa [String.size_toByteArray] using hlt)]
+      exact ofUInt8_val (ha c (by simp [hs']))
+    have ih' := fun inTok acc out => ih (P ++ [c]) T fuel inTok acc out (by simp [hs]) (by simp at he' ⊢; omega)
+      (by simp at hf; omega)
     simp only [List.length_append, List.length_singleton] at ih'
-    simp only [nums, hlt, dite_true, hb, numsL]
+    simp only [nums, hle, dite_true, hb, numsL]
     split
     · exact ih' _ _ _
     · split
@@ -268,9 +272,9 @@ theorem toNat_succ {i n : USize} (h : i < n) : (i + 1).toNat = i.toNat + 1 := by
   rw [USize.toNat_add, USize.toNat_one]
   exact Nat.mod_eq_of_lt (by have : USize.size = 2 ^ System.Platform.numBits := rfl; omega)
 
-/-- `nums` in machine words: the byte index a `USize` below `n`, the string's size, and a number's value a `UInt64` with
+/-- `nums` in machine words: the byte index a `USize` below `n`, the range's end, and a number's value a `UInt64` with
 its digit count `k`, `none` past 19 digits. -/
-def numsU (s : String) (n : USize) (hn : n.toNat = s.utf8ByteSize) (i k : USize) (acc : UInt64) (out : Array Nat) :
+def numsU (s : String) (n : USize) (hn : n.toNat ≤ s.utf8ByteSize) (i k : USize) (acc : UInt64) (out : Array Nat) :
     Option (Array Nat) :=
   if h : i < n then
     let b := s.getUTF8Byte ⟨i.toNat⟩ (String.Pos.Raw.lt_iff.mpr (by
@@ -310,10 +314,10 @@ theorem usize_lit {m : Nat} (h : m < 2 ^ 32) : (OfNat.ofNat m : USize).toNat = m
   rw [USize.toNat_ofNat]
   exact Nat.mod_eq_of_lt (by have := USize.le_size; have : USize.size = 2 ^ System.Platform.numBits := rfl; omega)
 
-theorem numsU_some (s : String) (n : USize) (hn : n.toNat = s.utf8ByteSize) : ∀ (fuel : Nat) (i k : USize)
+theorem numsU_some (s : String) (n : USize) (hn : n.toNat ≤ s.utf8ByteSize) : ∀ (fuel : Nat) (i k : USize)
     (acc : UInt64) (out : Array Nat) (v : Array Nat), n.toNat - i.toNat < fuel → k.toNat ≤ 19 →
     acc.toNat < 10 ^ k.toNat → numsU s n hn i k acc out = some v →
-    nums s fuel i.toNat (k != 0) acc.toNat out = some v := by
+    nums s n.toNat hn fuel i.toNat (k != 0) acc.toNat out = some v := by
   intro fuel
   induction fuel with
   | zero => intro i k acc out v hf; omega
@@ -325,7 +329,7 @@ theorem numsU_some (s : String) (n : USize) (hn : n.toNat = s.utf8ByteSize) : �
     · rename_i h
       have hi := USize.lt_iff_toNat_lt.mp h
       have hi' : i.toNat < s.utf8ByteSize := by omega
-      rw [dite_eq_left_of_eq_true (eq_true hi')]
+      rw [dite_eq_left_of_eq_true (eq_true hi)]
       simp only at hv ⊢
       have hp : (⟨i.toNat⟩ : String.Pos.Raw) < s.rawEndPos := String.Pos.Raw.lt_iff.mpr (by simpa using hi')
       generalize s.getUTF8Byte ⟨i.toNat⟩ hp = b at hv ⊢
@@ -373,8 +377,7 @@ theorem numsU_some (s : String) (n : USize) (hn : n.toNat = s.utf8ByteSize) : �
         · exact absurd hv (by simp)
     · rename_i h
       have hi : ¬ i.toNat < n.toNat := mt USize.lt_iff_toNat_lt.mpr h
-      have hi' : ¬ i.toNat < s.utf8ByteSize := by omega
-      rw [dite_eq_right_of_eq_false (eq_false hi')]
+      rw [dite_eq_right_of_eq_false (eq_false hi)]
       exact hv
 
 end Flock.Scan

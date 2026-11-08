@@ -21,8 +21,10 @@ outputs: shapes come from the manifest (prompt length, cap), never from served l
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +35,7 @@ from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
 from verity.ml.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
 from verity_vllm.program.sampling_event import is_sampling_event
+from verity_vllm.program.shared_definitions import canonicalize
 
 SCHEMA = "verity/workload-program/v1"
 
@@ -146,92 +149,6 @@ class RequestComponent:
                 "step_nodes": [list(x) for x in self.step_nodes], "step_gates": [list(x) for x in self.step_gates]}
 
 
-_CANON: dict[str, tuple[Any, dict]] = {}  # specialization id -> (the canonical decoded object, its v0 encoding); the DEFAULT canon
-# the canon is the set of definitions ONE compose shares; a process composing several workloads (the
-# reviewer's fixture runner, a test module) must not compare a later compose against an earlier one's definitions -> callers pass their
-# own `canon` dict per compose (global_program.build does); the module-level dict serves callers that pass none (single-compose processes).
-
-
-def _canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
-    """Share definitions across components. Each descriptor decodes into FRESH objects, so a definition used by two request
-    Programs (every layer's Gemm/RmsNorm/... specialization) would be two objects under one id: `encode_program` then proves
-    them equal by re-encoding both for every pair (O(components²) encodes — 20+ min at B=8). Here each decoded definition is
-    encoded ONCE (v0, self-contained), compared with the canonical one under its id (fail-closed: a different body under the
-    same id is `IdentityConflict`, never first-wins), and every reference to it (node callees, function-valued statics) is
-    re-pointed to the canonical object. Primitives come from the registry and are already shared."""
-    from verity.ml.circuits.codec import _encode_definition
-    from verity.ml.circuits.defs import IdentityConflict, PrimitiveDefinition
-
-    if canon is None:
-        canon = _CANON
-    subst: dict[str, Any] = {}
-    # pass 1: an encoding names callees by id, so it does not depend on object identity — compare first, re-point after
-    for fid, fn in dp.defs.items():
-        if isinstance(fn, PrimitiveDefinition):
-            continue
-        if fn is dp.root:
-            # the request Program's ROOT is never shared: its body becomes the component's
-            # (`WorkloadRequest{program_digest, program_fn}`, identity = the whole descriptor's digest) and nothing calls it. Its id is
-            # derive's `Root[Derived[vLLMRequest[...]]{SRC=...}]` whose SRC static names class/mode/profile/INPUT SHAPES/config -- not T --
-            # so two requests of one manifest with the same prompt length and different caps (LP11: T24/T36) carry ONE root id over two
-            # bodies, and comparing roots under that id would refuse a valid workload (E_IDENTITY) although their digests differ. Callees stay
-            # under the fail-closed rule below; the root's identity is the component digest.
-            continue
-        enc = _encode_definition(fn)
-        c = canon.get(fid)
-        if c is None:
-            canon[fid] = (fn, enc)
-        elif c[1] != enc:
-            raise IdentityConflict(f"E_IDENTITY: request Programs disagree on the definition {fid!r}")
-        elif c[0] is not fn:
-            subst[fid] = c[0]
-    if not subst:
-        return
-    # pass 2: every node callee / function-valued static of this decode now points at the canonical object
-    for fn in list(dp.defs.values()) + [dp.root]:
-        if not isinstance(fn, PrimitiveDefinition):
-            _repoint(fn, subst)
-
-
-def _repoint(fn, subst: dict[str, Any]) -> None:
-    """Re-point `fn`'s node callees and function-valued statics at their canonical objects (`subst`, by `_spec_id`), in
-    place. Each substitute must have the id it replaces (`_canonical`): a complete specialization's id is formatted once
-    from its bindings, so a static swapped for another id would leave it stale."""
-    if fn._body is None:
-        return
-    for n in fn.body.nodes:
-        c = _canonical(n.fn, subst)
-        if c is not n.fn:
-            n.fn = c
-    for k, v in list(fn.bindings.items()):
-        fn.bindings[k] = _subst_static(v, subst)
-
-
-def _canonical(v, subst):
-    """`v`'s substitute in `subst`, or `v` itself; refused (IdentityConflict) before it is applied when its id is not `v`'s."""
-    from verity.ml.circuits.defs import IdentityConflict
-    key = _spec_id(v)
-    c = subst.get(key, v)
-    if c is not v and _spec_id(c) != key:
-        raise IdentityConflict(f"E_IDENTITY: {key!r} would be re-pointed to a definition of another id, {_spec_id(c)!r}")
-    return c
-
-
-def _subst_static(v, subst):
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    if isinstance(v, SpecializedDefinition):
-        return _canonical(v, subst)
-    if isinstance(v, PrimitiveDefinition):
-        return v
-    if isinstance(v, tuple):
-        return tuple(_subst_static(x, subst) for x in v)
-    if isinstance(v, list):
-        return [_subst_static(x, subst) for x in v]
-    if isinstance(v, dict):
-        return {k: _subst_static(x, subst) for k, x in v.items()}
-    return v
-
-
 _REQUEST_DEF = CompositeDefinition("WorkloadRequest", 1, ("program_digest", "program_fn"), lambda S: ((), None), lambda *_: None,
                                    doc="a derived request Program (descriptor) as a callable component: its root body with the Input "
                                        "gates as parameters; identity = the request Program's digest + program function",
@@ -250,11 +167,19 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     back onto them by leaf count, so `groups[j]` names the wrapper parameter batch j belongs to (the shared one is `weights`).
     Without it every batch is its own group (`p<j>`) and nothing can be shared.  `digest`: `program_digest(desc)`, when the caller has it."""
     digest = digest or program_digest(desc)
-    key = (("program_digest", digest), ("program_fn", desc["program_fn"]))
-    cached = _REQUEST_CACHE.get(key)
     dp = decode_program(desc, registry)
-    _canonicalize(dp, canon)   # `canon`: this compose's shared-definition set (None -> the process default)
-    body = dp.root.body
+    canonicalize(dp, canon)   # `canon`: this compose's shared-definition set (None -> the process default)
+    return program_component(dp.root, digest, desc["program_fn"], wrapper_params)
+
+
+def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
+                      wrapper_params: list[tuple[str, str]] | None = None) -> RequestComponent:
+    """`request_component` of a request Program's root: a decoded descriptor's (`DecodedProgram.root`), or a `Program`'s own
+    (`Program.root`, whose definitions are this process's, so nothing is decoded or re-pointed), its `program_digest` and its
+    program function's descriptor id."""
+    key = (("program_digest", digest), ("program_fn", program_fn))
+    cached = _REQUEST_CACHE.get(key)
+    body = root.body
     K = 0
     while K < len(body.nodes) and _is_input_node(body.nodes[K]):
         K += 1
@@ -278,10 +203,10 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
             raise ValueError(f"{K - j} Input batches beyond the declared parameters")
     else:
         groups = [f"p{j}" for j in range(K)]
-    counts: dict[str, int] = {}
+    total, counts = Counter(groups), {}
     names = []
     for g in groups:
-        names.append(g if groups.count(g) == 1 else f"{g}[{counts.get(g, 0)}]")
+        names.append(g if total[g] == 1 else f"{g}[{counts.get(g, 0)}]")
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
     logs: dict = {}
@@ -292,7 +217,7 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         offsets.append(offsets[-1] + n.gates)
     ret = _remap(body.ret, K)
     if cached is None:
-        sp = SpecializedDefinition(_REQUEST_DEF, {"program_digest": digest, "program_fn": desc["program_fn"]}, key)
+        sp = SpecializedDefinition(_REQUEST_DEF, {"program_digest": digest, "program_fn": program_fn}, key)
         sp.set_body(Body(params, body.ret_type, nodes, ret, offsets))
         _REQUEST_CACHE[key] = sp
     else:
@@ -303,14 +228,17 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     # request-relative steps = segments ending at a sampling-event instance (inclusive) — X-09's segmentation, on the Program side;
     # the sampling-event vocabulary is `verity_vllm.program.sampling_event`'s (greedy and seeded Gumbel selects alike), read nowhere else
     bounds, lo = [], 0
+    events: dict[int, bool] = {}   # by callee object: a descriptor id serializes the callee's statics
     for i, n in enumerate(nodes):
-        if is_sampling_event(_spec_id(n.fn)):
+        if (e := events.get(id(n.fn))) is None:
+            e = events[id(n.fn)] = is_sampling_event(_spec_id(n.fn))
+        if e:
             bounds.append((lo, i + 1))
             lo = i + 1
     if lo != len(nodes):
         bounds.append((lo, len(nodes)))  # trailing instances after the last TokenSelect (none for the request wrapper; kept, never dropped)
     step_gates = tuple((offsets[a], offsets[b]) for a, b in bounds)
-    return RequestComponent(sp, digest, desc["program_fn"], params, input_gates, offsets[-1], len(nodes),
+    return RequestComponent(sp, digest, program_fn, params, input_gates, offsets[-1], len(nodes),
                             hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates,
                             tuple(body.nodes[j].fn.binding for j in range(K)))
 
@@ -609,8 +537,7 @@ class WorkloadProgram:
         self.fn = WORKLOAD.bind(**statics) if edge is None else WORKLOAD_EDGE.bind(**statics, edge=edge.static())
         self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered,
                                theta=self.theta)
-        self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
-        self.digest = program_digest(self.descriptor)
+        self.digest = program_digest(self.program)   # streamed: the descriptor is built only for a caller that writes it
         # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes
         body = self.program.root.body
         self._K = sum(1 for nd in body.nodes if _is_input_node(nd))
@@ -620,6 +547,11 @@ class WorkloadProgram:
             assert nd.fn is r.component.fn
             if nd.fn.gates != r.component.body_gates:
                 raise AssertionError("component gate count changed under composition")
+
+    @functools.cached_property
+    def descriptor(self) -> dict:
+        """The workload Program's descriptor (`codec.encode_program`), whose digest is `digest`."""
+        return encode_program(self.program)
 
     # -- canonical address space --------------------------------------------------------------------
     def address_map(self) -> dict:
