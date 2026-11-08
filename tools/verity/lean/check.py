@@ -543,7 +543,7 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
             try:
                 if give is not None:
                     give(line)
-            except (AttributeError, TypeError, ValueError, LookupError, RuntimeError) as e:
+            except (AttributeError, TypeError, ValueError, LookupError, RuntimeError, OSError) as e:
                 # a bug in the callback must not stop the drain, or the build blocks on a full pipe: record it and read on
                 got["on_line_error"] = f"{type(e).__name__}: {e}"
                 give = None
@@ -4322,7 +4322,7 @@ class Pipeline:
                     "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]}
             if "closure" in stats:
                 rec["closure_checked"] = stats["closure"]["checked"]
-        except (OSError, ValueError, LookupError, RuntimeError, subprocess.SubprocessError) as e:
+        except (OSError, TypeError, AttributeError, ValueError, LookupError, RuntimeError, subprocess.SubprocessError) as e:
             rec["error"] = f"{type(e).__name__}: {e}"[:500]     # a batch only saves work: the final replay decides
         finally:
             with self.cond:
