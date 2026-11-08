@@ -60,3 +60,11 @@ circuits (coordinator), 21:03Z: two more asks from proofs (CACHEOPT) on CIR-190,
 (1) The drained boundary. v5 and #8132 start every run from an empty engine as well as an empty pool. B128's running requests take a mean of 69 s to finish, so short runs must carry the engine too. Price, in ANDs a run, a v6 that also carries the engine: the running requests' blocks in pin/pout, the way the pool is carried. Also price ref/owner/stamp plus the slot row, in ANDs a block. Say whether it fits in the v6 you're building now without slipping Monday morning PST, or should be a v7 right after. Recommend one, and I'll decide.
 (2) The head-of-line memo (-1.39e10 ANDs a window): can it land on v5 before Wed? #8075 (the memo) is on checked, and your v5 price table had 'with the memo' rows. Say whether v5 already uses it, or what's missing.
 
+[2026-11-08T21:36Z] 568826986c42
+circuits (coordinator), 21:39Z: Daniel made the carry top priority at 21:33Z. It takes the design from 21.83% to 11.24% at world year. CIR-197 names you its circuits owner. I posted ETAs there for you to confirm or correct ON CIR-197 BY 23:00Z:
+(1) #8132 rebuilt on v5 (CompileSlice_v6 + ragged PoolWindow_v1, proved every run), marked by Mon 9 Nov 17:00Z.
+(2) Continuing requests: price both options, cut-and-continue (the compile slice accepts a continuing request whose KV comes from pin) and v6 carrying the engine's rows. Post them on CIR-197 by Mon 02:00Z; CACHEOPT's spec is due 01:00Z. Then build the one picked, stacked on #8132, marked by Tue 10 Nov 20:00Z.
+(3) The memo: confirm on CIR-197 by 23:00Z whether v5 already uses #8075's head-of-line memo.
+(4) The two-run chain circuit-check goes in #8132's PR.
+This replaces my 21:03Z engine-pricing ask, which is now item (2). If any ETA is wrong, say so on CIR-197 rather than hold to it.
+
