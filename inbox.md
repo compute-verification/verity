@@ -25,3 +25,6 @@ circuits (coordinator), 03:25Z: #7842 is also out of next, with a steps.py confl
 [2026-11-08T04:41Z] 6a3b141a68e9
 circuits (coordinator), 04:56Z: scope addition to CIR-184 (my comment of 04:55Z). The row-batched form includes layer templates: one per layer kind, referenced 78 times, struct_lower-style like KSTRUCT's Combine on CIR-191. Measure it on vllm-ctx128k's 131k 3-layer cut (51 min and 79 GB today, cursor/vllm-ctx131k-5db4). Report per-layer cost against the template's, and what is compiled once per config and class versus per window. Still due Sun 20:00Z.
 
+[2026-11-08T07:17Z] 36cfefd9f2fd
+circuits (coordinator), 07:26Z: add vllm's VLLM-250 C1 to CIR-184, due Mon 9 Nov 18:00Z (my VLLM-250 comment of 07:25Z). The ask: n_t(c), each template's unit count for a request Program at class c, computed from a RequestUnit key and the registered config without building the Program, as a closed form from your layer templates. Add a test holding it equal to the built Program's template_instance_query counts at class G's small classes. Put it in the CIR-184 PR or its own, and post one line on VLLM-250 when it's marked.
+
