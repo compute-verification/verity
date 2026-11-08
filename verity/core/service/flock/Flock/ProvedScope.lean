@@ -27,6 +27,45 @@ def portReadsB (net : Net) : Bool :=
   (List.range (net.constPos - n)).all fun i =>
     ((net.a.row (n + i)).toList ++ (net.b.row (n + i)).toList).all fun x => decide (x < n → mask.getD x false = true)
 
+/-- `p` on the `k` entries from entry `t` of the row starting at byte `s` of `m`, without building the row. -/
+@[specialize] def rowAllGo (m : Sparse) (s : Nat) (p : Nat → Bool) : Nat → Nat → Bool
+  | 0, _ => true
+  | k + 1, t => p (rd32 m.data (s + 4 * t)) && rowAllGo m s p k (t + 1)
+
+/-- `f` on the `k` numbers from `i`, without building the list. -/
+@[specialize] def allFrom (f : Nat → Bool) : Nat → Nat → Bool
+  | 0, _ => true
+  | k + 1, i => f i && allFrom f k (i + 1)
+
+theorem rowAllGo_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ k t,
+    rowAllGo m s p k t = ((List.range' t k).map fun t => rd32 m.data (s + 4 * t)).all p := by
+  intro k
+  induction k with
+  | zero => intro t; rfl
+  | succ k ih => intro t; simp only [rowAllGo, ih, List.range'_succ, List.map_cons, List.all_cons]
+
+theorem allFrom_eq (f : Nat → Bool) : ∀ k i, allFrom f k i = (List.range' i k).all f := by
+  intro k
+  induction k with
+  | zero => intro i; rfl
+  | succ k ih => intro i; simp only [allFrom, ih, List.range'_succ, List.all_cons]
+
+/-- `portReadsB`, each row's entries read where they lie. -/
+def portReadsBFast (net : Net) : Bool :=
+  let n := min (net.inWords * WORD) net.constPos
+  let mask := portMask net.inGroups n
+  let ok := fun x => decide (x < n → mask.getD x false = true)
+  allFrom (fun i => rowAllGo net.a (net.a.start.getD (n + i) 0) ok (net.a.len.getD (n + i) 0) 0 &&
+    rowAllGo net.b (net.b.start.getD (n + i) 0) ok (net.b.len.getD (n + i) 0) 0) (net.constPos - n) 0
+
+/-- Compiled code runs `portReadsBFast`; the kernel and every proof see `portReadsB`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `scopeOk`. -/
+@[csimp] theorem portReadsB_eq_fast : @portReadsB = @portReadsBFast := by
+  funext net
+  unfold portReadsB portReadsBFast
+  simp only [allFrom_eq, rowAllGo_eq, List.range_eq_range', Sparse.row, Array.toList_map, Array.toList_range,
+    List.all_append]
+
 /-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
 def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
 
