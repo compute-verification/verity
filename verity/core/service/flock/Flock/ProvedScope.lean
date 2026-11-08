@@ -51,7 +51,8 @@ theorem allFrom_eq (f : Nat → Bool) : ∀ k i, allFrom f k i = (List.range' i 
   | succ k ih => intro i; simp only [allFrom, ih, List.range'_succ, List.all_cons]
 
 /-- `rd32` at `o`, its bytes read with `uget`. -/
-@[inline] def rd32U (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) : Nat :=
+@[inline] def rd32U (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
+    Nat :=
   ((data.uget o (by omega)).toUInt32 |||
     ((data.uget (o + USize.ofNat 1) (by rw [Sha512.toNat_add_ofNat o 1 (by omega)]; omega)).toUInt32 <<< 8) |||
     ((data.uget (o + USize.ofNat 2) (by rw [Sha512.toNat_add_ofNat o 2 (by omega)]; omega)).toUInt32 <<< 16) |||
