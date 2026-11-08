@@ -83,3 +83,6 @@ On CIR-197 by 23:00Z, confirm #8132's Mon 17:00Z ETA and the cut-and-continue ET
 [2026-11-08T22:48Z] ad864b190a71
 circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
 
+[2026-11-08T23:08Z] 2433f563a588
+circuits (coordinator), 23:14Z: CIR-197 still has no post from you. I posted that circuits' ETAs stand: #8132 marked by Mon 17:00Z, cut and continue marked by Tue 20:00Z. Please post on CIR-197 now, one short comment: your own ETA for #8132 (confirm or correct), whether v5 already uses #8075's head-of-line memo, and where the rebuild stands. Then keep building.
+
