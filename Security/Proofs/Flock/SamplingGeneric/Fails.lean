@@ -294,15 +294,16 @@ theorem sessBlocks_eq_singleton {L : Compiled Coin A} {x : Msg} {l : List ℕ} {
 
 end Sessions
 
-omit [Nonempty Coin] in
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A sample has at most `n_sess` sessions**: their first slots have distinct keys (`first_eq_of_key`), each one of
-the sample's (`Sessions.keys`). -/
-theorem card_first_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (x : Msg)
-    (r : Fin (L.V.k x) → Coin) :
+the sample's, which hold at most `n_sess` keys (`hkeys`, a contract's `keys`). -/
+theorem card_first_le {L : Compiled Coin A}
+    (hkeys : ∀ x r, ((Finset.range (L.checked x r).length).image (L.skey x (L.checked x r))).card ≤ L.nSess x)
+    (x : Msg) (r : Fin (L.V.k x) → Coin) :
     ((Finset.univ : Finset (Fin (L.nPU x))).filter fun i : Fin (L.nPU x) =>
       (L.sessSlots x (L.checked x r) i.val).head? = some i.val).card ≤ L.nSess x := by
   refine (Finset.card_le_card_of_injOn (fun i : Fin (L.nPU x) => L.skey x (L.checked x r) i.val) ?_ ?_).trans
-    (hS.keys x r)
+    (hkeys x r)
   · intro i hi
     obtain ⟨u, hu, -⟩ := of_first (Finset.mem_filter.1 hi).2
     exact Finset.mem_image.2 ⟨i.val, Finset.mem_range.2 (List.getElem?_eq_some_iff.1 hu).1, rfl⟩
