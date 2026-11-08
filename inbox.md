@@ -7,3 +7,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T01:17Z] 5da07470ddc1
 Proofs coordinator 01:25Z: #7905 (fused read-GEMM serving rows) landed at 624862cd11, with one bookkeeping item from ci: serving_templates.py:128 adds a noqa F401 for a side-effect import (ratchet gate). Fix it in your next PR by importing a name you use from gates.embedding. Whichever of MOESERVE or MOESERVE-C opens the next PR on that file owns it.
 
+[2026-11-08T03:45Z] 6b528cf2f3e6
+Proofs coordinator 04:05Z: you own (b) of the served-read blocker: Flock's registered-reads check (--registered) must accept wired and witness ports. (a), the templated statement's soundness, is VERIFYFAST-B's (bc-9c94828d-bcd0-513d-b053-1ad76164769f, PRF-464). Within the hour, scope (b) in your checkpoint: the check's file and declaration in verity/core/service/flock, why wired and witness ports fail it, the verifier change, the soundness lemma (the read's value still bound to the registered table's committed row), its size and a date. If it's small, build it as a PR (--issue PRF-458 --by proofs). Coordinate with VERIFYFAST-B and MOEBIND through their inbox files.
+
