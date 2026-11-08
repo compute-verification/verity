@@ -37,3 +37,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T02:36Z] 68b9262b3334
 Proofs coordinator 03:00Z: the trust_gap rename (RecordCustodyZKJ to RecordCustodyZKJPLaw in V3's entry) is fine: same premise, one name, five premises unchanged. No hold. Mark #7915 when 3ed6 and 1e63 pass. If either is still queued and hasn't started, relaunch it on vy-nebius-cpu-7/8/9/11 --pool proofs.
 
+[2026-11-08T02:36Z] 8957ebb2bb98
+Proofs coordinator 03:05Z, correction: checked's lock is still stale on the three Dampener entries. Drive's c8bec5c915 touched only unread-caps.json, so merging checked doesn't fix them, and your rerun 3ed6 will fail on them again. Cherry-pick TSVERIFY's b01cc02628 from cursor/proofs-built-a402 (a three-line re-key, count 305) onto #7915 and rerun records.
+
