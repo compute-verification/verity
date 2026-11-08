@@ -7,7 +7,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr::{null, null_mut},
     slice::from_raw_parts,
-    sync::OnceLock,
+    sync::{Mutex, OnceLock},
 };
 
 use flock_field::F128;
@@ -242,20 +242,25 @@ pub(crate) unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_le
 }
 
 pub(crate) fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
-    let nnz: u64 = m.rows.iter().map(|r| r.len() as u64).sum();
+    csc_of(&m.rows, m.num_cols)
+}
+
+/// The CSC of `rows` over `num_cols` columns: the same as of them followed by any number of empty rows.
+pub(crate) fn csc_of(rows: &[Vec<usize>], num_cols: usize) -> (Vec<u32>, Vec<u32>) {
+    let nnz: u64 = rows.iter().map(|r| r.len() as u64).sum();
     assert!(nnz <= crate::circuit::GPU_NNZ_MAX, "{nnz} nonzeros: past the device prover's 32-bit offsets");
-    let mut col_ptr = vec![0u32; m.num_cols + 1];
-    for row in m.rows.iter() {
+    let mut col_ptr = vec![0u32; num_cols + 1];
+    for row in rows.iter() {
         for &c in row {
             col_ptr[c + 1] += 1;
         }
     }
-    for c in 0..m.num_cols {
+    for c in 0..num_cols {
         col_ptr[c + 1] += col_ptr[c];
     }
     let mut next = col_ptr.clone();
     let mut rows_flat = vec![0u32; *col_ptr.last().unwrap() as usize];
-    for (r, row) in m.rows.iter().enumerate() {
+    for (r, row) in rows.iter().enumerate() {
         for &c in row {
             rows_flat[next[c] as usize] = r as u32;
             next[c] += 1;
@@ -277,15 +282,22 @@ fn statics(st: &ChunkStmt) -> &'static Static {
     statics_with(&st.circuit.da, &st.circuit.db)
 }
 
-/// One statement per process: the first caller's Δ is the process's.
 fn statics_with(da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
     statics_for(comp(), da, db)
 }
 
-/// [`statics_with`] with another compression circuit (the CSC the lincheck folds per slot).
+/// [`statics_with`] with another compression circuit (the CSC the lincheck folds per slot). Built once per (compression circuit,
+/// Δ) and kept for the process: a long-lived prover proves statements of many circuits, and the device keys its copies of the
+/// CSC by its addresses (`FcUploads`, prove_circuit.cuh), so it is never freed.
 pub(crate) fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
-    static S: OnceLock<Static> = OnceLock::new();
-    S.get_or_init(|| {
+    type Held = (usize, Vec<(u32, u32)>, Vec<(u32, u32)>, &'static Static);
+    static S: Mutex<Vec<Held>> = Mutex::new(Vec::new());
+    let key = c as *const flock_prover::r1cs::BlockR1cs as usize;
+    let mut held = S.lock().unwrap();
+    if let Some(h) = held.iter().find(|h| h.0 == key && h.1[..] == *da && h.2[..] == *db) {
+        return h.3;
+    }
+    let s: &'static Static = Box::leak(Box::new({
         let ntt_s = AdditiveNttGf8::new(K_SKIP, F8::ZERO);
         let ntt_l = AdditiveNttGf8::new(K_SKIP, F8(1u8 << K_SKIP));
         let mut mcol = vec![0u8; 64 * 64];
@@ -306,7 +318,9 @@ pub(crate) fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], 
         }
         let flat = |d: &[(u32, u32)]| d.iter().flat_map(|&(i, c)| [i, c]).collect();
         Static { a: csc_from_rows(&c.a_0), b: csc_from_rows(&c.b_0), mcol, f8mul, da: flat(da), db: flat(db) }
-    })
+    }));
+    held.push((key, da.to_vec(), db.to_vec(), s));
+    s
 }
 
 struct Reader<'a> {

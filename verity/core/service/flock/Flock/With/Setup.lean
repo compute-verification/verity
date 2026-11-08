@@ -165,6 +165,36 @@ def classOfWith (hs : Hashes M) (bytes : ByteArray) (head : String) (mj : Json) 
     | j => j
   hs.sha512 (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canonUtf8 m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
 
+theorem append_extract_eq_copySlice (pre src : ByteArray) (s : Nat) :
+    pre ++ src.extract s src.size = src.copySlice s pre pre.size (src.size - s) := by
+  apply ByteArray.ext
+  have hp : pre.size = pre.data.size := rfl
+  have hs : src.size = src.data.size := rfl
+  simp only [ByteArray.data_append, ByteArray.data_extract, ByteArray.copySlice, hp, hs, Nat.min_self]
+  rw [Array.extract_eq_empty_of_le (as := pre.data) (i := pre.data.size + (src.data.size - s)) (j := pre.data.size)
+    (by omega), Array.append_empty, Array.extract_size]
+  by_cases h : s ≤ src.data.size
+  · rw [show s + (src.data.size - s) = src.data.size by omega]
+  · rw [Array.extract_eq_empty_of_le (as := src.data) (i := s) (j := src.data.size) (by omega),
+      Array.extract_eq_empty_of_le (as := src.data) (i := s) (by omega)]
+
+/-- `classOfWith`, the file's bytes after META copied once, onto the message's head. -/
+def classOfWithFast (hs : Hashes M) (bytes : ByteArray) (head : String) (mj : Json) : M ByteArray := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no section after META"
+  let m := match mj with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
+    | j => j
+  let pre := head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canonUtf8 m).toUTF8 ++ "\n".toUTF8
+  hs.sha512 (bytes.copySlice (n2 + 1) pre pre.size (bytes.size - (n2 + 1)))
+
+/-- Compiled code runs `classOfWithFast`; the kernel and every proof see `classOfWith`. `@[csimp]` rewrites only code
+compiled after it, so it stays directly below `classOfWith`. -/
+@[csimp] theorem classOfWith_eq_fast : @classOfWith = @classOfWithFast := by
+  funext M _ _ _ hs bytes head mj
+  unfold classOfWith classOfWithFast
+  simp only [append_extract_eq_copySlice]
+
 /-- `parse`'s sections after META from the state `s`, the nets so far and the line it reads next: each block line's net. -/
 def sectionsLoop (tags : Tags) (lines : Array String) (s : Array (String × Net) × Nat) : V (Array (String × Net) × Nat) :=
   forIn Lean.Loop.mk s fun _ __s => do
@@ -187,7 +217,7 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
     (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) : V Circuit := do
   let __s ← sectionsLoop tags lines ((match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
-    | none => pre), 2)
+    | none => pre), 2 + tmplLines tags lines)
   let mut nets := __s.1
   for k in Circuit.FORBIDDEN do
     if J.has mj k then throw s!"META: {k} (a verifier-evaluated part of the computation); the verifier only checks proofs"
@@ -678,8 +708,9 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
 def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
     M Circuit := do
   let mj ← metaOf bytes
+  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
   let ctx := "templated statement META"
-  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
   let tu ← TmplUnit.read (← Tmpl.parse lines) mode

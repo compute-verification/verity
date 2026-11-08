@@ -116,6 +116,6 @@ checkpoint a segment, one deficient word a segment, and whose share is positive 
 (the B200 heavy design's keyed rounds `y ← (y ⊕ k)·a + c` in the li fold, a round the run skipped being a wrong word),
 (L) holds at 0: a deficient round never passes. -/
 def LuckCaseAKeyed : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {S : ℕ} (G : ReceiptGame Ω S), G.Pinned → G.CaseA → G.WrongWords → LuckAt 0 G.game
+  ∀ {Ω : Type} [Fintype Ω] {S : ℕ} (G : ReceiptGame Ω S), G.Pinned → G.CaseA → G.IncorrectWords → LuckAt 0 G.game
 
 end Accounting.Guarantees.TS

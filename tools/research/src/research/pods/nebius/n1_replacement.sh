@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vy-nebius-1's replacement (INF-57): n1 stops at its deadline, 19 Oct 15:00Z; its CPU work (two train slots, Lean slots, lean's
+# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two train slots, Lean slots, lean's
 # cache publisher, the merge mirror, research runs at nice 19) goes to vy-nebius-cpu-4/5, and its GPU and Kueue services retire.
 #
 #   n1_replacement.sh [plan] [PATH]     print every live step in order, each command as it is to be run; runs nothing

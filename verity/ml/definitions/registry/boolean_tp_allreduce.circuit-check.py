@@ -10,7 +10,8 @@ def _boolean_roots() -> list[Any]:
     elements, 1-stage and 2-stage (every rank owns one pack, so every START is reached), and torch's multimem one of 128
     elements (16 per owner) at a chain for owners 0-3 and a balanced tree for 4-7, IEEE and FTZ, and one 16-byte vector of it,
     the one-stage unit, at GLM-5.3's tree with IEEE adds and at the balanced tree with FTZ ones; and NCCL's tree one of 8
-    elements at WORLD 4, down the TP4 capture's chain and down another."""
+    elements at WORLD 4, down the TP4 capture's chain and down another, and its coordinate at WORLD 8 down the PCI order (the
+    coordinate combine a TP8 window wires under batch invariance, `tp_combine.coordinate_binding`)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_tp_allreduce as BA
     from verity.ml.definitions.registry import tp_allreduce as TA
@@ -23,4 +24,5 @@ def _boolean_roots() -> list[Any]:
         *[bind(BA.AllReduceMultimem, WORLD=8, SIZE=128, TREES=trees, FTZ=f) for f in (False, True)],
         *[bind(BA.AllReduceMultimemVector, WORLD=8, TREE=t, FTZ=f) for t, f in ((TA.GLM53_H200_TREE, False), (balanced, True))],
         *[bind(BA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=c) for c in ((0, 1, 2, 3), (2, 0, 3, 1))],
+        bind(BA.AllReduceNcclTreeCoordinate, WORLD=8, CHAIN=tuple(range(8))),
     ]
