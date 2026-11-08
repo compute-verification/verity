@@ -289,6 +289,8 @@ def repriced() -> dict[str, Case]:
     for s in ("R6", "R6x4"):
         for e, kw in extras.items():
             out[f"{s}+{e}"] = Case(**(base | steps[s] | kw))
+    for s in ("R6x4+all+4perH200+host", "R6x4+all+4perH200+host+hash4"):
+        out[f"{s}+vtmpl"] = replace(out[s], verify=reprice.VERIFY_TEMPLATED)
     for s in ("R6x4", "R6x4+all+4perH200"):
         out[f"{s}+vflat"] = replace(out[s], verify=0.4)
         out[f"{s}+vtmpl"] = replace(out[s], verify=reprice.VERIFY_TEMPLATED)
