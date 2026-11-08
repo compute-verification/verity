@@ -8960,3 +8960,41 @@ head follows.
     file, the code the templated path edits. The rest is the line split (20 s) and the number scan (15 s).
   - Building the matrices, 21 s, and the session's `foldRow` (64 s) and allocation (16 s). Writing in place needs
     `ByteArray.set!` or `uset` in `verifier.allow`.
+
+## 08:50Z from MOESERVE-C: [#8020](https://github.com/compute-verification/verity/pull/8020) is marked at `6839cb68e0` (PRF-458); on the real L5 layer Lean accepts every served read with `--registered`; land ask below
+
+- **Suites:** all 54 suites #8020 touches passed with `--changed f576efc545 --quick` (r20261108-080327-bd49, cpu-11,
+  87 min of test time). The first run, 76f2, had used `--fresh` without `--quick` and hit its 90-min timeout with no
+  failures.
+  - The mark's preflight merged #8020 onto `next` at `effd33690f` and refused nothing.
+  - No Lean changes.
+- **#7981, the move:** #8020 merges cleanly with #7981's head `bb0d466328`, and none of its added lines contain a name
+  the move renames. So no restack is needed. If drive's regenerated move conflicts anyway, I'll carry #8020 across with
+  `restack.py` once the move is on `checked`.
+- **End to end with `own_value`,** on synthetic served MoE windows, fused, flat read statements:
+  - r20261108-061832-52e7 ran with #7999 in the tree, and r20261108-061901-89c0 ran without it. Both passed.
+  - Each run's audit record accepted, with every check passing. Lean accepted 12 of 12 verdicts, reads included.
+  - 26 of 26 negatives were refused, the new port-committed-afresh case among them, and 6 of 6 proof edits.
+  - `registered-read-opened-against-another-root` no longer runs on this window. The registration lists no registered
+    values, so it was skipped before the fix as well.
+- **The real L5 layer, from the served arms on the flat branch before `own_value`.** Lean accepted every drawn session
+  with `--zk --registered`, every served read among them:
+  - fused r20261108-051615-53ff: the router, the scale reads `EmbeddingRead_v1{V=256,H=96}` and `{H=4}`, and the fused
+    read-GEMMs `MoeExpertFp8ReadGemm_v1` (w13, reading `H=3072`) and `MoeExpertFp8ReadGemmW_v1` (w2, reading `H=4096`);
+  - unfused r20261108-051638-ee9f: the router, the weight reads `H=3072` and `H=4096`, the scale reads `H=96` and `H=4`,
+    and both GEMMs.
+  - Each read's own ports opened at the registration's roots; I checked every one. Its table ports opened at the roots
+    in the verifier's `--registered` file, which `records_audit` builds from B's table registration. Staging read 756
+    tables, with no row left unregistered. I didn't re-derive those table roots myself.
+  - Both arms are still in their audits' record checks and negatives, ETA about 11:00–13:00Z. Their audit records will
+    refuse at `registered`, since they predate `own_value`. A rerun with `own_value` needs cpu-1, or B's key moved, which
+    is your call.
+- **Not yet shown: the templated read statement.** The smokes on #8003 + #7999 staged flat statements
+  (`verity/flock-circuit`), so `--registered` hasn't met `verity/flock-circuit/tmpl`. The place to show it is
+  MOESERVE's templated MoE session (310a), verified with a `--registered` file built by `rows.own_reads`. Shall I?
+- The unfused smoke on #8003 + #7999 (r20261108-061808-db89, cpu-7) is in its negatives, ETA about 09:30Z. Its five
+  sessions, both reads among them, were accepted.
+
+Land ask for #8020 (36 words): "#8020 (proofs, PRF-458) registers a served read member's other ports at the registration's roots, so
+Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the fused smoke passes end to end; real L5 reads accepted."
+
