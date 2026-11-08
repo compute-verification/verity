@@ -10,6 +10,48 @@ It carries no policy parameter: it surfaces the ε at δ its sample established.
 least half of the honest prover's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
 every product, is a reference, not an answer.
 
+## Start here
+
+- **The verifier** is Lean (What runs, below). `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) is the subprotocol
+  the onsite and the remote protocol compose: it decides each execution phase by `PouwCheck.check` and credits a closed
+  credit period by `PouwCheck.Credit`. Its executable is `pouw-check`; the Python modules of the same names mirror it,
+  held to it by difftests.
+- **The guarantees.** Each `G` is stated as `Pouw.Guarantees.G` or `Accounting.Guarantees.G` under
+  `Security/Definitions/` and proved as its `SecurityProofs.G` under `Security/Proofs/`; `Security/lean-audit.json`
+  records each statement and its premises. W is the credited reference work, t the work-weighted samples, ε_s the share
+  of W a sample may miss, and γ = 1 − (1 − γ₀)/Ω_max.
+  1. **The audit game**, `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): for every in-domain workload and
+     every adversary within its budget and q ≤ 2^64 oracle calls, Pr[the audit accepts ∧ the work done is below
+     (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + ε(q, N). Assumes TT(γ₀) (`Pouw.Assumptions.TT`), the scheme's conjecture;
+     `Pouw.Guarantees.GammaFromTT` is its first step, the scheme's G_γ from TT.
+  2. **Per run, for compute accounting**, `Accounting.Guarantees.ComputeOfPouwPerRun`
+     (`Accounting/Guarantees/PerRun.lean`): on any device whose compute audit realizes PoUW's game, the compute
+     audit's per-run guarantee holds at certificate (1 − γ)(1 − ε_s)·W with error (1 − ε_s)^t + ε(q, N), q the device's
+     oracle rate times the compute window. Assumes TT and `Accounting.BudgetAbort` (the cost model truncates).
+  3. **A credit period's binding**, `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`):
+     binding of a credit period's openings fails in each verification phase with probability at most
+     |L|·√(q/2^256 + κ), q the SHA-512 calls of the prover's own fork finder at the period's positions L. Assumes
+     `Claims.ExpectedCR` at that finder; κ (accepted openings no path verifies, and positions that split) is stated in
+     full and not yet bounded.
+  4. **The served credit's spot check**, `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap`
+     (`Pouw/Guarantees/RelativeSecurity.lean`): a play whose errors are of degree at most 2 is accepted with deficiency
+     at least D with probability at most e^{−D/4}. No premise.
+
+  Also proved: the deadline (`WorkBetweenSaltAndDeadline`, `SpareCapacityAtDeadline`, `PearlCSampledByDeadline`) and
+  each scheme's γ at its served point (NCP's `NCP.GammaFromTTNCP_U_v1`; Pearl-C's
+  `PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin), under the schemes' TT forms
+  (`Pouw.NCP.Assumptions.TTNCP_U`, Pearl-C's `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`, Pearl-C4's
+  `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise (`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`),
+  the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled tile's proof
+  (`Pouw.PearlC.Assumptions.TileProofSoundAll`) and the claims `trusted-host`, `live-verifier`, `cr/sha-512` and
+  `prf/sha-512` (`verity.core.claims`). Stated and open: an execution phase's ε from its calls'
+  (`Pouw.Guarantees.Window.WindowEps`, `Security/Definitions/Pouw/Guarantees/Window.lean`), Dither's
+  (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`), and several of Pearl-C's per-shape and per-model
+  instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`).
+- **Where next.** `lean/check/README.md` maps each Lean module to its Python. `Security/README.md` (Start here) gives
+  the guarantees PoUW rests on (SPOT's and Flock's) and the composite protocols' soundness, whose PoUW target is
+  `PouwSound`. `benchmarks/pouw/` measures it.
+
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
@@ -44,9 +86,8 @@ references, held to them by the difftests (`lean/check/tests`, `lean/window/test
 the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) is the switch, and
 setting it to `"python"` is the one line that undoes it.
 
-An **execution phase** is the served steps one commitment covers (PoUW's older name, "commit period"). The code and the
-Lean call it an execution phase (`window.py`, `PouwWindow`, `credit.window`), and keep the name until a format version. In one
-execution phase:
+An **execution phase** is the served steps one commitment covers; the code and the Lean name it a window (`window.py`,
+`PouwWindow`, `credit.window`) until a format version. In one execution phase:
 
 1. The weights' root binds every weight's committed rows, and a credit period's open signs it.
 2. The salt is a live coin of the challenger, opened once after the root it follows (`PouwCheck.Rounds`,
@@ -86,42 +127,6 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
-
-## Security assumptions and guarantees
-
-Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Proofs/Pouw`, as
-`Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
-reads. Proved:
-
-- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`, through two lemmas in
-  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's γ holds with error η and the sample misses more
-  than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is
-  below (1 − γ)(1 − ε_s)·W with probability at most δ_s + η) and work-weighted sampling.
-- **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
-  `Pouw.SecurityProofs.PearlCSampledByDeadline`.
-- **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`; Pearl-C's at the served point,
-  `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
-  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
-  are lemmas, in `Security/Proofs/Pouw/Lemmas/PearlC.lean` and `Security/Proofs/Pouw/Lemmas/Barrier.lean`.
-- **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
-  `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
-- **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
-  `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
-  `Accounting.SecurityProofs.PouwLocalOff`.
-
-Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and
-`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`);
-Dither's guarantees (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
-per-model instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
-is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept rule
-against its code.
-
-The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
-proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
-`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
-(`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled
-tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
-and `prf/sha-512` (`verity.core.claims`).
 
 ## Core API
 
