@@ -18,13 +18,15 @@ Parts (--part):
           a constant per column); aligning G by least squares against the truth leaves the error, over V*d - d^2 - d
           degrees of freedom. A top-k API with logit bias reads a full vector in ceil((V - 1)/(k - 1)) queries, so the
           honest rate is bits / (n * that).
-  rows    a fault at layer l's MLP hidden unit j (--row-site mlph; attnh: its attention context), value v. The
+  rows    a fault at layer l's MLP hidden unit j (--row-site mlph; attnh: its attention context; resid: the residual
+          stream itself, w_j = e_j), value v. The
           residual stream at that position gains (v - a_j) w_j, w_j the unit's row of the down (output) projection; at
           large |v| it dominates every later layer's addition, and the final norm
           reads its direction: the logits become E (g * norm(w_j) + b), g and b the final norm's weights. A decoder that
           knows E, g and b (from the final-site attack, peeling from the top) reads norm(w_j) from m logits (logit bias,
-          k - 1 tokens a fault, F = ceil(m/(k-1)) faults) by least squares. Its error against norm(w_j) includes what
-          the honest layers after l add, so this part shows where depth costs the attack and where it does not.
+          k - 1 tokens a fault, F = ceil(m/(k-1)) faults) by an MMSE fit weighted by the served rounding's error. Its
+          error against norm(w_j) includes what the honest layers after l add, so this part shows where depth costs
+          the attack and where it does not.
 
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model gpt2 --part final --out "$OUT"
 """
