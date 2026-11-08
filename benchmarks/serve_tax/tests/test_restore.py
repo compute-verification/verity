@@ -6,6 +6,7 @@ import gzip
 import json
 import pickle
 from pathlib import Path
+from types import SimpleNamespace as NS
 
 import boundary as B
 import pytest
@@ -116,11 +117,14 @@ def test_dump_diff_sets_the_differences_by_construction_apart():
     assert not R.dump_diff(served, {**replayed, "core.extra": 1})["clean"]
 
 
-def test_warm_serves_its_requests_to_the_end_under_other_ids(monkeypatch: pytest.MonkeyPatch):
+def test_warm_serves_its_requests_to_the_end_and_empties_the_batch_queue(monkeypatch: pytest.MonkeyPatch):
     class Eng:
-        def __init__(self) -> None:
+        """Each request takes two steps; under async scheduling (a core with a batch queue) one batch is left in the
+        queue past the last finish."""
+
+        def __init__(self, core: NS) -> None:
             self.added: list[str] = []
-            self.left = 0
+            self.left, self.core = 0, core
 
         def add_request(self, rid: str, prompt: dict, params: object) -> None:
             self.added.append(rid)
@@ -130,9 +134,17 @@ def test_warm_serves_its_requests_to_the_end_under_other_ids(monkeypatch: pytest
             return self.left > 0
 
         def step(self) -> None:
-            self.left -= 1
+            if self.left:
+                self.left -= 1
+                if self.left == 0 and hasattr(self.core, "batch_queue"):
+                    self.core.batch_queue = [1]
+            else:
+                self.core.batch_queue = []
 
     monkeypatch.setattr(R, "params", lambda r: r["sampling"])
-    eng = Eng()
-    assert R.warm(eng, [{"prompt_ids": [1], "sampling": {}}] * 2) == 4
-    assert eng.added == ["restore-warm-0", "restore-warm-1"]
+    core = NS(batch_queue=[])
+    eng = Eng(core)
+    assert R.warm(eng, core, [{"prompt_ids": [1], "sampling": {}}] * 2) == 5
+    assert eng.added == ["restore-warm-0", "restore-warm-1"] and core.batch_queue == []
+    sync = NS()
+    assert R.warm(Eng(sync), sync, [{"prompt_ids": [1], "sampling": {}}]) == 2
