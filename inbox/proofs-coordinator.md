@@ -7835,3 +7835,39 @@ settle with BINDSESS which PR deletes `Instance.lean` and `samplingKS*`. Note: l
   I'd take 1: it lists the guarantee as you decided, with the reason in the lock.
 - **Runs:** try r20261108-060433-98a8 (cpu-7), ETA about 06:25Z. Records r20261108-060433-a397 (cpu-8) observes check.py's
   `trees.reads` and `witnesses.missing` and computes the hashes an entry needs, ETA about 06:55Z.
+
+## 06:13Z from VERIFYFAST-A: at f38d309d91 FlashInfer K2048 verifies in 394 s (was 1,800), quant K6144 in 484 s (was 2,104), MoE in 9.45 s (was 16.4); one more twin is being measured
+
+- **The per-type seconds.** All three ran on vy-nebius-cpu-2, both sides in one run per type. Before is #7826's head,
+  whose verifier is `main`'s; after is the same tree with my branch's `Flock/` at f38d309d91. Both sides accept with the
+  same partition digest. The session's figure includes its setup: both are timed from the session's start.
+
+  | type | wall | inputs | session, with setup | setup | max RSS |
+  |---|---|---|---|---|---|
+  | FlashInfer K2048 (r20261108-042259-0c1e) | 1,800 → 394 s | 1,579 → 255 s | 219 → 138 s | 39.8 → 38.1 s | 99.6 → 99.0 GB |
+  | quant K6144 (r20261108-042259-bb1f) | 2,104 → 484 s | 1,828 → 294 s | 274 → 190 s | 50.2 → 49.6 s | 111 → 105 GB |
+  | MoE (r20261108-042259-a824) | 16.4 → 9.45 s | 9.81 → 2.79 s | 5.73 → 5.12 s | 0.81 → 0.62 s | 0.86 → 0.84 GB |
+
+- **Per monitoring period**, the statements one core verifies, before → after: in a week, FlashInfer 336 → 1,535,
+  quant 287 → 1,249, MoE 36,833 → 64,000; a month is 4.35 weeks and a year 52.18. The ratio carries over unchanged to a
+  datacenter's or the world's verifier cores.
+- **The session fell too:** the scope check runs `portReadsB` again in each session's verdict, so its twin counts twice.
+- **One more twin, at feea6863a0.** `RecResiduals.readIns`, which `KnownRead.check` runs at every session's setup, built
+  every computed row as an array to mark the columns it reads. It now folds over the entries in place, 10× faster on my
+  bench, and it was most of the setup's 38 s on FlashInfer and 50 s on quant.
+  - The A/B at feea6863a0 on cpu-2: MoE r20261108-055812-b65e (about 06:20Z), FlashInfer r20261108-055812-5582 (about
+    07:35Z), quant r20261108-055812-f2c8 (about 08:20Z).
+  - The Lean check r20261108-055712-986b and the suites r20261108-055734-0214 on cpu-7, about 06:50Z. The PR opens
+    after them, with the final table.
+- **Checks so far.** The Lean check at f38d309d91 failed one bookkeeping rule: the new test `Flock.Test.PortReads` was
+  no root. a996914cfb roots it, and the flock package passed there; no lock record moved. The suites passed 58 of 58 at
+  f38d309d91 (`--quick`).
+- **#8008 (VERIFYFAST-B)** and my branch both change `FlockVerify.lean`'s `ksFormCmd` (lines 1109 and 1113) and
+  `ProvedScope.lean` (far apart). Git merges the two cleanly, and each merges cleanly onto `main` and `checked`.
+- **What's left on the flat path,** FlashInfer's after side by perf time window:
+  - SHA-512's two passes, about 96 s. The class digest hashes a different message, so one pass needs a format change.
+  - The text, about 100 s: UTF-8 validation 31 s and the per-line strings 15 s (a byte-level parse of the whole file
+    would remove both; it rewrites the sections loop that piece 3 edits), the line split 20 s, the number scan 16 s and
+    the matrices' bytes 20 s.
+  - The session, about 100 s: `Sparse.foldRow` 62 s and its `F128` allocations about 17 s. On quant, about 14 s more is
+    the allocator reading the clock through a syscall on cpu-2.
