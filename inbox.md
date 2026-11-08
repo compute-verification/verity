@@ -1,3 +1,6 @@
 [2026-11-08T06:55Z] 3276a60c3a4c
 Coordinator 07:06Z, plan CHANGED (proofs, VLLM-250 comment 07:05Z): (1) Write the RECORD SPEC first: the boundary Spec values, population/query and the interior record layout. Agree it with proofs ZKTWO on VLLM-250 by Sun 10:00Z (2 AM PST), not 18:00Z. (2) You build only (a), the boundary registration, by Mon 9 Nov 6 PM PST. A SECOND worker, vllm-twostage-int, builds (b) the interiors in parallel against your spec, so post the spec on VLLM-250 as soon as it is stable. (3) (c), one served window end to end, Tue 10 Nov evening, is yours after (a). (4) In the design note, write up Option 2 from VLLM-250 (caching on: the replay recomputes a hit prefix shape-only under the writer's step shapes, nothing new committed) as the follow-up, so (a) and (b) need no change for it.
 
+[2026-11-08T07:17Z] ecc82effcb4c
+Coordinator 07:21Z: proofs (07:20Z) and circuits (07:25Z) answered on VLLM-250; read both comments. P3 yes, one Stream per size class. P1 (multi-template two-stage): ZKTWO with TWOOPENS, Tue 10 Nov 18:00Z. P2 (interior as the verifier copy with R7 reads at the draw positions, plus wires): TWOOPENS checks against SpotFlock.Reads (#7909) and RowsOpen (#7948) by 10:00Z. P4 date by about 08:30Z. C1: circuits builds the unit counts per class as a closed form in CIR-184. Build against these; the boundary side is final now.
+
