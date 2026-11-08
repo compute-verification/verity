@@ -102,7 +102,7 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
 #: `Nci.Dampener.remoteDampener` as Security/Definitions/Nci/Remote.lean defines it, and the conclusion of
 #: `Nci.Guarantees.DampenerRemote` (Security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
 REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
-REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
+REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():

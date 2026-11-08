@@ -149,7 +149,7 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   hardware outside it is unregistered. Φ_X is X's **capacity**, work a tick at its rated peak (the site entry: SKU,
   clock, rate per operand class). Φ_R and Φ_U are the registered and unregistered capacities, Φ = Φ_R + Φ_U.
 - **The actual circuit** A: every gate the hardware computed, hidden work included, each gate g at a leaf x(g) and a
-  tick t(g); A[X, I] is its gates at X during the ticks I. The builder's own runs, the developer's preparation and
+  tick t(g); A[X, I] is its gates at X during the ticks I. The registered compiler's own runs, the developer's preparation and
   anything else the hardware does are gates of A.
 - **Initial information**: the registered information θ, input gates whose values are committed before J (models, code,
   data). Nothing else is carried into J.
@@ -172,9 +172,9 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
 - **Derived quantities**, none assumed:
   - F, the incorrect proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
     the **faulty share** φ, the share of credited work that lies in F;
-  - Φ_cred, the rate PoUW credits as registered work, and the **credited utilization** u = Φ_cred/Φ_R;
+  - Φ_cred, the rate PoUW credits, and the **credited utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
-  - Φ_D, the rate of correct credited registered work;
+  - Φ_D, the rate of the registered circuit's correct credited work;
   - q_I, the most of the weighted count inference block I computes whole (part 2); ζ̄ and the counts below use the same
     convention.
 - **Updated state.** The trained model's parameter slots i, each with its eligible versions (one per optimizer step
@@ -242,7 +242,7 @@ multiplications) is coverage for one structure: a candidate sufficient condition
 A block can **import** information, spending its k fresh bits, or **reconstruct** it, spending its c gates. A local
 bound has three ingredients, each with its own premises: **information** (which jointly selected values are expensive
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
-per-block cap to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
+block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
 `Nci.Capability` (vocabulary), `Nci.Assumptions` (premises) and `Nci.Guarantees` (the repertoire), one module per role;
 `Security/Definitions/Nci/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
 test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
@@ -325,11 +325,11 @@ record is the min-cut theorem (Start here).
 
 #### Counting and the standard assemblies
 
-Theorem 3 (`Verity.Guarantees.Counting`, proved) turns a per-block cap q on weighted counted products into
+Theorem 3 (`Verity.Guarantees.Counting`, proved) turns a block yield q on weighted counted products into
 |C| ≥ c·Ω/q, Ω the computation's weighted total; coverage must then bound Ω, not the raw product count. The assemblies
 used so far:
 
-| Information | Structure | Per-block cap |
+| Information | Structure | Block yield |
 |---|---|---|
 | update hardness | dependency, recomputing priced out | k, in served weight |
 | none | dependency, recomputing by gates | k + c/g, in served weight |
@@ -373,10 +373,10 @@ guarantees to read first"):
 **The accounting**, deterministic. Every counted multiplication of a successful computation inside A goes to exactly
 one of two parts:
 
-- an inference block I of correct credited registered computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
+- an inference block I of the registered circuit's correct credited work whose effective fresh input k_I + k_{F,I} + k_{a,I}
   (its own fresh input, the bits incorrect proof blocks inject into it, and the advice bits its structure depends on) is
   within the range of part 2's assembly, contributing q_I;
-- the remainder: unregistered hardware, registered hardware not running credited registered work, the incorrect proof
+- the remainder: unregistered hardware, registered hardware not running credited work, the incorrect proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
 Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
@@ -462,7 +462,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
-| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
+| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
@@ -494,7 +494,7 @@ guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by m
 Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
 assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
 its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
-declared in `Definitions/Assumptions.lean` (`assumptions_module`) or under it; any other named premise is open, under `open` with
+declared in `Definitions/Assumptions.lean` (`assumptions_module`) or under it; every other assumption is open, under `open` with
 the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
 hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
 with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
@@ -503,14 +503,29 @@ when:
 
 - a declaration uses an axiom other than `propext`, `Classical.choice` and `Quot.sound` (so no `sorry`, `axiom` or
   `native_decide`), or an option that skips the kernel;
-- a guarantee has a `Prop` hypothesis that is not a named premise: a `Prop` listed by name in the lock, with an owner
+- a guarantee has a `Prop` hypothesis that is not an assumption: a `Prop` listed by name in the lock, with an owner
   and its definition's digest;
 - a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions`), or an
   open premise is not listed;
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
-- a record no longer matches the build.
+- a record no longer matches the build;
+- a deployed guarantee rests, outside the trust base, on a premise its `trust_gap` entry doesn't list, or the entry
+  lists one it no longer rests on.
+
+The trust base (`trust`) is what the deployed guarantees may rest on: SHA-512's collision resistance
+(`SHA512CRStrict`, `SHA512CRExpected`, `Claims.StrictBirthday`, `Claims.ExpectedCR`), uniform random bytes
+(`UniformRandomBytes`, `UniformRandomBytesTest`) and an honest verifier's coin log (`ChallengerLogsCoins`,
+`FlipsAfterRecorded`, `VerifierReadsLog`), with Lean's kernel under all of them (`trust.base`, each premise with the
+assumption it states). A deployed guarantee
+may also rest on premises of its own that a ruling's rule names, each with that reason (`trust.extra`): the remote
+audit's verifier never talks to the onsite devices and gets their LMS signatures only as witness inside the proof, so
+`Verity.remote_soundness_of_subprotocols` trusts `LmsUnforgeable`. `deployed` lists the guarantees that
+state the deployed system, and `trust_gap` what each rests on beyond its trust: the named assumptions and open
+premises its record lists, and those of each listed guarantee whose statement it takes as a domain hypothesis. A
+premise enters the gap only by hand, and leaves it when a proof discharges it; the Lean check prints each deployed
+guarantee's gap, and the total is to reach zero.
 
 A changed record means a guarantee now says something else. When one lands, the change is shown, the statement before
 and after and each changed definition with its source; nothing waits on it, and a guarantee that only moved shows none.
@@ -555,14 +570,14 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   acceptance to `SampledKSLiveV3`'s event.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
-  `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
+  `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
   onsite's (`verity/core/protocols/sampled_proofs/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
-  Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
+  Remote's coin path is three assumptions over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
   `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
   reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed

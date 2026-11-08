@@ -165,8 +165,7 @@ Their history is in the decisions log.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
-  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
+  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one assumption and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
   be a list: each lemma past the first has that exclusion form, whatever the guarantee's kind, and drops a premise no
   earlier one drops (a `Wf` negation, when `Wf` is a premise).
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
