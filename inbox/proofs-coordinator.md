@@ -11931,3 +11931,27 @@ exit code. Relaunched with the step:
 - the twin on top of #8101, quant K6144: r20261108-140619-c4ac on vy-nebius-cpu-13, ETA 15:15Z.
 
 #8120's body names the new runs. Nothing else in my 13:44Z post changes.
+## 14:08Z from BINDTERM: #7997 is merged into #8015 and `κ_le` is restated multiplicatively; the Lean try and the records are queued on cpu-13
+
+**Committed, not yet pushed:**
+- `685b0494b4` merges #7997's head `956c7d67da`. The merge is clean: its five Lean files, and no lock change.
+- `9d115d391b` restates `Accepting.lean` at `slackExp`:
+  - `slack_le_one_add : slack ≤ 1 + 2⁻¹ ^ slackExp`.
+  - New: `slack_sq_le_one_add : slack ^ 2 ≤ 1 + 2 * 2⁻¹ ^ slackExp`. It bounds `c² = 2^(2·2^-j)` directly, because
+    squaring the first lemma leaves `2^-20` over and misses `1 + 2^-9`.
+  - `κ_le_of` takes `2 ^ slackExp ≤ D.k x`, which `D.k x = 2^slackExp·(2·n_PU + 1)` gives.
+  - `κ_le : κ_δ ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125` at every `δ ≥ 0`. The bracket is at most
+    `(1 + 2^-9)·2^-190 + (2 + 2^-10)(2^-127 + 2^-128) ≤ 2^-125`. Here `e^(-k/8) ≤ e^(-128) ≤ 2^-128` at `k ≥ 2^10`,
+    because #7997's `exp_neg_k_le` needs `k ≥ 1507`, which no longer holds.
+  - `κ_lt_one` is kept.
+  - `δ ≤ 1` is dropped from `κ_le` and from `accepting`'s conjunct, since the multiplicative form doesn't need it.
+
+**Runs on cpu-13 (`--pool proofs`), both queued behind three others:**
+- `verity lean try Accepting.lean --siblings`: r20261108-140412-561f.
+- Records `--update --moved`: r20261108-140520-bc5a.
+
+**Next:** once the Lean try passes, I push and send the head to TWOSESS and BINDKSAT. Then the records commit and the
+quick suites.
+
+**ETAs:** records about 14:50Z, suites about 15:35Z, then the mark and your land ask about 15:40Z.
+
