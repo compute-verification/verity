@@ -30,7 +30,7 @@ theorem poolOpen_of_chains (rec : Json) {v : Registration.Verifier} {p : Registr
     (hc : p.chains v.log (Flock.hexOf v.program.sha512) = true) :
     Registration.poolOpen rec v p = chainOpen v.log.back? p.pout := by
   unfold Registration.poolOpen
-  exact (ite_cond_eq_true _ _ (eq_true hc)).trans rfl
+  exact (ite_eq_left_of_eq_true _ _ (eq_true hc)).trans rfl
 
 theorem openOf_of_chains {rec prev : Json} {v : Registration.Verifier} {p : Registration.Pool}
     (hc : p.chains v.log (Flock.hexOf v.program.sha512) = true) (hlog : v.log.back? = some prev) :
