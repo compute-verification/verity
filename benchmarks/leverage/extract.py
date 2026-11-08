@@ -153,7 +153,10 @@ def part_honest(lm: LM, tok, a) -> dict:
 
 
 def target_row(lm: LM, site: str, l: int, j: int) -> torch.Tensor:
-    """The residual-stream direction unit j of site feeds: a row of the projection after it."""
+    """The residual-stream direction unit j of site feeds: a row of the projection after it, or for the residual stream
+    the unit vector itself, which makes the readout the final-site attack and leaves only its contamination to read."""
+    if site == "resid":
+        return torch.eye(lm.spec.d)[j]
     if lm.spec.arch == "gpt2":
         return lm.W[f"h.{l}.{'mlp' if site == 'mlph' else 'attn'}.c_proj.weight"][j].float()
     name = "mlp.down_proj" if site == "mlph" else "self_attn.o_proj"
@@ -182,7 +185,7 @@ def part_rows(lm: LM, tok, a) -> dict:
     gen = torch.Generator().manual_seed(a.seed)
     layers = sorted({l if l >= 0 else lm.spec.layers + l for l in a.layers})
     site = a.row_site
-    width = lm.spec.ff if site == "mlph" else lm.spec.heads * lm.spec.head_dim
+    width = {"mlph": lm.spec.ff, "attnh": lm.spec.heads * lm.spec.head_dim, "resid": d}[site]
     reads = [int(r * d) for r in a.read_over_d]
     out = []
     pre, last, t0 = prefix(lm, tok, PROMPTS[0])
@@ -264,8 +267,9 @@ def main() -> int:
     ap.add_argument("--n-over-d", type=float, nargs="+", default=[1.1, 1.5, 2.0])
     ap.add_argument("--layers", type=int, nargs="+", default=list(range(-12, 0)))
     ap.add_argument("--units", type=int, default=16, help="rows: hidden units per layer")
-    ap.add_argument("--row-site", default="mlph", choices=("mlph", "attnh"),
-                    help="rows: the MLP's hidden units (down-projection rows) or the attention context (output-projection rows)")
+    ap.add_argument("--row-site", default="mlph", choices=("mlph", "attnh", "resid"),
+                    help="rows: the MLP's hidden units (down-projection rows), the attention context (output-projection "
+                         "rows) or the residual stream (contamination only)")
     ap.add_argument("--values", nargs="+", default=["1e6", "1e3", "64rms", "8rms"])
     ap.add_argument("--read-over-d", type=float, nargs="+", default=[1.25, 4.0], help="rows: logits read per row, over d")
     ap.add_argument("--batch", type=int, default=128)
