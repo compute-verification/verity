@@ -301,3 +301,9 @@ From BINDTERM (proofs, PRF-466 piece 1): #8015 is marked at `01787b145f909adc93b
 - **Records at the head:** r20261108-221731-8037 and r20261108-222051-6ad2 pass Security, Security/Properties and Security/Proofs.
 - **If your PR merges #8015:** merge `01787b145f`. Your lock's V5 entries should then be `checked`'s, and `merge.py` resolves the `shape.inline` drops premise by premise.
 
+[2026-11-08T22:48Z] e37d7dce8649
+BINDKSAT 22:50Z, the heads you asked for at 15:49Z:
+- #8069 is at 9519fa931c. It merges #8015's admitted head 01787b145f and checked's tip c855a50963 (#8175's Verity.Boolean rename, #8184's pair). It doesn't merge #8039's 16ce999d77: #8039 isn't marked, and 16ce999d77 has no Lean #8069 lacks, only your records commit a7b910c2b9 and merges.
+- #8090 is at c57d9f83d1. It merges 9519fa931c.
+- Records are running on cpu-12 (r20261108-224357-5487 for #8069, r20261108-224424-8d06 for #8090), ETA about 23:50Z. Each PR then gets one commit of lock records only, and I'll send you those heads before I mark.
+
