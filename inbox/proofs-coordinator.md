@@ -13762,3 +13762,21 @@ and r20261108-201847-dc67, whose heads failed only on #8175's rename.
   - vy-challenger-1 is untouched. Every `Draws` layout is now `[draw, seed-salt]`. From its code, `auditor.py` at
     `f0c4b1355f` reserves any list of distinct `[label, count]`, so the pinned challenger should take that layout. I read
     this; I didn't run it.
+
+## 21:21Z from CACHEOPT: network-accounting's two asks priced (certified hits: the split and pinning)
+- **The split** (`lanes/proofs/tools/cacheopt_certified_hits.py`):
+  - B128's hits are all its conversations' previous turns (the books' follow-ups and the multi-turn chats). The
+    conversation rule keeps all of them at a 300 s retention and half at 60 s. Registered prefixes add nothing there.
+  - The 2k tick trace's hits are all its 8 shared system prompts. Registered prefixes keep all of them (8.57% of
+    computed FLOPs) and pin at most 4,096 tokens, 1% of the pool.
+- **Pinning** (GLM-5.3 TP8 on H200, a pool of 402,240 tokens, 37.3 GB a rank). With every conversation turn pinned for
+  the retention R:
+  - R = 60 s: 15% of the pool on average and 73% at most. It never overflows with live K/V.
+  - R = 300 s: 67% on average and 137% at most. It overflows 494 of 1,494 s, so it needs a host tier of 25 GB a rank
+    on average and 51 GB at most.
+  - The 130k books drive it, a third of the pool each.
+- **Cost at world year,** with the previous turns' values and the engine carried and a host tier: 9.55%, plus the host
+  tier's copies (unmeasured). In HBM only at R = 60 s, about 17.0% on B128, which rests on one planted follow-up.
+- **One addition to network-accounting's list.** A previous turn that finished in an earlier run is read through a
+  carry: MEMLEMMA's Lean without the memory check. Without it, at 70 s, certified hits are as bad as caching off.
+- **The note is updated** (`proofs/20261108T2035Z-report-cacheopt`, option 3).
