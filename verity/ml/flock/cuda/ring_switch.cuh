@@ -117,10 +117,14 @@ __device__ __forceinline__ void ring_words(F128 v, uint32_t* w) {
 
 // A warp's 32x32 bit transpose: lane l returns bit l of every lane's x, lane r's in bit r
 __device__ __forceinline__ uint32_t ring_transpose32(uint32_t x, int lane) {
+    // stages 16 and 8 move whole bytes, so each is one permute of the lane's word and its partner's: the low lane keeps its
+    // m-bytes with the partner's m-bytes above them, the high lane its other bytes with the partner's below them
+    x = __byte_perm(x, __shfl_xor_sync(0xffffffffu, x, 16), lane & 16 ? 0x3276 : 0x5410);
+    x = __byte_perm(x, __shfl_xor_sync(0xffffffffu, x, 8), lane & 8 ? 0x3715 : 0x6240);
 #pragma unroll
-    for (int i = 0; i < 5; i++) {
+    for (int i = 2; i < 5; i++) {
         const int s = 16 >> i;
-        const uint32_t m = i == 0 ? 0x0000FFFFu : i == 1 ? 0x00FF00FFu : i == 2 ? 0x0F0F0F0Fu : i == 3 ? 0x33333333u : 0x55555555u;
+        const uint32_t m = i == 2 ? 0x0F0F0F0Fu : i == 3 ? 0x33333333u : 0x55555555u;
         const bool hi = lane & s;
         const uint32_t got = __shfl_xor_sync(0xffffffffu, hi ? (x & m) << s : (x >> s) & m, s);
         x = (x & (hi ? ~m : m)) | got;
