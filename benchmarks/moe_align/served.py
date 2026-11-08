@@ -11,7 +11,7 @@ One engine; every batch is the workload's first request with its prompt rotated 
   of eight at once, over it), a wrap over each rank's Marlin `moe_align_block_size` holds every call's three outputs to
   `moe_align.reference(topk_ids, num_experts, block_size)` bit for bit, by MoE layer, and counts the calls by step kind (a
   prefill step is one with more tokens than the batch has requests) and by the `Align` path the call took; with each rank's
-  `Align.record` before and after.
+  `Align.record` before and after, and the calls of vLLM's own aligners (`VLLM_ALIGNERS`), which must be none.
 - ``decode.jsonl``: the decode step (TPOT, `served_commit.tp_decode.phases`) at ``--batches`` rows, the canonical op against
   vLLM's (`moe_align.uninstall` on every rank, then `moe_align.install` of the same `Align`), interleaved over ``--pairs``
   pairs after a warm-up of each, with a digest of each run's tokens.
@@ -20,8 +20,8 @@ One engine; every batch is the workload's first request with its prompt rotated 
 
 ``summary.json`` gathers them: per rank the MoE layers whose every call equalled the reference, the paths each rank took in
 prefill and in decode, per batch the TPOT of each op and the paired ratios, and the host cost per call and per decode step.
-Exits 3 when a rank does not serve the canonical op, a call differs from the reference, or a rank took either path in no
-prefill step.
+Exits 3 when a rank does not serve the canonical op, an MoE layer's calls miss it (they reach no `Align`, reach one of vLLM's
+aligners, or the layer made none), a call differs from the reference, or a rank took either path in no prefill step.
 """
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ from served_commit.tp_decode import phases, requests_at
 from verity_vllm.engine import moe_align as MA
 
 UNATTRIBUTED = "<outside every MoE layer>"
+#: vLLM's aligner ops (``vllm._custom_ops``): with the canonical op on, the Marlin experts call none of them
+VLLM_ALIGNERS = ("moe_align_block_size", "batched_moe_align_block_size", "moe_lora_align_block_size")
 #: rank-local state of the phases (`check_on`, `use`, `timer_on`)
 _STATE: dict[str, Any] = {}
 
@@ -51,6 +53,10 @@ def _tp_rank() -> int:
 
 def _site() -> Any:
     return importlib.import_module(MA.SITE)
+
+
+def _ops() -> Any:
+    return importlib.import_module("vllm._custom_ops")
 
 
 def status(worker: Any) -> dict[str, Any]:
@@ -66,7 +72,7 @@ def status(worker: Any) -> dict[str, Any]:
 
 class Checker:
     """Holds each `moe_align_block_size` call of one rank to `moe_align.reference`, attributed to the MoE layer whose forward
-    made it."""
+    made it, and counts the calls of vLLM's own aligners (`VLLM_ALIGNERS`)."""
 
     def __init__(self, model: Any) -> None:
         from verity_vllm.acquire.sources.moe_source import moe_layers_of
@@ -76,12 +82,26 @@ class Checker:
         self.modules = [(n, m) for n, m in model.named_modules() if n in self.layers]
         self.hooks, self.handles, self.cur, self.rows = hooks.Hooks(), [], None, 0
         self.by_layer: dict[str, dict[str, Any]] = {}
+        self.vllm_calls: dict[str, int] = {}
 
     def install(self) -> None:
         for name, m in self.modules:
             self.handles.append(m.register_forward_pre_hook(self._enter(name)))
             self.handles.append(m.register_forward_hook(self._leave(name), always_call=True))
         self.hooks.wrap(_site(), MA.NAME, self.wrap)
+        ops = _ops()
+        for name in VLLM_ALIGNERS:
+            if callable(getattr(ops, name, None)):
+                self.vllm_calls[name] = 0
+                self.hooks.wrap(ops, name, self._count(name))
+
+    def _count(self, name: str) -> Any:
+        def make(orig: Any) -> Any:
+            def aligner(*a: Any, **k: Any) -> Any:
+                self.vllm_calls[name] += 1
+                return orig(*a, **k)
+            return aligner
+        return make
 
     def uninstall(self) -> None:
         for h in self.handles:
@@ -143,7 +163,7 @@ def check_off(worker: Any) -> dict[str, Any]:
     """On a rank: the `Checker` uninstalled, and what it saw."""
     c = _STATE.pop("checker")
     c.uninstall()
-    return {"rank": _tp_rank(), "layers": len(c.layers), "by_layer": c.by_layer}
+    return {"rank": _tp_rank(), "layers": len(c.layers), "by_layer": c.by_layer, "vllm_calls": c.vllm_calls}
 
 
 def use(worker: Any, *, canonical: bool) -> dict[str, Any]:
@@ -197,7 +217,8 @@ def digest(tokens: Any) -> str:
 
 def summarize_check(seen: list[dict[str, Any]], before: list[dict[str, Any]], after: list[dict[str, Any]]) -> dict[str, Any]:
     """Per rank: the MoE layers all of whose calls equalled the reference, the unequal ones, and the calls by step kind and path,
-    beside the `Align` counts' change; ``ok`` when every rank's every call equalled it and every rank took both paths in prefill."""
+    beside the `Align` counts' change and the calls of vLLM's aligners; ``ok`` when on every rank every MoE layer called it and
+    every call equalled the reference, reached the rank's `Align` and none of vLLM's aligners, and both paths ran in prefill."""
     align0 = {int(s["rank"]): (s["align"] or {}).get("calls", {}) for s in before}
     ranks, ok = {}, True
     for r in sorted(seen, key=lambda r: int(r["rank"])):
@@ -209,9 +230,14 @@ def summarize_check(seen: list[dict[str, Any]], before: list[dict[str, Any]], af
         unequal = sorted(n for n, row in layers.items() if row["equal"] != row["calls"])
         a1 = next(((s["align"] or {}).get("calls", {}) for s in after if int(s["rank"]) == rank), {})
         both = all(paths.get(f"prefill/{p}", 0) > 0 for p in ("one", "chunked"))
-        ok &= not unequal and both and UNATTRIBUTED not in layers and len(layers) == r["layers"]
+        calls = sum(row["calls"] for row in layers.values())
+        reached = sum(v - align0.get(rank, {}).get(k, 0) for k, v in a1.items())
+        bypassed = sum(r.get("vllm_calls", {}).values())
+        ok &= (not unequal and both and UNATTRIBUTED not in layers and len(layers) == r["layers"] and reached == calls
+               and not bypassed)
         ranks[rank] = {"layers": r["layers"], "layers_called": len(layers), "layers_equal": len(layers) - len(unequal),
-                       "calls": sum(row["calls"] for row in layers.values()), "unequal": unequal[:8],
+                       "calls": calls, "calls_reaching_align": reached, "vllm_aligner_calls": r.get("vllm_calls", {}),
+                       "unequal": unequal[:8],
                        "first_unequal": next((layers[n]["first_unequal"] for n in unequal), None), "paths": dict(sorted(paths.items())),
                        "both_paths_in_prefill": both,
                        "align_calls": {k: v - align0.get(rank, {}).get(k, 0) for k, v in a1.items()},
@@ -318,13 +344,15 @@ def main() -> None:
 
     for b in check_batches:
         warm(b, 100 + b)
+    before = llm.collective_rpc(status, timeout=rpc)
+    for b in check_batches:
         llm.collective_rpc(check_on, timeout=rpc, kwargs={"rows": b})
         r = run_workload(eng, reqs[b], sampling)
         print(f"[moe-align] check B{b}: {r['wall_s']:.2f}s, {len(r['step_wall_s'])} steps", flush=True)
     seen = llm.collective_rpc(check_off, timeout=rpc)
     after = llm.collective_rpc(status, timeout=rpc)
-    check = summarize_check(seen, start, after)
-    (out / "check.json").write_text(json.dumps({**check, "seen": seen, "before": start, "after": after}, indent=1) + "\n")
+    check = summarize_check(seen, before, after)
+    (out / "check.json").write_text(json.dumps({**check, "seen": seen, "before": before, "after": after}, indent=1) + "\n")
     print(f"[moe-align] check ok {check['ok']}: " + "; ".join(
         f"rank {r}: {v['layers_equal']}/{v['layers']} layers equal, {v['calls']} calls, {v['paths']}" for r, v in check["ranks"].items()), flush=True)
 

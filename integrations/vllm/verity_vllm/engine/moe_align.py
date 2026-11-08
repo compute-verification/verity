@@ -1,10 +1,11 @@
 """vLLM's `moe_align_block_size` on the Marlin MoE path, made a function of its inputs: each expert's pairs in ascending pair
 index.
 
-`fused_marlin_moe`, in vLLM's module `SITE` (DeepSeek-V4-Pro's MXFP4 experts on Hopper), calls its module's `NAME`: vLLM's
-wrapper (fused_moe/moe_align_block_size.py), which allocates three int32 buffers and has the op
+`fused_marlin_moe` (`CALLER`), in vLLM's module `SITE` (DeepSeek-V4-Pro's MXFP4 experts on Hopper), calls its module's
+`NAME`: vLLM's wrapper (fused_moe/moe_align_block_size.py), which allocates three int32 buffers and has the op
 ``torch.ops._moe_C.moe_align_block_size`` (`OP`) fill them.  `install` replaces that name with `wrapper`, which allocates the
-same buffers (`sorted_len`) and has `Align` fill them.  Every other MoE path keeps vLLM's op.
+same buffers (`sorted_len`) and has `Align` fill them; it refuses a module whose `CALLER` does not load `NAME` as the
+module's global, since the experts would then bypass it.  Every other MoE path keeps vLLM's op.
 
 The op takes the router's ``topk_ids`` (``[tokens, top_k]``, any integer dtype, contiguous), ``num_experts`` E, the moe
 block ``BM``, the three outputs and an optional ``expert_map``. A pair is p = t * top_k + k, a slot of ``topk_ids`` in
@@ -33,16 +34,20 @@ call; its `Align.record` counts their calls on each path.
 """
 from __future__ import annotations
 
+import dis
 import importlib
+import inspect
 import os
 import sys
+import types
 from collections.abc import Callable, Sequence
 from typing import Any
 
 from verity_vllm.engine import hooks
 
-#: vLLM's Marlin experts module, and the name in it `fused_marlin_moe` calls
+#: vLLM's Marlin experts module, the function in it that runs the experts, and the module global that function calls
 SITE = "vllm.model_executor.layers.fused_moe.experts.marlin_moe"
+CALLER = "fused_marlin_moe"
 NAME = "moe_align_block_size"
 #: the op vLLM's wrapper calls, under ``torch.ops._moe_C``
 OP = "moe_align_block_size"
@@ -249,18 +254,33 @@ def wrapper(align: Align) -> Callable[..., tuple[Any, Any, Any]]:
     return moe_align_block_size
 
 
+def loads_global(fn: Any, name: str) -> bool:
+    """Whether ``fn`` (unwrapped), or a function nested in it, loads ``name`` as its module's global: what replacing the
+    module's ``name`` reaches.  An attribute of the same name (``ops.name``) is not one."""
+    def walk(code: types.CodeType) -> bool:
+        return any(i.opname == "LOAD_GLOBAL" and i.argval == name for i in dis.get_instructions(code)) or any(
+            walk(c) for c in code.co_consts if isinstance(c, types.CodeType))
+
+    code = getattr(inspect.unwrap(fn), "__code__", None)
+    return isinstance(code, types.CodeType) and walk(code)
+
+
 _INSTALLED: tuple[hooks.Patch, Align] | None = None
 
 
 def install(module: Any = None, align: Align | None = None) -> Align:
     """Replace `NAME` on ``module`` (`SITE`, imported when None) with `wrapper` of ``align`` (a new `Align` when None), once per
-    process; returns the `Align` installed.  Refused while another patch of that name is on: a capture's wrap of it
-    (`acquire.sources.moe_align_source`) goes on top of this one, never under it."""
+    process; returns the `Align` installed.  Refused when the module's `CALLER` does not load `NAME` as its global
+    (`loads_global`): the Marlin experts would bypass the canonical op.  Refused while another patch of that name is on: a
+    capture's wrap of it (`acquire.sources.moe_align_source`) goes on top of this one, never under it."""
     global _INSTALLED
     if _INSTALLED is not None and _INSTALLED[0].installed:
         return _INSTALLED[1]
     if module is None:
         module = importlib.import_module(SITE)
+    if not loads_global(getattr(module, CALLER, None), NAME):
+        raise RuntimeError(f"refused to install the canonical {NAME}: {module.__name__}.{CALLER} does not call the module's {NAME}, "
+                           "so the Marlin experts would bypass it; install it where this vLLM's experts call their aligner")
     if on := [p for p in hooks.live() if isinstance(p, hooks.Patch) and p.owner is module and p.name == NAME]:
         raise RuntimeError(f"refused to install the canonical {NAME} under {on[-1].value!r}, which is already on: arm it before "
                            "vLLM builds the model (engine.moe_align.arm)")
@@ -306,5 +326,5 @@ def register() -> None:
 
 arm()
 
-__all__ = ["MAX_EXPERTS", "NAME", "OP", "SITE", "Align", "arm", "canonical", "cdiv", "install", "installed", "reference", "register",
-           "sorted_len", "uninstall", "wrapper"]
+__all__ = ["CALLER", "MAX_EXPERTS", "NAME", "OP", "SITE", "Align", "arm", "canonical", "cdiv", "install", "installed", "loads_global",
+           "reference", "register", "sorted_len", "uninstall", "wrapper"]

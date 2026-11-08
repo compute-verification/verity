@@ -91,7 +91,7 @@ runs three phases:
 
 - **`check.json`.** A wrap over each rank's `moe_align_block_size` holds every call to `moe_align.reference`, by MoE
   layer, through the prefill and decode of one request and of eight. It counts each rank's calls by step kind and
-  `Align` path.
+  `Align` path, and requires that every call reach the rank's `Align` and none reach vLLM's own aligners.
 - **`decode.jsonl`.** The decode step at 1, 16, 64 and 256 rows, with the canonical op and with vLLM's, interleaved, and
   each run's tokens.
 - **`host.json`.** The host's time to issue a call of each op on each rank.

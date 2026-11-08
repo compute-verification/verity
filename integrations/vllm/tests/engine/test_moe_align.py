@@ -1,13 +1,16 @@
 """`engine.moe_align`: the canonical `moe_align_block_size` (`moe_align.reference`), vLLM's buffers and padding with each
 expert's pairs in ascending pair index, on hand-made cases (vLLM's docstring example, empty experts, whole blocks, fewer pairs
 than experts, ids no expert takes, an expert map); the same schedule the align Definitions give when every pair's key is its
-index; any output vLLM's atomic order can give canonicalizes to it; the Marlin experts' wrapper allocates as vLLM's does and
-is installed once, armed before vLLM's module is imported, by the driver, every rank and the distribution's vLLM plugin;
-and, where Triton is importable, the kernels (in Triton's interpreter) write the reference on both paths."""
+index; any output vLLM's atomic order can give canonicalizes to it; the Marlin experts' wrapper allocates as vLLM's does, is what
+the experts' function reaches, is refused where that function would bypass it, and is installed once, armed before vLLM's
+module is imported, by the driver, every rank and the distribution's vLLM plugin; every call launches the program that
+writes the total, 0 pairs included; and, where Triton is importable, the kernels (in Triton's interpreter) write the
+reference on both paths and at 0 pairs."""
 from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import inspect
 import os
 import random
@@ -137,13 +140,26 @@ class RefAlign(moe_align.Align):
         num_tokens_post_pad[0] = n
 
 
-def marlin_module(name: str = "fake_marlin_moe") -> types.ModuleType:
-    """vLLM's Marlin experts module as far as this goes: its module-global wrapper, which must not run once installed."""
-    m = types.ModuleType(name)
+#: vLLM's Marlin experts module as far as this goes: its module-global wrapper, which must not run once installed, and the
+#: experts' function, which calls it as fused_marlin_moe does (marlin_moe.py, `moe_align_block_size(..., ignore_invalid_experts=True)`)
+MARLIN = '''
+def moe_align_block_size(*args, **kwargs):
+    raise AssertionError("vLLM's wrapper ran")
 
-    def moe_align_block_size(*args, **kwargs):
-        raise AssertionError("vLLM's wrapper ran")
-    m.moe_align_block_size = moe_align_block_size
+
+def fused_marlin_moe(topk_ids, block_size_m, global_num_experts, expert_map=None):
+    return moe_align_block_size(topk_ids, block_size_m, global_num_experts, expert_map, ignore_invalid_experts=True)
+'''
+#: the same module with the experts reaching vLLM's aligner by another name, which an install on the module global would miss
+BYPASSED = MARLIN.replace("    return moe_align_block_size(", "    import vllm_ops as ops\n    return ops.moe_align_block_size(")
+
+
+def marlin_module(where: Path, name: str = "fake_marlin_moe", source: str = MARLIN) -> types.ModuleType:
+    path = where / f"{name}.py"
+    path.write_text(source)
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
     return m
 
 
@@ -154,8 +170,8 @@ def clean():
     moe_align.uninstall()
 
 
-def test_install_replaces_marlins_wrapper_once_and_uninstall_restores_it(clean):
-    m = marlin_module()
+def test_install_replaces_marlins_wrapper_once_and_uninstall_restores_it(clean, tmp_path):
+    m = marlin_module(tmp_path)
     vllms = m.moe_align_block_size
     rec = RefAlign()
     assert moe_align.install(m, rec) is rec and moe_align.installed() is rec
@@ -186,8 +202,25 @@ def test_the_wrapper_allocates_as_vllms_and_applies_the_expert_map(clean):
     assert not rec.args[-1][3] and s.tolist() == gs and int(n[0]) == gn and b.tolist() == emap[torch.tensor(gb)].tolist()
 
 
-def test_install_is_refused_under_a_live_wrap_of_the_name(clean):
-    m = marlin_module()
+def test_marlins_experts_reach_the_canonical_op_and_an_install_they_would_bypass_is_refused(clean, tmp_path):
+    torch = pytest.importorskip("torch")
+    m = marlin_module(tmp_path)
+    moe_align.install(m, RefAlign())
+    ids = [2, 3, 4, 1, 2, 4, 1, 3, 4, 1, 2, 3]
+    s, b, n = m.fused_marlin_moe(torch.tensor(ids, dtype=torch.int32).reshape(4, 3), 4, 5)
+    assert (s.tolist(), b.tolist(), int(n[0])) == reference(ids, 5, 4)
+    moe_align.uninstall()
+    bypassing = marlin_module(tmp_path, "bypassing_marlin_moe", BYPASSED)
+    for bypassed in (bypassing, types.ModuleType("no_experts")):
+        with pytest.raises(RuntimeError, match="bypass"):
+            moe_align.install(bypassed, RefAlign())
+        assert moe_align.installed() is None
+    assert moe_align.loads_global(m.fused_marlin_moe, moe_align.NAME)
+    assert not moe_align.loads_global(bypassing.fused_marlin_moe, moe_align.NAME)
+
+
+def test_install_is_refused_under_a_live_wrap_of_the_name(clean, tmp_path):
+    m = marlin_module(tmp_path)
     on = hooks.wrap(m, moe_align.NAME, lambda orig: lambda *a, **k: orig(*a, **k))
     try:
         with pytest.raises(RuntimeError, match="already on"):
@@ -201,7 +234,7 @@ def test_arm_installs_when_vllms_module_is_imported_and_imports_nothing_itself(c
     pkg = tmp_path / "fake_vllm_experts"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    (pkg / "marlin_moe.py").write_text("def moe_align_block_size(*a, **k):\n    raise AssertionError(\"vLLM's wrapper ran\")\n")
+    (pkg / "marlin_moe.py").write_text(MARLIN)
     monkeypatch.syspath_prepend(str(tmp_path))
     site = "fake_vllm_experts.marlin_moe"
     try:
