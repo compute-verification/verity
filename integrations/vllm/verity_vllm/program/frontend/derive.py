@@ -52,6 +52,7 @@ from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refu
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
+from verity_vllm.program.frontend import stop_rule as SR
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.value_types import Alloc
@@ -100,9 +101,7 @@ class WeightLeaf:
     def to_json(self) -> dict:
         d = {"name": self.name, "aliases": list(self.aliases), "kind": self.kind, "shape": list(self.shape), "dtype": self.dtype,
              "field": self.index}
-        if self.derivation is not None:
-            d["derivation"] = self.derivation
-        return d
+        return d if self.derivation is None else {**d, "derivation": self.derivation}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -797,8 +796,10 @@ def _translate(ctx: Ctx) -> Coll:
                 refuse("side_input", node, None, f"placeholder {node.name} is neither a user input nor a parameter/buffer")
         elif node.op == "output":
             out_node = node
-        elif node.op == "get_attr":
-            refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+        elif node.op == "get_attr":  # a tensor constant of a traced graph (`make_fx`), as export lifts one
+            if not isinstance(getattr(ep, "constants", {}).get(node.target), torch.Tensor):
+                refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+            ctx.env[node] = _LiftedConstant(node, node.target, node.meta.get("val", ep.constants[node.target]))
         elif node.op == "call_function":
             if node in ctx.env:
                 continue  # absorbed by a pattern rule that fired at an earlier node of its chain
@@ -817,7 +818,7 @@ def _translate(ctx: Ctx) -> Coll:
         v = ctx.val(a)
         if isinstance(v, (int, float, bool)):
             refuse("side_input", out_node, None, f"returned Python scalar {v!r}; outputs must be values")
-        outs.append(ctx.coll(a, "returned value"))
+        outs.append(v.returned(ctx, a) if hasattr(v, "returned") else ctx.coll(a, "returned value"))
     if not outs:
         refuse("shape", out_node, None, "the source returns nothing")
     # returned inputs / repeated returns are representable (a return is a reference sequence) — record them explicitly
@@ -826,6 +827,7 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
+    SR.in_derive(ctx, outs, out_node)    # the length rule under the config's `stop`: the last Call and check
     if ctx.checks:
         ctx.checks_output = len(outs)
         outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))

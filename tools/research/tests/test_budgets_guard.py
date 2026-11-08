@@ -235,7 +235,7 @@ def test_a_failed_list_is_logged_and_the_guard_keeps_polling(tmp_path, guard_dir
 
 def live_helper() -> subprocess.Popen:
     """A process whose command line names `guard`, returned once its Python runs.  `Popen` returns while the child is still inside
-    execve, before the kernel records the new argument area, so /proc/<pid>/cmdline can read empty then (measured 2026-09-29: 40 %
+    execve, before the kernel records the new argument area, so /proc/<pid>/cmdline can read empty then (as measured: 40 %
     of spawns on an idle VM, 95 % under load); the child's own line on stdout comes after it is in place."""
     p = subprocess.Popen([sys.executable, "-c", "import os, signal; os.write(1, b'ready\\n'); signal.pause()", "guard"], stdout=subprocess.PIPE)
     assert p.stdout is not None and p.stdout.readline() == b"ready\n", "the helper did not start"
