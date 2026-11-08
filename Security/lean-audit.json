@@ -24524,6 +24524,12 @@
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
    "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
+   "owner": "@proofs"
   }
  },
  "shape": {
