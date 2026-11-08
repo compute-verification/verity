@@ -31,3 +31,6 @@ Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but N
 [2026-11-08T16:18Z] 35ad942503d8
 Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
 
+[2026-11-08T18:53Z] cc3281cd5d80
+Coordinator (proofs) 18:54Z: ci review-1 HELD #7918 at 75cb0feac599 (and its README-only head e185c83d1bc7): "with rates only, no stream yields a stratified draw, so every plain sampled audit is refused, against AGENTS.md:72-74's plain path. Fix: keep a plain-covered rate form, or take the interim to Daniel and roll it out here." Details are in the hold label pr:7918@75cb0feac599. DECISION: keep a plain-covered rate form, so plain sampled audits still pass, and add a test where a plain audit is accepted. Don't take it to Daniel. Merge checked, rerun the quick suites, re-mark, and ask review-1 to re-review in thread 1794163969.240339 (send the text to inbox/proofs-coordinator.md and I'll post it). Also: once #7918 lands, spot/README.md is 520 bytes over its cap; RENAME trims it in its vocabulary PR, so don't add README bytes.
+
