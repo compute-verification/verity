@@ -253,7 +253,11 @@ def statics(inp: CPV.Input) -> dict[str, int]:
 # --- the drive -------------------------------------------------------------------------------------------------------
 
 
-class _Driver:
+class Driver:
+    """The transcribed pool beside `_KV`, each interned hash's BlockKey_v1 key (`keyed`) and the counts: `check` holds the
+    two pools to each other after an operation (every ``every``-th while a block is held), and `edge` exports the row
+    wherever none is."""
+
     def __init__(self, S: dict[str, int], every: int) -> None:
         self.S, self.tok, self.every = S, V4.key_tok(SimpleNamespace(**S)), every
         self.T = BlockPool(S["NB"], S["B"])
@@ -285,7 +289,7 @@ class _Driver:
         self.counts["checks"] += 1
 
     def edge(self, kv: Any) -> None:
-        got = PR.export(self.T, self.S)
+        got = PR.export(self.T, self.S["B"])
         want = kv_row(kv, self.key)
         if PR.row(PR.snapshot(self.T)) != want:
             raise AssertionError(f"op {self.counts['ops']}: the exported row leaves the one _KV gives")
@@ -298,7 +302,8 @@ class _Driver:
 
 
 @contextmanager
-def _tapped(drv: _Driver):
+def tapped(drv: Driver):
+    """`_KV`'s pool operations, each made on ``drv``'s transcribed pool too and checked (the module's docstring)."""
     K = KV
     names = ("hit", "allocate_slots", "cache_blocks", NEW_BLOCKS, "_free_blocks")
     orig = {n: getattr(K, n) for n in names}
@@ -367,13 +372,9 @@ def _tapped(drv: _Driver):
             setattr(K, n, orig[n])
 
 
-def drive(path: Path, *, every: int = 1) -> dict[str, Any]:
-    """The transcribed pool over the trace at ``path``, held to `_KV` (the module's docstring); its counts and the root
-    at each edge. Raises AssertionError where they disagree."""
-    inp = CPV.replay_input(path)
-    if not inp.engine.enable_prefix_caching:
-        raise ValueError(f"{path.name}: the pool row needs prefix caching on")
-    drv = _Driver(statics(inp), every)
+@contextmanager
+def keyed(drv: Driver):
+    """The replay's interned block hashes, each keyed by BlockKey_v1 in ``drv.key`` as it is interned."""
     H = HASHES
     intern = H.__call__
 
@@ -385,14 +386,24 @@ def drive(path: Path, *, every: int = 1) -> dict[str, Any]:
 
     H.__call__ = call
     try:
-        with _tapped(drv):
-            rp = RP.replay(inp.engine, inp.requests, admit=inp.before)
+        yield
     finally:
         H.__call__ = intern
+
+
+def drive(path: Path, *, every: int = 1) -> dict[str, Any]:
+    """The transcribed pool over the trace at ``path``, held to `_KV` (the module's docstring); its counts and the root
+    at each edge. Raises AssertionError where they disagree."""
+    inp = CPV.replay_input(path)
+    if not inp.engine.enable_prefix_caching:
+        raise ValueError(f"{path.name}: the pool row needs prefix caching on")
+    drv = Driver(statics(inp), every)
+    with keyed(drv), tapped(drv):
+        rp = RP.replay(inp.engine, inp.requests, admit=inp.before)
     if [list(s.rows) for s in rp.steps] != inp.rows:
         raise AssertionError("the replay leaves the trace")
     PR.genesis_reset(drv.T)
-    if PR.export(drv.T, drv.S)["root"] != V6.genesis(SimpleNamespace(**drv.S)).hex():
+    if PR.export(drv.T, drv.S["B"])["root"] != V6.genesis(SimpleNamespace(**drv.S)).hex():
         raise AssertionError("the reset pool isn't the empty row")
     return {**dict(drv.counts), "steps": len(rp.steps), "keys": len(drv.key), "roots": drv.roots}
 
