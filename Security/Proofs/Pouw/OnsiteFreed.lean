@@ -380,6 +380,11 @@ theorem prob_eq_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h 
   unfold prob
   rw [filter_true_of_mem fun ω _ => h ω, card_univ, div_self (by exact_mod_cast Fintype.card_ne_zero)]
 
+/-- **The witness machine's certifier sees every exchanged bit at counts of `0`**: no program exchanges any. -/
+theorem twSees : CertifierSeesImports tw twRound 2 twDev (fun _ => 0) (fun _ => 0) := fun _ _ _ => by
+  show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0 + 0
+  simp
+
 end OnsiteFreedWitness
 
 section Witnesses

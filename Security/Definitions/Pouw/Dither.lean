@@ -428,7 +428,7 @@ abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
 
 /-- **The auditor's devices' readings** of a prover's period (the network certifier's counts), at the oracle and the
-coins. They are the devices' and depend on what the prover's programs exchange (`CertifierSeesImports`). -/
+coins. They are the devices' and depend on what the prover's programs exchange (`ImportWithinCertifier`). -/
 abbrev Readings (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) : Type 1 :=
   Prover G P k → P.Orc → (Fin k → P.Draw × P.Chk) → Obs
 

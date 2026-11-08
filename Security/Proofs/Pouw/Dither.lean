@@ -430,39 +430,12 @@ theorem freedSound_of_momentSound {G : Accel} {P : RoundProto} {k : ℕ} {Obs : 
         _ ≤ ε' A * C := mul_le_mul_of_nonneg_right (hε A) hC
   · linarith [hκ A]
 
-/-- **A stricter verdict keeps freed-soundness**: a verdict `v₁` that accepts only periods `v₂` accepts is
-`FreedSound` wherever `v₂` is. -/
-theorem freedSound_of_imp {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} {v₁ v₂ : Verdict P k Obs}
-    {dev : Readings G P k Obs} {Pd : Period G} {W C : ℝ} {ε κ : Prover G P k → ℝ}
-    (himp : ∀ (A : Prover G P k) o x, A.Passes v₁ dev o x → A.Passes v₂ dev o x)
-    (h : FreedSound G P k v₂ dev Pd W ε C κ) : FreedSound G P k v₁ dev Pd W ε C κ := fun A =>
-  le_trans (prob_mono fun ox hox => ⟨himp A ox.1 ox.2 hox.1, hox.2⟩) (h A)
-
-/-- **A stricter verdict keeps soundness in moment**, as `freedSound_of_imp`. -/
-theorem momentSound_of_imp {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} {v₁ v₂ : Verdict P k Obs}
-    {dev : Readings G P k Obs} {Pd : Period G} {W C η : ℝ} {ε κ : Prover G P k → ℝ}
-    (himp : ∀ (A : Prover G P k) o x, A.Passes v₁ dev o x → A.Passes v₂ dev o x)
-    (h : MomentSound G P k v₂ dev Pd W ε C η κ) : MomentSound G P k v₁ dev Pd W ε C η κ := fun A => by
-  obtain ⟨D, M, Bad, hD, hM, hav, hbad, hfree⟩ := h A
-  exact ⟨D, M, Bad, hD, hM, hav, hbad, fun ox z hv => hfree ox z (himp A ox.1 ox.2 hv)⟩
-
 /-- `Definitions.Pouw.Guarantees.Dither.WorkMoment`: the moment is the rounds' stopped supermartingale, and off the
 service's, the extraction's, the bad oracles' and the degenerate dithers' events it is `e^{η D}` at the rounds'
 combined shortfall `D`, where the floor holds at `ε + D / C`. -/
 theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
-  intro G P k Reg Obs verdict₀ dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS Q κdmm κdsha sel Badv ξ κx κsha cin cout
-    hdual hpos hH hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv₀ hsees hans₀ hextr
-  -- The counted verdict: the service's, so its soundness and its answers' fit carry over, and the certifier's count
-  -- within `K`, so with `CertifierSeesImports` an accepted period exchanged at most `K` bits.
-  have hserv : ProofSystemSound G P k Reg (CountedWithin verdict₀ cin cout K) dev κS := fun A =>
-    le_trans (prob_mono fun ox hox => ⟨hox.1.1, hox.2⟩) (hserv₀ A)
-  have hans : AnswersFit G P k (CountedWithin verdict₀ cin cout K) dev sel Pd := fun A o x hv => hans₀ A o x hv.1
-  have himp : ∀ (A : Prover G P k) o x, A.Passes (CountedWithin verdict₀ cin cout K) dev o x → A.ext o x ≤ K :=
-    fun A o x hv => (hsees A o x).trans hv.2
-  clear hserv₀ hans₀
-  revert hserv hans himp
-  generalize CountedWithin verdict₀ cin cout K = verdict
-  intro hserv hans himp A
+  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS Q κdmm κdsha sel Badv ξ κx κsha
+    hdual hpos hH hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr A
   beta_reduce
   classical
   obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hG3 hP1 hP2 A
@@ -679,8 +652,8 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSound`: `WorkMoment`, then Markov on the moment at `δ`
 (`freedSound_of_momentSound`), whose luck `ln(1/δ)/η` is `epsWorkSound`'s. -/
 theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
-  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha sel Badv ξ κx κsha cin cout
-    hdual hpos hH hη hδ _ hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv hsees hans hextr
+  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha sel Badv ξ κx κsha
+    hdual hpos hH hη hδ _ hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr
   have hC : ∑ r, μ r * (1 * Pd.hon r) = ∑ w, (Hmm w + Hsha w + Ho w) := by
     rw [hH]
     simp only [one_mul]
@@ -689,7 +662,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
     exact Finset.sum_nonneg fun w _ => by linarith [hpos w]
   refine freedSound_of_momentSound hη hδ hC0
     (WorkMoment G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS Q κdmm κdsha sel Badv ξ κx κsha
-      cin cout hdual hpos hH hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv hsees hans hextr)
+      hdual hpos hH hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr)
     (fun A => le_of_eq ?_) (fun A => le_of_eq (by ring))
   rw [hC]
   unfold epsWorkSound
@@ -711,8 +684,8 @@ the budget `q = (k + 1) M + k ⌈Q⌉`, `M = ⌈Q⌉ + V`, and the schedule `τ_
 `q² + Σ_w q (2 τ_w + 1)` is `q² + k q ((k + 1) M + 1)` (`sum_segments`). -/
 theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
   intro G nf k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κsha κdmm κdsha sel Badv V X D
-    _ _ _ _ _ E eo rD pl dirs ξw ξl cin cout hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hcap hopens hG1 hG2 hG3 horc
-    hP1 hP2 hsak hsha hout hserv hsees hans hR A
+    _ _ _ _ _ E eo rD pl dirs ξw ξl hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hcap hopens hG1 hG2 hG3 horc hP1 hP2
+    hsak hsha hout hserv himp hans hR A
   have hx := Pouw.SecurityProofs.ShaRealize.ExtractOfRealize G nf k Reg sel Q X D E eo rD pl dirs ξw ξl
     (fun _ => (k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) hopens
     horc hR
@@ -724,9 +697,9 @@ theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
     sel (fun _ => Badv) (fun _ r => k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊ : ℕ) * ξl r)
     (fun _ => ((((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) +
         ∑ w : Fin k, ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * (2 * (((w : ℕ) + 1) * (⌈Q⌉₊ + V)) + 1) : ℕ) : ℝ) /
-      Fintype.card D) (fun _ => κsha) cin cout hdual hpos hH hη hδ hδ1 hβ hK
+      Fintype.card D) (fun _ => κsha) hdual hpos hH hη hδ hδ1 hβ hK
     (fun _ r => add_nonneg (mul_nonneg (Nat.cast_nonneg _) (hξw r)) (mul_nonneg (Nat.cast_nonneg _) (hξl r))) hκd
-    hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv hsees hans hx A).trans (le_of_eq ?_)
+    hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hx A).trans (le_of_eq ?_)
   simp only [hk]
 
 end Pouw.SecurityProofs.Dither

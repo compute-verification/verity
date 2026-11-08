@@ -59,7 +59,7 @@ whatever the price), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 * an exchanged bit replaces at most `β` of priced work (`OutsourceWithinEgress`),
 * the service's verdict accepts only periods whose sampling blocks' committed instances are registrable and whose
   checks pass, but with probability `κ_S`,
-* the network certifier's signed counts `cin`, `cout` take in every exchanged bit (`CertifierSeesImports`),
+* the network certifier counts at most `K` exchanged bits,
 * an accepted period's selected answers run within it (`AnswersFit`), and
 * each sampling block's work splits into its words and their commitment on advice of at most `B_adv(A)` bits fixed
   before the block's coins, the commitment's output the prover's root; on runs within the cap `Q` (the commit phases'
@@ -69,9 +69,8 @@ whatever the price), the devices meet (G1), (G2), (G3), (P1) and (P2), and
   `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`),
 
 then for every prover `A`, the probability over the oracle and the verifier's coins that the service accepts its
-period with the certifier's counts within `K` together (`CountedWithin`, so it exchanged at most `K` bits) and other
-work `z` fits on the period's devices beside its sampling blocks' timed work (`Prover.timedUse`: their commit phases
-and work) with
+period and other work `z` fits on the period's devices beside its sampling blocks' timed work (`Prover.timedUse`:
+their commit phases and work) with
 `rv + W_other(z) > OPT_honest + ε_A C` is at most
 `δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, with `C = μ · hon = Σ_w H w` and
 `ε_A = (Σ_w (H − pub_mm − pub_sha) w + ln(1/δ)/η + β K)/C + μ · ξ_A/C` (`epsWorkSound`).
@@ -131,7 +130,7 @@ def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
     (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η δ β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (sel : P.Chk → Prop)
-    (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ) (cin cout : Obs → ℝ),
+    (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
     Pd.DualOpt μ 1 →
     (∀ w, 0 < Hmm w ∧ 0 < Hsha w ∧ 0 ≤ Ho w ∧ pubmm w ≤ Hmm w ∧ pubsha w ≤ Hsha w) →
     ∑ w, (Hmm w + Hsha w + Ho w) = ∑ r, μ r * Pd.hon r →
@@ -141,9 +140,9 @@ def WorkSound : Prop :=
     (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
     SAKSha G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
     OutsourceWithinEgress G μ β → ProofSystemSound G P k Reg verdict dev κS →
-    CertifierSeesImports G P k dev cin cout → AnswersFit G P k verdict dev sel Pd →
+    ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
     ExtractAdv G P k Reg sel Q Badv ξ κx →
-    FreedSound G P k (CountedWithin verdict cin cout K) dev Pd 1
+    FreedSound G P k verdict dev Pd 1
       (fun A => epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η δ β K +
         (∑ r, μ r * ξ A r) / ∑ w, (Hmm w + Hsha w + Ho w))
       (∑ r, μ r * (1 * Pd.hon r))
@@ -163,7 +162,7 @@ def WorkMoment : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
     (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (sel : P.Chk → Prop)
-    (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ) (cin cout : Obs → ℝ),
+    (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
     Pd.DualOpt μ 1 →
     (∀ w, 0 < Hmm w ∧ 0 < Hsha w ∧ 0 ≤ Ho w ∧ pubmm w ≤ Hmm w ∧ pubsha w ≤ Hsha w) →
     ∑ w, (Hmm w + Hsha w + Ho w) = ∑ r, μ r * Pd.hon r →
@@ -173,9 +172,9 @@ def WorkMoment : Prop :=
     (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
     SAKSha G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
     OutsourceWithinEgress G μ β → ProofSystemSound G P k Reg verdict dev κS →
-    CertifierSeesImports G P k dev cin cout → AnswersFit G P k verdict dev sel Pd →
+    ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
     ExtractAdv G P k Reg sel Q Badv ξ κx →
-    MomentSound G P k (CountedWithin verdict cin cout K) dev Pd 1
+    MomentSound G P k verdict dev Pd 1
       (fun A => epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η 1 β K +
         (∑ r, μ r * ξ A r) / ∑ w, (Hmm w + Hsha w + Ho w))
       (∑ r, μ r * (1 * Pd.hon r)) η
@@ -216,7 +215,7 @@ def WorkSoundNoFold : Prop :=
     (κdmm κdsha : ℕ → ℝ) (sel : (noFoldRound nf).Chk → Prop) (Badv V : ℕ) (X D : Type) [Fintype X] [DecidableEq X]
     [Fintype D] [DecidableEq D]
     [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D))
-    (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool) (ξw ξl : G.Res → ℝ) (cin cout : Obs → ℝ),
+    (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool) (ξw ξl : G.Res → ℝ),
     Pd.DualOpt μ 1 →
     (∀ w, 0 < Hmm w ∧ 0 < Hsha w ∧ 0 ≤ Ho w ∧ pubmm w ≤ Hmm w ∧ pubsha w ≤ Hsha w) →
     ∑ w, (Hmm w + Hsha w + Ho w) = ∑ r, μ r * Pd.hon r →
@@ -229,10 +228,10 @@ def WorkSoundNoFold : Prop :=
     SAKSha G (noFoldRound nf) k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha
       (fun _ => κsha) →
     OutsourceWithinEgress G μ β → ProofSystemSound G (noFoldRound nf) k Reg verdict dev κS →
-    CertifierSeesImports G (noFoldRound nf) k dev cin cout → AnswersFit G (noFoldRound nf) k verdict dev sel Pd →
+    ImportWithinCertifier G (noFoldRound nf) k verdict dev K → AnswersFit G (noFoldRound nf) k verdict dev sel Pd →
     ShaRealize G nf k Reg sel Q E eo rD pl dirs ξw ξl (fun _ => (k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊)
       (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) →
-    FreedSound G (noFoldRound nf) k (CountedWithin verdict cin cout K) dev Pd 1
+    FreedSound G (noFoldRound nf) k verdict dev Pd 1
       (fun _ => epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η δ β K +
         (∑ r, μ r * (k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊ : ℕ) * ξl r)) / ∑ w, (Hmm w + Hsha w + Ho w))
       (∑ r, μ r * (1 * Pd.hon r))

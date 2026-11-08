@@ -334,8 +334,8 @@ theorem twOutsource : OutsourceWithinEgress tw twμ 0 := by
 theorem twService : ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 := fun _ =>
   prob_le_zero fun _ h => h.2 fun w => ⟨Set.mem_univ _, h.1.1 w⟩
 
-theorem twSees : CertifierSeesImports tw twRound 2 twDev (fun _ => 0) (fun _ => 0) := fun _ _ _ => by
-  show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0 + 0
+theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _ _ _ _ => by
+  show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0
   simp
 
 theorem twAnswersFit : AnswersFit tw twRound 2 twVerdict twDev twSel twPd := fun _ _ _ hv b _ r => hv.2 b r
@@ -518,8 +518,7 @@ def WitnessHolds : Prop :=
     SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
       (fun _ => 0) (fun _ => 0) ∧
     OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
-    CertifierSeesImports tw twRound 2 twDev (fun _ => 0) (fun _ => 0) ∧
-    AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
+    ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
     ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
     (∀ A, twε A < 1 ∧ twκ A < 1) ∧
     ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧ honest.WithinCap twSel twQ o x
@@ -528,20 +527,17 @@ theorem witness : WitnessHolds :=
   ⟨twDual, fun _ => ⟨by norm_num [twHmm], by norm_num [twHsha], by norm_num [twHo], le_rfl, le_rfl⟩, twCost,
     by norm_num [twη], by norm_num [twδ], by norm_num [twδ], le_rfl, le_rfl, fun _ _ => le_rfl,
     fun _ => ⟨le_rfl, le_rfl⟩, twCap, tw_G1, tw_G2, tw_G3, trivial, trivial, twSAK, twSAKSha, twOutsource,
-    twService, twSees, twAnswersFit, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
+    twService, twImport, twAnswersFit, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
     fun o x => ⟨honest_passes o x, honest_timedUse o x, honest_withinCap o x⟩⟩
 
 /-- **The headline at the witness**: `WorkSound`'s conclusion from `witness`. -/
 theorem witness_freed :
     FreedSound tw twRound 2 twVerdict twDev twPd 1 twε (∑ r, twμ r * (1 * twPd.hon r)) twκ := by
   obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
-    hsvc, hsees, hans, hext, -, -⟩ := witness
-  -- The certifier counts nothing at the witness, so the counted verdict is the witness's.
-  exact Pouw.SecurityProofs.Dither.freedSound_of_imp (v₁ := twVerdict) (fun _ _ _ hv => ⟨hv, (add_zero (0 : ℝ)).le⟩)
-    (Pouw.SecurityProofs.Dither.WorkSound tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm twHsha
-      twHo twHmm twHsha twη twδ 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0)
-      (fun _ => 0) (fun _ => 0) hdual hinst hC hη hδ hδ1 hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc
-      hsees hans hext)
+    hsvc, himp, hans, hext, -, -⟩ := witness
+  exact Pouw.SecurityProofs.Dither.WorkSound tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm twHsha
+    twHo twHmm twHsha twη twδ 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
+    hinst hC hη hδ hδ1 hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
 
 end Witness
 

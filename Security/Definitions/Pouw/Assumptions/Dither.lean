@@ -17,8 +17,11 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
   machines;
 * `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
   (Flock sound and zero knowledge, live coins from the auditor's challenger);
-* `CertifierSeesImports`: the network certifier's counts take in every exchanged bit (class L, the auditor's devices),
-  so a verdict that refuses counts past `K` (`CountedWithin`) accepts only periods that exchanged at most `K` bits.
+* `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
+
+`CertifierSeesImports`, the network certifier's counts take in every exchanged bit (class L, the auditor's devices), is
+the device premise under it: a verdict that refuses counts past `K` (`CountedWithin`) accepts only periods that
+exchanged at most `K` bits. `Definitions.Pouw.Guarantees.OnsiteFreed.OnsiteFreed` and the card instance read it.
 
 `Definitions.Pouw.Guarantees.Dither.FleetSound` adds two on the challenger's coins across a fleet's replicas:
 
@@ -181,6 +184,17 @@ would fail honest replicas, and leaving it out by address would let an outside m
 def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs)
     (cin cout : Obs → ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)
+
+/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted period
+exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the prover doesn't
+control, and signs the bits that cross them in either direction (its readings `dev`); the period's verdict reads its
+signed count and refuses a period past `K`. The challenger's coin stream isn't counted, and nothing else is left out
+(`CertifierSeesImports`, which gives it at the verdict `CountedWithin verdict cin cout K`). Open: the per-period form
+from the certifier's counts with `n_max · E_out`; the fold into `CertifierSeesImports` waits on `WorkSoundNoFold`'s
+witnesses, since it changes that guarantee's statement. -/
+def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
+    (dev : Readings G P k Obs) (K : ℝ) : Prop :=
+  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
 
 /-- `pouw-own-dither` (proposed; the challenger on `trusted-host`). **Each
 replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,

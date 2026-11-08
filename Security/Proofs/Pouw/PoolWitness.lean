@@ -120,13 +120,10 @@ end Probability
 theorem witness_moment :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) := by
   obtain ⟨hdual, hinst, hC, -, -, -, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
-    hsvc, hsees, hans, hext, -, -⟩ := witness
+    hsvc, himp, hans, hext, -, -⟩ := witness
   have h := Pouw.SecurityProofs.Dither.WorkMoment tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm
-    twHsha twHo twHmm twHsha twη 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0)
-    (fun _ => 0) (fun _ => 0) hdual hinst hC hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc hsees hans hext
-  -- The certifier counts nothing at the witness, so the counted verdict is the witness's.
-  replace h := Pouw.SecurityProofs.Dither.momentSound_of_imp (v₁ := twVerdict)
-    (fun _ _ _ hv => ⟨hv, (add_zero (0 : ℝ)).le⟩) h
+    twHsha twHo twHmm twHsha twη 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
+    hinst hC hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
   convert h using 1
   · funext A
     norm_num [epsWorkSound, twHmm, twHsha, twHo, twξ, Fin.sum_univ_two]
@@ -154,14 +151,13 @@ theorem WorkMoment_honest :
       SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
       OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
-      CertifierSeesImports tw twRound 2 twDev (fun _ => 0) (fun _ => 0) ∧
-      AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
+      ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
       ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
-      ∀ o x, honest.Passes (CountedWithin twVerdict (fun _ => 0) (fun _ => 0) 0) twDev o x := by
-  obtain ⟨hdual, -, hC, -, -, -, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, hsees, hans, hext,
+      ∀ o x, honest.Passes twVerdict twDev o x := by
+  obtain ⟨hdual, -, hC, -, -, -, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
     -, hhon⟩ := witness
-  exact ⟨hdual, hC, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, hsees, hans, hext,
-    fun o x => ⟨(hhon o x).1, (add_zero (0 : ℝ)).le⟩⟩
+  exact ⟨hdual, hC, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
+    fun o x => (hhon o x).1⟩
 
 /-- **`WorkMoment`'s nontrivial witness**: its conclusion at the witness (`witness_moment`'s period and
 parameters, `ε = 1/7`, `C = 14`, `η = 1/7`, `κ = 0`) is false at the verifier that accepts everything. -/
@@ -194,16 +190,14 @@ theorem WorkSound_honest :
       SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
       OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
-      CertifierSeesImports tw twRound 2 twDev (fun _ => 0) (fun _ => 0) ∧
-      AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
+      ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
       ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
-      ∀ o x, honest.Passes (CountedWithin twVerdict (fun _ => 0) (fun _ => 0) 0) twDev o x ∧
-        honest.timedUse o x = twPd.hon ∧ honest.WithinCap twSel twQ o x := by
-  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, hsees,
+      ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧
+        honest.WithinCap twSel twQ o x := by
+  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp,
     hans, hext, -, hhon⟩ := witness
   exact ⟨hdual, fun w => ⟨(hinst w).1, (hinst w).2.1, (hinst w).2.2.1⟩, hC, hη, hδ, hδ1, hcap, hG1, hG2, hG3, hP1,
-    hP2, hsak, hsha, hout, hsvc, hsees, hans, hext,
-    fun o x => ⟨⟨(hhon o x).1, (add_zero (0 : ℝ)).le⟩, (hhon o x).2⟩⟩
+    hP2, hsak, hsha, hout, hsvc, himp, hans, hext, hhon⟩
 
 /-- **`WorkSound`'s nontrivial witness**: its conclusion at the witness (`witness_freed`'s period
 and bounds, `ε_A = 1/7 + ln 2 / 2`, `C = 14`, `κ_A = 1/2`) is false at the verifier that accepts everything. The
