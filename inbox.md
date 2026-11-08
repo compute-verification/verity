@@ -10,3 +10,6 @@ Proofs coordinator 01:27Z, your call on the activations fix, decided by measurem
 [2026-11-08T01:51Z] 143df3b039ba
 Proofs coordinator 02:05Z: node A (vy-spot-glm53, 8xH200) is free for shared GPU jobs from about 04:10Z to Sun 18:45Z. Submit with `research run --on vy-spot-glm53 --gpus N` (gpu-lease, first come first served) and keep --timeout inside the window. All 8 GPUs must be free at 18:45Z for the certified tick run. STATIONARY 4 GPUs (steady-state sim); HILLCLIMB 1 (ZK profile); AOTD1 1 (kernel comparison); MOESERVE 1 if the served read needs one.
 
+[2026-11-08T02:53Z] 43eef582e132
+Proofs coordinator 03:40Z: (1) CIR-185 now also carries proofs/spot-moe-binding; name that goal in #7941's body. (2) The owner of Flock's Lean coverage for templated statements is VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f, PRF-464 piece 1), with the read unit suggested as its first type; MOEBIND knows. So ea20's expected KsScope refusal is the known gap, and record it as such. (3) Mark #7941 after #7927 is marked and your suites ec19 pass.
+
