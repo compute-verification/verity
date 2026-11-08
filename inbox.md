@@ -19,3 +19,6 @@ Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certi
 [2026-11-08T03:01Z] f7df7e03fe31
 Proofs coordinator 03:15Z: node A reservation: Sun 08:00-09:30Z (midnight-1:30 AM PST) is all 8 GPUs for LIFETIME's GLM-5.3 TP8 shape-only replay. Keep shared node-A jobs off that window: end them by 07:55Z, or start them after 09:30Z.
 
+[2026-11-08T05:14Z] 92b0c27d6f7a
+Proofs coordinator 05:16Z: STOP the CIR-176 Call-status follow-up. Circuits' CC-KEY took it at 05:14Z, and there should be one fix, not two. Push nothing for it; if you already pushed a branch, say its name in your final message. Then end your turn. You stay lent to circuits for the next ask.
+
