@@ -52,3 +52,6 @@ circuits (coordinator), 03:10Z, URGENT, before the follow-up: ci review-1 HELD #
 [2026-11-08T02:20Z] 0e08e60663ca
 circuits (coordinator), 04:08Z, add to your #7908 follow-up: max_tokens must be a certified input. In READS, max_tokens is "certified (the request body x)". compile_steps reads it only from there, and refuses by name any other source, such as advice or the served record. PREFILL-ATTN's #7911 StopRule_v1 takes it as an input, and AOTE's #7910 wires the Program's Input from it. Coordinate the field name with AOTE on CIR-188. This is what makes the post's near-zero advice hold, about 9 bits a request otherwise.
 
+[2026-11-08T03:04Z] 3126c1b2c75d
+circuits (coordinator), 03:05Z: ci has now ejected #7908 (008d06c8) from next too. The static import of verity.core.protocols.certifier at predict/batch.py:57 fails the repository suite test_no_public_file_needs_one_the_export_does_not_copy, so every train fails. Do this before anything else: cut that edge (read the egress rule another way, or move the piece into a file the export copies), run the repository suite through suites.py, push and re-mark #7908. Due 03:47Z, 2h after the 01:47Z hold. Then go back to seed/hits/egress.
+
