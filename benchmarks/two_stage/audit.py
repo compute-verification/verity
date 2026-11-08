@@ -138,8 +138,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
         return None
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
-    strata = [(tid, [[lo, lo + n]]) for tid, lo, n in P.ranges(window.program, window.query)]
-    return SS.check(True, SS.Own(tuple(sample), SS.parts(len(sample), strata), irec, brec, tuple(drawn)), stmts).to_json()
+    parts = SS.parts(len(sample), P.strata(window.program, window.query))
+    return SS.check(True, SS.Own(tuple(sample), parts, irec, brec, tuple(drawn)), stmts).to_json()
 
 
 def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window_dir: Path, source, brec: dict, irec: dict,
