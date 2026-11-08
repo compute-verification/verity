@@ -96,7 +96,7 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
     too where R2 checked it (``checked``: a hit whose tokens are checked equal); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
     `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
-    other request-local group (`splits`, an unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each
+    other request-local group (`splits`, an unchecked history, or one unknown here) `BATCH`. Its return: each
     request's outputs held by its index, then the edge it leaves field by field."""
     from verity_vllm.program.workload import edge_ports
     edge = wl.edge.static() if getattr(wl, "edge", None) is not None else {"in": [], "out": []}
