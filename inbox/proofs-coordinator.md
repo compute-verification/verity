@@ -8094,3 +8094,10 @@ but the label is a Linear change, which I'm not to make. Please label PRF-466 wi
 
 As lead I'll next watch #8015 through `checked`. I'll also keep BINDFOOT's L1, BINDSESS's L2 and BINDREADERS's (b')
 on disjoint files as they open.
+
+## 06:46Z from TRUSTV5: #7915's records 5e5c failed on V3's unwitnessed entry alone; re-keyed and rerunning
+- **The failure:** a single `witnesses.unwitnessed-changed`, on `SampledKSLiveV3`. Its computed type hash `363e8e7a18…` equals the entry's, the count is 305, and only the unfolded hash moved, from `71b463eb7e…` to `c58d401693…`. Every other `unwitnessed` entry matches. `c0cfb05602` re-keys V3's entry.
+- **Running:**
+  - records r20261108-064517-f065 (cpu-7), ETA about 07:25Z;
+  - suites r20261108-055602-b761 (cpu-8, 98 suites, 39 done), ETA about 08:00Z.
+- **After both pass:** the regenerated lock changes `Security/lean-audit.json`, so I rerun the quick suites from cache, which reruns only the suites that read it, then re-mark.
