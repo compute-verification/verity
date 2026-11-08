@@ -16,20 +16,20 @@ COMPILE = ("3.8", "14.0")
 #: the served line's levers, statuses and owners, which OPTMODES reads too
 PATH = json.loads((Path(__file__).parent / "reprice_path.json").read_text())
 #: the per-window pool unit beside a step, its pool side and compile window: proved every window, as one pool per
-#: window needs, as built (every position paid for), with the ragged token row alone and with the planned v5, each
+#: window needs, as built (every position paid for), with the ragged token row alone (estimated) and at v5, each
 #: walked and with the head-of-line memo (not built); and sampled like the other units, which is unsound as drafted
 POOL = [("every", "built walked", "proved every window, as built, every lookup walking"),
         ("every", "built memo", "proved every window, as built with the head-of-line memo"),
-        ("every", "ragged walked", "proved every window, with the ragged token row alone"),
-        ("every", "ragged memo", "proved every window, with the ragged token row and the memo"),
-        ("every", "v5 walked", "proved every window, v5 planned: the ragged row and carried request numbers"),
-        ("every", "v5 memo", "proved every window, v5 planned, with the memo"),
+        ("every", "ragged walked", "proved every window, with the ragged token row alone (estimated)"),
+        ("every", "ragged memo", "proved every window, with the ragged token row and the memo (estimated)"),
+        ("every", "v5 walked", "proved every window, v5: the ragged row and carried request numbers"),
+        ("every", "v5 memo", "proved every window, v5 with the memo"),
         ("sampled", "built walked", "sampled like the other units, as built (unsound as drafted)")]
 #: the pool readings a total takes until the pool's unit is settled: every case as built, the last step and the path's
 #: end also with the ragged row and with v5, and a pool per window those its entry names (`pools`)
 TOTAL_POOLS = (("every", "built walked", "the pool proved every window as built"),
                ("every", "ragged walked", "the pool proved every window with the ragged row"),
-               ("every", "v5 walked", "the pool proved every window at v5 (planned)"))
+               ("every", "v5 walked", "the pool proved every window at v5"))
 #: each theorem form a row is priced under, as the table names it
 FORM = {"v5": "V5 per block: not proved for two-stage", "tk": "T·K_δ: two-stage, proved",
         "v5-1s": "V5 per block: one-stage, proved"}
@@ -227,7 +227,8 @@ def served(rows, data):
     for how, load, what in POOL:
         c = [pct(rows[(last, s)]["pool"][how][load]) if "pool" in rows.get((last, s), {}) else "–" for s in ALL_SCOPES]
         print(f"| pool | + the per-window pool unit (its pool side and compile window), {what} | ANDs measured at the "
-              f"class (v5's planned), --zk rate; verifier assumed | MEMPOOL | {FORM['v5']} | " + " | ".join(c) + " |")
+              f"class (the ragged row alone estimated), --zk rate; verifier assumed | MEMPOOL | {FORM['v5']} | "
+              + " | ".join(c) + " |")
     for delta in PATH["deltas"]:
         print(f"| delta | {delta['label']}: points on {delta['base']}, not in the totals | {delta['status']} | "
               f"{delta['owner']} | {FORM[delta['form']]} | "

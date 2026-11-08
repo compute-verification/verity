@@ -48,10 +48,10 @@ HITS_WINDOW_BITS = 5181.0
 COMPILE_CORE_H = (3.1, 3.8)
 #: the per-window pool unit, its pool side (CacheStep_v3 on MemCheck_v1 and BlockKey_v1) and its compile window: a
 #: window's ANDs at the chat class, which the busiest window sets, with every lookup walking and with the head-of-line
-#: memo; as built, which pays for every position, with the ragged token row alone, and with the ragged row and the
-#: request numbers carried in the slot row (`v5`, planned)
+#: memo; as built, which pays for every position, with the ragged token row alone (estimated), and with the ragged row
+#: and the request numbers carried in the slot row (`v5`, built)
 POOL_WINDOW_ANDS = {"built walked": 3.05e11, "built memo": 2.95e11, "ragged walked": 2.25e11, "ragged memo": 2.15e11,
-                    "v5 walked": 1.17e11, "v5 memo": 1.03e11}
+                    "v5 walked": 1.24e11, "v5 memo": 1.10e11}
 #: the share of the FLOPs the 128k plan computes that a pool per window recomputes, the hits on blocks only an earlier
 #: window computed, by window seconds: the expectation over a uniformly random phase from the 128k trace's reuse
 #: distances, all 60-300 s and 189 s on average a saved FLOP, so 189 s / W of the 13.86% its hits save
