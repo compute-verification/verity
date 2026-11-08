@@ -3829,6 +3829,15 @@
      "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
     ]
    },
+   "Claims.SamplingGeneric.CompiledTwo.KSAt": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSAt_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
    "Claims.SamplingGeneric.CompiledTwo.Exfil": {
     "fails": "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
     "meets": [
@@ -3948,6 +3957,8 @@
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
+   "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
+   "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
    "Claims.SamplingGeneric.CompilerKSAt": "Claims.SamplingGeneric.compilerKSAt",
@@ -4192,6 +4203,14 @@
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSAtTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSAtTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerEfficientTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial"
   },
   "WeightSecurity.SecurityProofs.Theft": {
    "honest": ["WeightSecurity.SecurityProofs.TheftHonest"],
@@ -11737,6 +11756,9 @@
    },
    "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSAt_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11905,6 +11927,12 @@
    "type_hash": "21af2809d9cbe6c94684ce640570d0fead7fd6a11c3b403ce9731d9124100b69",
    "unfolded_hash": "ac880e87937f1c75d7c0cc49e9af5fb3f2ea7ce4655d9d88a6aaf3ff97f5b66d"
   },
+  "Claims.SamplingGeneric.compilerEfficientTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.compilerEfficient_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -11987,6 +12015,12 @@
    },
    "type_hash": "86c0c76d767eeed9c3d6f0ba50bdc9f5a460be2ae5a716bef9ad44ffef243867",
    "unfolded_hash": "92e403cec8f991118e93542458f9b0b9fe731ba1be4047fe6db27b0a54892a52"
+  },
+  "Claims.SamplingGeneric.compilerKSAtTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSAtTwo_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerKSAt_nontrivial": {
    "owner": "@proofs",
