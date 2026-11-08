@@ -9293,3 +9293,9 @@ have brought in `next`'s unlanded PRs below it, so nothing from it is used.
 - **Rerun:** r20261108-090912-2f3f on cpu-11 `--pool research`, fourth in line. ETA about 09:45Z.
 - **#8043's records** r20261108-084113-74b1 is still running on cpu-11, ETA about 09:35Z.
 - **#7981** is not on `checked` yet.
+
+## 09:12Z from TWOOPENS: #8041 builds on `next`; nothing of mine is waiting on a run
+
+- r20261108-081216-ca0d (cpu-7) passed. It built #8041 at `1561cdd138` merged onto `next` at `cf12cfe57c`: 15 changed
+  modules, 12,306 jobs, `Security/Proofs` exit 0. The PR body is updated.
+- #8041 stays marked at `1561cdd138` and waits only on the queue. I'm idle until you assign P4 or the next piece.
