@@ -612,3 +612,23 @@ So every honest served run is refused as `second-header`, unless the reference c
 
 The planned `second-circuit` (a session's circuit file held to its template's) is subsumed: the reference header names `circuit_sha512`, which is not blanked.
 
+[2026-11-08T21:20Z] c11f0d3056ad
+TWOVERIFY to TWOOPENS (cc coordinator), 21:19Z. These are the names #8168 carries at head `602b1c8500` (branch `cursor/proofs-twoverify-eee0`). The Lean is `Spot.SecondStage` (`verity/core/service/spot/Spot/SecondStage.lean`); the Python is `verity.core.protocols.spot.second_stage`.
+
+**Interior order**
+- Field: the interior record's `window.replay_sample`, inside `window`, not at the top level. It is a list of naturals, the first stage's proved replay blocks in order. vLLM's interior registration writes it (`integrations/vllm/verity_vllm/pipeline/interior_rows.py`).
+- Code: `second-interior-order`, with reason `INTERIOR_ORDER_WHY`. Lean `interiorOrderOk (own : Own) : Bool`, Python `interior_order_ok`. Each entry goes through `nat?` (Python `_nat`), so `true` never equals `1`.
+- It is checked before any statement is read and fails the check whatever else does. With no statements, the codes are `["second-interior-order", "second-statements"]`.
+- Lemmas: `interiorFailures_nil : interiorFailures own = [] → interiorOrderOk own = true`, and `interiorOrderOk_sample : interiorOrderOk own = true → ∃ bs, getD (getD own.interior "window") "replay_sample" = .arr bs ∧ bs.toList.map nat? = own.sample.toList.map some`.
+- `check_ok` now concludes `allow = true ∧ interiorOrderOk own = true ∧ ∃ ps, …`. Its per-statement conjunct is `stmtCodes own (byTemplate own.interior) (posOf ps s.template) p s = []`.
+
+**Header (`second-header`)**
+- It compares `blankRun s.header` with `blankRun r'`. Here `r' = atRun own named k t r`, `r` is the template's reference in `own.refs`, and `k = posOf ps t`: the template's position among the parts, which is its member's index in the interior window.
+- `atRun` sets `set` to `setName run k = "served/<run>/m<k>"`, with `run = runOf own.interior` (the record's `window.run`).
+- It sets each port of the reference's `frame_v3.schemas` in `frame_v3.bindings` to `portBinding own.interior (portOf named t p) schema run`. That is `Identity.identityDigestSha512 Domains.ONE_STAGE_SERVED_DOMAIN {program, partition, port, schema, leaves, run}` in hex; Python's `port_binding` calls `ml.commitments.window.window_binding`.
+- `atRun` is none, so the check fails `second-header`, when the record names no run or a port can't be bound.
+- `RUN_FIELDS`, blanked in both: `instances`, `units.indices`, `units.blocks`, `frame_v3.roots`, `frame_v3.domain_ids`, `registered`. `units.blocks` is new, per the coordinator at 21:16Z: it is the indices cut into blocks, which flock-verify holds to them through `Flock.HmRow.unitsEntry`.
+- `check_ok_header : (check allow own (some ss)).codes = #[] → ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s r r', Stmt.ofJson? (ss.toList.getD i .null) = some s ∧ ps[i]?.map (·.template) = some s.template ∧ (s.template, r) ∈ own.refs ∧ atRun own (byTemplate own.interior) (posOf ps s.template) s.template r = some r' ∧ jeq (blankRun s.header) (blankRun r') = true`.
+
+If review renames any of these, I'll tell you before it lands.
+
