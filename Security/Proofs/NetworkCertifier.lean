@@ -5,6 +5,7 @@ public import Definitions.NetworkCertifier.Guarantees.Pooled
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -31,6 +32,8 @@ public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.WitnessesChecked
+public import Proofs.NetworkCertifier.Carried
+public import Proofs.NetworkCertifier.WitnessesCarried
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -86,6 +89,8 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
 `PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
+`Carried` proves the leak bound over runs that carry the pool (`PooledLeakCarried`): an opened row costs no advice bits,
+since the chain fixes it unless two rows have one root, and `WitnessesCarried` gives its nontrivial lemma.
 -/
 
 @[expose] public section
@@ -160,5 +165,6 @@ theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe :
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
 theorem PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked := NetTiming.pooledLeakChecked
+theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
 
 end NetTiming.SecurityProofs
