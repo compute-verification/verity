@@ -1040,16 +1040,16 @@ _SERVED_EXPERTS = ("GLM-5.3's MoE expert GEMM at served statics, kept in the sui
 
 #: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
 #: is allowed: the suite's (two σ Definitions at their smallest bindings, `boolean_sigma.circuit-check.py`, whose split moves
-#: GLM-5.3's and DeepSeek-V4's word digests; GLM-5.3 TP8's served all-reduces over the gate budget: 36 gates an element
-#: two-shot MNNVL, past 22 rows of 6,144; 16 multimem, past 50 rows; multimem at 86 rows and more over the leaf budget too; and
-#: GLM-5.3's served expert GEMMs over the leaf budget, an E = 256 stack of FP8 weights: 805M leaves for w13, 403M for w2), and
+#: GLM-5.3's and DeepSeek-V4's word digests; GLM-5.3 TP8's served multimem all-reduces at 86 rows of 6,144 and more, over the
+#: leaf budget, where over the gate budget alone, two-shot MNNVL past 22 rows and multimem past 50, the partition cuts each
+#: member by member; and GLM-5.3's served expert GEMMs over the leaf budget, an E = 256 stack of FP8 weights: 805M leaves for
+#: w13, 403M for w2), and
 #: any range spot or callee of one `_unchecked_walk` reaches.  Each passes no Call status to its callees
 #: (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes
 OVER_PARTITION_BUDGET = {
     "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
     "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
-    **{f"AllReduceMnnvl_v1{{WORLD=8,N={rows * 6144},SHOT=2}}": _SERVED_ALLREDUCE for rows in range(23, 43)},
-    **{f"AllReduceMultimem_v1{{WORLD=8,SIZE={rows * 6144},TREES={_GLM53_TREES},FTZ=False}}": _SERVED_ALLREDUCE for rows in (85, 86, 256)},
+    **{f"AllReduceMultimem_v1{{WORLD=8,SIZE={rows * 6144},TREES={_GLM53_TREES},FTZ=False}}": _SERVED_ALLREDUCE for rows in (86, 256)},
     **{f"MoeExpertFp8Gemm{w}_v1{{E=256,K={k},N={n},G=128,KB=128,SWAP={swap},DOT=HopperE4m3{dot}Dot32_v1}}": _SERVED_EXPERTS
        for w, k, n in (("", 6144, 512), ("W", 256, 6144)) for swap in (False, True) for dot in ("MmaV2", "Qgmma")},
 }
@@ -1069,6 +1069,25 @@ def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
             elif (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves:
                 out[k] = f"{n} leaves"
     return out
+
+
+def _gap(fn) -> str | None:
+    """Why a Call of ``fn`` over the budget passes with its partition unchecked, or None: for one `checks.uncut` leaves to its
+    callees, `checks.callee_gap`; for one the partition cuts member by member (`cut.separable`, in turn), a member over the
+    gate budget that isn't cut so, which `word.unit_rule` leaves whole (``too-large``)."""
+    from verity.ml.circuits.cut import separable
+    from verity.ml.definitions import word as W
+
+    if CK.uncut(fn, OPTS) is not None:
+        return CK.callee_gap(fn, OPTS)
+    todo = [fn]
+    while todo:
+        u = todo.pop()
+        if hasattr(u, "body") and u.gates > W.gate_limit(u, OPTS.partition_max_gates):
+            if (sep := separable(u)) is None:
+                return f"its member {u.id} is over the partition budget and not cut member by member"
+            todo += [c for c, _m in sep]
+    return None
 
 
 _WALK: dict = {}
@@ -1112,18 +1131,18 @@ def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, s
 def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
-    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, or is partitioned by its callees
-    (`checks.callee_gap` finds no gap), apart from `OVER_PARTITION_BUDGET`, which holds only Calls that are still neither."""
+    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, is cut member by member with each member within
+    them, or is partitioned by its callees (`_gap` finds none), apart from `OVER_PARTITION_BUDGET`, which holds only Calls
+    that are still none of these."""
     suite, calls = catalog.suite, TG.call_families()
     over = _over_budget(catalog, calls)
-    gaps = {k: f"{why}; {gap}" for k, why in over.items()
-            if k not in OVER_PARTITION_BUDGET and (gap := CK.callee_gap(suite[k], OPTS)) is not None}
+    gaps = {k: f"{why}; {gap}" for k, why in over.items() if k not in OVER_PARTITION_BUDGET and (gap := _gap(suite[k])) is not None}
     assert gaps == {}, ("a Call over the partition budget that its callees can't partition: list a callee that is no Call in "
-                        "targets.CALLEE_CALLS, cut an uncut primitive callee, or hold the Call here with why")
+                        "targets.CALLEE_CALLS, cut an uncut primitive callee or member, or hold the Call here with why")
     assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - _unchecked_walk(catalog)[1]) == [], \
         "no longer an over-budget Call the suite checks, or a range spot or callee of one: remove it from OVER_PARTITION_BUDGET"
-    assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and CK.callees_are_calls(suite[k], OPTS)) == [], \
-        "partitioned by its callees now: remove it from OVER_PARTITION_BUDGET"
+    assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and _gap(suite[k]) is None) == [], \
+        "cut member by member or partitioned by its callees now: remove it from OVER_PARTITION_BUDGET"
 
 
 @pytest.mark.slow
