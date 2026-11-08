@@ -3956,6 +3956,35 @@ mod tests {
         }
     }
 
+    /// A slot type's circuit from its rows as they are is the one from its rows padded to its slot with empty rows, and the
+    /// rows come back unchanged.
+    #[test]
+    fn net_csc_is_the_padded_rows_circuit() {
+        let mut s = 11u64;
+        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+        let mut padded = 0;
+        for (name, c) in test_circuits() {
+            for (nm, net) in &c.nets {
+                let k = 1usize << net.unit_log;
+                padded += usize::from(net.a.len() < k || net.b.len() < k);
+                let pad = |rows: &Vec<Vec<usize>>| {
+                    let mut x = rows.clone();
+                    x.resize(k, Vec::new());
+                    SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() }
+                };
+                let want = CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b));
+                let mut lent = net.clone();
+                let got = net_csc(&mut lent);
+                assert!(lent.a == net.a && lent.b == net.b, "{name} {nm}: the rows changed");
+                let alpha = rnd();
+                let eq: Vec<F128> = (0..k).map(|_| rnd()).collect();
+                assert_eq!(format!("{} {:?}", got.n_cols(), got.fold_alpha_batched(alpha, &eq)),
+                           format!("{} {:?}", want.n_cols(), want.fold_alpha_batched(alpha, &eq)), "{name} {nm}");
+            }
+        }
+        assert!(padded > 0, "no slot type with a padding row to leave out");
+    }
+
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.
     #[test]
     fn typed_template_refusals() {
