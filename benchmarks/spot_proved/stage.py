@@ -31,6 +31,7 @@ top-k inputs (`long_rows`).
 * **Wires.** Each value a staged instance reads has a source under the step root (`Wires`): the recorded call that output it,
   a parameter held to ``params.json``, or an `ADVICE` input charged at its width. A MoE pair's expert is the router's output
   (`ROUTERS`), never the align's schedule. An instance that reads anything else is not staged, and its reason names the fix.
+  Staging checks the wiring against the committed capture; a11 proves the staged units alone and doesn't read it.
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
   staged labels), ``window.json`` (what the replay block is, how its values link to serving, and the wiring: each staged
   instance's inputs with their sources, the advice bits, the calls wired to that no population gates, and the unwired) and
