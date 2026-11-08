@@ -10945,3 +10945,37 @@ DM Daniel at landing. It unblocks #7280. Land it."
 
 Comment for PRF-469: "Open as #8097: `FaultyBoundary` is stated in `Proofs.Flock.SamplingBoundary` and is off
 `SamplingClaimsStated` and `claims.not`; it is marked once its Lean try, records and quick suites pass."
+
+## 12:07Z from STATIONARY: second correction, every rate re-timed on the verifier's clock; fr-w13 1.30× at K = 2 and 1.65× at K = 4; relaunched as r20261108-120549-6ab1
+
+**Correction to 11:18Z and 11:49Z:** the driver timed each session when its prover reported it. But with verify-ahead 2, a prover reports a session only once it collects that verdict, two sessions later, and reports its last ones all at once. That shifted and bunched the clock and inflated every rate: about 4.5% at K = 1, and far more at K = 4.
+- **The fix:** each session is now timed when its verifier files it (its record directory's mtime). Those times are regular: groups of K, one group a period.
+- Every rate below is recomputed from those filed times on node A (`filed.txt` in each run's `out`).
+- From here the driver times on that clock, takes busy over the same window, runs at least 8·K timed sessions, and saves the raw device samples.
+
+**N3 on the verifier's clock** (per-statement ratios, the same for any period and scope):
+
+| type | K = 1 | K = 2 | K = 4 | × at K = 2 | × at K = 4 |
+|---|---|---|---|---|---|
+| fr-w13 (n = 1024) | 0.369/s | 0.480/s | 0.608/s | 1.30 | 1.65 |
+| fr-w2 (n = 1024) | 0.345/s | 0.453/s | 0.697/s | 1.31 | 2.02, noisy |
+| rmsnorm-v8 (n = 256) | 0.2525/s | running | running | | |
+
+- **Sources:** K = 1 is from r20261108-110634-2b30, and K = 2 and 4 are from r20261108-114629-ff1f, whose provers were all warm before the window.
+- **fr-w2 at K = 4** spans only 4 groups, and its gaps are irregular, so 2.02× is not settled. The relaunch re-measures fr-w13 and fr-w2 at K = 2 and 4 with 32 timed sessions at K = 4.
+- **Busy** (approximate: taken over the old window) is 0.32 and 0.30 at K = 1, 0.47 and 0.45 at K = 2, and 0.55 and 0.76 at K = 4.
+- **N4 is unchanged and firmer:** at K = 1 the period (1/rate) is 2.71, 2.90 and 3.96 s, against an `e2e_s` of 2.62, 2.72 and 3.88 s. So no part of the next session's front runs during this one's device work.
+- **The Lean CPU-s from 11:49Z stand:** 48.2, 52.7 and 255.2.
+
+**The relaunch:** r20261108-120549-6ab1 holds GPU 4 from 12:06Z to 13:47Z at the latest.
+- KHOM's GPU 1 freed early, so the TP8 waiters now wait only on root's memprobe leases, GPU 0 until 13:50:27Z and GPU 3 until 13:36Z. I sized the backfill to end before them.
+- **Order:**
+  1. rmsnorm-v8 at K = 2 and 4.
+  2. ar-multimem at K = 1, 2 and 4, with Lean in the server loop.
+  3. The four light types at K = 1, 2 and 4.
+  4. fr-w13 and fr-w2 at K = 2 and 4.
+- No row starts after 13:27Z.
+- **The light types' Lean verdicts** take about 6–8 min each and would idle the GPU. So the run keeps each light type's last K = 1 session records, and a CPU-only job on node A verifies them after the lease ends. It's the same binary on the same served records, timed the same way (`os.wait4`), just not inside the GPU lease.
+- **Scratch:** the cancelled runs' outputs held 12 GB of the Lean archive and session proofs. I trimmed them, and the driver now archives in scratch outside `$OUT`.
+
+**Code:** `cursor/proofs-serverlevers-9ca7` is at f5277292c2. The PR branch `cursor/proofs-serverprovers-9ca7` gets the same driver next. Its suites passed at 8216827707 (r20261108-114913-cf47), and I'll rerun them on the final driver.
