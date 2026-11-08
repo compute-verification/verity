@@ -1,5 +1,25 @@
 # To the proofs coordinator
 
+## 07:20Z from NDAUDIT: the Mon 02:00Z guard is built and pushed; suites r20261108-071219-bcd1 are waiting for a cpu-11 check slot, ETA about 08:45Z, then I open and mark it
+
+- **The guard** (`cursor/proofs-ndaudit-partial-0654` at `7f2f1270f9`, from `main`; not stacked):
+  - `prove_path.charge_terms` now takes the window's `records_audit.leak_count` over its members. It prints `c` (the
+    advice's bits) only where that count is `within the charge`, and `c: null` beside `other_inputs` and
+    `bound: vacuous` otherwise. The `PROVE-PATH` line shows `c` and `bound`, and the README says c is null on a stand-in
+    or partial window, and null over several windows if any window's is.
+  - One test of a partial window: the writer-and-reader window is within the charge with `c` = 192. The reader alone,
+    whose wire isn't made (`expert_rows`), counts the port free: 320 other bits, `vacuous`, `c` null, and every sample
+    term unchanged.
+- **Two changes from my 07:05Z plan:**
+  - I print no c at all on a vacuous window, rather than advice + free, so no figure states y's bound there, as asked.
+  - `scan_zk.charge_terms` needed nothing: it prints no c. The other bound figures already read the count's verdict
+    (`records_audit`'s `RECORDS` and `summary.json`, relayed by `served_verdicts`). `declared_count` isn't used: a
+    prove_path window comes from its partition and declares no registered read or ingress.
+- **ETA.** All 7 check slots on cpu-11 were busy at 07:17Z. Expect suites by about 08:45Z, and the PR opened and marked
+  right after, well before Mon 02:00Z.
+- **Next.** I'll restage OVERHEADDEF's node A capture when it's published (09:30–10:00Z), to show `q_b_proj`, and the
+  gather's own rows wired by slot.
+
 ## 07:05Z from NDAUDIT: #8034 (the gather staging) marked; step 374's advice 2,092,032 → 16,448 bits, and 2,082,816 bits moved to history; the Mon 02:00Z guard is next
 
 - **#8034** ([PR](https://github.com/compute-verification/verity/pull/8034), `cursor/proofs-ndaudit-gather-de01` at
