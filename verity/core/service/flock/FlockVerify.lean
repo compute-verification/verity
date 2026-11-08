@@ -270,32 +270,13 @@ def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← can
 /-- The digest a verdict names a public file's header by (`sha512Of`), none where `canon` refuses it. -/
 def headerDigest (header : Lean.Json) : Option String := (sha512Of header).toOption
 
-/-- The `public_header_sha512` of a session's verdict: the `headerDigest` of the header of the public file each of its
-statements (one a table) was set up from and checked against (`Stmt.pub`), when they are one; none when there is no
-statement or two of them differ. -/
-def headerSha (sts : Array Stmt) : Option String :=
-  match sts.toList.map (headerDigest ·.pub.header) with
-  | d :: ds => if ds.all (· == d) then d else none
-  | [] => none
-
-/-- **A verdict's header digest is every statement's**: the digest `headerSha` names is the `headerDigest` of the header
-each of the session's statements was set up and checked against. -/
-theorem headerSha_mem {sts : Array Stmt} {h : String} (e : headerSha sts = some h) {st : Stmt} (m : st ∈ sts) :
-    headerDigest st.pub.header = some h := by
-  unfold headerSha at e
-  have hm : headerDigest st.pub.header ∈ sts.toList.map (headerDigest ·.pub.header) :=
-    List.mem_map.mpr ⟨st, by simpa using m, rfl⟩
-  generalize sts.toList.map (headerDigest ·.pub.header) = l at e hm
-  cases l with
-  | nil => cases hm
-  | cons d ds =>
-    try simp only at e
-    split at e
-    · next ha =>
-      rcases List.mem_cons.mp hm with h1 | h1
-      · exact h1.trans e
-      · exact (beq_iff_eq.mp (List.all_eq_true.mp ha _ h1)).trans e
-    · cases e
+/-- A public file's header: the JSON of its first line, which every public-file loader parses (`Public.load`,
+`HmRow.loadPublic`) and sets the statement up from, and a sampled statement's is drawn from (`HmRow.drawn`, which adds the
+sample). A verdict names the file by its `headerDigest`. -/
+def publicHeader (file : ByteArray) : Option Lean.Json := do
+  let nl ← findByte file 10
+  let text ← String.fromUTF8? (file.extract 0 nl)
+  (Flock.JsonParse.parse text).toOption
 
 /-- The deployed hashes (`With.std`) with the SHA-512 of `file` known to be `sha`; `b == file` is one pointer comparison
 when `b` is `file` itself. -/
@@ -873,7 +854,7 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
 sample; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
-the digest of its public file's header (`public_header_sha512`, `headerSha`), with `--registered F` the digest of that
+the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
 `recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
@@ -1100,16 +1081,16 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
-        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered,
-          headerSha sts)
+        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
+  let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- the population's statement is set up once, when a session first needs it; a sampled session at its own sample, never at
   -- another session's (samples have no faithful cache key: `canon` refuses a non-integer number that `recordDraw` keeps)
-  let mut population : Option (Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json × Option String)) := none
+  let mut population : Option (Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := none
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -1118,7 +1099,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       catch e => pure (Except.error s!"session files: {e}")
     -- a sampled session is verified against the sampled proof blocks' statement (Σ covers the sample); several tables split the sample
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
-    let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json × Option String) := .error "setup: none"
+    let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
     match draw, population with
     | none, some s => st := s
     | _, _ =>
@@ -1172,14 +1153,12 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       if stmtTags.upstreamPlain then throw UPSTREAM_PLAIN
     if let some k := coinKey then coinKeys := coinKeys.push k
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
-    let (part, opened, header) := match st with
-      | .ok (_, _, p, o, h) => (p, o, h)
-      | .error _ => (Lean.Json.null, Lean.Json.null, none)
+    let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
     let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
       (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
-      -- the public file and the registered reads it checked the session against, by their digests (`headerSha_mem`),
-      -- and the sample it checked it at, which a caller holds a statement of the session to
+      -- the public file's header and the registered reads it checked the session against, by their digests, and the
+      -- sample it drew the session's statement at, which a caller holds a statement of the session to
       (match header with | some h => [("public_header_sha512", Lean.Json.str h)] | none => []) ++
       (match registeredSha with | some h => [("registered_sha512", Lean.Json.str h)] | none => []) ++
       (match draw with | some d => [("unit_draw", d)] | none => []) ++

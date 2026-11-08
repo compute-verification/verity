@@ -108,11 +108,12 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
 
 def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_against(fx, tmp_path):
     """`verify`'s verdict names the public file it checked the session against by its header's digest
-    (``public_header_sha512``, the SHA-512 of the header's canonical JSON: `headerSha`), the registered reads by the
-    digest of their file (``registered_sha512``, the SHA-512 of its canonical JSON) and the session's sample
-    (``unit_draw``, its record's), which the second stage's audit holds each statement to. On a public file whose header
-    is another's (one more key), or a registered file at another root, the session is refused, and its verdict names
-    that file, never the one it was proved on."""
+    (``public_header_sha512``, the SHA-512 of the header's canonical JSON, `publicHeader`: the population's header, which
+    the sampled statement is drawn from, never the drawn one), the registered reads by the digest of their file
+    (``registered_sha512``, the SHA-512 of its canonical JSON) and the session's sample (``unit_draw``, its record's),
+    which the second stage's audit holds each statement to. On a public file whose header is another's (one more key),
+    or a registered file at another root, the session is refused, and its verdict names that file, never the one it was
+    proved on."""
     import served_registered as SR
 
     def digest(j) -> str:
