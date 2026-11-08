@@ -6,8 +6,11 @@ prior over U taken from the same matrix (--unknowns):
   column  U = W_down[l][:, j], unit j's whole column; the prior is uniform over the matrix's columns, so an exact read
           is log2(ff) bits, and a fault's bits say how much of the column the served token is a function of.
 It sees served greedy tokens only. Its faults are in range: hidden unit j of layer l (`mlph`), at a prompt's last
-position, set to a value inside that unit's box (clamp.py's boxes.pt, whose clamps every forward applies), a 16-bit
-fault in an interior layer.
+position (clamp.py's boxes.pt, whose clamps every forward applies), set to (--range)
+  own     one FP8 code at the token's own group scale, at most 448 times it: what a block writing that one value can do,
+          a 16-bit fault;
+  box     any value inside the unit's box: beyond the own range it rewrites the group's scale, and with it every code
+          of the group, so it is a whole-group writer's fault.
 
 Prompts (--prompts): the first half from PROMPTS, the rest prefixes of held-out traffic (traffic.HELDOUT_TEXTS), one a
 text, ending where the honest greedy token's margin over the runner-up is smallest, where a fault moves it most easily.
@@ -43,7 +46,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import LM, MODELS, Boxes, Cache, Edit, Fault, position_class, served_logprobs
+from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Edit, Fault, position_class, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
 from traffic import HELDOUT_TEXTS
 
@@ -97,6 +100,11 @@ def outcomes(lm: LM, p: Prompt, l: int, j: int, edit_of, cands: torch.Tensor, v:
             toks.append(served_logprobs(z, "bf16").argmax(-1))
         out.append(torch.stack(toks, 1))
     return torch.cat(out)
+
+
+def own_scale(p: Prompt, j: int) -> float:
+    """Unit j's group scale at p's last position: one FP8 code there reaches at most 448 times it."""
+    return float(ue8m0_scale(p.a_j[j // GROUP * GROUP:(j // GROUP + 1) * GROUP].abs().max()))
 
 
 def split(out: torch.Tensor, mass: torch.Tensor) -> tuple[float, torch.Tensor]:
@@ -156,10 +164,20 @@ def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt
             return sample_reps(vs, ms, a.reps, gen)
     hi = lm.boxes.hi[("mlph", l)][int(position_class(torch.tensor(prompts[0].t0)))].float()
     box = float(hi[j])
+    scales = [own_scale(p, j) for p in prompts]
+    own = [min(E4M3_MAX * s, box) for s in scales]
+    lims = own if a.range == "own" else [box] * len(prompts)
+
+    def value(v: float, pi: int) -> float:
+        """v as the fault writes it: under --range own, the nearest FP8 code at the prompt's group scale."""
+        if a.range == "box":
+            return v
+        return float(torch.tensor(v / scales[pi]).to(torch.float8_e4m3fn).float()) * scales[pi]
+
     rec = {"layer": l, "unknown": unknown, "i": i if unknown == "entry" else None, "j": j,
-           "w": truth if unknown == "entry" else None, "box": box, "candidates": len(vals), "prior_bits": entropy(mass),
-           "target_bits": -math.log2(float(mass[vals == truth])), "a_j": [float(p.a_j[j]) for p in prompts],
-           "rounds": []}
+           "w": truth if unknown == "entry" else None, "box": box, "range": a.range, "own": own,
+           "candidates": len(vals), "prior_bits": entropy(mass), "target_bits": -math.log2(float(mass[vals == truth])),
+           "a_j": [float(p.a_j[j]) for p in prompts], "rounds": []}
     t_start = time.time()
     honest_bits, honest = 0.0, []
     for p in prompts:
@@ -170,13 +188,12 @@ def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt
         honest_bits += -math.log2(float(mass[ok].sum() / mass.sum()))
         vals, mass = vals[ok], mass[ok]
     rec["honest_bits"] = honest_bits
-    grid = torch.linspace(-box, box, a.grid)
     faults, fault_bits = 0, 0.0
     while len(vals) > 1 and faults < a.max_faults:
         rv, rm = reps_of(vals, mass)
         best = (0.0, None, None)
         for pi, p in enumerate(prompts):
-            for v in grid.tolist():
+            for v in sorted({value(x, pi) for x in torch.linspace(-lims[pi], lims[pi], a.grid).tolist()}):
                 h, _ = split(outcomes(lm, p, l, j, edit_of, rv, v, a.obs, a.batch), rm)
                 if h > best[0] + 1e-9:
                     best = (h, pi, v)
@@ -184,9 +201,10 @@ def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt
             rec["stopped"] = f"no fault on the grid splits off more than {a.min_bits} bits"
             break
         h, pi, v = best
-        step = 2 * box / (a.grid - 1)
+        step = 2 * lims[pi] / (a.grid - 1)
         for v2 in torch.linspace(v - step / 2, v + step / 2, a.refine).tolist():
-            if abs(v2) <= box:
+            if abs(v2) <= lims[pi]:
+                v2 = value(v2, pi)
                 h2, _ = split(outcomes(lm, prompts[pi], l, j, edit_of, rv, v2, a.obs, a.batch), rm)
                 if h2 > h + 1e-9:
                     h, v = h2, v2
@@ -198,8 +216,8 @@ def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt
         vals, mass = vals[ok], mass[ok]
         faults += 1
         fault_bits += got
-        rec["rounds"].append({"prompt": pi, "value": v, "value_over_box": v / box, "planned_bits": h, "bits": got,
-                              "outcome_classes": classes, "candidates": len(vals),
+        rec["rounds"].append({"prompt": pi, "value": v, "value_over_box": v / box, "within_own": abs(v) <= own[pi],
+                              "planned_bits": h, "bits": got, "outcome_classes": classes, "candidates": len(vals),
                               "direct": bool((served != honest[pi]).any()), "seconds": time.time() - t_start})
         print(f"target {unknown} l={l} i={i} j={j}: fault {faults} prompt {pi} v={v:.4g} ({v / box:+.3f} box) "
               f"planned {h:.2f} got {got:.2f} bits of {classes} outcomes, {len(vals)} left, "
@@ -223,6 +241,9 @@ def main() -> int:
                     "largest), and a random unit (and a random entry)")
     ap.add_argument("--prompts", type=int, default=4)
     ap.add_argument("--obs", type=int, default=1, help="served tokens a request returns that the decoder reads")
+    ap.add_argument("--range", default="own", choices=("own", "box"),
+                    help="fault values: one FP8 code at the token's own group scale (a 16-bit fault), or anywhere in "
+                         "the unit's box (beyond the own range, a whole-group writer's)")
     ap.add_argument("--grid", type=int, default=13, help="fault values across the box, planned per round")
     ap.add_argument("--refine", type=int, default=9)
     ap.add_argument("--reps", type=int, default=64, help="posterior representatives planned per round")
