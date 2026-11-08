@@ -93,18 +93,26 @@ VERIFY_TEMPLATED = 125.0 / 2100.0
 #: (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa
 #: core, two vCPUs at $0.015 a vCPU-hour, with its 8 GiB at $0.0045 a GiB-hour
 CORE_PER_GPU = 5.40 / (2 * 0.015 + 8 * 0.0045)
-#: the flat Lean verifier with its proved twins (`fast`): in the proof server's verdict pool at K = 1, a full statement,
-#: on the fused blocks (w13 48.2 s, w2 52.7 s), RMSNorm v8 (255.2 s) and the all-reduce (91.96 s); today's column times
-#: the after-over-before ratio measured in one job a type on FlashInfer K2048 (0.207), quant K6144 (0.217) and the MoE
-#: GEMM (0.577); the other four by a fixed-plus-per-entry fit to those two (0.21 to 0.23, assumed)
+#: the flat Lean verifier with its proved twins (`fast`): a full statement in the proof server's verdict pool at K = 1
+#: on the fused blocks (w13 48.2 s, w2 52.7 s), RMSNorm v8 (255.2 s) and the all-reduce (91.96 s), and on the server's
+#: last K = 1 session record on the light types (the FP8 scaled matmuls 8.8 and 14.2 s, the DSA logits 11.6 s, the
+#: residual add 37.1 s); today's column times the after-over-before ratio measured in one job a type on FlashInfer K2048
+#: (0.207), quant K6144 (0.217) and the MoE GEMM (0.577); the other four by a fixed-plus-per-entry fit to those two
+#: (0.21 to 0.23, assumed)
 VERIFY_FAST = {"Fused[EmbeddingRead_v1{V=256,H=3072}": 48.2, "Fused[EmbeddingRead_v1{V=256,H=4096}": 52.7,
                "FlashInferFp8Linear_v1{K=2048,": 513.0, "Fp8GroupQuantUe8m0_v1{K=6144,": 456.0,
                "SparseMlaCombine_v1{NSPLIT=12,": 359.0, "RMSNormFusedCudaVector8_v1{N=6144,": 255.2,
                "Fp8GroupQuantUe8m0_v1{K=2048,": 150.0, "Fp8GroupQuantUe8m0_v1{K=1536,": 112.0,
-               "SparseMlaCombine_v1{NSPLIT=2,": 75.0, "AllReduceMultimem_v1{": 91.96, "MoeExpertFp8GemmW_v1{": 8.7}
+               "SparseMlaCombine_v1{NSPLIT=2,": 75.0, "AllReduceMultimem_v1{": 91.96, "MoeExpertFp8GemmW_v1{": 8.7,
+               "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": 8.8,
+               "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": 14.2, "DsaMqaLogits_v3{N=1,H=32,D=128}": 11.6,
+               "ResidualAdd_v1{N=6144}": 37.1}
 VERIFY_FAST_MEASURED = ("Fused[EmbeddingRead_v1{V=256,H=3072}", "Fused[EmbeddingRead_v1{V=256,H=4096}",
                         "RMSNormFusedCudaVector8_v1{N=6144,", "AllReduceMultimem_v1{", "FlashInferFp8Linear_v1{K=2048,",
-                        "Fp8GroupQuantUe8m0_v1{K=6144,", "MoeExpertFp8GemmW_v1{")
+                        "Fp8GroupQuantUe8m0_v1{K=6144,", "MoeExpertFp8GemmW_v1{",
+                        "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}",
+                        "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}", "DsaMqaLogits_v3{N=1,H=32,D=128}",
+                        "ResidualAdd_v1{N=6144}")
 #: the flat column's cut a statement (`verify_cut`): measured on FlashInfer K2048 and quant K6144 and taken for every
 #: other type but the MoE family's, which it leaves unchanged
 VERIFY_CUT = 0.85
@@ -156,14 +164,14 @@ ONE_PROVER = ("SparseMlaSplitPart_v1",)
 K_GAIN = {2: 0.768 / 0.570, 4: 0.903 / 0.570}
 K_GAIN_MPS = 1.77
 #: each type's own statements a second at K provers over one's on the final driver, by block prefix or expert
-#: (`k_gain="types"`; the rest at K_GAIN)
+#: (`k_gain="types"`; the rest at K_GAIN); the fused blocks' K = 4 the mean of two runs
 K_GAIN_TYPES = {"ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": {2: 1.04, 4: 1.10},
                 "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": {2: 1.17, 4: 1.16},
                 "DsaMqaLogits_v3{N=1,H=32,D=128}": {2: 1.10, 4: 1.13},
                 "ResidualAdd_v1{N=6144}": {2: 1.09, 4: 1.20},
                 "RMSNormFusedCudaVector8_v1{N=6144,": {2: 1.48, 4: 2.60},
                 "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": {2: 1.02, 4: 1.00},
-                "w13": {2: 1.30, 4: 1.65}, "w2": {2: 1.31, 4: 2.02}}
+                "w13": {2: 1.13, 4: 1.37}, "w2": {2: 1.17, 4: 1.45}}
 #: the busy-share model K provers' gain is held to as its goal: chains overlapping at the light types' statements a
 #: second at K = 4 over K = 1 (2.87) over 4, on an earlier driver
 OVERLAP_EFFICIENCY = 2.87 / 4
