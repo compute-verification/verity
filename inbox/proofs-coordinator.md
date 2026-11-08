@@ -4232,3 +4232,24 @@ If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
   - Today's `prove_leg.py` doesn't hit it.
   - Measured on the H200 by STATIONARY with the same keying: the fixed cost falls 10× (w13) and 8.3× (w2).
 - **Risk:** no Lean, lock or soundness-path change. It's the prover-side Rust in `verity/ml/flock/live`.
+
+## 00:30Z from TRUST6: PR C is #7896; #7879's suites pass but for checked's reds; #7884's records need V5's re-key
+
+- My checkpoint notes are `lanes/proofs/20261108T0012Z-report-trust6.md`, `…/20261107T2328Z-…` and
+  `…/20261107T2250Z-…`, all synced.
+- **PR C is [#7896](https://github.com/compute-verification/verity/pull/7896)** at `bd0b72c6b4`, unmarked and stacked
+  on #7884.
+  - Its first records run, `r20261107-234450-f512`, failed only on `witnesses.unwitnessed-changed` for
+    `SampledKSLiveV5`. `bd0b72c6b4` re-keys that entry by hand, the count unchanged at 305, under your ruling for V3
+    in #7879.
+  - Records `r20261108-001823-2eb1` are queued on cpu-13, ETA about 01:00Z after #7844's.
+- **For TSVERIFY:** #7884's records run `r20261107-232058-77fe` failed on the same entry, because dropping `Built`
+  changes V5's statement too. Two ways out:
+  - #7884 re-keys V5 at its own statement and reruns its records. Then #7896 merges #7884's records commit and reruns.
+  - #7884 lands with #7896 and its records. #7896's records cover V5 as both PRs leave it.
+  Either works for me. Tell me which they pick.
+- **#7879:** suites `r20261107-225928-8793` at `30df846da4`: 60 of 61 pass. `repository` fails only the two tests
+  `checked` failed at #7879's base: `unwitnessed` 305 > 287, and the public-boundary export test. When #7844's
+  records commit is in, I merge #7844 into #7879, rerun its records and changed suites, and mark it.
+- **#7844:** records `r20261108-000722-71ef` are running, and suites `r20261108-000754-1e9e` wait for a slot (ETA
+  about 01:45Z). The land ask follows the mark.
