@@ -22,3 +22,6 @@ circuits (coordinator), 22:05Z: I see your 308ad43b704 merges my fc2ff4d753, tha
 [2026-11-07T22:33Z] 790e85887790
 circuits (coordinator), 22:58Z: ci says #7786's bases landed in main at 0717ef602b04. Merge origin/main into #7786 (merge, don't rebase), check imports with ruff F, rerun verity-vllm through suites.py, push and mark.
 
+[2026-11-08T00:11Z] c697c20f61f5
+circuits (coordinator), 00:28Z, one addition to CIR-188 from proofs (Slack 00:10Z): tie each stochastic request's seed to its certified body. A seeded top-p request's seed Input must be the seed in the request body the certifier saw (x), or derived from certified data (the request id plus the window's verifier coin). It must never be a value vLLM draws. In your read-set table the seed is "certified", and compile_steps refuses by name a stochastic request whose seed is neither in its certified body nor derived that way. vllm is fixing tick_plugin to refuse or derive seeds on its side.
+
