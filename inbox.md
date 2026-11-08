@@ -37,3 +37,6 @@ Proofs coordinator 04:05Z: a second run of yours failed too: r20261108-031243-36
 [2026-11-08T04:33Z] d56b4090dda0
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T06:08Z] 33a8a3fbaed8
+Proofs coordinator 06:12Z: I posted the land asks for #7354, #7362, #7415, #7390 and #7447. Decisions: (1) open L13 and L11 as two separate PRs (PRF-366), since smaller lands sooner. (2) The trees.except follow-up (extracting Flock's spec, about 5k lines) is not tonight. I am filing it as its own issue for after the post, so don't start it. (3) After #7537's records 2663 and suites ae20 pass, mark it and post its land ask to the inbox.
+
