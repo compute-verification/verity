@@ -6,6 +6,7 @@ profile at the footprint."""
 
 from __future__ import annotations
 
+import hashlib
 import random
 from fractions import Fraction
 from math import comb
@@ -94,9 +95,22 @@ def _interior(m: int, previous: str, row=0, **change) -> tuple[dict, dict]:
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
 
 
-def _lean(accepted=True, reads=None) -> dict:
+def _digest(j) -> str:
+    return hashlib.sha512(codec.canonical_json(j)).hexdigest()
+
+
+def _lean(accepted=True, reads=None, checked=None) -> dict:
+    """The verdict of record, accepted or not, reporting the sessions' registered reads `reads`, and naming what
+    `flock-verify verify` names of the session of statement `checked` it checked: its header's and registered reads'
+    digests and its sample (None: no statement's)."""
     v = {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}
-    return {"lean": v if reads is None else {**v, "registered": reads}}
+    if reads is not None:
+        v["registered"] = reads
+    if isinstance(checked, dict):
+        v |= {"public_header_sha512": _digest(checked.get("header")), "unit_draw": checked.get("draw")}
+        if checked.get("registered") is not None:
+            v["registered_sha512"] = _digest(checked["registered"])
+    return {"lean": v}
 
 
 def _roots(names) -> dict:
@@ -127,16 +141,20 @@ def _reads_of(statements) -> dict | None:
     return out or None
 
 
-def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of) -> S.Outcome:
+def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, checked=None) -> S.Outcome:
     """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
     `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier of record
-    reporting the reads `reads` gives of them."""
+    reporting the reads `reads` gives of them and naming what it checked of the first one's session, or of the one
+    `checked` gives (a function of the honest statement, None for none)."""
     _, second = _stages(stream)
     stream.deliver(second, [SESSION])
+    honest = stream.statements(second)[0]
     if callable(statements):
-        statements = statements(stream.statements(second)[0], second)
-    return stream.outcome(second, _lean(reads=reads(statements)), {"statement": "stub"},
-                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
+        statements = statements(honest, second)
+    first = statements[0] if isinstance(statements, list) and statements else None
+    return stream.outcome(second, _lean(reads=reads(statements), checked=first if checked is None else checked(honest)),
+                          {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
+                          statements=statements)
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
@@ -166,7 +184,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     reads = statements[0]["registered"]["ports"]
     assert {p: (e["value"], e["reads"]) for p, e in reads.items()} == {
         p: (v, [D.proved(first.draw)[u // N_RHO] for u in range(Q * N_RHO)]) for p, v in (("x", BX), ("o0", BOUT))}
-    out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+    out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
     assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
@@ -253,7 +271,7 @@ def _frame(key: str, f):
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
     cell's replay block, and its own `out` reading each slot's own rows or not (the form's refusal their one failure),
-    and refuses: none (`second-statements`), none for a template the second stage drew in (`second-cover`), a template
+    and refuses, each statement's session checked as it states by a verifier of record: none (`second-statements`), none for a template the second stage drew in (`second-cover`), a template
     twice or one of no part (`second-template`), one that isn't a statement (`second-statement`, and `second-reported`
     when its session's reads are reported, since no statement makes them), and one that isn't the
     run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
@@ -279,6 +297,29 @@ def test_round_two_holds_the_reads_to_what_the_verdicts_report(reads):
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], reads)
     assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-reported"]
+
+
+@pytest.mark.parametrize("checked", [
+    lambda s: None,
+    lambda s: {**s, "header": {**s["header"], "circuit_sha512": "ab" * 64}},
+    lambda s: {**s, "draw": {**s["draw"], "units": [0, 3] if s["draw"]["units"] != [0, 3] else [1, 4]}},
+    lambda s: {**s, "registered": _linked(s, shift=1)},
+], ids=["no-verdict", "another-file", "another-sample", "other-reads"])
+def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(checked):
+    """The run's own statement, which passes every other check, is refused (`second-verified`) when no verdict of record
+    names its session, or the one that does checked it against a public file whose header names another file, at another
+    sample, or on other registered reads: round 2 reads a statement only as a verifier of record checked it."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [s], checked=checked)
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-verified"]
+
+
+def test_only_an_accepted_verdict_of_record_names_what_was_checked():
+    v = {"of_record": True, "accepted": True, "public_header_sha512": "ab" * 64, "unit_draw": {"units": [1]}}
+    assert SS.verified_of({"lean": v, "upstream": {"of_record": False, "accepted": True}}) == (
+        SS.Checked("ab" * 64, None, {"units": [1]}),)
+    assert SS.verified_of({"a": {**v, "accepted": False}, "b": {**v, "of_record": False},
+                           "c": {**v, "public_header_sha512": None}}) == ()
 
 
 def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):

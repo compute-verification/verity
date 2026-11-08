@@ -6,7 +6,10 @@ registration and to the second draw's cells. `service.Stream` adds it to the int
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
 an instance of (its stratum's name under the check's query), its public file's header, its session record's
-``unit_draw``, and the registered reads it was verified against (``--registered``), None for none.
+``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
+where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
+`verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
+``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked.
 
 The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
 difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
@@ -16,6 +19,7 @@ difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never suppli
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -65,6 +69,40 @@ class Stmt:
 
 
 @dataclass(frozen=True)
+class Checked:
+    """What an accepted verdict of record names of the session it checked: the digests of the public file's header and
+    of the ``--registered`` file it checked the session against (``public_header_sha512``, ``registered_sha512``, None
+    for none) and the sample it checked it at (``unit_draw``)."""
+
+    header: str
+    registered: Any
+    draw: Any
+
+
+def verified_of(verdicts: Mapping[str, Any]) -> tuple[Checked, ...]:
+    """`SecondStage.verifiedOf`: what each accepted verdict of record among `verdicts` that names a header names."""
+    return tuple(Checked(v["public_header_sha512"], v.get("registered_sha512"), v.get("unit_draw"))
+                 for v in verdicts.values() if isinstance(v, Mapping) and isinstance(v.get("public_header_sha512"), str)
+                 and v.get("of_record") and v.get("accepted") is True)
+
+
+def _sha512(j: Any) -> str | None:
+    """`canonSha512`: the SHA-512 of `j`'s canonical JSON, None where it isn't JSON."""
+    try:
+        return hashlib.sha512(canonical_json(j)).hexdigest()
+    except (TypeError, ValueError):
+        return None
+
+
+def _checked(s: Stmt) -> Checked | None:
+    """`Stmt.checked`: what a verdict of record that checked statement `s`'s session names of it, None when its header
+    or registered reads aren't JSON."""
+    h = _sha512(s.header)
+    r = None if s.registered is None else _sha512(s.registered)
+    return None if h is None or (s.registered is not None and r is None) else Checked(h, r, s.draw)
+
+
+@dataclass(frozen=True)
 class Link:
     """A link of the two-stage design: template `template`'s session port `port` reads the boundary registration's port
     `value`."""
@@ -78,8 +116,8 @@ class Link:
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
-    Definition makes none), and the ``{value: root}`` the verifiers of record report the sessions read
-    (`audit.session_registered`)."""
+    Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
+    (`audit.session_registered`), and what they name of each session they accepted (`verified_of`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -88,6 +126,7 @@ class Own:
     drawn: tuple[int, ...]
     links: tuple[Link, ...] | None = ()
     reported: Mapping[str, Any] | None = None
+    verified: tuple[Checked, ...] = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -344,9 +383,18 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
+def _verified_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.verifiedOk`: an accepted verdict of record names statement `s`'s header, registered reads and
+    sample."""
+    c = _checked(s)
+    return c is not None and any(v.header == c.header and _jeq(v.registered, c.registered) and _jeq(v.draw, c.draw)
+                                 for v in own.verified)
+
+
 def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
-    checks = (("second-population", _population_ok(q, p, s.header)),
+    checks = (("second-verified", _verified_ok(own, s)),
+              ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
@@ -421,5 +469,5 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Link", "Own", "Part", "attach", "check", "links_of", "own_draw", "parts", "replay_links",
-           "statement_reads"]
+__all__ = ["FORM", "Checked", "Link", "Own", "Part", "attach", "check", "links_of", "own_draw", "parts", "replay_links",
+           "statement_reads", "verified_of"]
