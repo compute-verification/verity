@@ -20,7 +20,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 
 Access, Entry = MC.Access, MC.Entry
 POOL = json.loads((Path(__file__).with_name("fixtures") / "memcheck_pool.json").read_text())
-PL = MC.Layout(**POOL["layout"])
+PL = MC.Widths(**POOL["layout"])
 #: (Definition, statics) -> its traced circuit's (And, Xor, Not) gates
 PINS = {
     ("MemAccess", (2, 128, 128, 28)): (11367, 57426, 35),
@@ -28,8 +28,8 @@ PINS = {
     ("MemCheck", (3, 3, 2, 4, 4, 3)): (21227, 111652, 44),
 }
 #: MemCheck's bindings the random logs run at: one chunk a record, and two
-SMALL = MC.Layout(1, 2, 3, 4)
-WIDE = MC.Layout(2, 64, 64, 4)
+SMALL = MC.Widths(1, 2, 3, 4)
+WIDE = MC.Widths(2, 64, 64, 4)
 
 
 def _bits(x: int, n: int) -> list[int]:
@@ -238,7 +238,7 @@ def test_the_parts_cost_the_pinned_gates() -> None:
 
 def test_bad_statics_are_refused() -> None:
     with pytest.raises(ValueError, match="width A is 0"):
-        MC.MemAccess.signature(MC.Layout(1, 0, 1, 1))
+        MC.MemAccess.signature(MC.Widths(1, 0, 1, 1))
     with pytest.raises(ValueError, match="times 1..8 need more than T = 3 bits"):
         MC.MemCheck.signature(type("S", (), {"N": 8, "M": 1, **SMALL._asdict(), "T": 3}))
     with pytest.raises(ValueError, match="out of its 2 bits"):

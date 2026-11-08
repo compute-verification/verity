@@ -53,7 +53,7 @@ from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, const_bits, or_reduc
 from verity.ml.circuits.boolean.gf128 import mul, mul_forms
 from verity.ml.circuits.types import Array, Tuple
 
-__all__ = ["Access", "Entry", "Layout", "MemAccess", "MemCheck", "MemEntry", "access", "consistent", "element", "entry",
+__all__ = ["Access", "Entry", "Widths", "MemAccess", "MemCheck", "MemEntry", "access", "consistent", "element", "entry",
            "memcheck", "pack"]
 
 BIT = BL.BIT
@@ -61,7 +61,7 @@ F = Array(128, BIT)
 STATE = Tuple(F, F, BIT)
 
 
-class Layout(NamedTuple):
+class Widths(NamedTuple):
     """A record's field widths: tag G, address A, value V, time T."""
     G: int
     A: int
