@@ -33,7 +33,7 @@ Verity itself knows nothing of vLLM.
 | `serve-openai` | the committing endpoint |
 | `row run\|stage\|chain` | a workload's Build, Match and Commit (`chain` also publishes its record) |
 | `build`, `match`, `commit` | one stage of one workload |
-| `tp-capture`, `tp-match`, `tp-commit` | the stages at tensor-parallel world above 1 |
+| `tp-capture`, `tp-match`, `tp-commit` | the same stages at a tensor-parallel size above 1 |
 | `predict row\|compare\|emit` | the Build of record from the workload alone; held to a traced Build; a switched workload's Build |
 | `advice` | a served run's advice, from its step trace and Commit record |
 | `commit-replay`, `serving-rows` | a sealed Commit's replay on CPU; its serving rows and registration |
