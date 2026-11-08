@@ -472,8 +472,11 @@ LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
     "MoeExpertFp8Gemm_v1": ("w",),
     "MoeExpertFp8GemmW_v1": ("w",),
     "ScaledMmFp8BlockGrouped_v1": ("w",),
-    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys
+    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys (Waksman's network,
+    # and the mask form's concentrator in words and in bits)
     "AllReduceMultimem_v1": ("parts",),
+    "DsaButterflyRows_v1": ("rows",),
+    "DsaButterflyRows_v2": ("rows",),
     "DsaWaksmanRows_v1": ("rows",),
 }
 
