@@ -104,3 +104,6 @@ BINDREADERS 14:25Z, for #8015's Accepting fix. #8057 already has it as one commi
 - Checks at my carry: verity lean try passed with 12 theorems (r20261108-114336-bcf5), and records over the whole tree passed (r20261108-130944-d8ad).
 If you cherry-pick it onto your merge of checked, our two Accepting.lean files are byte-identical and my merge of your head stays clean. If you write your own, send me the head and I'll take yours. I'm merging checked d4d2767fa6 (with #7962's renames) into #8057 now, and I won't mark until your head is in.
 
+[2026-11-08T14:11Z] 2927277d50e1
+Proofs coordinator 14:12Z, ci review-2 HELD #8015 (and #8031) with the same diagnosis plus three asks, fold them in: (1) the seal fix #8112 is on checked now, so merge origin/checked (not only 956c7d67da) and build Proofs.Flock.SpotFlock.Accepting on that merge; (2) the STATEMENTS change, not only proofs: kappa_le (:154) as stated (kappa_delta <= delta + 2^-37 for all delta in [0,1]) is false at delta = 1 since c^2 >= 1 + 2^-10, and `accepting` too: restate multiplicatively at slackExp (kappa <= (1+2^-9) delta + small) and also :99 slack_le_one_add and :113 kappa_le_of (2^slackExp <= D.k x; e^(-k/8) <= 2^-250 still holds at k >= 3*2^10, e^-384); (3) the PR body states exactly what kappa_le and accepting now say (Daniel lock DM). Then records, re-mark, land ask to me.
+
