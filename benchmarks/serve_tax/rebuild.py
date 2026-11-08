@@ -695,7 +695,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 if a.mirror_out and trace.scheduled == a.at_step:
                     stop["start"] = start_state(sched, kvm, kv, mirror, arrived, w["steps"], max(outs, default=first - 1),
                                                 a.at_step, bs)
-                    raise _Stop
+                    raise _Stop(f"stopped right before step {a.at_step}, with its start state taken")
             add_due()
             if hits:
                 hits.due(sched.requests, trace.scheduled)
@@ -729,8 +729,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 if not sched.has_requests():
                     raise SystemExit(f"the replay is idle at step {trace.scheduled} short of {w['hi']}")
             eng.step()
-    except _Stop:
-        pass
+    except _Stop as e:
+        out["stopped"] = str(e)
     steps = {r["step"]: r for r in trace.records if r["kind"] == "step" and first <= r["step"] < w["hi"]}
     block = {"from_edge": a.from_edge, "to_edge": a.to_edge, "from_step": w["lo"], "to_step": w["hi"], "first_step": first,
              "arrivals": len(w["arrive"]), "requests_at_start": len(readded)}
