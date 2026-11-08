@@ -15,8 +15,7 @@ which claims the Marlin block's call boundaries when the manifest names no plane
 (`kv_slots_source`, for the rank's memory map, never the record).  The route, linear quant and align sources: once one rank has
 one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
 manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
-gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split
-count (`prescribe_idle_splits`), taps or none, and attach the narrowed-rows source (`narrowed_source`: the keys' and values' columns of
+gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank`, taps or none, attach the narrowed-rows source (`narrowed_source`: the keys' and values' columns of
 the last layer's prompt rows before the last) whenever the manifest names narrowed rows; once one rank has it, every rank must."""
 from __future__ import annotations
 
@@ -32,7 +31,6 @@ from verity_vllm.acquire.sources import (attention_source, call_boundary_source,
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
-from verity.ml.definitions.registry.topp_geometry import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
@@ -77,18 +75,7 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
     required_classes, _src = int8_source.attach(com, int8_source.applies(manifest), manifest, required_classes,
                                                 explicit_classes=explicit_classes, model=model)
     narrowed_source.attach(com, manifest, model=model)
-    prescribe_idle_splits(com, manifest)
     return required_classes
-
-
-def prescribe_idle_splits(com: Any, manifest: Mapping[str, Any] | None) -> bool:
-    """For a derived-S Program (its manifest names `sampler_splits`), a sampling step on which vLLM ran no split kernel (every row at
-    top_p 1) binds the prescribed S `SplitsFor_v1(rows, num_SMs)` (`commit.committer.topp_splits.step_splits`); True when armed.  A
-    manifest without the family (greedy, or B1's constant S) arms nothing, and a step whose split kernels ran binds their S either way."""
-    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
-        com.prescribe_idle_splits = splits_for_v1
-        return True
-    return False
 
 
 def warmup(com: Any, on: bool) -> None:
@@ -130,12 +117,11 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, kv_slots: bool = False, **given: Any) -> dict[str, Any]:
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
-    map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal; and arm the
-    prescribed split count as `attach` does (`prescribe_idle_splits`: "SplitsFor_v1" when armed).  With ``kv_slots`` (tp-commit
+    map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal.  With ``kv_slots`` (tp-commit
     ``--memory-map``) also the KV-slots source, never the record: the rank's map reads it (`pipeline.tp.rank_replay.memory_map`)."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
     mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
-    out: dict[str, Any] = {"prescribe_idle_splits": "SplitsFor_v1"} if prescribe_idle_splits(com, mine) else {}
+    out: dict[str, Any] = {}
     for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
             continue
@@ -216,4 +202,4 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "prescribe_idle_splits", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]

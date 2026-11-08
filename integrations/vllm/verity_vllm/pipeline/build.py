@@ -121,30 +121,11 @@ def engine_dtype(model_config) -> str:
 #: not a key here is REFUSED before export (`reason: "sampler"`) — never built as the greedy Program (a fail-open Build).
 SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 logits row -> TokenSelect_v1{V})",
                   # temperature > 0 with top-p, an explicit per-request seed and no top-k: the wrapper authors ONE
-                  # `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p, pos, splits)` per sampled step; the rule binds it to
-                  # `GumbelTopPTokenSelect_v1{V,S}` (registry.sampling: f32 widening -> div.full.f32 temperature -> the S-split top-p mask
+                  # `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p, pos, S)` per sampled step; the rule binds it to
+                  # `GumbelTopPTokenSelect_v2{V,S}` (registry.sampling: f32 widening -> div.full.f32 temperature -> the S-split top-p mask
                   # `_topp_sb_{stats,step,mask}_kernel` -> Gumbel-max keyed `tl.randint(seed, pos)` -> first maximum).  The seed is a runtime
-                  # INPUT of the Program; temperature / top_p / pos are constants; S = SplitsFor_v1(|live(t)|, num_SMs) is a DERIVED input
-                  # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`), or the constant SplitsFor_v1(1, num_SMs)
-                  # of a single-request workload -- the 6th operand, never a static.
-                  "stochastic": "GumbelTopPTokenSelect[vllm]_v3 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V} with seed + derived S Program inputs, or GumbelTopPTokenSelect_v2{V,S} with the seed input and the constant S of a single-request workload: its keep word as word gates)"}
-
-
-def declared_live_counts(reqs: list[dict]) -> list[int]:
-    """The DECLARED chronology's live sampler batch per engine step: n_live(e) = #{r : arrive_r <= e <
-    arrive_r + cap_r} — every request is sampled once per engine step from its arrival (prefill sample at e = arrive_r) until it has produced
-    `cap_r` tokens (the `length` stop; vLLM's sampler sees one logits row per scheduled request, chunked prefills included).  Index e."""
-    horizon = max((int(r.get("arrive_step", 0) or 0) + _cap_of(r) for r in reqs), default=0)
-    n = [0] * horizon
-    for r in reqs:
-        a, c = int(r.get("arrive_step", 0) or 0), _cap_of(r)
-        for e in range(a, a + c):
-            n[e] += 1
-    return n
-
-
-def _cap_of(r: dict) -> int:
-    return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
+                  # INPUT of the Program; temperature / top_p / pos and the registered S (`sampler_geometry`) are constants, S the 6th operand.
+                  "stochastic": "GumbelTopPTokenSelect[vllm]_v4 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v2{V,S} with the seed input and the registered S: its keep word as word gates)"}
 
 
 def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
@@ -156,7 +137,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split`, whose keep set depends
     on its split count S.  vLLM picks S from the live sampler batch, so a request's batch-mates would pick its nucleus at top_p < 1
     (as `circuit-check --batch` shows).  The served engine runs every launch at the registered S instead
-    (`topp_geometry.registered_splits` = SplitsFor_v1(1, num_SMs), from the target's SM count, never hard-coded; `engine.topp_pin`),
+    (`topp_geometry.registered_splits`, from the target's SM count, never hard-coded; `engine.topp_pin`),
     so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
     holds every launch's S to it."""
     from verity.ml.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
@@ -185,13 +166,13 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     if B > SPLIT_MAX_BATCH:
         return refuse(f"sampler batch {B} > _SPLIT_MAX_BATCH {SPLIT_MAX_BATCH}: vLLM runs `_topk_topp_kernel`, not the split pipeline", reason="sampler_geometry")
     if getattr(target, "num_sms", None) is None:
-        return refuse("the target profile declares no num_sms: the registered split count SplitsFor_v1(1, num_SMs) has no num_SMs",
+        return refuse("the target profile declares no num_sms: the registered split count registered_splits(num_SMs) has no num_SMs",
                       reason="sampler_geometry")
     nsm = int(target.num_sms)
     S = int(registered_splits(nsm))
     sampling["splits"] = S
     sampling["geometry"] = {"num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "registered", "splits": S,
-                            "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every sampling event, whatever the live "
+                            "rule": "S = registered_splits(num_SMs) at every sampling event, whatever the live "
                                     "batch: the served engine pins vLLM's split count to it (engine.topp_pin)",
                             "constant": f"Const32[{S}]: the select's 6th operand at every sampling event (no `splits` input)"}
     return None

@@ -21,7 +21,6 @@ verity_vllm/ops/pod_fa2_tap.sh
 verity_vllm/ops/pod_fa3_tap.sh
 verity_vllm/ops/pod_norm_tap.sh
 verity_vllm/ops/pod_router_tap.sh
-verity_vllm/ops/stoch_negative_n3.sh
 verity_vllm/ops/stoch_negatives.sh
 **/*_negatives.sh
 **/*_negative_*.sh

@@ -240,20 +240,16 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         # the registered value as the build's layout records it: what registration binds, never a committed word
                         words.append(np.array([f["bits"]], dtype=_NP_BY_BITS[int(f["width"])] if int(f["width"]) in _NP_BY_BITS else np.uint64))
                         inputs_rec.append({"kind": "registered", "param": pname, "field": f["name"], "bits": f"0x{f['bits']:x}"})
-                elif pname in (SEED_PARAM, RM.SPLITS_PARAM):
-                    # the sampler's named INPUTS: the committed runner.sampler/seed word of THIS (step, request) and,
-                    # under derived S, the committed runner.sampler/splits word of the event the Program's slice names (`splits[s]` = the
-                    # request's step s; the identity is per engine step, request-local element 0).  Never the declared / observed value.
+                elif pname == SEED_PARAM:
+                    # the sampler's named INPUT: the committed runner.sampler/seed word of THIS (step, request).  Never the declared /
+                    # observed value.
                     if hi - lo != 1:
                         raise _Unresolved(f"{pname} slice [{lo}, {hi}) is not one word")
-                    step = d["step"] if pname == SEED_PARAM else lo
-                    if pname == RM.SPLITS_PARAM and lo != d["step"]:
-                        raise _Unresolved(f"splits slice [{lo}, {hi}) names step {lo}, the selector is at step {d['step']}")
-                    w, why = store.words(rid, arrive + step, SAMPLER_OP, pname, 0, 1)
+                    w, why = store.words(rid, arrive + d["step"], SAMPLER_OP, pname, 0, 1)
                     if w is None:
                         raise _Unresolved(why)
                     words.append(w)
-                    inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
+                    inputs_rec.append({"kind": "committed", "identity": [rid, arrive + d["step"], SAMPLER_OP, pname, [0, 1]]})
                 elif pi.kv_prefix and a == pi.kv_prefix["input"]:
                     words.extend(_cached_prefix_words(pi, store, rid, pname, lo, hi, inputs_rec))
                 elif pname == RM.SCHEDULE_PARAM:

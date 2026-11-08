@@ -60,7 +60,7 @@ class WithPeers(nn.Module):
     """A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
     in collective call order) to the rank's `CollectiveBus` and runs the inner wrapper; the k-th collective of this forward consumes
     peer k (see `export_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
-    (`SeededWithPeers`, `SplitsWithPeers`), and so does a `schedule` witness (`ScheduledWithPeers`); `with_peers` picks the form: the
+    (`SeededWithPeers`), and so does a `schedule` witness (`ScheduledWithPeers`); `with_peers` picks the form: the
     Program's parameters are the TP1 Program's, then the schedule, then the peers."""
 
     def __init__(self, inner: nn.Module, bus) -> None:
@@ -86,17 +86,10 @@ class WithPeers(nn.Module):
 
 
 class SeededWithPeers(WithPeers):
-    """`WithPeers` over a stochastic wrapper whose split count is the single request's constant: `forward(prompt, seed, *peers)`."""
+    """`WithPeers` over a stochastic wrapper (its split count the registered constant): `forward(prompt, seed, *peers)`."""
 
     def forward(self, prompt: torch.Tensor, seed: torch.Tensor, *peers: torch.Tensor):
         return self._run((prompt, seed), peers)
-
-
-class SplitsWithPeers(WithPeers):
-    """`WithPeers` over a stochastic wrapper with a `splits` input: `forward(prompt, seed, splits, *peers)`."""
-
-    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, splits: torch.Tensor, *peers: torch.Tensor):
-        return self._run((prompt, seed, splits), peers)
 
 
 class ScheduledWithPeers(WithPeers):
@@ -113,14 +106,14 @@ class ScheduledWithPeers(WithPeers):
 
 def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
-    prompt, and a stochastic wrapper's `seed` and `splits`), the `schedule` when the probe recorded an align call that reads it, then
+    prompt, and a stochastic wrapper's `seed`), the `schedule` when the probe recorded an align call that reads it, then
     the bus's example peers in collective order."""
-    forms = {1: WithPeers, 2: SeededWithPeers, 3: SplitsWithPeers}
+    forms = {1: WithPeers, 2: SeededWithPeers}
     if getattr(inner, "C", 0):
         raise ValueError(f"with_peers: a rank Program with a cached prefix (C={inner.C}) has no peer form yet (its prefix is the rank's own "
                          f"KV heads, an input before the peers)")
     if len(inputs) not in forms:
-        raise ValueError(f"with_peers: a wrapper takes 1 to 3 inputs of its own (prompt, seed, splits), {type(inner).__name__} takes {len(inputs)}")
+        raise ValueError(f"with_peers: a wrapper takes 1 or 2 inputs of its own (prompt, seed), {type(inner).__name__} takes {len(inputs)}")
     if bus.schedule_record:
         if len(inputs) != 1:
             raise ValueError(f"with_peers: the schedule witness has a greedy wrapper's form only (prompt, schedule, *peers), not one "
