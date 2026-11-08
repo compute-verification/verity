@@ -48,6 +48,16 @@ def test_an_idle_nodes_research_pool_takes_a_job_while_the_busy_ones_queue():
         assert target == (idle, "research") and why.endswith("a slot is free there now")
 
 
+def test_slots_blocked_on_memory_are_not_capacity_when_ranking_lines():
+    """cpu-1's 13 idle slots all waited on memory reservations while 28 runs queued; counted as capacity, its line looked
+    shortest and every `--on auto` job queued there behind them."""
+    mem = "-1 GB of memory free (481 GB more is reserved by live runs that haven't reached it), under the 40 GB a check here may peak at"
+    cpu1 = pool(*(slot(f"r{i}", held=True) for i in range(8)), *(slot(f"r{i}", blocked=mem) for i in range(8, 21)), waiters=28)
+    cpu6 = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=6)
+    target, why = auto.choose({N2: share(waiters=5), CPU1: cpu1, "vy-nebius-cpu-6": cpu6}, 4, 16)
+    assert target == ("vy-nebius-cpu-6", "research"), why
+
+
 def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
     """INF-281, 27 Oct 03:06Z: cpu-1 had 22 waiting and cpu-5 34 while cpu-3's research pool sat idle, outside SPILL."""
     cpu3 = "vy-nebius-cpu-3"

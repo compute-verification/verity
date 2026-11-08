@@ -195,7 +195,10 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     waiting = len(doc.get("waiters") or [])
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
-    return len(open_), len(free), waiting, why
+    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears, and a
+    # pool whose idle slots all wait on memory reservations would otherwise rank as a short line
+    running = [s for s in open_ if s.get("holder") is not None or not s.get("blocked")]
+    return max(len(running), 1), len(free), waiting, why
 
 
 def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
