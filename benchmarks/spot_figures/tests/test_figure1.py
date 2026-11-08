@@ -421,4 +421,4 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
                                        "figure1_overhead_appendix_datacenter_week.png",
                                        "figure1_overhead_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (stem("world year"), appendix_stem("world year")) == ("figure1_overhead", "figure1_overhead_appendix")
+    assert (stem("datacenter year"), appendix_stem("datacenter year")) == ("figure1_overhead", "figure1_overhead_appendix")
