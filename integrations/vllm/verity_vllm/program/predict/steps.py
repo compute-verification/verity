@@ -511,6 +511,7 @@ class Plan:
                     [d for d in self.discarded if d[1] not in gone], dict(sorted(refused.items())), self.idle)
 
 
+@cyclic_gc_off
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
@@ -525,7 +526,6 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
     return replace(r, digest=program_digest(r.program))
 
 
-@cyclic_gc_off
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
     """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
     live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice` and `ingress` only, and compiles them or raises
