@@ -1,5 +1,25 @@
+module
+
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.VBridge.ResUnit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.AlgHolds
 import Proofs.Flock.VBridge.OpeningUnit
+import Proofs.Flock.VBridge.PartsCover
 
 /-!
 # n4's session (a): the opening's parts' zero columns are its residuals'
@@ -16,6 +36,8 @@ The verifier cuts R's opening's S (`RecOpening.structureOf`) into parts as it cu
 * `residuals_zero_of_cols`: when every part's outputs hold its residuals and are zero, every residual of S is
   (`residuals_zero_of_parts`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

@@ -1,4 +1,53 @@
-import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Walk
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.Count
+import Proofs.Flock.Claims.Complete.ZkTables.Prover
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Trace
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Claims.Scope.StmtOf
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The masked completeness premises, one table at a time
@@ -32,6 +81,8 @@ of a good case, its rep `r` from the sends after the link's and the `2 i + r` ea
   `Inner` at the deployed relation, from the table-level forms at table `0` of a good masked case (`CaseZk.toCase`) or
   run (`RunZk.toRun`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

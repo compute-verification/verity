@@ -1,5 +1,19 @@
-import Proofs.Flock.C3.RegLevels.LevelsChecked
-import Proofs.Flock.C3.RegLevels.OpensRegs
+module
+
+public import Proofs.Flock.C3.RegLevels.LevelsChecked
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # R's levels' tops reads (`TopRead`), from check 5
@@ -15,6 +29,8 @@ entry. `RecCoins.checkStackedLevel` holds that entry to the verifier's (`checkTo
   reads file `(F.zs …).own` (the session's list, not `ownAt`: `ownPorts` names no port of R's levels) is `TopRead`;
   `topReads_of_accepted`: at each of R's levels of a map `M` (`StackedParams`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

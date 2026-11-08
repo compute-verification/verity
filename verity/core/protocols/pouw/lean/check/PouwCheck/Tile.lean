@@ -1,17 +1,21 @@
+module
+
 /-!
 # The tile templates the verifier pins
 
-`tiles`: each tile template a window's check item may name, with its work per tile, its check query's SHA-512 (one-stage's
+`tiles`: each tile template an execution phase's check item may name, with its work per tile, its check query's SHA-512 (one-stage's
 `query_digest` of the template's instance query), and the one circuit, by SHA-512, a unit's tile proof of it is over: the
 `circuit_sha512` of the proof's public file, which `flock-verify verify --zk` binds to the circuit it verifies against.
 `paramsOf` refuses a check item or query that isn't one of these, and `opening` a proof over any other circuit, so this
-table fixes the circuit a window's units are proved over, not the code that builds it (`verity.ml.circuits`, lowered by
-C-Flock). A change to a template's Definition or to C-Flock's lowering changes its circuit's digest, which then has to
+table fixes the circuit an execution phase's units are proved over, not the code that builds it (`verity.ml.circuits`, lowered by
+Flock). A change to a template's Definition or to Flock's lowering changes its circuit's digest, which then has to
 change here before the verifier accepts its proofs.
 
-A salted template (`salted`, `core_check.Salted`) is one whose unit reads the window's certified salt: its pinned circuit's
-first ports are R A rows, C B rows and the public row `pub`, and only a certified window opens its units (`opening`).
+A salted template (`salted`, `core_check.Salted`) is one whose unit reads the execution phase's certified salt: its pinned circuit's
+first ports are R A rows, C B rows and the public row `pub`, and only a certified execution phase opens its units (`opening`).
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -31,8 +35,8 @@ structure Tile where
   salted : Option Salted := none
   deriving DecidableEq, Repr
 
-/-- The served window's template (`served_commit.template`) at K = 4096 and at the test window's K = 128, the two
-templates of the windows recorded before it, which the replay of those windows reads, and the salted H1 tile unit at
+/-- The served execution phase's template (`served_commit.template`) at K = 4096 and at the test execution phase's K = 128, the two
+templates of the execution phases recorded before it, which the replay of those execution phases reads, and the salted H1 tile unit at
 K = 64 (R = 4, C = 8: 32 dot products of K per tile). -/
 def tiles : List Tile := [
   ⟨"Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}", 4096,

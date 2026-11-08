@@ -1,5 +1,20 @@
-import Proofs.Flock.C3.Opening.Session
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Opening.Session
+public import Proofs.Flock.C3.Compose.Decoder
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n7's opening: `OpeningReadAt` at the source, from V*'s sessions
@@ -15,6 +30,8 @@ their claims' checks (`checks_of_run`, `packed_check`).
 `openingReadAt_src` takes `SessionAt` and `OpenTie` at every accepted outer proof, and the claim tie (rec-lean's
 item 5, from `claimO` to the source's claims).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

@@ -3,7 +3,12 @@
 units per VU but one is refused, before the structure is computed or any net built; at one it goes on to the part's bits
 (this unit has no input bits, so its claims exceed them). A unit of another name passes at any number.
 -/
-import Flock.RecOpening
+module
+
+public import Flock.RecOpening
+meta import Flock.RecOpening
+
+@[expose] public section
 
 namespace Flock.Test.RecOpening
 

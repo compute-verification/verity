@@ -1,24 +1,27 @@
-import Flock.Firewall.Honest
-import Proofs.Flock.Recursive.FirewallTemplate
+module
+
+public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.FirewallRun
 import Proofs.Flock.Recursive.FirewallWire
-import Proofs.Flock.Recursive.FirewallObj
 
 /-!
-# The firewall's steps on requests it takes
+# The ZK server's steps on requests it takes
 
-`FirewallTemplate` shows what the firewall sends wherever it doesn't refuse; this file shows where it doesn't. `Runs m st
-Q`: from the state `st`, `m` returns at a state `Q` holds of. `Draws m rows P`: `m` draws one salt for each of `rows`, in
-order, and changes nothing else, its result and the rows' commit strings `P`. `Goes s reqs st t`: the firewall's loop
-takes every request of `reqs` from `st`, ending at `t`. Each `run_*` is one request the firewall takes, at the state
+`FirewallTemplate` shows what the ZK server sends wherever it doesn't refuse; this file shows where it doesn't. `Runs m st
+Q`: from the state `st`, `m` returns at a state `Q` holds of. `Draws m rows P`: `m` samples one salt for each of `rows`, in
+order, and changes nothing else, its result and the rows' commit strings `P`. `Goes s reqs st t`: the ZK server's loop
+takes every request of `reqs` from `st`, ending at `t`. Each `run_*` is one request the ZK server takes, at the state
 after it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallSteps
 
 open Lean (Json)
 open Flock Flock.Firewall
 
-/-! ## Total correctness of the firewall's state monad -/
+/-! ## Total correctness of the ZK server's state monad -/
 
 /-- From `st`, `m` returns `a` at a state `t` with `Q a t`. -/
 def Runs {α : Type} (m : Fw α) (st : State) (Q : α → State → Prop) : Prop :=
@@ -95,7 +98,7 @@ theorem Runs.set_bind {β : Type} {t : State} {f : PUnit → Fw β} {st : State}
 theorem Runs.send_bind {β : Type} {m : Sent} {f : PUnit → Fw β} {st : State} {R : β → State → Prop}
     (h : Runs (f ⟨⟩) { st with sent := st.sent.push m } R) : Runs (Flock.Firewall.send m >>= f) st R := h
 
-/-! ## Salts drawn in order -/
+/-! ## Salts sampled in order -/
 
 /-- The commit strings of `rows` under the salts `ys`, row by row. -/
 def cs (rows : List (Array Nat)) (ys : List ByteArray) : List ByteArray :=
@@ -105,7 +108,7 @@ theorem cs_append (a b : List (Array Nat)) (ys : List ByteArray) :
     cs (a ++ b) ys = cs a ys ++ cs b (ys.drop a.length) :=
   FirewallRun.zipWith_append_left _ a b ys
 
-/-- `m` draws one salt for each of `rows`, in order, and changes nothing else; `P` holds of its result and the rows'
+/-- `m` samples one salt for each of `rows`, in order, and changes nothing else; `P` holds of its result and the rows'
 commit strings. -/
 def Draws {α : Type} (m : Fw α) (rows : List (Array Nat)) (P : α → List ByteArray → Prop) : Prop :=
   ∀ st : State, rows.length ≤ st.salts.length →
@@ -162,9 +165,9 @@ theorem draws_salteds (rows : List (Array Nat)) : Draws (rows.mapM salted) rows 
 theorem draws_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) :=
   draws_salteds (topRows top)
 
-/-! ## The firewall's loop -/
+/-! ## The ZK server's loop -/
 
-/-- The firewall's loop takes each of `reqs` in turn from `st`, ending at `t`. -/
+/-- The ZK server's loop takes each of `reqs` in turn from `st`, ending at `t`. -/
 def Goes (s : Schedule) : List ByteArray → State → State → Prop
   | [], st, t => t = st
   | b :: bs, st, t => ∃ u, (FirewallRun.stepOf s b).run st = .ok ((), u) ∧ Goes s bs u t
@@ -185,7 +188,7 @@ theorem forIn_goes (s : Schedule) : ∀ (reqs : List ByteArray) {st t : State}, 
     rw [e]
     exact forIn_goes s bs h
 
-/-- **The firewall finishes where its loop takes every request** and ends finished. -/
+/-- **The ZK server finishes where its loop takes every request** and ends finished. -/
 theorem run_of_goes {s : Schedule} {reqs ys : List ByteArray} {t : State} (h : Goes s reqs { salts := ys } t) :
     run s reqs ys = (t.sent, t.finished) := by
   rw [FirewallRun.run_eq]
@@ -214,7 +217,7 @@ theorem decode_putProof {table : String} {rep : Nat} {proof : ByteArray} (h1 : t
     FirewallWire.rdBytes_at a.right.right h3, FirewallWire.ok_bind]
   rfl
 
-/-! ## The requests the firewall takes -/
+/-! ## The requests the ZK server takes -/
 
 theorem Runs.run_eq {m : Fw Unit} {st t₀ : State} (h : Runs m st fun _ t => t = t₀) : m.run st = .ok ((), t₀) := by
   obtain ⟨⟨⟩, t, hm, rfl⟩ := h
@@ -285,7 +288,7 @@ theorem run_hello (s : Schedule) {H L : FirewallObj.Tree} {A B : List ((_ : Stri
   exact Runs.lift_bind (pinned_ok (by rw [hT]; exact hcan)) (Runs.modify_bind (Runs.send rfl))
 
 /-- **Commit** of tables with distinct names in the schedule's order, each top a whole number of nodes, their node counts
-the schedule's roots, after Hello and before any other Commit: it draws a salt for each node and sends each table's
+the schedule's roots, after Hello and before any other Commit: it samples a salt for each node and sends each table's
 commit strings. -/
 theorem run_commit (s : Schedule) (rootF : ByteArray) (roots : List (String × ByteArray)) {st : State}
     (hf : st.finished = false) (hh : st.hello = true) (hc : st.committed = false) (hnd : (roots.map (·.1)).Nodup)
@@ -400,7 +403,7 @@ theorem some_bne_self (a : ByteArray) : (some a != some a) = false := bne_self a
 
 /-- **A round** on an opened stream whose content `split` reads, as the schedule's entry has it: its binding's cap and
 its first copies the committed top of its stream's table, its other caps fresh tops of the entry's node counts, its
-message the entry's rows. It draws a salt for each node of its fresh tops and each message row, and sends the round
+message the entry's rows. It samples a salt for each node of its fresh tops and each message row, and sends the round
 after its stream's `Open` where it is the stream's first. -/
 theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Nat) {st : State} {w parent : String}
     {k : Nat} {sp : Split} (hf : st.finished = false)

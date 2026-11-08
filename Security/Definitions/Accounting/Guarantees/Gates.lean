@@ -1,8 +1,11 @@
-import Mathlib.Data.Int.ModEq
-import Mathlib.Data.Nat.Prime.Defs
-import Definitions.Accounting.Gates
-import Definitions.Core.Prims
-import Definitions.Accounting.Assumptions.SquaringChain
+module
+
+public import Definitions.Accounting.Assumptions.SquaringChain
+public import Definitions.Accounting.Gates
+public import Definitions.Accounting.Gates.Declared
+public import Definitions.Accounting.Gates.Registry
+public import Definitions.Core.Prims
+public import Mathlib.Data.Nat.Prime.Defs
 
 /-!
 # The circuit model's window, and its lower bounds: the fooling bound, the carry bound and the encode budget (trusted)
@@ -50,7 +53,7 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
   drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
-  restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
+  restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the samples number at most
   `(budget)/E + (run-input bits)/(n − 1)`, under `SquaringFloor` at `e` and `ChainSum` with `E ≤ k · S · e`: the
   budget is the caps (rational nonlinear units per certified byte, data products among them) times the
   audit's certified reads, summed over the windows, and the run inputs are each window's `R_in` bound, summed over the
@@ -74,6 +77,8 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   131,040`) and P·V (LUT index, table gather, low byte into the same chain, `32·S ≤ 132,096`) are proven and declared,
   so they're in their window on every typed input.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Gates
 
@@ -207,7 +212,7 @@ def RhoPairs : Prop :=
 /-- **The encode budget: what the stacking property bounds.** For a declared circuit `W` in the restricted class
 (`Restricted B`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
-distinct words `words` on more than `ε` of the fresh draws, its inputs and budgeted gates but gathers there in
+distinct words `words` on more than `ε` of the fresh samples, its inputs and budgeted gates but gathers there in
 their declared intervals (its window is then `ProvenWindow`'s, never a hypothesis): under `SquaringFloor F e ε` and
 `ChainSum F k B e ε`, at `E ≤ k · S · e` (`S = Field.squarings F`) and inside their floor (`ε ≥ 2^−64`, `k ≥ 1`,
 `p ≥ 2^66`, `p ≡ 3 mod 4`),
@@ -231,7 +236,7 @@ def EncodeBudget : Prop :=
 /-- **The encode cost, bounded.** Under `SquaringFloor F e ε` and `ChainSum F k B e ε`, at `E ≤ k · S · e` and inside
 their floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), with `n ≥ 2`, `q` distinct words cost at least `q · E`
 nonlinear units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input computes them
-on more than `ε` of the draws. -/
+on more than `ε` of the samples. -/
 def EncodeCost : Prop :=
   ∀ (F : Field) (k B E e εnum εden q : ℕ),
     SquaringFloor F e εnum εden → ChainSum F k B e εnum εden → E ≤ k * F.squarings * e →

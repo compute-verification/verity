@@ -1,4 +1,7 @@
-import Definitions.Accounting.Slowdown
+module
+
+public import Definitions.Accounting.Slowdown
+import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
 /-!
@@ -9,6 +12,8 @@ sufficiently cheap way to reach the target contains enough computation that some
 task-level hypothesis, separate from every local premise, and stated over the tasks and runs of
 `Definitions.Accounting.Slowdown`.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

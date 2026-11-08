@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.FirewallRun
+module
+
+public import Proofs.Flock.Recursive.FirewallRun
 
 /-!
-# The firewall sends the schedule's transcript
+# The ZK server sends the schedule's transcript
 
-`run_blank_tables`: a session the firewall (`Flock.Firewall.run`) finishes sends, but for its commit strings,
+`run_blank_tables`: a session the ZK server (`Flock.Firewall.run`) finishes sends, but for its commit strings,
 `tmpl s s.tables`, the pinned schedule `s`'s transcript with Commit's tables in the schedule's order
 (`Schedule.tables`), the only order `step` takes, so the tables its Commit names (`namesOf`) are the schedule's
 (`namesOf_run`). Every count, name, order, stream, parent and position it sends is the schedule's, through the
@@ -15,6 +17,8 @@ commit strings at every salt list of that length (`sends_of_one`).
 The proof reads `step` one case at a time from states equal but for their salts (`H`, `Like`), and carries `Inv` through
 `run`'s loop: what was sent, blanked, is what the state's flags say the schedule has had so far (`sofar`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallTemplate
 
@@ -72,7 +76,7 @@ def sofar (s : Schedule) (st : State) : List Sent :=
   (if st.hello then [.hello s.hello] else []) ++ (if st.committed then [commitT s s.tables] else []) ++
     (if st.linked then [.link s.y] else []) ++ roundsT s st.rounds ++ (if st.finished then [.finish true] else [])
 
-/-- The firewall's invariant: what it sent, blanked, is what the schedule has had so far, and its flags come in order. -/
+/-- The ZK server's invariant: what it sent, blanked, is what the schedule has had so far, and its flags come in order. -/
 structure Inv (s : Schedule) (st : State) : Prop where
   sent : st.sent.toList.map blank = sofar s st
   hello : st.committed = true → st.hello = true
@@ -80,9 +84,9 @@ structure Inv (s : Schedule) (st : State) : Prop where
   linked : 0 < st.rounds → st.linked = true
   finished : st.finished = true → st.linked = true ∧ st.rounds = s.rounds.size
 
-/-! ## One run of the firewall's state monad -/
+/-! ## One run of the ZK server's state monad -/
 
-/-- An outcome of the firewall's state monad: a refusal, or a result `a` at a state `t` with `Q a t`. -/
+/-- An outcome of the ZK server's state monad: a refusal, or a result `a` at a state `t` with `Q a t`. -/
 def OK {α : Type} (Q : α → State → Prop) : V (α × State) → Prop
   | .ok (a, t) => Q a t
   | .error _ => True
@@ -169,7 +173,7 @@ theorem H.send {v : State} (m : Sent) :
     H (Like v) (send m) (fun _ t => Like { v with sent := v.sent.push m } t) :=
   H.modify _ fun z => ⟨z, rfl⟩
 
-/-- A computation the firewall's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted: its result is its
+/-- A computation the ZK server's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted: its result is its
 value. -/
 theorem H.lift {α : Type} {P : State → Prop} {x : V α} :
     H P (liftM x : Fw α) (fun a t => x = .ok a ∧ P t) := by
@@ -485,7 +489,7 @@ theorem loop_inv (s : Schedule) (reqs salts : List ByteArray) : Inv s (loop s re
     · exact fun ht => ⟨_, _, rfl, rfl, rfl, ht⟩
   · exact ⟨_, _, rfl, rfl, rfl, hr⟩
 
-/-- **A finished session sends the schedule's transcript**: blanked, what the firewall sent on a session it finished is
+/-- **A finished session sends the schedule's transcript**: blanked, what the ZK server sent on a session it finished is
 `tmpl s s.tables`, Commit's tables in the schedule's order, the only order `step` takes them in. -/
 theorem run_blank_tables (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
     (run s reqs ys).1.toList.map blank = tmpl s s.tables := by
@@ -512,9 +516,9 @@ theorem run_blank (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys)
   rw [namesOf_run s reqs ys h]
   exact run_blank_tables s reqs ys h
 
-/-! ## What the firewall sends, at every salt list -/
+/-! ## What the ZK server sends, at every salt list -/
 
-/-- **One run fixes them all, from the schedule**: if at the salts `ys₀` the firewall finishes a session whose Commit names
+/-- **One run fixes them all, from the schedule**: if at the salts `ys₀` the ZK server finishes a session whose Commit names
 the tables `o` in order, its commit strings those of the 64-byte digests `D` under `ys₀`, then at every salt list `ys` of
 that length it finishes and sends the schedule's transcript `tmpl s o` filled with `D`'s commit strings under `ys`. -/
 theorem sends_of_one (s : Schedule) (reqs : List ByteArray) {nh : Nat} (o : List String) (D ys₀ : Fin nh → ByteArray)

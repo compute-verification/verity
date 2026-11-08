@@ -1,7 +1,7 @@
-import Std.Sync.Mutex
-import RemoteAudit.Difftest
-import RemoteAudit.P2Session
-import RemoteAudit.Wire
+module
+
+public import Std.Sync.Mutex
+public import RemoteAudit.Difftest
 
 /-!
 # The verifier's process: `remote-audit-verifier`
@@ -25,7 +25,7 @@ difftest's `session` reads one, `Difftest.eventOf`):
   `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
-  node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
+  node's live registration sampled here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
   flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
   at one window in flight with g above 1, which no property covers (`Flight`); `coins` `null` takes its W + ⌈W/g⌉
   live, each with the event that releases it (`event`'s `coin`);
@@ -55,7 +55,7 @@ difftest's `session` reads one, `Difftest.eventOf`):
   the pooled bound of its windows, or at `groups_per_coin` g > 1 of its draws, `Pooled.pooled`), refused unless the
   record is of `registration` (`Line.lineOfRegistered`), or off the record `Shared.run g` makes of the session's
   transcript `session` (`Line.lineOfRun`), as the difftest's `line_record` writes it (`Difftest.lineRecordFn`), or
-  `{"refused": why}`, a record drawn g > 1 a coin at one window in flight among them (`Line.SHARED`): the line of
+  `{"refused": why}`, a record sampled g > 1 a coin at one window in flight among them (`Line.SHARED`): the line of
   record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s;
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
@@ -89,6 +89,10 @@ each verdict applied at its settle, is what `Shared.run g` accepts on the events
 none yet covers one in flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are
 checked in the clear.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Verifier
 
@@ -149,7 +153,7 @@ def spawnCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Arr
 private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.Run :=
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
-/-- Session `s`, drawn `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
+/-- Session `s`, sampled `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
 or why not: a close's is its draw's openings coin, `W + t / g`, and only the draw's last window's close releases it. -/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
   if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
@@ -171,7 +175,7 @@ def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) :
   | .append .. => pure { s with appendCoins := s.appendCoins.push c }
   | _ => throw "only a start, a boundary, a close or an append releases a coin"
 
-/-- Why event `e`'s result `res` read a coin of `s`, the session after it, drawn `g` windows a coin, that the
+/-- Why event `e`'s result `res` read a coin of `s`, the session after it, sampled `g` windows a coin, that the
 challenger never sent; none when it read none. -/
 def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Session.Result) : Option String :=
   let missing (i : Nat) : Bool := (s.coins[i]?.map (·.size != Codec.COIN_BYTES)).getD true

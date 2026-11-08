@@ -1,5 +1,41 @@
-import Proofs.Flock.Claims.KS.ZkLiveSched
-import Proofs.Flock.Claims.KS.ZkBatch
+module
+
+public import Proofs.Flock.Claims.KS.BatchSim
+public import Proofs.Flock.Claims.KS.ZkBatch
+public import Proofs.Flock.Claims.KS.ZkLiveSched
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.PlainLead
+import Proofs.Flock.Claims.KS.ZkStep
 
 /-!
 # The masked simulated strategy follows the batch's schedule at the deployed tables
@@ -19,6 +55,8 @@ count is short of both of table `j`'s reps' rounds (`zk_slot_lt`):
   `r · repRounds + zkCapDist` is below `2 · repRounds`;
 * `zkBatchAlign`, `zkSlotAlign`: `ZkBatchAlign` holds at every message, and with it `ZkSlotAlign`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

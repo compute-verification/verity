@@ -1,12 +1,57 @@
-import Proofs.Flock.Claims.Complete.Json.Record
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Canon
+public import Proofs.Flock.Claims.Complete.Json.Record
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Hex
+import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import Proofs.Flock.Claims.Complete.Json.Spec
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest record decodes (S1–S14)
 
 `decode_recordObj`: with no premise on the JSON library, `Record.decodeWith` through
 `Hashes.ofSha512 h` reads the printed honest record (`printJ` of `recordObj`) back as `sessOf`, its every check passing,
-for one table, no keyed coin tree, a printable draw that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
+for one table, no keyed coin tree, a printable sample that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
 configured point shape, one recorded stream per rep stream and well-formed rounds, with `h`'s outputs 64 bytes (S12
 compares each round's digest length with the empty message's).
 
@@ -14,6 +59,8 @@ compares each round's digest length with the empty message's).
 * **The decoded session** (`sessOf`): `Σ` as `root_F`, the `root_B`, no public words, the points, `y = 0`, each rep
   stream with its rounds' digests (`streamRec`, `roundRec`) and each proof file's digest.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -70,7 +117,7 @@ theorem array_mapIdxM_ok_of {α β : Type} (f : Nat → α → V β) (a : Array 
       simpa using hf i (by simpa using h₁) (by simpa using h₂)]
   simp
 
-/-- What the decoder's U1–U3 need of the statement's draw: none, or a non-null printable draw that decodes, its proved
+/-- What the decoder's U1–U3 need of the statement's sample: none, or a non-null printable sample that decodes, its proved
 units the statement's instances. -/
 def DrawOk (spec : SessionSpec) : Prop :=
   match spec.unitDraw with
@@ -94,7 +141,7 @@ def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array Byt
     streams := (spec.repStreams.zip streams).map (streamRec spec h rootB),
     proofSha := (spec.repStreams.zip proofs).map fun q => (q.1.2.2, hexOf (dgOf spec h q.2)) }
 
-/-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's draw
+/-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's sample
 `DrawOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
 `1 ≤ n ≤ 65536` coins, and `h`'s outputs 64 bytes. -/
 theorem decode_recordObj {h : ByteArray → ByteArray}

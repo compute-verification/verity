@@ -1,6 +1,16 @@
-import Proofs.Pouw.PearlC.TileCheck8
-import Proofs.Pouw.PearlC.TileProtocol
-import Proofs.Pouw.PearlC.TileGamma
+module
+
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.PeelExactProofsP
+public import Proofs.Pouw.PearlC.RowCircuit
+public import Proofs.Pouw.PearlC.Tile4Circuit
+public import Proofs.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.TileGamma
+public import Proofs.Pouw.PearlC.TileValues
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # `pc8`'s tile check computes the words (proofs)
@@ -38,6 +48,8 @@ multiple of 64 (`tileSide_dvd_iff`). `D_dev` (`pearlCDomainDev`) gives `Shape8`'
 (`shape8_of_pearlCDomainDev`). A last tile narrower than the others (`m = 80`) is outside the Program. The cap is not
 part of it: its verdict is a separate conjunct, decided by units of its own.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

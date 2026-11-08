@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -312,7 +313,7 @@ def chain() -> I.Circuit:
 
 def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output; ``first``: each
-    request's input at layer 0, step 0 (else drawn)."""
+    request's input at layer 0, step 0 (else sampled)."""
     rng = np.random.default_rng(seed)
 
     def bf16(a: np.ndarray) -> np.ndarray:
@@ -589,7 +590,6 @@ def test_the_proof_block_limits_are_c_flocks_composers():
     ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block room."""
     from verity_flock import circuit as FC
 
-    assert (I.K_MAX, I.SLOT_LOG, I.PER_SLOT, I.MASK_LOG) == (FC.K_MAX, FC.SHA_LOG, FC.PER_SLOT, FC.MASK_LOG)
     assert FC.HM_LOG == FC.SHA_LOG and FC._ranges([("mask", FC.MASK_LOG, 1, {})])[1] == I.K_MIN
     assert all((FC.Port("r", b // 2, 8 * b).comps > 0) == (b > I.LAST_BLOCK_BYTES) for b in range(2, 2048, 2))
     rng = np.random.default_rng(0)
@@ -734,6 +734,9 @@ class Held:
     def path(self, position: int) -> bytes:
         return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
 
+    def entry(self):
+        return {"value": self.name, "root": self.root.hex(), "leaves": self.leaves, "words": self.words, "domain": "ef" * 64}
+
     def statement(self, positions):
         return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
                 {"value": self.name, "positions": list(positions), "paths": [self.path(p).hex() for p in positions]})
@@ -765,9 +768,10 @@ REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM"
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 
-def registered(n: int = 12, cap: int = 4) -> tuple[I.Window, Held]:
+def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = ()) -> tuple[I.Window, Held]:
     w = Held("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
-    circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2}, reads=(READ,)))
+    circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,),
+                                                                        values=held))
     win = I.Window(circuit, RUN, LAW, cap, registered={"w": w})
     ins, _ = values(n)
     ins[2] = w.rows[np.arange(n) // 2].view(np.uint8)
@@ -824,6 +828,54 @@ def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
     odd = I.Circuit("odd", ((COORD, 12),), registered=I.Registered({"w": 6 * K // 2 + 1}, reads=(READ,)))
     with pytest.raises(ValueError, match="aren't whole rows"):
         I.read_shape(odd, "w")
+
+
+def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
+    """`Registered.values`: registered parameters the circuit's program takes as its own, ahead of its units', in 16-bit
+    leaves (`program_values`), so a circuit of one template with values is a ``TemplatePopulations``. Its record names them
+    in its ``registered`` only when there are some, the verifier's window from the record is the circuit's, its members
+    are the ones without values, and a value that is no registered parameter, or one named twice, is refused."""
+    win, w = registered()
+    reg = replace(win.circuit.registered, values=("w",))
+    circuit = replace(win.circuit, registered=reg)
+    program, query = circuit.program()
+    assert program.fn.signature()[0][0] == ("w", Array(6 * K // 2, Value(16))) and query == PO.template_instances_query([COORD])
+    held = I.Window(circuit, RUN, LAW, 4, registered={"w": w})
+    doc = json.loads(I.circuit_bytes(held.circuit_record()))
+    assert doc["registered"]["values"] == ["w"] and I.Registered.of(doc["registered"]) == reg
+    assert "values" not in json.loads(I.circuit_bytes(win.circuit_record()))["registered"]
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert (mine.partition_digest, mine.members) == (held.window.partition_digest, held.window.members)
+    assert held.window.partition_digest != win.window.partition_digest and held.window.members == win.window.members
+    for bad in (("v",), ("w", "w")):
+        with pytest.raises(ValueError, match="each once"):
+            replace(circuit, registered=replace(reg, values=bad))
+
+
+def test_a_window_registers_its_circuits_values_by_their_entries_chained_after_the_last_record(tmp_path):
+    """With values, `Window.write` registers each by its committed value's entry, in the circuit's order, chained after
+    ``previous``, and names the record v2 (core's ``record`` makes it ``verity/registration/v2`` with entries); without,
+    none and v1. A value with no committed value is refused before anything is written."""
+    got = {}
+
+    def record(*_x, **k):
+        got.clear()
+        got.update(k)
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
+                         "digest": staticmethod(lambda rec: "d")})
+    win, w = registered(held=("w",))
+    doc = win.write(win.close(salt_key=bytes(32)), tmp_path / "v2", {"by": "test"}, registrar=reg, previous="ab" * 64)
+    assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, "f2")
+    plain, _ = registered()
+    doc = plain.write(plain.close(salt_key=bytes(32)), tmp_path / "v1", {"by": "test"}, registrar=reg)
+    assert (got["registered"], got["previous"], doc["registration"]) == ([], None, "f1")
+    unheld, _ = registered(params={"v": 8}, held=("v",))
+    c = unheld.close(salt_key=bytes(32))
+    with pytest.raises(ValueError, match=r"values \['v'\] have no committed value"):
+        unheld.write(c, tmp_path / "unheld", {"by": "test"}, registrar=reg)
+    assert not (tmp_path / "unheld").exists()
 
 
 def test_a_read_covers_whole_members_and_reads_whole_rows():
@@ -1069,8 +1121,8 @@ class _Counted(list):
 def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
     """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the window
     reads each row's salt once, however many members read it, and asks for no statement. Core's ``Registered.statement``
-    draws a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
-    them a third time: 10,565,136 draws at the 4,32,4 class, whose members read 37,788 distinct rows."""
+    samples a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
+    them a third time: 10,565,136 samples at the 4,32,4 class, whose members read 37,788 distinct rows."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     w.salts = _Counted(w.salts)
     monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads drew their salts again"))
@@ -1216,7 +1268,7 @@ def _like(value: Bound, **fields) -> Bound:
 
 def _value_rows(value=None, positions=None, salts=None):
     """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
-    `Window.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
+    `Window.close` drew)``, each as given when None (the salts sampled again by `rows.commit` when the positions change)."""
     def edit(window: CS.Binding, data: list[dict]) -> CS.Binding:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]

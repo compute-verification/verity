@@ -1,11 +1,10 @@
 """`circuit.h1device`: H1's device records. `h1window.h1_tile` without ``arch`` is the sm_120 tile it was before records
 existed (template and Program digests recorded on the tree before), sm_90's binds the same step, so its tiles are sm_120's
-id for id, and sm_90's domain is h1u's; each record's sheet numbers are its data sheet's."""
+id for id, and sm_90's domain is h1u's; each record's sheet numbers are its data sheet's Lean table's."""
 from __future__ import annotations
 
 import hashlib
 import re
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -14,14 +13,14 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 
-from verity.core.protocols.pouw.circuit import h1device as D
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1device as D
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
 ROOT = Path(__file__).resolve().parents[5]
-SHEET_90 = ROOT / "benchmarks" / "pouw" / "machine_model" / "data" / "devices" / "sm_90" / "sheet.toml"
+SHEET_90_LEAN = ROOT / "Security" / "Definitions" / "Accounting" / "Sheets" / "H200.lean"
 SM120_LEAN = ROOT / "Security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
 
 #: sha512 of the template descriptor of `HW.template(K, HW.tile_unit(K, (32, 32), definition))`, recorded before `h1_tile`
@@ -37,7 +36,7 @@ TEMPLATE_IDS = {
            "fb95db196ed9c54304c5a9acaf65cfa244252c9964fe6c7e0f93d6ca60aa5488d65664abd958baee233bb118b7969c275d0ec3cc9478a30762311d45e299a0e9"),
 }
 
-#: `P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8)))`: a change to the window's layout moves it
+#: `P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8)))`: a change to the execution phase's layout moves it
 PROGRAM_64 = ("e009cbeb20775cd21cb183eab99a34432e130840d90a66b8110a34a776c05669d9043c3bdfbe78cc21570f8a9b8a27c925263e4e5cf8a544f11ff8d9053b0c17")
 
 
@@ -55,17 +54,15 @@ def test_the_default_and_sm120_and_sm90_tiles_are_the_recorded_ones(k) -> None:
 
 @pytest.mark.slow
 def test_the_default_program_digest_is_the_recorded_one() -> None:
-    """A whole window's Program (the real tile at K = 64), as recorded before records existed. It builds the
+    """A whole execution phase's Program (the real tile at K = 64), as recorded before records existed. It builds the
     Program end to end (about 40 s), which the template ids above don't: a change in how `program` reaches `tile_unit`
     would show only here."""
     assert P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8))) == PROGRAM_64
 
 
 def test_sm90s_domain_is_h1us_and_the_combines() -> None:
-    """sm_90 serves K >= `h1zy.LEAST_K` (384) with 512 | K, h1u's own refusal (``if (K % 512) return 2``), so its least K is
-    512; sm_120 keeps the Definitions' own refusals."""
-    h1u = (ROOT / "benchmarks" / "hash" / "dither" / "h1u.cu").read_text()
-    assert "if (K % 512) return 2;" in h1u
+    """sm_90 serves K >= `h1zy.LEAST_K` (384) with 512 | K, h1u's own refusal (the kernel's tests hold h1u to this
+    record), so its least K is 512; sm_120 keeps the Definitions' own refusals."""
     assert Z.LEAST_K == 384 and D.SM90.domain == (384, 512)
     for k in (64, 256, 384, 640, 1000, 1024 + 32):
         with pytest.raises(ValueError, match=re.escape(f"K={k} is outside H1's domain on sm_90 (H200 SXM (sm_90a)): "
@@ -94,14 +91,19 @@ def test_each_record_binds_its_pinned_step() -> None:
 
 
 def test_the_sm90_record_is_its_data_sheet() -> None:
-    """SMs, the tensor clock, f_max and the dense s8 MACs are the H200 sheet's, and 2 x MACs x SMs x clock is half the H200 data sheet's
-    sparse INT8 3,958 TOPS to within its tolerance."""
-    sheet = tomllib.loads(SHEET_90.read_text())
-    s8 = sheet["peaks"]["s8"]
-    assert (D.SM90.gpu, D.SM90.sms, D.SM90.fmax_mhz) == (sheet["gpu"], sheet["sms"]["value"], sheet["fmax"]["mhz"])
-    assert (D.SM90.tensor_mhz, D.SM90.s8_macs) == (sheet["clocks"][s8["clock"]]["mhz"], s8["macs"])
-    assert s8["sparse"] and D.SM90.sheet_s8_tops == s8["sheet"] / 2
-    assert abs(D.SM90.s8_dense_tops - s8["sheet"] / 2) <= s8["tol"]
+    """SMs, the tensor clock, f_max and the dense s8 MACs are the H200 sheet's (`Accounting.TS.Sheets.H200`, the sheet's
+    Lean table), and 2 x MACs x SMs x clock is half the H200 data sheet's sparse INT8 3,958 TOPS to within the table's
+    tolerance."""
+    lean = SHEET_90_LEAN.read_text()
+
+    def real(name: str) -> int:
+        return int(re.search(rf"^def {name} : ℝ := (\d+)$", lean, re.M).group(1))
+
+    assert f"at the {D.SM90.gpu}'s vendor values" in lean
+    assert (D.SM90.sms, D.SM90.fmax_mhz) == (real("smCount"), real("fmaxMHz"))
+    assert (D.SM90.tensor_mhz, D.SM90.s8_macs) == (real("tensorMHz"), real("peakS8"))
+    assert "3958 with sparsity, dense 1979 ± 0.25" in lean and D.SM90.sheet_s8_tops == 3958 / 2
+    assert abs(D.SM90.s8_dense_tops - 3958 / 2) <= 0.25
 
 
 def test_the_sm120_record_is_ds120() -> None:

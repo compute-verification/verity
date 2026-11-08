@@ -1,5 +1,12 @@
+module
+
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Registered.Binding
-import Proofs.Flock.Soundness.Binding.RowsX
 
 /-!
 # Registered reads of rows each hashed under its own encoding
@@ -8,6 +15,8 @@ import Proofs.Flock.Soundness.Binding.RowsX
 encoding (`ReadsX.leaf`), the same SHA-512 of the same commit string as hm96's. `Checked`, `Off`, `pick` and their
 bounds (`regLeaf_eq`, `prob_off_le`) are `Reads`' at that leaf: they read only the leaf, never how its bytes were made.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 

@@ -1,17 +1,64 @@
-import Definitions.Accounting.Guarantees.CoinFlow
-import Proofs.Accounting.HMu.Luck
+module
+
+public import Definitions.Accounting.Guarantees.CoinFlow
+public import Mathlib.Algebra.DirectSum.Internal
+public import Mathlib.Geometry.Euclidean.Projection
+public import Mathlib.MeasureTheory.Measure.FiniteMeasure
+public import Mathlib.MeasureTheory.Measure.ProbabilityMeasure
+public import Mathlib.NumberTheory.LucasLehmer
+public import Mathlib.RepresentationTheory.Homological.GroupCohomology.LowDegree
+public import Mathlib.RingTheory.FractionalIdeal.Basic
+public import Proofs.Accounting.HMu.Luck
+import Definitions.Claims
+import Mathlib
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Tag.Basic
+import Proofs.Accounting.Tag.LittlewoodOfford
+import Proofs.Accounting.Tag.Signs
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The coin rules, proved on the dataflow model
 
 `viewIndependent` and `coinsThroughNoise` are strong inductions over the node order: a node's value is its `op` on what
-it reads (`eval_congr`), so two draws give it one value when they agree on its coins and on its earlier reads. Under rule
+it reads (`eval_congr`), so two samples give it one value when they agree on its coins and on its earlier reads. Under rule
 (b) no node outside a noise injection's forward cone reads its coins; under rule (a) and sink confinement a non-fold
 node's coins are its own fresh coins, and its reads are non-fold. `pointMass` moves the run's coins to
 `Ω₀ × (J → Bool)`, the coins a noise injection doesn't make fresh and the ones it does, through an equivalence that
 keeps the uniform measure (`prob_comp_equiv`). The view is then a function of `Ω₀` (`viewIndependent`), and
 `Accounting.HMuProofs.coinPointMass` applies.
 -/
+
+@[expose] public section
 
 namespace Accounting.CoinFlowProofs
 
@@ -27,7 +74,7 @@ theorem eval_eq [Inhabited V] (P : Program m C V) (σ : C → Bool) (n : Fin m) 
     P.eval σ n = P.op n (fun k => if _h : k.1 < n then P.eval σ k.1 else default) (fun c => σ c.1) := by
   rw [Program.eval]
 
-/-- Two draws give node `g` one value when they agree on its coins and give its earlier reads one value. -/
+/-- Two samples give node `g` one value when they agree on its coins and give its earlier reads one value. -/
 theorem eval_congr [Inhabited V] (P : Program m C V) {σ σ' : C → Bool} {g : Fin m}
     (hc : ∀ c ∈ P.coins g, σ c = σ' c) (hr : ∀ k ∈ P.reads g, k < g → P.eval σ k = P.eval σ' k) :
     P.eval σ g = P.eval σ' g := by
@@ -100,7 +147,7 @@ theorem prob_comp_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β)
 
 variable [DecidableEq C] (S : Finset C)
 
-/-- A draw of every coin from the coins outside `S` and the coins in it. -/
+/-- A sample of every coin from the coins outside `S` and the coins in it. -/
 def glue (ω : ({c // c ∉ S} → Bool) × ({c // c ∈ S} → Bool)) (c : C) : Bool :=
   if h : c ∈ S then ω.2 ⟨c, h⟩ else ω.1 ⟨c, h⟩
 

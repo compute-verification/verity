@@ -127,7 +127,7 @@ def test_streams_are_prefix_consistent_and_index_separated():
 
 
 def test_sharded_draws_equal_unsharded_draws():
-    """Draws are addressed by index, so each shard reproduces its slice of the population on its own."""
+    """Samples are addressed by index, so each shard reproduces its slice of the population on its own."""
     population = range(1000)
     whole = [KEY.bernoulli(Fraction(1, 5), ("ru", i)) for i in population]
     shards = [[KEY.bernoulli(Fraction(1, 5), ("ru", i)) for i in population[s::4]] for s in range(4)]

@@ -1,4 +1,39 @@
-import Proofs.Flock.Claims.Recursion.DeployZK
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.DeployZK
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # The recursion's deployed stop (`stopsRec`) and its record (`deployRecStop`)
@@ -32,7 +67,7 @@ plain Flock's:
   before each inner and staging round and after the last, `stopRounds`) it sends the empty message, as `SimStop` does
   (`refPStop_halted`, `refPStop_live`).
 * **The record** (`deployRecStop`): `deployRec` with `refPStop` as its reference prover and `stopsRec` as its stop, so
-  `Complete` at it reads the stopping prover at `δcRec`; its tape at each statement drawn from a finite nonce and rest
+  `Complete` at it reads the stopping prover at `δcRec`; its tape at each statement sampled from a finite nonce and rest
   by `tapeOf` (`Tape b` is not finite), the outer simulators `SO`, and the inner rounds' commit strings `nAt` in the
   layout `innerMsg`. Those four stay parameters, as `tapeOf` and `SO` do in the masked record of `ZK`: the inner
   prover (`RefParts.PI`) is a parameter of `deployRec`, and its round messages fix `nAt` and `innerMsg`. `ZKStop`
@@ -45,6 +80,8 @@ zero digest.
 
 `ZKStop` at `deployRecStop` is its bound, as `ZK` is at `deployRec` (`zkStop_deployRecStop_iff`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -103,7 +140,7 @@ noncomputable def refPStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg →
     else (refP IV b w).next x hist ω⟩
 
 /-- **The compiled verifier with its reference prover's stop**: `deployRec`, its reference prover `refPStop` and its
-stop `stopsRec`, which reads no oracle; the reference prover's tape at each statement `x` drawn from the finite nonce
+stop `stopsRec`, which reads no oracle; the reference prover's tape at each statement `x` sampled from the finite nonce
 and rest `N x × Ω x` by `tapeOf x`, the outer simulators `SO`, and the inner rounds' commit strings `nAt` in the
 layout `innerMsg`. -/
 noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
@@ -123,7 +160,7 @@ noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Ms
     stops := fun _ => stopsRec IV ivScope b.st }
 
 /-- **`ZKStop` reads the record's own reference prover**: at each statement `x`, `refPStop` on the tape `tapeOf x`
-draws. -/
+samples. -/
 theorem prover_deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
     (nAt : Claims.Msg → ℕ → ℕ)

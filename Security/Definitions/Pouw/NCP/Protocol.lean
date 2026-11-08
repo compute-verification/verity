@@ -1,5 +1,7 @@
-import Definitions.Pouw.D1
-import Definitions.Pouw.NCP.Defs
+module
+
+public import Definitions.Pouw.D1
+public import Definitions.Pouw.NCP.Defs
 
 /-!
 # NCP as a protocol (trusted)
@@ -24,11 +26,13 @@ most `2^40` rows per weight.
 (`Pouw.Guarantees.NCP.ShiftBy24Admissible`).
 -/
 
+@[expose] public section
+
 namespace Pouw.NCP
 
 open Finset
 
-/-- The symmetric range `[−31, 31]` (`ThreeBlock`'s). -/
+/-- The symmetric range `[−31, 31]` (`ThreeSegment`'s). -/
 def InSmall (x : ℤ) : Prop := -31 ≤ x ∧ x ≤ 31
 
 /-- The noise range of `E₁` and `F₁`: `[−31, 32]`, 6 bits of `H` output per entry (not `Pouw.InNoise`, the problem
@@ -92,7 +96,7 @@ def Y (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=
 
 /-- The compared entries: blocks `t < ⌈3k/d⌉`, rows `i < m`, columns `j < n`. -/
 def checkIdx (sh : Shape) : Finset (ℕ × ℕ × ℕ) :=
-  range (D1.nBlocks P.d (3 * sh.k)) ×ˢ range sh.m ×ˢ range sh.n
+  range (D1.nSegments P.d (3 * sh.k)) ×ˢ range sh.m ×ˢ range sh.n
 
 /-- `H_ref`'s checked values: the int32 accumulator of `X·Y` read at each block end. -/
 def refChecked (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=

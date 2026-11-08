@@ -1,9 +1,14 @@
-import Definitions.Pouw.Assumptions.Pinned
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # R_copy (tt-attacks §6): the bound under Nz, and Nz for independent uniform bits
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

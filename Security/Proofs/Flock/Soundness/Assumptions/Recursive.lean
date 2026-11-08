@@ -1,4 +1,19 @@
-import Proofs.Flock.Recursive.Registrants
+module
+
+public import Proofs.Flock.Recursive.Registrants
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # V*'s bridge: the recursive audit's open obligation
@@ -9,16 +24,18 @@ obligation, not a premise. VBridge G (`Proofs.Flock.VBridge`) discharges it, and
 
 In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's firewall sends the auditor a salted
 SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in
-C-Flock `--zk --registered` sessions of the public verifier circuits V* (`Vs j`, one session each, in a row), that
+Flock `--zk --registered` sessions of the public verifier circuits V* (`Vs j`, one session each, in a row), that
 openings of those commitments exist on which the inner verifier accepts. `VBridge` is what V*'s circuits must compute
-for those sessions to mean it: V* accepts at its public inputs (the firewall's commitments registered in its public
+for those sessions to mean it: V* accepts at its public inputs (the ZK server's commitments registered in its public
 files) and at the values it registers itself (the rounds' coins and the comb `coef`, in its record `ZkOuter.rd`) only
 when the inner verifier accepts the inner transcript those commitments open to.
 
-C-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is the recursion's model
+Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is the recursion's model
 (`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Registrants`, and `Models.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Assumptions
 
@@ -30,8 +47,8 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 (`PubCommits`).
 
 **`v-bridge`: V*'s circuits compute the inner verifier** (V*'s session `j` is of the circuit `(Vs j).c`, pinned by
-its file's digest through `ZkOuter.hc`, under the law `(Vs j).law`; `k, Rw` the count curve's). Four facts about V*'s
-circuits, laws and inputs, each read at every history `(R, ω, t)` (the registration, the draw of the hidden circuit's
+its file's digest through `ZkOuter.hc`, under the sampling design `(Vs j).law`; `k, Rw` the count curve's). Four facts about V*'s
+circuits, laws and inputs, each read at every history `(R, ω, t)` (the registration, the sample of the hidden circuit's
 units, the rounds' commitments and coins) and every registration `R₂` of the outer proof (`outerV`: the values V*'s
 sessions read that the history does not fix, its running sums `rec-acc` and its opened rows and their siblings
 `rec-rows-L<level>` and `rec-aux-L<level>`, sent after the last inner coin and before any session):
@@ -42,20 +59,20 @@ sessions read that the history does not fix, its running sums `rec-acc` and its 
   every record that is a genuine session-game outcome (each session's record is one its game reaches against its
   strategy, `Game.Outcome`; an accepted record is always such an outcome, since the audit only ever accepts what its
   sessions play), when every session's outcome `flock-verify verify --zk --registered` accepts and every session's
-  value layer is `Good` (no wrong unit, and at every unit each registered read carries the registrant's value: the
+  value layer is `Good` (no incorrect proof block, and at every unit each registered read carries the registrant's value: the
   hidden circuit's rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb
   `coef`), the messages `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden
   circuit's statement `x R ω` at the rounds' coins;
-* **their public files register the firewall's commitments** (`VCommits`): the digest session `j`'s value binding
-  registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`, at every
+* **their public files register the ZK server's commitments** (`VCommits`): the digest session `j`'s value binding
+  registers at each commit string of stage `i`'s `Sk i j` is the ZK server's stage-`i` commitment's, `cmt j`, at every
   `R₂` and registration `R'` where session `j` accepts a transcript it writes at `R'` (`ZkOuter.Writes`, an outcome
   its game reaches; the verifier ties a public file's rows to its registration only on an accepted run);
 * **they decode each round's message from those commit strings** (`VDecodesR`, at equality): layers whose bits on the
   wires of each `Sk i j` that some unit reads (`ReadW`) are those of the values `v j` hold `msg i v` as their round-`i`
   message (true at V* when every wire `wmsg` depends on is some unit's `io`, which is what VBridge G's
   `vbridgeRead_assembled` builds);
-* **their laws draw every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit session `j`'s law
-  draws. Every unit is drawn under the full draw, so this holds of every `Sk` (`vFullR_of_read`).
+* **their laws sample every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit session `j`'s law
+  samples. Every unit is sampled under the full sample, so this holds of every `Sk` (`vFullR_of_read`).
 
 Both read only the wires some unit reads: V*'s rows pad a port to whole words, and no unit reads the padding.
 

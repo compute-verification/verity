@@ -1,5 +1,7 @@
-import Definitions.Accounting.Confidence
-import Definitions.Pouw.Game.Deadline
+module
+
+public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Game.Deadline
 
 /-!
 # The cost model of `A`'s provers (trusted)
@@ -20,6 +22,8 @@ any map from the oracle to runs), so a program carries an oracle program's form 
 inputs fixed, what the verifier receives before `t_d` is an oracle program's output and the hash's gates are its
 queries.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

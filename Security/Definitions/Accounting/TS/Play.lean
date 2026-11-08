@@ -1,23 +1,58 @@
-import Definitions.Accounting.TS.Routes
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Accounting.TS.Routes
+public import Definitions.Pouw.RelativeSecurity
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The two plays: full checking and sampling (trusted)
 
 EPS1-SPEC §2.7 over PoUW's rounds (`Pouw.RelativeSecurity.RoundGame`, `Paths`, `prob`): a window of `S` rounds of
-fresh coins on `Ω`, each round one live σ (and, when sampling, the round's draws).
+fresh coins on `Ω`, each round one live σ (and, when sampling, the round's samples).
 
 * `Play`: the protocol's acceptance on each path of coins, the cheater's labelled run there, and the ideal game, whose
   round `w` has a share `d_w` and a check `pass`, its rounds' proofs as if every proof were sound. In 𝒫_full `d_w` is
   round `w`'s deficient share of its committed words; in 𝒫_samp(u, s, Q) it is its deficient, wrong and adaptive
-  work share, and `pass` is the drawn units' proofs.
+  work share, and `pass` is the sampled proof blocks' proofs.
 * `RoundGame.LuckAt p`: (L) at `p`, one bet a round: every round's share is in `[0, 1]`, and given the past a
   deficient round passes with probability at most `p`.
 * `RoundGame.BudgetAt Λ`: `Λ` bounds the round's saving per unit of detection (Lemma C's `Λ`): given the past,
-  `E[exp(d_w / Λ) · 1{pass}] ≤ 1`. When `d_w` is fixed before the round's draws this reads
+  `E[exp(d_w / Λ) · 1{pass}] ≤ 1`. When `d_w` is fixed before the round's samples this reads
   `d_w ≤ Λ · (−ln Pr[pass | past])`, SAMPLING's budget.
 * `RoundGame.deficientRounds`: the rounds with a positive share along the realized coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

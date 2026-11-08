@@ -2,7 +2,7 @@
 The interface every core protocol implements (PoUW, PoUS, the network certificate check, sampled proofs' one-stage
 audit, the composition).
 
-* `params`: the protocol's public parameters (k, Δ, the law, ...), canonical JSON;
+* `params`: the protocol's public parameters (k, Δ, the sampling design, ...), canonical JSON;
 * `commitment`: what the prover committed to before the challenge, and the digest that binds it;
 * `evidence`: everything else the check reads (the session record, transcript, proofs, certificate);
 * `check`: one total function from those three to an `Outcome`;
@@ -12,9 +12,14 @@ audit, the composition).
 parameters, runs the check, and turns every decoding failure into a rejection, so every input gets a verdict.
 `Answer.toJson` is the outcome's one canonical form, the one the difftests compare and a composition reads.
 -/
-import Lean.Data.Json
-import Flock.Bytes
-import Flock.Canon
+module
+
+public import Flock.Canon
+public import Lean.Data.Json.Parser
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

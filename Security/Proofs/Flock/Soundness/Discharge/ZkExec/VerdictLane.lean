@@ -1,4 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Final
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # Level 0's lane rows are the executable's
@@ -12,6 +36,8 @@ constraints `Zk.ligeritoConstraints` builds, at the record `Zk.ligerito` returns
 * `foldZK_rel`, `ligeritoPadZC_row`: the model's lane rounds fold the claim as the executable does, so every run of
   `ligeritoPadZC` returns the row `laneLhs` is.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -239,6 +265,8 @@ theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : L
       | done b => obtain ⟨-, rfl, rfl⟩ := lpure_ok h₂; exact hI₁
       | yield b => exact lforIn_inv' body I B hb n (a + 1) b st₁ t₁ s' st' t' (by omega) hI₁ h₂
 
+-- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
+-- the round indices
 set_option maxHeartbeats 4000000 in
 /-- **`Zk.ligerito`'s record**: the target, level 0's out-of-domain coin, the lane rounds' coins and the pair's coins,
 at the rounds the run consumed, and those rounds' coin counts. -/
@@ -534,6 +562,8 @@ theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOo
   · simp only [liftK, ZkSession.cK, ZkSession.padF, ZkSession.cF, ZkSession.mskF, ZkSession.pF, Prod.snd_add,
       Prod.smul_snd, smul_eq_mul, add_zero, map_add, map_mul]
 
+-- `ZkLink.ligeritoPadZC`'s run matched against `ligMsgsZ`'s messages, a `plays_bind_split` step per message and coin,
+-- then the lane relation's algebra (`convert`, `abel`)
 set_option maxHeartbeats 1000000 in
 /-- **Every run of the compiled masked level 0 returns the lane phase's row** (`laneLhs`), at the record whose
 target, out-of-domain coin, lane coins and pair coins the run's coins are. -/

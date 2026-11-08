@@ -1,36 +1,40 @@
-import PouwCheck.Credit
-import PouwCheck.Difftest
+module
+
+public import PouwCheck.Credit
+public import PouwCheck.Difftest
 
 /-!
-# The difftest's functions for a served window's credit (`PouwCheck.Credit`)
+# The difftest's functions for a served execution phase's credit (`PouwCheck.Credit`)
 
 Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck.DifftestMain` reads both tables):
 
-* `credit` (`key`, `ledger`, `pins`, `main` as `rounds` reads them, `salt` the window's Program salt as hex, `calls`
-  the manifest's rows, `served` the served trees' digest or null, `commit` the window's Commit record in hex, `rounds`
-  the round log, `draw` the window's draw with its own session's files, each as `credit._credited` takes it,
+* `credit` (`key`, `ledger`, `pins`, `main` as `rounds` reads them, `salt` the execution phase's Program salt as hex, `calls`
+  the manifest's rows, `served` the served trees' digest or null, `commit` the execution phase's Commit record in hex, `rounds`
+  the round log, `draw` the execution phase's sample with its own session's files, each as `credit._credited` takes it,
   `Credit.Internal.credited`): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
 * `drawn` (`coin`, `stream`, `registration`, `receipt`, `layout`, as `credit.drawn` takes them): `{"drawn": [units]}`,
   or `{"refused": [code, why]}`.
 * `window-drawn` (`window`, `draw`, `descriptor` in hex, `k`): `Credit.descriptorDrawn`, `credit._window_drawn` over
   the strata of the `layoutOf` of the descriptor's Program: `{"drawn": [units]}`, or `{"refused": [code, why]}`.
 * `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries`, `calls`, the
-  window's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
+  execution phase's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
   `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
 * `leaf-words` (`k`): `{"leaf_words": w}`, `Credit.leafWords` (`weights.leaf_words`), or `{"leaf_words": null}` for a K
   `Credit.chunks?` refuses (`PouwCheck.Difftest`'s `chunks` holds the count itself).
 * `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs`, `live`, `k` and `rows`, as `credit._window_outcomes`
   takes them): `{"credited": [indices]}`,
-  and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each window's evidence
+  and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each execution phase's evidence
   `window`'s): `{"credited": …}`; or
   `{"refused": [code, why]}`.
 * `weights` (`window`, `layout`, `entries`, `requests`, `session`, `program`, `prefix`, as `credit._weights` takes them,
   `Credit.Internal.weights`): `{"weights": hex}`, or `{"refused": [code, why]}`.
-* `registered-file` (`descriptor` in hex, `call`, `roots` `{value: [root, ...]}`, `window`, the window's open root,
+* `registered-file` (`descriptor` in hex, `call`, `roots` `{value: [root, ...]}`, `window`, the execution phase's open root,
   `steps`, its rounds, and `salt`, its Program salt):
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the `layoutOf` and `shapeOf` of
   the descriptor's Program (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.CreditDifftest
 

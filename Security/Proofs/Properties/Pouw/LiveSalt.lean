@@ -1,7 +1,10 @@
-import Properties.Pouw.LiveSalt
-import Proofs.Properties.Pouw.LiveSalt.Ledger
-import Proofs.Properties.Pouw.Commit
-import Proofs.Properties.NetworkRecords.Bytes
+module
+
+public import Properties.Pouw.LiveSalt
+public import Proofs.Properties.Pouw.LiveSalt.Ledger
+public import Proofs.Properties.Pouw.Commit
+public import Proofs.Flock.Bytes
+import all Lean.Data.Json.Basic
 
 /-!
 # Proofs of the Pearl-C live salt's properties (`Properties.Pouw.LiveSalt`)
@@ -19,6 +22,8 @@ the session's `end` recorded (`Ledger.sessionNamed_root`). So, given `LiveCoinBi
 and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`). `LiveSalt.Coin` proves
 `LiveCoinBinding` (`liveCoinBinding`), so `onePair` holds with no hypothesis.
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

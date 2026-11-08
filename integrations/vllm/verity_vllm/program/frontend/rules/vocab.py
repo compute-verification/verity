@@ -259,7 +259,7 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
-# Definitions live in `verity.ml.definitions.registry.dense` (promoted from `quarantine.dense`, the X-08 pattern: same name / version / body, so the
+# Definitions live in `verity.ml.definitions.registry.dense` (promoted from `quarantine.dense` with the same name, version and body, so the
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
     from verity.ml.definitions.registry import dense as DN
@@ -603,9 +603,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "fp8_group_quant_ue8m0": "Fp8GroupQuantUe8m0_v1{K,G}: _C.per_token_group_fp8_quant(use_ue8m0=True) on one bf16 row -> (x_q e4m3[K], "
                                     "x_s f32[K/G]); s = Fp8Ue8m0Ceil_v1 of the group's absmax/448 (the power of two at or above it), "
                                     "q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed (registry.deepgemm)",
-           "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
+           "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
-                                  "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
+                                  "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; each weight block's FMULs formed "
                                   "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
            "flashinfer_fp8_linear": "FlashInferFp8Linear_v1{K,N}: vLLM's default Hopper block-FP8 linear for M < 32; FlashInfer "
                                     "scale_1x128_kernel followed by the TRT-LLM swapAB GEMM",

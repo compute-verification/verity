@@ -1,4 +1,13 @@
-import Proofs.Flock.VBridge.Algebra.Build
+module
+
+public import Proofs.Flock.VBridge.Algebra.Build
+public import Batteries.Data.List.Basic
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # When `verifierRows` returns
@@ -10,6 +19,8 @@ and the constant's value go into v and `kappa`, never into S. So S is the same a
 skeleton (`Lin.Skel`, `build_skel`), and `verifierRows` returns, with v the coefficient slots then the comb, whenever
 `run` at the rep's coins gives residuals of the zero coins' skeleton (`verifierRows_ok_of_skel`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

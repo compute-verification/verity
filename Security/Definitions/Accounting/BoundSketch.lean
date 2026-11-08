@@ -1,11 +1,14 @@
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.ZMod.Defs
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # The deployed bound receipt's sketch: a relay as a two-party protocol (trusted)
 
 The remote protocol's bound receipt (`ro-bound-sketch-blake3/v0`) hashes a sketch of the block's bytes against a
-multiplier matrix drawn from the matmul: for a tile of `r` vectors `e_i` of `m` bytes and a matrix `B` of `r` columns of
+multiplier matrix sampled from the matmul: for a tile of `r` vectors `e_i` of `m` bytes and a matrix `B` of `r` columns of
 `m` bytes, the sketch is `v_i[c] = Σ_q e_i[q]·B[c][q]` and the receipt `H(σ_p, j, v)`. The matrix is `B = R ⊕ M`: `M`
 the pass's fresh sign mask (one buffer for every tile of the pass, derived from the chained seed), `R` bytes of the
 matmul's own values (the bound tile's partial accumulators). A location makes the right receipt only knowing `v`, so a
@@ -19,6 +22,8 @@ an average of these. The bytes are read in `𝔽_p` (`p = 257` for the deployed 
 injectively); the sketch is the integer sketch's image mod `p`, which a location knowing the integer sketch knows. `ip` is the inner product on `𝔽_p^ι`, and the sketch's trace
 `Σ_i v_i[i]` is `ip` of the tile's bytes and the matrix (`sketch`, with `ι = Fin r × Fin m`).
 -/
+
+@[expose] public section
 
 namespace Accounting.BoundSketch
 

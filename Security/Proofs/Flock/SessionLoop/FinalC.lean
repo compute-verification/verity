@@ -1,9 +1,42 @@
-import Proofs.Flock.SessionLoop.TakenVals
+module
+
+public import Proofs.Flock.SessionLoop.TakenVals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `vs`'s `final_c` is fixed by its round-1c values
 
-The firewall's finish sends the inner proof's round 0 only where the request's `final_c` is the one its passed values
+The ZK server's finish sends the inner proof's round 0 only where the request's `final_c` is the one its passed values
 fix: the rep's `zerocheck c_eval` constraint, `Σ_i λ_i(z)·r1c_i + final_c` with each value under its own pad, holds on
 the pads (`Flock.Firewall.Finish.consWhy`). This file states that identity on the switched session's values, a premise
 over `vs` beside `Loop.TakesVals` and `Loop.RowsOK`:
@@ -17,6 +50,8 @@ over `vs` beside `Loop.TakesVals` and `Loop.RowsOK`:
   session loop.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
@@ -27,7 +62,7 @@ namespace Loop
 /-- **`vs`'s `final_c` is the c_eval of its round-1c values**: at every nonce, opened coins and tape at which none of
 table `j`'s zerocheck outer coins is `1`, each rep's value at `final_c`'s pad index is `Σ_i λ_i(z)·r1c_i`, the Lagrange
 weights at the rep's zerocheck point `z` (the opened coins', `zcE`) against its values at the 64 round-1c indices, as the
-firewall's finish computes it (`Flock.dot`, `Flock.lagrange`). -/
+ZK server's finish computes it (`Flock.dot`, `Flock.lagrange`). -/
 def FinalCFixed (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)),
     (∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1) → ∀ (r : Fin 2),

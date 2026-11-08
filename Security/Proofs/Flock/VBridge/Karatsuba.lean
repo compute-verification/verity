@@ -1,5 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-import Proofs.Flock.Level3.GF128
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
+public import Proofs.Flock.Level3.GF128
+public import Mathlib.Algebra.Field.ZMod
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # V*'s gadgets: Karatsuba multiplication in GF(2^128)
@@ -16,6 +38,8 @@ bit `k` being bit `k` of `2^64·hi + lo` (`Flock.F128`):
 `sound_mul128`: whenever every row holds and the input forms carry the bits of `x` and `y`, the output forms carry the
 bits of `x * y`, the executable's product, which is level 3's GF(2^128) product (`F128.poly_mul`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

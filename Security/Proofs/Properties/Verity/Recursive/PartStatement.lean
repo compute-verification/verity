@@ -1,7 +1,43 @@
+module
+
+public import Proofs.Properties.Verity.Recursive.Names
+import all Init.Data.String.Defs
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Properties.Verity.Recursive.Names
-import VStarRecursive
 
 /-!
 # A step of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
@@ -10,7 +46,7 @@ The model's V\* statement of part `s` (`RecDeploy.staged st x ms s`, the encodin
 outer verifier's readers (`RecDeploy.insO`, `RecRaw.ins`) as exactly the recursive inputs compiled part `s`'s
 `VStar.Recursive.partVerdict` sets its session up on (`partIns`): the part's circuit and staged public file, its
 partition, program, registered reads, bindings and rows, the verifier's inner shape, check 5's source, the inner
-circuit's binding, the inner session's commits and link points, and the part's draw. `SetupChecks` holds `partIns`' setup to
+circuit's binding, the inner session's commits and link points, and the part's sample. `SetupChecks` holds `partIns`' setup to
 the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
 
 * **Round trip** (`decode_encode_fits`, `decodeRec_encode_fits`): a statement whose lengths fit their 8-byte words reads
@@ -26,6 +62,8 @@ the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
   stratified, closure or public input words).
 * `vstarAt_eq_staged`: where part `s`'s staged numbers are `nums`' (`Numbers`), its V\* statement is the staged one.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive.Part
 
@@ -154,7 +192,6 @@ theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     run_bind_of (rdOptBytes h7 _), run_bind_of (rdOptBytes h8 _), run_bind_of (rdOptBytes h9 _),
     run_bind_of (rdOptBytes h10 _), run_bind_of (rdOptBytes h11 _),
     run_bind_of (rdOpt_encOpt (fun t ht rest => FlockComplete.rdStr_encStr (h12 t ht) rest) _),
-    run_bind_of (rdOpt_encOpt (fun b _ rest => rdBool_encBool b rest) _),
     run_bind_of (rdOpt_encOpt (fun ts hts rest => rdTables (h13 ts hts) rest) _), run_bind_of (rdOptBytes h14 _),
     run_bind_of (rdOpt_encOpt (fun l hl rest => by
       rw [List.append_assoc, run_bind_of (FlockComplete.rdBytes_encBytes (h15 l hl).1 _),
@@ -623,7 +660,7 @@ theorem rows_model {b : ByteArray} {rows : Array Registered.Port}
     try rfl
 
 /-- **What `innerHeld` holds**, read off the blobs: the inner circuit, the inner public file, the inner session's
-record, the inner statement's draw, the coin server's transcript and the registration, each as text where `innerHeld`
+record, the inner statement's sample, the challenger's live-coin part's transcript and the registration, each as text where `innerHeld`
 reads text; its shape (`shapeOf`), check 5's source, the inner circuit's binding, the commits and the link points; V*'s
 staged shared rows, read as `RecRaw.ins` reads `--rec-rows`; Flock's own checks on the inner statement (`innerOk`);
 and the record, transcript and staged rows each under `FIELD_MAX` bytes (`fits`). -/
@@ -636,7 +673,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       bs.get o.draw "the inner statement's draw" = .ok drawB ∧
       h.src = .files
         { circuit := circuitB, pub := pubB, partition := o.partition, record := record,
-          form := some { statement := VStar.Recursive.INNER_STATEMENT, os := true, tables := [], draw := some drawB },
+          form := some { statement := VStar.Recursive.INNER_STATEMENT, tables := [], draw := some drawB },
           program := some o.program } ∧
       h.bound = (do RecSetup.metaBound (← VStar.Recursive.metaOf circuitB)) ∧
       bs.get pr.transcript "rec inner transcript" = .ok trB ∧ String.fromUTF8? trB = some t ∧
@@ -694,7 +731,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
 /-! ## The correspondence -/
 
 /-- **Compiled part `j`'s recursive inputs**, as `partVerdict` hands them to its setup: the statement's tags `tags0`,
-the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its draw,
+the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its sample,
 the inner session held (`h`: the verifier's inner shape, check 5's source, the inner circuit's binding, the commits and
 the link points), `--rec-part j`, the bindings, the rows and no link table. -/
 def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
@@ -704,7 +741,7 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
     { stmtTags := tags0
       registered
       read :=
-        { I := { tags := tags0.withCoins (partCoins tags0), circuitFile := circuitB, publicFile := pubB,
+        { I := { tags := tags0, circuitFile := circuitB, publicFile := pubB,
                  coins := partCoins tags0, count := 1, tables := [], partition := some pj.partition,
                  program := some pj.program, work := none, stratified := none, closure := none }
           zk := true
@@ -721,30 +758,25 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
   rows
   links := none
 
-/-- `withCoins` changes a statement's tags only for the coin server's coins, never for a keyed coin tree. -/
-theorem withCoins_tree (t : Tags) (s : CoinTree.Spec) : t.withCoins (.tree s) = t := by
-  unfold Tags.withCoins
-  rfl
-
 /-- **The session's tags at `partIns` are the compiled part's**: `verify --zk`'s (`ZkExec.zkTags`) at the keyed coin
 tree of one table and the part circuit's mask log, as `partVerdict` sets its session up. -/
 theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
     (partIns tags0 circuitB pubB pj registered draw h j bindings rows).base.read.tags =
-      Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1 :=
-  congrArg (fun t => Zk.tags t (Zk.maskLogOf circuitB) 1) (withCoins_tree _ _)
+      Zk.tags tags0 (Zk.maskLogOf circuitB) 1 :=
+  (rfl)
 
 /-- **What the recursive setup reads of `partIns`** (`SetupChecks`'s `SetupMatch`, field by field, in its order): `--zk`, the
 statement's and the session's tags, the part's circuit and staged public file, no lookup table, one table, the part's
-partition and program, no public input words, the registered reads, the draw `draw`, the inner shape, check 5's
+partition and program, no public input words, the registered reads, the sample `draw`, the inner shape, check 5's
 source, the commits, the link, `--rec-part j`, the bindings, the rows and no link table. -/
 theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
     let i := partIns tags0 circuitB pubB pj registered draw h j bindings rows
     i.base.read.zk = true ∧ i.base.stmtTags = tags0 ∧
-      i.base.read.tags = Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1 ∧
+      i.base.read.tags = Zk.tags tags0 (Zk.maskLogOf circuitB) 1 ∧
       i.base.read.I.circuitFile = circuitB ∧ i.base.read.I.publicFile = pubB ∧ i.base.read.I.tables = [] ∧
       i.base.read.I.count = 1 ∧ i.base.read.I.partition = some pj.partition ∧
       i.base.read.I.program = some pj.program ∧ i.base.read.publicInputs = none ∧ i.base.registered = registered ∧
@@ -823,7 +855,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
-    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
     (hIprog : r.innerRaw.program = some o.program)
@@ -903,7 +935,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     rw [hPbind]
     exact hbindC
   have h4 : sourceOf (partRaw r st x ms s q) = .ok (some h.src) := by
-    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hIos, hItab, hIprog, edraw, ecI, epI, erec, jsonOf_what hpqj,
+    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hItab, hIprog, edraw, ecI, epI, erec, jsonOf_what hpqj,
       textOf, hu, ok_bind, Option.getD_some]
     rw [hsrc]
     rfl
@@ -954,11 +986,11 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
 and its part `s`, `q`; the compiled check's inner session held (`innerHeld`), and part `s`'s own inputs `pj` with what
 the compiled `partVerdict` reads of them (`registered`, `bindings`, the statement's tags `tags0`, the part's circuit and
 public file; its rows are `innerHeld`'s). Suppose:
-* `Names`' clauses: the inner statement's circuit, public file, partition and draw are the blobs' and `p.own`'s, its
-  statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the coin server's coins, no tables), its own inner
+* `Names`' clauses: the inner statement's circuit, public file, partition and sample are the blobs' and `p.own`'s, its
+  statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the challenger's live-coin part's coins, no tables), its own inner
   shape `innerHeld`'s, the registration the blobs', no link table; part `s`'s circuit, partition, program and registered reads
-  `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
-* `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the coin server's
+  `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its sample, read as the verifier reads one, `draw`;
+* `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the challenger's live-coin part's
   transcript the blobs', and V*'s staged shared rows the evidence's `rows` blob (`hSrows`, `RowsShow`), which
   `innerHeld` reads once for every part;
 * `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean
@@ -981,7 +1013,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
-    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
     (hIprog : r.innerRaw.program = some o.program)
@@ -1004,7 +1036,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)) := by
   have hfit := partRaw_fits hr hq hPform hIlinks (by rw [hSp]; exact hpub) hrec htr hrows
   rw [insO_staged hr hq hfit hPform.2.1,
-    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIprog hIdraw hIshape hIreg hIlinks hPform
+    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hItab hIpart hIprog hIdraw hIshape hIreg hIlinks hPform
       hPc hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
   rfl
 

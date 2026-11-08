@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ZK.Refusal
-import Proofs.Flock.Soundness.ZK.Adaptivity
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.Refusal
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Zero knowledge: Lemma C, the pre-final views against an adaptive verifier
@@ -31,6 +33,8 @@ tables' randomness read from `(ω, U)` through a map `e c` with fibers of one si
 coin-dependent positions, so their randomness types vary with `c`, and `e c` keeps the part they read).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.ZK
 
 open Finset Game
@@ -46,9 +50,6 @@ section Generic
 def Strategy.comap {Ω Ω' M C : Type} {n : ℕ} (P : Strategy Ω M C n) (f : Ω' → Ω) : Strategy Ω' M C n where
   msg x := P.msg (f x)
   causal x := P.causal (f x)
-
-theorem run_comap {Ω Ω' M C : Type} {n : ℕ} [Inhabited M] (P : Strategy Ω M C n) (f : Ω' → Ω) (V : Responder M C n)
-    (x : Ω') : run (P.comap f) V x = run P V (f x) := rfl
 
 /-- On one space, equal distributions are equal fiber counts. -/
 theorem SameDist.card_eq {Ω V : Type} [Fintype Ω] [Nonempty Ω] [DecidableEq V] {f g : Ω → V} (h : SameDist f g)
@@ -87,7 +88,7 @@ theorem card_msg_pad {Ω L B Y Cc D V : Type} [Fintype Ω] [Fintype L] [Decidabl
   refine Finset.card_equiv φ (fun x => ?_)
   simp only [Finset.mem_filter, Finset.mem_univ, true_and, φ, Equiv.coe_fn_mk]
 
-/-- **A verifier's own tape**: a bound that holds at every fixed tape `t` holds on a uniform tape drawn independently of
+/-- **A verifier's own tape**: a bound that holds at every fixed tape `t` holds on a uniform tape sampled independently of
 the experiment. -/
 theorem prCoin_avg_close {Tp X : Type} [Fintype Tp] [Nonempty Tp] [Fintype X] (A A' : Tp → X → Prop) {ε : ℝ≥0∞}
     (h : ∀ t, prCoin (A t) ≤ prCoin (A' t) + ε) :
@@ -221,7 +222,7 @@ theorem adaptive_prefinal_hm96 {n : ℕ} {Cn M Cc Ω L : Type} [Inhabited M] [De
           + Fintype.card L * δ₁) + Fintype.card L * δ₁ := add_le_add h2 le_rfl
     _ = _ := by ring
 
-/-- **Lemma C against a randomized verifier**: `adaptive_prefinal_hm96` with `V*`'s tape `t` uniform on `Tp`, drawn
+/-- **Lemma C against a randomized verifier**: `adaptive_prefinal_hm96` with `V*`'s tape `t` uniform on `Tp`, sampled
 independently of the prover's randomness and salts. -/
 theorem adaptive_prefinal_hm96_tape {n : ℕ} {Cn M Cc Ω L Tp : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L] [DecidableEq L] [Fintype Tp] [Nonempty Tp]

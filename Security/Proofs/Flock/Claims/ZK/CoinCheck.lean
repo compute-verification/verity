@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.GK
-import Proofs.Flock.Soundness.ZK.GK.Extract
+module
+
+public import Proofs.Flock.Claims.ZK.GK
+public import Proofs.Flock.Soundness.ZK.GK.Extract
 
 /-!
 # The coin-tree check as an oracle program (`coin-tree/hm96-sha512/v2`)
@@ -16,6 +18,8 @@ conflict under the root, so T6 located (`coinPairs_coll`) gives an aligned pair 
 `H(ν ‖ ·)`. Each is an input the walk asked (`coinPairs_mem`, `reachK_passes`), so the two checks' logs hold a
 collision.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -98,9 +102,6 @@ def opIns (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinO
     List (List UInt8) :=
   chainIns Hd T.chainTag T.E op.cs op.Tn ++
     rIn Hd T op :: sIn T op :: lIn Hd T op :: walkIns Hd T.ME op.idx (Hd (lIn Hd T op)) op.sibs
-
-theorem reach_eq (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) :
-    T.reach Hd op = walk Hd T.ME op.idx (Hd (lIn Hd T op)) op.sibs := rfl
 
 /-! ## A passing walk asks every input -/
 

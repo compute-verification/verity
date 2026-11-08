@@ -22,13 +22,16 @@ READERS: tuple[str, ...] = ("verity/core/protocols/pouw",)
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
 TIE = re.compile(r"^example : (.*) := rfl$", re.M)
+#: the module header every Lean file has (`tools/verity/lean/modules.py`)
+MODULE = re.compile(r"^(?:module|@\[expose\] public section)$", re.M)
 
 
 def lean_entries() -> list[tuple[str, str]]:
     body = re.sub(r"/-.*?-/", "", LEAN.read_text(), flags=re.S)
     body = re.sub(r"--[^\n]*", "", body)
-    rest = ABBREV.sub("", body).replace("namespace Domains", "").replace("end Domains", "")
-    assert not rest.strip(), f"{LEAN.relative_to(ROOT)} holds only `abbrev NAME : String := \"…\"` lines, found: {rest.strip()[:200]}"
+    rest = MODULE.sub("", ABBREV.sub("", body)).replace("namespace Domains", "").replace("end Domains", "")
+    assert not rest.strip(), (f"{LEAN.relative_to(ROOT)} holds only its module header and `abbrev NAME : String := \"…\"` "
+                              f"lines, found: {rest.strip()[:200]}")
     return ABBREV.findall(body)
 
 

@@ -1,4 +1,7 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
+module
+
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
@@ -22,6 +25,8 @@ proved or pinned, and no pin reads them.
   ulp at `|R| ≥ 2^32`. `H1TCrossLateStaging` proves it where block 2 adds exactly on the 512 grid and the last two
   slices are quiet (`Exact512`), a regime that is empty for `k ≤ 19,430`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

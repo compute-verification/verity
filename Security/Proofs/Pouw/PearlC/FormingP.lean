@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.FormingPDefs
-import Proofs.Pouw.PearlC.AtomErr
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.FormingPDefs
+public import Proofs.Pouw.PearlC.AtomErr
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
 # P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix
@@ -26,6 +28,8 @@ statement) and at sm_120's `w = 26`, and carries the flat-pair instances to `ato
 The width-generic alignment and normalization (`alignedW_value`, `normalizeW_spec`) are proved here rather than taken
 from `PeelExactProofs`' width-26 lemmas, since the step lemma is parametric in `w`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FormingP
 
@@ -103,9 +107,6 @@ theorem alignedW_natAbs_lt (w : ℕ) (E : ℤ) (t : Term) (hm : t.mag < 2 ^ 25) 
 
 /-- Truncation toward zero to `p` significant bits (`trunc14` at `p = 14`). -/
 def truncP (p : ℕ) (y : ℚ) : ℚ := if y = 0 then 0 else truncTo (2 ^ (binade |y| - ((p : ℤ) - 1))) y
-
-theorem truncP_14 : truncP 14 = trunc14 := by
-  funext y; simp only [truncP, trunc14]; norm_num
 
 theorem abs_truncP_sub_le {p : ℕ} (hp : 1 ≤ p) (y : ℚ) : |truncP p y - y| ≤ |y| / 2 ^ (p - 1) := by
   rcases eq_or_ne y 0 with rfl | hy

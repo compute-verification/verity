@@ -1,6 +1,44 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Verifier.Merkle
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowE
+public import Proofs.Flock.Claims.Recursion.VerdictRowR
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.RecordCanon
+import Proofs.Flock.Claims.Recursion.VerdictRowG
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # Row D's `rec-open` pieces at a decision: which pieces, their cover, and their holding
@@ -19,7 +57,7 @@ hypotheses. This file supplies the pieces and those two.
   which is the converse of `opened_plain_of`'s use of `merkleCheck_of`.
 * `levelCheck_of_merkleOk`, `levelPass_of_merkleOk`: the honest run's checks (`FlockComplete.Replay.Lg.MerkleOk`, at
   hashes whose `plain` operations are the scheme's, e.g. `With.std` by `plain_named`) are `levelCheck`s at the
-  positions its query coins draw, with the level's `q` of them.
+  positions its query coins sample, with the level's `q` of them.
 * `DecAt.hholds_rowDPieces`: every piece holds (`hholds`), at the layout tie (`hside`) and coin tie (`hpos`) in
   `runs_assembled`'s form at each table, where at each rep the verifier rows run and every level's check passes at
   their positions (`hrun`).
@@ -31,6 +69,8 @@ hypotheses. This file supplies the pieces and those two.
   the rows' run from row R's structure and sizes (`DecAt.rowsRun_of`). `DecAt.runs_openAt`: `runs_assembled` at them,
   with `hcover` and `hholds` discharged but for `hlev`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 
@@ -111,7 +151,7 @@ theorem opening_eq (p : LigeritoProof) (cap : Array ByteArray) (R ℓ : ℕ) :
   unfold FlockComplete.Replay.Lg.opening FlockSoundness.Refine.capAt openAt
   by_cases h0 : ℓ = 0 <;> by_cases h1 : ℓ < R <;> simp [h0, h1]
 
-/-- **The honest run's Merkle check at level `ℓ` is `levelCheck`** at the positions the level's query coins draw
+/-- **The honest run's Merkle check at level `ℓ` is `levelCheck`** at the positions the level's query coins sample
 (`MerkleOk`, at hashes whose `plain` operations are the scheme's). -/
 theorem levelCheck_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = MerkleOps.ofScheme plain)
     {sch : Flock.Schedule} {cap : Array ByteArray} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {k : ℕ}
@@ -122,7 +162,7 @@ theorem levelCheck_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = 
   rw [hops, With.ofScheme_merkleCheck, opening_eq] at h'
   simpa only [levelCheck, FlockVBridge.Family.Conss.getD_default] using h'
 
-/-- **Every level passes at positions `pos ℓ`** where they are the ones the honest run's query coins draw: `q` of
+/-- **Every level passes at positions `pos ℓ`** where they are the ones the honest run's query coins sample: `q` of
 them (`positions_size`, at `fast100`'s seamed levels), and the level's check passes there. -/
 theorem levelPass_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = MerkleOps.ofScheme plain)
     {sch : Flock.Schedule} (hseam : ∀ lv ∈ sch.levels, FlockSoundness.Refine.LevelSeam lv)
@@ -286,7 +326,7 @@ theorem hholds_rowDPiecesAt (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ ×
   exact queryOpens_of_check hc (Nat.lt_of_lt_of_le hj hle)
 
 /-- **`hlev` at the honest run**: where rep `r`'s proof passes FlockComplete's Merkle checks (`MerkleOk`) at the query
-coins `cf` from round `k`, and any run of the verifier rows draws its positions from those coins (`htie`, the coin
+coins `cf` from round `k`, and any run of the verifier rows samples its positions from those coins (`htie`, the coin
 tie), every level passes at the rows' positions. -/
 theorem levels_of_merkleOk {i : ℕ} (r : Fin 2) {hs : Hashes Flock.V}
     (hops : plain.opsWith hs = MerkleOps.ofScheme plain)

@@ -1,18 +1,18 @@
 """`Spans.throughput`: per-stage wall time, bytes, leaves and rates, labelled with the committer's scheme (torch-free)."""
 from __future__ import annotations
 
-from verity_vllm.commit import scheme
+from verity_vllm.commit import step_rows
 from verity_vllm.pipeline.spans import COMPONENTS, Spans
 
 
 def test_throughput_sums_each_stage_and_names_the_scheme():
-    sp = Spans(scheme.NAME)
+    sp = Spans(step_rows.NAME)
     sp.add("hashing", 0.5, step=0, nbytes=1024, leaves=4)
     sp.add("hashing", 1.5, step=1, nbytes=3072, leaves=12)
     sp.add("root_finalisation", 0.25, step=0)
     sp.add("padding", 0.0, step=2, nbytes=256, leaves=1)
     tp = sp.throughput()
-    assert tp["scheme"] == scheme.NAME == "vllm-v1"
+    assert tp["scheme"] == step_rows.NAME == "rows-sha512"
     assert list(tp["stages"]) == ["hashing", "root_finalisation", "padding"]
     assert tp["stages"]["hashing"] == {"wall_s": 2.0, "bytes": 4096, "leaves": 16, "bytes_per_s": 2048.0, "leaves_per_s": 8.0}
     assert tp["stages"]["root_finalisation"] == {"wall_s": 0.25, "bytes": 0, "leaves": 0, "bytes_per_s": 0.0, "leaves_per_s": 0.0}

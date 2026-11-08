@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Audit.HarmBudget
+module
+
+public import Proofs.Flock.Soundness.Audit.HarmBudget
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The cumulative harm budget over a lifetime of one-stage audits
@@ -7,14 +12,16 @@ import Proofs.Flock.Soundness.Audit.HarmBudget
 `L m`: before each, the prover chooses to stop (accepting) or to run it, and a rejected audit ends
 the session. The prover's choices are adaptive, so the number of rounds is a stopping time.
 
-For a prover strategy `s`, `lifePlay A N s` is its run tree (`Adaptive.Play`), each round's wrong
-units being those of its committed transcript (`Analysis.committedOf`), which the prover's state at
-registration fixes before the round's draw. It is faithful: its acceptance is the lifetime's
+For a prover strategy `s`, `lifePlay A N s` is its run tree (`Adaptive.Play`), each round's incorrect
+proof blocks being those of its committed transcript (`Analysis.committedOf`), which the prover's state at
+registration fixes before the round's sample. It is faithful: its acceptance is the lifetime's
 (`life_accept`). Each round's drawn-unit bound is `audit_drawn` (`drawn_lifePlay`), so `harm_budget`
 gives the lifetime's bound (`life_harm_budget`):
 $$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{wrong}(X_t)) \ge H\Big]
   \le e^{-\lambda H} + \sum_{m < N} (\varepsilon_{ks,m} + \delta_{link,m}).$$
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Adaptive
 
@@ -122,8 +129,8 @@ section Stage
 
 variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- The run tree of one audit and what follows it: a round over the committed transcript's wrong
-units. -/
+/-- The run tree of one audit and what follows it: a round over the committed transcript's incorrect
+proof blocks. -/
 noncomputable def roundPlay (A : Analysis L Reg session) {next : Game Bool} {N : ℕ}
     (rest : Strategy next → Play n N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     Play n (N + 1) :=
@@ -274,7 +281,7 @@ section Life
 
 variable {L : ℕ → Law n} {Reg : ℕ → Type} {session : (m : ℕ) → Finset (Fin n) → Reg m → Game Bool}
 
-/-- **The run tree of a lifetime** under a prover strategy, round `m`'s wrong units those of its
+/-- **The run tree of a lifetime** under a prover strategy, round `m`'s incorrect proof blocks those of its
 committed transcript under the analysis `A m`. -/
 noncomputable def lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) :
     (N : ℕ) → Strategy (life L Reg session N) → Play n N

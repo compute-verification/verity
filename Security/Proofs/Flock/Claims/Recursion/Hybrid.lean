@@ -1,20 +1,59 @@
-import Proofs.Flock.Claims.Recursion.Compose
-import Proofs.Flock.Claims.KS.Fork
+module
+
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Recursion.Compose
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The composed extractor's failure, rerun by rerun
 
 `servedERep_bad_le` charges the outer extractor `E₂`'s failure once, at the judged run. The inner stage reruns at many
-draws, and `E₂` serves each, so `E₂` can fail at any of them. This file charges every one, by Wald's identity
+samples, and `E₂` serves each, so `E₂` can fail at any of them. This file charges every one, by Wald's identity
 (`erepProg_cost_exp`, at the indicator of `E₂`'s failure as the weight). The composed extractor fails on an accepted run
 at most `(1 + m·k)` times as often as `E₂` fails (`OuterFails`), plus the inner stage's failure when `E₂` succeeds at
-every draw it reruns at (`ServedGood`, `PrBadGood`): `servedERep_bad_le_good`. On that event every view the inner stage
+every sample it reruns at (`ServedGood`, `PrBadGood`): `servedERep_bad_le_good`. On that event every view the inner stage
 sees is the one `dec` reads off a successful outer extraction.
 
 * `Pr_exists_le` (the union bound), `Ex_pi_coord` and `Pr_pi_coord` (one coordinate of a dependent product
   of coins), `Pr_equiv` (coins regrouped): the averages the recursion's proof uses.
 * `sqrt_add_lin_any`: `sqrt_add_lin` at any `C`, since `√` of a negative is `0`.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -85,13 +124,13 @@ section Hybrid
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`E₂` fails at a draw**: the prover's run at the draw's coins accepts and `E₂` there, at the draw's own coins,
+/-- **`E₂` fails at a sample**: the prover's run at the sample's coins accepts and `E₂` there, at the sample's own coins,
 fails. -/
 def OuterFails (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (d : (Fin (V.k x) → Coin) × E₂.C x) : Prop :=
   (run H P V x ω d.1).out = .acc ∧ ¬ R₂.ext x (E₂.eval H P x ω d.1 d.2).1
 
-/-- **`E₂` succeeds at every draw the inner stage reruns at**, the judged draw among them, at the judged run `(ω, r₀)`
+/-- **`E₂` succeeds at every sample the inner stage reruns at**, the judged sample among them, at the judged run `(ω, r₀)`
 and the composed extractor's coins `c`. -/
 def ServedGood (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
@@ -110,8 +149,8 @@ noncomputable def PrBadGood (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R
     (run H P V x s.1 s.2.1).out = .acc ∧ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2 ∧
       ¬ R.ext x ((servedERep V E₂ dec m k K opens assemble check).eval H P x s.1 s.2.1 s.2.2).1
 
-/-- **An event at some draw the inner stage reruns at is at most `1 + m·k` times as likely as at one draw** (Wald's
-identity at the event's indicator as the weight): for every event `Q` of the tape and a draw. -/
+/-- **An event at some sample the inner stage reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's
+identity at the event's indicator as the weight): for every event `Q` of the tape and a sample. -/
 theorem Pr_exists_rerun_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]

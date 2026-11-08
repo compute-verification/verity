@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-import Definitions.Pouw.NCP.Witness
-import Definitions.Pouw.Assumptions.NCP.Assumptions
-import Definitions.Pouw.Game.Params
+module
+
+public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.NCP.Witness
 
 /-!
 # NCP's game instance on route U: pinned statements (trusted)
@@ -11,6 +13,8 @@ whose ratio to the credited `3·m·k·n` is `1 + f/(3n)`, its two instances (ncp
 C2: `β = 129`, `f = 20`, `1 + 20/(3n)`), and the satisfiability witnesses for its hypotheses. All but the lead's
 witness (`LeadUWitness`) are in `Pouw.Guarantees.NCP`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RouteU
 

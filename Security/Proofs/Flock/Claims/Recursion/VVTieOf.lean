@@ -1,9 +1,48 @@
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.VerdictRowRDep
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.RegLevels.VRows
-import Proofs.Flock.VBridge.Family.Join
+import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Recursive.ValueInner
 
 /-!
 # `VVTie` at `Rows.resVRead`'s verifier values
@@ -26,6 +65,8 @@ agree:
 statement over the dense form's plain inner shape (`staged_plain`, by `checkCircuit_plain`). `vvTie_dense` is
 `vvTie_of` with `hplain` so discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

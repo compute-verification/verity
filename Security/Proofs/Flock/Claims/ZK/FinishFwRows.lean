@@ -1,11 +1,54 @@
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.ZK.FinishLane
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.FinishStopAt
-import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
+import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.InnerTauLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
-# A worker's rows from the firewall's own run
+# A worker's rows from the ZK server's own run
 
-`FinishStopAt.rowsAt_of_cons` decides a table's rows at its own draw. Here they are decided at the firewall's run on a
+`FinishStopAt.rowsAt_of_cons` decides a table's rows at its own sample. Here they are decided at the ZK server's run on a
 rep's request (`repFwC`, answered by `asksCut`): where it goes on, its constraints are the first seven rows on its masked
 values `vals + h` (`tauFw_vals`) and none fails on the request's pads `h`, and where that holds at both reps, at masked
 values that are the worker's clear values plus `h`, the worker's rows hold (`rowsAt_of_fw`).
@@ -17,6 +60,8 @@ values that are the worker's clear values plus `h`, the worker's rows hold (`row
 * **`rowsAt_of_fw`**: where, at each rep, constraints on the layout's length that are the first seven rows on the
   clear values plus pads `h` (`h_ab = h_a·h_b`, `h_w = h_x·h_y`) don't fail on `h`, the rows hold.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 
@@ -51,7 +96,7 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The firewall's seven rows, level 0 read off its proof**: `tauFw`'s, where, at the run's steps, level 0's record's
+/-- **The ZK server's seven rows, level 0 read off its proof**: `tauFw`'s, where, at the run's steps, level 0's record's
 target is the opening's `T` and its coins are the model's (`hrec`), and the returned proof's level 0 values are the
 view's (`LaneVals`) and its restart is `T'`. -/
 theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
@@ -181,7 +226,7 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
 
 variable (P : LigProver) {mPts : ℕ}
 
-/-- **Where the firewall goes on at masked values that are a worker's, its rows hold**: where, at each rep, constraints
+/-- **Where the ZK server goes on at masked values that are a worker's, its rows hold**: where, at each rep, constraints
 on the layout's length are the first seven rows on the worker's clear values plus pads `h` of the layout's length (with
 `h_ab = h_a·h_b` and `h_w = h_x·h_y`), and none fails on `h`, the worker's rows hold at the mask slot `u` and level 0's
 hiding `V` (`noFail_iff_rows`, `rowsAt_of_rows`). -/

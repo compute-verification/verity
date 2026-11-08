@@ -1,14 +1,25 @@
+module
+
+public import Aesop.BuiltinRules
+public import Batteries.Tactic.OpenPrivate
+public import Flock.Draw
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import all Init.Data.Array.QSort.Basic
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Batteries.Tactic.OpenPrivate
+
+@[expose] public section
 
 set_option Elab.async false
 
 /-!
-# The drawn units are in the population, with a closure
+# The sampled proof blocks are in the population, with a closure
 
-`Draw.UnitDraw.proved` sorts the drawn units with their closure (`Array.qsort`) when the closure isn't empty. Every swap
+`Draw.UnitDraw.proved` sorts the sampled proof blocks with their closure (`Array.qsort`) when the closure isn't empty. Every swap
 of `qsort` keeps a property every element has (`all_qsort`), so every proved unit is below the population
-(`proved_lt_population`), as each drawn unit and each closure unit is (`ofJson_lt`).
+(`proved_lt_population`), as each sampled proof block and each closure unit is (`ofJson_lt`).
 -/
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
@@ -25,7 +36,7 @@ theorem all_swap {n : ℕ} {as : Vector α n} (h : ∀ k (hk : k < n), P as[k]) 
   rw [Vector.getElem_swap]
   split_ifs <;> apply h
 
-theorem all_qpartition_loop {n : ℕ} (lt : α → α → Bool) {lo hi : ℕ} (hhi : hi < n) (pivot : α) :
+private theorem all_qpartition_loop {n : ℕ} (lt : α → α → Bool) {lo hi : ℕ} (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ x (hx : x < n), P as[x]) →
       ∀ x (hx : x < n), P (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2[x] := by
@@ -58,7 +69,7 @@ variable (P) in
 /-- Every element of a vector has `P`. -/
 def AllP {n : ℕ} (as : Vector α n) : Prop := ∀ k (hk : k < n), P as[k]
 
-theorem all_sort {n : ℕ} (lt : α → α → Bool) :
+private theorem all_sort {n : ℕ} (lt : α → α → Bool) :
     ∀ (d : ℕ) (as : Vector α n) (lo hi : ℕ) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       AllP P as → AllP P (Array.qsort.sort lt as lo hi w hlo hhi) := by
   intro d
@@ -92,7 +103,7 @@ theorem all_qsort (as : Array α) (lt : α → α → Bool) (h : ∀ x ∈ as, P
     refine all_sort lt _ as.toVector _ _ _ _ _ rfl (fun k hk => ?_) k (by simpa using hk)
     exact h _ (by simp)
 
-/-- **Every proved unit of a draw is below the population**, with or without a closure. -/
+/-- **Every proved unit of a sample is below the population**, with or without a closure. -/
 theorem proved_lt_population {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
     ∀ u ∈ D.proved, u < D.population := by
   obtain ⟨hu, hc⟩ := ofJson_lt h

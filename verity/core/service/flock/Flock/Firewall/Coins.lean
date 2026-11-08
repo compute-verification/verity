@@ -18,9 +18,12 @@ coin it hands on: the session's `Hello` (the spec, the link points' count and th
 the key), then each opening in the order the prover asks for them. The first refusal ends the session: nothing after it
 is checked, so no coin after a refused opening is handed on.
 -/
-import Flock.CoinTree
-import Flock.Hm96
-import Flock.JsonParse
+module
+
+public import Flock.CoinTree
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock.Firewall.Coins
 
@@ -29,7 +32,7 @@ open Lean (Json)
 /-- The prefix of a refusal: the prover stops there, before it uses any coin of the round (`coin_tree::Checked`). -/
 def STOP : String := "PROVER-STOPPED: "
 
-/-- The stream of the session's own round: the link points, drawn at `Commit` (`coin_tree::SESSION`). -/
+/-- The stream of the session's own round: the link points, sampled at `Commit` (`coin_tree::SESSION`). -/
 def SESSION : String := "session"
 
 /-- `SHA-512(ν ‖ m)`. -/

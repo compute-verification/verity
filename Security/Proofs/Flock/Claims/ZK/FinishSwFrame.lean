@@ -1,25 +1,61 @@
-import Proofs.Flock.Claims.ZK.FinishSwMk
-import Proofs.Flock.Claims.ZK.FrameTape
-import Flock.Firewall.Finish
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwMk
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Flock.Firewall.Finish
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 
 /-!
-# `hmk` at the firewall's own request
+# `hmk` at the ZK server's own request
 
-`FinishSwMk`'s `swSrcE_hmk` and `swSrcE_l0` read the firewall's clear values by pad index (`valsFw`) and the pads from
-the session's tape (`padsOf (UE.tapeZk τ)`). The firewall's `Finish` builds rep `r` of table `j` from its request
-(`Finish.RepIn`): the values that passed the firewall (`vals`, `zp 64` words) and the frame's draws (`draws`), whose
-pads are `Finish.padsOf`. So where the passed values are the request's, its draws are the release's frame draws on the
-tape (`LeanRelease.drawsAt`), and the session's tape has, at that rep, the pads of the tape of those draws
+`FinishSwMk`'s `swSrcE_hmk` and `swSrcE_l0` read the ZK server's clear values by pad index (`valsFw`) and the pads from
+the session's tape (`padsOf (UE.tapeZk τ)`). The ZK server's `Finish` builds rep `r` of table `j` from its request
+(`Finish.RepIn`): the values that passed the ZK server (`vals`, `zp 64` words) and the frame's samples (`draws`), whose
+pads are `Finish.padsOf`. So where the passed values are the request's, its samples are the release's frame samples on the
+tape (`LeanRelease.drawsAt`), and the session's tape has, at that rep, the pads of the tape of those samples
 (`tapeOfDraws`), `repCut_fw`'s `hmk` holds at the request's own `vals` and `padsOf draws`.
 
-* `Finish.padsOf_h`: a request's pads are its draws' `h`, as `drawsPads` has them.
+* `Finish.padsOf_h`: a request's pads are its samples' `h`, as `drawsPads` has them.
 * `Masked.pads_frame`: the session's pads are then the request's below `h_ab` (`padsOf_get`, `padsOf_drawsAt`).
-* **`Masked.swSrcE_hmk_frame`**: `hmk` at the switched source, at the firewall's request: below `zp 64`, rep `r`'s
+* **`Masked.swSrcE_hmk_frame`**: `hmk` at the switched source, at the ZK server's request: below `zp 64`, rep `r`'s
   masked values are `q.vals[k]! + (Finish.padsOf q.draws).h[k]!`.
 * **`Masked.swSrcE_l0_frame`**: from `zp 64` to `h_ab` they are level 0's opening's values plus the request's pads.
 -/
 
-/-- A request's pads are its draws' `h`. -/
+@[expose] public section
+
+/-- A request's pads are its samples' `h`. -/
 theorem Flock.Firewall.Finish.padsOf_h (d : _root_.Flock.Firewall.Frame.Draws) :
     (_root_.Flock.Firewall.Finish.padsOf d).h = d.h := rfl
 
@@ -30,9 +66,9 @@ open CoinLayer
 
 namespace Masked
 
-/-- **The session's pads are the request's below `h_ab`**: where `q`'s draws are the frame's on the tape `ρ` (of
+/-- **The session's pads are the request's below `h_ab`**: where `q`'s samples are the frame's on the tape `ρ` (of
 `drawBytes` bytes, at table `j`'s layout) for frame rep `rep j r` of the release `L`, and the session's tape has, at that
-rep, the pads of the tape of the frames' draws (`tapeOfDraws`), the session's pad array for table `j`'s rep `r`
+rep, the pads of the tape of the frames' samples (`tapeOfDraws`), the session's pad array for table `j`'s rep `r`
 (`padsOf`) is `Finish.padsOf q.draws`'s below `h_ab`. -/
 theorem pads_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.Firewall.Finish.RepIn)
@@ -51,7 +87,7 @@ theorem pads_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (
     ← hlay, Claims.ZKServer.padsOf_drawsAt L x ρ t₀ rep j.val r.val hz, hq]
   rfl
 
-/-- **`repCut_fw`'s `hmk` at the switched source, at the firewall's request `q`** for table `j`'s rep `r`, frame rep
+/-- **`repCut_fw`'s `hmk` at the switched source, at the ZK server's request `q`** for table `j`'s rep `r`, frame rep
 `rep j r` of the release `L`: where the passed values there are `q`'s and the pads are the request's (`pads_frame`'s
 premises), then where table `j`'s rows hold at its base, rep `r`'s masked values below `zp 64` are
 `q.vals + (Finish.padsOf q.draws).h`. -/
@@ -73,7 +109,7 @@ theorem swSrcE_hmk_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
   rw [swSrcE_hmk x c w A B τ j r hrows k hk, hA,
     pads_frame L ρ t₀ rep x τ j r q hq hlay hz htape k (lt_trans hk (zp64_lt_hab x j))]
 
-/-- **Level 0's opening at the switched source, at the firewall's request `q`**: at `pads_frame`'s premises, where table
+/-- **Level 0's opening at the switched source, at the ZK server's request `q`**: at `pads_frame`'s premises, where table
 `j`'s rows hold at its base, rep `r`'s masked values from `zp 64` to `h_ab` are `B j r` plus
 `(Finish.padsOf q.draws).h`. -/
 theorem swSrcE_l0_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)

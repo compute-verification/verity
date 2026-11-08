@@ -1,8 +1,47 @@
+module
+
+public import Proofs.Flock.Claims.Bridge.Hm96Tree
+public import Proofs.Flock.Claims.KS.Trim
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ConflictTied
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.KSStated
-import Proofs.Flock.Claims.KS.TableBound
-import Proofs.Flock.Claims.KS.Trim
-import Proofs.Flock.Claims.Bridge.Hm96Tree
 
 /-!
 # Flock meets `Inner.KSAbort` at the deployed records
@@ -26,6 +65,8 @@ So the recursion's KS over an inner deployed record (`plain_KSFlock`, `zk_KSFloc
 the one-table shape), Flock's KS at the outer deployment, and the recursion's own hypotheses, with `PublicCoin` met at
 `decCoin`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

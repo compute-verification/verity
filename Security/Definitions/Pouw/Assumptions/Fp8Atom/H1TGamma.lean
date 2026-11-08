@@ -1,7 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Fintype.Sigma
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Definitions.Pouw.Fp8Atom.H1T
 
 /-!
 # H-1T's γ corollary: several units in `MH100w` (trusted statements)
@@ -17,6 +17,8 @@ unit's raw XOF words. The grid is every joint salt.
   whose registers include every credited word of every unit costs at least 32 per credited word: `32·Σ m·n·(4T − 3)`
   (`H1TPosCard`). This is `DistinctLiveMH100` at `ε = 0`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

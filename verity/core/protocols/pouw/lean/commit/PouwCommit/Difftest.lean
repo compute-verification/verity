@@ -1,10 +1,11 @@
-import PouwCommit.Coins
-import PouwCommit.Draws
-import PouwCommit.Rows
-import Lean.Data.Json
+module
+
+public import PouwCommit.Draws
+public import PouwCommit.Rows
+public import Lean.Data.Json.Parser
 
 /-!
-# The difftest: the Python held to PoUW's commitments in Lean, its verifier of record, on generated cases
+# The difftest: the Python held to PoUW's commitments in Lean, its verifier, on generated cases
 
 `tests/difftest_vectors.py` writes `difftest/cases.jsonl`, one case a line: `{"kind", "in", "python"}`. An outcome is
 `{"ok": v}`, `{"reason": text}` (a coin refused, in `coin_reason`'s words) or `{"error": …}` (Python raised; Lean threw),
@@ -18,12 +19,14 @@ is not it, naming the Lean's. The kinds:
 * `transcript`: the transcript tree's root over tile digests (`Prover.prove`);
 * `verify`: `verify_opening` against `rows_domain`, of openings Python's trees made and of tampered ones;
 * `coins`: `coin_reason` of `CoinCommitment.from_json` and `CoinOpening.from_json`, honest and tampered;
-* `salt_of`, `unverified_salt`: the epoch's salt from a coin, and `Epoch.unverified`'s from a seed;
+* `salt_of`, `unverified_salt`: the execution phase's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
-* `key`: the audit, draw and replay keys and `draw_after`;
-* `sampled`, `pearl_draw`: the clear audit's work-weighted draws over given tickets, `Sampled.select`'s and
+* `key`: the audit, sample and replay keys and `draw_after`;
+* `sampled`, `pearl_draw`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
   `clear_work.draw`'s (`benchmarks/pouw/clear`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit.Difftest
 
@@ -97,7 +100,7 @@ def outcome (kind : String) (i : Json) : E Json := do
       | .str s => pure (some (← unhex s))
       | _ => throw "salt_key is hex or null"
     return hexJ (← commitRows (← unhexField i "binding") (← int i "owner") (← hexes i "rows") (← str i "hash") key
-      (← nat i "nonce") (← bool i "digests"))
+      (← nat i "nonce") (← bool i "digests") (← bool i "public"))
   | "transcript" =>
     return hexJ (← transcriptRoot (← unhexField i "salt") (← unhexField i "weights_root") (← hexes i "digests")
       (← str i "hash") (← unhexField i "salt_key"))

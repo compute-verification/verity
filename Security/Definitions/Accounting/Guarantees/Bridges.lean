@@ -1,8 +1,9 @@
-import Definitions.Accounting.Confidence
-import Definitions.Accounting.Physical
-import Definitions.Accounting.CostModel
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Game.Params
+module
+
+public import Definitions.Accounting.Physical
+public import Definitions.Accounting.CostModel
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Game.Params
 
 /-!
 # Obligations B1 and B4, and PoUW's row, stated (trusted)
@@ -24,6 +25,8 @@ Stated in the actual-circuit model; none is proved here.
   `2^{res_out}` values, `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound
   misses when a send leaves, which signals by its tick.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

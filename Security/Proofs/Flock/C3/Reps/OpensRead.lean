@@ -1,6 +1,21 @@
-import Proofs.Flock.C3.Reps.StepsTie
-import Proofs.Flock.C3.Reps.Vals
-import Proofs.Flock.C3.Compose.LastRead
+module
+
+public import Proofs.Flock.C3.Reps.StepsTie
+public import Proofs.Flock.C3.Reps.Vals
+public import Proofs.Flock.C3.Compose.LastRead
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The reps' openings, read from the layers' read wires
@@ -20,6 +35,8 @@ and 1 the source's openings are the reps' (`repsOfVals`: the values' proof's row
   `opensReadAt_repsOfVals` at the tied source of `nm ∘ repsOfVals` for any `nm` keeping strata 0 and 1 (H's
   `normOs`), and `opensReadAt_src` at G's values.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

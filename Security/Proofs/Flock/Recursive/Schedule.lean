@@ -1,6 +1,10 @@
-import Proofs.Flock.Recursive.Defs
+module
+
+public import Proofs.Flock.Recursive.Defs
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.Refine.LiveSim
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Recursion: an inner protocol on a fixed schedule
@@ -8,16 +12,18 @@ import Proofs.Flock.Soundness.Refine.LiveSim
 `Inner` has `r` uniform rounds, each a message and then a live coin. A verifier written as a `Game`, whose shape may
 depend on the prover's messages (it may stop early, or let the prover choose which of two interleaved runs moves next),
 becomes an inner protocol once a fixed schedule says what each round carries: round `k < r` sends a list of messages,
-each of one of the types `T i`, and then draws a coin of type `CT k`; round `r` sends the last messages.
+each of one of the types `T i`, and then flips a coin of type `CT k`; round `r` sends the last messages.
 
 * `schedInner`: that protocol, with `r + 1` rounds. Each round's coin is the whole product `∀ k, CT k`, of which round
-  `k < r` reads coordinate `k` and round `r` reads none (a game that ends with a message, as C-Flock's table ends with
+  `k < r` reads coordinate `k` and round `r` reads none (a game that ends with a message, as Flock's table ends with
   the openings, needs a round after its last coin); the verifier plays the game with round `0`'s messages, round `0`'s
   coin, round `1`'s messages, and so on (`Game.PlaysT`), and accepts when the game ends in an accepted outcome. A round whose messages have the wrong types, or
-  too many, or whose coin's type is not the one the game draws there, makes the run fail.
+  too many, or whose coin's type is not the one the game samples there, makes the run fail.
 * `sched_sound`: the schedule's verifier is as sound as the game. Against every prover it accepts with probability at
-  most the game's `value`, the best any prover achieves when the game draws its own coins.
+  most the game's `value`, the best any prover achieves when the game flips its own coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

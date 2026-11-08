@@ -7,7 +7,7 @@
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
-#      controls, drawn the same way, and the Lean
+#      controls, sampled the same way, and the Lean
 #      verifier on all of them:
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
@@ -123,7 +123,7 @@ setup() {
 free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
 session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
-  local D=$1 O=$2 port pin srv rc try up= tu=   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
+  local D=$1 O=$2 port pin srv rc try up= tu=   # sampling all N instances (subset:N), as every soundness claim is about a sampled session
   pin=$(cat "$D/pin.txt")
   # a templated statement's unit rows, placed by flock-tmpl-unit (h1_lanes/job.sh), which serve and prove read
   [ -L "$D/unit.placed" ] || [ -e "$D/unit.placed" ] && tu="--tmpl-unit $D/unit.placed"
@@ -148,7 +148,7 @@ session() {   # session D O: one loopback --zk session with the proving build, t
   return $rc
 }
 
-controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier, drawn as session's are
+controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier, sampled as session's are
   local D=$1 O=$2 role=$3 c rc
   mkdir -p "$D/rec"
   for c in $CASES; do

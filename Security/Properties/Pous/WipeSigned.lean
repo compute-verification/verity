@@ -1,6 +1,9 @@
-import MemoryChallenger.WipeProtocol
-import Properties.Pous.MemoryChallenger
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import MemoryChallenger.WipeProtocol
+public import Properties.Pous.MemoryChallenger
+public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session
@@ -26,7 +29,7 @@ code and the game but the game's shape (C5, C6 and every tier declared), which t
 `streamed_wipe.Challenger`, as `wipe_party.serve` drives it (their module docstrings): it claims the session id and
 publishes the commitment (`__init__`); it reads its clock, streams the labels `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` of
 its key `K` (`fill`, or `fill_by` through the native streamer) and reads its clock again; once the fill has ended it
-draws its `k` reads and reveals them one at a time (`challenge`, reading its clock: the send time), each only after the
+samples its `k` reads and reveals them one at a time (`challenge`, reading its clock: the send time), each only after the
 previous one's answer arrived (`challenge` refuses while a batch is open); `receive(answer)` reads its clock (the receipt
 time), refuses an answer that is not one label long, and records batch `b` as `(b, b, 1, send, receipt, wrong,
 SHA-512(u64 index ‖ answer))`, `wrong` 1 when the answer is not the read's label; the first late batch ends the session
@@ -42,6 +45,8 @@ under a key, each signed once, and the key signs PoUS's sessions too: `wipe_part
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties
 
@@ -70,7 +75,7 @@ structure WipeObserved where
   answer : ByteArray
 
 /-- A wipe the challenger runs: the commitment it publishes when it opens the session, the labels' key `K`, the `k`
-reads it draws once the fill ends, its clock's readings as the fill starts and as it ends, what it observes of each read
+reads it samples once the fill ends, its clock's readings as the fill starts and as it ends, what it observes of each read
 it reveals, in order, and the egress it is given for the session, in bits. -/
 structure WipeRun where
   commitment : StreamedWipe.Commitment
@@ -293,7 +298,7 @@ def MEASURED_MAX_READ_NS : Int := 1399363
 /-- The egress the session was signed with, `UNCOUNTED`: 32767 MiB, where the count saturates. -/
 def MEASURED_EGRESS_BITS : Int := 274869518336
 
-/-- The digest the honest challenger records for read `i`, under the labels' key `K` and its draws `c`: that of the
+/-- The digest the honest challenger records for read `i`, under the labels' key `K` and its samples `c`: that of the
 read's index and the answer it received, the read's label (`wipeBatchDigest (c i) (wipeLabel K (c i))`). -/
 def measuredDigest (K : ByteArray) (c : Nat → Nat) (i : Nat) : ByteArray := wipeBatchDigest (c i) (wipeLabel K (c i))
 

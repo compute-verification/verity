@@ -1,16 +1,19 @@
-import Properties.Pouw.Period
-import Proofs.Accounting.ComposePeriod
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Properties.Pouw.Period
+public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # Proofs: a period's work over the windows PoUW's deployed check accepts (`Properties.Pouw.Period`)
 
-`CheckedWorkPeriod` and `CheckedCreditPeriod` are `CircuitWorkPeriod` and `CircuitCreditPeriod` at the period's proofs
+`CheckedWorkPeriod` and `CheckedCreditPeriod` are `CircuitWorkMonitoringPeriod` and `CircuitCreditPeriod` at the period's proofs
 with the check's verdict (`checkedRun`). There a window is credited exactly when it and every earlier window are
-accepted (`credited_iff`, at `K_d > 0`: the check's verdict is every drawn tile's), so the run's accepted prefix and its
-live words are the check's (`prefixLen_eq`, `creditedLive_eq`). `JointSound` holds at `δ_ks`: an unsound drawn tile of
-an accepted window is a unit the check publishes as drawn (`DrawIsCoin`) whose opening fails its relation, which
+accepted (`credited_iff`, at `K_d > 0`: the check's verdict is every sampled tile's), so the run's accepted prefix and its
+live words are the check's (`prefixLen_eq`, `creditedLive_eq`). `JointSound` holds at `δ_ks`: an unsound sampled tile of
+an accepted window is a unit the check publishes as sampled (`DrawIsCoin`) whose opening fails its relation, which
 `ServiceSound` bounds (`jointSound_checked`). `Pins` is the hypothesis itself, and `RegisteredBeforeDraw`, protocol
 structure, is not read.
 
@@ -19,9 +22,11 @@ structure, is not read.
 statement pinning the flat tile (`pins_h1`).
 
 Its premises are met: `Proofs.Pouw.Period.Accept` evaluates the deployed `PouwCheck.protocol.check` to an accept at
-the H1 loop's parameters for every ascending draw of 24 of 144 units (`check_h1`), and `Proofs.Pouw.Period.Honest`
+the H1 loop's parameters for every ascending sample of 24 of 144 units (`check_h1`), and `Proofs.Pouw.Period.Honest`
 builds a period of those windows, the salt each window's live coin, that meets every premise (`h1_meets`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs
 
@@ -61,8 +66,8 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
   unfold creditedLive checkedLive
   exact Finset.sum_congr rfl fun w _ => if_congr (credited_iff hK hKd p ws opened rel right x w) rfl rfl
 
-/-- **Joint soundness at the check's run from the service's**: in each window, an accepted window with a drawn tile
-whose opening fails its relation is one the check accepts with a published unit (`DrawIsCoin`: the drawn tile's unit is
+/-- **Joint soundness at the check's run from the service's**: in each window, an accepted window with a sampled tile
+whose opening fails its relation is one the check accepts with a published unit (`DrawIsCoin`: the sampled tile's unit is
 among `Public.drawn`) whose opening fails its relation, which `ServiceSound` bounds at `δ_ks`. -/
 theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {Kd Np n : ℕ}
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
@@ -76,12 +81,12 @@ theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Dec
   obtain ⟨pub, prof, hc⟩ := hacc
   exact ⟨pub, prof, hc, drawOf hK (coinAt x w).2 i, ((hD x w pub prof hc).2.2 _).2 ⟨i, rfl⟩, hrel⟩
 
-/-- **`CheckedWorkPeriod`**: `CircuitWorkPeriod` at `checkedRun`, its accepted prefix and live words the check's. -/
+/-- **`CheckedWorkPeriod`**: `CircuitWorkMonitoringPeriod` at `checkedRun`, its accepted prefix and live words the check's. -/
 theorem checkedWorkPeriod : CheckedWorkPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK hKd prm ws opened rel right Wp Pl folded
     ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved _hReg hDraw hServ hPins
     hMu hRB hGs hUF
-  have h := Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod Sc Cd hn hN hr hK Wp Pl
+  have h := Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
     (checkedRun hK prm ws opened rel right) folded ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG
     hDD hPre hMoved (jointSound_checked Cd hr hK prm ws opened rel right hDraw hServ) hPins hMu hRB hGs hUF
   simp only [prefixLen_eq hK hKd prm ws opened rel right,

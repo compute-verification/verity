@@ -1,26 +1,51 @@
-import Proofs.Flock.C3.PubRows.Prefix
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.VBridge.Family.Pub
-import Proofs.Flock.C3.Compose.RowsReg
+module
+
+public import Proofs.Flock.C3.Compose.Family
+public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.VBridge.Family.Pub
+import all Init.Data.Array.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # n1: what the verifier's check of the public rows gives
 
 `RecVStar.checkPubRows` compares each table row of each registered port whose value `fixedRow` knows with
-`fixedRow`'s row at the position the port's entry gives it (`checkPubRows_rows`). At an accepted session, a drawn unit
-that the drawn statement labels itself reads its row of the port at one of those positions (`Registered.check`'s
+`fixedRow`'s row at the position the port's entry gives it (`checkPubRows_rows`). At an accepted session, a sampled proof block
+that the sampled statement labels itself reads its row of the port at one of those positions (`Registered.check`'s
 `checkPort`, whose positions are one per table row: `checkPort_size`), so the public file's row there is the row
 `fixedRow` holds (`pubRow_of_checked`, the end of `opens_of_acceptsZKR` at the check rather than at the root).
 
-`HPubRows` reads every unit and every port of a name, at the verifier's own RecSparse shape; the check reads the drawn
-units, the first port of a name, and a rec-sparse unit's own shape. What closes the gap is the family's:
+`HPubRows` reads every unit and every port of a name, at the verifier's own RecSparse shape; the check reads the sampled
+proof blocks, the first port of a name, and a rec-sparse unit's own shape. What closes the gap is the family's:
 
-* `RowsHeld`: a session accepting a transcript it writes draws every unit that reads a value `fixedRow` knows (G's
+* `RowsHeld`: a session accepting a transcript it writes samples every unit that reads a value `fixedRow` knows (G's
   `RowsDrawn` at every such value, not only `rec-c<k>`), whose label is the unit by the verifier's label check
-  (`label_of_checked`); every family holds it (`rowsHeld`: the record's custody and the full draw);
+  (`label_of_checked`); every family holds it (`rowsHeld`: the record's custody and the full sample);
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 
@@ -208,7 +233,7 @@ theorem port_find_of_unique {c : Flock.Circuit}
 /-! ## At an accepted session -/
 
 /-- **An accepted session's checked public row**: where the session accepts at `tr` and the verifier's check of its
-public rows passes at `tr`'s setup, a drawn unit `u` that its table's drawn statement labels `idx` reads row `x` of a
+public rows passes at `tr`'s setup, a sampled proof block `u` that its table's sampled statement labels `idx` reads row `x` of a
 port `reg` of `own` whose value `fixedRow` knows (the circuit's port `q`), and the public file's `b ‖ c` of `u`'s row
 `q` is `fixedRow`'s row `x` of the value, at the unit's RecSparse shape or else `sparse`. -/
 theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
@@ -313,13 +338,13 @@ theorem checkLabels_at {d : Lean.Json} {count : ℕ} {sts : Array Stmt}
     (fun j => RecVStar.checkLabel (RecVStar.tableDraw d count j) sts[j]!.pub j) = .ok () from h) j (by simpa using hj)
   simpa [Array.getElem_range, getElem!_pos sts j hj] using this
 
-/-- The verifier's table draw is the one the model's tables are set up from. -/
+/-- The verifier's table sample is the one the model's tables are set up from. -/
 theorem drawJ_tableDraw (I : Inputs) (d : Lean.Json) (j : ℕ) : drawJ I d j = RecVStar.tableDraw d I.count j := by
   unfold drawJ RecVStar.tableDraw DecodeZLJ.partJson Tables.partDraw
   rfl
 
 /-- **The label conjunct, from the verifier's label check** (`RecVStar.checkLabels`): at an accepted transcript whose
-tables label their instances with the units their draws prove, the drawn statement's label of a drawn unit is the
+tables label their instances with the units their samples prove, the sampled statement's label of a sampled proof block is the
 unit. -/
 theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
@@ -359,10 +384,10 @@ theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n1) A session accepting a transcript it writes draws the units that read a value `fixedRow` knows**: G's
+/-- **(n1) A session accepting a transcript it writes samples the units that read a value `fixedRow` knows**: G's
 `RowsDrawn` at every such value, at the outcomes the session's game reaches (`ZkOuter.Writes`). `AcceptsZKR` checks the
-drawn units only (U4, `checkFull`, is not among its checks), so a unit it does not draw has a public row no check reads;
-a transcript it writes draws every unit (`rowsHeld`). The drawn statement's label of the unit
+sampled proof blocks only (U4, `checkFull`, is not among its checks), so a unit it does not sample has a public row no check reads;
+a transcript it writes samples every unit (`rowsHeld`). The sampled statement's label of the unit
 (`Registered.unitIndices`) is the unit by the verifier's label check (`label_of_checked`), not by this. -/
 def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ R ω t R₂ j R' tr, (F.zs R ω t R₂ j).Writes R' tr → AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr →
@@ -375,9 +400,9 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
           (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok dp ∧
         Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved
 
-/-- **(n1) Every family holds its rows**: a transcript a session writes and accepts records the law's draw file (the
-record's custody, `hRec`), the table each unit is drawn into has a drawn statement (`drawn_of_acceptsZKR`), and that
-table's draw proves the unit (the coin server's draw, `hDraw`), since V*'s law, the full draw, draws every unit
+/-- **(n1) Every family holds its rows**: a transcript a session writes and accepts records the sampling design's sample file (the
+record's custody, `hRec`), the table each unit is sampled into has a sampled statement (`drawn_of_acceptsZKR`), and that
+table's sample proves the unit (the challenger's live-coin part's sample, `hDraw`), since V*'s law, the full sample, samples every unit
 (`execOS_subset_full_mem`). -/
 theorem rowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : RowsHeld F := by
   rintro R ω t R₂ j R' tr ⟨ω', o, rfl⟩ hacc _ _ _ u _ _

@@ -3,18 +3,20 @@ allows, where ci.toml's `[[plan]]`s are written by hand (they stay, as fallbacks
 
 Its tasks are the check's parts with the test steps split by suite: each suite of pytest and of lean-suites (`pytest:SUITE`,
 `lean-suites:SUITE`), each Lake package's audit (`lean-audit:PKG`), circuit-check's `circuit-check:K/M` (its ci.toml
-`shards`), and every other job whole (the builds, lean-changed, ratchet-gate).  A suite measured past `SPLIT_S` is split by test
+`shards`), and every other job whole (the builds, lean-changed, ratchet-gate).  A suite that declares `[tool.verity.tests]
+parts = P` is its P parts by test id, `JOB:SUITE:K/P`, each at 1/P of its seconds; another measured past `SPLIT_S` is split by test
 file into M = ceil(seconds / `SPLIT_S`) parts (`split_m`, at most one per file), `pytest:SUITE:K/M`, each `suites.py SUITE:K/M`
 (`suites.partition`: its files packed longest first by their recorded seconds) and priced at its share of the suite's seconds.
 Each costs its measured seconds (`priced`, from recorded verdicts and runs); one with none costs the median of its kind's
 measured tasks, else of every measured task, else `DEFAULT_S`.
 
 A part whose job `needs` or runs `after` another (lean-unit-cut, lean-agreement and lean-suites read lean-build's binaries,
-flock-rust-tests flock-circuit-build's crates) runs on a shard that runs that build, and so does a spec package's audit, which
-audits the packages its `proved_in` names beside it (`lean-audit:Security` and `lean-audit:Security/Properties` audit
-`Security/Proofs`).  A cheap build (at most `CHEAP_S`) may run again, beside its parts, on each shard that holds a part reading
-it and not the build's own part (`builds`), until a shared artifact cache exists; the plan says so and charges it.  A costlier
-one holds its readers on its own shard (`units`).  The build's part is in exactly one shard, so a combine takes each part once.
+flock-rust-tests flock-circuit-build's crates) runs on a shard that runs that build.  A cheap build (at most `CHEAP_S`) may run
+again, beside its parts, on each shard that holds a part reading it and not the build's own part (`builds`), until a shared
+artifact cache exists; the plan says so and charges it.  A costlier one holds its readers on its own shard (`units`).  A spec
+package's audit, which audits the packages its `proved_in` names beside it from one build of theirs (`lean-audit:Security`
+and `lean-audit:Security/Properties` audit `Security/Proofs`), is held on their shard whatever they cost, so they build once
+a run.  The build's part is in exactly one shard, so a combine takes each part once.
 
 Units are packed longest first (own cost and builds) onto the shard where they end soonest, the builds a shard lacks counted
 (LPT); a shard's predicted time is the sum of its parts' and builds' costs (a shard runs its groups at once, so this is an upper
@@ -77,22 +79,24 @@ def kind(part: str) -> str:
 
 
 def parts(all_parts: list[str], suites: list[str], after_lean: list[str], lean: bool,
-          splits: dict[str, int] | None = None) -> list[str]:
+          splits: dict[str, int] | None = None, declared: dict[str, int] | None = None) -> list[str]:
     """The auto plan's parts from a check's (`declaration.all_parts`): `pytest` as `pytest:SUITE` for each suite (but those of
-    ``after_lean`` when the tree has the Lean verifier, ``lean``), `lean-suites` as `lean-suites:SUITE` for those; a suite
-    ``splits`` puts in M > 1 parts as `JOB:SUITE:K/M`, K = 1..M."""
-    splits = splits or {}
+    ``after_lean`` when the tree has the Lean verifier, ``lean``), lean-suites' parts (`lean-suites:SUITE`, those) as they are,
+    or none without it; a suite ``splits`` puts in M > 1 parts by test file as `JOB:SUITE:K/M`, K = 1..M, and pytest's suite that
+    declares P parts by test id (``declared``) as `pytest:SUITE:K/P`, as lean-suites' already are."""
+    splits, declared = splits or {}, declared or {}
 
     def each(job: str, s: str) -> list[str]:
-        m = splits.get(s, 1)
+        m = declared.get(s) or splits.get(s, 1)
         return [f"{job}:{s}:{k}/{m}" for k in range(1, m + 1)] if m > 1 else [f"{job}:{s}"]
 
     out = []
     for p in all_parts:
+        job, name, spec = suite_part(p)
         if p == "pytest":
             out += [x for s in suites if not (lean and s in after_lean) for x in each("pytest", s)]
-        elif p == "lean-suites":
-            out += [x for s in suites if lean and s in after_lean for x in each("lean-suites", s)]
+        elif job == "lean-suites":
+            out += [] if not lean else [p] if spec else each(job, name)
         else:
             out.append(p)
     return out
@@ -101,8 +105,9 @@ def parts(all_parts: list[str], suites: list[str], after_lean: list[str], lean: 
 def priced(names: list[str], suites: dict[str, float], audits: dict[str, float], steps: dict[str, float],
            shares: dict[str, float] | None = None) -> dict[str, float]:
     """The measured seconds of each part of ``names`` that has some: a suite's (``suites``, by name), a suite part's its share of
-    them (``shares``, by part, `suites.Part.share`), a package's audit (``audits``), a part a recorded step ran alone (``steps``,
-    by part), else its whole step's (``steps``, by job), spread evenly over a split job's parts (circuit-check's shards)."""
+    them (``shares``, by part, `suites.Part.share`; none given, 1/M, a part by test id's), a package's audit (``audits``), a part
+    a recorded step ran alone (``steps``, by part), else its whole step's (``steps``, by job), spread evenly over a split job's
+    parts (circuit-check's shards)."""
     split: dict[str, int] = {}
     for p in names:
         if ":" in p:
@@ -111,7 +116,8 @@ def priced(names: list[str], suites: dict[str, float], audits: dict[str, float],
     for p in names:
         job, _, x = p.partition(":")
         if job in SUITE_JOBS and (spec := suite_part(p))[2]:
-            got = steps.get(p, suites[spec[1]] * shares[p] if spec[1] in suites and p in (shares or {}) else None)
+            share = (shares or {}).get(p, 1 / int(spec[2].partition("/")[2]))
+            got = steps.get(p, suites[spec[1]] * share if spec[1] in suites else None)
         elif job in SUITE_JOBS and x:
             got = suites.get(x)
         elif job == "lean-audit" and x:
@@ -159,8 +165,9 @@ def builds(names: list[str], needs: dict[str, list[str]]) -> dict[str, list[str]
 
 
 def units(ts: list[Task], needs: dict[str, list[str]]) -> list[tuple[list[str], list[str]]]:
-    """The tasks as the units LPT places: each part with the builds it needs that cost more than `CHEAP_S`, and their readers,
-    held on one shard (in ``ts``'s order); beside each unit, the cheap builds its parts need from outside it."""
+    """The tasks as the units LPT places: each part with the builds it needs that cost more than `CHEAP_S` and those its own
+    ``needs`` name (by part, not by job: a spec's audit's provers), and their readers, held on one shard (in ``ts``'s order);
+    beside each unit, the cheap builds its parts need from outside it."""
     cost = {t.part: t.seconds for t in ts}
     need = builds(list(cost), needs)
     root = {p: p for p in cost}
@@ -171,8 +178,9 @@ def units(ts: list[Task], needs: dict[str, list[str]]) -> list[tuple[list[str], 
         return p
 
     for p, bs in need.items():
+        own = needs.get(p, []) if ":" in p else []
         for b in bs:
-            if cost[b] > CHEAP_S:
+            if cost[b] > CHEAP_S or b in own:
                 root[find(p)] = find(b)
     held: dict[str, list[str]] = {}
     for p in cost:

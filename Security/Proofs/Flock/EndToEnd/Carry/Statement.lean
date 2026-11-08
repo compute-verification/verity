@@ -1,5 +1,19 @@
-import Proofs.Flock.EndToEnd.Blocks.Statement
-import Proofs.Flock.Soundness.LinkCarry
+module
+
+public import Proofs.Flock.EndToEnd.Blocks.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The integrity audit over a monitoring period of blocks, with carried state (trusted)
@@ -8,15 +22,15 @@ A block's carried state (the KV cache) crosses a wipe as committed values: each 
 the public file of every session that reads it, on both sides of every wipe it crosses (`CarriedLeaf`). `ServerBlocks`'
 statements read each session's values at its own plurality, so they say nothing of whether a session after a wipe reads
 the value the block before committed. Here a carried leaf's value is one value read in every session that shares the
-leaf: the plurality of its finder over all of them (`CarriedBlocks.Xm`), each session's wrong units counted at that value
+leaf: the plurality of its finder over all of them (`CarriedBlocks.Xm`), each session's incorrect proof blocks counted at that value
 there (`CarriedBlocks.wrongSet`).
 
 * `IntegrityHorizonCarried`: `IntegrityHorizonBlocks` with carried leaves. The probability that every session is
-  accepted and the wrong units over the monitoring period, each carried leaf read at its one value, total at least `ln(1/δ)/q` is
+  accepted and the incorrect proof blocks over the monitoring period, each carried leaf read at its one value, total at least `ln(1/δ)/q` is
   at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ`, with each carried leaf's term
   $$\delta_{carry,\ell} = \Big(\sum_{t \in \ell} \frac{\pi_{\ell,t}}{1 - \rho_t}\Big)
     \Big(\frac{2 \sum_{t \in \ell} (\sum_{j < t} t'_j + t'_t (1 + k_t))}{2^{256}} + \frac{m_\ell}{e M_\ell}\Big),$$
-  `π_{ℓ,t}` the probability that session `t`'s draw reads the leaf and `m_ℓ` the number of sessions that share it: `m_ℓ`
+  `π_{ℓ,t}` the probability that session `t`'s sample reads the leaf and `m_ℓ` the number of sessions that share it: `m_ℓ`
   times the binding error of the leaf's finder (`LinkCarry`).
 * `IntegrityBlockCarried`: `IntegrityBlock` with carried leaves, at `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`,
   each leaf's term with only its sessions in block `b` weighed (`CarriedLeaf.carryOn`), so the blocks' terms sum to at
@@ -30,6 +44,8 @@ one it picked, and that session's trial's (`CarriedLeaf.costMix`). The named ass
 and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried leaf's finder, with that cost. The proofs are
 `Flock.SecurityProofs.IntegrityHorizonCarried` and `IntegrityBlockCarried`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
@@ -70,7 +86,7 @@ noncomputable abbrev rs :=
 def salt (o : w.vb.Opening) : List UInt8 := (o : w.lay.Pos × w.lay.Val × List UInt8).2.2
 
 open Classical in
-/-- The probability that the session's draw reads commit string `c`. -/
+/-- The probability that the session's sample reads commit string `c`. -/
 noncomputable def readP (c : w.vb.Pos) : ℝ :=
   (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L c) : ℝ) / Fintype.card w.L.Ω
 
@@ -122,7 +138,7 @@ abbrev V : Type := Option {l // l ∈ x.encs}
 noncomputable def e (t : ℕ) (v : (W t).vb.Val) : x.V :=
   if h : (W t).rs.enc (x.pos t) v ∈ x.encs then some ⟨_, h⟩ else none
 
-/-- A draw of session `t` reads the leaf. -/
+/-- A sample of session `t` reads the leaf. -/
 abbrev Read (t : ℕ) : Prop :=
   Nonempty (ΩcZ execArith (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb (W t).L (x.pos t))
 
@@ -132,7 +148,7 @@ noncomputable def trialG (t : ℕ) (τ : Strategy (W t).game) (h : x.Read t) : G
   (trialGZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
     (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw).map fun o => (some ⟨t, τ, o⟩ : TrialAt W)
 
-/-- **The leaf's trial in session `t`**, at the strategy `τ` that plays it: `trialGZC` at the leaf, when a draw reads
+/-- **The leaf's trial in session `t`**, at the strategy `τ` that plays it: `trialGZC` at the leaf, when a sample reads
 it. -/
 noncomputable def trial (t : ℕ) (τ : Strategy (W t).game) : Game (TrialAt W) :=
   optG (x.Read t) (x.trialG t τ) none (Classical.dec _)
@@ -168,7 +184,7 @@ noncomputable def col : OpenAt W → OpenAt W → List UInt8 × List UInt8
       ((W t').rs.enc (x.pos t') ((W t').vb.val o')) ((W t').salt o')
   | _, _ => ([], [])
 
-/-- **The carried leaf's term `δ_carry`**: the probability that a session's draw reads the leaf over `1 − ρ`, summed
+/-- **The carried leaf's term `δ_carry`**: the probability that a session's sample reads the leaf over `1 − ρ`, summed
 over its sessions, times its finder's bound: `2·Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/2^256 + m/(eM)`. -/
 noncomputable def carry : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ t ∈ x.sessions, (W t).readP (x.pos t) / (1 - (W t).ρ)) *
@@ -225,14 +241,14 @@ noncomputable def Xcar (t : ℕ) (R : (S.W t).Reg)
   else XvalZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb R τ
     (S.W t).k (S.W t).Rw c
 
-/-- **Session `t`'s wrong units, each carried leaf read at its value**: `wrongRegZ` at the value layer of `Xcar`. -/
+/-- **Session `t`'s incorrect proof blocks, each carried leaf read at its value**: `wrongRegZ` at the value layer of `Xcar`. -/
 noncomputable def wrongSet (t : ℕ) (τ : Strategy (S.W t).game) : Finset (Fin (S.W t).n) :=
   wrongRegZ execArith (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
     (reg ((S.W t).sim τ))
     (XlayerZC execArith (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
       (S.Xcar s t (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ))))
 
-/-- Session `t`'s record, its wrong units those of `wrongSet`. -/
+/-- Session `t`'s record, its incorrect proof blocks those of `wrongSet`. -/
 noncomputable def record (t : ℕ) (τ : Strategy (S.W t).game) (o : (S.W t).Reg × Finset (Fin (S.W t).n) × Discharge.Exec.Transcript) :
     WindowRec :=
   ⟨t, LiveAcceptsZK (S.W t).I o, (S.wrongSet s t τ).card, ∃ u ∈ o.2.1, u ∈ S.wrongSet s t τ⟩
@@ -246,9 +262,9 @@ noncomputable def carry (b : ℕ) : ℝ≥0∞ := ∑ x, (S.leaf x).carryOn (S.s
 end CarriedBlocks
 
 /-- **The integrity audit of one server-time block, with carried state.** In a monitoring period of server-time blocks
-with carried leaves (`CarriedBlocks`), played by one adaptive prover `s`, if each of block `b`'s draws covers at least a
-fraction `q > 0` of its session's units, the probability that every session of block `b` is accepted and its wrong
-units, each carried leaf read at its one value in every session that shares it, total at least `ln(1/δ)/q` is at most
+with carried leaves (`CarriedBlocks`), played by one adaptive prover `s`, if each of block `b`'s samples covers at least a
+fraction `q > 0` of its session's units, the probability that every session of block `b` is accepted and its incorrect
+proof blocks, each carried leaf read at its one value in every session that shares it, total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,b},$$
 `δ_carry,ℓ,b` the carried leaf's term with only its sessions in block `b` weighed (`CarriedLeaf.carryOn`). Its named
 assumptions are `IntegrityBlock`'s, and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried leaf's finder,
@@ -270,8 +286,8 @@ def IntegrityBlockCarried : Prop :=
     value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b + S.carry b
 
 /-- **The integrity audit over a monitoring period of server-time blocks, with carried state.** In a monitoring period as in
-`IntegrityHorizonBlocks` with carried leaves (`CarriedBlocks`), whose draws each cover at least a fraction `q > 0` of
-their session's units, the probability that every session is accepted and the wrong units over the monitoring period, each
+`IntegrityHorizonBlocks` with carried leaves (`CarriedBlocks`), whose samples each cover at least a fraction `q > 0` of
+their session's units, the probability that every session is accepted and the incorrect proof blocks over the monitoring period, each
 carried leaf read at its one value in every session that shares it, total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell}.$$
 Its named assumptions are `IntegrityHorizonBlocks`', and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried

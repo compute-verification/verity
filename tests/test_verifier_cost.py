@@ -1,6 +1,6 @@
-"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
+"""A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
+A scan over the Lean under `verity/core/` (the verifiers and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
 range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
 array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
@@ -71,6 +71,9 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
+    "verity/core/service/flock/Flock/Gate.lean":
+        "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
+        "layout.Gate to it; no verifier calls it",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
@@ -148,7 +151,7 @@ def test_the_scan_sees_each_form():
     def k (node : Node) := for m in [0:node.members] do pure ()
     def l (body : Body) := (List.range (body.nodes[k]!).members).map id ++ List.range node.membersOf
     def n (f : Files) := do
-      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub Coins.os 1
+      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub RecVStar.innerTree 1
       (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr

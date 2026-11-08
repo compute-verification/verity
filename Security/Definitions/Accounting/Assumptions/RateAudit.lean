@@ -1,4 +1,7 @@
-import Definitions.Accounting.RateAuditPartial
+module
+
+public import Definitions.Accounting.RateAuditPartial
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit's named assumptions (trusted)
@@ -14,6 +17,8 @@ What the rate audit with partial completion (`Definitions/Accounting/RateAuditPa
   model's compute additivity, W), the remote audit's `Accounting.Remote.Assumptions.ComputeAdditive` for the device
   model's joint run.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

@@ -187,9 +187,17 @@ pub fn lean_frame_exe() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/flock/.lake/build/bin/flock-firewall"))
 }
 
+/// The `core-firewall` the ZK server keeps its record with (its release side and its value service): `FC_CORE_FIREWALL`,
+/// else the build in this checkout's verity/core/service/firewall.
+#[cfg(feature = "sha512")]
+pub fn core_firewall_exe() -> std::path::PathBuf {
+    std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/firewall/.lake/build/bin/core-firewall"))
+}
+
 /// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every sample of this process
 /// that is not a rep's own (`zk_hooks::set_os_source`): level 0's hiding, every tree's salts but the pads'. The mask slot's
-/// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first draw. A tap that fails later panics, as an OS
+/// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first sample. A tap that fails later panics, as an OS
 /// generator that fails does.
 #[cfg(feature = "sha512")]
 pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
@@ -325,7 +333,7 @@ pub fn rep_body(vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Ve
     b
 }
 
-/// The ZK server's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
+/// The ZK server's proof files of record on a ZK server session: the Lean session loop's finish (`Flock.Firewall.Finish`
 /// in the Lean verifier) on the session's statement, which reads each table's level 0 from the loop's own
 /// ([`LeanFinish::level0`]), then per rep, once its algebraic phase ended, is asked for its salts for levels ≥ 1, which it
 /// samples itself, and at its end given its request, which it proves with the pads the rep's Lean frame drew. It ends at
@@ -385,9 +393,9 @@ impl LeanFinish {
         self.ask(&format!("level0 {i}"), root)
     }
 
-    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish draws from the OS once, for the rep's proof
+    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish samples from the OS once, for the rep's proof
     /// file: one byte string a level, levels `1` to `R` in order, each 192 bytes a leaf (`Finish.saltsBytes`). The loop's
-    /// finish draws them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
+    /// finish samples them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
     pub fn salts(&mut self, i: usize, r: usize) -> Result<Vec<Vec<u8>>, String> {
         let b = self.ask(&format!("salts {i} {r}"), &[])?;
         let bad = || refused(format!("the Lean finish's salts of table {i} rep {r}: {} bytes that do not parse", b.len()));
@@ -550,53 +558,76 @@ pub struct LeanLevel0 {
     pub root: Vec<u8>,
 }
 
-/// The level-0 hiding of record on a firewalled table under the Lean session loop: the loop, on its frames port `addr`, draws
-/// the mask slot's words, level 0's hiding and salts from the OS for the host's packed witness `z` of the session's table
-/// `table` at `m`, writes the words into `z`'s mask slot, commits level 0 on them and keeps it for that table of the session
-/// `session` names ([`level0_session`]) until that session ends (`level0 SESSION TABLE M LEN` followed by `z`, answered
-/// `ok N R` and the samples then the root, its last `R` bytes). The loop samples a table's level 0 once a session and refuses
-/// a second request for it. `mask_words`, `extra_words`, `lanes` (the extra ones included), `t_pad` and `leaves` are the
-/// statement's sizes, which the answer must have.
+/// One table's part of a level-0 request to the Lean session loop ([`lean_level0`]): its statement's `m`, the host's packed
+/// witness `z`, and the statement's sizes the answer must have: `mask_words`, `extra_words`, `lanes` (the extra ones
+/// included), `t_pad` and `leaves`.
 #[cfg(feature = "sha512")]
-#[allow(clippy::too_many_arguments)]
-pub fn lean_level0(addr: &str, session: &str, table: usize, m: usize, z: &[F128], mask_words: usize, extra_words: usize, lanes: usize,
-                   t_pad: usize, leaves: usize) -> Result<LeanLevel0, String> {
+#[derive(Clone, Copy)]
+pub struct Level0Ask<'a> {
+    pub m: usize,
+    pub z: &'a [F128],
+    pub mask_words: usize,
+    pub extra_words: usize,
+    pub lanes: usize,
+    pub t_pad: usize,
+    pub leaves: usize,
+}
+
+/// The level-0 hiding of record on a session's firewalled tables under the Lean session loop: the loop, on its frames port
+/// `addr`, takes every table's packed witness in one request (`level0 SESSION M LEN …`, a pair a table in table order,
+/// followed by the witnesses), and only then samples each table's mask slot's words, level 0's hiding and salts from the OS,
+/// writes the words into the witness's mask slot, commits level 0 on them and keeps them for the session `session` names
+/// ([`level0_session`]) until that session ends. It answers each table in order, `ok N R` and the samples then the root, its
+/// last `R` bytes, or the request `err WHY`, nothing sampled. So no table's witness can depend on another table's samples. The
+/// loop takes one request a session, with every table's witness, and refuses any other.
+#[cfg(feature = "sha512")]
+pub fn lean_level0(addr: &str, session: &str, asks: &[Level0Ask]) -> Result<Vec<LeanLevel0>, String> {
     use std::io::{BufRead, Read, Write};
     let fail = |e: String| refused(format!("the Lean loop's level 0 at {addr}: {e}"));
     let tcp = std::net::TcpStream::connect(addr).map_err(|e| fail(e.to_string()))?;
     let _ = tcp.set_nodelay(true);
     let mut out = std::io::BufReader::new(tcp.try_clone().map_err(|e| fail(e.to_string()))?);
-    let body = f128_wire(z);
+    let bodies: Vec<Vec<u8>> = asks.iter().map(|a| f128_wire(a.z)).collect();
+    let sizes: String = asks.iter().zip(&bodies).map(|(a, b)| format!(" {} {}", a.m, b.len())).collect();
     let mut w = &tcp;
-    write!(w, "level0 {session} {table} {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
-    let mut line = String::new();
-    out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
-    let l = line.trim_end();
-    let (n, r) = match (l.strip_prefix("ok ").and_then(|v| v.split_once(' ')), l.strip_prefix("err ")) {
-        (Some((n, r)), _) => match (n.parse::<usize>(), r.parse::<usize>()) {
-            (Ok(n), Ok(r)) => (n, r),
-            _ => return Err(fail(format!("the answer {l:?}"))),
-        },
-        (_, Some(why)) => return Err(fail(why.to_string())),
-        _ => return Err(fail(format!("the answer {l:?}"))),
-    };
-    use flock_core::pcs::ligerito::zk::EXTRA_LANES;
-    let o_extra = 16 * mask_words;
-    let o_pads = o_extra + 16 * EXTRA_LANES * extra_words;
-    let o_salts = o_pads + 16 * lanes * t_pad;
-    let o_root = o_salts + crate::zk_hooks::SALT_BYTES * leaves;
-    if n != o_root + r || r == 0 {
-        return Err(fail(format!("{n} bytes with a {r}-byte root where the draws take {o_root}")));
+    write!(w, "level0 {session}{sizes}\n").map_err(|e| fail(e.to_string()))?;
+    for b in &bodies {
+        w.write_all(b).map_err(|e| fail(e.to_string()))?;
     }
-    let mut b = vec![0u8; n];
-    out.read_exact(&mut b).map_err(|e| fail(e.to_string()))?;
-    let words = |o: usize, k: usize| -> Vec<F128> {
-        (0..k).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
-                                 u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
-    };
-    Ok(LeanLevel0 { mask: words(0, mask_words), extra: (0..EXTRA_LANES).map(|e| words(o_extra + 16 * extra_words * e, extra_words)).collect(),
-                    pads: (0..lanes).map(|l| words(o_pads + 16 * t_pad * l, t_pad)).collect(),
-                    salts: b[o_salts..o_root].to_vec(), root: b[o_root..].to_vec() })
+    w.flush().map_err(|e| fail(e.to_string()))?;
+    use flock_core::pcs::ligerito::zk::EXTRA_LANES;
+    let mut got = Vec::with_capacity(asks.len());
+    for (j, a) in asks.iter().enumerate() {
+        let mut line = String::new();
+        out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
+        let l = line.trim_end();
+        let (n, r) = match (l.strip_prefix("ok ").and_then(|v| v.split_once(' ')), l.strip_prefix("err ")) {
+            (Some((n, r)), _) => match (n.parse::<usize>(), r.parse::<usize>()) {
+                (Ok(n), Ok(r)) => (n, r),
+                _ => return Err(fail(format!("table {j}'s answer {l:?}"))),
+            },
+            (_, Some(why)) => return Err(fail(why.to_string())),
+            _ => return Err(fail(format!("table {j}'s answer {l:?}"))),
+        };
+        let o_extra = 16 * a.mask_words;
+        let o_pads = o_extra + 16 * EXTRA_LANES * a.extra_words;
+        let o_salts = o_pads + 16 * a.lanes * a.t_pad;
+        let o_root = o_salts + crate::zk_hooks::SALT_BYTES * a.leaves;
+        if n != o_root + r || r == 0 {
+            return Err(fail(format!("table {j}: {n} bytes with a {r}-byte root where the draws take {o_root}")));
+        }
+        let mut b = vec![0u8; n];
+        out.read_exact(&mut b).map_err(|e| fail(e.to_string()))?;
+        let words = |o: usize, k: usize| -> Vec<F128> {
+            (0..k).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
+                                     u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
+        };
+        got.push(LeanLevel0 { mask: words(0, a.mask_words),
+                              extra: (0..EXTRA_LANES).map(|e| words(o_extra + 16 * a.extra_words * e, a.extra_words)).collect(),
+                              pads: (0..a.lanes).map(|l| words(o_pads + 16 * a.t_pad * l, a.t_pad)).collect(),
+                              salts: b[o_salts..o_root].to_vec(), root: b[o_root..].to_vec() });
+    }
+    Ok(got)
 }
 
 /// The ZK server's session loop of record: `flock-firewall session` (`Flock.Firewall.Session` in the Lean verifier) owns the
@@ -656,11 +687,216 @@ impl Drop for LeanSession {
     }
 }
 
+/// The ZK server's value service of record: `core-firewall values --state DIR --salt-key FILE` (`Flock.Firewall.Values`
+/// in the Lean verifier, on the ZK server's record in `DIR`), which holds the server's salt key and derives every value
+/// commitment's salt from it (live PROTOCOL.md §10.2). The serving stack commits through it ([`lean_commit`]) and
+/// registers one session of each epoch ([`lean_register`]), each registration numbered on the record, and the prover takes
+/// its witness's salts from it ([`lean_salts`]). It runs until this handle drops.
+#[cfg(feature = "sha512")]
+pub struct LeanValues {
+    child: std::process::Child,
+    _stdin: std::process::ChildStdin,
+    addr: String,
+}
+
+#[cfg(feature = "sha512")]
+impl LeanValues {
+    /// The service `exe` (`core-firewall`) on the ZK server's state directory `state` and the key file `key`.
+    pub fn start(exe: &std::path::Path, state: &std::path::Path, key: &std::path::Path) -> Result<Self, String> {
+        use std::io::BufRead;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("values").arg("--state").arg(state).arg("--salt-key").arg(key)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean value service {} does not start ({e}): `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL", exe.display())))?;
+        let stdin = child.stdin.take().expect("piped stdin");
+        let mut line = String::new();
+        let _ = std::io::BufReader::new(child.stdout.take().expect("piped stdout")).read_line(&mut line);
+        let Some(addr) = line.trim_end().strip_prefix("VALUES ").map(str::to_string) else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(refused(format!("the Lean value service did not start: {:?}", line.trim_end())));
+        };
+        Ok(LeanValues { child, _stdin: stdin, addr })
+    }
+
+    /// Where a commit or a salts request connects.
+    pub fn addr(&self) -> &str {
+        &self.addr
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl Drop for LeanValues {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// One request to the value service at `addr`, its line `line` and its body `body`, sent whole before the client shuts its
+/// side down (the service reads a request up to there): the whole answer.
+#[cfg(feature = "sha512")]
+pub fn values_request(addr: &str, line: &str, body: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::{Read, Write};
+    let tcp = std::net::TcpStream::connect(addr).map_err(|e| e.to_string())?;
+    let send = || -> std::io::Result<()> {
+        let mut w = &tcp;
+        w.write_all(format!("{line}\n").as_bytes())?;
+        w.write_all(body)?;
+        w.flush()?;
+        tcp.shutdown(std::net::Shutdown::Write)
+    };
+    send().map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    (&tcp).read_to_end(&mut out).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+/// The answer line at byte `*o` of `b`, past `ok `, its words; the service's `err WHY` as the error.
+#[cfg(feature = "sha512")]
+fn answer_line(b: &[u8], o: &mut usize) -> Result<Vec<String>, String> {
+    let nl = b[*o..].iter().position(|&x| x == b'\n').ok_or("an answer with no line")?;
+    let l = String::from_utf8_lossy(&b[*o..*o + nl]).to_string();
+    *o += nl + 1;
+    match (l.strip_prefix("ok "), l.strip_prefix("err ")) {
+        (Some(ws), _) => Ok(ws.split(' ').map(String::from).collect()),
+        (_, Some(why)) => Err(why.to_string()),
+        _ => Err(format!("an answer line {l:?}")),
+    }
+}
+
+/// The row schemas in the order the value service indexes them (`Flock.Registered.SCHEMAS`).
+#[cfg(feature = "sha512")]
+pub const VALUE_SCHEMAS: [&str; 3] = [crate::circuit::ROW_SCHEMA, crate::circuit::ROW_SCHEMA_V2, crate::circuit::ROW_SCHEMA_SEG];
+
+/// A table a commit request carries: its frame-v3-sha512 domain id, its row schema and its rows' unsalted 64-byte digests in
+/// leaf order.
+#[cfg(feature = "sha512")]
+pub struct CommitTable {
+    pub domain: Vec<u8>,
+    pub schema: &'static str,
+    pub digests: Vec<[u8; 64]>,
+}
+
+/// A table as the value service committed it: its root, its tag and its leaves' `b || c` in leaf order.
+#[cfg(feature = "sha512")]
+pub struct Committed {
+    pub root: Vec<u8>,
+    pub tag: Vec<u8>,
+    pub bcs: Vec<[u8; crate::circuit::BC_BYTES]>,
+}
+
+/// Commits `tables` through the value service at `addr` (`commit J D₀ N₀ S₀ …`, the body every table's digests and
+/// nothing else): the session the service drew, and each table as it committed it.
+#[cfg(feature = "sha512")]
+pub fn lean_commit(addr: &str, tables: &[CommitTable]) -> Result<(Vec<u8>, Vec<Committed>), String> {
+    use crate::circuit::BC_BYTES;
+    let fail = |e: String| refused(format!("the Lean value service's commit at {addr}: {e}"));
+    let mut line = format!("commit {}", tables.len());
+    for t in tables {
+        if !VALUE_SCHEMAS.contains(&t.schema) {
+            return Err(fail(format!("a table of row schema {}, none of the service's", t.schema)));
+        }
+        line += &format!(" {} {} {}", crate::hex(&t.domain), t.digests.len(), t.schema);
+    }
+    let body: Vec<u8> = tables.iter().flat_map(|t| t.digests.iter().flatten().copied()).collect();
+    let b = values_request(addr, &line, &body).map_err(fail)?;
+    let mut o = 0;
+    let hex = |w: &[String], k: usize| w.get(k).ok_or("a short answer line".to_string()).and_then(|x| crate::circuit::hexb(x));
+    let s = hex(&answer_line(&b, &mut o).map_err(fail)?, 0).map_err(fail)?;
+    let mut out = Vec::with_capacity(tables.len());
+    for (j, t) in tables.iter().enumerate() {
+        let w = answer_line(&b, &mut o).map_err(fail)?;
+        let n: usize = w.get(2).and_then(|x| x.parse().ok()).ok_or_else(|| fail(format!("table {j}'s answer {w:?}")))?;
+        if n != t.digests.len() || b.len() < o + BC_BYTES * n {
+            return Err(fail(format!("table {j}: {n} leaves answered of its {}, {} bytes left", t.digests.len(), b.len() - o)));
+        }
+        let bcs = b[o..o + BC_BYTES * n].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
+        o += BC_BYTES * n;
+        out.push(Committed { root: hex(&w, 0).map_err(fail)?, tag: hex(&w, 1).map_err(fail)?, bcs });
+    }
+    if o != b.len() {
+        return Err(fail(format!("{} bytes past its tables", b.len() - o)));
+    }
+    Ok((s, out))
+}
+
+/// A table ref (`Flock.Firewall.Salts.TableRef`): table `j` of the commit session `s`, its domain, row schema and leaf
+/// count, and the root and tag the service answered.
+#[cfg(feature = "sha512")]
+pub fn table_ref(s: &[u8], j: usize, t: &CommitTable, c: &Committed) -> Vec<u8> {
+    let schema = VALUE_SCHEMAS.iter().position(|&x| x == t.schema).expect("a committed table's schema") as u8;
+    let parts: [&[u8]; 7] = [s, &(j as u32).to_be_bytes(), &t.domain, &(t.digests.len() as u64).to_be_bytes(), &[schema], &c.root, &c.tag];
+    parts.concat()
+}
+
+/// A refs file (`Flock.Firewall.Salts.parseRefs`): `be32 T ‖ be32 R`, the table refs, then each row ref `(t, i)`, leaf `i`
+/// of table ref `t`.
+#[cfg(feature = "sha512")]
+pub fn refs_file(tables: &[Vec<u8>], rows: &[(usize, usize)]) -> Vec<u8> {
+    let mut b = [(tables.len() as u32).to_be_bytes(), (rows.len() as u32).to_be_bytes()].concat();
+    b.extend(tables.iter().flatten());
+    for &(t, i) in rows {
+        b.extend((t as u32).to_be_bytes());
+        b.extend((i as u64).to_be_bytes());
+    }
+    b
+}
+
+/// The number of row refs a refs file names, from its counts and its length.
+#[cfg(feature = "sha512")]
+pub fn refs_rows(refs: &[u8]) -> Result<usize, String> {
+    const TABLE_REF: usize = 64 + 4 + 64 + 8 + 1 + 64 + 64;
+    let count = |o: usize| refs.get(o..o + 4).map(|x| u32::from_be_bytes(x.try_into().unwrap()) as usize);
+    let (Some(t), Some(r)) = (count(0), count(4)) else { return Err(format!("a refs file of {} bytes, shorter than its counts", refs.len())) };
+    if refs.len() != 8 + TABLE_REF * t + 12 * r {
+        return Err(format!("a refs file of {} bytes, where {t} table refs and {r} row refs take {}", refs.len(), 8 + TABLE_REF * t + 12 * r));
+    }
+    Ok(r)
+}
+
+/// Registers the commit session `s` through the value service at `addr` (`register S`): the registration's number on the
+/// ZK server's record, the number of sessions the service's epoch opened (1: the service opens one an epoch, refusing a
+/// commit while its session is not yet registered), and its record (`Flock.Firewall.Salts.recordOf`:
+/// `be64 n ‖ be64 m ‖ be32 T ‖` the session's table refs `‖` its record tag), which the service appended to the ZK server's
+/// record whole, where the session loop admits it (`core-firewall session --salt-key`).
+#[cfg(feature = "sha512")]
+pub fn lean_register(addr: &str, s: &[u8]) -> Result<(u64, u64, Vec<u8>), String> {
+    let fail = |e: String| refused(format!("the Lean value service's registration at {addr}: {e}"));
+    let b = values_request(addr, &format!("register {}", crate::hex(s)), &[]).map_err(fail)?;
+    let mut o = 0;
+    let w = answer_line(&b, &mut o).map_err(fail)?;
+    let (Some(m), Some(len)) = (w.first().and_then(|x| x.parse::<u64>().ok()), w.get(1).and_then(|x| x.parse::<usize>().ok())) else {
+        return Err(fail(format!("an answer {w:?}")));
+    };
+    let rec = &b[o..];
+    if rec.len() != len || len < 20 || rec[8..16] != m.to_be_bytes() {
+        return Err(fail(format!("a record of {} bytes, where the answer names {len} and {m} sessions", rec.len())));
+    }
+    Ok((u64::from_be_bytes(rec[..8].try_into().unwrap()), m, rec.to_vec()))
+}
+
+/// The salts of the rows the refs file `refs` names, in its row refs' order, from the value service at `addr`, which checks
+/// every table ref's tag.
+#[cfg(feature = "sha512")]
+pub fn lean_salts(addr: &str, refs: &[u8]) -> Result<Vec<u8>, String> {
+    let fail = |e: String| refused(format!("the Lean value service's salts at {addr}: {e}"));
+    let b = values_request(addr, "salts", refs).map_err(fail)?;
+    let mut o = 0;
+    let w = answer_line(&b, &mut o).map_err(fail)?;
+    let len: usize = w.first().and_then(|x| x.parse().ok()).ok_or_else(|| fail(format!("an answer {w:?}")))?;
+    let want = crate::circuit::SALT_BYTES * refs_rows(refs).map_err(fail)?;
+    if len != want || b.len() != o + len {
+        return Err(fail(format!("{len} bytes of salts in an answer of {}, where the refs' rows take {want}", b.len() - o)));
+    }
+    Ok(b[o..].to_vec())
+}
+
 /// The masking challenger's inner challenger under the ZK server. While a round's `release` is set (the device's unmasked
 /// round, which the Lean session loop's frame of the rep checks and masks, or a firewalled rep's inner proof's round, the
 /// session's Lean finish's, which the frame holds to its own: `flock-circuit`'s `zk_finish_fw`), what the masking
 /// challenger hands it is dropped, and at the round's squeeze the release, and only the release, goes to the stream. With
-/// no release set it passes every call through: unfirewalled reps.
+/// no release set it passes every call through: unserved reps.
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,
@@ -913,6 +1149,23 @@ mod tests {
             let e = relations_held(&named(&bad), &replay, true).unwrap_err();
             assert!(e.starts_with("FIREWALL-REFUSED: the Lean finish's constraints"), "{e}");
         }
+    }
+
+    /// A table ref and a refs file at the offsets `Flock.Firewall.Salts.TableRef.parse` and `parseRefs` read them.
+    #[cfg(feature = "sha512")]
+    #[test]
+    fn a_refs_file_is_laid_out_as_the_value_service_reads_it() {
+        let t = CommitTable { domain: vec![1; 64], schema: crate::circuit::ROW_SCHEMA_V2, digests: vec![[0; 64]; 3] };
+        let c = Committed { root: vec![2; 64], tag: vec![3; 64], bcs: vec![] };
+        let r = table_ref(&[4; 64], 5, &t, &c);
+        assert_eq!(r.len(), 269);
+        assert_eq!((&r[..64], &r[64..68], &r[68..132], &r[132..140], r[140], &r[141..205], &r[205..]),
+                   (&[4; 64][..], &[0, 0, 0, 5][..], &[1; 64][..], &3u64.to_be_bytes()[..], 1, &[2; 64][..], &[3; 64][..]));
+        let f = refs_file(&[r.clone()], &[(0, 2), (0, 0)]);
+        assert_eq!((&f[..8], &f[8..8 + 269]), (&[0, 0, 0, 1, 0, 0, 0, 2][..], &r[..]));
+        assert_eq!(&f[8 + 269..], &[[0u8, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]].concat()[..]);
+        assert_eq!(refs_rows(&f), Ok(2));
+        assert!(refs_rows(&f[..f.len() - 1]).is_err() && refs_rows(&f[..7]).is_err());
     }
 
     #[cfg(feature = "sha512")]

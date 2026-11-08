@@ -1,5 +1,9 @@
-import Definitions.Core.Fp32
-import Proofs.Core.Round
+module
+
+public import Definitions.Core.Fp32
+public import Proofs.Core.Round
+import Mathlib.Data.Rat.Floor
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # `roundRn` is the nearest FP32 word, ties to even
@@ -16,6 +20,8 @@ both zeros included; a finite word of another value equally near makes the word 
 (`roundRn_fin`). From `2^128 - 2^103` up it is `±inf` (`roundRn_inf`), and a zero is the zero of its sign
 (`roundRn_zero`).
 -/
+
+@[expose] public section
 
 namespace Verity.Fp32.Round
 

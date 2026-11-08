@@ -1,4 +1,10 @@
-import Proofs.NetworkCertifier.Advice
+module
+
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Ingress
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.NetworkCertifier.Occupancy
 
 /-!
 # Satisfiability witnesses (the project's rule: no named hypothesis without one)
@@ -12,6 +18,8 @@ import Proofs.NetworkCertifier.Advice
   `allocated_witness_tight` shows its 8 messages meet the bound exactly, below the 27 of `r = S`.
 * The toy of the September draft: `(2 + 1)^6 = 729` left-packed occupancies.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

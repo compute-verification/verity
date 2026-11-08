@@ -1,5 +1,44 @@
-import Proofs.Flock.Claims.KS.PlainLeafFork
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafFork
+public import Proofs.Flock.Claims.KS.PlainLeafClash
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.PlainForkClash
+import Proofs.Flock.Claims.KS.PlainLive
+import Proofs.Flock.Claims.KS.PlainSlackFit
+import Proofs.Flock.Claims.KS.SessionSC
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Knowledge soundness at the deployed plain verifier, with no premise
@@ -18,6 +57,8 @@ which the deployed decoders read at the model's plain leaf `leafPlain` (`plain_h
 * `plain_tableBoundθAt_all`, `plain_KS`: so KS at SHA-512 at the deployed plain verifier's trimmed record at the
   deployed relation holds with no hypothesis.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -162,7 +203,7 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **A simulator of each prover at the verdict at the draw, at `leafPlain`**: `PlainSimWrPAtD` with its decoders, live self-clash and fork advantage at `leafPlain`. -/
+/-- **A simulator of each prover at the verdict at the sample, at `leafPlain`**: `PlainSimWrPAtD` with its decoders, live self-clash and fork advantage at `leafPlain`. -/
 def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -211,7 +252,7 @@ def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : table
             Claims.Flock.forkSlack sha512 (V false) P x δ (plainJ (tables_head_one h) hsch r ℓ).val ω)
 
 open Classical in
-/-- **A simulator at the verdict at the draw gives the plain table bound at a statement, at `leafPlain`**: `plain_tableBoundθAt_of_simD`'s proof, at `plain_le_sessionsEU`. -/
+/-- **A simulator at the verdict at the sample gives the plain table bound at a statement, at `leafPlain`**: `plain_tableBoundθAt_of_simD`'s proof, at `plain_le_sessionsEU`. -/
 theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -268,7 +309,7 @@ theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : Sessi
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
 open Classical in
-/-- **The concrete simulator at the verdict at the draw, from its clash and its fork bound, at `leafPlain`**: `plainSimWrPAtD_of_parts`'s proof. -/
+/-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound, at `leafPlain`**: `plainSimWrPAtD_of_parts`'s proof. -/
 theorem plainSimWrPAtD_of_partsU {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}

@@ -1,12 +1,34 @@
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Soundness.ZK.Refusal
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Dist
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ZK.Refusal
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Rewinding
+import Proofs.Flock.Soundness.ZK.Adaptivity
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.SHVZK
+import Proofs.Flock.Soundness.ZK.Session
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Lemma B at a worker's values
 
 The ZK server's workers compute the clear values under the pads (`Table.vals`: the zerocheck and lincheck rounds, the
 final evaluations) and never see the pads. A worker's values are a function of the witness, the mask slot `u` and level
-0's hiding `V` (`Table.Vis`: the lanes' paddings, the extra lanes and theirs; `Vals`), and of nothing the server draws
+0's hiding `V` (`Table.Vis`: the lanes' paddings, the extra lanes and theirs; `Vals`), and of nothing the server samples
 for the pads (`h`, `pad_h`, `pad_μ`, `μ`, the salts). Lemma B holds at any such values, whether or not they pass the
 inner proof's constraint:
 
@@ -36,12 +58,14 @@ inner proof's constraint:
   commit `p`'s columns where the rows hold and the honest prover's on the moved pads elsewhere (`Hm96.swDig`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.ZK.Table
 
 open Finset
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## The switched prover -/
 
@@ -65,7 +89,7 @@ def RowsAt {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] (T :
     ∑ i, T.lam r (T.view p ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view p ω).pre
 
 open Classical in
-/-- The pads the switched prover's triple and `C_h` read: the drawn ones where the rows hold, else the moved ones. -/
+/-- The pads the switched prover's triple and `C_h` read: the sampled ones where the rows hold, else the moved ones. -/
 noncomputable def swPads {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (p q : W) (u : T.Mask) (b : T.Vis)
     (h : Fin 2 → (Fin T.nE → F) × F × F) : Fin 2 → (Fin T.nE → F) × F × F :=
@@ -401,7 +425,7 @@ noncomputable def rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [Cha
   fun r w' u V => if T.onVals.RowsAt (w, v) u V then v r w' u V else T.vals r w' u V
 
 open Classical in
-/-- **The switched prover's tape**: the drawn one where `p`'s rows hold, the moved one elsewhere. -/
+/-- **The switched prover's tape**: the sampled one where `p`'s rows hold, the moved one elsewhere. -/
 noncomputable def swTape {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) : T.Rand :=
   if T.RowsAt p ω.1 ω.2.1 then ω else T.shift p q ω

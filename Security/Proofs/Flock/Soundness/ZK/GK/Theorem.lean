@@ -1,13 +1,17 @@
-import Proofs.Flock.Soundness.ZK.GK.Sim
+module
+
+public import Proofs.Flock.Soundness.ZK.GK.Sim
+public import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Expect
 import Proofs.Flock.Soundness.ZK.Masking
-import Proofs.Flock.Soundness.Assumptions
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: Theorem GK, the simulator's output is close to `V*`'s real view
 
 The hybrid argument for the Goldreich–Kahan simulator (`GK/Sim.lean`) against one verifier `V*`, in four steps:
 
-* `sim_hyb₁`: the simulator's rewinds draw fresh dummy openings for the coins `V*` opened (`rwS`); hybrid 1's rewinds
+* `sim_hyb₁`: the simulator's rewinds sample fresh dummy openings for the coins `V*` opened (`rwS`); hybrid 1's rewinds
   are runs with the real witness (`rwR`). One rewind's law moves by at most `δ_B` (Lemma B, `RewindClose`), and the
   expected number of rewinds is at most `4t` over the first run's completion (`estimate_runs`), so every test moves by
   at most `4t·δ_B`.
@@ -27,7 +31,7 @@ is stated this way, as the expected number of `V*`'s runs over the simulator's c
 caps it, and `t/M` is what the cap costs in `ε`.
 
 `gk_simulate_avg` averages over `V*`'s random tape: a randomized `V*` is a deterministic one for each tape, and the
-simulator draws the tape first.
+simulator samples the tape first.
 
 **The model.** `Model` is the analysis's description of one session against a deterministic `V*` (fixed tape): its real
 view `real ω`, the dummy run `dummy ω` (the protocol with a dummy witness), the simulator's rewind `rwS v₀ σ` from a
@@ -37,6 +41,8 @@ message (`pre`) with completion read from it (`compP`) and an incomplete view re
 `comp_eq`, `inc_real`, `inc_dummy` and `bind_real` are facts about the protocol's runs; `RewindClose` (Lemma B, one
 rewind) and `PrefinalClose` (Lemma C) are its two distances, taken as hypotheses at `δ_B` and `δ_C`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 
@@ -519,9 +525,9 @@ end Model
 
 /-! ## A randomized `V*` -/
 
-/-- **Theorem GK for a randomized `V*`**: a deterministic `V*` for each tape `τ` (the model `m τ`); the simulator draws the
+/-- **Theorem GK for a randomized `V*`**: a deterministic `V*` for each tape `τ` (the model `m τ`); the simulator samples the
 tape, then runs `gk`. If each tape's model satisfies Lemmas B and C at `δ_B`, `δ_C` and `pick` computes T6's collision
-from each conflict, and the finder that draws the tape and runs that tape's finder satisfies `SHA512CRStrict` at budget
+from each conflict, and the finder that samples the tape and runs that tape's finder satisfies `SHA512CRStrict` at budget
 `q`, then the simulator's output is within `ε = 3δ_C + 8t·δ_B + 3^{-t} + t/M + q²/2^513` of the real view, for every test
 `φ` of views with values in `[0, 1]`. -/
 theorem gk_simulate_avg {T : Type} [Fintype T] [Nonempty T] {D : Type} (H : List UInt8 → D)

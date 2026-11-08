@@ -1,5 +1,51 @@
-import Proofs.Flock.SessionLoop.FinHmkCut
-import Proofs.Flock.Claims.ZK.FinishLigEnd
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinHmkCut
+public import Proofs.Flock.SessionLoop.FinRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.CutPrefix
+import Proofs.Flock.Claims.ZK.FrameFree
+import Proofs.Flock.Claims.ZK.L0PinCut
+import Proofs.Flock.Claims.ZK.L0PinLoop
+import Proofs.Flock.SessionLoop.FinRepView
+import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
 # `final_c` from the history: the views' masked `final_c`, read off the inner proof's round 0
@@ -16,6 +62,8 @@ The loop's frame reads `final_c'` there (`finalCOf`) and adds its pad (`valsOf_f
 * **`finalCOf_inner`**: `final_c'` of the inner proof's round 0 is its `final_c`, from no pending bytes.
 * **`Loop.swSrcE_hmk_cut_fc`**: the views' masked `final_c` is the request's plus its pad.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -123,7 +171,7 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
       FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog b.1.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))))
     (2 * j.val + r.val) (by simpa using hk) ?_ ⟨?_, fun h => absurd h (by norm_num)⟩ ?_
-  · -- the reps before `2j + r` return by `n`, as at the firewall's stop
+  · -- the reps before `2j + r` return by `n`, as at the ZK server's stop
     rintro k hk' ⟨streams, proofs⟩ ls ⟨hls, hpts⟩
     obtain ⟨extras', hxe'⟩ := hexts k hk'
     obtain ⟨ic', hic'⟩ := padsTreeCut_go
@@ -333,7 +381,7 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -464,7 +512,7 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
         (finS.swCutOf x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t) := rfl
   have hlen : ops.length = refK x := hF.1
   obtain ⟨s', spec', hsx', hm⟩ := msg_runCut vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w
-    hE hc hlast ν t κ m₀ ρ₀ ops hF.1 hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (L.size + 1) (by omega) (by omega)
+    hE hc hlast ν t κ m₀ ρ₀ ops hF.1 (swOk_take_of_finCtx hF) hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (L.size + 1) (by omega) (by omega)
   rw [hsx] at hsx'
   cases hsx'
   rw [← hsrc, Nat.add_sub_cancel, hW] at hm

@@ -1,8 +1,12 @@
-import Mathlib.Algebra.BigOperators.Group.List.Basic
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Field.Rat
-import Mathlib.Data.Nat.Log
-import Mathlib.Data.Finset.Card
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.GroupWithZero.Nat
+public import Mathlib.Algebra.Order.Field.Rat
+public import Mathlib.Algebra.Ring.Int.Defs
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Nat.Log
+public import Mathlib.Data.Rat.Init
 
 /-!
 # The circuit model: a declared circuit's gates, their classes, its window and its census (trusted)
@@ -94,6 +98,8 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
 * **Fan-in.** MULT-LB's lane programs (`ofLane`: inputs, then instructions that each apply an arbitrary function to at
   most `f` earlier values, and `c` outputs) are this model's circuits of neutral gates of fan-in at most `f` (`FanIn`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 
@@ -278,7 +284,7 @@ def Role.isTail : Role → Bool
 * `dot K L tail s`: step `s` of an `S8Dot_v1` coordinate's body (an `S8Matmul_v1` row's among them), whose statics
   are `K` products committed every `L` (`T_t` after `t·L`) and the tail groups' atom counts (`TAIL`);
 * `receipt dot K w a b`: word `w` of an H1 + fx1 tile's CP-W receipt (`PouwH1Tile`,
-  `verity/core/protocols/pouw/circuit/h1tile.py`): the XOR over the tile's lanes of half `w % 2` of each lane's fx1
+  `verity/ml/protocols/pouw/circuit/h1tile.py`): the XOR over the tile's lanes of half `w % 2` of each lane's fx1
   state after set `w / 2` of `[T_0 … T_{KS−1}, O′, D_1 … D_{m−1}]`, `2·(KS + m)` words at contraction `K` (`KS = K/32`
   segments). `dot` is the tile's dot kind (its `EXACT`: `S8Dot_v2` or `GemmAccumulatorS8_v2`), and `a` and `b` are the
   gates of its `A` and `B` operand rows (its call's arguments), from which a word's kind reads whether each operand is

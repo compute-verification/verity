@@ -1,4 +1,15 @@
-import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGamma
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.UOnlyGamma
+import Proofs.Pouw.Prob
 
 /-!
 # v1 under rev1 per audit tile at a stricter cap (compute accounting's file)
@@ -14,6 +25,8 @@ import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
   16384³), so the headline 0.36949% rests on `TTOutTilePearlCDevRev1` at 1/1,000
   (`pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400`, `_16384_of_cap400`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

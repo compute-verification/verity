@@ -1,6 +1,8 @@
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.Basic.QTree
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Basic.Mat
+public import Definitions.Pouw.Basic.QTree
 
 /-!
 # The γ-gap game (trusted; problem statement §3.2–§3.5)
@@ -29,6 +31,8 @@ Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
 * deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
 -/
+
+@[expose] public section
 
 namespace Pouw
 
@@ -228,9 +232,26 @@ def Requirement [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
 `w u / ∑_v w v`. -/
 abbrev Ticket (w : ℕ → ℕ) (N : ℕ) : Type := Σ u : Fin N, Fin (w u)
 
-/-- The audit with `t` independent work-weighted samples accepts iff every sampled unit is in `K` (the verifier
-recomputes the sampled units and checks their checked values and useful output). -/
+/-- The audit with `t` independent work-weighted samples accepts iff every sampled proof block is in `K` (the verifier
+recomputes the sampled proof blocks and checks their checked values and useful output). -/
 def AuditAccepts {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
   ∀ i, ((c i).1 : ℕ) ∈ K
+
+/-- The number of the `t` samples that land in `O`, each sample counted once. -/
+def drawsIn {w : ℕ → ℕ} {N t : ℕ} (O : Finset ℕ) (c : Fin t → Ticket w N) : ℕ :=
+  (univ.filter fun i => ((c i).1 : ℕ) ∈ O).card
+
+/-- The tolerant audit accepts iff every sampled proof block is in `K`, checked and credited, or in `O`, accepted and credited
+nothing. -/
+def AuditAcceptsTol {w : ℕ → ℕ} {N t : ℕ} (K O : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
+  ∀ i, ((c i).1 : ℕ) ∈ K ∨ ((c i).1 : ℕ) ∈ O
+
+/-- **A miss bound for `t` work-weighted samples at `δ`**: whatever the set `S` of units, the table `u` at the number of
+samples in `S` falls below `S`'s share of the tickets with probability at most `δ`, the failure probability. `u` is
+the sampling tolerance read off the samples. Clopper–Pearson's one-sided upper bound at `δ` is one; `u 0 = ε_s` and
+`u x = 1` otherwise is the audit that accepts only checked units, at `δ = (1 − ε_s)^t`. -/
+def MissBound (t : ℕ) (u : ℕ → ℝ) (δ : ℝ) : Prop :=
+  ∀ (N : ℕ) (w : ℕ → ℕ) (S : Finset ℕ), S ⊆ range N →
+    pr (fun c : Fin t → Ticket w N => u (drawsIn S c) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ)) ≤ δ
 
 end Pouw

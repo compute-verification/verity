@@ -1,7 +1,60 @@
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.SessionLoop.FinHmkLive
+module
+
+public import Proofs.Flock.Claims.ZK.FinTau
+public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.SessionLoop.FinHmkLive
+public import Proofs.Flock.SessionLoop.FinRepOpen
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.FinishSwBit
 import Proofs.Flock.Claims.ZK.FinishSwFw
-import Proofs.Flock.Claims.ZK.FinTau
+import Proofs.Flock.Claims.ZK.FinishSwInner
+import Proofs.Flock.Claims.ZK.FinishSwPts
+import Proofs.Flock.Claims.ZK.FinishSwRows
+import Proofs.Flock.Claims.ZK.FinishSwSv
+import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.FrameUnrefused
+import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.PiopSrcSv
+import Proofs.Flock.SessionLoop.FinRepRows
+import Proofs.Flock.SessionLoop.FinRepXs
+import Proofs.Flock.SessionLoop.RepSrc
+import Proofs.Flock.SessionLoop.Tables
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # (c.3)'s `FinRepTau`: `τ` from the views is the session's
@@ -19,9 +72,11 @@ return proofs equal up to `eraseZ`, their `τ` agree. `eraseZ` forgets `τ`, so 
   them is the view's `τ` (`Masked.swTau_of_rows`; `Masked.fwTau_at`).
 
 **`Loop.finRepTau`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 and pads the
-source draws from the tape (`Loop.Level0Src`, `Loop.RepSrc`), `FinRepTau` holds wherever every table's rows hold at its
+source samples from the tape (`Loop.Level0Src`, `Loop.RepSrc`), `FinRepTau` holds wherever every table's rows hold at its
 base (`Loop.FinRepRows`).
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -60,7 +115,7 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's `τ` from the firewall's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
+/-- **A deployed rep's `τ` from the ZK server's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`), at the tape's pads (`hP`), returns, and
 below `zp 64` the passed values plus the pads are the switched source's masked values (`hmk`), its `τ` is the worker's
 view's at the clear values `v`, wherever table `j`'s rows hold at its base there (`hrows`). The inner proof's `τ` is
@@ -188,7 +243,7 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the firewall's
+    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
@@ -423,7 +478,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **`FinRepTau` where every table's rows hold at its base**: in the masked scope, with a witness, at a statement the
-loop serves (no coin fault at the opened coins, `frameUnrefused_ofLoop`) whose level 0 and pads the source draws from
+loop serves (no coin fault at the opened coins, `frameUnrefused_ofLoop`) whose level 0 and pads the source samples from
 the tape (`Level0Src`, `RepSrc`). The run from the views sends the views' `τ` (`FinRep.repCut_map_tau`), the worker's
 view's (`finSrc_tau`); the session's rep runs at the session's table, schedule and packed table (`finRepTab`,
 `schedsPZk_live`, `Level0Src.realOf`), at the tape's pads (`pads_frame_eq`), with the switched source's masked values

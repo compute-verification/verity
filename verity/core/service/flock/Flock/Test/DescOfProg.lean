@@ -6,7 +6,13 @@ its refusal. Each program lists its callees in another order than the decoder nu
 `TQPair_v0` and three `TQTriple_v0` instances over `Input8_v1` gates (the codec's `mixed_population_program`), and
 `Flock.Test.RegProgram`'s `plain` and `reg`, whose roots a template query refuses.
 -/
-import Flock.Test.RegProgram
+module
+
+public import Flock.TemplateQuery
+public import Flock.Test.RegProgram
+meta import Flock.Test.RegProgram
+
+@[expose] public section
 
 namespace Flock.Test.DescOfProg
 

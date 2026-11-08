@@ -1,5 +1,45 @@
+module
+
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.KS.PlainLive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.DecodeHidden
 import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainLive
+import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 /-!
 # The deployed plain decoders at plain SHA-512 leaves, at `VK keep`
@@ -17,6 +57,8 @@ The scope admits hidden outputs under plain SHA-512 leaves (`flock-leaf/sha512-u
 * `plain_setupHiddenU`, `plain_hdecHUAtK_of`: `plain_setupHidden` and `plain_hdecHAtK_of` there; `plain_hdecHUAtK` at
   `wrPDK`, with `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenDec
 
@@ -267,7 +309,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A plain statement in scope with hidden outputs and plain SHA-512 leaves sets up its one table at its draw**:
+/-- **A plain statement in scope with hidden outputs and plain SHA-512 leaves sets up its one table at its sample**:
 `plain_setupHiddenT` at `flock-leaf/sha512-unsalted`. -/
 theorem plain_setupHiddenU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -282,7 +324,7 @@ theorem plain_setupHiddenU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
   plain_setupHiddenT hs hin hset h hh hl hd
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves, at a record writer**: `plain_hdecHLfAtK_of` at `LeafForm.plain`. -/
 theorem plain_hdecHUAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -313,7 +355,7 @@ theorem plain_hdecHUAtK_of (keep : Bool → Bool)
     hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHUAtK_of` at
 `wrPDK`). -/
 theorem plain_hdecHUAtK (keep : Bool → Bool)

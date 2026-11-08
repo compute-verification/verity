@@ -1,5 +1,21 @@
-import Proofs.Flock.C3.Compose.HoloCoinTys
-import Proofs.Flock.C3.Compose.LaterHeld
+module
+
+public import Proofs.Flock.C3.Compose.HoloCoinTys
+public import Proofs.Flock.C3.Compose.LaterHeld
+import all Init.Data.Repr
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The map's coins and points at candidate 3
@@ -9,11 +25,13 @@ import Proofs.Flock.C3.Compose.LaterHeld
 `coinsEncoded_holoMap`: where a stream round takes one history round (`holoSelOne`: the reps' and R's rounds of coins,
 a sparse phase's of one), the coin the map reads off the history's prefix is that round's coin (`CoinsEncoded`), at
 every inner statement and sparse parameters. A sparse phase's round of `n > 1` coins is not one: the map reads its `n`
-history rounds' words as one array, while each of those rounds draws a coin of one word.
+history rounds' words as one array, while each of those rounds flips a coin of one word.
 `roundAt_reps`: the history order of the reps' rounds at the map read, rep 0's from round 1 and rep 1's past all of rep
 0's coin rounds (`repStart`), the `j + p` that `StageHeld` reads; `holoSelOne_rep` selects rep `i`'s rounds of coins
 there.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -48,7 +66,7 @@ theorem pointsEncoded_holoMap (st : Flock.Stmt) (hp : HoloParams) (Cm : Type) (i
   exact congrArg (fun p : Fin 2 → Fin (holoAt st hp).cls.mPts → GF128 => (⟨_, p⟩ : FlockSoundness.Game.Msg))
     (holoPts_ofFn (c ⟨0, h⟩))
 
-/-- **`holoMap`'s draws where a stream round takes one history round**: round `i` draws round `q` of the stream named
+/-- **`holoMap`'s samples where a stream round takes one history round**: round `i` samples round `q` of the stream named
 `s`, which takes history round `i` alone (`HoloStream.group` 1: a round of coins of a rep's or R's stream, or of one
 coin of a sparse phase's). -/
 def holoSelOne (ish : RecVStar.Inner) (tbl : String) (i : ℕ) (s : String) (q : ℕ) : Prop :=
@@ -106,8 +124,8 @@ theorem roundAt_reps (rs : Array SchedRound) (L : List (HoloStream × Array Sche
   · exact absurd hn (by omega)
 
 /-- **Rep `i`'s rounds of coins at the map read**: where the session's streams are rep 0's rounds `rs`, rep 1's and
-then the rest (`holoStreams`' order), the stream named `s` is rep `i`'s (`hf`) and its round `q` draws coins,
-`holoSelOne` draws it at history round `repStart c₀ i` plus rep `i`'s coin rounds before `q`. -/
+then the rest (`holoStreams`' order), the stream named `s` is rep `i`'s (`hf`) and its round `q` flips coins,
+`holoSelOne` samples it at history round `repStart c₀ i` plus rep `i`'s coin rounds before `q`. -/
 theorem holoSelOne_rep {ish : RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)} {i : Fin 2} {q : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))

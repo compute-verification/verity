@@ -1,5 +1,13 @@
-import Proofs.Flock.VBridge.Algebra.Eval
-import Proofs.Flock.Soundness.Refine.Zerocheck
+module
+
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.Soundness.Refine.Zerocheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # V*'s zerocheck residual is zero only when the zerocheck's checks pass
@@ -10,10 +18,12 @@ import Proofs.Flock.Soundness.Refine.Zerocheck
 and the residual rounds' claim is `final_a · final_b`. The rounds are the fold of `Refine.zStep`, which
 `Refine.forIn_rounds` shows the verifier's loop computes, on any coins whose first entries are `zerocheck`'s challenges.
 
-`zerocheck_coins` says which rounds `zerocheck` draws its points from, and `zerocheck_of_residuals` is the stage at a
+`zerocheck_coins` says which rounds `zerocheck` samples its points from, and `zerocheck_of_residuals` is the stage at a
 rep: when `GfResiduals`' residuals on the S `structureOf` builds and the v `verifierRows` gives are all zero, the checks
 hold on the messages w holds (`decoded`), at the points `verifierRows` returns.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 
@@ -142,7 +152,7 @@ section CoinSource
 
 variable {α : Type} [Val α]
 
-/-- The residual rounds draw one round each, its first coin the round's challenge. -/
+/-- The residual rounds sample one round each, its first coin the round's challenge. -/
 theorem zcRounds_coins (r : Array F128) :
     ∀ (l : List (α × α)) (i : Nat) (claim : α) (rho : Array F128) (k k' : Nat) (src : CoinSource) (claim' : α)
       (rho' : Array F128),
@@ -167,7 +177,7 @@ theorem zcRounds_coins (r : Array F128) :
         exact ⟨c', by rw [show k + (j + 1) = k + 1 + j by omega]; exact hc',
           by rw [show rho.size + (j + 1) = rho.size + 1 + j by omega]; exact he⟩
 
-/-- **The zerocheck's coins.** The rounds `zerocheck` draws its points from, when `r_outer` is not empty: `r_skip`
+/-- **The zerocheck's coins.** The rounds `zerocheck` samples its points from, when `r_outer` is not empty: `r_skip`
 (6 coins, unused), `r_outer` (`m − 13`), `z`, then one round per residual round, its challenge. -/
 theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat} {src : CoinSource} {r0 : α}
     {zc : ZcPts α} (h : zerocheck m M k src = .ok ((r0, zc), k')) :
@@ -195,7 +205,7 @@ theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat}
 end CoinSource
 
 /-- The residual rounds over F are the fold of `Refine.zStep` on round `i`'s messages and on coins `C` whose first
-entries are the challenges drawn. -/
+entries are the challenges sampled. -/
 theorem zcRounds_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
     ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (rho : Array F128) (k k' : Nat) (src : CoinSource)
       (claim' : F128) (rho' : Array F128),

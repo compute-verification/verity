@@ -1,5 +1,11 @@
-import Proofs.Pouw.PearlC.DeviceCapGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGamma
+import Proofs.Pouw.PearlC.DeviceRev1Gamma
 
 /-!
 # v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (staged)
@@ -17,6 +23,8 @@ Each is above its issue-bound twin (0.36162%, 0.35576%, 0.51056%, 0.50503%).
 Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGamma`'s `…LoopCast8…` pins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

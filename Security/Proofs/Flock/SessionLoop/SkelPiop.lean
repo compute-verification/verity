@@ -1,6 +1,42 @@
+module
+
+public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FinishLive
+public import Proofs.Flock.Claims.ZK.FrameFree
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishSrc
+import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.SessionLoop.FinHmkCut
-import Proofs.Flock.Claims.ZK.FinishLive
-import Proofs.Flock.Claims.ZK.FrameOuter
 
 /-!
 # The algebraic phase's scheduled rounds are the PIOP's bodies at zero values
@@ -18,6 +54,8 @@ and answering it by its index (`asksCut`), and its log is the PIOP's bodies what
   PIOP's frames at zero values (`piopFr`) closed by its squeeze, with its coin count `piopN`.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer.Sched
 
 open _root_.Flock (V F128 Transcript TMW)
@@ -30,7 +68,7 @@ open FlockComplete (PS asksCut)
 /-- A round's coin count, read off its squeeze header as `recAsks` reads it. -/
 def cntOf (c : ByteArray) : ℕ := (_root_.Flock.u64OfLE c (c.size - 8)).toNat
 
-/-- The coins drawn over the recorded rounds `rs`. -/
+/-- The coins flipped over the recorded rounds `rs`. -/
 def cntSum (rs : List (ByteArray × ℕ)) : ℕ := (rs.map Prod.snd).sum
 
 /-- A recording as `recAsks` keeps it: each round with its coin count, and their total. -/
@@ -122,7 +160,7 @@ theorem asksRel_skel (fin : Array (ByteArray × ℕ)) (n : ℕ) (hn : fin.size �
         simp only [skelCoin, hsz, ht, ← hk]
       · simp [recLog, hl, Array.toList_push]
 
-/-- The cut's sends as the firewall's `Asks`. -/
+/-- The cut's sends as the ZK server's `Asks`. -/
 def skelIO (fin : Array (ByteArray × ℕ)) (n : ℕ) : Asks PS :=
   ⟨(asksCut (skelCoin fin) n).link, (asksCut (skelCoin fin) n).round⟩
 

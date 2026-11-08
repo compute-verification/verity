@@ -1,40 +1,48 @@
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# The executable Bernoulli draw escapes no more often than the model's
+# The executable Bernoulli sample escapes no more often than the model's
 
 `Flock.Draw.bernoulli num den n src` is the verifier's executable Bernoulli sampler: for each unit `u < n` in order, one
-exact uniform draw `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rejection sampling on big-endian words), and
-`u` is drawn when `r < num`. `num = 0` draws nothing and `num = den` every unit, without reading the stream.
+exact uniform sample `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rejection sampling on big-endian words), and
+`u` is sampled when `r < num`. `num = 0` samples nothing and `num = den` every unit, without reading the stream.
 
 * `bernoulli_eq`: the loop as a list recursion (`bernLoop`), through `Std.Legacy.Range.forIn_eq_forIn_range'`.
 * `bernLoop_streamOf`, `bernL_le`: on a stream of uniform bytes the loop reads, unit by unit, `uniformL` on the rest of
   the stream (`DrawExec.uniformL_le`), so a unit of `B` is missed with probability `(den − num)/den` independently of
   what came before, and `B` with at most `((den − num)/den)^|B|`.
-* `Law.bernoulli_exec_escape_le`: over a uniform stream of `L` bytes, the executable returns a draw missing `B` with
+* `Law.bernoulli_exec_escape_le`: over a uniform stream of `L` bytes, the executable returns a sample missing `B` with
   probability at most `Law.bernoulli`'s escape, `((den − num)/den)^|B|` (`Law.bernoulli_escape`).
-* `Law.bernoulli_append`: a draw that succeeds is the same on a longer stream, so `Flock.Draw.onWith`'s extend-and-rerun
-  never changes it; `Law.drawOS_bernoulli_escape_le`, `Law.execOS_bernoulli_escape_le`: the live draw
+* `Law.bernoulli_append`: a sample that succeeds is the same on a longer stream, so `Flock.Draw.onWith`'s extend-and-rerun
+  never changes it; `Law.drawOS_bernoulli_escape_le`, `Law.execOS_bernoulli_escape_le`: the live sample
   (`Flock.Draw.drawWith`, `Law.runOS`) on a uniform byte source (A3) escapes no more often, as `ExecDrawOS.lean` proves
   for the other three laws.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.DrawExec
 
 open Flock.Draw Game
 open scoped ENNReal
 
-/-- `bernoulli`'s loop as a list recursion: the units drawn so far `out`, and the stream position `pos`. -/
+/-- `bernoulli`'s loop as a list recursion: the units sampled so far `out`, and the stream position `pos`. -/
 def bernLoop (num den : ℕ) (src : ByteArray) : List ℕ → Array ℕ → ℕ → Option (Array ℕ)
   | [], out, _ => some out
   | u :: us, out, pos => match uniform den src (src.size + 1) pos with
     | none => none
     | some (r, p) => bernLoop num den src us (if r < num then out.push u else out) p
 
-/-- The loop's state: an early return, the units drawn so far and the stream position. -/
+/-- The loop's state: an early return, the units sampled so far and the stream position. -/
 abbrev BSt := Option (Option (Array ℕ)) × Array ℕ × ℕ
 
-/-- A `forIn` whose body draws with `uniform` and keeps the unit when the draw is below `num`, followed by a
+/-- A `forIn` whose body samples with `uniform` and keeps the unit when the sample is below `num`, followed by a
 continuation that returns the early exit or finishes: the loop computes `bernLoop`. -/
 theorem forIn_bern (num den : ℕ) (src : ByteArray) (F : ℕ → BSt → Id (ForInStep BSt))
     (POST : BSt → Id (Option (Array ℕ)))
@@ -83,7 +91,7 @@ theorem bernoulli_eq (num den n : ℕ) (src : ByteArray) (h0 : num ≠ 0) (h1 : 
 
 /-! ## The loop on the rest of the stream -/
 
-/-- `bernLoop` on the rest of the stream, with `uniformL`'s fuel `F`: the units it draws. -/
+/-- `bernLoop` on the rest of the stream, with `uniformL`'s fuel `F`: the units it samples. -/
 def bernL (num den F : ℕ) : List ℕ → List UInt8 → Option (List ℕ)
   | [], _ => some []
   | u :: us, bs => match uniformL den F bs with
@@ -127,7 +135,7 @@ theorem bernLoop_streamOf {L : ℕ} (f : Fin L → Fin 256) (num den : ℕ) :
 
 open Classical in
 /-- **Each unit of `B` is missed independently with probability `(den − num)/den`**: on a uniform stream, `bernL` returns
-a draw missing `B` with probability at most `((den − num)/den)` to the number of `l`'s entries in `B`. -/
+a sample missing `B` with probability at most `((den − num)/den)` to the number of `l`'s entries in `B`. -/
 theorem bernL_le (num den F : ℕ) (hden : 0 < den) (B : Finset ℕ) :
     ∀ (l : List ℕ) ℓ, prCoin (fun g : Fin ℓ → Fin 256 => ∃ D, bernL num den F l (bsOf g) = some D ∧ ∀ u ∈ B, u ∉ D) ≤
       (((den - num : ℕ) : ℝ≥0∞) / den) ^ (l.filter (· ∈ B)).length := by
@@ -220,8 +228,8 @@ namespace FlockSoundness.Audit.Law
 open Game Finset
 open scoped ENNReal
 
-/-- **A `bernoulli` draw that succeeds is the same on a longer stream**: extending the stream and rerunning changes
-nothing once the draw has succeeded. -/
+/-- **A `bernoulli` sample that succeeds is the same on a longer stream**: extending the stream and rerunning changes
+nothing once the sample has succeeded. -/
 theorem bernoulli_append (num den n : ℕ) (a b : ByteArray) (D : Array ℕ)
     (h : Flock.Draw.bernoulli num den n a = some D) : Flock.Draw.bernoulli num den n (a ++ b) = some D := by
   by_cases h0 : num = 0
@@ -234,7 +242,7 @@ theorem bernoulli_append (num den n : ℕ) (a b : ByteArray) (D : Array ℕ)
 theorem bernoulli_escape_empty {n num den : ℕ} [NeZero den] (h : num ≤ den) : (bernoulli n num den).escape ∅ = 1 := by
   rw [bernoulli_escape h, Finset.card_empty, pow_zero]
 
-/-- **The executable Bernoulli draw escapes no more often than the model's** (`Law.bernoulli`), on a uniform stream of
+/-- **The executable Bernoulli sample escapes no more often than the model's** (`Law.bernoulli`), on a uniform stream of
 `L` bytes. -/
 theorem bernoulli_exec_escape_le (n num den L : ℕ) [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
@@ -287,7 +295,7 @@ theorem drawWith_bernoulli_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Optio
   cases (Flock.Draw.onWith (get 0) (2 * pop * Flock.Draw.width den + 64) (Flock.Draw.bernoulli num den pop)).run s <;>
     rfl
 
-/-- **The live Bernoulli draw escapes no more often than the model's** (`Law.bernoulli`), extend-and-rerun included, on a
+/-- **The live Bernoulli sample escapes no more often than the model's** (`Law.bernoulli`), extend-and-rerun included, on a
 uniform byte source (A3). -/
 theorem drawOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
@@ -328,7 +336,7 @@ theorem drawOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ d
         rw [Fin.prod_univ_one]
         exact bernoulli_exec_escape_le n num den (L 0) h B
 
-/-- **The live Bernoulli draw, as a law, escapes no more often than `Law.bernoulli`**, on a uniform byte source (A3). -/
+/-- **The live Bernoulli sample, as a sampling design, escapes no more often than `Law.bernoulli`**, on a uniform byte source (A3). -/
 theorem execOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (L : Fin 1 → ℕ) (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t)
     (B : Finset (Fin n)) :

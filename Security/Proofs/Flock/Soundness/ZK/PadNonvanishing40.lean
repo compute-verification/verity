@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Assumptions.Zk
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `PadNonvanishing40`, proved
@@ -9,6 +25,8 @@ import Proofs.Flock.Soundness.Assumptions.Zk
 * `What_omega`: `Ŵ_i(ω_q) ∈ {0, 1}` for `i < 64`, `q < 2^(i+1)`.
 * `padNonvanishing40`: the instance Lemma B's row (ii) reads (`Composed.zkViewAt_of_ok`), so no `--zk` headline takes it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

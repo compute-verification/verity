@@ -1,22 +1,38 @@
+module
+
+public import Proofs.Flock.Recursive.FirewallLive
+public import Proofs.Flock.Recursive.FirewallHonest
+public import Proofs.Flock.Recursive.Firewall
+import Flock.Firewall.Contract
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallLive
-import Proofs.Flock.Recursive.FirewallHonest
 
 /-!
-# `FirewallSends` from the firewall's code
+# `FirewallSends` from the ZK server's code
 
-`RecursiveFirewallPrivate` takes `FirewallSends` of the firewall and the honest worker: on the worker's requests the
-firewall (`Flock.Firewall.run`) sends the schedule's transcript `T` with the commit strings `firewallStrings`, and
-finishes. The firewall's half is its code's, proved here at `T = firewallT s tables`: the pinned schedule's transcript
+`RecursiveFirewallPrivate` takes `FirewallSends` of the ZK server and the honest worker: on the worker's requests the
+ZK server (`Flock.Firewall.run`) sends the schedule's transcript `T` with the commit strings `firewallStrings`, and
+finishes. The ZK server's half is its code's, proved here at `T = firewallT s tables`: the pinned schedule's transcript
 (`FirewallTemplate.tmpl`, every count, name, stream, parent and position the schedule's) with Commit's tables in the
 order `tables`, filled with the commit strings. What is left is the worker's half, `FirewallAccepts`: on its requests at
-any commit strings the firewall finishes at zero salts, Commit names the tables `tables`, and the commit strings are
+any commit strings the ZK server finishes at zero salts, Commit names the tables `tables`, and the commit strings are
 those of the messages `msgs`, each reading the strings before it.
 
 * `firewallSends_of_accepts`: `FirewallAccepts s reqs msgs tables → FirewallSends s reqs msgs (firewallT s tables)`, by
   `FirewallTemplate.sends_of_one` at the zero salts and `firewallStrings`' unfolding.
-* `tables_eq_of_accepts`: there `tables` is the schedule's order `s.tables`, the only one the firewall takes.
+* `tables_eq_of_accepts`: there `tables` is the schedule's order `s.tables`, the only one the ZK server takes.
 * `recursiveFirewallPrivate_of_accepts`: `RecursiveFirewallPrivate`'s two ways with `FirewallAccepts` in place of
   `FirewallSends`, its simulated view at `firewallT s tables`, which reads only the schedule and the table order.
 * `liveSends`, `liveSends_of_accepts`: the deployed send check, `flock-firewall live` (`FirewallLive.liveRun`), sends
@@ -24,9 +40,11 @@ those of the messages `msgs`, each reading the strings before it.
   read begin with `ys`, sends the transcript at the commit strings `firewallStrings ys` and finishes
   (`FirewallLive.run_live`, `FirewallLive.run_append`).
 * `honestReqs_accepts`: the worker's half, `FirewallAccepts` of the honest worker's requests (`honestReqs`) and its rows'
-  messages (`FirewallHonest.honestMsgs`), at a schedule the firewall holds a session to and a worker that follows it,
+  messages (`FirewallHonest.honestMsgs`), at a schedule the ZK server holds a session to and a worker that follows it,
   its rows reading only the commit strings before them (`FirewallHonest.honest_accepts` at the zero salt).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -41,11 +59,11 @@ def firewallT (s : Flock.Firewall.Schedule) (tables : List String) {nh : ℕ} (l
     Array Flock.Firewall.Sent :=
   (FirewallRun.fillAll (FirewallTemplate.tmpl s tables) (List.ofFn l)).toArray
 
-/-- Obligation (the honest worker's requests pass the firewall, committing the messages `msgs`): at every private circuit
-`P`, witness `w`, registration salts `r`, tape `a`, randomness `p` and commit strings `l`, the firewall
+/-- Obligation (the honest worker's requests pass the ZK server, committing the messages `msgs`): at every private circuit
+`P`, witness `w`, registration salts `r`, tape `a`, randomness `p` and commit strings `l`, the ZK server
 (`Flock.Firewall.run s`) at `nh` zero salts finishes on the requests `reqs P w r a p l`, their Commit names the tables
 `tables` in order, and the commit strings it sends are those of the messages `msgs P w r a p` in salt order, message `i`
-read at the strings of `l` before it. It says nothing of how the firewall salts, which its code fixes
+read at the strings of `l` before it. It says nothing of how the ZK server salts, which its code fixes
 (`FirewallTemplate.sends_of_one`), nor of what it sends but the table order, which the schedule fixes
 (`FirewallTemplate.run_blank`): it is that the worker's requests pass, and that message `i` reads only the strings
 before it. -/
@@ -78,7 +96,7 @@ theorem firewallStrings_eq {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteAr
       (Sha512.hash (msgs i fun j => Flock.Guarantees.firewallStrings msgs ys (Fin.castLE i.isLt.le j))) (ys i) := by
   rw [Flock.Guarantees.firewallStrings]
 
-/-- **The firewall's half of `FirewallSends`, from its code**: under `FirewallAccepts`, the firewall sends the schedule's
+/-- **The ZK server's half of `FirewallSends`, from its code**: under `FirewallAccepts`, the ZK server sends the schedule's
 transcript `firewallT s tables` at the commit strings `firewallStrings`, at every salt list, and finishes. -/
 theorem firewallSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
@@ -95,7 +113,7 @@ theorem firewallSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Fl
   exact congrArg List.ofFn (funext fun i => (firewallStrings_eq (msgs P w r a p) ys i).symm)
 
 /-- **The table order is the schedule's**: under `FirewallAccepts s reqs msgs tables`, `tables` is `s.tables`, the only
-order the firewall takes Commit's tables in (`FirewallTemplate.namesOf_run`), so `firewallT s tables` reads the schedule
+order the ZK server takes Commit's tables in (`FirewallTemplate.namesOf_run`), so `firewallT s tables` reads the schedule
 alone. -/
 theorem tables_eq_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
@@ -105,7 +123,7 @@ theorem tables_eq_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.
   obtain ⟨hfin, ho, -⟩ := h P w r a p l
   exact ho.symm.trans (FirewallTemplate.namesOf_run s _ _ hfin)
 
-/-- **(ii) at the firewall and V*'s code, from the honest worker's half**: `RecursiveFirewallPrivate`'s two ways with
+/-- **(ii) at the ZK server and V*'s code, from the honest worker's half**: `RecursiveFirewallPrivate`'s two ways with
 `FirewallAccepts` in place of `FirewallSends`, the simulated view filling the schedule's transcript `firewallT s tables`
 with ideal commit strings. -/
 theorem recursiveFirewallPrivate_of_accepts {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa]
@@ -166,8 +184,8 @@ theorem liveSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.
       t.finished = true :=
   liveSends s reqs msgs _ (firewallSends_of_accepts s reqs msgs tables hA) P w r a p ys zs L sent t hreqs hsalts hlive
 
-/-- **The honest worker's half of `FirewallSends`**: at a schedule the firewall holds a session to, the honest worker's
-requests (`honestReqs`) pass the firewall, Commit naming the schedule's tables (`Schedule.tables`), and commit its rows'
+/-- **The honest worker's half of `FirewallSends`**: at a schedule the ZK server holds a session to, the honest worker's
+requests (`honestReqs`) pass the ZK server, Commit naming the schedule's tables (`Schedule.tables`), and commit its rows'
 messages (`FirewallHonest.honestMsgs`), wherever at every commit strings it follows the schedule (`FirewallHonest.Fits`)
 and its rows read only the commit strings before them (`FirewallHonest.Causal`). -/
 theorem honestReqs_accepts {Prog Wit Rr Ωa Ωp : Type} (s : Flock.Firewall.Schedule)

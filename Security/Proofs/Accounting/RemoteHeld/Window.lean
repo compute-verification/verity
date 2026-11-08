@@ -1,4 +1,9 @@
-import Proofs.Accounting.RemoteHeld.OverTime
+module
+
+public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Proofs.Accounting.RemoteHeld.OverTime
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Held over time from any start in the first group's window
@@ -9,6 +14,8 @@ import Proofs.Accounting.RemoteHeld.OverTime
 session's facts given there rather than through `Paced` and `Covers`. The memory line's stretches after the first start
 at their first group's coin `s_lo`, before their paced session's `e_lo` (`Properties.RemoteAudit.Line.LineHeld`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

@@ -1,4 +1,41 @@
-import Proofs.Flock.Claims.ZK.Interact
+module
+
+public import Proofs.Flock.Claims.ZK.Interact
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.ZK.Statement
 
 /-!
 # `ZKmalR` at two provers with the same messages
@@ -7,8 +44,11 @@ import Proofs.Flock.Claims.ZK.Interact
   give the same transcript, and where one's calls include the other's, so do its run's.
 * `fork_pr_mono`: `Fork` finds at least as much at a prover with the same messages and more calls.
 * `zkmalR_congr`, `zkmalR_congr_eq`: so `ZKmalR` carries over to such a prover, at `γ ≥ 0`, and to a prover with the
-  same messages and calls, at every `γ`.
+  same messages and calls, at every `γ`; `zkmalR_congr_on`: the first with the two provers agreeing only on the
+  relation's statements.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -89,22 +129,32 @@ theorem fork_pr_mono {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
         (runStar_pLog_congr H P Q Vs x _ θ (fun h hh => hv h _ hh) (fun h hh => hl h _ hh) he)
   exact (findColl_ne_none_iff _).mpr ⟨p, hsub p hp, q, hsub q hq, h₁, h₂⟩
 
-/-- **`ZKmalR` carries over to a prover with the same messages and more calls** within the rounds, at `γ ≥ 0`: the real
-transcripts are the same, and its `Fork` finds at least as much. -/
+/-- **`ZKmalR` carries over to a prover with the same messages and more calls where the relation holds**, within the
+rounds, at `γ ≥ 0`: the real transcripts are the same, and its `Fork` finds at least as much. -/
+theorem zkmalR_congr_on {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
+    {k : Msg → ℕ} {P Q : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
+    (hv : ∀ w x, R x w → ∀ (hist : List (Msg × Msg)) ω, hist.length < k x →
+      (((P w).next x hist ω).eval H).1 = (((Q w).next x hist ω).eval H).1)
+    (hl : ∀ w x, R x w → ∀ (hist : List (Msg × Msg)) ω, hist.length < k x →
+      (((P w).next x hist ω).eval H).2 ⊆ (((Q w).next x hist ω).eval H).2)
+    (h : ZKmalR H k P R S εzk γ) : ZKmalR H k Q R S εzk γ := by
+  intro x w hR Θ Vs θ hk Ev
+  have e : ∀ ω, (runStar H (Q w) Vs x ω θ).msgs = (runStar H (P w) Vs x ω θ).msgs := fun ω =>
+    (runStar_msgs_congr H (P w) (Q w) Vs x ω θ fun hist hh => hv w x hR hist ω (hk ▸ hh)).symm
+  simp only [e]
+  exact (h x w hR Θ Vs θ hk Ev).trans (add_le_add le_rfl (mul_le_mul_of_nonneg_left
+    (fork_pr_mono H (P w) (Q w) Vs θ x (fun hist ω hh => hv w x hR hist ω (hk ▸ hh))
+      (fun hist ω hh => hl w x hR hist ω (hk ▸ hh))) (hγ x)))
+
+/-- **`ZKmalR` carries over to a prover with the same messages and more calls** within the rounds, at `γ ≥ 0`. -/
 theorem zkmalR_congr {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : Msg → ℕ}
     {P Q : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
     (hv : ∀ w x (hist : List (Msg × Msg)) ω, hist.length < k x →
       (((P w).next x hist ω).eval H).1 = (((Q w).next x hist ω).eval H).1)
     (hl : ∀ w x (hist : List (Msg × Msg)) ω, hist.length < k x →
       (((P w).next x hist ω).eval H).2 ⊆ (((Q w).next x hist ω).eval H).2)
-    (h : ZKmalR H k P R S εzk γ) : ZKmalR H k Q R S εzk γ := by
-  intro x w hR Θ Vs θ hk Ev
-  have e : ∀ ω, (runStar H (Q w) Vs x ω θ).msgs = (runStar H (P w) Vs x ω θ).msgs := fun ω =>
-    (runStar_msgs_congr H (P w) (Q w) Vs x ω θ fun hist hh => hv w x hist ω (hk ▸ hh)).symm
-  simp only [e]
-  exact (h x w hR Θ Vs θ hk Ev).trans (add_le_add le_rfl (mul_le_mul_of_nonneg_left
-    (fork_pr_mono H (P w) (Q w) Vs θ x (fun hist ω hh => hv w x hist ω (hk ▸ hh))
-      (fun hist ω hh => hl w x hist ω (hk ▸ hh))) (hγ x)))
+    (h : ZKmalR H k P R S εzk γ) : ZKmalR H k Q R S εzk γ :=
+  zkmalR_congr_on hγ (fun w x _ => hv w x) (fun w x _ => hl w x) h
 
 /-- **`ZKmalR` carries over to a prover with the same messages and the same calls** within the rounds, at every `γ`. -/
 theorem zkmalR_congr_eq {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}

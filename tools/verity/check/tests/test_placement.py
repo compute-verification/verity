@@ -29,6 +29,13 @@ def _placed(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "PLACED", tmp_path / "placed.json")
 
 
+@pytest.fixture(autouse=True)
+def roomy_disk(monkeypatch, tmp_path):
+    """The machine's own /workspace and check cache never block a slot `status_doc` reads in these tests."""
+    monkeypatch.setattr(CHECK.SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(CHECK.SLOT, "cache_disk", lambda: tmp_path / "no-disk")
+
+
 def slot(name: str, holder: dict | None = None, blocked: str | None = None, upcoming: list | None = None) -> dict:
     return {"name": name, "cpus": "0-47", "windows": None, "lead": 30, "holder": holder, "blocked": blocked, "upcoming": upcoming or []}
 
@@ -284,7 +291,10 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     (locks / "lean-slots").write_text("check 2\naudit 2\n")
     held = [_hold(locks / "check-c.lock"), _hold(locks / "lean-check-0.lock")]
     env = {"PATH": os.environ["PATH"], "CHECK_SLOTS": str(locks / "slots"), "LEAN_SLOTS": str(locks / "lean-slots")}
-    r = subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env, capture_output=True, check=True)
+    floors = b"DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50"      # the payload reads the machine's own disks, which this test can't set
+    assert floors in (payload := CHECK.slots_payload())
+    payload = payload.replace(floors, b"DISK_MIN_INODES, DISK_MIN_GB = 0, 0")
+    r = subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
     doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set
     assert [(s["name"], s["holder"]["pid"] if s["holder"] else None, s["blocked"]) for s in doc["check"]["slots"]] == [
@@ -293,7 +303,7 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     assert [s["holder"]["pid"] if s["holder"] else None for s in pools["check"]["slots"]] == [os.getpid(), None]
     assert CHECK.placement(doc) == (True, 0, "check slots: c held, a free; 0 waiting ahead; Lean check: 1 of 2 free")
     (locks / "lean-slots").write_text("check two\n")
-    doc = json.loads(subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env,
+    doc = json.loads(subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env,
                                     capture_output=True, check=True).stdout)
     assert doc["lean"]["error"].startswith("Refused: ") and doc["check"]["slots"][0]["name"] == "c"
     for fd in held:

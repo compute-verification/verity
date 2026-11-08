@@ -1,9 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # The theorems of `Statements.lean`
@@ -11,6 +30,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 The tables' theorems hold from the session alone (`drawSetupZKH_of_acceptsU`, `tablesAtZKH_liveU`), so each circuit
 form, `HmOut.parse`'s and the statement circuit's (`…St`, `HmOut.parseStmt`), reads them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -50,7 +71,7 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
 
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**, from the session alone:
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**, from the session alone:
 with `ZkSchedOK`, a `DrawSetupZKH` at `dj S`. -/
 theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
@@ -70,7 +91,7 @@ theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs
   exact ⟨⟨x, _, _, hz', h1, h2, h3, h4, h5, h6 _⟩⟩
 
 set_option linter.unusedVariables false in
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**: with `ZkSchedOK`, a
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**: with `ZkSchedOK`, a
 `DrawSetupZKH` at `dj S`, wherever the outputs are returned. -/
 theorem drawSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)

@@ -1,5 +1,19 @@
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TGapStaging
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.H100WProofs
+import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+import Proofs.Pouw.Fp8Atom.H1TGammaProofs
+import Proofs.Pouw.Fp8Atom.H1TProofs
 import Proofs.Pouw.Fp8Atom.H1TRunningProofs
-import Proofs.Pouw.Fp8Atom.H1TGapStaging
+import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 
 /-!
 # H-1T at bounded `k` (staging, unpinned)
@@ -17,6 +31,8 @@ bounded forms of `h1tDistinctLive`, `h1tRunningOfDistinct`, `h1tGamma` and `h1tG
   `|R_p| < 2^31` (ulp at most 128) for `k ≤ 9,048` (`T ≤ 312`, which covers 8,192³), and `|R_p| < 2^32` (ulp at most
   256) for `k ≤ 18,096` (`T ≤ 624`, which covers 16,384³).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Bounded
 

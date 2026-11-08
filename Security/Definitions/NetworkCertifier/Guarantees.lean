@@ -1,11 +1,11 @@
-import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.Assumptions
-import Mathlib.Data.Sym.Card
-import Mathlib.Data.Set.Card
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Order.Interval.Finset.Fin
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Schedule
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # The network certifier's guarantees
@@ -18,6 +18,8 @@ counting bound among them, are in `Proofs.NetworkCertifier.Lemmas`, under the sa
 `docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2), Theorem 3 (§2.4), and the
 ingress bound (§2.5, "Ingress content"; §3.2).
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 
@@ -305,7 +307,7 @@ that is 2,400 bits per window, 343 times the sync's 7.
   The registration statement proves that the rows are `Sched_E(p_i, arrivals)` for the arrivals the ingress
   certificates give, and that i < N. The count holds whenever i was chosen, since acceptance takes any value in the set.
   The rule that the root precedes the coins is there for the sampled proofs, so that the circuit can't be shaped around
-  the draw.
+  the sample.
 
 **The count.** With one profile per audit, `#Ac = N` and `A_c = log2 N`, once. Switching profiles at window
 boundaries, declared at each window's first bucket with the sync, makes the advice one (profile, sync) pair per window:
@@ -346,7 +348,7 @@ the ingress grid, and their content is exempt.
     anything X sends, and `c_coin` is the same for every message the bound counts.
   - Only the count is free. The frames on the coin link are a prefix of `c_coin`, in order, since a retry never
     resamples. How far the prefix has reached at each bucket is timing, and the grid charges it. Which coins the
-    firewall asks for, and when, is egress, which the egress grid charges.
+    ZK server asks for, and when, is egress, which the egress grid charges.
 - **What it doesn't cover.** The exemption is for coin openings only. Anything else the challenger sends on the link
   must be fixed by the public parameters, or it is charged as content.
 -/

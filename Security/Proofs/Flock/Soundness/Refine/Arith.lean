@@ -1,6 +1,12 @@
-import Proofs.Flock.Soundness.Refine.Tapes
-import Proofs.Flock.Soundness.Refine.Exec
-import Proofs.Flock.Soundness.Refine.Plays
+module
+
+public import Proofs.Flock.Soundness.Refine.Plays
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # Element seams: the executable's arithmetic is the model's
@@ -11,6 +17,8 @@ the verifier uses (`fOf_add`, `fOf_mul`, `fOf_inv`). This file adds what the pha
 is a sum (`fOf_dot`), the weight arrays have 64 entries, reading a coin as `getD` or `!` agrees, and the zerocheck
 vector `pinned ++ r_outer` is the model's `zcVector`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -76,7 +84,7 @@ theorem combWeights_size (z : F128) : (combWeights z).size = 64 := by
   unfold combWeights
   split <;> simp
 
-/-- The zerocheck vector (§9.2): the executable's `pinned ++ r_outer` is the model's `zcVector` on the coins
+/-- The zerocheck vector (`Flock.Piop`): the executable's `pinned ++ r_outer` is the model's `zcVector` on the coins
 `r_outer`. -/
 theorem zcVector_eq {m : ℕ} (c : Array F128) (hc : c.size = m - 13) (hm : 13 ≤ m) (j : Fin (m - 6)) :
     Model.zcVector execArith (vecOf (m - 13) c) j = fOf ((pinned ++ c)[j.val]!) := by

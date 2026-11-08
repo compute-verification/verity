@@ -1,15 +1,32 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+module
+
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Int.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+public import Properties.Flock.Circuit.Keys
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # Δ's source keys with public inputs
 
-With public input ports (§16.10, `HmIn`), a public leaf is a zero leaf of `leaves_in`, so its `srcKey` is the zero; but
+With public input ports (`Flock.HmRow`, `HmIn`), a public leaf is a zero leaf of `leaves_in`, so its `srcKey` is the zero; but
 `HmIn.delta` drops its Δ entries (`HmIn.publicCol`) and an in region pins it to its instance's public word
 (`Layout.public_pinned`). `srcKeyP` keys it by that word instead: bit `t` of public word `q` (`KeyP.pub`), so that
 `keyIdxP`, `keyIdx` at these keys, gives each unit one input gate per public word bit, whose value the instance's
 public file fixes. Off a public leaf it is `srcKey`'s, and with no public leaf map (`HmIn.parse` at a circuit without
 public inputs) `keyIdxP` is `keyIdx` (`keyIdxP_empty`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

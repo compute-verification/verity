@@ -1,4 +1,6 @@
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json.Basic
 
 /-!
 # JSON as Python's `json.dumps(v, sort_keys=True, separators=(",", ":"))` writes it
@@ -7,6 +9,8 @@ import Lean.Data.Json
 `' '..'~'` is escaped (`ensure_ascii`), as `\uXXXX` in lowercase hex, a pair of surrogates past the BMP, or the short forms
 `\" \\ \b \f \n \r \t`; keys sort by code point. Only integers are accepted as numbers.
 -/
+
+@[expose] public section
 
 namespace VStar
 

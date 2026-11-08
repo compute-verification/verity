@@ -1,18 +1,22 @@
-import Proofs.Flock.SessionLoop.FinRepErasedAt
-import Proofs.Flock.SessionLoop.FinL0Vals
+module
+
+public import Proofs.Flock.SessionLoop.FinRepErasedAt
+public import Proofs.Flock.SessionLoop.FinL0Vals
 
 /-!
 # `FinRepErased` from its parts
 
 **`Loop.finRepErased_of`**: at SessionLoopZKDeployed's premises, where every table's rows hold at its base (`hRows`,
 `Loop.FinRows`'s body) and the views' masked values below `zp 64` are the request's values plus its pads (`hMk`, FINH's
-equation), the run from the views is the firewall's up to `eraseZ` at every rep stream. By strong induction on the
+equation), the run from the views is the ZK server's up to `eraseZ` at every rep stream. By strong induction on the
 stream: where the streams before `k` return from the views with the auditor's rounds (`viewRep_rounds`,
 `viewRep_size`), rep `0`'s claim points are the opened coins' (`priorOf_view`, `repCut_points`) and they return from the
 switched cut too (`repCut_eraseZ`), so level 0's masked values are `l0Clear` plus the pads (`swSrcE_l0_live`), and
-`finRepErased_at` gives stream `k`; the firewall's rep at `k` returns (`proofsOf_at`, `proofFile_ok`, `finRepCut`), so
+`finRepErased_at` gives stream `k`; the ZK server's rep at `k` returns (`proofsOf_at`, `proofFile_ok`, `finRepCut`), so
 stream `k` returns from the views with the auditor's rounds.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -76,7 +80,7 @@ theorem priorOf_view (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
 
 set_option maxHeartbeats 1000000 in
 /-- **`FinRepErased` at rep stream `k`, from the streams before it**: where the streams before `k` return from the
-views with the auditor's rounds, the run from the views at `k` is the firewall's up to `eraseZ` (`finRepErased_at`),
+views with the auditor's rounds, the run from the views at `k` is the ZK server's up to `eraseZ` (`finRepErased_at`),
 its `hl0` from `swSrcE_l0_live` at the switched cut (`cmsCut_ok`, `icCut_ok`, the earlier streams by `repCut_eraseZ`),
 its `hpri` from `priorOf_view` and its `hxs` from `finRepXs`. -/
 theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -84,7 +88,7 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
@@ -220,20 +224,20 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
       have e' := hicC l
       rw [hsj] at e'
       exact e') hl hpiopC hlo hhi
-  rw [hg, hexT] at e
+  rw [hg, Masked.l0Clear_ligTab _ _ x w t j _ _ hexT] at e
   exact e
 
 set_option maxHeartbeats 1000000 in
 /-- **`FinRepErased` from its parts**: at SessionLoopZKDeployed's premises, where every table's rows hold at its base
 (`hRows`, `Loop.FinRows`'s body) and the views' masked values below `zp 64` are the request's values plus its pads
-(`hMk`), the run from the views is the firewall's up to `eraseZ` at every rep stream, by strong induction on the stream
-(`finRepErased_step`, then `viewRep_rounds` and `viewRep_size` at the firewall's rep, `finRepCut`). -/
+(`hMk`), the run from the views is the ZK server's up to `eraseZ` at every rep stream, by strong induction on the stream
+(`finRepErased_step`, then `viewRep_rounds` and `viewRep_size` at the ZK server's rep, `finRepCut`). -/
 theorem finRepErased_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (hRows : ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
       ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
         (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)

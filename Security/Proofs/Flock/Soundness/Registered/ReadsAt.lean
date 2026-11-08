@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Registered.ReadsX
+module
+
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # The registered reads' term at the outcome's registration
@@ -7,6 +13,8 @@ import Proofs.Flock.Soundness.Registered.ReadsX
 registration is the outcome's first component, so `ReadsX.prob_off_le_at` takes it from the outcome (`reg`), with the
 same finder: one play of the game, and the extractor's pair at the off read.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 

@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Types.Dag
+module
+
+public import Proofs.Flock.Soundness.Types.Dag
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A type DAG's Boolean circuit (phase 1 S4a: `flatten`, `flatten_eval`)
@@ -18,6 +21,8 @@ type semantics the rows' theorems are stated in (`Types.Dag.evalT`) is the Boole
 `GateRows.Gate` is RoPE's earlier gate model; this one keeps the constants as gates so that a callee's gates embed
 unchanged.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Types.Flatten
 

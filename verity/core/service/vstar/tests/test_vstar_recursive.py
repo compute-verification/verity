@@ -8,13 +8,13 @@ compiled check reads from the evidence (the staged rows), not from the verifier'
 The verifier's own inputs (`own_json`) and the evidence's `recursive` (`proofs_json`) are built from the files those
 flags name, by SHA-512, and every file is handed to `verdicts` as a blob. The format tests hold that build to what
 `ownOfJson` and `proofsOf` parse. With ``VERITY_VSTAR_RECURSIVE_DATA=DIR``, a `recursion_e2e` run's kept data (its
-``data/TAG``, `KEEP_DATA=1`, after STEP=lean), three recursive sessions are put to both: the honest one, every part
-accepted by each; the inner session with rep 0's challenge coin flipped (85's ``inner-neg-challenge``); and the honest
-one with one bit of part 0's first rep file flipped. Each part's verdict is the same in both, and a refusal of the whole
+``data/TAG``, `KEEP_DATA=1`, after STEP=lean), or with ``=fetch`` the kept run `recursive_data.json` names, three
+recursive sessions are put to both: the honest one, every part accepted by each; the inner session with rep 0's challenge
+coin flipped (85's ``inner-neg-challenge``); and the honest one with one bit of part 0's first rep file flipped. Each part's verdict is the same in both, and a refusal of the whole
 check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at every part.
 
 The refusals the compiled check adds to `flock-verify`'s per-part path are each held to a refusal by both: the inner
-statement under Flock's plain verifier (`innerOk`, here an inner draw that does not parse), and plain SHA-512 leaves under
+statement under Flock's plain verifier (`innerOk`, here an inner sample that does not parse), and plain SHA-512 leaves under
 `--zk` (`verifyCmd`'s message, which `partVerdict` gives word for word; its statement is the constant
 `verity/flock-circuit`, so only `flock-verify`'s side is driven). `fits`' bound, `2^56` bytes, is past any file a test can
 stage; `statementFits`, the same bound on the whole statement the inputs name, is driven at a limit of the honest
@@ -28,6 +28,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -49,8 +50,8 @@ def sha(p: Path) -> str:
 # --- what the verifier holds and what the prover sends, from a recursive session's files -----------------------------------
 
 class Inner:
-    """The inner statement's files (85's ``stage/``) and the inner session (``inner/s<k>``: ``session/`` and the coin
-    server's transcript ``public.json``)."""
+    """The inner statement's files (85's ``stage/``) and the inner session (``inner/s<k>``: ``session/`` and the challenger's
+    live-coin part's transcript ``public.json``)."""
 
     def __init__(self, stage: Path, session: Path):
         (self.pub,) = sorted(stage.glob("pub-*.bin"))
@@ -62,7 +63,7 @@ class Inner:
         return ["--rec-inner-circuit", str(self.circuit), "--rec-inner-public", str(self.pub), "--rec-inner-partition",
                 str(self.partition), "--rec-inner-program", str(self.program),
                 "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
-                "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(self.draw), "--rec-inner-session",
+                "--rec-inner-draw", str(self.draw), "--rec-inner-session",
                 str(self.session), "--rec-inner-transcript", str(self.transcript)]
 
 
@@ -225,7 +226,34 @@ def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_p
 
 DATA = settings.recursive_data()
 DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean): set "
-                              "VERITY_VSTAR_RECURSIVE_DATA=DIR")
+                              "VERITY_VSTAR_RECURSIVE_DATA=DIR, or =fetch for the kept run recursive_data.json names")
+KEPT = json.loads((Path(__file__).with_name("recursive_data.json")).read_text())["art"]
+
+
+def _data_dir(tmp_path_factory) -> Path:
+    """``DATA``'s directory: ``DATA`` itself, or for ``fetch`` `KEPT` fetched from the evidence store into a fresh directory.
+    `KEPT` is on the store's private remote only, so where the store can't reach it (a node without the remote's keys)
+    the tests skip, naming the store's refusal."""
+    if DATA != "fetch":
+        return Path(DATA)
+    to = tmp_path_factory.mktemp("kept")
+    r = subprocess.run([sys.executable, "-m", "research", "data", "fetch", KEPT, "--to", str(to)], capture_output=True,
+                       text=True, check=False)
+    if r.returncode:
+        why = (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
+        pytest.skip(f"VERITY_VSTAR_RECURSIVE_DATA=fetch: the evidence store did not fetch {KEPT} ({why}); run where "
+                    "`research data fetch` reaches the private remote, or fetch it there and set VERITY_VSTAR_RECURSIVE_DATA=DIR")
+    return to
+
+
+def _staged(dd: Path, named: str) -> Path:
+    """The staged directory a ``<s>.stmt`` names, in ``dd``: the run wrote its path on the node that ran it, so a copy of
+    the data elsewhere holds it under the longest tail of that path that is a directory of ``dd``, else the path as written."""
+    p = Path(named)
+    for i in range(1, len(p.parts)):
+        if (q := dd.joinpath(*p.parts[i:])).is_dir():
+            return q
+    return p
 
 
 class Session:
@@ -255,7 +283,7 @@ class Session:
         rows.write_text(json.dumps(VS.staged_shared_rows(dd / "v")))
         by_unit = {}
         for s in sorted(p for p in (dd / "v-sess").iterdir() if p.is_dir() and not p.name.startswith("forged-")):
-            c = Path((dd / "v-sess" / f"{s.name}.stmt").read_text().strip())
+            c = _staged(dd, (dd / "v-sess" / f"{s.name}.stmt").read_text().strip())
             with (c / "circuit.txt").open() as f:
                 unit = f.readline().split()[1]
             b = o / f"bindings-{s.name}.json"
@@ -274,7 +302,7 @@ class Session:
 
 @pytest.fixture(scope="module")
 def session(tmp_path_factory) -> Session:
-    return Session(Path(DATA), tmp_path_factory.mktemp("own"))
+    return Session(_data_dir(tmp_path_factory), tmp_path_factory.mktemp("own"))
 
 
 @pytest.mark.slow
@@ -333,7 +361,7 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
 @pytest.mark.slow
 @DEPLOYED
 def test_an_inner_draw_that_does_not_parse_is_refused_by_both(session, tmp_path):
-    """The inner statement's draw cut short: the compiled check refuses the whole check at Flock's plain verifier on the
+    """The inner statement's sample cut short: the compiled check refuses the whole check at Flock's plain verifier on the
     inner statement (`innerOk`), and `flock-verify` accepts no part."""
     inner = copy.copy(session.inner)
     inner.draw = tmp_path / "draw.json"

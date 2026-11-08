@@ -1,4 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A segment's chain: SHA-512 of its message in its compressions alone
@@ -11,6 +26,8 @@ the blocks after `pre` of `pre ‖ data` padded (`128 (n - 1) ≤ |data|`, `|dat
 output is `SHA-512(pre ‖ data)` in word order. The outer message is then `row_commitP`'s, with `Q(l)` its prefix and the
 segments' digests its data.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

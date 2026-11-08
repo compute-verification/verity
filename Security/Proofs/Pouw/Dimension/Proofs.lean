@@ -1,8 +1,13 @@
-import Definitions.Pouw.Dimension.Defs
-import Definitions.Pouw.Assumptions.Dimension.Pinned
-import Proofs.Pouw.NCP.RelationProofs
-import Proofs.Pouw.NCP.RelationWitness
-import Proofs.Pouw.NCP.ChainProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pinned
+public import Proofs.Pouw.NCP.ChainProofs
+public import Proofs.Pouw.NCP.RelationProofs
+public import Proofs.Pouw.NCP.RelationWitness
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Exact
+import Proofs.Pouw.NCP.Proofs
 
 /-!
 # Theorem D: proofs
@@ -13,6 +18,8 @@ import Proofs.Pouw.NCP.ChainProofs
 * `pricedCount`, `algBound` (Theorem D), `ttNCPAlg` (TT_NCP in AlgM_16 at `γ₀ = 16/(3k)`).
 * `algWitness`, `algSharp`: the hypotheses hold jointly, the bound is attained, and `16/(3k)` is sharp.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

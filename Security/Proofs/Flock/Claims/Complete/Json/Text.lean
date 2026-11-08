@@ -1,8 +1,44 @@
-import Flock.RecordText
-import Std.Data.TreeMap.Raw.Lemmas
-import Proofs.Flock.Claims.Complete.Json.Value
-import Proofs.Flock.Claims.Complete.Prover.Print
+module
+
+public import Flock.RecordText
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # The honest record is in its canonical text (S0)
@@ -13,6 +49,8 @@ print in its tree's order, which for a well-formed tree is its keys' sorted orde
 verifier's parser reads a printable value's text back as an alike value (`FlockComplete.JsonRT.parse_print`), so S0
 accepts the honest record (`check_printJ`), with no assumption.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

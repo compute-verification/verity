@@ -1,11 +1,11 @@
+module
+
+public import Proofs.Pous.P3.Column.BandWeights
+public import Proofs.Pous.P3.Column.TwoWay
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.IntervalCases
-import Proofs.Pous.P3.Column.BandWeights
-import Proofs.Pous.P3.Column.TwoWay
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
 
 /-!
 # The band-graph certificate for the two-directional column game
@@ -26,6 +26,8 @@ collects `Ψ t = Σ_{u ∈ U} (r u − t)`.
 * **Free starts from round `τ` on.** Every non-final dropped top finishes by `τ − 3`. So the rank sum is at most
   `⌊n/k⌋·tri (τ − 4) + tri (d − 1)`, and the free starts add at most `⌊n/(k+1)⌋·tri (d − τ)`.
 -/
+
+@[expose] public section
 
 namespace PousP3Column
 

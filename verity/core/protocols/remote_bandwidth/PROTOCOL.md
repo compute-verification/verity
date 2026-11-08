@@ -17,17 +17,17 @@ pinned by
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
 `RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
-`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
-record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the
+verifier, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
 tiles.
 
 ## 1. What an accepted session certifies
 
 Let \(N\) be the store's blocks, \(b = 4096\) bytes each. A session has \(W\) windows. Window \(t\)'s challenge
-\(\sigma_t\) left the verifier at \(b_{t-1}\) (\(b_{-1}\) is the session's start). Its boundary message left at
-\(b_t\), and its roots arrived by \(D_t = b_t + A\). Window \(t\) is \(P_t\) chained passes. Pass \((t, i)\) is a plan
-of \(L_{t,i}\) distinct blocks and their receipts. Every receipt was made after the root before it existed and before
-its own root left the node. So every read serves at most one receipt of the session (§5). Except with probability
+\(\text{chal}_t\) left the verifier at \(b_{t-1}\) (\(b_{-1}\) is the session's start). Its boundary message left
+at \(b_t\), and its roots arrived by \(D_t = b_t + A\). Window \(t\) is \(P_t\) chained passes. Pass \((t, i)\) is a
+plan of \(L_{t,i}\) distinct blocks and their receipts. Every receipt was made after the root before it existed and
+before its own root left the node. So every read serves at most one receipt of the session (§5). Except with probability
 \(\delta\) per window, at most \(m^*_t\) of window \(t\)'s \(U_t = \sum_i L_{t,i}\) receipts are wrong
 (`IntegrityProfile.bound`). Pooled over the session's windows instead, the openings bound the wrong receipts of all
 of them at once, and each window's share, except with \(\delta\) for the session (§10).
@@ -42,7 +42,7 @@ are at least \((1 - \gamma) R \Sigma\), with
 \]
 
 A receipt of a registered block is credited. One of a block appended after the codec seed (§4) is credited only on
-the property's verdict on the circuits that wrote it (`credit_post_seed`, §3); without one it is certified, drawn and
+the property's verdict on the circuits that wrote it (`credit_post_seed`, §3); without one it is certified, sampled and
 opened like any other, but not credited.
 
 | term | what it is | where it comes from |
@@ -72,7 +72,7 @@ under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \,
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
 and \(s'_t\), which follow the prover's play: \(|L_t|\), the most receipts a window of the session can have, is its
 pass cap (the pace's \(k\), unpaced `STEP_LIMIT` − 1) times its extent (\(N\), or the codec's `max_blocks` when the
-session reserves append coins), and \(s_t = \min(s, |L_t|)\). Drawn \(g > 1\) windows a coin (`groups_per_coin`), its
+session reserves append coins), and \(s_t = \min(s, |L_t|)\). Sampled \(g > 1\) windows a coin (`groups_per_coin`), its
 \(t\) is a draw: \(\lceil W/g \rceil\) of them, each with at most \(g\) times a window's \(|L_t|\) receipts and the
 cap \(s\) over them together. It takes the chance that the two runs' roots differ as
 0: the prover holds nothing of a window's openings coin before its roots (§4), but that its play then fixes them by the
@@ -94,14 +94,14 @@ to γ.
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
 \(\gamma_t\): window \(t\)'s reads are at least \((1 - \gamma_t) R \Sigma_t\) (`GammaTerms.windows`, a `WindowLedger`
-each). Every read behind window \(t\)'s receipts falls in \(\Sigma_t\): its chain starts from \(\sigma_t\), which left
-at \(b_{t-1}\), and its roots arrived by \(D_t\). Consecutive spans overlap by \(A\), but no read serves two windows'
-receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`GammaTerms.worst`, and `GammaTerms.worst_horizon` read
-over the horizon), which the ledger reports beside the session's γ. A window the prover leaves idle is its own
-\(\gamma_t\) there, where the session's γ sees about \(1/W\) of it. Read per window, the failure probability is the
-same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the session's one event (§10). A window is
-charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
-\(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
+each). Every read behind window \(t\)'s receipts falls in \(\Sigma_t\): its chain starts from \(\text{chal}_t\), which
+left at \(b_{t-1}\), and its roots arrived by \(D_t\). Consecutive spans overlap by \(A\), but no read serves two
+windows' receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`GammaTerms.worst`, and
+`GammaTerms.worst_horizon` read over the horizon), which the ledger reports beside the session's γ. A window the prover
+leaves idle is its own \(\gamma_t\) there, where the session's γ sees about \(1/W\) of it. Read per window, the failure
+probability is the same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the session's one event
+(§10). A window is charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them
+once, so its \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
@@ -168,8 +168,8 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier draws.
-- **The challenger** is the proof service's one challenger (`sampled_proofs.challenger`, on the auditor's host through
-  `sampled_proofs.remote` when it is remote). It draws every coin of a session, commits to them before the session,
+- **The challenger** is the proof system's one challenger (`sampled_proofs.challenger`, on the auditor's host through
+  `sampled_proofs.remote` when it is remote). It flips every coin of a session, commits to them before the session,
   and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
   In the reference, `audit.AuditRun` is the verifier and drives the challenger.
@@ -269,7 +269,7 @@ its top 16 bits are all ones, a bf16 NaN (and its top byte 0xFF, an E4M3 NaN), s
 \(k = 1\) is refused, because a word can then be partly kept and completed for less than an encode (red team).
 
 **A block's key** is the seed's or its own. A block whose payload the payload root committed before the codec
-seed was drawn (every block of a registration) is encoded under the seed's key, \(b_j = 0\), as above. A block whose
+seed was sampled (every block of a registration) is encoded under the seed's key, \(b_j = 0\), as above. A block whose
 payload is written after the seed (a KV page, or any block appended to a registered store) must be encoded under its
 bound key, whose offset is derived from the seed, \(j\), its payload's digest \(d_j\) and its append's coin \(c_a\),
 \(b_j(c_a)\) (`codec.encode(..., bound=True, coin=c_a)`, `codec.decode(..., d, c_a)`): only bound blocks may be
@@ -314,7 +314,7 @@ and vLLM's encoded store take the seed's key only (§8).
 Three properties of registration matter:
 
 - **The order is the point.** If the codec seed came before the payloads, the prover would register
-  \(\text{payload}_j = \text{decode}(0)\) and hold a store of zeros. Drawn after, each \(E_j\) costs \(k\) square roots
+  \(\text{payload}_j = \text{decode}(0)\) and hold a store of zeros. Sampled after, each \(E_j\) costs \(k\) square roots
   a word to produce, whatever the payload, all-zero weights included. That is the only rebuild bound: no
   incompressibility is assumed, and every bound is decode-free. A block written after the seed can't be ordered this
   way, so its bound key does the ordering: its key follows its payload.
@@ -327,7 +327,7 @@ Three properties of registration matter:
   \(\tau i\) separates every word of one store.
 
 **One live registration per node.** Each registration draws a fresh codec seed, so a prover that registered \(R\)
-times and kept the registration whose key suits it would choose \(\log_2 R\) bits of the seed: a retry that redraws,
+times and kept the registration whose key suits it would choose \(\log_2 R\) bits of the seed: a retry that resamples,
 which live coins rule out (a red-team finding). The verifier draws
 through its `Registry`, which holds at most one live registration per node:
 
@@ -349,7 +349,7 @@ process ends early, until `--close`. The registry's record holds digests and out
 
 ## 4. The coins and the chained passes
 
-Before a session the challenger draws its coins and commits to them, one epoch of the proof service's live coins
+Before a session the challenger flips its coins and commits to them, one epoch of the proof system's live coins
 (`coins.py`, `sampled_proofs.challenger`), and the verifier holds the commitment before the first coin. The prover
 receives each coin's value as it is released and the commitment only once the session has its outcome:
 
@@ -359,10 +359,11 @@ layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's inde
             a session that takes none: a session reserves exactly the coins it will use)
 c           64 bytes a coin from the challenger's generator, committed whole (`challenger.live_leaf`, hm96-sha512 under
             a fresh salt, frame-v3-sha512 over the layout); the audit's coin is its first 32 bytes (`coins.coin`):
-            window t's challenge σ_t is challenge coin t, its openings coin openings coin t, append i's c_a append coin i
+            window t's challenge chal_t is challenge coin t, its openings coin openings coin t,
+            append i's c_a append coin i
 R           SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
-after       σ_0 after R; σ_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after window
-            t's last root; append i's coin after append i's root
+after       chal_0 after R; chal_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after
+            window t's last root; append i's coin after append i's root
 released    (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`coins.Released`), no salt
             or path
 opening     (epoch, label, index, after, coin, salt, path): every released coin's, sent to the prover with the
@@ -370,7 +371,7 @@ opening     (epoch, label, index, after, coin, salt, path): every released coin'
             (`coins.received_reason`)
 ~~~
 
-The messages run: registration; then each window's challenge σ_t as it is released, the window's roots, and its
+The messages run: registration; then each window's challenge chal_t as it is released, the window's roots, and its
 openings coin, draws and openings; then the outcome; then the commitment and every released coin's opening, which the
 prover checks (the remote session's `end`, `ended`, `coins`). The challenger can't choose a coin after seeing a root,
 and the prover holds nothing of a coin before it is released: not its leaf, and not the commitment's root, a function
@@ -379,10 +380,10 @@ guarantee takes a hiding premise on the root. This is the construction of PoUW's
 the same challenger. Each coin leaves once, after the root the verifier
 recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
 The verifier holds that log to its own record (`AuditRun.released_reason`): the commitment it used, the same roots in
-the same order, σ_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened before
-its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's signed
-ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
-period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
+the same order, chal_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened
+before its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's
+signed ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the
+audit's period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
 (period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
 keep the coins it likes. `coins.trusted` reads that session only through `challenger.pinned_session`: the
 host's pins log (`pins`, as its gate serves it) is the one the session's open sealed and records the open's pin, and
@@ -390,13 +391,13 @@ that commit is on the verifier's own `git rev-list --first-parent origin/main` (
 main's check passed. A session with no pins log or no copy of main, an open that sealed none, or a pin off main's
 first-parent line is refused.
 
-The verifier releases \(\sigma_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
-boundary message, which is \(\sigma_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is one-way:
-no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of window \(t\)
-(`receipts.py`):
+The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
+boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+window \(t\) (`receipts.py`):
 
 ~~~text
-seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ prev_(t,i)),
+seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ chal_t ‖ u32be i ‖ prev_(t,i)),
             root_(t,−1) = root_(t−1,last) in a session, and the registration's digest before its first window
 prev_(t,i)  root_(t,i−1) while no append has been received before root_(t,i); otherwise
             SHA512("verity/remote-bandwidth/chained/v0\0" ‖ root_(t,i−1) ‖ a_(t,i)) (`audit.chained`)
@@ -465,14 +466,14 @@ as a partly written block is (memory-map/v1, `memory_map.py`). The append theref
 the block, the root of every pass whose plan holds the block follows the append, and that pass's seed binds it
 (below). The record's step follows from the encode, and moving it gains nothing: recorded later, the block's encoded
 reads go uncredited; recorded earlier, a plan holds bytes that are not its encoding, and their receipts fail. The
-convention is unchanged: step \(t - 1\)'s record takes effect after that step's reads. Each coin is live and drawn
-once: the challenger commits none ahead, a retry never redraws one, and an append whose coin is never used is a
+convention is unchanged: step \(t - 1\)'s record takes effect after that step's reads. Each coin is live and sampled
+once: the challenger commits none ahead, a retry never resamples one, and an append whose coin is never used is a
 failure in the record. A coin is used once a root follows its append, the append then joining that root's window
 (the lifetime cap, below). The rejections are `coin`: an append whose root was sent before (a retry; no coin is
-drawn), an append after the last window's roots are final (no root can follow it; no coin is drawn), and, at the last
+flipped), an append after the last window's roots are final (no root can follow it; no coin is flipped), and, at the last
 window's close, an append no root followed (`AuditRun.close`). A block the prover stops holding is released
 (`AuditRun.release`, runs of the store), and a plan received after its release that holds it rejects with `plan`; its
-receipts from earlier passes can still be drawn, so the prover keeps it until its windows are drawn. A block freed
+receipts from earlier passes can still be sampled, so the prover keeps it until its windows are sampled. A block freed
 before its encode lands is *withdrawn*: its values' last structural reader (§8, "The pass and its step") is at or
 before the step its write would be recorded at, so it gets no write, no free and no credit. It was never resident
 encoded, and a block no step reads while it's resident is in no record, so the line its write would be in lists its
@@ -488,7 +489,7 @@ its runs or held by a plan, with `release`. Appends are a session's: the next se
 **No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
 its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
 committed before its seed. A block appended after the seed is in no plan of the pass, and its receipts are credited
-in no pass whose seed came before its append. Without this the seed would depend only on \(\sigma_t\) and the root
+in no pass whose seed came before its append. Without this the seed would depend only on \(\text{chal}_t\) and the root
 before, which the prover knows before it sends that root, so a page appended mid-window could hold the pass's
 sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and their receipts would follow from the
 page's bytes without reading them, a red-team finding whose
@@ -608,11 +609,11 @@ rank \(r\) over \(\mathbb{Q}\), then \(r\) of the sector's bytes are fixed by th
 of its fibers has at most \(256^{32-r}\) members, and a guess of \(S_u e_u\) is right with chance at most
 \(2^{-8r}\).
 
-The rank's law is bounded through \(\mathbb{F}_2\). Multiply each column of a uniform \(\pm 1\) matrix by its first
+The rank's sampling design is bounded through \(\mathbb{F}_2\). Multiply each column of a uniform \(\pm 1\) matrix by its first
 row's sign, and replace every other row \(v\) by \((\text{first} - v)/2\). Both keep the rank over \(\mathbb{Q}\), and
 they leave the all-ones row over a uniform 0/1 matrix \(B\). That matrix's rank over \(\mathbb{Q}\) is at least its
 rank over \(\mathbb{F}_2\), which is \(1 + \text{rank}\,U\), where \(U\) is \(B\) with its first column added to the
-others and then dropped: a uniform \((k_s - 1) \times 31\) matrix over \(\mathbb{F}_2\). Its law is exact: an
+others and then dropped: a uniform \((k_s - 1) \times 31\) matrix over \(\mathbb{F}_2\). Its sampling design is exact: an
 \(m \times n\) matrix over \(\mathbb{F}_2\) has rank \(s\) in \(\prod_{i<s} (2^m - 2^i)(2^n - 2^i)/(2^s - 2^i)\) of
 the \(2^{mn}\) cases. So
 
@@ -779,19 +780,19 @@ all-gather of the GPUs' subtree roots, the send), the next seed and its broadcas
 trip, not half. The boundary message's one-way trip comes before the prover knows the window has ended, the pass it
 has just started must finish, and its root's trip comes after. The honest prover runs passes back to back,
 \(t_{\text{pass}} + g\) apart. On the boundary message it finishes the pass in flight, which is its window's last, and
-starts the next window's chain under \(\sigma_{t+1}\) from that pass's root. It is never late: in integer nanoseconds
-its last root arrives at most \(A - 1\) after the boundary, which happens when the pass in flight starts the
+starts the next window's chain under \(\text{chal}_{t+1}\) from that pass's root. It is never late: in integer
+nanoseconds its last root arrives at most \(A - 1\) after the boundary, which happens when the pass in flight starts the
 nanosecond before the message arrives (`timing.honest`, replayed against `AuditRun` in the tests).
 
 The deadlines don't make the chain sound. What they do is place window \(t\)'s reads in
 \([b_{t-1} + d^{\downarrow}_{\text{floor}}, D_t - d^{\uparrow}_{\text{floor}}]\), so each window certifies a rate, and
-fix the window's roots before its openings are drawn.
+fix the window's roots before its openings are sampled.
 
 **The cost.** Only \(g\) goes uncovered between passes, so in steady state
 \(\mu_{\text{timing}} = g/(t_{\text{pass}} + g)\) (`timing.chained`): 0.25% at 20 ms passes and 0.10% at 50 ms, whatever
 the RTT. A window's end costs nothing, because the chain runs on through the boundary. The round trip appears only at
-the session's two ends: \(\sigma_0\)'s trip down before the first pass, and after the last boundary the slack of the
-pass in flight and its root's trip up, together at most \(A + J\). So
+the session's two ends: \(\text{chal}_0\)'s trip down before the first pass, and after the last boundary the slack of
+the pass in flight and its root's trip up, together at most \(A + J\). So
 \(g/(t_{\text{pass}} + g) \le \mu_{\text{timing}} \le g/(t_{\text{pass}} + g) + (A + J)/\Sigma\). §10 has the grid.
 
 **Between sessions.** Sessions over one store are not chained to each other: each session's chain starts from the
@@ -815,10 +816,10 @@ fewer than `min_passes` roots then rejects with `few`. Otherwise the challenger 
 \(c_{W+t}\), and the verifier draws \(s\) distinct receipts uniformly from the window's \(U_t\) with it
 (`AuditRun.close`): `derive(c_(W+t), "verity/remote-bandwidth/openings/v0", {registration, window: t}).subset(min(s,
 U_t), U_t, "openings")`. Unit \(u\) is (pass, position): pass \(i\) for the first \(i\) whose prefix sum
-\(L_{t,0} + \dots + L_{t,i}\) exceeds \(u\), and the position \(u\) less the passes before it. Windows are drawn in
+\(L_{t,0} + \dots + L_{t,i}\) exceeds \(u\), and the position \(u\) less the passes before it. Windows are sampled in
 order. The coin is released only after every root it draws from is fixed, so the draw is independent of the roots.
 
-**Why a coin, not Fiat–Shamir, for the openings.** Drawing from the window's last root instead (`derive` keyed by
+**Why a coin, not Fiat–Shamir, for the openings.** Sampling from the window's last root instead (`derive` keyed by
 \(\text{root}_{(t,\text{last})}\)) is also sound in the random-oracle model, but the prover can grind it. Re-salting the
 last leaf re-rolls the draws for the price of a leaf and its path, so a prover with wrong receipts tries \(Q\) roots
 and keeps one whose draws miss them. By the union bound the window's δ becomes \(Q\delta\), so \(s\) must rise to the
@@ -849,7 +850,7 @@ openings that aren't one a draw:
 
 1. the indices are the draw's and every field has its size, the tile evidence empty unless the registration binds
    \(z\), and the digest 64 bytes for an appended block (\(j \ge N\)) and empty for a registered one (`malformed`);
-2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\sigma_t\), \(i\) and the root received before
+2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\text{chal}_t\), \(i\) and the root received before
    \(\text{root}_{(t,i)}\)), the plan received with the root and the leaf's salt, has its path to
    \(\text{root}_{(t,i)}\) (`receipt-path`);
 3. the block, read as the registered codec's words, has every word below \(p\) (`codec`), and its decoding's leaf under
@@ -897,7 +898,7 @@ drew \(\min(s, U)\), and the memory line's δ charges the draw's rejection at \(
 `groups_per_coin` draws several from one coin), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
-kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
+kind, `bind` and the rows (§4), and `ledger` takes a binding error only from a record that binds \(z\);
 \(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger` refuses a rebuild model of any
 other; and the layout says which bytes a credited block is (§4). Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), their post-seed reads \(a_{t,i}\) (`post_seed`, which
@@ -921,11 +922,11 @@ checkable from the record (§1). `Record.end_ns` is the last deadline, which the
 out.
 
 **How `IntegrityProfile` fits.** It fits the openings exactly. The one level is `receipt`, \(U_t\) members, with
-`Subset(s)` drawn. That is valid because every pass's root and plan are committed before the openings coin is released,
+`Subset(s)` sampled. That is valid because every pass's root and plan are committed before the openings coin is released,
 and `bound()` is \(m^*_t\). A level of passes above it would only group (the subset is uniform over all \(U_t\)), and a
 profile's hierarchy has one fan-out per level, which passes of different lengths don't have.
 
-It doesn't fit the rest of γ: the timing, chip, rebuild, host and link terms aren't a sampling design over units. So,
+It doesn't fit the rest of γ: the timing, chip, rebuild, host and binding errors aren't a sampling design over units. So,
 as the core protocol interface provides for a protocol whose acceptance isn't only a sampling design, the protocol's
 profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term, the session's
 and each window's, from it plus the node's capacities.
@@ -972,7 +973,7 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
 - **γ**, per window (\(\gamma_t\)) and over the session, each against both \(R\): the node's specified read bandwidth,
   the headline, and its measured one (§1, "Which \(R\) is the headline"). The session's is read both ways, per window at
   \(W\delta\) and over the horizon at \(\delta\) (§10), each with its failure probability. γ is over the registered
-  store only: a receipt of a block appended after the codec seed is drawn and opened like any other but not credited
+  store only: a receipt of a block appended after the codec seed is sampled and opened like any other but not credited
   (`credit_post_seed` is None, so \(\mu_{\text{carrier}}\) is 0), and γ doesn't depend on what the workload appends.
   A paced session's coins leave as its roots arrive, so when they left is a value, and its γ per window is over the
   fixed windows of the stated \(T\) (`Pace.window_ns`) from its first challenge, the last ending at its last deadline
@@ -1035,13 +1036,13 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 
 - **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
-  proves. Deployed, each drawn receipt is one proof block that the proof service proves in zero knowledge, and the
+  proves. Deployed, each sampled receipt is one proof block that the proof system proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
   binds \(z\)), plus the link from the block's payload to the circuit's committed values:
   - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
     hiding commitments): the registration (its digest, \(N\), \(b\), the codec and the receipt kind); the draw
     (window \(t\), pass \(i\), the position in the pass, and \(L_{t,i}\)); the pass's root \(\text{root}_{(t,i)}\)
-    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\sigma_t\), \(i\) and that
+    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\text{chal}_t\), \(i\) and that
     root; the plan's commitment (v0's plan digest); the payload root; for an appended block, its append's root and
     coin \(c_a\); and the roots of the circuit's value commitments.
   - *Witness*: the block \(E_j\), its payload \(\text{payload}_j\) and digest \(d_j\), the index \(j\), the receipt
@@ -1062,7 +1063,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 
   The formats already hide: payload blocks and receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and
   the coins are hm96 leaves until released, so the formats don't change when the openings move into proofs. A public
-  \(c_a\) and append root say which append the drawn block belongs to, but not its index or its contents. Which value
+  \(c_a\) and append root say which append the sampled block belongs to, but not its index or its contents. Which value
   leaves a block's payload bytes are is the memory-map unit's public row's (`map_value_leaves` in
   `verity.ml.circuits.requirement_units`: a present value \(k\) is leaf \(\text{pos}[k]\) of the value commitments,
   and payload \(c\) is store index \(\text{first} + c\)). Open: the units' circuits; and the plan's commitment in
@@ -1112,12 +1113,12 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   `StoreMatches` asks for (`requirement.Requirement.last` over the census, in Python). It reads the circuit, its
   schedule and the registration, never a committed value, so residency comes from the public schedule. A free at a
   value's last *use*, the last step whose gather selected it, would read residency off committed values.
-  `StoreMatches` would fail for every candidate no later step selects, and one faulty proof block upstream of the selection
+  `StoreMatches` would fail for every candidate no later step selects, and one incorrect proof block upstream of the selection
   would move the free. In a red-team counterexample,
   one flipped bit of a length unit keeps \(L - 1\) dead pages of \(L\) resident to the last
   step, \((L - 1)(S - 1) \cdot 32\) bits more, while the structural residency is the same in both runs. The
   structural free holds more instead: each candidate page stays resident to the last step that may select it, \(L\)
-  times the honest run's use there with no faulty proof block. The prover does hold those pages, so the audit's own claim is
+  times the honest run's use there with no incorrect proof block. The prover does hold those pages, so the audit's own claim is
   sound, but they are memory the circuit may not need. That is why registered weights, which `W` must hold whatever
   the router or the tokens select, are creditable in every format, and KV only where no selection reads it. Each
   request's arrival step and executed extent are part of the schedule. They are host- or value-derived until the
@@ -1139,7 +1140,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
     reads it, so serving writes into memory whose block was released at step \(r\) only once no pass yet to read is
     at a step up to \(r\) (the free fence). A write that skips the fence lands over a block a pass has yet to read,
-    and a drawn receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
+    and a sampled receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
     as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
     and the verifier sees the same messages, so what it accepts is unchanged.
 - **The schedule check.** Credit after the seed waits on it (`schedule.py`, of record in
@@ -1181,7 +1182,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   \(u_s\) the pass's planned blocks it credits no receipt of (0 when its receipts cover its plan), a window
   its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
   to the ledger's error (`GammaTerms.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
-  the share of units drawn wrong, is the link's to establish: a faulty proof block at a heavy step carries more than its
+  the share of units sampled wrong, is the link's to establish: an incorrect proof block at a heavy step carries more than its
   share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts, filler. `PlanMatches` is
@@ -1218,10 +1219,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     choice, past what the advice bound tolerates. Even with the map fixed, a writer keeps choices the map doesn't
     read (padding and dead-value bits, run inputs, schedules), and the stacked sketch bound goes vacuous past about
     \(41 - \log_2(\text{passes})\) bits of them. The append coin (§3, §4)
-    makes that advice 0: an appended block's key is \(b_j(c_a) = H(\text{seed}, j, d_j, c_a)\), and \(c_a\) is drawn
+    makes that advice 0: an appended block's key is \(b_j(c_a) = H(\text{seed}, j, d_j, c_a)\), and \(c_a\) is sampled
     after the append's root commits every \(d_j\) and its place, so no choice made before the commit can depend on an
     encoding. After the coin the prover's remaining choice is to append again, which draws a fresh coin: a retry
-    that redraws unless the map makes it, which check 3 below covers. The audit charges no advice for these
+    that resamples unless the map makes it, which check 3 below covers. The audit charges no advice for these
     choices because W's memory map fixes them: memory-map/v1's frees and writes are functions of the served
     steps, fixed before the coins. That the session's appends, releases and plans are that map's is the memory-map
     unit's to prove (proofs', I4), inside zero knowledge, and the audit relies on it for exactly this:
@@ -1321,7 +1322,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   and its credited bytes.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
-- **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover
+- **Keeping receipts for the draws.** Any receipt of a window may be sampled once its roots are final, so the prover
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (about 0.06–0.1%). The reference keeps every pass whole.
@@ -1569,7 +1570,7 @@ commitment, the salt, `vk`'s root and \(k_s\); its digest is `p2.py`'s table, an
 Per pass \(i\), after root \(i-1\):
 
 ~~~text
-seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
+seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
            K.stream(("row", c), 1028) (verity.ml.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
@@ -1627,7 +1628,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-- No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
+- No property in `Security/Properties/Accounting/Remote` states yet what the Lean accepts of a P2 session; the difftest
   (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).

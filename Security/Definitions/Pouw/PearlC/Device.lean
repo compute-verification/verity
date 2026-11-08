@@ -1,9 +1,10 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Accum
-import Definitions.Pouw.PearlC.PeelExactP
-import Definitions.Pouw.PearlC.SkipP
-import Definitions.Pouw.PearlC.FormingPDefs
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.PearlC.PeelExactP
+public import Definitions.Pouw.PearlC.SkipP
+public import Definitions.Pouw.PearlC.FormingPDefs
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
 # Pearl-C at a device record (trusted)
@@ -29,6 +30,8 @@ are H100 W1 prices. A device record makes each of them a parameter, as the schem
   at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not `SkipP.unitFlagsP · 0`, which would judge one group
   over all of k.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

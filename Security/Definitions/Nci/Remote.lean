@@ -1,4 +1,7 @@
-import Definitions.Nci.Dampener
+module
+
+public import Definitions.Nci.Dampener
+public import Definitions.Core.Prob
 
 /-!
 # The compute dampener, remote protocol: the vocabulary
@@ -10,10 +13,10 @@ can do outside it:
 
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
-  (`wrongCapacity`), which is at most `ε' C` outside an event of probability (`prob`) at most `p/ε'`;
-* the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected faulty proof block until the halt `Δ` later,
+  (`wrongCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
+* the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected incorrect proof block until the halt `Δ` later,
   its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
-* the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't drawn is accepted, so the faulty blocks
+* the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't sampled is accepted, so the faulty blocks
   an identity runs before its first detection (`escaped`) skip declared work too, at most `θ C` outside an event of
   probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
   (`noDetectionBefore`) being detected with probability at least `q`.
@@ -26,12 +29,9 @@ residual read there is `r̂ + ε_W W_cert/C`.
 computes it at `s = 0`; `hardwareMultiple` is the one a developer needs.
 -/
 
-namespace Nci.Dampener
+@[expose] public section
 
-/-- **The probability of an event** `E` under a distribution `μ` on a finite outcome space, as a real number:
-`∑_{ω ∈ E} μ(ω)`. -/
-noncomputable def prob {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) : ℝ :=
-  open scoped Classical in ∑ ω, if E ω then (μ ω).toReal else 0
+namespace Nci.Dampener
 
 /-- **The capacity of the windows whose certificates are wrong**: `∑_{i : wrong i} c_i`, window `i` of `N` having
 capacity `c_i`. -/
@@ -42,7 +42,7 @@ noncomputable def wrongCapacity {N : ℕ} (c : Fin N → ℝ) (wrong : Fin N →
 `H`. -/
 noncomputable def lagShare (J Δ H : ℝ) : ℝ := J * Δ / H
 
-/-- **The faulty proof blocks accepted before their identity's first detection**: of the faulty proof blocks `bad`,
+/-- **The incorrect proof blocks accepted before their identity's first detection**: of the incorrect proof blocks `bad`,
 block `b` run by identity `ident b` at time `τ b`, those with no detected faulty block (`detected`) of the same
 identity at or before `τ b`. When every faulty block is detected (every proof block proved, tiers T1–T4), none is. -/
 noncomputable def escaped {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) : Finset β :=

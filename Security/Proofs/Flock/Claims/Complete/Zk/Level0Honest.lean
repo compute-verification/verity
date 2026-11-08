@@ -1,7 +1,48 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Model
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
+public import Proofs.Flock.Claims.Complete.Zk.Level0Model
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+import Proofs.Flock.Claims.Complete.Zk.Level0Shape
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest masked Ligerito meets the masked model's final identity
@@ -14,6 +55,8 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
   (`Sync.closeZk`, the padding cancelled by `ybar`) then keeps it as plain's close does.
 * **The last level** (`goal_lastZ`): plain's `goal_last` at the masked model's level loop.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

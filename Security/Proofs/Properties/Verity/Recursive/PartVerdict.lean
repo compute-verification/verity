@@ -1,13 +1,48 @@
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Complete.Encode
-import VStarRecursive
+module
+
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import VStarRecursive.Protocol
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A V\* part's compiled verdict is the model's decision at its session (a step of `acc_of_accepts`)
 
-The compiled recursive component runs, per V\* part `j`, `partVerdict`: part `j`'s setup at its record's draw
+The compiled recursive component runs, per V\* part `j`, `partVerdict`: part `j`'s setup at its record's sample
 (`buildSessionOf` and the recursive setup's checks), then `Zk.verify` on the record and the rep files the part names
-(`partFiles`), the scope check, the tables' sizes, the draw's law, the full-draw and inner-draw refusals, the program and
+(`partFiles`), the scope check, the tables' sizes, the sample's law, the full-draw and inner-draw refusals, the program and
 the record's canonical text. The model verifier (`RecDeploy.V`) decides session `s` with `RecDeploy.nextO` at the
 session's V\* statement `xO`: at SHA-512 it accepts exactly when `Zk.verify` at `xO`'s recursive setup accepts the last
 message's record and proof files, `FlockDeploy.checks` pass and so do the verdict's last refusals
@@ -20,7 +55,7 @@ What the compiled part can't see is a hypothesis:
 * **The inputs** (`hfind` … `hdraw`): `xO`'s reading (`s`, its `Ins`, and `innerOfO`, `srcOfO`) holds the compiled part's
   inputs: the statement's tags, the circuit and public file it reads off the blobs, the session's tags, one table, no
   lookup tables or public inputs, the registered reads, the verifier's inner shape and the inner session's record, and the
-  record's draw.
+  record's sample.
 * **`Shows`** (`hstmt`, `hrec`, `hreps`, `hnp`): the last message's statement is `xO`, its record is the part's record
   blob and its proof files are the part's rep files, by `repName`, in `spec.repStreams` order. `hnp` (the last message
   carries exactly one proof file per rep stream) is not in `Shows` yet: `Zk.verify` refuses any other count, so
@@ -32,6 +67,8 @@ What the compiled part can't see is a hypothesis:
 verifier's acceptance, as `FlockDeploy.decisionAt`'s verdict at SHA-512, and as the model verifier's answer at the
 session's last round.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 
@@ -139,8 +176,8 @@ private theorem recordDraw_eq (r : String) :
     FlockSoundness.Discharge.Exec.recordDraw r = Flock.Witness.recordDraw r := rfl
 
 /-- **The compiled part's verdict, unfolded**: where part `j`'s verdict is `.ok ()`, it read the statement's tags, the
-circuit, public file and registered reads, and a UTF-8 record with a draw off the blobs; `buildSessionOf` at the part's
-tags, coins and the record's draw set up a session `(spec, sts)`; the part's rep files are `.ok`; and `Zk.verify` at that
+circuit, public file and registered reads, and a UTF-8 record with a sample off the blobs; `buildSessionOf` at the part's
+tags, coins and the record's sample set up a session `(spec, sts)`; the part's rep files are `.ok`; and `Zk.verify` at that
 session, the scope check at the session's tags, the full-draw and inner-draw refusals and the record's canonical text
 pass. -/
 theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {bs : Core.Blobs}
@@ -155,17 +192,14 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
       (Flock.Witness.recordDraw record).isSome = true ∧
       SampledProofs.OneStageZk.buildSessionOf
           (Flock.ProvedScope.circuitOf
-            (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-              (Flock.Zk.maskLogOf circuitB) 1) circuitB [])
-          (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-            (Flock.Zk.maskLogOf circuitB) 1)
+            (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1) circuitB [])
+          (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
           circuitB pubB (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) [] 1
           (Flock.Witness.recordDraw record) (some p.partition) (some p.program) registered = .ok (spec, sts) ∧
       partFiles spec s bs = .ok proofs ∧
       Flock.Zk.verify spec (tabsOf sts) record proofs = .ok () ∧
       Flock.ProvedScope.check
-          (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-            (Flock.Zk.maskLogOf circuitB) 1)
+          (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
           true circuitB pubB [] 1 false registered.isSome = .ok () ∧
       Flock.RecSetup.fullDraw (some h.shape) true (Flock.Witness.recordDraw record) record = .ok () ∧
       Flock.RecSetup.innerDrawn (some h.src) = .ok () ∧
@@ -205,8 +239,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     · simp only [hu] at hpart
       try exact absurd hpart throw_ne
     simp only [hu] at hpart
-    generalize hT' : Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-      (Flock.Zk.maskLogOf circuitB) 1 = T at hpart
+    generalize hT' : Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1 = T at hpart
     generalize hD : (if T.hm96Rows = true then Flock.Witness.recordDraw record else none) = D at hpart
     have hv := Except.ok.inj hpart
     clear hpart
@@ -263,7 +296,7 @@ verdict is `.ok ()` and the model decides at `xO` on the last message `f` with `
 `(spec, sts)`, the deployed `Zk.verify` at that session accepts `f`'s record and proof files, the custody checks pass and
 so do the verdict's last refusals, given:
 * the session: `(spec, sts)` is what `buildSessionOf` sets up at `s`'s reading of the part's inputs (`hD`);
-* the inputs: `s`, `innerOfO xO` and `srcOfO xO` hold the compiled part's inputs (`hfind` … `hsrc`), and `s`'s draw is the
+* the inputs: `s`, `innerOfO xO` and `srcOfO xO` hold the compiled part's inputs (`hfind` … `hsrc`), and `s`'s sample is the
   record's (`hdraw`);
 * `Shows`: `f` is the part's last message at `xO` (`hstmt`), its record the part's record blob (`hrec`) and its proof
   files the part's rep files (`hreps`), one per rep stream (`hnp`);
@@ -275,8 +308,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
     (hpub : bs.get q.pub "a part's public file" = .ok s.read.I.publicFile)
-    (htags : s.read.tags = Flock.Zk.tags (s.stmtTags.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec
-      (s.stmtTags.tableNames 1)))) (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
+    (htags : s.read.tags = Flock.Zk.tags s.stmtTags (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
     (hzk : s.read.zk = true) (htables : s.read.I.tables = []) (hcount : s.read.I.count = 1)
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
@@ -361,8 +393,7 @@ theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : Pa
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
     (hpub : bs.get q.pub "a part's public file" = .ok s.read.I.publicFile)
-    (htags : s.read.tags = Flock.Zk.tags (s.stmtTags.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec
-      (s.stmtTags.tableNames 1)))) (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
+    (htags : s.read.tags = Flock.Zk.tags s.stmtTags (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
     (hzk : s.read.zk = true) (htables : s.read.I.tables = []) (hcount : s.read.I.count = 1)
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
@@ -396,8 +427,7 @@ theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : P
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
     (hpub : bs.get q.pub "a part's public file" = .ok s.read.I.publicFile)
-    (htags : s.read.tags = Flock.Zk.tags (s.stmtTags.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec
-      (s.stmtTags.tableNames 1)))) (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
+    (htags : s.read.tags = Flock.Zk.tags s.stmtTags (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
     (hzk : s.read.zk = true) (htables : s.read.I.tables = []) (hcount : s.read.I.count = 1)
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
@@ -436,8 +466,7 @@ theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
     (hpub : bs.get q.pub "a part's public file" = .ok s.read.I.publicFile)
-    (htags : s.read.tags = Flock.Zk.tags (s.stmtTags.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec
-      (s.stmtTags.tableNames 1)))) (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
+    (htags : s.read.tags = Flock.Zk.tags s.stmtTags (Flock.Zk.maskLogOf s.read.I.circuitFile) 1)
     (hzk : s.read.zk = true) (htables : s.read.I.tables = []) (hcount : s.read.I.count = 1)
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)

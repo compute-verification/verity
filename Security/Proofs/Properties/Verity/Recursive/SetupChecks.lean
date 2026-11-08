@@ -1,7 +1,40 @@
+module
+
+public import Proofs.Properties.Verity.Recursive.Names
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Properties.Verity.Recursive.Names
-import VStarRecursive
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The compiled part's setup is the model's recursive setup
@@ -11,7 +44,7 @@ Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`
 verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
 `RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
 `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`
-at no link table, `RecVStar.checkLabels` and the draw's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
+at no link table, `RecVStar.checkLabels` and the sample's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
 which `setupO` runs on a V\* statement) makes the same calls in the same order. This module matches them.
 
 * `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
@@ -29,6 +62,8 @@ at the dense shape the compiled component accepts (`shapeOf`: no sparse shape) t
 META need not be compared.
 -/
 
+@[expose] public section
+
 namespace Verity.Recursive
 
 open Flock
@@ -39,7 +74,7 @@ open FlockDeploy (noIdentifier)
 and the scope check read): the model's reading `i` of part `j`'s staged statement holds, field by field, the values the
 compiled part `j`'s check passes to the same calls: `--zk`, the statement's tags (`tags0`) and the session's
 (`tags`), the part's circuit and staged public file, no lookup table, one table, the part's partition and program, the
-verifier's registered reads, the record's draw, the inner shape, check 5's source, the inner commits and link the
+verifier's registered reads, the record's sample, the inner shape, check 5's source, the inner commits and link the
 compiled component holds (`h`), `--rec-part j`, the bindings, the rows and no link table. -/
 structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags)
     (circuitB pubB : ByteArray) (partition : Lean.Json) (program : ByteArray)
@@ -70,8 +105,8 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
 part `j`'s check calls it on the session's tables `sts`: the inner checks, the inner shape at no link table, the
 registration's and V\*'s list's caps, V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public
-rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the draw's law
-where there is a draw. -/
+rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's law
+where there is a sample. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) (draw : Option Lean.Json)
@@ -116,7 +151,7 @@ theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (For
 
 /-- **The model's recursive setup passes where the compiled part's does.** Suppose the model's reading `i` of part
 `j`'s staged statement holds the compiled part's inputs (`SetupMatch`), the inner shape has no RecSparse phase and the
-session's tags hm96-sha512 rows (as the compiled part's do wherever it has a draw). Suppose the model's Flock setup
+session's tags hm96-sha512 rows (as the compiled part's do wherever it has a sample). Suppose the model's Flock setup
 gives the compiled session `(spec, sts)`, every table passes the registered-reads and identifier checks and the
 registration is full (`BaseSetup`'s conclusion), and the compiled checks block passes on `sts` (`RecChecks`). Then the
 model's recursive setup (`RecIns.setup`) passes with `(spec, sts)`. -/
@@ -263,7 +298,7 @@ def PartRegistered (pr : Option Lean.Json) (registered : Option (Array Registere
 
 /-- **What an accepted compiled part shows of its setup.** Where part `j`'s verdict (`VStar.Recursive.partVerdict`)
 is `.ok ()`, its readers read (the statement's tags, without plain leaves, the part's circuit and staged public file,
-under `FIELD_MAX` bytes, its registered reads and bindings, its record and the record's draw, under hm96-sha512 rows;
+under `FIELD_MAX` bytes, its registered reads and bindings, its record and the record's sample, under hm96-sha512 rows;
 its rows are the inner session's, `h.rows`), Flock's session and the verifier's
 own checks on it pass (`BaseSetup`'s inputs: `checkProgram`, `buildSessionOf`, `checkComplete`, `checkCover`,
 `KnownRead.check`), the checks block passes (`RecChecks`), and so does the scope check. -/
@@ -331,8 +366,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     · simp only [hrec] at hv
       first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
     simp only [hrec] at hv
-    generalize hT : Zk.tags (tags0.withCoins (Coins.tree (Zk.coinSpec (tags0.tableNames 1))))
-      (Zk.maskLogOf circuitB) 1 = T at hv
+    generalize hT : Zk.tags tags0 (Zk.maskLogOf circuitB) 1 = T at hv
     generalize hD : (if T.hm96Rows = true then Witness.recordDraw record else none) = D at hv
     have hv := Except.ok.inj hv
     obtain ⟨proofs, -, hv⟩ := bind_ok hv

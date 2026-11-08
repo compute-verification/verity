@@ -1,6 +1,13 @@
-import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+module
+
+public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # `test-16-nvfp4`: rows 8 to 15 of `G = F_Bᵀ·F_A` (`PeelFp4Checks`, which joins them) -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

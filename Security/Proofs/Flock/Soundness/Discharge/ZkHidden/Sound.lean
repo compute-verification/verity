@@ -1,30 +1,49 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 /-!
 # The soundness of one hidden-output `--zk` sampled session
 
 `zk_session_soundH`: `Composed.zk_session_sound` for the sessions production `--zk` writes, whose tables
-`Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`, PROTOCOL §16.13), at the
+`Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`, `HmOut`), at the
 same law and parameters, with the same proof. For any live prover `τ` of a hidden-output one-table `--zk` session,
 `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition (`keyProg c hU n`), each read at its `--zk` site in its hidden-output table and bound to the rows it commits,
 input or output (`placeZH`, `rsZH`: HiddenExec's `keyLayoutH` and `keyRowsH` moved to the `--zk` tables): the compiled
 `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_atH`) at the simulated prover `simZ … τ`, with `δ_tree = 0`,
-carried to flock-verify's acceptance by `zk_headline_exec_on`. `RunsZC` at the law's draws is `runsZC_liveH`, from
+carried to flock-verify's acceptance by `zk_headline_exec_on`. `RunsZC` at the sampling design's samples is `runsZC_liveH`, from
 `TablesAtZKHLive` (`tablesAtZKH_live`), the tags (`TagsOkH`), the challenger's record of the live session
-(`RecordsLiveZK`) and its draw at each of the law's draws (`DrawOkZKH`).
+(`RecordsLiveZK`) and its sample at each of the sampling design's samples (`DrawOkZKH`).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and the challenger
-(`RecordsLiveZK`, and `DrawOkZKH` at each of the law's draws), as `zk_session_sound`. Its circuit hypotheses are the
+(`RecordsLiveZK`, and `DrawOkZKH` at each of the sampling design's samples), as `zk_session_sound`. Its circuit hypotheses are the
 hidden-output path's: `HmOut.parse` and `HmOut.loadPublic` for `HmRow.parse` and `HmRow.loadPublic`; the unit
-returning the outputs comes from `scopeOk`. flock-verify refuses a statement failing any of them (PROTOCOL.md §16.15), and
+returning the outputs comes from `scopeOk`. flock-verify refuses a statement failing any of them (`Flock.ProvedScope`), and
 `FailClosed.zk_session_soundH` takes none.
 
 `tagsOkH_circuit`: the citation of its tag hypotheses. Under the default `--statement` (`verity/flock-circuit`,
 `Tags.circuit`) with one table, `TagsOkH I` and `I.tags.typed = false` hold by `decide`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -52,12 +71,12 @@ theorem zk_session_soundH
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOkH c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's draw at each of the law's draws
+    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOkH I) (hRec : RecordsLiveZK I dj wr)

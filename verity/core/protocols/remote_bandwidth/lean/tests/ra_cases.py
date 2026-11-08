@@ -230,7 +230,7 @@ class Clock:
 
 class Replay:
     """Session k's challenger replaying a case's coins: a `LiveChallenger` of the session's layout whose coins are the
-    case's 2W, then its append coins in the order drawn, each the audit's 32 bytes padded to the challenger's 64 under a
+    case's 2W, then its append coins in the order sampled, each the audit's 32 bytes padded to the challenger's 64 under a
     zero salt. Past the case's append coins it refuses the case, as the Lean does."""
 
     def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes], per_coin: int = 1) -> None:
@@ -641,7 +641,7 @@ class Run:
                           lambda: self.s.verify(t, opened))
 
     def finish(self, edit: Callable[[int, list[audit.Opening]], list[audit.Opening]] | None = None) -> None:
-        """Every sample not yet drawn closed at its last window and its windows verified in order, their openings
+        """Every sample not yet sampled closed at its last window and its windows verified in order, their openings
         through `edit`, until one fails; a window its close accepted, its share none, isn't verified."""
         for t in range(len(self.s.windows)):
             if t in self.draws:
@@ -1065,7 +1065,7 @@ def honest_paced(r: Run) -> None:
 
 
 def honest_paced_drawn_at_k(r: Run) -> None:
-    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a sample after one
+    """A paced session (k = 2) sampled as each window's k-th root arrives once its boundary has left: a sample after one
     root, or after k before the boundary, is refused; window 0 is sampled before window 1's first root, and the last
     window before its deadline."""
     r.start()

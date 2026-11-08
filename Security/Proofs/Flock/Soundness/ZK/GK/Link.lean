@@ -1,5 +1,17 @@
-import Proofs.Flock.Soundness.ZK.GK.Theorem
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+module
+
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.RealView
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.GK.Theorem
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.Session
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: Lemmas B and C as Theorem GK's two distances
@@ -20,13 +32,15 @@ assumptions are `Hm96Hiding` at `δ₁` and `SHA512CRStrict` for the finder, and
 `ε = 3·2|L|δ₁ + 8t·2·N_hid·δ₁ + 3^{-t} + t/M + q²/2^513`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.ZK.GK
 
 open Finset Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- An `ℝ≥0∞` bound between two probabilities, as reals. -/
 theorem toReal_le_add {a b ε : ℝ≥0∞} (hb : b ≠ ⊤) (hε : ε ≠ ⊤) (h : a ≤ b + ε) : a.toReal ≤ b.toReal + ε.toReal := by

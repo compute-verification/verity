@@ -1,5 +1,7 @@
-import Flock.With.SimVerify
-import Flock.With.Log
+module
+
+public import Flock.With.Log
+import Flock.With.SimWalk
 
 /-!
 # A rep reads its rounds as replay does
@@ -16,6 +18,8 @@ The proof is a simulation (`Flock.With.Sim`) between two runs of one transcript 
 agree after erasure (`Sim.er`). The squeeze reads its round through what erasure keeps (`er_squeezeWith`), every other
 transcript action only frames bytes, and `sim_walk` carries the relation through each of the rep's `…With` functions.
 -/
+
+@[expose] public section
 
 namespace Flock
 

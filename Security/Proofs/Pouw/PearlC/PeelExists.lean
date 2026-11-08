@@ -1,13 +1,15 @@
-import Proofs.Pouw.PearlC.RowStats
-import Proofs.Pouw.PearlC.HonestWords
+module
+
+public import Proofs.Pouw.PearlC.RowStats
+public import Proofs.Pouw.PearlC.HonestWords
 
 /-!
 # The peel's rows exist (proofs)
 
 `Pc8EntryOK` asks that U's pinned order form `C̃_ij`'s word and the factor rows `P_A,i`, `P_B,j`
 (`PeelExactProofsP.peelRowsP`): that no step, promotion, FMA or BF16 narrowing leaves the finite range. At a step
-`⟨[32], w, z⟩` with `w ≥ 24` (sm_120's `sm120E4m3`, width 26) and `k ≤ 2^16` that holds on every input whose codes
-are not NaN, by magnitudes:
+`⟨[32], w, z⟩` of any width (the H100's `hopperE4m3K32`, width 14; sm_120's `sm120E4m3`, width 26) and `k ≤ 2^16`
+that holds on every input whose codes are not NaN, by magnitudes:
 
 * **A step** (`step_fin`, `HonestWords.step_abs_le`'s converse): from a finite accumulator of magnitude `x`, 32
   products of codes that are not NaN write a finite word of magnitude at most `x + 32·448² ≤ x + 2^23`.
@@ -19,9 +21,11 @@ are not NaN, by magnitudes:
 * **The roundings** (`rnBf16_fin`, `addWord_fin`): a finite 32-bit word below `2^127` narrows to BF16 (its exponent
   field is at most 253), and a sum below `2^127` is finite.
 * **The rows** (`peelRowsP_isSome`): at `k/32 ≤ 2^11` every chain is at most `2^34` and every FMA chain below `2^76`.
-  `pc8EntryOK_of_wide` is `Pc8EntryOK` at such a step from `Noise8OK` alone: `A′`'s and `B̃`'s codes are E4M3 casts,
+  `pc8EntryOK_of_noise` is `Pc8EntryOK` at such a step from `Noise8OK` alone: `A′`'s and `B̃`'s codes are E4M3 casts,
   never NaN; the bases' codes are `Noise8OK`'s; and `be8`'s words are BF16 words of `E′`'s codes, at most `448`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExists
 
@@ -35,9 +39,9 @@ theorem abs_value (t : Term) : |t.value| = (t.mag : ℚ) * 2 ^ (t.exp - 23) := b
   unfold Term.value
   split <;> simp [abs_mul, abs_of_pos (two_zpow_pos _)]
 
-/-- **A step from a bounded finite accumulator is finite**: at `⟨[32], w, z⟩` with `w ≥ 24`, on codes that are not
+/-- **A step from a bounded finite accumulator is finite**: at `⟨[32], w, z⟩` of any width, on codes that are not
 NaN, the word written is finite and at most `2^23` larger in magnitude than the accumulator. -/
-theorem step_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {acc : ℕ} {x : ℚ} (hx : wordQ acc = some x) (a b : List Code)
+theorem step_fin {w : ℕ} (z : ℤ) {acc : ℕ} {x : ℚ} (hx : wordQ acc = some x) (a b : List Code)
     (ha : ∀ c ∈ a, c.isNaN = false) (hb : ∀ c ∈ b, c.isNaN = false) (hB : |x| + 2 ^ 23 < 2 ^ 127) :
     ∃ y, wordQ ((⟨[32], w, z⟩ : Pipeline).step acc a b) = some y ∧ |y| ≤ |x| + 2 ^ 23 := by
   obtain ⟨tc, htc, rfl⟩ := PeelExactProofs.wordQ_fin hx
@@ -48,7 +52,7 @@ theorem step_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {acc : ℕ} {x : ℚ} (hx :
   have hps : L.map (fun x => productTotal x.1 x.2) = L.map (fun x => Value.fin (product x.1 x.2)) :=
     List.map_congr_left fun p hp => by simp [productTotal, (hLok p hp).1, (hLok p hp).2]
   set ts : List Term := tc :: L.map (fun x => product x.1 x.2) with hts
-  obtain ⟨hcan, habs⟩ := HonestWords.groupSum_le hw z ts
+  obtain ⟨hcan, habs⟩ := HonestWords.groupSum_le z ts
   have hsum : (ts.map fun t => |t.value|).sum ≤ |tc.value| + 2 ^ 23 := by
     rw [hts, List.map_cons, List.sum_cons]
     gcongr
@@ -104,7 +108,7 @@ theorem step_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {acc : ℕ} {x : ℚ} (hx :
 /-- No code of the atoms is NaN. -/
 def AtomsOK (g : List AtomIn) : Prop := ∀ x ∈ g, ∀ l, (x.1 l).isNaN = false ∧ (x.2 l).isNaN = false
 
-theorem windowFold_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) :
+theorem windowFold_fin {w : ℕ} (z : ℤ) :
     ∀ (g : List AtomIn) (acc : ℕ) (x : ℚ) (n : ℕ), AtomsOK g → wordQ acc = some x → |x| ≤ n * 2 ^ 23 →
       n + g.length < 2 ^ 24 →
       ∃ c cv, g.foldlM (fun v x => finite? ((⟨[32], w, z⟩ : Pipeline).step v (List.ofFn x.1) (List.ofFn x.2)))
@@ -114,20 +118,20 @@ theorem windowFold_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) :
     simp only [List.length_cons] at hn
     have hn' : (n : ℚ) + 1 ≤ 2 ^ 24 := by exact_mod_cast (show n + 1 ≤ 2 ^ 24 by omega)
     have hB : |x| + 2 ^ 23 < 2 ^ 127 := by nlinarith
-    obtain ⟨y, hy, hyb⟩ := step_fin hw z hx (List.ofFn a.1) (List.ofFn a.2)
+    obtain ⟨y, hy, hyb⟩ := step_fin z hx (List.ofFn a.1) (List.ofFn a.2)
       (fun c hc => by obtain ⟨l, rfl⟩ := List.mem_ofFn.1 hc; exact (hok a List.mem_cons_self l).1)
       (fun c hc => by obtain ⟨l, rfl⟩ := List.mem_ofFn.1 hc; exact (hok a List.mem_cons_self l).2) hB
     rw [List.foldlM_cons, RowCircuit.finite?_of_wordQ hy]
-    obtain ⟨c, cv, hc, hcv, hcb⟩ := windowFold_fin hw z g _ y (n + 1)
+    obtain ⟨c, cv, hc, hcv, hcb⟩ := windowFold_fin z g _ y (n + 1)
       (fun x hx => hok x (List.mem_cons_of_mem _ hx)) hy (by push_cast; linarith) (by omega)
     refine ⟨c, cv, hc, hcv, ?_⟩
     rwa [show n + 1 + g.length = n + (g.length + 1) by omega] at hcb
 
 /-- **A window is finite**: `n < 2^24` atoms whose codes are not NaN, stepped from `+0`, write a finite word of
 magnitude at most `n·2^23`. -/
-theorem windowWordP_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {g : List AtomIn} (hok : AtomsOK g) (hn : g.length < 2 ^ 24) :
+theorem windowWordP_fin {w : ℕ} (z : ℤ) {g : List AtomIn} (hok : AtomsOK g) (hn : g.length < 2 ^ 24) :
     ∃ c cv, windowWordP? ⟨[32], w, z⟩ g = some c ∧ wordQ c = some cv ∧ |cv| ≤ g.length * 2 ^ 23 := by
-  obtain ⟨c, cv, hc, hcv, hcb⟩ := windowFold_fin hw z g 0 0 0 hok Freeze.wordQ_zero (by simp) (by omega)
+  obtain ⟨c, cv, hc, hcv, hcb⟩ := windowFold_fin z g 0 0 0 hok Freeze.wordQ_zero (by simp) (by omega)
   exact ⟨c, cv, hc, hcv, by simpa using hcb⟩
 
 /-- **A promotion of bounded words is finite**: words of magnitude at most `A·2^23` and `g·2^23`, `A + g < 2^24`,
@@ -169,7 +173,7 @@ theorem promote_fin {t x : ℕ} {tv xv : ℚ} {A g : ℕ} (ht : wordQ t = some t
       rw [Freeze.wordQ_zero, hr]
     · exact hr
 
-theorem chainFold_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) :
+theorem chainFold_fin {w : ℕ} (z : ℤ) :
     ∀ (gs : List (List AtomIn)) (t : ℕ) (tv : ℚ) (A : ℕ), (∀ g ∈ gs, AtomsOK g) → wordQ t = some tv →
       |tv| ≤ A * 2 ^ 23 → A + (gs.map List.length).sum < 2 ^ 24 →
       ∃ c cv, gs.foldlM (fun t g => (windowWordP? ⟨[32], w, z⟩ g).bind (promoteWord? t)) t = some c ∧
@@ -177,10 +181,10 @@ theorem chainFold_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) :
   | [], t, tv, A, _, ht, hb, _ => ⟨t, tv, rfl, ht, by simpa using hb⟩
   | g :: gs, t, tv, A, hok, ht, hb, hA => by
     simp only [List.map_cons, List.sum_cons] at hA ⊢
-    obtain ⟨x, xv, hx, hxv, hxb⟩ := windowWordP_fin hw z (hok g List.mem_cons_self) (by omega)
+    obtain ⟨x, xv, hx, hxv, hxb⟩ := windowWordP_fin z (hok g List.mem_cons_self) (by omega)
     obtain ⟨s, sv, hs, hsv, hsb⟩ := promote_fin ht hxv hb hxb (by omega)
     rw [List.foldlM_cons, hx, Option.bind_some, hs]
-    obtain ⟨c, cv, hc, hcv, hcb⟩ := chainFold_fin hw z gs s sv (A + g.length)
+    obtain ⟨c, cv, hc, hcv, hcb⟩ := chainFold_fin z gs s sv (A + g.length)
       (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg')) hsv hsb (by omega)
     refine ⟨c, cv, hc, hcv, ?_⟩
     rwa [show A + g.length + (gs.map List.length).sum = A + (g.length + (gs.map List.length).sum) by omega] at hcb
@@ -199,10 +203,10 @@ theorem mem_of_mem_toChunks {α : Type} {G : ℕ} {l g : List α} {x : α} (hg :
 
 /-- **A chain is finite**: `n < 2^24` atoms whose codes are not NaN, in windows of any `G`, give a finite word of
 magnitude at most `n·2^23`. -/
-theorem chainWordP_fin {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) {atoms : List AtomIn} (hok : AtomsOK atoms)
+theorem chainWordP_fin {w : ℕ} (z : ℤ) (G : ℕ) {atoms : List AtomIn} (hok : AtomsOK atoms)
     (hn : atoms.length < 2 ^ 24) :
     ∃ c cv, chainWordP? ⟨[32], w, z⟩ G atoms = some c ∧ wordQ c = some cv ∧ |cv| ≤ atoms.length * 2 ^ 23 := by
-  obtain ⟨c, cv, hc, hcv, hcb⟩ := chainFold_fin hw z (atoms.toChunks G) 0 0 0
+  obtain ⟨c, cv, hc, hcv, hcb⟩ := chainFold_fin z (atoms.toChunks G) 0 0 0
     (fun g hg x hx => hok x (mem_of_mem_toChunks hg hx)) Freeze.wordQ_zero (by simp)
     (by rw [HonestWords.toChunks_length_sum]; omega)
   refine ⟨c, cv, hc, hcv, ?_⟩
@@ -406,10 +410,10 @@ theorem pbRow_fin {be bf : Fin 32 → ℕ} {g : Fin 32 → Fin 32 → ℕ}
   obtain ⟨mid, hmid⟩ := mapM_exists _ _ key
   exact ⟨_, by unfold pbRow?; rw [hmid]; rfl⟩
 
-/-- **The peel's rows exist** at a step `⟨[32], w, z⟩` with `w ≥ 24`, in windows of any `G`, at `k/32 ≤ 2^11`: on
+/-- **The peel's rows exist** at a step `⟨[32], w, z⟩` of any width, in windows of any `G`, at `k/32 ≤ 2^11`: on
 operands and bases whose codes are not NaN, with row `j`'s scaled noise `beB j` BF16 words of magnitude at most `448`,
 every chain is finite and at most `2^34`, so `P_A,i` and `P_B,j` exist (`paRow_fin`, `pbRow_fin`). -/
-theorem peelRowsP_isSome {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) {m n k : ℕ} (hk : k / 32 ≤ 2 ^ 11)
+theorem peelRowsP_isSome {w : ℕ} (z : ℤ) (G : ℕ) {m n k : ℕ} (hk : k / 32 ≤ 2 ^ 11)
     (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (FA FB : Matrix (Fin k) (Fin 32) Code)
     (beA : Matrix (Fin m) (Fin 32) ℕ) (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n)
     (hA : ∀ l, (Aq i l).isNaN = false) (hB : ∀ l, (Bq j l).isNaN = false)
@@ -421,7 +425,7 @@ theorem peelRowsP_isSome {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) {m n k : 
     intro a b ha hb
     have hl : ((rowAtoms a b).length : ℚ) ≤ 2 ^ 11 := by rw [rowAtoms_length]; exact_mod_cast hk
     obtain ⟨c, cv, hc, hcv, hcb⟩ :=
-      chainWordP_fin hw z G (atomsOK_rowAtoms ha hb) (by rw [rowAtoms_length]; omega)
+      chainWordP_fin z G (atomsOK_rowAtoms ha hb) (by rw [rowAtoms_length]; omega)
     refine ⟨c, cv, hc, hcv, hcb.trans ?_⟩
     calc ((rowAtoms a b).length : ℚ) * 2 ^ 23 ≤ 2 ^ 11 * 2 ^ 23 := by gcongr
       _ = 2 ^ 34 := by norm_num
@@ -458,13 +462,13 @@ theorem e4m3_isNaN (v : ℚ) : (e4m3 v).isNaN = false := by
   have := RowCircuit.e4m3_notNaN v
   simp [Code.isNaN, this]
 
-/-- **`Pc8EntryOK` at a step `⟨[32], w, z⟩` with `w ≥ 24` and `k ≤ 2^16`, from `Noise8OK` alone**: `A′`'s and `B̃`'s
+/-- **`Pc8EntryOK` at a step `⟨[32], w, z⟩` of any width and `k ≤ 2^16`, from `Noise8OK` alone**: `A′`'s and `B̃`'s
 codes are E4M3 casts, never NaN, the bases' codes are `Noise8OK`'s, and `be8`'s words are BF16 words of `E′`'s codes
 (`lineCodes_notNaN`), at most `448`. -/
-theorem pc8EntryOK_of_wide {ops : RowCircuit.RowOps} {w : ℕ} (hw : 24 ≤ w) (zf : ℤ) {m n k : ℕ} (hk : k ≤ 2 ^ 16)
+theorem pc8EntryOK_of_noise {ops : RowCircuit.RowOps} {w : ℕ} (zf : ℤ) {m n k : ℕ} (hk : k ≤ 2 ^ 16)
     {z : Noise m n k Params.pi.r} (hz : WholeCircuit.Noise8OK z) (act wt : Codes) (i : Fin m) (j : Fin n) :
     WholeCircuit.Pc8EntryOK ops ⟨[32], w, zf⟩ z act wt i j :=
-  ⟨peelRowsP_isSome hw zf 4 (by omega) _ _ _ _ _ _ i j (fun _ => e4m3_isNaN _) (fun _ => e4m3_isNaN _)
+  ⟨peelRowsP_isSome zf 4 (by omega) _ _ _ _ _ _ i j (fun _ => e4m3_isNaN _) (fun _ => e4m3_isNaN _)
     (fun l q => hz.2.1 l q) (fun l q => hz.2.2.2 l q)
     fun _ => ⟨_, wordQ_codeBf16 _ (WholeCircuit.lineCodes_notNaN _ _ _), abs_codeVal_le _⟩⟩
 end Pouw.PearlC.PeelExists
