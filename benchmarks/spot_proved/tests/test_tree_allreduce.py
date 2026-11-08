@@ -73,6 +73,18 @@ def test_gathered_words_sum_in_the_trees_f32_order_and_round_once():
     assert np.array_equal(got, _reference(words, [0, 2, 3, 1, 5, 6, 4, 7]))
 
 
+def test_a_tree_with_right_subtrees_sums_each_in_a_row_of_its_own_into_the_given_output():
+    def ref(words: np.ndarray, t) -> np.ndarray:
+        return _bf16(words[t]) if isinstance(t, int) else (ref(words, t[0]) + ref(words, t[1])).astype(np.float32)
+    rng = np.random.default_rng(11)
+    words = rng.integers(0x3000, 0x4800, size=(8, 64), dtype=np.uint16)
+    t = TA.parse_tree("((0,(1,(2,3))),((4,5),(6,7)))")
+    assert TA.buffers(t) == 3 and TA.buffers(TA.parse_tree(NODE_A)) == 1
+    out, f32 = torch.empty(64, dtype=torch.bfloat16), torch.full((3, 100), float("nan"))
+    assert TA.reduce_gathered(_torch_words(words).reshape(-1), 8, t, out, f32) is out
+    assert np.array_equal(_words(out), _rne(ref(words, t)))
+
+
 def test_another_order_gives_other_bits_so_the_check_can_fail():
     """1e8 + 1 - 1e8 in f32: rank order keeps none of the 1s that the tree's order adds after the large ones cancel."""
     vals = np.array([3e8, 1.0, -3e8, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
@@ -119,15 +131,20 @@ def test_the_wrapper_leaves_flashinfers_and_the_custom_routes_and_other_dtypes_t
         ar(_Comm(inputs[:4], fi_max=4, world=4), inputs[0])
 
 
-def test_a_call_is_gathered_in_chunks_with_the_same_bits(monkeypatch):
+def test_a_call_is_gathered_in_chunks_with_the_same_bits_into_one_workspace_allocated_once(monkeypatch):
     rng = np.random.default_rng(5)
     words = rng.integers(0x3000, 0x4800, size=(8, 3, 7), dtype=np.uint16)
     inputs = [_torch_words(w) for w in words]
     monkeypatch.setattr(TA, "CHUNK", 5)
     comm = _Comm(inputs, fi_max=4)
-    out = TA.wrap(None, TA.parse_tree(NODE_A))(comm, inputs[2])
+    ar = TA.wrap(None, TA.parse_tree(NODE_A))
+    out = ar(comm, inputs[2])
     assert comm.gathers == 5
     assert np.array_equal(_words(out).reshape(-1), _reference(words.reshape(8, -1), [0, 2, 3, 1, 5, 6, 4, 7]))
+    ws = comm._tree_ws
+    assert ws[0].shape == (8 * 5,) and ws[1].shape == (1, 5)
+    comm.at = 0
+    assert np.array_equal(_words(ar(comm, inputs[2])), _words(out)) and comm._tree_ws is ws
 
 
 def test_a_route_the_tree_was_not_measured_with_is_refused():

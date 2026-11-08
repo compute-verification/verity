@@ -2,19 +2,10 @@
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
 Security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean -> Security/Proofs/Properties/Nci/ReadsExact.lean
 Security/Proofs/Flock/Claims/Sampling/Path.lean -> Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean
-benchmarks/one_stage/served_composite.sh -> benchmarks/pous/served_case.sh
-benchmarks/one_stage/served_composite.sh -> verity/core/devices/memory_challenger/lean
-benchmarks/one_stage/served_composite.sh -> verity/core/protocols/pous/check
 benchmarks/one_stage/served_verdicts.py -> examples/h200/interfaces
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/network_traces/certifier_piece.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/one_stage/served_bandwidth.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/one_stage/served_bandwidth.sh
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/served_piece.sh
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/streamed_wipe/served_wipe.sh
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
-benchmarks/one_stage/served_verdicts.sh -> tools/research/pyproject.toml
 integrations/vllm/tests/engine/fattn_oracle.py -> benchmarks/pouw/edited_gemm
 integrations/vllm/tests/engine/int8_attention_sass.py -> benchmarks/pouw/harness/sass_gate.py
 integrations/vllm/tests/engine/ppl_oracle.py -> benchmarks/ppl
@@ -48,11 +39,6 @@ integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/core/proto
 integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/steps.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/window_rows.py -> verity/ml/protocols/certifier/__init__.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/__init__.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/layout.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/schemes/__init__.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/schemes/p2.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/verifier.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/binder.py -> verity/core/protocols/remote_bandwidth/audit.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py -> verity/core/protocols/remote_bandwidth/__init__.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py

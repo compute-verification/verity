@@ -473,7 +473,7 @@ def unwitnessed(h: str) -> str:
 @pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
 def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
                                                                                             hold):
-    """#7831 renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    """A PR renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
     hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
     `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
     record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
