@@ -66,17 +66,27 @@ class Op(NamedTuple):
 class Ram:
     """Memories under offline memory checking: `access` logs (address, value read, its time, value written, now). Each
     access belongs to an operation (`begin`) and is at one of its positions, whose time is fixed: operation o's position
-    j is at 8·(o + 1) + j, used or not (in the circuit, slot o's times are wiring)."""
+    j is at 8·(o + 1) + j, used or not (in the circuit, slot o's times are wiring). Without `keep`, only the current
+    operation and no log are kept (a long load's memory), so there is nothing for `check`."""
 
-    def __init__(self, initial: Callable[[tuple], Any]) -> None:
+    def __init__(self, initial: Callable[[tuple], Any], keep: bool = True) -> None:
         self.initial = initial
+        self.keep = keep
         self.cells: dict[tuple, tuple[Any, int]] = {}
         self.log: list[tuple[tuple, Any, int, Any, int]] = []
+        self.accesses = 0
         self.first: dict[tuple, Any] = {}
         self.ops: list[Op] = []
+        self.begun = 0
+        self.touch: Callable[[tuple], None] | None = None
 
     def begin(self, kind: str, **desc: Any) -> None:
-        self.ops.append(Op(kind, desc, 8 * (len(self.ops) + 1), {}))
+        self.begun += 1
+        op = Op(kind, desc, 8 * self.begun, {})
+        if self.keep:
+            self.ops.append(op)
+        else:
+            self.ops[:] = [op]
 
     def value(self, a: tuple) -> Any:
         """The value at a now, without an access: an operation's write may depend on a read it makes later (the circuit
@@ -96,8 +106,12 @@ class Ram:
         assert t < now
         w = f(v)
         self.cells[a] = (w, now)
-        op.at[pos] = len(self.log)
-        self.log.append((a, v, t, w, now))
+        op.at[pos] = self.accesses
+        self.accesses += 1
+        if self.touch:
+            self.touch(a)
+        if self.keep:
+            self.log.append((a, v, t, w, now))
         return v
 
     def multisets(self) -> tuple[Counter, Counter]:
@@ -197,9 +211,9 @@ def fingerprint(ms: Counter, alpha: int, gamma: int, S: Widths = GLM) -> int:
 class RamPool:
     """vLLM's block pool over `Ram` (the module's docstring), with `_KV`'s calls."""
 
-    def __init__(self, B: int, L: int, caching: bool, watermark_blocks: int, NB: int) -> None:
+    def __init__(self, B: int, L: int, caching: bool, watermark_blocks: int, NB: int, keep: bool = True) -> None:
         self.B, self.L, self.caching, self.watermark_blocks, self.NB = B, L, caching, watermark_blocks, NB
-        self.ram = Ram(self._initial)
+        self.ram = Ram(self._initial, keep)
         self.nf = NB - 1
         self.held: dict[int, int] = {}
         self.num_cached: dict[int, int] = {}
@@ -207,8 +221,8 @@ class RamPool:
         self.ops: Counter = Counter()
 
     @classmethod
-    def like(cls, kv: Any) -> RamPool:
-        return cls(kv.B, kv.L, kv.caching, kv.watermark_blocks, len(kv.ref))
+    def like(cls, kv: Any, keep: bool = True) -> RamPool:
+        return cls(kv.B, kv.L, kv.caching, kv.watermark_blocks, len(kv.ref), keep)
 
     def _initial(self, a: tuple) -> Any:
         if a[0] == "B":
@@ -417,13 +431,19 @@ def disagreement(kv: Any, pool: RamPool) -> str | None:
 
 class Mirror:
     """Mirrors every call on the replay's pool (not a fork's, not a dry run) onto a RamPool and holds the two to each
-    other after each; counts each step's operations."""
+    other after each; counts each step's operations, calls, block keys first used (RK writes) and lookup units a memo
+    or certificate would save. Within `window` (step indices), collects the sparse addresses touched (M, RB, and RK:
+    each lookup unit and cache reads its block's key)."""
 
-    def __init__(self, every: int = 1) -> None:
+    def __init__(self, every: int = 1, keep: bool = True, window: range | None = None) -> None:
         self.pool: RamPool | None = None
         self.kv: Any = None
         self.depth = 0
         self.every = every
+        self.keep = keep
+        self.window = window
+        self.touched: dict[str, set] = {"M": set(), "RB": set(), "RK": set()}
+        self.keyed: dict[int, int] = {}
         self.calls = 0
         self.steps: list[Counter] = [Counter()]
         self.counts: Counter = Counter()
@@ -433,9 +453,24 @@ class Mirror:
 
     def _pool(self, kv: Any) -> RamPool:
         if self.pool is None:
-            self.pool, self.kv = RamPool.like(kv), kv
+            self.pool, self.kv = RamPool.like(kv, self.keep), kv
+            self.pool.ram.touch = self._touch
         assert kv is self.kv, "one pool per replay"
         return self.pool
+
+    def _in_window(self) -> bool:
+        return self.window is not None and len(self.steps) - 1 in self.window
+
+    def _touch(self, a: tuple) -> None:
+        if a[0] in self.touched and self._in_window():
+            self.touched[a[0]].add(a[1:])
+
+    def _keys(self, rid: int, ks: range) -> None:
+        if ks.stop > self.keyed.get(rid, 0):
+            self.steps[-1]["keys"] += ks.stop - self.keyed.get(rid, 0)
+            self.keyed[rid] = ks.stop
+        if self._in_window():
+            self.touched["RK"].update((rid, k) for k in ks)
 
     def _check(self, kv: Any) -> None:
         self.calls += 1
@@ -459,12 +494,14 @@ class Mirror:
         def need_lb(tokens: int) -> int:
             return max(cdiv(tokens, p.B) - x - held, 0)
 
-        ok = (x is not None and x < (r.num_tokens - 1) // p.B and not p.ram.value(("M", r.block_hashes[x]))[0]
+        miss = x is not None and (x >= len(r.block_hashes) or not p.ram.value(("M", r.block_hashes[x]))[0])
+        ok = (miss and x < (r.num_tokens - 1) // p.B
               and ((kw["full_sequence_must_fit"] and need_lb(min(r.num_tokens, p.L)) + wm > p.nf)
                    or need_lb(min(total + n, p.L)) + wm > p.nf))
         if ok:
             self.counts["certified refusals"] += 1
             self.counts["lookup units a certificate saves"] += max(units - 1, 0)
+            self.steps[-1]["certificate saves"] += max(units - 1, 0)
         else:
             self.last_walk[r.i] = h
 
@@ -474,6 +511,7 @@ class Mirror:
         self.steps[-1].update(d)
         if any(d[k] for k in SHAPE):
             self.counts["calls"] += 1
+            self.steps[-1]["calls"] += 1
 
 
 @contextmanager
@@ -494,10 +532,13 @@ def mirrored(m: Mirror, K: type = RP._KV, S: type = RP._Sched):
             m.counts["lookups"] += 1
             m.walked = r.i
             if p.caching:
+                units = p.ops["lookup"] - before["lookup"]
+                m._keys(r.i, range(units))
                 res = (tuple(got), p.looked[r.i][1])
                 if m.last_result.get(r.i) == res:
                     m.counts["repeated walks"] += 1
-                    m.counts["lookup units in repeated walks"] += p.ops["lookup"] - before["lookup"]
+                    m.counts["lookup units in repeated walks"] += units
+                    m.steps[-1]["repeated units"] += units
                 m.last_result[r.i] = res
         return out
 
@@ -531,8 +572,10 @@ def mirrored(m: Mirror, K: type = RP._KV, S: type = RP._Sched):
         orig["cache_blocks"](self, r, num_tokens)
         p = m._pool(self)
         before = Counter(p.ops)
+        done = p.num_cached.get(r.i, 0)
         p.cache_blocks(r, num_tokens)
         m._tally(before)
+        m._keys(r.i, range(done, p.num_cached.get(r.i, done)))
         m._check(self)
 
     def free_request(self, r):
@@ -565,10 +608,11 @@ def mirrored(m: Mirror, K: type = RP._KV, S: type = RP._Sched):
         S.schedule = sched
 
 
-def run(engine: RP.Engine, requests: Sequence[RP.RequestIO], *, every: int = 1, **how: Any) -> Mirror:
+def run(engine: RP.Engine, requests: Sequence[RP.RequestIO], *, every: int = 1, keep: bool = True,
+        window: range | None = None, **how: Any) -> Mirror:
     """The replay (admitting as `how` says: `replay.replay`'s `admit` or `decide`) with its pool mirrored (`Mirror`);
-    raises AssertionError where the two disagree, or where the RAM log fails its memory check."""
-    m = Mirror(every)
+    raises AssertionError where the two disagree, or (with `keep`) where the RAM log fails its memory check."""
+    m = Mirror(every, keep, window)
     with mirrored(m):
         rp = RP.replay(engine, requests, **how)
     m.counts["steps"] = len(rp.steps)
@@ -577,6 +621,6 @@ def run(engine: RP.Engine, requests: Sequence[RP.RequestIO], *, every: int = 1, 
         where = disagreement(m.kv, m.pool)
         if where:
             raise AssertionError(f"at the end: the RAM pool leaves vLLM's at its {where}")
-        if not check(m.pool.ram):
+        if keep and not check(m.pool.ram):
             raise AssertionError("the RAM log fails its memory check")
     return m

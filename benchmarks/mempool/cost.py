@@ -1,6 +1,7 @@
-"""CacheStep_v3's cost at the GLM-5.3 class: the RAM pool's operations per window on synthetic loads at the class's engine
-(NB = 5,000, B = 64, R = 256, T = 8,192, P = 4,964 steps a window), each priced at its slot's ANDs (`slots.py`) plus
-the in-circuit hash of its witness, plus the parts that are per call, per block and per window.
+"""CacheStep_v3's cost at the GLM-5.3 class: the RAM pool's operations in the busiest window (P = 4,964 consecutive
+steps, `measure`) of synthetic loads at the class's engine (NB = 5,000, B = 64, R = 256, T = 8,192), each priced at its
+slot's ANDs (`slots.py`) plus the in-circuit hash of its witness, plus the parts that are per call, per block and per
+window.
 
     python3 cost.py [--slots slots.json] [--json OUT] [--quick]
 
@@ -23,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import random
 from collections import Counter
 from pathlib import Path
@@ -124,43 +124,56 @@ def glm_load(seed: int, *, kind: str, steps: int = 3000, NB: int = 5000, B: int 
     return eng, reqs, admit
 
 
+def accesses(c: Counter) -> int:
+    return sum(PR.SHAPE[k] * n for k, n in c.items() if k in PR.SHAPE)
+
+
 def measure(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) -> dict[str, Any]:
-    m = PR.run(eng, reqs, every=10**9, decide=lambda i, k, o: admit[i] <= k)
-    pool = m.pool
-    steps = m.counts["steps"]
-    per_step = [sum(c.values()) for c in m.steps[1:]] or [0]
-    acc_per_step = sorted(sum(PR.SHAPE[k] * n for k, n in c.items() if k in PR.SHAPE) for c in m.steps[1:])
-    keyed = sum(min(len(r.tokens), r.prompt_len + r.output_len) // eng.block_size for r in reqs)
-    touched = Counter(a[0] for a in pool.ram.first)
-    return {"steps": steps, "tokens": m.counts["tokens"], "ops": {k: pool.ops[k] for k in (*PR.SHAPE, "evict")},
-            "calls": m.counts["calls"], "lookups": m.counts["lookups"], "allocations": m.counts["allocations"],
-            "refused after a lookup": m.counts["refused after a lookup"], "frees": m.counts["frees"],
-            "certified refusals": m.counts["certified refusals"],
-            "lookup units a certificate saves": m.counts["lookup units a certificate saves"],
-            "repeated walks": m.counts["repeated walks"],
-            "lookup units in repeated walks": m.counts["lookup units in repeated walks"],
-            "blocks keyed": keyed, "touched": dict(touched),
-            "accesses per step": {"mean": sum(acc_per_step) / max(len(acc_per_step), 1),
-                                  "p99": acc_per_step[int(0.99 * (len(acc_per_step) - 1))] if acc_per_step else 0,
-                                  "max": acc_per_step[-1] if acc_per_step else 0},
-            "ops per step max": max(per_step), "requests": len(reqs)}
+    """The load's busiest window: the P_STEPS consecutive steps with the most accesses (the whole replay if shorter),
+    found on a first replay; a second, identical one collects the sparse addresses that window touches."""
+    how = {"every": 10**9, "keep": False, "decide": lambda i, k, o: admit[i] <= k}
+    m = PR.run(eng, reqs, **how)
+    per = [accesses(c) for c in m.steps]
+    n = min(P_STEPS, len(per))
+    run = sum(per[:n])
+    best, s0 = run, 0
+    for s in range(1, len(per) - n + 1):
+        run += per[s + n - 1] - per[s - 1]
+        if run > best:
+            best, s0 = run, s
+    window = range(s0, s0 + n)
+    w = PR.run(eng, reqs, window=window, **how)
+    assert [accesses(c) for c in w.steps] == per, "the replay is not deterministic"
+    tot = sum((w.steps[s] for s in window), Counter())
+    acc = sorted(per[1:])
+    return {"steps": m.counts["steps"], "requests": len(reqs), "tokens": m.counts["tokens"],
+            "replay": {"ops": {k: m.pool.ops[k] for k in (*PR.SHAPE, "evict")}, **{k: m.counts[k] for k in (
+                "calls", "lookups", "allocations", "refused allocations", "refused after a lookup", "frees",
+                "certified refusals", "lookup units a certificate saves", "repeated walks",
+                "lookup units in repeated walks")}},
+            "window": {"steps": [s0, s0 + n], "accesses": best, "ops": {k: tot[k] for k in (*PR.SHAPE, "evict")},
+                       "calls": tot["calls"], "keys": tot["keys"], "repeated units": tot["repeated units"],
+                       "certificate saves": tot["certificate saves"],
+                       "touched": {k: len(v) for k, v in w.touched.items()}},
+            "accesses per step": {"mean": sum(acc) / max(len(acc), 1),
+                                  "p99": acc[int(0.99 * (len(acc) - 1))] if acc else 0,
+                                  "p99.9": acc[int(0.999 * (len(acc) - 1))] if acc else 0,
+                                  "max": acc[-1] if acc else 0}}
 
 
-def window_cost(load: dict[str, Any], pr: dict[str, Any], NB: int = 5000, certify: bool = False) -> dict[str, float]:
-    """ANDs for a window of P_STEPS steps at the load's per-step rates; with `certify`, a refused head-of-line
-    candidate's walk replaced by the one-unit refusal certificate where it suffices (`pool_ram.Mirror.certify`)."""
-    f = P_STEPS / load["steps"]
-    ops = dict(load["ops"])
-    if certify:
-        ops["lookup"] -= load["lookup units a certificate saves"]
-    parts = {f"ops: {k}": n * f * pr[k] for k, n in ops.items() if k in PR.SHAPE}
-    parts["calls (bus)"] = load["calls"] * f * pr["call"]
-    parts["block keys"] = load["blocks keyed"] * f * pr["block key"]
+def window_cost(load: dict[str, Any], pr: dict[str, Any], NB: int = 5000, lookups: str = "walked") -> dict[str, float]:
+    """ANDs for the load's busiest window. `lookups`: "walked" (every lookup walks, as vLLM does), "certified" (a
+    refused head-of-line candidate's walk replaced by the one-unit refusal certificate where it suffices,
+    `pool_ram.Mirror.certify`), or "memo" (a walk whose (hit, evictable) equals the request's last one is reused; an
+    upper bound on the head-of-line memo's saving, which doesn't count its marks and dirty bit)."""
+    w = load["window"]
+    ops = dict(w["ops"])
+    ops["lookup"] -= {"walked": 0, "certified": w["certificate saves"], "memo": w["repeated units"]}[lookups]
+    parts = {f"ops: {k}": n * pr[k] for k, n in ops.items() if k in PR.SHAPE}
+    parts["calls (bus)"] = w["calls"] * pr["call"]
+    parts["block keys"] = w["keys"] * pr["block key"]
     parts["dense init/final (B, K)"] = NB * (pr["dense address"]["B"] + pr["dense address"]["K"])
-    t = load["touched"]
-    parts["sparse init/final (M, RB, RK)"] = f * (t.get("M", 0) * pr["sparse address"]["M"]
-                                                  + t.get("RB", 0) * pr["sparse address"]["RB"]) \
-        + load["blocks keyed"] * f * pr["sparse address"]["RK"]
+    parts["sparse init/final (M, RB, RK)"] = sum(w["touched"].get(k, 0) * pr["sparse address"][k] for k in ("M", "RB", "RK"))
     parts["total"] = sum(parts.values())
     return parts
 
@@ -184,14 +197,13 @@ def main() -> None:
         load = measure(eng, reqs, admit)
         print(kind, json.dumps(load))
         report["loads"][kind] = {"load": load}
-        for cert in (False, True):
-            cost = window_cost(load, pr, NB=eng.num_gpu_blocks, certify=cert)
+        for how in ("walked", "certified", "memo"):
+            cost = window_cost(load, pr, NB=eng.num_gpu_blocks, lookups=how)
             share = cost["total"] / ODBRANCH
-            report["loads"][kind]["certified" if cert else "walked"] = {
+            report["loads"][kind][how] = {
                 "window ANDs": cost, "vs ODBRANCH": share, "vs CacheStep_v2": cost["total"] / V2,
                 "share of the node, plain GPU": [share * x for x in SHARE_PLAIN], "share of the node, --zk": share * SHARE_ZK}
-            print(kind, "certified" if cert else "walked", {k: f"{v:.3g}" for k, v in cost.items()},
-                  f"= {share:.3g} × ODBRANCH's 1.0e12")
+            print(kind, how, {k: f"{v:.3g}" for k, v in cost.items()}, f"= {share:.3g} × ODBRANCH's 1.0e12")
     if a.json:
         a.json.write_text(json.dumps(report, indent=1, default=str))
 
