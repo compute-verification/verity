@@ -211,6 +211,7 @@ unsafe extern "C" {
     fn flock_cuda_host_unregister(p: *mut c_void);
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
+    fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
 }
 
 /// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
@@ -387,9 +388,9 @@ impl Default for HostBuf {
     }
 }
 
-/// Device memory holding a copy of host words ([`HostSlots::upload`]). Dropped buffers go back to a pool, not to `cudaFree`,
-/// which would synchronize the device under the session proving there; a process allocates at most `FC_DEV_PREFETCH_GB`
-/// (default 16) of them.
+/// Device memory holding a copy of host words ([`HostSlots::upload`]). Dropped buffers are zeroed and go back to a pool, not to
+/// `cudaFree`, which would synchronize the device under the session proving there; a process allocates at most
+/// `FC_DEV_PREFETCH_GB` (default 16) of them.
 pub struct DevBuf {
     ptr: usize,
     len: usize,
@@ -445,7 +446,11 @@ impl DevBuf {
 }
 
 impl Drop for DevBuf {
+    /// A buffer the device can't zero never goes back to the pool: its words stay out of any later witness's copy
     fn drop(&mut self) {
+        if unsafe { flock_cuda_dev_zero(self.ptr as *mut c_void, 8 * self.cap) } != 0 {
+            return;
+        }
         DEV_POOL.lock().unwrap_or_else(std::sync::PoisonError::into_inner).0.push((self.ptr, self.cap));
     }
 }
