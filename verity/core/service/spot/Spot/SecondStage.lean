@@ -15,6 +15,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 * **Its checks**, each a code (`stmtCodes`, `stmtFailures`):
   - `second-statement`: it is not one;
   - `second-template`: its template is none of the parts', or an earlier statement's;
+  - `second-verified`: no accepted verdict of record names its header, its registered reads and its sample: the
+    SHA-512 of the canonical JSON of the public file's header and of the `--registered` file it checked the session
+    against (`public_header_sha512`, `registered_sha512`, none for none) and the sample it checked it at (`unit_draw`;
+    `Checked`, `verifiedOf`). So the checks below read only a header, reads and a sample that were verified;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
     count;
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
@@ -116,6 +120,33 @@ def Stmt.ofJson? (j : Json) : Option Stmt :=
   | .str t, .obj h, .obj d, .obj r => some ⟨t, .obj h, .obj d, .obj r⟩
   | _, _, _, _ => none
 
+/-- What an accepted verdict of record names of the session it checked (`flock-verify verify`'s verdict): the digests
+of the public file's header and of the `--registered` file it checked the session against (`public_header_sha512`,
+`registered_sha512`, null for none) and the sample it checked it at (`unit_draw`). -/
+structure Checked where
+  header : String
+  registered : Json
+  draw : Json
+
+/-- What each accepted verdict of record among `verdicts` that names a header names (`Checked`). -/
+def verifiedOf (verdicts : Array (String × Json)) : Array Checked :=
+  verdicts.filterMap fun (_, v) =>
+    match getD v "public_header_sha512" with
+    | .str h =>
+      if truthy (getD v "of_record") && jeq (getD v "accepted") (.bool true) then
+        some ⟨h, getD v "registered_sha512", getD v "unit_draw"⟩
+      else none
+    | _ => none
+
+/-- What a verdict of record that checked statement `s`'s session names of it (`Checked`): its header's digest, its
+registered reads' (null for none) and its sample; none when one isn't canonical JSON. -/
+def Stmt.checked (s : Stmt) : Option Checked := do
+  let h ← (canonSha512 s.header).toOption
+  let r ← match s.registered with
+    | .null => pure Json.null
+    | r => (canonSha512 r).toOption.map Json.str
+  pure ⟨h, r, s.draw⟩
+
 /-- A link of the two-stage design: template `template`'s session port `port` reads the boundary registration's port
 `value`. -/
 structure Link where
@@ -138,8 +169,8 @@ def linksOf? : Json → Option (Array Link)
 
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
-Definition makes none), and the `{value: root}` the verifiers of record report the sessions read
-(`Record.sessionRegistered`). -/
+Definition makes none), the `{value: root}` the verifiers of record report the sessions read
+(`Record.sessionRegistered`), and what they name of each session they accepted (`verifiedOf`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -148,6 +179,7 @@ structure Own where
   drawn : Array Nat
   links : Option (Array Link) := some #[]
   reported : Option (Array (String × Json)) := none
+  verified : Array Checked := #[]
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -313,11 +345,19 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
 def linkedRead (own : Own) (t : String) (reads : Array (String × Json)) : Bool :=
   (own.links.getD #[]).all fun l => l.template != t || reads.any (·.1 == l.port)
 
+/-- Statement `s` states what an accepted verdict of record checked: one names its header's digest, its registered
+reads' and its sample (`Stmt.checked`). -/
+def verifiedOk (own : Own) (s : Stmt) : Bool :=
+  match s.checked with
+  | some c => own.verified.any fun v => v.header == c.header && jeq v.registered c.registered && jeq v.draw c.draw
+  | none => false
+
 /-- Statement `s`'s failing checks against its part `p` (module docstring), in order. -/
 def stmtCodes (own : Own) (named : Bool) (p : Part) (s : Stmt) : List String :=
   let q := own.sample.size
   let reads := entries (getD s.registered "ports")
-  [("second-population", populationOk q p s.header),
+  [("second-verified", verifiedOk own s),
+   ("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
    ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads)].filterMap
@@ -505,15 +545,48 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         · assumption
         · simp at hrep
 
-/-- A passing statement's checks: its population, roots, sample and registered reads, every port a link names among
-them. -/
+/-- A passing statement's checks: an accepted verdict of record checked its header, registered reads and sample, and
+its population, roots, sample and registered reads, every port a link names among them. -/
 theorem stmtCodes_nil {own : Own} {named : Bool} {p : Part} {s : Stmt} (h : stmtCodes own named p s = []) :
-    populationOk own.sample.size p s.header = true ∧
+    verifiedOk own s = true ∧ populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
       linkedRead own p.template (entries (getD s.registered "ports")) = true := by
   simpa [stmtCodes, List.filterMap_eq_nil_iff] using h
+
+/-- **A verified entry is a verdict's**: each of `verifiedOf verdicts` is read off an accepted verdict of record among
+`verdicts`, its header's digest that verdict's `public_header_sha512`, its registered reads' its `registered_sha512` and
+its sample its `unit_draw`. -/
+theorem mem_verifiedOf {verdicts : Array (String × Json)} {c : Checked} (h : c ∈ verifiedOf verdicts) :
+    ∃ x ∈ verdicts, getD x.2 "public_header_sha512" = .str c.header ∧ truthy (getD x.2 "of_record") = true ∧
+      jeq (getD x.2 "accepted") (.bool true) = true ∧ c.registered = getD x.2 "registered_sha512" ∧
+      c.draw = getD x.2 "unit_draw" := by
+  obtain ⟨⟨k, v⟩, hm, hv⟩ := Array.mem_filterMap.mp h
+  refine ⟨(k, v), hm, ?_⟩
+  dsimp only at hv ⊢
+  generalize hg : getD v "public_header_sha512" = g at hv
+  cases g with
+  | str hdr =>
+    dsimp only at hv
+    split at hv
+    · next ha =>
+      cases hv
+      simp only [Bool.and_eq_true] at ha
+      exact ⟨hg, ha.1, ha.2, rfl, rfl⟩
+    · cases hv
+  | _ => simp at hv
+
+/-- **What `second-verified` says**: a statement passing it is, by what a verdict names of it (`Stmt.checked`), one an
+accepted verdict of record checked (`mem_verifiedOf`): its header's digest, its registered reads' and its sample are
+that verdict's. -/
+theorem verifiedOk_some {own : Own} {s : Stmt} (h : verifiedOk own s = true) :
+    ∃ c, s.checked = some c ∧ ∃ v ∈ own.verified, v.header = c.header ∧ jeq v.registered c.registered = true ∧
+      jeq v.draw c.draw = true := by
+  unfold verifiedOk at h
+  cases hc : s.checked with
+  | none => simp [hc] at h
+  | some c => exact ⟨c, rfl, by simpa [hc, Bool.and_eq_true, beq_iff_eq] using h⟩
 
 private def exRoot (i : Nat) : String := String.ofList (List.replicate 128 (Char.ofNat (48 + i)))
 
@@ -536,16 +609,43 @@ private def exStmt (indices units : List Nat) : Json :=
     ("draw", Json.mkObj [("law", "subset"), ("population", (6 : Nat)), ("k", Lean.toJson units.length),
       ("units", natsJson units.toArray)])]
 
+/-- `own` with a verifier of record that checked statements `ss`' sessions, naming each one's header, registered reads
+and sample (`Stmt.checked`). -/
+private def exVerifying (ss : Array Json) (own : Own := exOwn) : Own :=
+  { own with verified := ss.filterMap fun j => (Stmt.ofJson? j).bind Stmt.checked }
+
+/-- Round 2's check of statements `ss`, each one's session checked by a verifier of record. -/
+private def exCheck (allow : Bool) (own : Own) (ss : Array Json) : Check := check allow (exVerifying ss own) (some ss)
+
+private def exHonest : Json := exStmt [0, 1, 2, 3, 4, 5] [2, 4]
+
 #guard exOwn.parts == some #[{ template := "Pair_v0", lo := 0, n := 3 }]
-#guard (check false exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["two-stage-form"]
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes.isEmpty
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 6] [2, 4]])).codes == #["second-population"]
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]])).codes == #["second-sample"]
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4], exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes ==
-  #["second-template"]
+#guard (exCheck false exOwn #[exHonest]).codes == #["two-stage-form"]
+#guard (exCheck true exOwn #[exHonest]).codes.isEmpty
+#guard (exCheck true exOwn #[exStmt [0, 1, 2, 3, 4, 6] [2, 4]]).codes == #["second-population"]
+#guard (exCheck true exOwn #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]).codes == #["second-sample"]
+#guard (exCheck true exOwn #[exHonest, exHonest]).codes == #["second-template"]
 #guard (check true exOwn (some #[])).codes == #["second-cover"]
 #guard (check true exOwn none).codes == #["second-statements"]
 #guard (check true { exOwn with parts := parts 4 #[("Pair_v0", #[(0, 6)])] } none).codes == #["second-cells"]
+
+/-- The honest statement, its header naming circuit file `c` by digest. -/
+private def exNaming (c : Nat) : Json :=
+  exHonest.setObjVal! "header" ((getD exHonest "header").setObjVal! "circuit_sha512" (exRoot c))
+
+/-- The verdict of record a verifier that checked statement `j`'s session writes, accepted or not. -/
+private def exVerdict (j : Json) (accepted : Bool := true) : Json :=
+  Json.mkObj [("of_record", Json.bool true), ("accepted", Json.bool accepted),
+    ("public_header_sha512", Json.str ((canonSha512 (getD j "header")).toOption.getD "")), ("unit_draw", getD j "draw")]
+
+#guard (check true exOwn (some #[exHonest])).codes == #["second-verified"]
+#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest)] } (some #[exHonest])).codes.isEmpty
+#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest false)] } (some #[exHonest])).codes ==
+  #["second-verified"]
+#guard (verifiedOf #[("lean", (exVerdict exHonest).setObjVal! "of_record" (.bool false))]).isEmpty
+#guard (check true (exVerifying #[exNaming 7]) (some #[exNaming 7])).codes.isEmpty
+#guard (check true (exVerifying #[exNaming 7]) (some #[exNaming 8])).codes == #["second-verified"]
+#guard (check true (exVerifying #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]) (some #[exHonest])).codes == #["second-verified"]
 
 /-- Port `x`'s statement reading `value`'s tree of `leaves` leaves at root `root`, domain `dom`, slot `k` its `reads[k]`. -/
 private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat) : Json :=
@@ -558,21 +658,22 @@ private def exReported (value : String) (root : Nat) (own : Own := exOwn) : Own 
 
 private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "bx"⟩] }
 
-#guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes.isEmpty
-#guard (check true exOwn (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-reported"]
-#guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]])).codes == #["second-read"]
-#guard (check true (exReported "out" 3) (some #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-read"]
-#guard (check true (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes.isEmpty
-#guard (check true (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]])).codes == #["second-read"]
-#guard (check true (exReported "bx" 5) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes == #["second-read"]
-#guard (check false (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes ==
+#guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck true exOwn #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-reported"]
+#guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck true (exReported "out" 3) #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck true (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
+#guard (exCheck true (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]]).codes == #["second-read"]
+#guard (exCheck true (exReported "bx" 5) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
+#guard (exCheck false (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
   #["two-stage-form"]
-#guard (check true (exReported "x" 1 exLinked) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes ==
-  #["second-read"]
-#guard (check true exLinked (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-read"]
-#guard (check true { exOwn with links := none } (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-links"]
+#guard (exCheck true (exReported "x" 1 exLinked) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck true exLinked #[exHonest]).codes == #["second-read"]
+#guard (exCheck true { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check true { exOwn with links := none } none).codes == #["second-links"]
 #guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+#guard (check true (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]))
+  (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
 
 private def exArg (p : Bool) (i : Nat) : Flock.Program.Arg :=
   { ty := .value 8, seq := Flock.Program.Seq.ofParts #[.affine p i 0 1] }
