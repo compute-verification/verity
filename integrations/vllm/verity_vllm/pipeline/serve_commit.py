@@ -7,7 +7,8 @@ root. The record is the served path's and COMMIT-ARB's one record, `commit.serve
 `served_record.SamplerInputsSource`, which binds each sampled row's seed and position beside the sampled ids and keeps
 the step's rows, and at each close `served_record.BlockValues.absorb` reads the window back from the committed bytes into one
 `RequestRecord` per engine request. A finished request is checked by `BlockValues.check` against what was streamed for it,
-the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
+the seed it carried into the engine (the client's, the greedy default, or derived from its window's seed coin and its
+``user``: `engine.served_seed.served`; each window's line names its coin, ``seed_coin``) and how its stream
 ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
 those are the committed ids' prefix. The finish says who ended it: ``by`` ``client``, or ``server`` for a request still
 running when the server stopped or failed. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
@@ -57,6 +58,7 @@ from typing import Any
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
+from verity_vllm.engine.served_seed import SeedCoins, param_of
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
@@ -163,17 +165,12 @@ def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
     return None if d is None else {"path": str(d.path), "floor_gb": d.floor / GB, "free_gb_at_start": round(d.free() / GB, 1)}
 
 
-def param_of(params: Any, name: str) -> Any:
-    """One field of the engine's sampling parameters: vLLM's ``SamplingParams`` or `PlainProtocol`'s dict."""
-    return params.get(name) if isinstance(params, Mapping) else getattr(params, name, None)
-
-
-def ingress_of(brought: Mapping[str, Any], params: Any) -> dict[str, Any]:
+def ingress_of(brought: Mapping[str, Any], params: Any, rule: str) -> dict[str, Any]:
     """A request's ingress record: the sampling fields it sent, the engine's parameters they make (``params``, seeded),
-    and the seed with its rule (``request``: the client's; ``default``: `engine.served_seed.DEFAULT_SEED`)."""
+    and the seed with its rule (`engine.served_seed.rule_of`: ``request``, the client's; ``default``,
+    `engine.served_seed.DEFAULT_SEED` for a greedy request; ``derived``, from its window's seed coin and its ``user``)."""
     made = {k: param_of(params, k) for k in SAMPLING_FIELDS}
-    return {"brought": dict(brought), "params": made, "seed": made["seed"],
-            "seed_rule": "request" if brought.get("seed") is not None else "default"}
+    return {"brought": dict(brought), "params": made, "seed": made["seed"], "seed_rule": rule}
 
 
 def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> dict[str, int]:
@@ -227,6 +224,7 @@ class _Closed:
     on_loop: dict[str, float] = field(default_factory=dict)    # off the loop: the close's phases on the loop
     t_close: float = 0.0                                       # ... when its job was queued
     seal_wait: float = 0.0                                     # ... and how long the loop waited for the sealer's room
+    seed_coin: dict[str, Any] | None = None                    # the seed coin it opened under (`SeedCoins.record`)
 
 
 def _phases(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
@@ -247,7 +245,8 @@ class CommitWindows:
     opens on each window once its committer is installed and closes first at its close, before the committer comes off,
     its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
     is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
-    with ``sealed`` hears each window's seal line, or why it has none."""
+    with ``sealed`` hears each window's seal line, or why it has none. ``coins`` (`engine.served_seed.SeedCoins`, which the
+    engine loop draws from as it admits) names the seed coin each window opens under in its line (``seed_coin``)."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -255,8 +254,10 @@ class CommitWindows:
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0, arm: Any = None, release: Any = None) -> None:
+                 request_cap: int = 0, arm: Any = None, release: Any = None, coins: SeedCoins | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        self.coins = coins if coins is not None else SeedCoins()
+        self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
@@ -339,6 +340,7 @@ class CommitWindows:
     def open(self) -> None:
         t0 = self.clock()
         self.window += 1
+        self.seed_coin = self.coins.record()
         self.step_t = {}
         self.in_window = set()
         self.off_loop = self._views()
@@ -428,7 +430,7 @@ class CommitWindows:
         lap("readback")
         self.com.uninstall()
         self.is_open = False
-        c = _Closed(self.window, self.com, self.step_t, self.ledgers, [], self.open_s)
+        c = _Closed(self.window, self.com, self.step_t, self.ledgers, [], self.open_s, seed_coin=self.seed_coin)
         rec, job = self._record(c, rc, readback, lap)
         c.finished = self._pop_finished()
         self._write_step_trace(rec, rc, c)
@@ -458,7 +460,7 @@ class CommitWindows:
         finished = self._pop_finished()
         with self._lock:
             self.closing[self.window] = [led.engine_id for led in finished]
-        c = _Closed(self.window, view, self.step_t, ledgers, finished, self.open_s, off_loop=True)
+        c = _Closed(self.window, view, self.step_t, ledgers, finished, self.open_s, off_loop=True, seed_coin=self.seed_coin)
         if self.marks is not None:
             self.marks(self.window, "close")
         lap("ledgers")
@@ -493,7 +495,7 @@ class CommitWindows:
             self._check_finished(c.finished)
             lap("requests")
         except Exception as e:  # noqa: BLE001  (a window whose close fails is its own failure; the server goes on)
-            rec = {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "steps": 0, "requests": [],
+            rec = {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "steps": 0, "requests": [], "seed_coin": c.seed_coin,
                    "error": f"{type(e).__name__}: {e}"[:500], "passed": False}
             job = None
             if not checking:
@@ -533,9 +535,9 @@ class CommitWindows:
         job: Any = None
         if rc is None:
             return {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "steps": 0, "empty": True, "requests": [],
-                    "passed": True}, None
+                    "seed_coin": c.seed_coin, "passed": True}, None
         commit = window_commit(rc)
-        rec = {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "run_root": commit["run_root"],
+        rec = {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "run_root": commit["run_root"], "seed_coin": c.seed_coin,
                "steps": commit["steps"], "step_roots": [bytes(s.root).hex() for s in rc.steps],
                "committed_bytes": sum(int(s.n_bytes) for s in rc.steps), "ids_name": readback["ids_name"],
                "requests": readback["requests"], "commit": commit, "readback_errors": readback["readback_errors"],

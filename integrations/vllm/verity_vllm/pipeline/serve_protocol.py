@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.core.protocols.certifier import active as A, io_tie as IT, release as REL
-from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -120,10 +119,6 @@ class PlainProtocol:
         """The sampling fields the request sent, as it sent them."""
         return {k: req.raw[k] for k in SAMPLING_FIELDS if k in req.raw}
 
-    def seeded(self, params: dict[str, Any]) -> dict[str, Any]:
-        """``params`` with the served default seed when the request sent none (`engine.served_seed`)."""
-        return {**params, "seed": DEFAULT_SEED} if params.get("seed") is None else params
-
     def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
         """vLLM's ``get_max_tokens`` without truncation or an override (and no platform limit, which CUDA hasn't)."""
         if max_model_len < prompt_len:
@@ -194,9 +189,6 @@ class VllmProtocol(PlainProtocol):
 
     def brought(self, req: Completion) -> dict[str, Any]:
         return req.raw.model_dump(include=set(SAMPLING_FIELDS), exclude_unset=True)
-
-    def seeded(self, params: Any) -> Any:
-        return seeded(params)
 
     def chunk(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
               prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int] | None) -> str:
@@ -277,9 +269,6 @@ class IdsProtocol:
 
     def brought(self, req: Completion) -> dict[str, Any]:
         return self.base.brought(req)
-
-    def seeded(self, params: Any) -> Any:
-        return self.base.seeded(params)
 
     def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
         return self.base.max_tokens(req, max_model_len, prompt_len, defaults)

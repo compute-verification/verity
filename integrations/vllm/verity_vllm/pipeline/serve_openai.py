@@ -25,9 +25,12 @@ other request (the network certifier's shim and probes, the load) is answered as
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
-engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
-`engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its sample is not a function of the committed values.
+engine's resulting parameters, the seed and its rule). A greedy request without a ``seed`` carries the public default,
+`engine.served_seed.DEFAULT_SEED`, which its sample never reads; a stochastic one is sampled under
+`engine.served_seed.derived` of its window's seed coin and its ``user``, as the engine loop adds it (`serve_loop.EngineLoop`,
+`engine.served_seed.SeedCoins`), and one that sends no ``user`` is refused (`engine.served_seed.UNSEEDED`); each window's
+``windows.jsonl`` line names its coin (``seed_coin``). A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's
+split count is not pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -116,13 +119,13 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, group, option
-from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
                                    serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
-                                               records_mirror, served_statics, user_of)
+from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, param_of, records_mirror,
+                                               served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
@@ -377,15 +380,18 @@ class Server:
         except ValueError as e:
             raise RequestError(str(e)) from e
         try:
-            params = proto.seeded(proto.sampling_params(req, max_tokens, self.defaults))
+            params = proto.sampling_params(req, max_tokens, self.defaults)
         except ValueError as e:                              # SamplingParams' own validation
             raise RequestError(str(e)) from e
         top_p = param_of(params, "top_p")
         if top_p is not None and float(top_p) < 1:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
+        user = user_of(req.raw)
+        if user is None and rule_of(params) == "derived":
+            raise RequestError(UNSEEDED, param="user")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
-                              user_of(req.raw), release, dict(times or {}))
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, proto.brought(req), user, release,
+                              dict(times or {}))
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
                           proto: Any = None, times: Mapping[str, float] | None = None) -> None:

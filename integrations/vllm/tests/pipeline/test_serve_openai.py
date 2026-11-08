@@ -19,7 +19,8 @@ import torch
 
 from verity.core.protocols.certifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
 from verity_vllm.commit import served_record as SR
-from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.engine import served_seed
+from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -482,7 +483,11 @@ def test_errors_and_whole_response(tmp_path):
         assert status == 404 and json.loads(raw)["error"]["type"] == "NotFoundError"
         status, raw = s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1] * 600))
         assert status == 400 and "maximum context length" in json.loads(raw)["error"]["message"]
-        status, raw = s.post("/v1/completions", {"model": "m", "prompt": "a bb", "max_tokens": 3, "return_token_ids": True})
+        whole = {"model": "m", "prompt": "a bb", "max_tokens": 3, "return_token_ids": True}
+        status, raw = s.post("/v1/completions", whole)          # stochastic at the default temperature, unseeded, no user
+        err = json.loads(raw)["error"]
+        assert status == 400 and err["param"] == "user" and err["message"] == UNSEEDED
+        status, raw = s.post("/v1/completions", {**whole, "user": "u1"})
     body = json.loads(raw)
     assert status == 200 and body["usage"]["completion_tokens"] == 3 and body["choices"][0]["prompt_token_ids"] == [1, 101, 102]
     assert body["choices"][0]["text"] == "".join(f" w{t}" for t in body["choices"][0]["token_ids"])
@@ -752,32 +757,66 @@ def test_check_fails_on_a_committed_id_that_was_not_served(tmp_path):
     assert not s.windows.summary()["passed"]
 
 
-def test_a_seedless_request_commits_the_default_seed_and_a_seeded_one_its_own(tmp_path):
+HOT = dict(CERTIFIER_BODY, temperature=0.8, user="u-hot")
+
+
+def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_derived_seed_and_a_seeded_one_its_own(tmp_path):
+    """The derived seed is the one `engine.served_seed.derived` makes of the coin the request's window names and its user,
+    never `DEFAULT_SEED` or one the engine draws."""
     with Serving(tmp_path) as s:
-        serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6], seed=1234)])
+        serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6], seed=1234), dict(HOT, prompt=[7, 8])])
     by_rule = {r["ingress"]["seed_rule"]: r for r in records(tmp_path, "requests.jsonl")}
     assert by_rule["default"]["ingress"]["seed"] == DEFAULT_SEED and by_rule["default"]["committed_seeds"] == [DEFAULT_SEED]
-    assert "seed" not in by_rule["default"]["ingress"]["brought"]
+    assert "seed" not in by_rule["default"]["ingress"]["brought"] and "seed" not in by_rule["derived"]["ingress"]["brought"]
     assert by_rule["request"]["ingress"]["seed"] == 1234 and by_rule["request"]["committed_seeds"] == [1234]
+    (w,) = [w for w in records(tmp_path, "windows.jsonl") if w["window"] in by_rule["derived"]["windows"]]
+    assert w["seed_coin"]["source"] == "in-process" and len(bytes.fromhex(w["seed_coin"]["coin"])) == 64
+    want = derived(bytes.fromhex(w["seed_coin"]["coin"]), "u-hot")
+    assert by_rule["derived"]["ingress"]["seed"] == by_rule["derived"]["ingress"]["params"]["seed"] == want != DEFAULT_SEED
+    assert by_rule["derived"]["committed_seeds"] == [want]
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
+def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
+    """One user's two requests, each into an idle engine, are seeded under two coins, so differently; the windows
+    ``--window-steps`` cuts from a request's run keep the coin of the one before them, so every window holding one of its
+    rows names the coin it was seeded under."""
+    draws = iter(range(1, 100))
+    monkeypatch.setattr(served_seed, "in_process", lambda: (next(draws).to_bytes(64, "big"), "test"))
+    with Serving(tmp_path, window_steps=2) as s:
+        for _ in range(2):
+            assert s.post("/v1/completions", dict(HOT, max_tokens=5, min_tokens=5))[0] == 200
+    coin = {w["window"]: w["seed_coin"] for w in records(tmp_path, "windows.jsonl") if not w.get("empty")}
+    a, b = records(tmp_path, "requests.jsonl")
+    for r, index in ((a, 0), (b, 1)):
+        want = derived((index + 1).to_bytes(64, "big"), "u-hot")
+        assert len(r["windows"]) == 3 and {coin[k]["index"] for k in r["windows"]} == {index}, (r["windows"], coin)
+        assert (r["ingress"]["seed_rule"], r["ingress"]["seed"], r["committed_seeds"]) == ("derived", want, [want])
+        assert r["check"]["passed"], r["check"]
+    assert a["ingress"]["seed"] != b["ingress"]["seed"]
+
+
 def test_a_committed_seed_other_than_the_one_admitted_fails(tmp_path):
-    with Serving(tmp_path, seed_override=7) as s:
-        s.post("/v1/completions", CERTIFIER_BODY)
-    (rec,) = records(tmp_path, "requests.jsonl")
-    assert not rec["check"]["passed"] and any(p.startswith("seeds: committed [7]") for p in rec["check"]["problems"])
-    assert not s.windows.summary()["passed"]
+    """The engine sampling under a seed of its own (vLLM's drawn one) rather than the default or the derived one fails the
+    request's check, naming the seed it committed."""
+    for i, body in enumerate((CERTIFIER_BODY, HOT)):
+        (tmp_path / str(i)).mkdir()
+        with Serving(tmp_path / str(i), seed_override=7) as s:
+            s.post("/v1/completions", body)
+        (rec,) = records(tmp_path / str(i), "requests.jsonl")
+        assert rec["ingress"]["seed"] != 7 and not rec["check"]["passed"]
+        assert any(p.startswith("seeds: committed [7]") for p in rec["check"]["problems"]), rec["check"]
+        assert not s.windows.summary()["passed"]
 
 
 def test_the_ingress_record_holds_the_sampling_the_request_brought(tmp_path):
-    body = dict(CERTIFIER_BODY, temperature=0.7, top_k=50, ignore_eos=False, stop=["."])
+    body = dict(CERTIFIER_BODY, temperature=0.7, top_k=50, ignore_eos=False, stop=["."], user="u1")
     with Serving(tmp_path) as s:
         assert s.post("/v1/completions", body)[0] == 200
     (rec,) = records(tmp_path, "requests.jsonl")
     ing = rec["ingress"]
     assert ing["brought"] == {k: body[k] for k in ("temperature", "top_k", "max_tokens", "min_tokens", "ignore_eos", "stop")}
-    assert (ing["params"]["temperature"], ing["params"]["top_k"], ing["params"]["top_p"]) == (0.7, 50, 1.0)
+    assert (ing["params"]["temperature"], ing["params"]["top_k"], ing["params"]["top_p"], ing["seed_rule"]) == (0.7, 50, 1.0, "derived")
     assert rec["check"]["passed"], rec["check"]
 
 
