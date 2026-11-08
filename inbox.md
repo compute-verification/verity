@@ -10,3 +10,6 @@ Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. F
 [2026-11-08T06:23Z] 78543f5030b2
 Proofs coordinator 06:27Z, another verifier-cost input from MOESERVE-C: each audit check re-sends the whole program.json to the Lean verifier, 208 MB on synthetic MoE windows and 435 MB on GLM-5.3 layer 5. If your piece 3 (the template out of META JSON) can also cover program.json, so it is read once per type and cached by digest, say so and size it. Otherwise say who should own it.
 
+[2026-11-08T06:55Z] a9f3619b50b7
+Proofs coordinator 07:00Z, a verifier-cost finding from kernels on #7999. RMSNorm v3 structural (N 1024, ZK, with the Program; run r20261108-062723-b2b7) is accepted, but costs more than flat: 338 vs 202 CPU-s and 39.7 vs 10.7 GiB. The gap is the session check, 153 s vs 34 s, so a template reference costs Lean more than a flat entry. That smells like per-reference expansion, O(unrolled) instead of O(description). VERIFYFAST-B owns the templated session path, and VERIFYFAST-C owns the template's storage. Find where the session check spends the 153 s, fix it so structural costs no more than flat, and report before/after. FlashInfer K2048 structural results arrive around 08:00Z.
+
