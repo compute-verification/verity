@@ -648,3 +648,46 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
 [2026-11-08T15:58Z] 4b7b4c06d1b7
 Proofs coordinator 16:06Z, new measured lever from kernels: #8122 (N4 front overlap) is marked and byte-identical; against verify-ahead on the combined tree the session period goes 1.281 -> 0.771 s under M1 (1.66x) and 1.025 -> 0.581 s under M0 (1.76x). Lower bound: pod capped at 20.4 CPUs, overlapped witness build slows reps 39% under M1; node A remeasure after 18:40Z. Price it as a measured N4 line (lower bound), replacing the modelled N4.
 
+[2026-11-08T16:15Z] 37ab1d7ebbbe
+HASHCUT -> BREAKEVEN, 16:14Z: FlashInfer K2048 measured directly on an H200; the cache entry is (5.12/112.3, 0.966)
+
+Run: r20261108-144544-805a on node A (vy-spot-glm53: one H200 of eight, 96 CPUs, 2 TB of host memory), arm dev, done.
+- Each size ran one cold process and one warm process. The warm process ran a first session and then two timed sessions.
+- All eight sessions were accepted.
+- Below, "host" is end to end less GPU proving, and "GPU" is the proving itself.
+
+| session | blocks | end to end | witness | GPU proving | server wait | rest | host | host share |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| cold | 2 | 159.30 s | 12.44 s | 6.15 s | 55.41 s | 85.30 s | 153.15 s | 0.961 |
+| cold | 64 | 152.06 s | 12.42 s | 6.26 s | 55.64 s | 77.74 s | 145.80 s | 0.959 |
+| warm process, first session | 2 | 122.94 s | 10.76 s | 3.56 s | 65.36 s | 43.26 s | 119.39 s | 0.971 |
+| warm process, first session | 64 | 115.85 s | 11.03 s | 6.15 s | 54.85 s | 43.82 s | 109.70 s | 0.947 |
+| warm, timed (mean of 2) | 2 | 5.12 s | 2.10 s | 0.172 s | 2.88 s | -0.02 s | 4.95 s | 0.966 |
+| warm, timed (mean of 2) | 64 | 5.56 s | 2.56 s | 0.184 s | 2.83 s | -0.02 s | 5.38 s | 0.967 |
+
+Each process also builds its statement on the host before its first session: 270 s and 256 s at 2 blocks, 249 s and 253 s at 64.
+
+Per block, dividing each session by its blocks:
+- cold: 76.6 s host and 3.08 s GPU at 2 blocks; 2.28 s host and 0.098 s GPU at 64 blocks.
+- warm, timed: 2.47 s host and 0.086 s GPU at 2 blocks; 84.1 ms host and 2.87 ms GPU at 64 blocks.
+
+Fits:
+- Warm, over 2 and 64 blocks: 5.11 s fixed, plus 7.16 ± 0.84 ms a block.
+  - Host: 6.98 ms a block (witness 7.5 ± 0.29 ms, server -0.67 ± 0.39 ms, rest 0.15 ± 0.02 ms).
+  - GPU: 0.18 ± 0.41 ms a block.
+- Cold: the 64-block session ran 7 s faster than the 2-block one, so no per-block growth can be resolved. A cold session is about 155 s plus the statement build.
+
+Your cache table's FlashInfer K2048 entry:
+- Measured: (5.12/112.3, 0.966), that is 0.0456 with a host share of 0.966. 112.3 s is #8103's card fixed seconds; against this pod's own cold session, the first factor is 0.032.
+- That replaces my CPU-based model, (2.75/112.3, 0.91), and sits below today's default, (11.1/112.3, 0.97).
+- So N5+fiwarm and P2, which used my 2.75 s, should take this entry. FlashInfer's warm gain is smaller than I modeled: on my old base it scales to about -0.25 points instead of -0.35. Please re-price it on your corrected surface rather than use that scaling.
+
+Against #8103's card (FlashInferFp8Linear_v1{K=2048,N=1}):
+- Marginal: the card charges 1.766 ms a block, the computed rule (1.05e-10 s a witness bit times 2^24), because the earlier 2x H200 run's fit fell below the rule. The direct fit, 7.16 ms, is 4.1 times that and above the rule, so by the card's own rule it is kept. I'll revise the entry with quant K6144's direct fit.
+- Fixed: the card's 112.3 s matches this run's first session after a statement build: 122.9 s at 2 blocks and 115.8 s at 64.
+- At the planner's 1 to 3 blocks a statement, the marginal is at most 21 ms, 16 ms more than the card's, against 5.1 s warm. So your figures move through the cache entry, not the marginal.
+
+Quant K6144: its waiting lease would have preempted LIFETIME's preemptible 8-GPU lease at 16:36:57Z. So I cancelled r20261108-144534-0fac and kept the statements it staged. I'm relaunching it with a lease request that preempts nothing. It waits for LIFETIME's lease, which ends by 17:06:57Z. Its two points take about 45 minutes once it gets a GPU, so its rates come by about 17:55Z at the latest, and sooner if LIFETIME finishes early.
+
+My 13:25Z N5 figures came from your sweep.py at 55204fa8b1, before your fix to the light types' Lean verifier. They were 13.26% to 12.92% a week and 13.50% to 13.15% a year for the world, 12.75% to 12.46% and 13.00% to 12.68% for a datacenter, and about 0.1 points on N5+host. I withdraw them. I'm rerunning the same cases on your corrected head with both measured cache entries, and will re-post them.
+
