@@ -72,7 +72,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t
   computes and egress t reads, and the egress row the one the warden signed: the chains are wires through the
   registered roots, not the prover's word. `Registered.checkPort` holds every instance of a registered port, so the
-  last unit's o1, S_{G·T−1}, is a member's own unregistered output, committed and never opened. Leaf 0 is opened by
+  last unit's o1, S_{G·T−1}, is no state leaf. It, each o0 and the block's ``x`` are read at their own frame roots,
+  which the round's registration holds (`own_rows`), since Lean takes registered reads only when they name every port
+  of the circuit (`Flock.Registered.checkComplete`). Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
   which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
@@ -169,6 +171,7 @@ from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS  # noqa: E402
+from verity.ml.windows.rows import own_entries  # noqa: E402
 from verity.core.protocols.certifier import io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
@@ -665,11 +668,42 @@ def header_refusal(ports: dict, entries: dict) -> str | None:
                                        "verifier's registered reads do not")
 
 
-def registered_file(mr: SimpleNamespace) -> dict:
+def registered_file(mr: SimpleNamespace, own: dict | None = None) -> dict:
     """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
     verdict's `registered` reports its roots): each network certifier port at the head `warden_rows.check_registration`
-    read under the deployment's key, never a root of the prover's."""
-    return WR.reads_file(mr.ports)
+    read under the deployment's key, never a root of the prover's; each scan tree port at the tree's registered root;
+    and `own`, the member's other ports at their own registered roots (`own_rows`)."""
+    return WR.reads_file({**mr.ports, **(own or {})})
+
+
+def own_rows(mr: SimpleNamespace, path: Path, ports: list, at: str) -> dict:
+    """Member `mr`'s ports that read neither a warden row nor a scan tree (a public o0, the block's free ``x``, the
+    group's last unit's o1), each as rows of its own frame tree at the root the round's registration holds for it
+    (``<at>/<port>``, `audit`'s roots, registered before any coin), unit ``base + i`` its row i: Lean takes registered
+    reads only when they name every port of the circuit (`Flock.Registered.checkComplete`). Adds their paths to the
+    staged public file's header (`rows.own_entries`, which refuses rows that aren't the frame root) and returns the
+    verifier's ports for them. Refused where a port is left with no registered read."""
+    head, body = path.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    fv, reg = h["frame_v3"], h.get("registered") or {}
+    mem = {"name": at, "n": mr.n, "ports": [(p.name, p.words) for p in ports], "shared_rows": h["shared_rows"],
+           "frame_v3": fv}
+    try:
+        entries = own_entries(mem, body, without=reg)
+    except ValueError as e:
+        raise SystemExit(f"{mr.round}/{mr.name}: {e}") from None
+    left = [p.name for p in ports if p.name not in reg and p.name not in entries]
+    if left:
+        raise SystemExit(f"{mr.round}/{mr.name}: ports {left} have no registered read, and Lean refuses a statement "
+                         "whose registered reads leave a port out (Flock.Registered.checkComplete)")
+    if entries:
+        h["registered"] = {**reg, **entries}
+        path.unlink()
+        path.write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() + b"\n" + body)
+    words = {p.name: p.words for p in ports}
+    return {p: produced.port(e["value"], {"leaves": mr.n, "words": words[p], "word_bits": 16,
+                                          "domain": fv["domain_ids"][p]}, fv["roots"][p], range(mr.n), fv["schemas"][p])
+            | ({REG.READS_FROM: mr.base} if mr.base else {}) for p, e in entries.items()}
 
 
 def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespace:
@@ -681,7 +715,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     (``warden``). An ingress unit's ``prog<j>`` is one table row a slot entry it reads (``refs``, `registered.table`),
     since a timestep's units read their boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the
     group's last unit's none (its o1 a fresh salt's, `stage`). The block's unit k reads ``x``, slot entry k, its free
-    input and no registered read, and its o0, that entry, is a registered read of `prog`'s leaf k, no public word
+    input, read at its own root once staged (`own_rows`), and its o0, that entry, is a registered read of `prog`'s
+    leaf k, no public word
     (``outputs`` None); its statement's input set is ``set_name`` (`block_set`)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
@@ -938,7 +973,9 @@ def port_prefix(defn, mr: SimpleNamespace) -> str:
 def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     """Member mr's statement: each unit's input rows in a shared-row file (each instance its own table row, a slot
     entry's one a boundary, ``mr.refs``), every row but a public o0, input or output, under the salts and paths of its
-    registered entry, a public ``o0`` under a fresh salt; and the verifier's own `--registered` file. Its outputs are
+    registered entry, a public ``o0`` under a fresh salt; every port none of those registers (a public o0, the block's
+    ``x``, the last unit's o1) read at its own frame root (`own_rows`); and the verifier's own `--registered` file,
+    which names every port. Its outputs are
     the references' (o0 every unit's where it is public, each output row where the reference gives one), and each
     row's b‖c the one the host read. The block's o0 frame root and domain must be the `prog` tree's: the scan reads
     the slot entries only where they are one tree. Its ports in the registration are ``at``'s (`port_prefix`)."""
@@ -968,7 +1005,8 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
+    own = own_rows(mr, out / f"pub-{n}.bin", st.ports, port_prefix(sg.defn, mr))
+    (out / "registered.json").write_text(json.dumps(registered_file(mr, own), sort_keys=True))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
          "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
          "class": st.class_sha512, "set": set_name, "tables": {r: len(x) for r, x in tables.items()},
