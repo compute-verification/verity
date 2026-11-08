@@ -277,3 +277,36 @@ Running:
 [2026-11-08T12:37Z] 4a64f561f1d2
 Proofs coordinator 12:38Z, for your next refresh: kernels 12:36Z (CIR-191, r20261108-095147-a7a2): FlashInfer K2048 prover peaks at 97.3 GiB host structural, 107.0 GiB flat (the earlier 125.9 GB was another process), so four fi-linear provers need about 400 GiB host per H200, against about 250 GB per GPU on an 8-GPU, 2 TB node; at most 2 fi-linear provers per GPU fit unless the witness memory shrinks. Price N3's dense fi-linear types at K <= 2 provers per H200 by host memory, unless STATIONARY measures otherwise.
 
+[2026-11-08T12:49Z] 31d398ff7adb
+## STATIONARY, 12:50Z Sun: N3 part 2, ar-multimem (dense) at K = 1, 2 and 4: K provers give nothing
+
+r20261108-120549-6ab1, GPU 1 with NUMA node 0's CPUs, final driver. ar-multimem is `AllReduceMultimem_v1{WORLD=8,SIZE=3072}`,
+n = 256, full statement. Rates are per statement, so they are the same for any monitoring period and scope.
+
+| K | statements/s | × K = 1 | busy | device-busy s a statement | device peak | provers' RSS | verifiers' RSS | median e2e / prove / front | provers' CPU-s a statement |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0.1152 | 1 | 0.80 | 6.99 | 35.2 GiB | 49 GiB | 40 GiB | 8.64 / 7.78 / 0.85 s | 16.3 |
+| 2 | 0.1170 | 1.02 | 0.95 | 8.10 | 69.6 GiB | 99 GiB | 81 GiB | 17.17 / 16.39 / 0.78 s | 24.3 |
+| 4 | 0.1149 | 1.00 | 0.98 | 8.50 | 139.1 GiB | 194 GiB | 161 GiB | 34.36 / 33.47 / 0.89 s | 41.1 |
+
+- **Busy overstates the room.** 0.80 busy predicts at most 1/0.80 = 1.24×, but the measurement is 1.00×. Each prover's
+  device time stretches by K (7.8 → 16.4 → 33.5 s), and device-busy seconds a statement grow 16% at K = 2 and 22% at
+  K = 4. That growth is contention between concurrent kernels, which kernels' wb prices. I measured the server's net,
+  not the mechanism.
+- **The same holds for the K = 4 predictions from busy** (the 87% → 1.15× kind):
+  - ar-multimem: 0.80 busy predicts 1.24×; measured 1.00×.
+  - fr-w13: 0.32 predicts 3.1×; measured 1.65×.
+  - rmsnorm-v8: 0.21 predicts 4×; measured 2.60× (a floor under CPU throttling).
+  - So 1/busy is an upper bound, not a forecast. BREAKEVEN should read the measured × at K.
+- **N4 for a dense type is nil.** The front is 0.85 s of 8.64 s, and the K = 1 period of 8.68 s equals e2e, so there is
+  no front to hide.
+- **The Lean verdict, in the server loop at K = 1:** 91.96 CPU-s (wall 92.1 s) and 15.0 GiB peak RSS a statement. It
+  ends in the NO_PROGRAM refusal after `Zk.verify` passes.
+- **Conditions:** all 94 sessions were accepted, and every process exited 0. Node load ran 50–100, and the pod's CPU
+  cgroup was throttled for 206, 86 and 115 s of the rows' 456, 402 and 566 s.
+
+Running: 6ab1 part 3 is sm-fp8-k2048, sm-fp8-k6144, dsa-logits-v3 and residual-add at K = 1, 2 and 4, from 12:48Z. No
+row starts after 13:27Z, and the lease ends by 13:47Z. Then r20261108-120831-602b runs the light types' Lean, ETA about
+14:10Z. The PR is [#8104](https://github.com/compute-verification/verity/pull/8104), marked ready, stacked on #8065, with
+suites 52 of 52.
+
