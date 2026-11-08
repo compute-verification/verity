@@ -27,17 +27,24 @@ def _lean_driver(flag: str = "") -> str:
     """tools/verity/lean/merge.py's driver for the mode ``flag`` names, as its `driver` writes it (a test holds the two equal):
     origin/main's copy of tools/verity/lean when the repository has that ref, else the worktree's.  Git runs a driver from the
     worktree of the side merged into, so an old branch merging main would otherwise merge main's records by its own older
-    rules; a path base_drivers made absolute runs as it is.  The copy is extracted once per origin/main commit, into
-    <git common dir>/lean-merge/<sha>/ (`.ok` once whole), by the call that takes `<sha>.lock` (mkdir), which also keeps only
-    the two newest; a call that finds the lock taken runs a temporary copy of its own rather than wait on it."""
-    tree = "git archive \"$s\" -- tools/verity/lean ':(exclude)tools/verity/lean/tests' 2>/dev/null | tar -x -C"
-    return (f"m=tools/verity/lean/merge.py; f=$m; d=; case $m in /*) ;; *) if s=$(git rev-parse -q --verify "
-            f"'origin/main^{{commit}}') && g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && "
-            f"mkdir -p \"$b\"; then c=$b/$s; if [ ! -f \"$c/.ok\" ]; then if mkdir \"$c.lock\" 2>/dev/null; then "
-            f"[ -f \"$c/.ok\" ] || {{ rm -rf \"$c\" && mkdir \"$c\" && {tree} \"$c\" 2>/dev/null && [ -f \"$c/$m\" ] && "
-            f": >\"$c/.ok\"; }}; ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
-            f"rm -rf \"$b/$o\" \"$b/$o.lock\"; done; rmdir \"$c.lock\"; elif d=$(mktemp -d) && {tree} \"$d\" 2>/dev/null && "
-            f"[ -f \"$d/$m\" ]; then f=$d/$m; fi; fi; [ -f \"$c/.ok\" ] && f=$c/$m; fi;; esac; "
+    rules; a path base_drivers made absolute runs as it is.  The copy is kept per origin/main commit, at
+    <git common dir>/lean-merge/<full sha>/, extracted into a temporary directory beside it and renamed into place, so a
+    killed extraction leaves nothing at the key and of two racing calls one's rename wins and both run that copy; the two
+    newest stay.  Where origin/main resolves and no copy of it extracts, the file is left to git's conflict."""
+    return ("m=tools/verity/lean/merge.py; f=$m; d=; x() { git archive -o \"$1.tar\" \"$s\" -- tools/verity/lean "
+            "':(exclude)tools/verity/lean/tests' 2>/dev/null && "
+            "tar -x -C \"$1\" -f \"$1.tar\" 2>/dev/null && [ -f \"$1/$m\" ]; r=$?; rm -f \"$1.tar\"; return $r; }; "
+            "case $m in /*) ;; *) if s=$(git rev-parse -q --verify 'origin/main^{commit}'); then f=; "
+            "if g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && mkdir -p \"$b\"; then c=$b/$s; "
+            "if [ ! -f \"$c/$m\" ] && t=$(mktemp -d \"$b/.tmp-XXXXXX\"); then x \"$t\" && python3 -c "
+            "'import os, sys; os.rename(*sys.argv[1:])' \"$t\" \"$c\" 2>/dev/null; rm -rf \"$t\"; "
+            "ls -t \"$b\" | grep -E '^[0-9a-f]{40,64}$' | tail -n +3 | while read -r o; do "
+            "mv \"$b/$o\" \"$b/.tmp-gone-$o\" 2>/dev/null && rm -rf \"$b/.tmp-gone-$o\"; done; "
+            "find \"$b\" -maxdepth 1 -name '.tmp-*' -mmin +60 -exec rm -rf {} + 2>/dev/null; fi; "
+            "[ -f \"$c/$m\" ] && f=$c/$m; fi; [ -n \"$f\" ] || { d=$(mktemp -d) && x \"$d\" && f=$d/$m; }; "
+            "[ -n \"$f\" ] || { echo \"lean merge driver: origin/main ($s) resolves, but its tools/verity/lean could not be "
+            "extracted, so this file is left to git's conflict, not merged by the worktree's older copy\" >&2; "
+            "[ -z \"$d\" ] || rm -rf \"$d\"; exit 1; }; fi;; esac; "
             f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
 
 

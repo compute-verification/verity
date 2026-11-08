@@ -1004,18 +1004,27 @@ def driver(flag: str = "", where: str = DIR) -> str:
     """The command git runs for a driver whose mode ``flag`` names (`--caps `...): `origin/main`'s copy of ``where`` (this
     directory from the top of the worktree, where git runs drivers) when the repository has that ref, else the worktree's.
     `origin/main`'s copy is at least as new as any branch's, and the worktree's is the branch merged into's. A path made
-    absolute (`research queue`'s `base_drivers`) runs as it is. `git archive` extracts the copy once per `origin/main`
-    commit, into `<git common dir>/lean-merge/<sha>/` (`.ok` once whole), in the call that takes `<sha>.lock` (mkdir, so
-    concurrent calls don't both write it), which also removes all but the two newest; a call that finds the lock taken
-    runs a temporary copy of its own rather than wait on a lock its holder may never release."""
-    m, tree = f"{where}/merge.py", f"git archive \"$s\" -- {where} ':(exclude){where}/tests' 2>/dev/null | tar -x -C"
-    return (f"m={m}; f=$m; d=; case $m in /*) ;; *) if s=$(git rev-parse -q --verify "
-            f"'origin/main^{{commit}}') && g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && "
-            f"mkdir -p \"$b\"; then c=$b/$s; if [ ! -f \"$c/.ok\" ]; then if mkdir \"$c.lock\" 2>/dev/null; then "
-            f"[ -f \"$c/.ok\" ] || {{ rm -rf \"$c\" && mkdir \"$c\" && {tree} \"$c\" 2>/dev/null && [ -f \"$c/$m\" ] && "
-            f": >\"$c/.ok\"; }}; ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
-            f"rm -rf \"$b/$o\" \"$b/$o.lock\"; done; rmdir \"$c.lock\"; elif d=$(mktemp -d) && {tree} \"$d\" 2>/dev/null && "
-            f"[ -f \"$d/$m\" ]; then f=$d/$m; fi; fi; [ -f \"$c/.ok\" ] && f=$c/$m; fi;; esac; "
+    absolute (`research queue`'s `base_drivers`) runs as it is. The copy is kept per `origin/main` commit, at
+    `<git common dir>/lean-merge/<full sha>/`: a call that finds none there extracts one into a temporary directory beside
+    it (`git archive` to a file, then `tar`, each checked, and `merge.py` there) and renames it into place, so a killed
+    extraction leaves nothing at the key, and of two calls racing for one key the rename of one wins and the other runs
+    that copy; that call then keeps the two newest copies, each removed by renaming it away first. A call that can't keep
+    one runs a temporary copy of its own; one that can extract neither, though `origin/main` resolves, leaves the file to
+    git's conflict rather than merge it by the worktree's older copy."""
+    m = f"{where}/merge.py"
+    return (f"m={m}; f=$m; d=; x() {{ git archive -o \"$1.tar\" \"$s\" -- {where} ':(exclude){where}/tests' 2>/dev/null && "
+            f"tar -x -C \"$1\" -f \"$1.tar\" 2>/dev/null && [ -f \"$1/$m\" ]; r=$?; rm -f \"$1.tar\"; return $r; }}; "
+            f"case $m in /*) ;; *) if s=$(git rev-parse -q --verify 'origin/main^{{commit}}'); then f=; "
+            f"if g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && mkdir -p \"$b\"; then c=$b/$s; "
+            f"if [ ! -f \"$c/$m\" ] && t=$(mktemp -d \"$b/.tmp-XXXXXX\"); then x \"$t\" && python3 -c "
+            f"'import os, sys; os.rename(*sys.argv[1:])' \"$t\" \"$c\" 2>/dev/null; rm -rf \"$t\"; "
+            f"ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
+            f"mv \"$b/$o\" \"$b/.tmp-gone-$o\" 2>/dev/null && rm -rf \"$b/.tmp-gone-$o\"; done; "
+            f"find \"$b\" -maxdepth 1 -name '.tmp-*' -mmin +60 -exec rm -rf {{}} + 2>/dev/null; fi; "
+            f"[ -f \"$c/$m\" ] && f=$c/$m; fi; [ -n \"$f\" ] || {{ d=$(mktemp -d) && x \"$d\" && f=$d/$m; }}; "
+            f"[ -n \"$f\" ] || {{ echo \"lean merge driver: origin/main ($s) resolves, but its {where} could not be extracted, "
+            f"so this file is left to git's conflict, not merged by the worktree's older copy\" >&2; "
+            f"[ -z \"$d\" ] || rm -rf \"$d\"; exit 1; }}; fi;; esac; "
             f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
 
 

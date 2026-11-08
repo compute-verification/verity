@@ -90,23 +90,33 @@ def test_a_lean_driver_runs_origin_main_s_copy_when_the_repository_has_it_and_th
     assert (repo / "f.txt").read_text() == f"moved {flag}".rstrip() + "\n"
 
 
-def test_a_lean_driver_extracts_origin_main_s_copy_once_per_commit_and_keeps_the_two_newest(tmp_path, monkeypatch):
-    """Two driver calls (one merge, two conflicted files) with one `origin/main` extract its copy once, into
-    `.git/lean-merge/<sha>/`, and a later merge runs that copy; a moved `origin/main` extracts again, and only the two newest
-    commits' copies stay.  A call that finds another's extraction lock taken runs a temporary copy of its own and leaves the
-    cache to the lock's holder."""
-    repo, commit = repository(tmp_path, monkeypatch, "merge.lean-audit.driver", ("f.txt", "g.txt"))
-    (shim := tmp_path / "bin").mkdir()
-    (shim / "tar").write_text(f'#!/bin/sh\necho "$3" >> {tmp_path / "archived"}\nexec {shutil.which("tar")} "$@"\n')
-    (shim / "tar").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{os.environ['PATH']}")
-    cache = repo / ".git" / "lean-merge"
+def shim(tmp_path: Path, monkeypatch, then: str = "") -> Path:
+    """`tar` as a driver finds it (git puts its own directory first on a driver's PATH, so the shim is tar's): it logs the
+    directory each extraction goes into, then runs ``then`` and the real tar; returns the log."""
+    (bin_ := tmp_path / "bin").mkdir()
+    log = tmp_path / "archived"
+    (bin_ / "tar").write_text(f'#!/bin/sh\necho "$3" >> {log}\n{then}\nexec {shutil.which("tar")} "$@"\n')
+    (bin_ / "tar").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    return log
 
-    def archived() -> list[str]:
-        """Each extraction (git puts its own directory first on a driver's PATH, so the shim is tar's): the commit whose copy
-        went into the cache, or `temporary`."""
-        dirs = (tmp_path / "archived").read_text().split() if (tmp_path / "archived").exists() else []
-        return [Path(d).name if Path(d).resolve().parent == cache.resolve() else "temporary" for d in dirs]
+
+def archived(log: Path, cache: Path) -> list[str]:
+    """Each extraction in ``log``: `cache` for one into a directory beside the cache's keys, `temporary` for one elsewhere."""
+    dirs = log.read_text().split() if log.exists() else []
+    return ["cache" if Path(d).resolve().parent == cache.resolve() else "temporary" for d in dirs]
+
+
+def kept(cache: Path) -> list[str]:
+    return sorted(p.name for p in cache.iterdir())
+
+
+def test_a_lean_driver_extracts_origin_main_s_copy_once_per_commit_and_keeps_the_two_newest(tmp_path, monkeypatch):
+    """Two driver calls (one merge, two conflicted files) with one `origin/main` extract its copy once, at
+    `.git/lean-merge/<full sha>/`, and a later merge runs that copy; a moved `origin/main` extracts again, and only the two
+    newest commits' copies stay, with nothing else beside them."""
+    repo, commit = repository(tmp_path, monkeypatch, "merge.lean-audit.driver", ("f.txt", "g.txt"))
+    log, cache = shim(tmp_path, monkeypatch), repo / ".git" / "lean-merge"
 
     def merge(who: str) -> None:
         git(repo, "merge", "--no-edit", "main")
@@ -122,11 +132,12 @@ def test_a_lean_driver_extracts_origin_main_s_copy_once_per_commit_and_keeps_the
 
     git(repo, "update-ref", "refs/remotes/origin/main", "main")
     first = git(repo, "rev-parse", "main").stdout.strip()
+    assert len(first) == 40
     merge("main")
-    assert archived() == [first] and sorted(p.name for p in cache.iterdir()) == [first]
+    assert archived(log, cache) == ["cache"] and kept(cache) == [first]
     (cache / first / "tools" / "verity" / "lean" / "sibling.py").write_text("WHO = 'cached'\n")
     merge("cached")
-    assert archived() == [first], "the second merge runs the copy the first extracted"
+    assert archived(log, cache) == ["cache"], "the second merge runs the copy the first extracted"
 
     second = move("main2")
     merge("main2")
@@ -134,15 +145,66 @@ def test_a_lean_driver_extracts_origin_main_s_copy_once_per_commit_and_keeps_the
     os.utime(cache / second, (2, 2))
     third = move("main3")
     merge("main3")
-    assert archived() == [first, second, third]
-    assert sorted(p.name for p in cache.iterdir()) == sorted([second, third]), "the two newest stay, and no lock"
+    assert archived(log, cache) == ["cache"] * 3 and kept(cache) == sorted([second, third]), "the two newest stay"
+    assert list((tmp_path / "tmp").iterdir()) == []
 
-    fourth = move("main4")
-    (cache / f"{fourth}.lock").mkdir()
-    merge("main4")
-    assert not (cache / fourth).exists() and (cache / f"{fourth}.lock").is_dir() and list((tmp_path / "tmp").iterdir()) == []
-    assert archived() == [first, second, third, "temporary", "temporary"], "a copy of its own for each call while it's taken"
-    (cache / f"{fourth}.lock").rmdir()
-    merge("main4")
-    assert archived() == [first, second, third, "temporary", "temporary", fourth]
-    assert (cache / fourth / ".ok").is_file() and not (cache / f"{fourth}.lock").exists()
+
+def test_a_killed_extraction_leaves_nothing_at_its_key_and_the_next_call_extracts_it_whole(tmp_path, monkeypatch):
+    """The driver killed while it extracts `origin/main`'s copy (here once tar has written it, before the rename) stops the
+    merge and leaves nothing at `.git/lean-merge/<sha>/`, only its temporary directory and archive beside it, so no later
+    call can run a part of a copy; the next merge extracts the copy whole and merges by it."""
+    repo, _ = repository(tmp_path, monkeypatch, "merge.lean-audit.driver")
+    once = tmp_path / "kill"
+    once.touch()
+    log = shim(tmp_path, monkeypatch, f'if [ -e {once} ]; then rm {once}; {shutil.which("tar")} "$@"; kill -KILL $PPID; exit 1; fi')
+    cache = repo / ".git" / "lean-merge"
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    sha = git(repo, "rev-parse", "main").stdout.strip()
+
+    killed = git(repo, "merge", "--no-edit", "main", check=False)
+    assert killed.returncode and "died of signal 9" in killed.stderr and git(repo, "status", "--short").stdout == ""
+    assert not (cache / sha).exists() and all(p.startswith(".tmp-") for p in kept(cache)), kept(cache)
+    git(repo, "merge", "--no-edit", "main")
+    assert (repo / "f.txt").read_text() == "main\n" and (cache / sha / "tools" / "verity" / "lean" / "merge.py").is_file()
+    assert archived(log, cache) == ["cache", "cache"]
+
+
+def test_two_merges_racing_for_one_key_both_merge_by_a_whole_copy_and_one_stays(tmp_path, monkeypatch):
+    """Two merges in two worktrees of one repository, each finding no copy of one `origin/main` commit: the second runs
+    whole while the first extracts (the shim runs it then, so the order is fixed), its rename puts its copy at the key, and
+    the first's rename then finds the key taken, so the first removes its own and merges by the one there."""
+    repo, _ = repository(tmp_path, monkeypatch, "merge.lean-audit.driver")
+    git(repo, "branch", "old2", "old")
+    git(repo, "worktree", "add", "-q", str(other := tmp_path / "other"), "old2")
+    once = tmp_path / "race"
+    once.touch()
+    unset = "env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_REFLOG_ACTION"
+    log = shim(tmp_path, monkeypatch, f'if [ -e {once} ]; then rm {once}; {unset} git -C {other} merge -q --no-edit main '
+                                      f'> {tmp_path / "second.log"} 2>&1 || echo failed >> {tmp_path / "second.log"}; fi')
+    cache = repo / ".git" / "lean-merge"
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    sha = git(repo, "rev-parse", "main").stdout.strip()
+
+    git(repo, "merge", "--no-edit", "main")
+    assert "failed" not in (tmp_path / "second.log").read_text()
+    assert (repo / "f.txt").read_text() == (other / "f.txt").read_text() == "main\n"
+    assert archived(log, cache) == ["cache", "cache"] and kept(cache) == [sha], "both extracted, one copy stays, nothing else"
+    assert {"merge.py", "sibling.py"} <= {p.name for p in (cache / sha / "tools" / "verity" / "lean").iterdir()}
+
+
+def test_a_copy_of_origin_main_that_won_t_extract_leaves_the_file_to_git_s_conflict_not_to_the_worktree_s_copy(tmp_path,
+                                                                                                           monkeypatch):
+    """Where `origin/main` resolves, the worktree's copy never runs: its copy failing to extract, at the key and in a temporary
+    directory, leaves git's conflict and says why, the file as the side merged into has it."""
+    repo, _ = repository(tmp_path, monkeypatch, "merge.lean-audit.driver")
+    log = shim(tmp_path, monkeypatch, "exit 1")
+    cache = repo / ".git" / "lean-merge"
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+
+    refused = git(repo, "merge", "--no-edit", "main", check=False)
+    assert refused.returncode and "CONFLICT (content): Merge conflict in f.txt" in refused.stdout
+    assert "resolves, but its tools/verity/lean could not be extracted" in refused.stderr, refused.stderr
+    assert (repo / "f.txt").read_text() == "old\n", "not merged by the worktree's copy"
+    assert archived(log, cache) == ["cache", "temporary"] and kept(cache) == [] and list((tmp_path / "tmp").iterdir()) == []
+
+
