@@ -3,8 +3,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`; the protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's
-  soundness statement doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
+  "k"}`, or a rate as a selection rule states it, `rate:NUM/DEN[:T]`, `stratified-rate:NUM/DEN` or
+  `work-rate:NUM/DEN`, which names its sampling design and work table over the program's population (`design`); the
+  protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's soundness statement
+  doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
   what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
   `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
@@ -57,6 +59,7 @@ public import CoreProtocol.Live
 public import SampledProofs.Registration
 public import SampledProofs.Record
 public import SampledProofs.ChallengerDraw
+public import SampledProofs.Select
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -121,6 +124,18 @@ def rule (law : Json) : V Json := do
   | _ => throw "the law is not subset, bernoulli, stratified or work"
   return law
 
+/-- The agreed sampling design and the work table it is expanded over: a law object (`rule`) with the verifier's own work
+`table`, or a rate stated as a selection rule's law text (`Select.parseRate`, `Select.parseStrataRate`), which names its
+sampling design over the population of `program` under `query` as a stream's rule does (`Select.Rule.over`,
+`Select.Rule.lawOver`) and its work table (`Select.Rule.tableOver`). -/
+def design (program : Program) (query : Json) (law : Json) (table : Option Json) : V (Json × Option Json) := do
+  let .str t := law | return (← rule law, table)
+  if (Select.parseRate t).isNone && (Select.parseStrataRate t).isNone then
+    throw s!"a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, not {pyRepr t}"
+  let n ← Partition.units program query
+  let some over := (Select.Rule.law t).over n | throw s!"a rate law over {n} units draws none of them or more than {n}"
+  return (← over.lawOver n, ← (Select.Rule.law t).tableOver program query table)
+
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
   "registered", "scheme", "work_table"]
 
@@ -153,10 +168,10 @@ def paramsParsed (j : Json) : V Params := do
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
-  let law ← rule (getD j "law")
   let workTable ← match getD j "work_table" with
     | .null => pure none
     | t => some <$> obj t "work_table"
+  let (law, workTable) ← design program query (getD j "law") workTable
   let .str scheme := getD j "scheme" | throw "scheme is not a string"
   let ports ← (entries (← obj (getD j "ports") "ports")).mapM fun (p, v) => do
     exactly v #["domain", "leaves"] s!"port {p}"

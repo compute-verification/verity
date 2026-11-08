@@ -3,9 +3,17 @@ The rate law's count (`draw.rate_count`): a public rate `q = NUM/DEN` over `T` t
 registration's `n` units at `k = T·⌈NUM·n/(DEN·T)⌉`, `⌈q·n⌉` rounded up to a multiple of `T`. Every unit is sampled with
 probability `k/n ≥ q` whatever `n` the prover registers (`count_ge`), each of the `T` tables proves `k/T` of them
 (`count_dvd`), `k ≥ 1` once `q > 0` and `n ≥ 1` (`count_pos`), and `k ≤ n` whenever `T` divides `n` (`count_le`).
+
+The stratified and work rate laws' floor (`draw.rate_floor`): a stratum of `n` units draws at least `⌈q·n⌉` of them, the
+verifier's own floor `f` where that is more, and never more than `n` (`floor`). A work law sizes each stratum at its floor
+or above (`Flock.Draw.workK`), so under any `K`, any works and any population work, every unit of every stratum is
+sampled with probability `k_s/n_s ≥ q` whatever strata the prover registers (`workK_ge`), and `1 ≤ k_s ≤ n_s`
+(`floor_pos`, `workK_le`).
 -/
 
 module
+
+public import Flock.Draw
 
 @[expose] public section
 
@@ -51,5 +59,44 @@ theorem count_le (num den tables n : Nat) (hd : 0 < den) (ht : 0 < tables) (hq :
   generalize num * (tables * m) = a at hle ⊢
   have hc := Nat.mul_comm b m
   omega
+
+/-- A stratum's floor at the rate `NUM/DEN`: `⌈NUM·n/DEN⌉` (`count` over one table), raised to the verifier's floor `f`,
+never above the stratum's `n` units. -/
+def floor (num den n f : Nat) : Nat := min n (max f (count num den 1 n))
+
+theorem floor_le (num den n f : Nat) : floor num den n f ≤ n := Nat.min_le_left _ _
+
+/-- At least the rate: `NUM·n ≤ DEN·floor` once `NUM ≤ DEN`. -/
+theorem floor_ge (num den n f : Nat) (hd : 0 < den) (hq : num ≤ den) : num * n ≤ den * floor num den n f := by
+  have hc := count_ge num den 1 n hd Nat.one_pos
+  unfold floor
+  generalize count num den 1 n = c at hc ⊢
+  rcases Nat.le_total n (max f c) with h | h
+  · rw [Nat.min_eq_left h]; exact Nat.mul_le_mul_right n hq
+  · rw [Nat.min_eq_right h]; exact Nat.le_trans hc (Nat.mul_le_mul_left den (Nat.le_max_right f c))
+
+theorem floor_pos (num den n f : Nat) (hq : 0 < num) (hn : 0 < n) (hd : 0 < den) : 0 < floor num den n f := by
+  have hc := count_pos num den 1 n hq hn hd Nat.one_pos
+  unfold floor
+  generalize count num den 1 n = c at hc ⊢
+  rcases Nat.le_total n (max f c) with h | h
+  · rw [Nat.min_eq_left h]; exact hn
+  · rw [Nat.min_eq_right h]; exact Nat.lt_of_lt_of_le hc (Nat.le_max_right f c)
+
+/-- **A stratum sized from a rate floor samples at least the rate**: under any `K`, work and population work, the work
+law's draw over a stratum of `n` units whose floor is `floor NUM DEN n f` is `k` with `NUM·n ≤ DEN·k`, so each of its
+units is sampled with probability `k/n ≥ NUM/DEN` however many units the prover registers in it or elsewhere. -/
+theorem workK_ge (num den n f k work total : Nat) (hd : 0 < den) (hq : num ≤ den) :
+    num * n ≤ den * Flock.Draw.workK k work n total (floor num den n f) := by
+  have hf := floor_ge num den n f hd hq
+  unfold Flock.Draw.workK
+  generalize floor num den n f = fl at hf ⊢
+  generalize (k * work * n + total - 1) / total = x
+  rcases Nat.le_total n (max fl x) with h | h
+  · rw [Nat.min_eq_left h]; exact Nat.mul_le_mul_right n hq
+  · rw [Nat.min_eq_right h]; exact Nat.le_trans hf (Nat.mul_le_mul_left den (Nat.le_max_left fl x))
+
+theorem workK_le (n f k work total num den : Nat) : Flock.Draw.workK k work n total (floor num den n f) ≤ n :=
+  Nat.min_le_left _ _
 
 end SampledProofs.Rate

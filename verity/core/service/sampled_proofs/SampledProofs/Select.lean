@@ -5,15 +5,21 @@ program and query, that sampling design expanded over them, and the sample from 
 a work sample's closure under the challenger's closure map, held to `Draw.checkDraw` as the stream holds it. With the sample,
 the number of bytes of the coins it read.
 
-A rule's law text is a rate law (`parseRate`: `rate:NUM/DEN[:T]`, what a new Spec states) or one `parseDesign` reads. A rate
-law names no sampling design until the population is known: over `n` units it is `subset:k` at `k = Rate.count` (`Rule.over`,
-`resolve`), so the sample, the registration's law and the audit are a uniform `k`-subset's, and `select` runs on that rule.
+A rule's law text is a rate: a rate law (`parseRate`: `rate:NUM/DEN[:T]`), or a stratified or work rate law
+(`parseStrataRate`: `stratified-rate:NUM/DEN`, `work-rate:NUM/DEN`). The population a rule samples is the registration's,
+which the prover sizes, so a fixed count (`subset:K`, `stratified:K`, `work:K`), whose proof blocks are each sampled with
+`K/N` as the prover pads `N`, is refused (`Rule.ofJson`, `FIXED`); `bernoulli:NUM/DEN` parses and is refused at
+registration (`Draw.bernoulli`). A rate names no sampling design until the population is known. Over `n` units a rate law
+is `subset:k` at `k = Rate.count` (`Rule.over`, `resolve`), so the sample, the registration's law and the audit are a
+uniform `k`-subset's, and `select` runs on that rule. A stratified rate law is `work:1` and a work rate law `work:K` at
+`K = ⌈NUM·n/DEN⌉`, each over the work table `Rule.tableOver` writes, every stratum's floor at the rate (`Rate.floor`), so
+each stratum samples at least `⌈NUM·n_s/DEN⌉` of its `n_s` proof blocks (`Rate.workK_ge`).
 
 A two-stage rule (`Rule.twoStage grain replay k`) samples twice. Its first stage is `select` over the replay blocks, the
-population of the boundary registration's program under the replay grain's query, by its replay law (a rate law or
-`subset:K`); its second stage (`selectSecond`, on fresh coins after the interior registration) samples `k` proof blocks
-of each sampled replay block, one stratum per replay block (`secondLaw`). One-stage is the rule `law`: a two-stage rule
-whose replay blocks are single proof blocks is refused, so each design has one form.
+population of the boundary registration's program under the replay grain's query, by its replay law (a rate law); its
+second stage (`selectSecond`, on fresh coins after the interior registration) samples `k` proof blocks of each sampled
+replay block, one stratum per replay block (`secondLaw`). One-stage is the rule `law`: a two-stage rule whose replay
+blocks are single proof blocks is refused, so each design has one form.
 -/
 module
 
@@ -69,10 +75,35 @@ def parseRate (text : String) : Option (Nat × Nat × Nat) :=
     else none
   | none => none
 
-/-- The selection rules a `Stream` runs: every unit (`All`), a one-stage law, a rate law (`parseRate`) or one in
-`parseDesign`'s syntax (`Law`), and a two-stage design (`TwoStage`): replay blocks, the template instances of the replay
-partition's query `grain`, sampled by the first stage's law `replay` (a rate law or `subset:K`), then `k` proof blocks
-inside each sampled replay block (`second`). -/
+/-- `draw.parse_strata_rate`: the stratified rate law `stratified-rate:NUM/DEN` or the work rate law `work-rate:NUM/DEN`,
+a public rate `NUM/DEN` with `0 < NUM ≤ DEN`, split at the first `:` and then the first `/`, each number one or more ASCII
+digits, as `(work, NUM, DEN)`, `work` true for the work rate law; none for any other text. -/
+def parseStrataRate (text : String) : Option (Bool × Nat × Nat) :=
+  let (kind, arg) := split1 text ":"
+  let (num, den) := split1 arg "/"
+  if (kind == "stratified-rate" || kind == "work-rate") && digits num && digits den && 0 < num.toNat! &&
+      num.toNat! ≤ den.toNat! then
+    some (kind == "work-rate", num.toNat!, den.toNat!)
+  else none
+
+/-- A rule's law text is a rate: a rate law, a stratified or work rate law, or `bernoulli:NUM/DEN`, which registration
+refuses (`Draw.bernoulli`). -/
+def rate? (t : String) : Bool :=
+  (parseRate t).isSome || (parseStrataRate t).isSome ||
+    match parseDesign t with
+    | .ok l => jeq (getD l "law") "bernoulli"
+    | .error _ => false
+
+/-- The refusal of a law text that is no rate (`rate?`), `service.FIXED`'s: a fixed count's proof blocks are each sampled
+with `K/N` as the prover pads the `N` it registers. -/
+def FIXED (t : String) : String :=
+  s!"a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), stratified-rate:NUM/DEN or work-rate:NUM/DEN " ++
+    s!"(0 < NUM <= DEN) or bernoulli:NUM/DEN, not {pyRepr t}: a fixed count samples each proof block with K/N, which " ++
+    "falls as the prover pads the N it registers"
+
+/-- The selection rules a `Stream` runs: every unit (`All`), a one-stage law, a rate (`rate?`, `Law`), and a two-stage
+design (`TwoStage`): replay blocks, the template instances of the replay partition's query `grain`, sampled by the first
+stage's law `replay` (a rate law), then `k` proof blocks inside each sampled replay block (`second`). -/
 inductive Rule where
   | all
   | law (text : String)
@@ -85,22 +116,21 @@ def grain? (g : Json) : Bool :=
     jeq (getD g "version") (Lean.toJson (0 : Nat)) && keys? (getD g "params") == some #["template"] &&
     (getD (getD g "params") "template" matches .str _)
 
-/-- A two-stage rule's first-stage law text: a rate law or `subset:K`, a uniform sample of replay blocks. -/
-def replayLaw? (t : String) : Bool :=
-  (parseRate t).isSome || (match parseDesign t with | .ok l => jeq (getD l "law") "subset" | .error _ => false)
+/-- A two-stage rule's first-stage law text: a rate law, a uniform sample of replay blocks at the rate however many replay
+blocks the prover registers. -/
+def replayLaw? (t : String) : Bool := (parseRate t).isSome
 
-/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}`, its sampling design text a rate law or one
-`parseDesign` reads, as `service.Law` refuses any other when it is made, or `{rule: two-stage, grain, replay, k}`, its
-grain the replay partition's query (a `Q_template_instance` query object), its replay law a rate law or `subset:K`
-(`replayLaw?`) and `k` a positive integer, as `service.TwoStage` refuses any other. A stream refuses a sequential
-rule. -/
+/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}`, its law text a rate (`rate?`), as
+`service.Law` refuses any other when it is made (`FIXED`), or `{rule: two-stage, grain, replay, k}`, its grain the replay
+partition's query (a `Q_template_instance` query object), its replay law a rate law (`replayLaw?`) and `k` a positive
+integer, as `service.TwoStage` refuses any other. A stream refuses a sequential rule. -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all
   | .str "law" =>
     if keys? j == some #["law", "rule"] then
       if let .str t := getD j "law" then
-        if (parseRate t).isNone then let _ ← parseDesign t
+        if !rate? t then throw (FIXED t)
         return .law t
   | .str "two-stage" =>
     if keys? j == some #["grain", "k", "replay", "rule"] then
@@ -109,7 +139,7 @@ def Rule.ofJson (j : Json) : V Rule := do
       | .str t, some k =>
         if grain? grain then
           if !replayLaw? t then
-            throw s!"a two-stage rule's replay law is a rate law or subset:K, not {pyRepr t}"
+            throw s!"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not {pyRepr t}"
           if k == 0 then throw "a two-stage rule samples k >= 1 proof blocks in each replay block"
           return .twoStage grain t k
       | _, _ => pure ()
@@ -123,16 +153,45 @@ def Rule.lawOver : Rule → Nat → V Json
   | .law t, _ => parseDesign t
   | .twoStage _ t _, _ => parseDesign t
 
-/-- A sampling design text over `n` units: a rate law is `subset:k` at `k = Rate.count NUM DEN T n`, none unless `1 ≤ k ≤ n`; any
-other text is itself. -/
+/-- A sampling design text over `n` units: a rate law is `subset:k` at `k = Rate.count NUM DEN T n`, none unless `1 ≤ k ≤ n`;
+a stratified rate law is `work:1` and a work rate law `work:k` at `k = Rate.count NUM DEN 1 n`, none unless `1 ≤ k ≤ n`, each
+over `Rule.tableOver`'s work table; any other text is itself. -/
 def textOver (t : String) (n : Nat) : Option String :=
-  match parseRate t with
-  | some (num, den, tables) =>
+  match parseRate t, parseStrataRate t with
+  | some (num, den, tables), _ =>
     let k := Rate.count num den tables n
     if 1 ≤ k && k ≤ n then some s!"subset:{k}" else none
-  | none => some t
+  | none, some (false, _, _) => some "work:1"
+  | none, some (true, num, den) =>
+    let k := Rate.count num den 1 n
+    if 1 ≤ k && k ≤ n then some s!"work:{k}" else none
+  | none, none => some t
 
-/-- `service.selection_law`'s first step: the rule over `n` units, its rate law `subset:k` (`textOver`); none where
+/-- `service.selection_table`: the work table a rule's sampling design is expanded over, from the verifier's own `table`.
+A stratified or work rate law's names each stratum of `p` under `query` (`Partition.strata`) with its floor at the rate,
+`Rate.floor NUM DEN n_s f_s`: under a stratified rate law work one and `f_s` one, so each stratum samples `⌈NUM·n_s/DEN⌉`
+of its `n_s` proof blocks; under a work rate law the table's work and floor. Any other rule's is `table`. An error where
+the query doesn't apply, a work rate law has no table or its table names no work for a stratum's template. -/
+def Rule.tableOver (rule : Rule) (p : Program) (query : Json) (table : Option Json) : V (Option Json) := do
+  let .law t := rule | return table
+  let some (work, num, den) := parseStrataRate t | return table
+  let strata ← Partition.strata p query
+  let given ← if work then
+      match table with
+      | some j => Flock.Draw.workTableOfJson j
+      | none => throw "a work rate law needs the verifier's work table"
+    else pure #[]
+  let entries ← strata.mapM fun (tmpl, rs) => do
+    let n := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
+    let (w, f) ← if work then
+        match given.find? (·.1 == tmpl) with
+        | some (_, w, f) => pure (w, f)
+        | none => throw s!"the work table names no work for template '{tmpl}'"
+      else pure (1, 1)
+    pure (tmpl, Json.mkObj [("work", Lean.toJson w), ("floor", Lean.toJson (Rate.floor num den n f))])
+  return some (Json.mkObj entries.toList)
+
+/-- `service.selection_law`'s first step: the rule over `n` units, its rate `subset:k` or `work:k` (`textOver`); none where
 `selection_law` refuses (`rate`). It follows `lawOver`, whose matcher it shares, so that `lawOver` stays the definition
 the Properties lock records. -/
 def Rule.over : Rule → Nat → Option Rule
@@ -181,8 +240,8 @@ def closureMap? (j : Json) : V (Array (Int × Array Int)) := do
 
 private def inRange (n : Nat) (u : Int) : Bool := 0 ≤ u && u < n
 
-/-- The rule over the population of `p` under `query` (`Partition.units`, `Rule.over`), which `select` runs; an error
-where the query doesn't apply or `selection_law` refuses the rule's rate law. -/
+/-- The rule over the population of `p` under `query` (`Partition.units`, `Rule.over`), which `select` runs over
+`Rule.tableOver`'s work table; an error where the query doesn't apply or `selection_law` refuses the rule's rate. -/
 def resolve (rule : Rule) (p : Program) (query : Json) : V Rule := do
   let n ← Partition.units p query
   let some r := rule.over n | throw s!"a rate law over {n} units draws none of them or more than {n}"

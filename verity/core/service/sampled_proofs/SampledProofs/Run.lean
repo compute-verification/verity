@@ -4,9 +4,11 @@ whose selection rule `Select.Rule` reads: what the challenger holds once a deliv
 check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
-  the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
-  (`Registration.check`) against the challenger's copies under the sampling design the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), a `bernoulli` sampling design at any `p` (`Draw.bernoulli`: `bernoulli`), a
+  the rule's rate over it (`Select.Rule.over`: `rate`, a count of none or more than the population) and the work table
+  it is expanded over (`Select.Rule.tableOver`: `rate`, a stratified or work rate law whose strata or table don't
+  apply), then R1–R7 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
+  that population (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
+  design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
@@ -186,7 +188,8 @@ def run (i : Input) : V Json := do
   if n == 0 then return refused "register" #["population"]
   let some rule := i.rule.over n | return refused "register" #["rate"]
   let law ← rule.lawOver n
-  let v := { v with law }
+  let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
+  let v := { v with law, workTable }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli law then return refused "register" #["bernoulli"]
