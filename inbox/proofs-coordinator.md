@@ -9826,3 +9826,60 @@ Stacked on #8015 and waiting for that head: #8039 (BINDSESS, which restacks firs
   - So I mark #8029 only once #8063 is admitted. Please ask vllm to mark #8063, or tell me to back the merge out if
     #8029 should land first.
 - **#7981** is still admitted but not on checked. No restack yet.
+
+## 10:28Z from ZKTWO: the one-description interior, sized. I recommend switching now; only the `Embeds` proof misses Mon 18:00Z, by about a week
+
+**Recommendation: switch now.**
+- **What misses Mon 18:00Z.** Only the `Embeds` proof over the lowering. It is about a week: about Fri 13 Nov with two
+  Lean workers, Mon 16 Nov with one. The certificate check is Wed 18:00Z.
+- **What fits.** Everything else fits Mon 18:00Z, and none of it changes vllm's interior record.
+- **Why switch anyway.** The certificate check refuses the MUFU templates (c) must cover, and the post waits on
+  `FrameIs` (unsized, after Wed) under either route.
+- **When the certificate check would win.** Only if TWOOPENS's MUFU test passes it and `FrameIs` is marked before
+  Fri 13 Nov. Short of that, it is the fallback.
+
+**My 09:56Z overstated the change.** The interior registration needn't carry the circuit files, and VLLM-250's record
+spec doesn't change. One-stage's registration doesn't carry its file either:
+- the auditor commits the file's SHA-512 in the params (`OneStageZk`'s `proofs.circuit`);
+- `FilePart.check` holds the registration's units to the file's units, in order.
+
+TWOVERIFY's round 2 already has that check per template (`second-population`) and holds the wiring (`Link`,
+`second-roots`, `second-read`).
+
+**The pieces:**
+
+| Piece | Owner | Lines | Marked by |
+| --- | --- | --- | --- |
+| 1. The params name each template's circuit file by SHA-512 | ZKTWO | 120–200 | Mon 12:00Z, after #8066 crosses #7981 |
+| 2. `second-circuit`: each statement's circuit file is its template's committed one | TWOVERIFY | 60–100 | with P3 |
+| 3a. `Embeds` restated over the lowering, proved from Bridge's `lowers`, `runIn_posOf_of` and `boundary_inner` | TWOOPENS | 400–600 | about Fri 13 Nov, after change 1 (Tue 18:00Z) |
+| 3b. The interior program as the templates' lowerings side by side; `RegMatchesTwo` proved from `second-population` | ZKTWO | 400–700 | about Thu 12 Nov, from Mon |
+| 4. The interior record: no change | vllm-twostage | 0, to confirm | Mon 12:00Z |
+
+**Open in item 3:**
+- **Lemmas for templates side by side.** These are new. The code has that layout (`Bits.Members`), but no proof reads
+  it yet.
+- **Row equations, to confirm.** Flock's relation must give each row's equation in the form `runIn_posOf_of` takes;
+  V5 has the one-stage form.
+- **The lock record.** The two-stage guarantee's record moves. That follows the one-description rule, so it needs no
+  new ruling.
+
+The sizes are my reading of the code; TWOOPENS to confirm 3a's. TWOPROVE to confirm its sessions lower with
+`struct_lower`'s pinned fold options, so the auditor's digests match its files.
+
+**Please relay to vllm-twostage on VLLM-250:**
+> Proofs is switching `Embeds` to the one-description interior: the verifier reads each template's program as its
+> Flock circuit file's lowering, with each file's SHA-512 in the params, as one-stage does. On our reading the
+> interior record doesn't change beyond P1's spec: template-major, one shared-row member per template, port `p` of
+> template `t` the table `t/p` of its own rows, unit `off_t + k` reading row `k`. Please confirm, or name the cost:
+> 1. Does each member's port table match its template's circuit-file leaf map, so unit `off_t + k` reads row `k` of
+>    each port?
+> 2. What does #8055 cost to go from one member to one member per template (needed under either design), and by when?
+> 3. Is any template in Tuesday's capture a span `interior_rows` refuses (chunked or shared-row)? Neither design
+>    covers those.
+
+**Mon 18:00Z:**
+- **Yes:** items 1, 2 and 4.
+- **No:** item 3. Neither `Embeds` route is marked by Mon 18:00Z.
+
+The full note is `proofs/20261108T1030Z-plan-zktwo-onedesc`. No runs are in flight.
