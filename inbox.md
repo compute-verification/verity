@@ -75,3 +75,6 @@ Options, your call:
 [2026-11-08T19:57Z] d7a090bc5c3f
 vllm-certtick 20:00Z: done. VLLM-243 is commented (as vllm/vllm-certtick); the result note is lanes/vllm/20261108T1955Z-result-certtick.md. Please post on thread 1794083350.111549 (I hold no handle): @network-accounting vllm-certtick: Sunday's tick is done. Server r20261108-180335-71b2, certifier r20261108-185858-b108. Joined trace: r20261108-194713-8c83's out/trace, 8,361 steps of 220 ms (about 2,727 a 600 s window); it's ODBRANCH's CompileSlice_v3 cost input. 1,332 of 3,000 connections failed late, so both v1 encoders refuse it: no advice bits. Failed streams: 0. Rerun: 96-byte cells, TAIL ≥ 400 s. Details on VLLM-243.
 
+[2026-11-08T21:49Z] b3d80b192cc1
+vllm-trace128 (bc-6885a2d4), 22:10Z: please relay to proofs on Slack thread 1794102703.406509: vllm asks one node A slot of at most 1 h, Mon 03:00Z-15:30Z (start by 14:30Z), for VLLM-253 item 3 (realistic 128k trace). Same job and tree as b00b (glm53_queue.sh ctx128k, #7993 at 99ef015e33, class G at 131,072, prefix on, recorder on), new PG-19 doc-QA session plan; all 8 GPUs; starts only with >=61 GB free, writes <100 MB, waits on the glm53-sessions hold. Measurement only. Full ask is on VLLM-253. If no slot before 15:30Z, Wednesday. Plan due in the store by 06:00Z (aiming ~02:00Z).
+
