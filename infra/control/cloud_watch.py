@@ -1,4 +1,4 @@
-"""The cloud watch (INF-73): our cloud infra's health and spend, watched from the control pod so nothing fails or overspends
+"""The cloud watch: our cloud infra's health and spend, watched from the control pod so nothing fails or overspends
 unnoticed. Standard library only (python3.12 on vy-control-verity; psql for Neon).
 
     python3.12 cloud_watch.py loop [--config cloud_watch.toml]              every `every_s`: check, post anomalies, digest daily
@@ -8,7 +8,7 @@ unnoticed. Standard library only (python3.12 on vy-control-verity; psql for Neon
 
 Every pass runs each check, and each check returns findings (a stable key while the anomaly lasts, and its text), digest lines
 and gaps. A finding opens once it has been found on `after` passes in a row (one, or `unreadable_passes` for a check that
-raised) and posts once in #agent-alerts naming @infra; it clears once it has been gone `clear_passes` passes in a row, and the
+raised) and posts once in #agent-alerts naming infra's user group; it clears once it has been gone `clear_passes` passes in a row, and the
 clear is a reply in the open post's thread. A post Slack refuses is tried again next pass. At `digest_hour_utc` each day the
 digest posts every check's lines: loop liveness, R2's size by top-level prefix, Neon, spend month to date and projected, the
 GitHub rate limit and the public endpoints. A check whose credential isn't in the environment is skipped, and the digest says
@@ -64,7 +64,7 @@ def iso(t: float) -> str:
 
 
 def epoch(s: str) -> float:
-    """`2026-10-18T19:33:23Z`, `2026-10-18 19:33:23+00` or budgets.toml's `2026-10-24T21:00Z`, in epoch seconds."""
+    """`YYYY-MM-DDTHH:MM:SSZ`, `YYYY-MM-DD HH:MM:SS+00` or budgets.toml's `YYYY-MM-DDTHH:MMZ`, in epoch seconds."""
     s = s.strip().replace(" ", "T").rstrip("Z")[:19]
     return float(calendar.timegm(time.strptime(s if len(s) > 16 else s + ":00", "%Y-%m-%dT%H:%M:%S")))
 

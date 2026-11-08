@@ -10,9 +10,11 @@ A request after a history of C positions (`build.build_program`'s C: a prefix-ca
 reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
 which open its layers' logs (`_Model.open_with`) before its first call.
 The compiled execution is the target's compilation "breakable": vLLM serves `glm_moe_dsa` without torch.compile
-(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs, so every selection a launch
-reads is at the step's padded tokens (`targets.graph_tokens`) but the indexer's and the sparse MLA's, graph breaks that read the real
-batch (`_sparse_indexer_and_attn`), and the logits', computed outside the graphs.
+(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs: a uniform decode step's FULL
+graph, another step's PIECEWISE graphs (`targets.graph_launch`).  Both pad alike, so every selection a launch reads is at the step's
+padded tokens (`targets.graph_tokens`), and no all-reduce route, cuBLAS route or MoE tile reads the mode (d9105ea80's communicators
+choose by bytes alone), but the indexer's and the sparse MLA's: graph breaks on the real batch under PIECEWISE graphs, captured at the
+padded batch under a FULL graph, its padding rows without keys (`_Launch.keys`); and the logits', computed outside the graphs.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -117,7 +119,10 @@ class Net:
         if phi.execution == "compiled" and self.tp.compilation != "breakable":
             facts.append(f"a compiled execution by {self.tp.compilation!r} (vLLM serves glm_moe_dsa's eager kernels from breakable CUDA "
                          f"graphs, the target's compilation 'breakable')")
-        self.capture_sizes = graph_capture_sizes(phi)
+        self.capture_sizes, self.max_num_seqs = graph_capture_sizes(phi), (phi.engine or {}).get("max_num_seqs")
+        if self.capture_sizes and type(self.max_num_seqs) is not int:
+            facts.append(f"breakable CUDA graphs at engine arg max_num_seqs {self.max_num_seqs!r}, not a stated count (a uniform decode "
+                         f"step replays a FULL graph up to it)")
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
@@ -186,6 +191,12 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
+    def edge_groups(self, keys: int) -> tuple[str, ...]:
+        """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
+        carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
+        top-k selection keeps every key and reads no logit: `reads_run`)."""
+        return ("prefix", *(("prefix_ik", "prefix_iks") if self.reads_run(keys) else ()))
+
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
         layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
@@ -207,7 +218,8 @@ class _Model:
     reads_launch = True
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
-        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch(capture_sizes=net.capture_sizes)
+        self.net, self.C, self.B, self.peers = net, net.C, B, peers
+        self.launch = _Launch(capture_sizes=net.capture_sizes, max_num_seqs=net.max_num_seqs or 0)
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
         self.logs: dict[int, dict[str, PartLog]] = {}
         self.run, self.checks, self.topk = None, [], {}
@@ -238,6 +250,16 @@ class _Model:
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
                 self.logs[L]["iks"].append(iks[n][j].refs)
+
+    def edge_rows(self, groups: tuple[str, ...]) -> list[Coll]:
+        """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
+        `Net.prefix_params` lays out a history of them: wires and no gates."""
+        E, net = len(self.logs[0]["latent"]), self.net
+        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
+        if any(len(log) != E for g in groups for log in logs[g]):
+            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
+        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in groups]
 
     def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
@@ -403,7 +425,7 @@ class _Model:
                     continue
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)))
+                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)), "dsa_topk_switches")
                 order = self.call(self.k("dsa_waksman_order", N=n, TOPK=TOPK), sw.refs)
                 self.checks.append((self.call(self.k("dsa_topk_long_row", N=n, TOPK=TOPK), logits.refs, order.refs),
                                     f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "
@@ -443,7 +465,10 @@ class _Model:
         C, tp, M = self.C, self.net.tp, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
-        w = lambda f: self.w[(L, f)]  # noqa: E731
+
+        def w(f: str):
+            return self.w[(L, f)]
+
         if VH != D:
             _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
         if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):

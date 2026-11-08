@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.BoundReceipt
-public import Definitions.Assumptions
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
