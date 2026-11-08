@@ -16,3 +16,21 @@ vllm-twostage-int 11:49Z: #8055 is rebased onto checked (d00f68909e) and pushed 
 [2026-11-08T12:12Z] 712c87f08013
 vllm-twostage-int 12:15Z: #8055 is re-marked at 65c15eac42 (rebased on checked d00f68909e, imports verity.core.protocols.spot). Quick suites r20261108-114812-a371: 23 of 25 pass. The 2 reds fail identically on checked d00f68909e with none of my commits (I ran both there): verity-vllm tests/program/predict/test_step_needs.py::test_production_sizes_refuse_by_name and benchmarks/route_capture tests/test_gap.py::test_production_steps_name_each_gap. Both expect a no capture refusal for cublas-linear and cublas-router that checked no longer gives, likely since a capture landed for them. step_needs is our lane's suite, so someone should fix it forward. On the follow-up: still waiting on your branch answer.
 
+[2026-11-08T13:07Z] b8e7d943e189
+vllm-twostage-int, 13:07Z Sun.
+The follow-up is open and unmarked: https://github.com/compute-verification/verity/pull/8111, head ef514aa009, base #8055's branch (cursor/vllm-twostage-int-496a), Lane vllm, Refs VLLM-250, @proofs named, and TWOPROVE's link-rule gap listed as open with owner TWOPROVE. The P1 test stays local until #8066 lands.
+e10d (quick suites on 66c42f76f0): 25 of 28 suites passed and 3 failed, with 5 failed tests between them. Two are checked's #7769 reds (test_step_needs, route_capture's test_gap). Three were mine, all fixed in #8111:
+- sampler_capture wasn't a public interface for serve_tax's imports; it now states __all__ and is in PUBLIC.
+- interior_rows imported the predictor's window_rows, which made a P9 package cycle and broke test_predict's record-path rule. The chunk kernel moved to verity/ml/definitions/numerics/token_select_rows.py. Its first home there, numerics/rows.py, put that file past P10's 800-line cap, which the next quick run (6608) caught, so it got its own module.
+The quick suites at ef514aa009 are r20261108-125900-12dd. It is queued behind other runs for a check slot on cpu-2; I expect a result around 13:50Z and will put it in the PR body.
+LIFETIME: I answered their questions 1-4 on VLLM-250 and proposed who owns what.
+- LIFETIME: the GPU kernel (it needs row/v2, since every token-select piece port is v2), the recorder and the two passes.
+- Me: the port map, the token select's GPU taps, interior taking a GPU commitment, and opening the sampled cells.
+- vllm-twostage: REPLAY_c. ZKTWO: P1. TWOPROVE: the link gap.
+Three of my pieces are already built on the local branch cursor/vllm-twostage-int3-496a at ffa705f1cb:
+- interior(device=DeviceCommit(roots, bc, salts)) registers byte for byte what the host commit does under the same salts.
+- sampler_capture.piece_rows lays out the pieces in torch, equal word for word to pieces on CPU, NaN/inf/ties included.
+- port_map reads which committed word each unit's port word is off read_all itself.
+Its quick suites are r20261108-130407-12ea, queued. May I push it as a third stacked branch and open its PR unmarked when 12ea passes?
+The smoke test is ready for your go, Mon 16:00-17:30Z on node A: bash ~/.research/notes/lanes/vllm/tools/capture_smoke.sh /tmp/wt-3 . After the capture, it now also checks piece_rows on cuda:0 against the host's pieces (capture_pieces_gpu.py). The CPU half is capture_interior.py, as before.
+
