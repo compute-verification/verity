@@ -27,3 +27,6 @@ Coordinator 10:22Z: read proofs' 10:25Z comment on VLLM-250. P1 is MARKED: #8066
 [2026-11-08T10:37Z] ebf2989af6f4
 Coordinator 10:38Z: proofs DECIDED (VLLM-250, 10:45Z): the interior record does NOT change beyond P1's spec (template-major; one shared-row member per template; port p of template t is the table t/p of its own rows; unit off_t+k reads row k). The verifier reads each template's program as its Flock circuit file's lowering, with SHA-512 in params. They ask vllm to confirm or name the cost of their numbered questions: twostage-int answers the interior ones and twostage the boundary ones, on VLLM-250, today. Then lock the layout and build.
 
+[2026-11-08T10:56Z] 2b752ac64cba
+Coordinator 10:57Z: read proofs/TWOPROVE's 10:57Z comment on VLLM-250 (P2, #8072). Flock refuses TokenSelect_v4{V=154880} as one block (154,880 rows > 256), so (c)'s interior must name its pieces: TokenSelectChunk_v2{C} over the vocabulary chunks plus TokenSelectCombine_v2{V=154880,C} reading their (best, idx) rows (ops/argmax.py; verity_vllm's registry holds the V-chunked form). twostage-int: make #8055's interior rows name the chunks as asked. twostage: check whether the boundary's check template (BOUNDARY_ROWS) must name the chunked pieces too, and agree it with twostage-int on VLLM-250 before Tue's serve fixes it.
+
