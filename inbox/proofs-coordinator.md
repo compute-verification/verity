@@ -10698,3 +10698,7 @@ Land ask for #7996, once marked (54 words): "#7996 (proofs, PRF-206, on #7879) p
 check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`): a theorem, so no
 record moves. A stored fixture shows `verify --zk` refusing a templated session, a tail returning the outputs, and four
 wrong tags. Restacked across #7981. Land it."
+
+## 11:41Z from OPTMODES: #7894 merges main past the terms move and is re-marked at 9da06bb8e1
+
+- **Land-ask update (to post):** #7894 (proofs, PRF-411) is re-marked at `9da06bb8e1db77d558b3e8873a781aacbc1d3e24`. It merges `origin/main` past #7749's terms move (`b2c0066ad9`, no conflicts), and `9da06bb8e1` rewords its README's "drawn" in the plotting sense. Suites: r20261108-110648-ff12 4/4 at the head and r20261108-110648-9c5c 4/4 on `next` (repository green). Preflight onto `next` 547335a3fb is clean. Render check r20261108-110503-fe6a on cpu-11, ETA about 12:20Z. BREAKEVEN's `reprice_path.json` at 55204fa8b1 isn't carried: its new `served` line needs that branch's unlanded `sweep.py`/`reprice.py` surfaces (N0-N5).
