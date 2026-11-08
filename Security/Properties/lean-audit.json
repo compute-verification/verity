@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": [
   "Properties.Pouw",
   "Properties.Pouw.Check",
@@ -804,6 +805,76 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   }
+ },
+ "trust": {
+  "base": {
+   "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
+   "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
+   "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
+   "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
+   "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
+   "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
+   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
+  },
+  "extra": {
+   "Verity.remote_soundness_of_subprotocols": {
+    "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
+   }
+  }
+ },
+ "deployed": [
+  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+  "Pous.Period.SecurityProofs.periodHeld",
+  "Pous.Period.SecurityProofs.periodHeldDeployed",
+  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+  "Verity.remote_soundness_of_subprotocols"
+ ],
+ "trust_gap": {
+  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingAuditSecure"],
+  "Pous.Period.SecurityProofs.periodHeld": [
+   "Pous.P2.Assumptions.CoinCommitHides",
+   "Pous.P2.Assumptions.P2RingAuditSecure",
+   "Pous.Period.DeviceModel",
+   "Pous.Period.Instantiates"
+  ],
+  "Pous.Period.SecurityProofs.periodHeldDeployed": [
+   "Pous.P2.Assumptions.CoinCommitHides",
+   "Pous.P2.Assumptions.P2RingAuditSecure",
+   "Pous.Period.DeviceModel",
+   "Pous.Period.Instantiates"
+  ],
+  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": [
+   "Accounting.Assumptions.Compose.GuessLuckAt",
+   "Accounting.Assumptions.TS.OperandHMu",
+   "Accounting.Assumptions.TS.ReceiptLuckAt",
+   "Accounting.Assumptions.TS.UnitFixed",
+   "Accounting.Compose.PrefixOf",
+   "Accounting.Compose.Scope",
+   "Accounting.Compose.WindowPlay.EveryWindow",
+   "Properties.Pouw.Period.RegisteredBeforeDraw",
+   "Properties.Pouw.Period.SaltIsLiveCoin",
+   "Properties.Pouw.Period.SampleIsCoin",
+   "Properties.Pouw.Period.ServiceSound",
+   "Properties.Pouw.Period.StagedPins"
+  ],
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": [
+   "Accounting.Remote.Draw.Assumptions.Counted",
+   "Accounting.Remote.Draw.Assumptions.Live",
+   "Accounting.Remote.Draw.Assumptions.Refused",
+   "Accounting.Remote.Held.Assumptions.ChipCeiling",
+   "Accounting.Remote.Held.Assumptions.Covers",
+   "Accounting.Remote.Held.Assumptions.Disks",
+   "Accounting.Remote.Held.Assumptions.Links",
+   "Accounting.Remote.Held.Assumptions.NoOutsideCompute",
+   "Accounting.Remote.Held.Assumptions.Paced",
+   "Accounting.Remote.Held.Assumptions.Routed",
+   "Accounting.Remote.Held.Assumptions.SketchBoundAt",
+   "Accounting.Remote.Held.Assumptions.SquaringCeiling"
+  ],
+  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SampledProofsSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -24224,76 +24295,5 @@
    "Pous.Component.SecurityProofs.runDigest": "an equation between two functions of the commitment's bytes that no check takes part in, so no verifier's decision can falsify it, and its one hypothesis (the bytes decode) is what the composition establishes before it binds a digest",
    "Pous.Component.SecurityProofs.wipeDigest": "the same equation for the wipe's commitment: no check takes part in it"
   }
- },
- "format": 1,
- "trust": {
-  "base": {
-   "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
-   "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
-   "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
-   "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
-   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
-   "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
-   "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
-   "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
-   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
-  },
-  "extra": {
-   "Verity.remote_soundness_of_subprotocols": {
-    "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
-   }
-  }
- },
- "deployed": [
-  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
-  "Pous.Period.SecurityProofs.periodHeld",
-  "Pous.Period.SecurityProofs.periodHeldDeployed",
-  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-  "Verity.remote_soundness_of_subprotocols"
- ],
- "trust_gap": {
-  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingAuditSecure"],
-  "Pous.Period.SecurityProofs.periodHeld": [
-   "Pous.P2.Assumptions.CoinCommitHides",
-   "Pous.P2.Assumptions.P2RingAuditSecure",
-   "Pous.Period.DeviceModel",
-   "Pous.Period.Instantiates"
-  ],
-  "Pous.Period.SecurityProofs.periodHeldDeployed": [
-   "Pous.P2.Assumptions.CoinCommitHides",
-   "Pous.P2.Assumptions.P2RingAuditSecure",
-   "Pous.Period.DeviceModel",
-   "Pous.Period.Instantiates"
-  ],
-  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": [
-   "Accounting.Assumptions.Compose.GuessLuckAt",
-   "Accounting.Assumptions.TS.OperandHMu",
-   "Accounting.Assumptions.TS.ReceiptLuckAt",
-   "Accounting.Assumptions.TS.UnitFixed",
-   "Accounting.Compose.PrefixOf",
-   "Accounting.Compose.Scope",
-   "Accounting.Compose.WindowPlay.EveryWindow",
-   "Properties.Pouw.Period.DrawIsCoin",
-   "Properties.Pouw.Period.RegisteredBeforeDraw",
-   "Properties.Pouw.Period.SaltIsLiveCoin",
-   "Properties.Pouw.Period.ServiceSound",
-   "Properties.Pouw.Period.StagedPins"
-  ],
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": [
-   "Accounting.Remote.Draw.Assumptions.Counted",
-   "Accounting.Remote.Draw.Assumptions.Live",
-   "Accounting.Remote.Draw.Assumptions.Refused",
-   "Accounting.Remote.Held.Assumptions.ChipCeiling",
-   "Accounting.Remote.Held.Assumptions.Covers",
-   "Accounting.Remote.Held.Assumptions.Disks",
-   "Accounting.Remote.Held.Assumptions.Links",
-   "Accounting.Remote.Held.Assumptions.NoOutsideCompute",
-   "Accounting.Remote.Held.Assumptions.Paced",
-   "Accounting.Remote.Held.Assumptions.Routed",
-   "Accounting.Remote.Held.Assumptions.SketchBoundAt",
-   "Accounting.Remote.Held.Assumptions.SquaringCeiling"
-  ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SampledProofsSound"]
  }
 }
