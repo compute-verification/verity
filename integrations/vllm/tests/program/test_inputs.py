@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import Builder, bind
+from verity.ml.circuits.defs import Builder, PrimitiveDefinition, bind
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import dsa_topk
@@ -61,18 +61,22 @@ def test_every_run_declaration_is_read(declared):
     assert readers, f"no rule reads a run field under {declared!r}: remove its declaration from RUN"
 
 
-def _call(defn):
-    fn = bind(defn, N=5, TOPK=3)
+#: a relation `RELATIONS` doesn't list: any permutation of the top-3 set of 5 scores (log2(3!) free bits), a test's own
+ANY_ORDER = PrimitiveDefinition("TAnyTopKOrder", 1, (("scores", Array(5, Value(32))), ("order", Array(3, Value(32)))), Value(1),
+                                lambda *w: dsa_topk.order_ok(w[:5], w[5:], 3), register=False)
+
+
+def _call(fn):
     params, ret = fn.signature()
     B = Builder(tuple(params), ret)
     return B, B.call(fn, *(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)))
 
 
 def test_a_check_bit_is_a_declared_relations_verdict():
-    B, ok = _call(dsa_topk.DsaTopKLongRow)
+    B, ok = _call(bind(dsa_topk.DsaTopKLongRow, N=5, TOPK=3))
     IN.check(B, ok, "the long row")
-    B, ok = _call(dsa_topk.DsaTopKOrder)
-    with pytest.raises(IN.Free, match="DsaTopKOrder_v1, which RELATIONS doesn't list"):
+    B, ok = _call(ANY_ORDER)
+    with pytest.raises(IN.Free, match="TAnyTopKOrder_v1, which RELATIONS doesn't list"):
         IN.check(B, ok, "any permutation")
     B = Builder((("b", Value(1)),), Value(1))
     with pytest.raises(IN.Free, match="no call's output"):
@@ -83,7 +87,7 @@ def test_advice_needs_a_charging_term_and_a_witness_a_listed_relation():
     with pytest.raises(ValueError, match="charged by a term of the window charge"):
         IN.Kind("advice", "a choice", charge="decisions")
     with pytest.raises(ValueError, match="names its relation in RELATIONS"):
-        IN.Kind("witness", "an order", relation="DsaTopKOrder_v1")
+        IN.Kind("witness", "an order", relation="TAnyTopKOrder_v1")
 
 
 @pytest.mark.parametrize("relation", sorted(IN.RELATIONS))

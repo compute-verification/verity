@@ -326,8 +326,6 @@
 "DsaTopKMask_v1",
 "DsaTopKMask_v2",
 "DsaTopKOneHot_v1",
-"DsaTopKOrder_v1",
-"DsaTopKOrder_v2",
 "DsaTopKRow_v1",
 "DsaTopKRow_v2",
 "DsaTopKShortRow_v1",
