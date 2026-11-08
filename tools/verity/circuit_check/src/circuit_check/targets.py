@@ -680,16 +680,25 @@ def word_call_families() -> set[str]:
     return _SHORT["words"]
 
 
+#: {family: a Call that passes it Call status}: a Call the partition can't cut whole (a specialisation the suite or a RANGES
+#: spot checks, over `checks.Options.partition_max_gates` or ``partition_max_leaves``, and those it so passes to, in turn) is
+#: partitioned by its callees (`checks.by_callees`), so each family its body calls is a Call here, whatever else makes it one,
+#: and its partition fails by name; the suite derives this from the catalog and the RANGES spots and holds it to that
+#: (`test_every_call_over_the_budget_passes_call_status_to_its_callees`)
+CALLEE_CALLS: dict[str, str] = {}
+
+
 def call_families(found: dict[str, Any] | None = None) -> set[str]:
     """The Definition families a served Program calls, where the partition invariant applies: the word Call families
-    (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), and the
-    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
-    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
-    `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
-    whether one family is among them without it, and refuses a family it can't decide so."""
+    (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), the
+    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place), and the
+    families an over-budget Call passes Call status to (`CALLEE_CALLS`).  Any other Definition's gates are partitioned inside
+    the Call that contains them.  It builds the whole catalog, or takes ``found``, a `suite` built already (`cli._tasks`'s: a
+    later one would also hold what building its bodies registered); `is_call` asks whether one family is among them without
+    it, and refuses a family it can't decide so."""
     if not _CALLS:
         words = word_call_families()
-        _CALLS.update(words | boolean_call_families(set(words), found))
+        _CALLS.update(words | boolean_call_families(set(words), found) | set(CALLEE_CALLS))
     return _CALLS
 
 
@@ -698,10 +707,13 @@ class Undecided(LookupError):
 
 
 def is_call(fam: str) -> bool:
-    """Whether family ``fam`` is in `call_families`, never building the catalog for it: once `call_families` is known here, by it;
-    else a word Call family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is.  Any
-    other (a Boolean version of a word Call family that only Definitions the catalog reaches inside its roots could show) is
-    `Undecided`, by name, with the flags that decide it: the catalog's whole build is what ``--all`` pays once for every target."""
+    """Whether family ``fam`` is in `call_families`, never building the catalog for it: one `CALLEE_CALLS` holds is; once
+    `call_families` is known here, by it; else a word Call family is; a family outside `boolean_call_candidates` is not; one
+    `certified_boolean_calls` names is.  Any other (a Boolean version of a word Call family that only Definitions the catalog
+    reaches inside its roots could show) is `Undecided`, by name, with the flags that decide it: the catalog's whole build is
+    what ``--all`` pays once for every target."""
+    if fam in CALLEE_CALLS:
+        return True
     if _CALLS:
         return fam in _CALLS
     words = word_call_families()

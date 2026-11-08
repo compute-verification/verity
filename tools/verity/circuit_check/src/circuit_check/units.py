@@ -353,7 +353,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
     word_call_families`, which refuses a vocabulary kind that doesn't bind), the Boolean version of each one made on demand
     (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one (`targets.boolean_family`)
     that are of a suite family: each from its object, made (`_materialize`) only where it could be of a suite family no other
-    one gave (`targets.boolean_links`)."""
+    one gave (`targets.boolean_links`); and those an over-budget Call passes Call status to (`targets.CALLEE_CALLS`)."""
     words = TG.word_call_families()
     wordy = [fid for fid in d.ids if (n := d.nodes[fid])["f"] in words and n["k"] != "R" and not n["b"]]
     found = TG.on_demand_boolean_families(words)
@@ -369,7 +369,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
             if fid not in objects and (n.get("di", fid) in keys or n.get("n") in names):
                 if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit, d.via.get(fid)))) is not None:
                     found.add(f)
-    return words | found
+    return words | found | set(TG.CALLEE_CALLS)
 
 
 def _sited(v: Any) -> Any:
