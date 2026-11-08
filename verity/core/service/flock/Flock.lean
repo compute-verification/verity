@@ -16,6 +16,7 @@ public import Flock.Hm96
 public import Flock.Ligerito
 public import Flock.Comp
 public import Flock.Tags
+public import Flock.Scan
 public import Flock.Net
 public import Flock.SplitNL
 public import Flock.Lookup
