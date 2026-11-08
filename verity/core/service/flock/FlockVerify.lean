@@ -101,7 +101,9 @@ def statementInputs (args : List String) :
     return .ok (← IO.FS.readBinFile circuit, none, ← IO.FS.readBinFile pub, cm, ← readTables args)
   | some dir =>
     let get := fun hex => archiveGet dir hex
-    let (c, cSha) ← match ← archiveGetSha dir circuit with | .ok x => pure x | .error e => return .error s!"circuit: {e}"
+    let (c, cSha) ← match ← archiveGetSha dir circuit with
+      | .ok x => pure x
+      | .error e => return .error s!"circuit: {e}"
     let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
     let cm ← match comp with
       | none => pure ByteArray.empty
@@ -1004,8 +1006,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
   -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
-  -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`); and hashed once,
-  -- the archive's check and the parse reading one SHA-512 (`circuitOfKnowing_eq`)
+  -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`); and hashed
+  -- once, the archive's check and the parse reading one SHA-512 (`circuitOfKnowing_eq`)
   let sha := match circuitSha with | some d => d | none => Sha512.hash circuitB
   let parsed := circuitOfKnowing sha tags circuitB tables
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
