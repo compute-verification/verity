@@ -66,13 +66,11 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 -/
 module
 
+public import Flock.FV3
 public import Flock.Program
-public import Identity.Domains
-public import Identity.Tagged
 public import Spot.Record
+meta import Flock.FV3
 meta import Flock.Program
-meta import Identity.Domains
-meta import Identity.Tagged
 meta import Spot.Record
 
 @[expose] public section
@@ -346,18 +344,21 @@ def runOf (rec : Json) : Option String :=
 interior's `k`-th member being the `k`-th part. -/
 def setName (run : String) (k : Nat) : String := "served/" ++ run ++ "/m" ++ toString k
 
+/-- The window-domain rule's tag (`verity.ml.commitments.window.WINDOW_DOMAIN`). -/
+def WINDOW_DOMAIN : String := "verity/one-stage/served-domain/v1"
+
 /-- The binding, in run `run`, of the interior record `rec`'s port `port` of row schema `schema`: the window-domain rule
-(`verity.ml.commitments.window`), the identity digest of the record's program and partition, the port, its schema, the
-leaves the record gives it and the run. None when the record names no such port, or no program or partition. -/
+(`verity.ml.commitments.window`), the identity digest (`tagged_sha512` of the canonical JSON) of the record's program
+and partition, the port, its schema, the leaves the record gives it and the run. None when the record names no such
+port, or no program or partition. -/
 def portBinding (rec : Json) (port schema run : String) : Option String := do
   let .str program := getD rec "program" | none
   let .str partition := getD rec "partition" | none
   let (_, e) ← (Record.byPort rec).find? (·.1 == port)
   let leaves ← nat? (getD e "leaves")
-  let b ← (Identity.identityDigestSha512 Domains.ONE_STAGE_SERVED_DOMAIN (Json.mkObj [("program", .str program),
-    ("partition", .str partition), ("port", .str port), ("schema", .str schema), ("leaves", Lean.toJson leaves),
-    ("run", .str run)])).toOption
-  pure (Flock.hexOf b)
+  let m ← (Flock.canonUtf8 (Json.mkObj [("program", .str program), ("partition", .str partition), ("port", .str port),
+    ("schema", .str schema), ("leaves", Lean.toJson leaves), ("run", .str run)])).toOption
+  pure (Flock.hexOf (Flock.FV3.Sha512.taggedSha512 WINDOW_DOMAIN m.toUTF8))
 
 /-- Template `t`'s reference header `r` placed in the run, for the session of the `k`-th part: its `set`
 the run's input set (`setName`) and its `frame_v3.bindings` the binding of each port of its `frame_v3.schemas`
@@ -848,7 +849,9 @@ private def exStmt (indices units : List Nat) : Json :=
     ("draw", Json.mkObj [("law", "subset"), ("population", (6 : Nat)), ("k", Lean.toJson units.length),
       ("units", natsJson units.toArray)])]
 
-#guard (portBinding exInterior "x" "hm96-sha512/row/v2" exRun).isSome
+-- Python's `window_binding("program-0", "partition-0", "x", "hm96-sha512/row/v2", 6, "run-0")`
+#guard portBinding exInterior "x" "hm96-sha512/row/v2" exRun == some
+  "009d0ab56f7953138bd8853c525c88a1ede372e270f1243e8c7b1980de7390130205daa6b324fe330e87a215a663b19a011fd6dbe3391eb47c5e7116ca32192f"
 #guard portBinding exInterior "x" "hm96-sha512/row/v2" exRun != portBinding exInterior "out" "hm96-sha512/row/v2" exRun
 #guard portBinding exInterior "y" "hm96-sha512/row/v2" exRun == none
 #guard setName exRun 2 == "served/run-0/m2"

@@ -139,24 +139,7 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
-Round 2 holds each second-stage session's statement to its template (`second_stage.check`, the Lean's
-`SecondStage.check`). A port that the replay block's Definition passes across its boundary reads only that boundary
-value, at its sampled replay block's rows. The verifier derives these links from the Definition
-(`second_stage.replay_links`), and no party supplies them. Any other port reads its own interior port or a registered
-value. Round 2 reads the statements by position, one for each part in the parts' order (the interior program's
-strata's), and refuses any other list (`second-order`, `second-cover`). Each statement's header is its template's
-reference header, which the auditor's params give beside its circuit file (`template_circuits`), placed in the run
-(`second_stage.at_run`). The verifier computes its `set`, `served/<run>/m<k>` with `k` the template's position, and
-each port's `frame_v3.bindings` under the window-domain rule (`ml.commitments.window`), so the prover chooses neither.
-The run's fields are blanked in both (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots` and
-`frame_v3.domain_ids`, which round 2 holds to the run itself; `units.blocks`, the indices cut into blocks, which the
-session's verifier holds to them; and `registered`, whose reads `second-read` holds), so a reference staged at other
-slots fits too; any other header is refused (`second-header`). A header that shares rows (`shared_rows`, tables whose
-rows its instances read by the refs in the public file's body) must read each port it shares registered
-(`second-refs`): at such a port the session's verifier holds each instance's ref to the row its unit's read names
-(`Flock.Registered.check`), where elsewhere it only bounds the ref by its table. The interior record names the replay
-sample in order (`window.replay_sample`), and round 2 refuses it unless that is the verifier's own
-(`second-interior-order`). The two-stage form itself stays refused until `second_stage.FORM` allows it.
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
