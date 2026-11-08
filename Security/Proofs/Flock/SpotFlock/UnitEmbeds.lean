@@ -144,7 +144,7 @@ two-stage scope, where each member's unit net is built with `unitLog ≤ 32`, a 
 request `ρ`, is member `t`'s unit `k`: Bridge's proof block `k` of the member's key program, `Bits.base h.ms t` later,
 whose lowering sits in the statement's program from `Bits.base h.ms t`. -/
 theorem shape_of_checked
-    (hmem : ∀ t (ht : t < h.ms.length), Built h.ms[t].1.unit ∧ h.ms[t].1.unit.unitLog ≤ 32) {x : Msg}
+    (hmem : ∀ t (ht : t < h.ms.length), Built h.ms[t].1.unit ∧ h.ms[t].1.unit.unitLog ≤ 32) {x}
     {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sampling.Partition} {d : Claims.Sampling.Design.Two}
     {u ρ : ℕ} {b : List ℕ} (hx : SpotFlock.parse h x = some s) (hP : SpotFlock.partition h s = some Pt)
     (hd : SpotFlock.two h s = some d) (hin : Claims.Sampling.InScopeTwo Pt d s) (hb : Pt.blocks[u]? = some b)
