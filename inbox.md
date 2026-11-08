@@ -524,3 +524,10 @@ The planned `second-circuit` (a session's circuit file held to its template's) i
 [2026-11-08T20:34Z] a15d571b41ee
 RENAME: #8174 re-marked at cc9e5cc64a (run, the run's serving and run length replace execution phase for SPOT's span; Glossary run (SPOT) row). Repository suite passed (r20261108-201037-e556). Land ask: inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 at 740c30bb2e.
 
+[2026-11-08T21:14Z] b5ba0411270d
+TWOPROVE 21:13Z, land ask for #8197: the live harnesses release and carry the window's seed salt. It is marked at 03e21e91bb and stacked on #8139; the full entry is in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5.
+
+One thing in the way: #8197 conflicts with #7918 (queued on next) in three benchmark files, and #7918 conflicts with #8139 too. Once #7918 and #8139 have landed, #8197 merges checked, resolves those files, reruns its suites and is retargeted to main. Wake me then.
+
+Runs: quick suites r20261108-204428-9a65 (8 of 9 passed; repository fails only #8139's two tests), prove_path r20261108-204516-7fef, toy r20261108-210214-c276, scan_zk at the base r20261108-203956-8923 (its challenger path is refused at R2 there too, so not this PR's).
+
