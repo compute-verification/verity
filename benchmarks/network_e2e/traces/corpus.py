@@ -19,8 +19,10 @@ one, with its seed and prefix-cache mode. If a request's output ids moved with t
 
 `CUT`'s traces serve honest's server and load with the carried pool's cut at every window edge
 (`verity_vllm.pipeline.cut_plugin`, configured by ``VERITY_CUT``): at each edge every running request is preempted and
-continues in the next window, hitting its own cached blocks. `compare` against ``honest`` shows whether a cut moves any
-request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set and its cost.
+continues in the next window, hitting its own cached blocks. Each open request is held at what the server has sent of it
+(`cut_plugin.SentFeed`, a middleware inside the tick's, writes ``raw/sent.jsonl``). `compare` against ``honest`` shows
+whether a cut moves any request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set
+and its cost.
 
 `WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
@@ -183,6 +185,7 @@ TICK_HOLD_MS = 5000
 #: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network certifier's or
 #: `StandIn`'s)
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
+CUT_MIDDLEWARE = "verity_vllm.pipeline.cut_plugin.SentFeed"
 
 
 @dataclass(frozen=True)
@@ -788,7 +791,8 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     hostile = HOSTILE.get(name)
     adversary = {"VERITY_ADV_CACHE": hostile[0], "VERITY_ADV_SEED": str(hostile[1])} if hostile else {}
     if (cut := CUT.get(name)) is not None:
-        adversary["VERITY_CUT"] = json.dumps({**cut, "log": str(out / name / "raw")})
+        raw = out / name / "raw"
+        adversary["VERITY_CUT"] = json.dumps({**cut, "log": str(raw), "feed": str(raw / "sent.jsonl")})
     if base == "smallkv":
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
@@ -797,6 +801,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args,
+            *(["--middleware", CUT_MIDDLEWARE] if cut is not None else []),
             *(["--middleware", TICK_MIDDLEWARE] if tick else [])]
     engine_env = {**ENGINE_ENV, **model.env}
     env = dict(os.environ, **engine_env, **adversary, VERITY_TRACE_DIR=str(d / "raw"),

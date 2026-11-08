@@ -3,6 +3,7 @@ preempts as it does (a step's tokens are in flight until its output is processed
 async engine core's two-deep batch queue."""
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import deque
 from types import SimpleNamespace as NS
@@ -293,4 +294,77 @@ def test_the_setting_is_one_edge_period_and_a_hold(raw, why) -> None:
 def test_the_setting_parses() -> None:
     assert CP.cut_config({}) is None
     assert CP.cut_config({"VERITY_CUT": '{"every_s": 70, "log": "/x"}'}) == {
-        "every_s": 70.0, "every_steps": None, "hold_s": 30.0, "log": "/x"}
+        "every_s": 70.0, "every_steps": None, "hold_s": 30.0, "log": "/x", "feed": None}
+
+
+def _stream(app, path: str, headers: dict[str, str]) -> list[dict]:
+    scope = {"type": "http", "path": path, "headers": [(k.encode(), v.encode()) for k, v in headers.items()]}
+    sent: list[dict] = []
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(m: dict) -> None:
+        sent.append(m)
+
+    asyncio.run(app(scope, receive, send))
+    return sent
+
+
+def _event(token_ids: list[int], first: bool = False) -> bytes:
+    choice = {"index": 0, "text": "x", "token_ids": token_ids, **({"prompt_token_ids": [1, 2, 3]} if first else {})}
+    return b"data: " + json.dumps({"id": "cmpl-r", "choices": [choice]}).encode() + b"\n\n"
+
+
+BODY = [_event([5, 6], first=True), _event([7])[:30], _event([7])[30:] + _event([]), _event([8, 9, 10]),
+        b'data: {"id": "cmpl-r", "choices": [], "usage": {"completion_tokens": 6}}\n\ndata: [DONE]\n\n']
+
+
+class Streams:
+    async def __call__(self, scope: dict, receive, send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        for i, chunk in enumerate(BODY):
+            await send({"type": "http.response.body", "body": chunk, "more_body": i + 1 < len(BODY)})
+
+
+def test_the_sent_feed_counts_each_streamed_response_s_output_ids_as_they_leave(tmp_path, monkeypatch) -> None:
+    """The prompt's ids and an event split across two body messages count once each, and a request without an
+    X-Request-Id or off the sampled routes is passed unrecorded; the engine core reads the counts by engine request id."""
+    feed = tmp_path / "sent.jsonl"
+    monkeypatch.setenv("VERITY_CUT", json.dumps({"every_steps": 8, "feed": str(feed)}))
+    app = CP.SentFeed(Streams())
+    out = _stream(app, "/v1/completions", {"X-Request-Id": "req-00007"})
+    assert b"".join(m.get("body", b"") for m in out) == b"".join(BODY)
+    _stream(app, "/v1/completions", {})
+    _stream(app, "/health", {"X-Request-Id": "req-00008"})
+    assert [json.loads(x) for x in feed.read_text().splitlines()] == [
+        {"key": "req-00007", "sent": 2}, {"key": "req-00007", "sent": 3}, {"key": "req-00007", "sent": 6}]
+
+    sent = CP.Sent(CP.FeedReader(feed))
+    assert sent(NS(request_id="cmpl-req-00007-0-0123abcd")) == 0
+    sent.poll()
+    assert sent(NS(request_id="cmpl-req-00007-0-0123abcd")) == 6 and sent(NS(request_id="cmpl-req-00008-0-0123abcd")) == 0
+
+    monkeypatch.delenv("VERITY_CUT")
+    assert CP.SentFeed(Streams()).fd is None
+
+
+def test_the_cut_polls_the_sent_counts_every_step_and_holds_at_them() -> None:
+    """The engine runs ahead of what the server has sent: the edge waits until each open request's sent count reaches
+    its emitted one, read by ``poll`` before each step."""
+    recs: list[dict] = []
+    sent = CP.Sent(lambda: [recs.pop(0)] if recs else [])
+    sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=60, released=sent, poll=sent.poll, clock=lambda: 0.0)
+    r = Req(0)
+    r.request_id = "cmpl-req-00000-0-0123abcd"
+    cut.add(r)
+    sched.add_request(r)
+    for _ in range(4):
+        sched.update(sched.schedule())
+    assert r.num_output_tokens == 4
+    recs += [{"key": "req-00000", "sent": 2}, {"key": "req-00000", "sent": 4}]
+    held = cut.before(sched)
+    assert held is not None and sent.sent == {"req-00000": 2}
+    cut.after(sched, held)
+    assert cut.before(sched) is None
+    assert cut.edges[0]["cut"][0]["e"] == 4 and cut.edges[0]["held_steps"] == 1

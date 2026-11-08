@@ -25,18 +25,24 @@ whose sampling reads its own outputs (frequency or presence penalties, ``min_tok
 the continuation as a prompt of P + e tokens doesn't compute its draws.
 
 ``VERITY_CUT`` is a JSON object: ``every_s`` (an edge every so many seconds of the engine core's clock from its first
-step) or ``every_steps`` (every so many scheduler steps), ``hold_s`` (30 by default) and ``log`` (a directory). Until the
-network certifier posts each open response's released count, ``e`` is the count the engine emitted, so the hold is the
-flush alone. Refused: a scheduling policy other than FCFS, a KV connector, and more than one data-parallel engine.
+step; one that falls while the engine is idle is taken at its next step) or ``every_steps`` (every so many scheduler
+steps), ``hold_s`` (30 by default), ``log`` (a directory) and ``feed`` (a file). **Learning e.** With ``feed``, `SentFeed`,
+the OpenAI server's ASGI ``--middleware`` (inside `tick_plugin.TickFeed`), appends each streamed completion's count of
+output token ids as its bytes leave the server, keyed by its X-Request-Id, and the engine core reads them every step
+(`Sent`): e is what the server has sent, which the network certifier in front of it releases. Without ``feed``, e is the
+count the engine emitted, so the hold is the flush alone. Refused: a scheduling policy other than FCFS, a KV connector,
+and more than one data-parallel engine.
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings` and `verity_vllm.engine.hooks`, and `register` imports vLLM only once ``VERITY_CUT`` is set.
+stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks`, `serve_admit` and `tick_plugin`, and `register` imports vLLM
+only once ``VERITY_CUT`` is set.
 """
 from __future__ import annotations
 
 import itertools
 import json
 import os
+import re
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -44,8 +50,10 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.pipeline.serve_admit import request_key
+from verity_vllm.pipeline.tick_plugin import SAMPLED_PATHS, FeedReader, route_of
 
-__all__ = ["CUT_ENV", "Cut", "cut_config", "install", "register"]
+__all__ = ["CUT_ENV", "Cut", "Sent", "SentFeed", "cut_config", "install", "register"]
 
 #: `register`'s configuration, a JSON object (`cut_config`)
 CUT_ENV = "VERITY_CUT"
@@ -55,14 +63,14 @@ POOL_ENV = "VERITY_POOL_ROW"
 
 def cut_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
     """``VERITY_CUT``'s JSON object (in ``environ``, by default the process environment), None where it isn't set: exactly
-    one of ``every_s`` (a positive number) and ``every_steps`` (a positive integer), ``hold_s`` (30 by default) and
-    ``log`` (optional)."""
+    one of ``every_s`` (a positive number) and ``every_steps`` (a positive integer), ``hold_s`` (30 by default), ``log``
+    and ``feed`` (optional)."""
     cfg = settings.get(CUT_ENV, environ)
     if cfg is None:
         return None
     if not isinstance(cfg, dict) or ("every_s" in cfg) == ("every_steps" in cfg):
         raise ValueError(f"{CUT_ENV}: a JSON object with one of every_s and every_steps, not {json.dumps(cfg)[:80]!r}")
-    if unknown := set(cfg) - {"every_s", "every_steps", "hold_s", "log"}:
+    if unknown := set(cfg) - {"every_s", "every_steps", "hold_s", "log", "feed"}:
         raise ValueError(f"{CUT_ENV}: unknown keys {sorted(unknown)}")
     every_s, every_steps = cfg.get("every_s"), cfg.get("every_steps")
     if every_s is not None and not (type(every_s) in (int, float) and every_s > 0):
@@ -73,7 +81,61 @@ def cut_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | Non
     if not (type(hold_s) in (int, float) and hold_s >= 0):
         raise ValueError(f"{CUT_ENV}: hold_s is a number of seconds, not {hold_s!r}")
     return {"every_s": None if every_s is None else float(every_s), "every_steps": every_steps, "hold_s": float(hold_s),
-            "log": cfg.get("log")}
+            "log": cfg.get("log"), "feed": cfg.get("feed")}
+
+
+class Sent:
+    """Each open response's sent output count, from the records `SentFeed` appends (``pull``, a `tick_plugin.FeedReader`):
+    `poll` reads what came since the last call, and calling it on an engine request gives its count, 0 before any."""
+
+    def __init__(self, pull: Callable[[], list[dict[str, Any]]]) -> None:
+        self.pull, self.sent = pull, {}
+
+    def poll(self) -> None:
+        for rec in self.pull():
+            self.sent[str(rec["key"])] = int(rec["sent"])
+
+    def __call__(self, request: Any) -> int:
+        return self.sent.get(request_key(request.request_id), 0)
+
+
+_TOKEN_IDS = re.compile(rb'"token_ids":\s*\[([^\]]*)\]')
+
+
+class SentFeed:
+    """vLLM's OpenAI server's side of learning e (an ASGI ``--middleware``): with ``VERITY_CUT``'s ``feed`` set, a
+    completions or chat request with an X-Request-Id has the output token ids of its streamed events counted (the
+    ``token_ids`` that ``return_token_ids`` streams) as each body message leaves, and the running count appended to the
+    feed, ``{"key": X-Request-Id, "sent": count}``, each time it grows. Without the setting it passes everything."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+        cfg = cut_config()
+        feed = None if cfg is None else cfg.get("feed")
+        self.fd = None if not feed else os.open(feed, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+
+    async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
+        if self.fd is None or scope.get("type") != "http" or route_of(scope) not in SAMPLED_PATHS:
+            return await self.app(scope, receive, send)
+        key = next((v.decode("latin-1") for k, v in scope.get("headers") or () if k.lower() == b"x-request-id"), None)
+        if not key:
+            return await self.app(scope, receive, send)
+        sent, tail = 0, b""
+
+        async def counted(message: dict[str, Any]) -> None:
+            nonlocal sent, tail
+            await send(message)
+            if message.get("type") != "http.response.body":
+                return
+            data = tail + message.get("body", b"")
+            i = data.rfind(b"\n\n")
+            end = 0 if i < 0 else i + 2
+            events, tail = data[:end], data[end:]
+            n = sum(len(m.group(1).split(b",")) for m in _TOKEN_IDS.finditer(events) if m.group(1).strip())
+            if n:
+                sent += n
+                os.write(self.fd, (json.dumps({"key": key, "sent": sent}, separators=(",", ":")) + "\n").encode())
+        return await self.app(scope, receive, counted)
 
 
 def _reads_outputs(request: Any) -> bool:
@@ -94,17 +156,19 @@ def _blocks(sched: Any, request_id: str) -> int:
 class Cut:
     """One scheduler's edges: `add` numbers each request the scheduler receives, `before` holds or cuts ahead of a
     ``schedule()`` call and returns what it held out of it, `after` puts that back. ``released(request)`` is the request's
-    released output count ``e`` (by default, what the engine emitted); ``export(sched, k)`` exports the pool's row at edge
+    released output count ``e`` (by default, what the engine emitted), and ``poll()``, called before each step, brings
+    it up to date (`Sent`); ``export(sched, k)`` exports the pool's row at edge
     k after the cut (by default, none); ``clock`` is the engine core's (injected in tests); ``log`` is a JSON-lines file."""
 
     def __init__(self, *, every_s: float | None = None, every_steps: int | None = None, hold_s: float = 30.0,
-                 released: Callable[[Any], int] | None = None, export: Callable[[Any, int], Any] | None = None,
-                 clock: Callable[[], float] = time.monotonic, log: Path | None = None) -> None:
+                 released: Callable[[Any], int] | None = None, poll: Callable[[], None] | None = None,
+                 export: Callable[[Any, int], Any] | None = None, clock: Callable[[], float] = time.monotonic,
+                 log: Path | None = None) -> None:
         if (every_s is None) == (every_steps is None):
             raise ValueError("an edge every so many seconds or every so many steps, one of the two")
         self.every_s, self.every_steps, self.hold_s = every_s, every_steps, float(hold_s)
         self.released = released or (lambda r: r.num_output_tokens)
-        self.export, self.clock = export, clock
+        self.poll, self.export, self.clock = poll, export, clock
         self.file = None if log is None else open(log, "a", encoding="utf-8")
         self.numbers = itertools.count()
         self.seq: dict[str, int] = {}
@@ -122,6 +186,8 @@ class Cut:
         return sched.current_step if self.every_steps is not None else now - self.start
 
     def before(self, sched: Any) -> tuple[list[Any], ...] | None:
+        if self.poll is not None:
+            self.poll()
         now = self.clock()
         if self.start is None:
             self.start = now
@@ -262,7 +328,9 @@ def _make(cfg: Mapping[str, Any]) -> Callable[[Any], Cut]:
                     return {"refused": str(e)[:500]}
         if log is not None:
             log.mkdir(parents=True, exist_ok=True)
+        sent = Sent(FeedReader(cfg["feed"])) if cfg.get("feed") else None
         return Cut(every_s=cfg["every_s"], every_steps=cfg["every_steps"], hold_s=cfg["hold_s"], export=export,
+                   released=sent, poll=None if sent is None else sent.poll,
                    log=None if log is None else log / f"cut.{os.getpid()}.jsonl")
     return make
 

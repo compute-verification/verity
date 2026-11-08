@@ -176,7 +176,9 @@ def test_a_cut_trace_serves_honest_s_load_with_the_cut_before_the_tracer(tmp_pat
     for name, cut in corpus.CUT.items():
         assert corpus.TRACES[name][0] == corpus.TRACES["honest"][0] and name not in corpus.ORDER
         assert corpus.rate_of(model, name, None) == model.rates["heavy"]
-        assert cut_plugin.cut_config({cut_plugin.CUT_ENV: json.dumps({**cut, "log": "/x"})})["log"] == "/x"
+        assert cut_plugin.cut_config({cut_plugin.CUT_ENV: json.dumps({**cut, "log": "/x", "feed": "/f"})})["feed"] == "/f"
+    module, name = corpus.CUT_MIDDLEWARE.rsplit(".", 1)
+    assert module == cut_plugin.__name__ and getattr(cut_plugin, name) is cut_plugin.SentFeed
 
 
 def test_hook_records_the_schedulers_kv_pool(tmp_path, monkeypatch, mod):
