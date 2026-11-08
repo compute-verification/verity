@@ -5204,3 +5204,83 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - hiding uses only `hash-derived-key` and `prf/sha-512` terms;
   - #7856's admission test includes the refusal case.
 - **Pre-landing check.** A restack dry run of my stack (`restack.py --dry-run` onto `checked`) finds no move to cross. The plain merge conflicts only in `ZkAny.lean`'s module doc, at the line next to the move's rewrite. A Lean build of the six two-stage files at that merge (r20261108-013232-82fc, cpu-1) is in line.
+
+## 01:46Z from CLAIMSCHECK: claims ledger r4.2 (freeze), items 26 and 27, item 20 updated, captions at #7894's `10010ff237`
+
+These are in note:proofs/20261108T0013Z-report-spot-claims-r4, which carries the r4.2 change list at its top. Items 21
+to 25 are in my 00:39Z entry. What changed after it: Daniel's 01:04Z ruling on the hits, the compile slice off the post,
+the rate-only ruling, and the captions at `10010ff237`.
+
+26. **"The verifier recomputes the hits in Python, which the advice claim trusts" [L3, T4, §12]. Withdrawn.** I added
+    that sentence at r4.1, and OPTMODES carries it in Figure 1's card. Daniel ruled at 01:04Z that the hits are never
+    derived by trusted verifier-side Python.
+    - Any 0-bit or v1 figure from a run served with prefix caching on rests on derived hits and can't be stated as a
+      result. That covers 1fd1, 11cd, d3b6, the served tick trace 82d6 and C128, all under send-no-hits.
+    - Word it: "With the tick, certified arrivals and prefix caching off, the only advice left is each response's
+      length, which is charged until a circuit checks the stop rule."
+    - Sunday's certified tick run and Monday's run of record both serve with prefix caching off.
+    - If Daniel picks whole hits instead, add "...and each prefix-cache hit, sent whole and charged".
+    - **pending:** vllm's 03:00Z numbers (VLLM-243), then Daniel's pick.
+    - T4's trust list is now one item beyond T1's: the network certifier and its host. The length is charged, not
+      trusted.
+27. **"The compile slice proves each window's charge", or any lever line for proving `CompileSlice_v3` on every
+    window [L3, H1, H3, §12].** Off the post (proofs 00:55Z).
+    - network-accounting's 00:54Z estimate is about 1.1e7 H200-seconds a 600 s window: about 2,400× the node's own
+      GPU-seconds, 160× at the low end.
+    - The lever that could bring the hits back is a memory-checked pool (CIR-188). **pending:** ODBRANCH's report,
+      Sun 18:00Z.
+    - Your moved dates for the slice's cost (an estimate Sun 18:00Z, a measured prove Mon 20:00Z) are in the ledger,
+      marked superseded by that.
+
+**Item 20 updated [R5, T3].** "Every block is sampled at a public rate": your 01:20Z rate-only ruling has the verifier
+refuse `subset:K`, `stratified:K` and `work:K`. That is #7918, open and not marked. Until it lands, the claim stays
+"not yet true". Once it does, it reads: "each proof block is sampled with probability at least q, however the prover
+pads or spreads the population".
+
+**Captions at #7894's `10010ff237`** (art:1e852185, figure6.py, total_cost.py; §12):
+- **Fixed:** the length. Figure 1 draws it solid at 18 bits a request: 45.7 PB over a world year (121,000×) and 12.2
+  TB over a datacenter year (32×). The 0 is dashed as pending. The tax card and `design.all.json` also carry the length.
+- **Still disagrees:**
+  - "derived by the registered pool model" and "the replay's from the registered KV pool" in the references card, the
+    tax card (four configurations), `total_cost.py:195` and `figure6.py:116`. Under item 26, make them "with prefix
+    caching off", and don't substitute `pool.py`;
+  - the card's `source`, "the compile slice proves each window's charge at most c_w", is stated as done. Drop it
+    (item 27). The same goes for Figure 5's arrow "compile-slice proving, every window, unmeasured", or label it off
+    the post;
+  - Figure 6, panel (c): its 0 arm, "Tick, prefix-cache hits from the replay", now disagrees with Figure 1 twice.
+    Today's advice is the length, and the hits must be "prefix caching off". The caption also lacks "(the run with
+    the real network certifier is pending)" and the length;
+  - Figure 1 still doesn't state the condition that every block is a function of its committed inputs (L8,
+    CIR-189 Sun 20:00Z).
+
+**C2:** STATIONARY's 01:13Z fused rows. Fused blocks prove best at K = 4: fr-w13 329 blocks/s, h 4.9e8; fr-w2 307,
+h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× prover".
+
+28. **"A 10% total bounds 53.2 TB over a world year" [H1, H2], and any total quoted from Figure 1's h.** Figure 1's h
+    is proving GPU-seconds only. Your ruling counts the Lean verifier's CPU in total compute, and on BREAKEVEN's 128k
+    main line it adds 29.2 points at the break-even. Say "10% of compute spent on proving, before the verifier's CPU",
+    or wait for an h with the verifier line.
+
+**BREAKEVEN's surface (01:45Z), taken into H1 and H3:**
+- **H1.** On owned levers, R6x4 (a 4× prover, modeled, with lifetime replay, modeled) plus the verifier gives 44.38%
+  over a world year and 42.22% over a datacenter year. The assumed closing pair gives 38.07% and 36.00%. My 00:39Z
+  "about 16%" (item 23) is withdrawn: it left out the verifier.
+  - New wording: "On the levers we own, with the Lean verifier's CPU counted, the total is about 44% over a world year
+    and 42% over a datacenter year. The verifier's CPU is the largest line. Reaching 10% needs a verifier about 16
+    times faster than today's, plus four provers on every block type and per H200, none of which we've built or
+    measured."
+  - It holds only once `StopRule_v1` lands, and leaves out prefix caching off's cost (item 26).
+- **Flag, the hashing cut:** the only total under 10% on the surface, 8.51% (world year) and 8.35% (datacenter year),
+  includes the unowned hashing cut 4×. It stacks on a templated verifier at 0.06 of today's, the closing pair and the
+  host witness, all assumed. Without the hashing cut the best case is 10.38%. No draft-facing number under 10% should
+  appear without that said.
+- **H3, the lever path.** The main line in `reprice_path.json` (`71736b4e42`) excludes the hashing cut: it's the last,
+  ownerless step. But the cache and overlap are still two steps: R2 at 46.21%, then R3 at 45.90%, measured on the
+  expert types only. Figure 5 can draw them as one step. The `unpriced` compile-slice line still says "estimate due
+  Sun 18:00Z": it's off the post (item 27).
+- **Figure 5 isn't re-rendered** at 01:45Z: #7894 is still at `10010ff237`. Its `figure5.py` built-in `PATH` is the
+  old one, with "overlapped verifier waits" and the hashing cut after the 4× prover. So the render needs `--path`
+  with BREAKEVEN's file, or it shows no verifier step.
+- **Figure 6's latency panel:** pending vllm's 03:00Z sweep, after the freeze.
+- **Figure 1 v2.7** (art:5c3bb0cc) is superseded by render r20261108-010308-9d63 (`10010ff237`), not yet in the store.
+  Against the ledger, v2.7's advice footnote fails three of the §12 box's points: arrivals, hits and length.
