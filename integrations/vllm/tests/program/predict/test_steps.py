@@ -393,16 +393,15 @@ def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
     assert c.batch_rule is None and c.summary()["batch_rule"] is None and not c.refused
     assert compile_steps(reg, *_hit(16), partial=True).summary() == c.summary()
     u = c.requests[1]
-    want = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=24, T=2, C=16)
-    assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), want.digest)
-    assert u.digest != build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=24, T=2).digest
+    assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), _whole(reg, 24, 2, "length", C=16))
+    assert u.digest != _whole(reg, 24, 2, "length")
     params = [(n, t) for n, t in c.programs[u.digest].fn.signature()[0]]
     assert [n for n, _ in params] == ["prompt", "prefix", "weights"] and repr(params[1][1]) == repr(_arr((2, 2, 16, 32), 16))
     assert c.programs[u.digest].fn.bindings["SRC"]["class"] == "verity-vllm/cached-greedy-request/v1"
     assert c.steps[1] == [RowRef(0, c.requests[0].digest, 24, 1, 1), RowRef(1, u.digest, 16, 8, 1)]
     assert c.workload.requests[1].prefix == {"rows": 16, "producers": [0]} and c.workload.requests[0].prefix is None
     s = c.summary()
-    assert s["requests"][1]["C"] == 16 and trace_dir(s["requests"][1]) == "build_request_LP24_T2_C16_greedy"
+    assert s["requests"][1]["C"] == 16 and trace_dir(s["requests"][1]).rpartition("_s")[0] == "build_request_LP24_T2_C16_greedy"
     [_, cmd] = trace_commands(s, reg, "/t")
     assert cmd[cmd.index("--cached") + 1] == "16" and "--cached" not in trace_commands(s, reg, "/t")[0]
 
@@ -466,8 +465,10 @@ def test_positions_past_the_models_are_refused_by_name():
     compile_steps(_registered(), *_session([(60, 4, GREEDY)], [[(0, 0, 60)], [(0, 60, 1)], [(0, 61, 1)], [(0, 62, 1)]]))
 
 
-def _whole(reg: Registered, LP: int, T: int, C: int = 0) -> str:
-    return build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=LP, T=T, C=C).digest
+def _whole(reg: Registered, LP: int, T: int, finish: str | None, C: int = 0) -> str:
+    """The greedy request Program, its length rule at TINY's stop id on `finish` (None: no rule)."""
+    return build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=LP, T=T, C=C,
+                         stop=None if finish is None else SR.spec((255,), finish)).digest
 
 
 def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
@@ -475,7 +476,7 @@ def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
     each chunk is its prefill rows in turn. Request 1's chunks follow its prefix-cache hit of request 0's first block."""
     reg = _registered()
     c = compile_steps(reg, *_session([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]]))
-    d = _whole(reg, 8, 1)
+    d = _whole(reg, 8, 1, "eos")
     assert c.requests[0].digest == d and c.requests[0].first_step == 0 and c.discarded == []
     assert c.steps == [[RowRef(0, d, 0, 3, 0)], [RowRef(0, d, 3, 5, 1)], [RowRef(0, d, 8, 1, 1)]]
     assert c.requests[0].digest == compile_steps(reg, *_session([(8, 2, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)]])).requests[0].digest
@@ -486,7 +487,7 @@ def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
         [(1, 24, 16)],
         [(1, 40, 1)],
     ]))
-    d = _whole(reg, 40, 1, C=16)
+    d = _whole(reg, 40, 1, "length", C=16)
     assert (c.requests[1].digest, c.requests[1].C, c.requests[1].producers) == (d, 16, (0,))
     assert [s[-1] for s in c.steps[1:]] == [RowRef(1, d, 16, 8, 0), RowRef(1, d, 24, 16, 1), RowRef(1, d, 40, 1, 1)]
 
@@ -500,7 +501,7 @@ def test_a_preempted_request_compiles_to_its_program_and_its_recompute_is_discar
     c = compile_steps(reg, *_session([(8, 3, GREEDY), (4, 1, {**GREEDY, "max_tokens": 1})],
                                      [[(0, 0, 8)], [(0, 8, 1)], [(1, 0, 4)], [(0, 0, 10, {"preempted": True})]]))
     d = plain.requests[0].digest
-    assert c.requests[0].digest == d == _whole(reg, 8, 2)
+    assert c.requests[0].digest == d == _whole(reg, 8, 2, "eos")
     assert [[r for r in rows if r.request == 0] for rows in c.steps] == [[RowRef(0, d, 0, 8, 1)], [RowRef(0, d, 8, 1, 1)], [],
                                                                          [RowRef(0, d, 9, 1, 1)]]
     assert c.discarded == [(3, 0, 0, 9)]
@@ -513,7 +514,7 @@ def test_a_resume_reads_its_own_kv_past_its_prompt():
     rows = [[(0, 0, 20)]] + [[(0, 20 + k, 1)] for k in range(13)] + [[(0, 32, 2, {"cache_hit": 32, "preempted": True,
                                                                                "sources": (I1.Source(0, 32),)})], [(0, 34, 1)]]
     c = compile_steps(reg, *_session([(20, 16, {**GREEDY, "max_tokens": 16})], rows))
-    d = _whole(reg, 20, 15)
+    d = _whole(reg, 20, 15, "length")
     assert (c.requests[0].digest, c.requests[0].C) == (d, 0)
     assert c.steps[14] == [RowRef(0, d, 33, 1, 1)] and c.discarded == [(14, 0, 32, 1)] and c.steps[15] == [RowRef(0, d, 34, 1, 1)]
     p = _prompt(0, 20)
@@ -530,7 +531,7 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
     reg = _registered()
     steps = [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]]
     c = compile_steps(reg, *_session([(8, 3, GREEDY)], steps))
-    d = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=8, T=2).digest
+    d = _whole(reg, 8, 2, "eos")
     assert (c.requests[0].digest, c.requests[0].T, c.workload.requests[0].cap) == (d, 2, 3)
     assert c.steps[3] == [] and c.discarded == [(3, 0, 10, 1)] and c.summary()["discarded"] == [[3, 0, 10, 1]]
     c = compile_steps(reg, *_session([(8, 4, GREEDY)], steps))
@@ -539,14 +540,18 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
 
 def test_an_aborted_request_compiles_as_one_stopped_at_its_last_kept_output():
     """Request 0's client aborted it after 3 outputs, and the endpoint freed it after the step in flight, whose row (step 3) ran past
-    them: it compiles to the Program of a stop at 3 outputs, that row discarded, with ignore_eos set or not. At its max_tokens vLLM
-    has finished it on length, so an abort there is refused."""
+    them: it compiles to the rows of a stop at 3 outputs, that row discarded, with ignore_eos set or not. Its length rule has none
+    of its outputs a stop id (FINISH length) where the stop's has its last one; under ignore_eos it has no rule. At its max_tokens
+    vLLM has finished it on length, so an abort there is refused."""
     reg = _registered()
     stopped, ingress = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]])
     aborted = WA.Advice((WA.RequestAdvice("q0", 8, 3, "abort"),), stopped.steps, stopped.release)
-    c, d = compile_steps(reg, stopped, ingress), compile_steps(reg, aborted, {"q0": {**ingress["q0"], "ignore_eos": True}})
-    assert [(u.digest, u.T) for u in d.requests] == [(u.digest, u.T) for u in c.requests]
-    assert d.steps == c.steps and d.discarded == c.discarded == [(3, 0, 10, 1)]
+    c = compile_steps(reg, stopped, ingress)
+    a, d = compile_steps(reg, aborted, ingress), compile_steps(reg, aborted, {"q0": {**ingress["q0"], "ignore_eos": True}})
+    assert [[(u.digest, u.T, u.stop) for u in x.requests] for x in (c, a, d)] == [
+        [(_whole(reg, 8, 2, f), 2, None if f is None else SR.spec((255,), f))] for f in ("eos", "length", None)]
+    assert len({tuple((k, r.request, r.start, r.n, r.samples) for k, s in enumerate(x.steps) for r in s) for x in (c, a, d)}) == 1
+    assert a.discarded == d.discarded == c.discarded == [(3, 0, 10, 1)]
     with pytest.raises(Unexpressible, match="request 0: 3 kept outputs, finished on abort, against its max_tokens 3"):
         compile_steps(reg, aborted, {"q0": {**ingress["q0"], "max_tokens": 3}})
 
@@ -1071,7 +1076,8 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
     """Class G on GLM-5.3's first four layers (three indexer layers and one sharing the last one's indices, as in the model): A whole
     in one window is, call for call in the registered compiler's form, its Program in the window that leaves it after two outputs,
     then its Program in the next, which carries it in at position 4 with its 4 rows of every layer (latent rows and indexer keys and
-    scales) and its last token as Inputs; each window's batch rules pass, R1 holding that history A's own. What no cheaper test
+    scales) and its last token as Inputs, each but for its length rule over its own outputs (A's 4 there, 2 in each window, none a
+    stop id); each window's batch rules pass, R1 holding that history A's own. What no cheaper test
     can: that carrying a request across a Commit window neither drops nor repeats a call, nor moves a sample's position. The seeded
     case takes about two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler
     state (the seed, each sample's position) across the window."""
@@ -1086,6 +1092,8 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
         params.append(_history_params(p))
     own = [("prompt", 3)] + [("seed", 1)] * (body is not GREEDY)
     assert params == [own, own, own + [("prefix", 4 * 4 * 576), ("prefix_ik", 3 * 4 * 128), ("prefix_iks", 3 * 4), ("last_token", 1)]]
+    stop = SR.stop_ids(reg.phi.hf_config)
+    assert [ids.pop() for ids in calls_of] == [bind(IO.StopRule, L=L, STOP=stop, FINISH="length").id for L in (4, 2, 2)]
     assert calls_of[0] == calls_of[1] + calls_of[2]
 
 
@@ -1173,7 +1181,9 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     reg = _registered()
     s = compile_steps(reg, *_mixed()).summary()
     cmds = trace_commands(s, reg, str(tmp_path))
-    assert [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1"]
+    names = [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds]
+    assert [n.rpartition("_s")[0] for n in names] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1"]
+    assert [json.loads(c[c.index("--stop") + 1]) for c in cmds] == [SR.spec((255,), "length")] * 2
     assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 1.0, "top_k": 0}
     assert json.loads(cmds[0][cmds[0].index("--target") + 1]) == RTXPRO6000
     (tmp_path / trace_dir(s["requests"][0])).mkdir()
@@ -1187,12 +1197,15 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
 
 @pytest.mark.slow
 def test_a_compiled_request_equals_the_traced_build():
-    """SmolLM2-135M, one greedy request of 256 prompt tokens that ran 31 decodes: the compiled request Program is the one the Build
-    traced (cov-k01-10, `test_predict`'s pin).  About 20 s: the only test holding a compilation to a trace."""
+    """SmolLM2-135M, one greedy request of 256 prompt tokens that ran 31 decodes, under ignore_eos: the compiled request Program is
+    the one the Build traced (cov-k01-10, `test_predict`'s pin), which has no length rule; without ignore_eos the request has one,
+    FINISH length at SmolLM2's stop id 0.  About 20 s: the only test holding a compilation to a trace."""
     cfg = json.loads((FIX / "smollm2-135m.config.json").read_text())
     reg = _registered(cfg)
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
-    c = compile_steps(reg, advice, ingress)
+    c = compile_steps(reg, advice, {"q0": {**ingress["q0"], "ignore_eos": True}})
+    assert c.requests[0].stop is None
     assert c.requests[0].digest == ("91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d84"
                                     "11888")
+    assert plan_steps(reg, advice, ingress).requests[0].stop == SR.spec((0,), "length")
