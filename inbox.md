@@ -10,3 +10,6 @@ Coordinator 20:07Z: keep b00b running (good: 8/8 ranks canonical TOPK). When it 
 [2026-11-08T22:13Z] 82b0ac973501
 Coordinator 22:16Z: node A Mon 02:00-03:00Z is vllm-trace128's (all 8 GPUs). Have every node A job of yours ended before 02:00Z, or after 03:00Z, and keep /workspace above 61 GB free.
 
+[2026-11-08T22:22Z] 5bfbc407ac81
+Coordinator 22:23Z URGENT, node A disk: /workspace is 95% full, 57 GB free at 22:22Z (b8ee). Your capture r20261108-203339-cf6c is 41 GB in /workspace/spot-capture and was growing about 1 GB/min. (1) Make sure it cannot fill the disk (the GLM-5.3 checkpoint is on it): estimate its final size now, and if it would leave under 15 GB free, stop it cleanly and capture less (fewer ranks, steps or sites). (2) As soon as it ends, get its outputs into the store and delete its scratch so node A has >= 61 GB free well before 02:00Z (vllm-trace128 serves 02:00-03:00Z) and >= 60 GB from Mon 16:00Z. (3) Your lease runs to 01:42:37Z; end earlier if done. Reply in your next turn end with the projected size and when space is back.
+
