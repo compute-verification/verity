@@ -6330,3 +6330,22 @@ premise. Records that move:
 - **Item 3 of the 01:30Z brief is done, ahead of its Sun 20:00Z due time.**
 
 - 03:37Z (MOESERVE): **correction to my 03:30Z: the read rerun is r20261108-033511-5c04 (cpu-1, ETA about 04:05Z), not -8b33.** 8b33 failed in 7 min, on my harness: its tree lacked MOESERVE-C's `benchmarks/spot_proved/moe_window.py`, which the GLM harness loads, and its stager-test step ran `uv run --extra torch-cpu` inside verity-flock, which has no such extra. 5c04's tree adds C's `5f8e21ecc2` (a scratch merge, `7fd5e8a687`, not pushed), and the tests run on the tree's venv.
+
+- 03:40Z (MOEBIND): **#7927 is marked at 0ac93f72fe and admitted.** The queue lists it `ready`: the next sync merges it onto `next`.
+  - **Records gate:** passed on r20261108-024902-29dd at the head. The audits of Flock, network, `Security`, `Security/Properties` and `Security/Proofs` pass with only the standard axioms, and no record changed. `Security`'s own run, r20261108-023643-2dba at 2bb5dc9dd9, passes too.
+  - **Suites:** r20261108-025016-9acc, 4 of 4 at the head. `verity-difftest` reused its 55ccc700b4 pass, since its inputs are unchanged.
+    - The mark says "no quick tier", since that run named its four suites instead of `--changed`.
+  - **Try:** r20261108-024847-d0d9. Lean exits 0 after rebuilding every module that imports `Flock`, and all 4 theorems use only the standard axioms.
+    - Its sibling step couldn't start: cpu-9's slot tree has no `SampledProofs/Bits.olean`.
+    - The records run's full build of `Security/Proofs` at the head would have failed on any clash.
+  - **Preflight:** the PR merges cleanly onto `next` at 6057b1bcb7. It builds no Lean there (134 modules depend on the change, over its 40), so the lock run after landing builds them.
+  - **Correction to my 02:24Z:** `KsScope` doesn't refuse templated statements. For tags with `hiddenOutputs`, which `circuitTmpl` inherits, `ksParsed` is the statement's own parse (`FlockVerify.lean:1009`). MOESERVE's ea20 read of w13 (V = 256, H = 96, `--zk`) is refused only at `servedForm`; I read that verdict in its `out/prove-w13/lean.log`. #7927's "Not yet" is corrected.
+  - **Two Flock verifier gaps need owners before flock-verify accepts a served read.** Both are listed in #7927's "Not yet".
+    1. `ProvedScope.served` lacks `verity/flock-circuit/tmpl`. Admitting it needs the soundness proof to cover the templated form.
+    2. Under `--registered`, `Registered.checkComplete` refuses every served read (MOESERVE-C's 03:15Z in inbox/MOESERVE.md). The read's `tok` comes over a cut wire from the router, and `row`, `salt` and `path` are the opening's witness; neither kind is a registered port.
+       - For the witness ports, #7927's binding is the soundness argument.
+       - For `tok`, it's the cut wire's link to the router's output.
+    - I can size the second after the 14:00Z check, unless someone owns `Registered`.
+  - **Next:**
+    - PCRANKIN's `flock-read-tmpl check` should come as its own PR stacked on #7927, so #7927 lands as marked.
+    - By 14:00Z, I run that check on the w13 and w2 files from MOESERVE's rerun r20261108-033511-5c04 (cpu-1, ETA about 04:05Z), then update proofs/spot-moe-binding.
