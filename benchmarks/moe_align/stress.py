@@ -10,9 +10,9 @@ for each expert. ``stress.py compare --out DIR`` reads every ``check.*.json`` in
 distinct outputs of each op across processes and repetitions. ``stress.py time --out DIR`` writes ``DIR/time.json``:
 per row count, the median device time a call of each op by CUDA events and the host's time to issue it, for the op
 alone and through vLLM's wrapper (which allocates the outputs), and what `Align` adds to a decode step of `LAYERS`
-calls. ``stress.py plugin --out DIR``, in a process whose ``PYTHONPATH`` holds the site `moe_align.site` wrote and with
-``VERITY_MOE_ALIGN=canonical``, loads the plugin as vLLM does (``load_general_plugins``) and runs cases through the
-function `fused_marlin_moe` calls, eagerly and replayed from CUDA graphs, writing ``DIR/plugin.json``.
+calls. ``stress.py plugin --out DIR``, in a process whose ``PYTHONPATH`` holds the site directory `moe_align.site` wrote,
+loads the plugin as vLLM does (``load_general_plugins``) and runs cases through the function `fused_marlin_moe` calls,
+eagerly and replayed from CUDA graphs, writing ``DIR/plugin.json``.
 """
 from __future__ import annotations
 

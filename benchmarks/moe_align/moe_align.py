@@ -1,7 +1,7 @@
 """vLLM's `moe_align_block_size` at the integration's pin, made a function of its inputs: a vLLM general plugin (`register`,
-entry point group ``vllm.general_plugins``, run in every process whose path holds the site `site` wrote) that, with
-``VERITY_MOE_ALIGN=canonical``, replaces the op ``torch.ops._moe_C.moe_align_block_size`` (`OP`) with `Align`, which
-writes the same three outputs in the same buffers, with each expert's pairs in ascending pair index.
+entry point group ``vllm.general_plugins``, run in every process whose path holds the site directory `site` wrote) that
+replaces the op ``torch.ops._moe_C.moe_align_block_size`` (`OP`) with `Align`, which writes the same three outputs in the
+same buffers, with each expert's pairs in ascending pair index.
 
 The op takes the router's ``topk_ids`` (``[tokens, top_k]``, any integer dtype, contiguous), ``num_experts`` E, the moe
 block ``BM``, the three int32 outputs vLLM's wrapper (fused_moe/moe_align_block_size.py) allocates, and an optional
@@ -21,7 +21,9 @@ is the definition in Python, and the Triton kernels (`moe_align_kernels`) comput
 pairs and tiles of `LONG_TILE`. Each program places a tile, ranking its pairs by comparing them with each other, `COLS`
 at a time.
 
-``VERITY_MOE_ALIGN_LOG=DIR`` writes, per process, ``moe_align.PID.json``: the calls on each path.
+The plugin's configuration is `CONFIG` in the site directory, which `site` writes and nothing else: it reads no
+environment variable. A site written with a log directory gets, per process, ``moe_align.PID.json`` there: the calls on
+each path.
 """
 from __future__ import annotations
 
@@ -34,8 +36,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-ENV = "VERITY_MOE_ALIGN"
-LOG_ENV = "VERITY_MOE_ALIGN_LOG"
+#: the plugin's configuration beside the module in a site directory (`site`): ``{"log": DIR or null}``
+CONFIG = "verity_moe_align.json"
 #: the op this replaces, under ``torch.ops._moe_C``
 OP = "moe_align_block_size"
 #: the most pairs `align_small` takes in one launch; a longer call is chunked
@@ -267,26 +269,24 @@ def log_to(align: Align, d: str) -> None:
     atexit.register(write)
 
 
-def settings() -> tuple[str, str]:
-    """The plugin's two variables, read here only: ``VERITY_MOE_ALIGN`` and ``VERITY_MOE_ALIGN_LOG`` ("" when unset)."""
-    return os.environ.get(ENV, ""), os.environ.get(LOG_ENV, "")
-
-
 def register() -> None:
-    """The plugin: with ``VERITY_MOE_ALIGN=canonical``, `install` on ``torch.ops._moe_C`` in this process."""
-    mode, log = settings()
-    if mode in ("", "0"):
+    """The plugin: in a site directory (`CONFIG` beside this module), `install` on ``torch.ops._moe_C`` in this process,
+    logging to the configured directory if there is one; anywhere else, nothing."""
+    cfg = Path(__file__).with_name(CONFIG)
+    if not cfg.is_file():
         return
-    if mode != "canonical":
-        raise ValueError(f"{ENV}: 'canonical' or unset, not {mode!r}")
+    conf = json.loads(cfg.read_text())
+    if set(conf) != {"log"} or not isinstance(conf["log"], (str, type(None))):
+        raise ValueError(f"{cfg}: {{\"log\": DIR or null}}, not {conf!r}")
     align = install()
-    if log:
-        log_to(align, log)
+    if conf["log"]:
+        log_to(align, conf["log"])
 
 
-def site(d: Path) -> Path:
-    """Add this module to the site directory ``d`` as a vLLM general plugin: a server or replay with ``d`` on its
-    ``PYTHONPATH`` (and ``VLLM_PLUGINS`` unset or naming ``verity_moe_align``) loads it in every process."""
+def site(d: Path, log: str | None = None) -> Path:
+    """Add this module to the site directory ``d`` as a vLLM general plugin, logging each process's calls to ``log`` if
+    given: a server or replay with ``d`` on its ``PYTHONPATH`` (and ``VLLM_PLUGINS`` unset or naming ``verity_moe_align``)
+    loads it in every process."""
     d = Path(d)
     info = d / "verity_moe_align-0.0.dist-info"
     info.mkdir(parents=True, exist_ok=True)
@@ -294,12 +294,14 @@ def site(d: Path) -> Path:
     (info / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_moe_align = moe_align:register\n")
     for name in ("moe_align.py", "moe_align_kernels.py"):
         shutil.copy(Path(__file__).with_name(name), d / name)
+    (d / CONFIG).write_text(json.dumps({"log": None if log is None else str(Path(log).resolve())}) + "\n")
     return d
 
 
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 3 or sys.argv[1] != "site":
-        raise SystemExit("usage: python moe_align.py site DIR")
-    print(site(Path(sys.argv[2])))
+    a = sys.argv[1:]
+    if not (len(a) == 2 or len(a) == 4 and a[2] == "--log") or a[0] != "site":
+        raise SystemExit("usage: python moe_align.py site DIR [--log LOGDIR]")
+    print(site(Path(a[1]), a[3] if len(a) == 4 else None))

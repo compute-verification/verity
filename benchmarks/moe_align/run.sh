@@ -35,9 +35,8 @@ run check.p2 "$PY" "$HERE/stress.py" check --out "$OUT" --tag p2 --reps 10 & b=$
 wait "$a" "$b"
 run compare "$PY" "$HERE/stress.py" compare --out "$OUT"
 site=$(mktemp -d)
-"$PY" "$HERE/moe_align.py" site "$site" > /dev/null
-PYTHONPATH="$site:$ROOT" VERITY_MOE_ALIGN=canonical VERITY_MOE_ALIGN_LOG="$OUT/plugin-log" \
-  run plugin "$PY" "$HERE/stress.py" plugin --out "$OUT" --reps 3
+"$PY" "$HERE/moe_align.py" site "$site" --log "$OUT/plugin-log" > /dev/null
+PYTHONPATH="$site:$ROOT" run plugin "$PY" "$HERE/stress.py" plugin --out "$OUT" --reps 3
 rm -rf "$site"
 [ "${MOE_ALIGN_SKIP_TIME:-0}" = 1 ] || run time "$PY" "$HERE/stress.py" time --out "$OUT"
 head -12 "$OUT/compare.log"

@@ -26,7 +26,7 @@ owns one that `expert_map` sends to -1. vLLM's op writes the same buffers, excep
 
 ## How it runs
 
-`moe_align.register` is a vLLM general plugin. With `VERITY_MOE_ALIGN=canonical`, it replaces
+`moe_align.register` is a vLLM general plugin. Loaded from a site directory, it replaces
 `torch.ops._moe_C.moe_align_block_size` in every process with `moe_align.Align`. vLLM's wrapper looks the op up on each
 call and still allocates the buffers. `Align` runs Triton kernels (`moe_align_kernels.py`) on the inputs' stream, with no
 atomics and no host sync:
@@ -44,17 +44,19 @@ places one tile, and the program that places an expert's last pair writes that e
 The stores' slots are disjoint, so no barrier orders them, and every slot vLLM's kernel writes is written. The long path
 allocates its workspace through PyTorch's allocator, so both paths can be captured in a CUDA graph.
 
-`python moe_align.py site DIR` writes the plugin's entry point into `DIR`, and a server or replay with `DIR` on its
-`PYTHONPATH` loads it. `VERITY_MOE_ALIGN_LOG=DIR` keeps each process's calls on each path in `DIR/moe_align.PID.json`.
+`python moe_align.py site DIR [--log LOGDIR]` writes the plugin, its entry point and its configuration into `DIR`, and a
+server or replay with `DIR` on its `PYTHONPATH` loads it. With `--log`, each process keeps its calls on each path in
+`LOGDIR/moe_align.PID.json`. The plugin reads no environment variable, and `moe_align.py` imported from anywhere else
+installs nothing.
 
 ## Using it
 
-Run any vLLM command at the integration's pin from the pin's venv: a server, a replay or an in-process engine. Set the
-variables in the environment its engine processes inherit, with `VLLM_PLUGINS` unset or naming `verity_moe_align`:
+Run any vLLM command at the integration's pin from the pin's venv: a server, a replay or an in-process engine. Put `DIR`
+on the `PYTHONPATH` its engine processes inherit, with `VLLM_PLUGINS` unset or naming `verity_moe_align`:
 
 ~~~text
-python benchmarks/moe_align/moe_align.py site DIR
-PYTHONPATH=DIR${PYTHONPATH:+:$PYTHONPATH} VERITY_MOE_ALIGN=canonical [VERITY_MOE_ALIGN_LOG=LOGDIR] COMMAND
+python benchmarks/moe_align/moe_align.py site DIR [--log LOGDIR]
+PYTHONPATH=DIR${PYTHONPATH:+:$PYTHONPATH} COMMAND
 ~~~
 
 ## Measuring

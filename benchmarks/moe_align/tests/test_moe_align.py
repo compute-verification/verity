@@ -3,6 +3,7 @@ pair index, on hand-made cases (vLLM's docstring example, empty experts, whole b
 expert takes, an expert map); the same schedule the align Definitions give when every pair's key is its index; any output
 vLLM's atomic order can give canonicalizes to it; the op wrapper replaces the op once and the plugin is off unless asked;
 and, where Triton is importable, the kernels (in Triton's interpreter) write the reference on both paths."""
+import importlib.util
 import json
 import os
 import random
@@ -143,23 +144,25 @@ def test_install_replaces_once_and_keeps_the_real_op():
     assert rec.args == [("ids", 384, 8, "s", "b", "n", None)] * 2 and log == []
 
 
-def test_register_is_off_unless_asked(monkeypatch):
+def test_register_installs_only_from_a_site(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(moe_align, "install", lambda *a, **k: calls.append(a))
-    for v in (None, "", "0"):
-        if v is None:
-            monkeypatch.delenv(moe_align.ENV, raising=False)
-        else:
-            monkeypatch.setenv(moe_align.ENV, v)
-        moe_align.register()
-    assert calls == []
-    monkeypatch.setenv(moe_align.ENV, "sorted")
-    with pytest.raises(ValueError, match="canonical"):
-        moe_align.register()
-    monkeypatch.setenv(moe_align.ENV, "canonical")
-    monkeypatch.delenv(moe_align.LOG_ENV, raising=False)
+    monkeypatch.setattr(moe_align, "install", lambda *a, **k: calls.append(a) or "align")
     moe_align.register()
-    assert calls == [()]
+    assert calls == []
+    for log in (None, tmp_path / "log"):
+        d = moe_align.site(tmp_path / f"site-{log is None}", log)
+        spec = importlib.util.spec_from_file_location(f"site_moe_align_{log is None}", d / "moe_align.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        logged = []
+        monkeypatch.setattr(mod, "install", lambda *a, **k: calls.append(a) or "align")
+        monkeypatch.setattr(mod, "log_to", lambda align, d: logged.append((align, d)))
+        mod.register()
+        assert logged == ([] if log is None else [("align", str(log.resolve()))])
+        (d / mod.CONFIG).write_text('{"log": null, "mode": "sorted"}')
+        with pytest.raises(ValueError, match="log"):
+            mod.register()
+    assert calls == [(), ()]
 
 
 def test_log_rewrites_its_record(monkeypatch, tmp_path):
@@ -179,6 +182,8 @@ def test_site_declares_the_plugin(tmp_path):
     assert "[vllm.general_plugins]" in eps and "verity_moe_align = moe_align:register" in eps
     for name in ("moe_align.py", "moe_align_kernels.py"):
         assert (d / name).read_text() == Path(moe_align.__file__).with_name(name).read_text()
+    assert json.loads((d / moe_align.CONFIG).read_text()) == {"log": None}
+    assert not Path(moe_align.__file__).with_name(moe_align.CONFIG).exists()
 
 
 def test_refuses_what_vllms_op_cannot_take():
