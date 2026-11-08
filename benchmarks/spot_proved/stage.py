@@ -1189,13 +1189,13 @@ class Wires:
         (an index into the step's requests, ``meta.json``'s ``req_ids``) and the top-k positions its row keeps, in order
         (`convert_rows`); None where no such call is recorded with its inputs kept. Refuses one whose outputs aren't
         `convert_rows` of its inputs, or whose counts aren't the tap's ``seqused_k``."""
-        cap, table, used = self.cap, tap["in"]["block_table"], tap["in"]["seqused_k"]
+        rec, table, used = self.cap, tap["in"]["block_table"], tap["in"]["seqused_k"]
         ev = next((self.by_seq[r][s] for s, o in reversed(self.made.get((r, table.get("sha512")), []))
                    if s < tap["seq"] and o == "r0" and self.by_seq[r][s]["op"] == CONVERT), None)
         if ev is None:
             return None
         a = ev["in"]
-        if not all(isinstance(a.get(k), dict) and cap.kept(r, a[k]) for k in ("req_id", "block_table", "token_indices")):
+        if not all(isinstance(a.get(k), dict) and rec.kept(r, a[k]) for k in ("req_id", "block_table", "token_indices")):
             return None
         where = f"rank {r} {CONVERT} (seq {ev['seq']})"
         if (ev["out"].get("r1") or {}).get("sha512") != used.get("sha512"):
@@ -1204,9 +1204,9 @@ class Wires:
             raise Unwired(f"{where} maps prefill tokens to a workspace, which convert_rows doesn't model")
         block = int(a.get("BLOCK_SIZE") or KV_BLOCK)
         stride = int(a.get("BLOCK_STRIDE_ROWS") or block)
-        req = cap.tensor(r, a["req_id"]).reshape(-1).astype(np.int64)
-        kept, slots, counts = convert_rows(cap.tensor(r, a["token_indices"]), req, cap.tensor(r, a["block_table"]), block, stride)
-        if not (np.array_equal(slots, cap.tensor(r, table)) and np.array_equal(counts, cap.tensor(r, used).reshape(-1))):
+        req = rec.tensor(r, a["req_id"]).reshape(-1).astype(np.int64)
+        kept, slots, counts = convert_rows(rec.tensor(r, a["token_indices"]), req, rec.tensor(r, a["block_table"]), block, stride)
+        if not (np.array_equal(slots, rec.tensor(r, table)) and np.array_equal(counts, rec.tensor(r, used).reshape(-1))):
             raise Unwired(f"{where} output slots or counts that its inputs don't give (convert_rows)")
         return req, kept
 
@@ -1220,12 +1220,12 @@ class Wires:
         order (the Program's public map), a longer one that isn't a selection of its keys (which `DsaWaksmanRows_v1`'s
         settings, charged once per token, choose), and a position the step computes whose write isn't recorded."""
         from verity.ml.definitions.registry.dsa_topk import waksman_switches
-        cap, (req, rows) = self.cap, conv
+        rec, (req, rows) = self.cap, conv
         wev, slots, keys, made = write
-        page, used = cap.tensor(r, tap["in"]["block_table"]), cap.tensor(r, tap["in"]["seqused_k"]).reshape(-1)
+        page, used = rec.tensor(r, tap["in"]["block_table"]), rec.tensor(r, tap["in"]["seqused_k"]).reshape(-1)
         topk, width = page.shape[1], adv["shape"][-1]
         kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
-        names = cap.meta[r].get("req_ids") or []
+        names = rec.meta[r].get("req_ids") or []
         where = f"rank {r} {tap['op']} (seq {tap['seq']})"
         slot_of = {tw: s for s, tw in slots.items()}
         mine = {(int(req[tw]), int(keys[tw]) - 1): tw for tw in slot_of if tw < len(req)}
@@ -1262,7 +1262,7 @@ class Wires:
                             raise Unwired(f"{where}: token {t} reads position {x} of its request at slot {s}, but "
                                           f"{wev['op']} (seq {wev['seq']}) wrote it at slot {slot_of[tw]}")
                         if read is None:
-                            read = cap.tensor(r, ref)
+                            read = rec.tensor(r, ref)
                         if not np.array_equal(read[i, j], made[tw]):
                             raise Unwired(f"{where} reads {adv['in']}[{i}] row {j}, position {x} of its request, which "
                                           f"{wev['op']} (seq {wev['seq']}) wrote from its row {tw}, but not those bytes")
