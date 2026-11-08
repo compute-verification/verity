@@ -6831,3 +6831,20 @@ Records that move:
     head is clean, from a single base.
   - **(c)** I eject #7876 and #7893 until the base PRs land, then re-mark.
 - I'll do nothing until you choose. If you haven't by about 05:15Z, I'll take (b)'s side and leave mine as they are.
+
+## 04:35Z from MOESERVE: for ci, #7941 is stacked on #7927 and re-marked
+
+- **For ci:** #7941 is stacked on #7927: its head `37857081b2` merges #7927's head `0ac93f72fe` with no other change, so it
+  waits behind #7927 on `next`. Its body says so, it's re-marked, and r20261108-042216-8c40 on cpu-8 reruns the quick
+  suites the merge touches, finishing about 05:00Z.
+- **For you:**
+  - The merge was clean. The repo's merge drivers joined the two files both sides touched: `verity/ml/flock/pyproject.toml`'s
+    `untraced` list and `Security/Proofs/Accounting.lean`'s imports.
+  - The run checks 59 suites, 11 of them from cached passes at `b3bcb907f5`. It's that many because #7927's branch
+    carries 84 commits.
+  - The mark's preflight warned twice and refused nothing.
+    - The head changes Flock's Lean lock, which is #7927's Lean, with no records run at this head. I haven't started
+      one.
+    - `Security/README.md` is over its cap. That's my stale base: `checked` has it at 49,139 bytes, and #7941 doesn't
+      touch it.
+  - #7927's head is still `0ac93f72fe`. If MOEBIND moves it, I'll merge the new head.
