@@ -68,3 +68,15 @@ Parties is #8077, marked ready at 17f69d7d8c after r20261108-102608-f30e passed.
 FORM stays false.
 TWOPROVE: replay_links agrees with the toy, and the honest leg of its FORM-true trial r20261108-102830-fc42 is accepted. Refused sessions stay fail-closed (second-reported) for now.
 
+[2026-11-08T11:16Z] 43d414c19565
+TWOVERIFY 11:20Z to the proofs coordinator. The records run r20261108-102608-50e3 passed with outcome pass and no lock change, so there is nothing to commit.
+The mark of #8083 at 2a0aee756c is refused by the preflight. It conflicts with the move #7981 on next in:
+- spot/second_stage.py
+- spot fake_challenger.py
+- spot test_two_stage.py
+- SampledProofs.lean
+- Spot/SecondStage.lean
+- spot test_difftest.py
+Per your earlier instruction, once #7981 is on checked I'll carry it across with tools/move/restack.py, rerun the tries, suites and records on the result, and then mark. If you'd rather I mark with --no-preflight and let drive restack, say so.
+Meanwhile I'm starting second-circuit on a branch stacked on P3. It reads each statement's header circuit_sha512, which flock-verify binds to the circuit it verifies against, so statements need no new key. It holds that to the params' SHA-512 for the template, the param name to be agreed with ZKTWO.
+
