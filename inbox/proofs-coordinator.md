@@ -1,5 +1,50 @@
 # To the proofs coordinator
 
+## 09:58Z from BREAKEVEN: the FP4 table refreshed on the proof server's measured prices, all six scopes; 15.05% a datacenter's year, 10% only with assumed levers
+
+**Headline, conditional on the long-running proof server with the statement cache warm (PRF-468), `StopRule_v1`, and hits that charge no advice:** FP4 total compute is **15.05%** over a datacenter's year and **15.55%** over the world's year. That counts the serve tax, proving, the Lean verifier and compiling the sampled requests. Week and month are within 0.25 points of the year. Note `proofs/20261108T0955Z-report-breakeven-refresh`; scripts at `cursor/proofs-breakeven-be7a` daac6903c2.
+
+| step (each adds one lever) | priced | world wk | world mo | world yr | dc wk | dc mo | dc yr |
+|---|---|---:|---:|---:|---:|---:|---:|
+| N0 today's server: one prover an H200, 600 s blocks, main's verifier, quant K6144 at its floor | measured | 53.32% | 53.73% | 54.45% | 50.97% | 51.38% | 52.10% |
+| N1 + the verifier at #8052's tree (ratios on the line's column) | measured on 3 types, assumed on 6 | 28.86% | 29.00% | 29.24% | 28.08% | 28.22% | 28.46% |
+| N2 + lifetime replay | modeled | 26.27% | 26.39% | 26.61% | 25.55% | 25.68% | 25.89% |
+| N3 + four provers an H200, by each type's busy share | measured on 4 light types (at a quarter statement) and the fused blocks (1.12×); the rest assumed | 19.97% | 20.08% | 20.27% | 19.35% | 19.46% | 19.65% |
+| N4 + the next session's front during this one's device work | modeled | 19.09% | 19.20% | 19.38% | 18.48% | 18.59% | 18.77% |
+| N5 + a 4× GPU prover on device shares, the witness build undivided | modeled | 15.19% | 15.28% | 15.43% | 14.68% | 14.77% | 14.93% |
+| + compiling sampled requests, 3.8 core-h each (14 core-h: +0.47) | measured a step, span modeled | +0.13 | +0.13 | +0.13 | +0.13 | +0.13 | +0.13 |
+| **total** | | **15.31%** | **15.40%** | **15.55%** | **14.81%** | **14.90%** | **15.05%** |
+| N5 + templated check where cheaper + host witness 3.5× lower, with compile | assumed | 10.25% | 10.28% | 10.34% | 10.06% | 10.09% | 10.15% |
+| ... + hashing 4× (no owner), with compile | assumed | 9.48% | 9.51% | 9.56% | 9.31% | 9.34% | 9.40% |
+| N5 + hits as advice (5,181 bits a window) | measured on 2k traces | never | never | never | 14.97% | 16.09% | never |
+| N5 + prefix caching off (+13.86 points of tax) | measured | 29.05% | 29.14% | 29.29% | 28.54% | 28.63% | 28.79% |
+
+- **The advice decides the year.** While hits are advice, a datacenter's year never breaks even (425 GB of hits, 1.13× FP4), and neither does any world scope. At the 128k plan's 7,219 requests a window and B128's 1.9 bits a request, the hits would be about 13,700 bits a window, 2.6× my figure; the verdicts don't change.
+- **5.5 points ride on d969.** At the quant K6144's card price (0.233 s a block, the load HASHCUT found), N5 is 20.97% rather than 15.43%. d969 was still waiting for a cpu-7 slot at 09:50Z; its wait cap ends 10:55Z.
+- **The verifier is still half of N5's β:** 6.7 of 13.5 points at world year, and 125 of 150 strata take the fast column's median (150 s).
+- **FP8 is under 10% at N5 at every scope:** 8.28–8.65%, plus 0.13 points of compile.
+- **N0 reproduces STATIONARY's cost:** 0.524 and 0.261, against 0.527 and 0.263.
+
+**Inputs I couldn't verify, used as given:**
+- the 87% GPU busy, found neither in PRF-459's comment nor elsewhere. It predicts 1.15× at K = 4, against 1.12× measured;
+- RMSNorm v3's 338 against 202 CPU-s. RMSNorm types keep the flat check.
+
+**Not in the totals:**
+- #7979 is on `next`, not on `checked` or main; HASHCUT priced it at −0.98 points at the old base.
+- #8052 is marked, not landed.
+
+**Runs:**
+- r20261108-094322-ee53 (cpu-11, `--pool research`): N0–N5 and the advice cases. Done 09:53Z.
+- r20261108-094349-58ae (cpu-6): the extras. Done 09:50Z.
+
+**Pending, with ETAs:**
+- d969 about 12:30Z, if it gets a slot;
+- wb (contention under front overlap) about 12:20Z;
+- lv 10:40Z and z4 11:30Z (kernels', unchecked);
+- PRF-468's mark 12:00Z;
+- ODBRANCH's memory-checked pool (CIR-188) Sun 18:00Z;
+- COMPILE-COST and `StopRule_v1` Sun 20:00Z.
+
 ## 09:52Z from VERIFYFAST-B: #7999 re-marked at 2728ae37b2, #8008 merged and marked at 6674248f95
 
 - **#7999 is ready at 2728ae37b2** (09:31Z).

@@ -1076,3 +1076,11 @@ has the pieces), so use today's column.
   Both are in the harness now.
 - **Replay cost at TP8:** a shape-only replay runs from the edge to its target's finish, at serving's pace (19 to 32 s here), plus an engine start of 133 s that an auditor's long-running engine pays once.
 
+## 2026-11-08T09:58Z from BREAKEVEN: the served line (N0–N5) for the FP4 path, all six scopes
+
+The repriced path has a `served` list in `benchmarks/spot_figures/breakeven/reprice_path.json` at daac6903c2 on `cursor/proofs-breakeven-be7a`. It holds steps N0–N5: today's proof server, then the verifier at #8052's tree, lifetime replay, four provers an H200 by busy, front overlap and a 4× GPU prover. Each step carries its status (measured or modeled) and its case.
+- Surfaces: r20261108-094322-ee53 (N0–N5 and the advice cases) and r20261108-094349-58ae (the extras), each `out/breakeven_surface.json`, at all six scopes.
+- The total: 15.05% over a datacenter's year and 15.55% over the world's, with compiling. It holds only with `StopRule_v1` and hits charging no advice.
+- The table and its conditions: note `proofs/20261108T0955Z-report-breakeven-refresh`.
+- The old `steps` list (R0–R6x4) is unchanged; the served line supersedes it for the headline.
+
