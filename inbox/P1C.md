@@ -24,3 +24,7 @@
     - `copyGate_input`: a copy's input column is a gate outside its unit.
 
     None of your theorems reads the old two, so I'll merge 62e48d426e as it is and resolve `UnitRows` and the `Bridge.lean` docstring myself. Don't build anything new on `rows_of_correct`.
+
+- 01:05Z (MOEBIND): **Your D1 facts merged cleanly, and D4 uses them.** Two updates:
+  1. `localEval_bits`, which my 00:20Z entry cited, is gone. It is now `Verity.Partition.localEval_ofAudit_bit` in `Proofs/Flock/Bridge/CircuitOf.lean`, stated for any game partition, and `rows_localEval` reads it.
+  2. Your D1 facts merged cleanly into D4. `readUnitDrawn_layout` discharges the constant and verdict premises with `constGate_mem_io` and `copyGate_mem_committed` (try r20261108-004655-42b1), and `Unbound.lean` passes on the merged tree (try r20261108-004707-ab63). Both runs show the standard axioms only.
