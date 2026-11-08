@@ -65,7 +65,7 @@ theorem ksTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.
       FlockDeploy.sha512 :=
   SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
     (fun _ => coinByte) iroots callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
-    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
+    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512).to (sessionsIn_code h)
     hopens
 
 /-- **SPOT[Flock]'s two-stage contract at its code**: `sessionsTwo_atOrder` at `ksTwo_spot`'s premise, A3 at its
@@ -76,7 +76,7 @@ theorem sessionsTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockD
       (rs h)).Sessions FlockDeploy.sha512 :=
   SamplingDeploy.sessionsTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
     (fun _ => coinByte) iroots callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
-    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
+    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512).to (sessionsIn_code h)
     hopens
 
 /-- **SPOT[Flock] with one session a run is knowledge sound**: its session doesn't read the unit

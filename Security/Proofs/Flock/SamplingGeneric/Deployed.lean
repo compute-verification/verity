@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.Sampling.SessionTo
 
 /-!
 # The sampled compiler at a frozen sampled record
@@ -21,8 +22,8 @@ session's errors are `κ_F` and Flock's `γ` at those rounds and the record's we
   (`γ_ofDeploy_le`, from `γFlock_mul_le`);
 * **it meets the contract** where `D` meets the frozen hypotheses `KS_of` reads (`sessions_ofDeploy`): `draws` from
   `DrawLaw`, `slots` by the cut, `unions` by its bits, `refuses` from `Refuses`, `interior` from `InteriorFixed`,
-  `fixed` from `DrawFixed`, `runs` from `SessionRuns` and `InnerNumbers` (the session's embedding is `emb`, the only
-  order embedding onto its rounds), and `opens` from `SessionOpens`.
+  `fixed` from `DrawFixed`, `runs` from `SessionRuns` one way (`SessionRunsTo`) and `InnerNumbers` (the session's
+  embedding is `emb`, the only order embedding onto its rounds), and `opens` from `SessionOpens`.
 
 `SamplingDeploy.compiled F c iroots` is `ofDeploy` at the deployed record `deployOf F c`: its sample, rounds,
 sessions, reveal, interior roots and commitment are the code's (`compiled_checked`, …, `rfl`), its opening count is
@@ -210,10 +211,10 @@ theorem fixed_ofDeploy (hf : Claims.Sampling.DrawFixed D) (x : Msg) (r : Fin ((o
   exact ⟨hsub, fun d => congrArg (List.take _) (hkeep d)⟩
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`runs` from `SessionRuns` and `InnerNumbers`**: a session's rounds number Flock's at its statement and its
-embedding is `emb`, both from `SessionRuns`' order embedding onto them (`Finset.orderEmbOfFin_unique`); its shape and
+/-- **`runs` from `SessionRunsTo` and `InnerNumbers`**: a session's rounds number Flock's at its statement and its
+embedding is `emb`, both from `SessionRunsTo`'s order embedding onto them (`Finset.orderEmbOfFin_unique`); its shape and
 errors are within the block's from `InnerNumbers` at the session the run shows. -/
-theorem runs_ofDeploy (H : Msg → Msg) (hruns : Claims.Sampling.SessionRuns H D)
+theorem runs_ofDeploy (H : Msg → Msg) (hruns : Claims.Sampling.SessionRunsTo H D)
     (hnum : Claims.Sampling.InnerNumbers D) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω)
     (r : Fin ((ofDeploy D iroots).V.k x) → Coin) (u : ℕ) (hu : u ∈ (ofDeploy D iroots).checked x r) :
     ∃ (xS : Msg) (P' : Prover Unit), (Arg.ofFlock D.flock).shape xS = (ofDeploy D iroots).sh x u ∧
@@ -260,7 +261,7 @@ theorem runs_ofDeploy (H : Msg → Msg) (hruns : Claims.Sampling.SessionRuns H D
     rw [hcard]
     gcongr
   · rw [hco]
-    exact (hacc r' hr').mp
+    exact hacc r' hr'
   · rw [hco]
     exact hsess r' fun t ht hlt => hr' t ht fun t' ht' => by
       obtain ⟨i, rfl⟩ := (hrange t').1 ht'
@@ -292,7 +293,7 @@ theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr
   refuses := hr
   interior := hi
   fixed := fixed_ofDeploy D iroots hf
-  runs := runs_ofDeploy D iroots H hruns hnum
+  runs := runs_ofDeploy D iroots H hruns.to hnum
   opens x s P Ω Pv ω r u xS vS w hs hP hin hacc hu hsess hR :=
     hopens x s P Ω Pv ω r u xS vS w hs hP hin hacc ((mem_ofDeploy_checked D iroots).1 hu) hsess
       (flock_check_of_R hR)

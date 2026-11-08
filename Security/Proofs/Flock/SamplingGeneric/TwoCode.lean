@@ -487,7 +487,7 @@ theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (hreg : RegMatch
     (hunif : BytesUniform c L₁ bytes₁) (hfirst : FirstFixed c L₁ bytes₁) (hsec : SecondUniform c L₂ bytes₂)
     (hfixed : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) (hr : c.RefusesTwo FlockDeploy.sha512 two)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)))
     (hnum : SessionsIn (codeTwo c reg L₁ L₂ bytes₁ bytes₂))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
@@ -504,7 +504,7 @@ theorem sessionsTwo_code (iroots : Msg → Seen → ℕ → List Msg) (hreg : Re
     (hunif : BytesUniform c L₁ bytes₁) (hfirst : FirstFixed c L₁ bytes₁) (hsec : SecondUniform c L₂ bytes₂)
     (hfixed : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) (hr : c.RefusesTwo FlockDeploy.sha512 two)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)))
     (hnum : SessionsIn (codeTwo c reg L₁ L₂ bytes₁ bytes₂))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512

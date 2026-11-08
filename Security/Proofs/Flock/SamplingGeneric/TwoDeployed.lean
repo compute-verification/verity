@@ -87,7 +87,7 @@ noncomputable abbrev compiledTwo :
 openings at a replay block. -/
 theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs)
     (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
-    (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
+    (hruns : Claims.Sampling.SessionRunsTo H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo H (deployOf F c) two iroots) :
     (compiledTwo F c iroots two rs).Sessions H where
   replayDraws := hrd
@@ -115,7 +115,7 @@ decoder's list bound, the commitment's binding and the two-stage contract (`comp
 theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
     (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H)
     (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs) (hr : c.RefusesTwo H two)
-    (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed) (hruns : Claims.Sampling.SessionRuns H (deployOf F c))
+    (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed) (hruns : Claims.Sampling.SessionRunsTo H (deployOf F c))
     (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo H (deployOf F c) two iroots) :
     (compiledTwo F c iroots two rs).KS H :=
@@ -156,7 +156,7 @@ theorem ksTwo_masked (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ)
     (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs) (hr : c.RefusesTwo FlockDeploy.sha512 two)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
     (hnum : SessionsIn c)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c)
       two iroots) :
