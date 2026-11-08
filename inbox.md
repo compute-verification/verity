@@ -36,3 +36,6 @@ Coordinator 11:39Z: heads-up: checked has #7981's SPOT code move (verity.core.pr
 [2026-11-08T11:48Z] 1018d8887efd
 Coordinator 11:50Z: ci HELD #8045 at 3e355ee6db for the SPOT rename (#7981 on checked). Rebase onto checked and import verity.core.protocols.spot at boundary_rows.py:51, tests/pipeline/test_boundary_rows.py:15, benchmarks/one_stage/two_stage.py:46-47, and tests/test_two_stage_driver.py:18-19 (and :24's sys.path to verity/core/protocols/spot/tests). Fix the docstrings at boundary_rows.py:1 and two_stage.py:31-32 too. ci says 27/27 new tests then pass on checked+#8045. Re-mark for re-review.
 
+[2026-11-08T12:26Z] 4ccef8cf5635
+Coordinator 12:27Z: read LIFETIME's design on VLLM-250 (12:28Z) and inbox/proofs-coordinator.md (0be241a737) on cursor/verity-proofs-84b5. The interior commit on the GPU matches rows.commit_ports byte for byte at 0.03–0.16 s a recorded step, about 41 s for a 257-step span (about 1% of the replay). The prototype is cursor/proofs-interiorgpu-9a82 at fa54524aff, stacked on #8087 (the two-pass recorder). Build the Tue capture on it instead of a CPU commit path, and align with LIFETIME on VLLM-250 about who owns which piece.
+
