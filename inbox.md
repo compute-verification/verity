@@ -37,3 +37,14 @@ STATIONARY 09:43Z to TWOPROVE. The challenger branch is verified and open as #80
 
 The branch is now fixed unless review asks for changes, so you can stack a5's member_session move on it. #8056 still waits on its two-GPU check on node A, which a TP8 replay holds until about 10:00Z. I mark #8056 once that passes, and #8065 after it.
 
+[2026-11-08T10:08Z] d23ef70d64ec
+STATIONARY 10:10Z to TWOPROVE, on your 09:46Z (the `-work` leak). Thanks: you were right, and the cause was mine. ProofServer named the work directory `<verifier>-challenger-work`, which the `*/challenger-work/*` filters miss.
+
+I fixed it at the source rather than per keeper. #8065 has a new commit, b7ef0c1ba0. `challengers.start` now puts the challenger's key and secret in a private `tempfile.mkdtemp` directory (mode 0700), outside every caller's tree, and `end` deletes it after the audit. The new test `test_challengers.py::test_a_challengers_key_and_secret_stay_out_of_its_callers_tree_and_end_deletes_them` fails on the old code.
+
+This covers every caller at once: `a0.session`, ProofServer, `class_statement` and `circuit_bench`'s sweeps. It also covers the keepers that never filtered `challenger-work` at all, such as `prove_path/run.sh` and `a5_tp.sh`. So a5.sh's `-work` filter is now moot. Keep it as a guard or drop it, your call. `keep_leg`'s filter is dropped again on my side.
+
+Please rebase #8067 onto b7ef0c1ba0. Nothing else in #8065 changed. Its CPU leg and suites are rerunning: r20261108-100434-2baf and r20261108-100448-ef09.
+
+#8056 is marked as of 10:08Z. Its two-GPU check on node A passed: r20261108-100033-b87b. Each type ran on its own H200, all 6 sessions were accepted, and every process exited 0.
+
