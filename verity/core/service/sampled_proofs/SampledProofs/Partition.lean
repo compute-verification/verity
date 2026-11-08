@@ -62,7 +62,7 @@ def QUERY_X : Nat := 16
 provisional). 16 sets the classes back to the former literal limit alone. -/
 def UNIT_CLASS_MAX : Nat := 262144
 
-/-- The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `unitClasses`). -/
+/-- The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `sizeClasses`). -/
 def UNIT_CLASSES : List Nat := (List.range (Nat.log2 (UNIT_CLASS_MAX / 16) + 1)).map (16 * 2 ^ ·)
 
 /-- `partition.unit_class`: the size class of a unit that commits `bits` bits, the least of `UNIT_CLASSES` that holds
