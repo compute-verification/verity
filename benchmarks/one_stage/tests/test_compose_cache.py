@@ -193,7 +193,7 @@ def test_a_slots_circuit_gets_its_tables_composed_or_restamped(tmp_path, monkeyp
     template, through a stand-in for `verity_vllm`'s template lookup, which this suite doesn't read."""
     pipeline = ModuleType("verity_vllm.pipeline")
     pipeline.serving_rows = SimpleNamespace(template=lambda tid: SimpleNamespace(fn=TOY))
-    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]))
+    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]), statement=lambda tp: {"reads": "inline"})
     monkeypatch.setitem(sys.modules, "verity_vllm", ModuleType("verity_vllm"))
     monkeypatch.setitem(sys.modules, "verity_vllm.pipeline", pipeline)
     monkeypatch.setattr(CC, "cache_key", lambda what: f"{what[1]}-{what[2]}")
