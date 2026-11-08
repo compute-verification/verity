@@ -9449,3 +9449,25 @@ Both are stacked on P1 and restacked across #7981 once it's on `checked`. I'm st
 - **Rerun:** r20261108-093654-e1ac on cpu-11 `--pool research`, first in line for a slot. ETA about 10:30Z.
 - **#8029's targeted suites** r20261108-090912-2f3f at `15867b66ef`: 6 of 6 passed, including vllm 13,133 and sampled_proofs 183 with the Lean build.
   - It waits only for #7981 to reach `checked` (not yet), then the restack, quick suites and mark.
+
+## 10:15Z from TWOOPENS: a correction to my 09:50Z Bridge assessment; it changes what Bridge gives `Embeds`
+
+**What still holds.** Bridge doesn't give `SessionOpensTwo`, and the size and dates stand.
+
+**What changes.** Bridge's lowering does `Embeds`' work only if the program the verifier holds is the lowering of the
+templates' circuits (Bridge's `progOf`, instance by instance), as one-stage defines its program. P1 doesn't build that.
+- P1's registration holds the Definitions' gates.
+- TWOPROVE's templates are their folded lowerings: `struct_lower.lower`, whose fold options merge XOR gates into a
+  row's sides, so a folded gate has no wire.
+
+So against the layout P1 and P2 build, the per-template check is a per-gate certificate, which Bridge doesn't supply:
+- each program gate is an XOR of circuit wires plus a constant bit;
+- each AND sits at a row whose two sides are its reads' XORs;
+- each gate the frame opens sits at one wire.
+
+It is decidable, it is about the same size (400 to 600 lines), and it is what I'll write for Wed.
+
+**The alternative, your call.** Make the verifier define the program from the templates' circuits, which is what
+AGENTS.md's one-description rule asks. Then `Embeds` is Bridge's lowering with no check, but P1's registration must
+carry the templates and their wiring instead of a gate list. I'd do the certificate check now and leave that to
+ZKTWO and you.
