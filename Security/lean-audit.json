@@ -3388,7 +3388,6 @@
   ],
   "Flock.SecurityProofs.SampledKSLiveV5": [
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
-   "FlockSoundness.Built",
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
    "FlockSoundness.Discharge.ZkLink.LinkCRZC",
    "FlockSoundness.Discharge.ZkLink.SessCRZ"
@@ -4429,6 +4428,14 @@
    "type_hash": "adf77051204e654f79116b466bf8b2901ce4f9c35a882047988058a6bbdbb00a",
    "unfolded_hash": "7be6fec7e43d2b4bcb904cee6032058522ad1fba91c837fd4cd448417c732e62"
   },
+  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
+   "type_hash": "514a7aec3cc4e33e81ae87c8efd760c86424bcfa18b1e75b246b6d64e11bbdd2",
+   "unfolded_hash": "7d61453c79f2ab6a4c03f89facbceb697990a7198d63abac3a05b5edb43e3ab8"
+  },
+  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
+   "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
+   "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
+  },
   "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8",
    "unfolded_hash": "3d54089a8b29cf26b32a65da0287ef7e5f5ef8a59ff05a06f0ce314f0eda0dad"
@@ -5377,14 +5384,6 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
-   "type_hash": "514a7aec3cc4e33e81ae87c8efd760c86424bcfa18b1e75b246b6d64e11bbdd2",
-   "unfolded_hash": "7d61453c79f2ab6a4c03f89facbceb697990a7198d63abac3a05b5edb43e3ab8"
-  },
-  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
-   "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
-   "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
   }
  },
  "witnesses_assumed": {
@@ -15023,7 +15022,6 @@
     "open": [
      "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
-     "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
      "FlockSoundness.Discharge.ZkLink.LinkCRZC",
      "FlockSoundness.Discharge.ZkLink.SessCRZ"
@@ -15035,7 +15033,7 @@
     ]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "cf50487a15ba30695c770baf3219b6fc7f8637aee33c8feabad4c4de52abe8b0"
+   "unfolded_hash": "e8931a524eb1910c4f8dabd603fba7120726856113dede6cf66b2076f14acdf8"
   },
   "Flock.SecurityProofs.SampledKSLiveV5Honest": {
    "owner": "@proofs",
@@ -15048,7 +15046,7 @@
     "reads": []
    },
    "type_hash": "8aa10cc7e22e6a935407fa817c1bd6d0924244fdaf7afc7ec532b6790d1150d5",
-   "unfolded_hash": "5b94d4d24d4e02de86ec9412d9263eb9d8a3b59acb969a1e4b7df94cdc67b70b"
+   "unfolded_hash": "d28f7ca289405a8704f45ab0730bb5ba189347ea88e938bb3665a936662f6c74"
   },
   "Flock.SecurityProofs.SampledKSTwo": {
    "owner": "@proofs",
@@ -25841,6 +25839,24 @@
     "Eq Pl.game (Accounting.Compose.jointGame R (Accounting.Compose.tileCone Sc Cd Np) 1 1 Kd)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin 1), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
+    "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
+    "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Accounting.SecurityProofs.Composition": {
     "∀ (r : (i : Fin k) → Ω i), Set.instMembership.mem 𝓕 (S r)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin k) (r r' : (i : Fin k) → Ω i), (∀ (j : Fin k), Ne j i → Eq (r j) (r' j)) → Eq ((S r).inputs (Set.instCompl.compl (Finset.instSetLike.coe (V i)))) ((S r').inputs (Set.instCompl.compl (Finset.instSetLike.coe (V i))))": "∀ taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -26305,8 +26321,7 @@
     "∀ (sh : Pouw.Shape), Real.instLE.le (credit' sh) (credit sh)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TileUnpredictableOfNCPU": {
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul γ₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": {
     "∀ (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : Nat) (c : Pouw.PearlC.Commit), Pouw.PearlC.Correct P U H s u c → And (Real.instLE.le 0 (P.credit H s U u c.act)) (Real.instLE.le (credit (U.layout.shape u)) (P.credit H s U u c.act))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -26549,10 +26564,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -26949,30 +26962,34 @@
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": {
     "instLENat.le (instHAdd.hAdd 40000000000 E) q": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Pouw.Fp8Atom.H1T.Proofs.h1tGap": {
+    "∀ (u : Fin N), (Us u).Legal": "Us taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (f : Pouw.Fp8Atom.H1T.MSalt Us → Rat), List.instMembership.mem L f → Set.instMembership.mem (Pouw.Fp8Atom.H1T.mfree Us) f": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Pouw.Fp8Atom.H1T.Idx Us), Exists fun r => And (List.instMembership.mem (Pouw.Dimension.H100.regs100 fpSem P L) r) (∀ (G : Pouw.Fp8Atom.H1T.MSalt Us), Eq (r G) (Pouw.Fp8Atom.H1T.mword Us x G))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.NCP.GameProofs.gapFromTTNCP": {
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (instHMul.hMul 3 (U.layout.shape u).Wmm.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
     "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -27011,10 +27028,41 @@
     "∀ (τ : Pouw.Eps1.Tau m n Lseg) (t : Fin G), Eq (slot t) (slot (P.out τ)) → Eq t (P.out τ)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin S), instLENat.le (Finset.filter (fun t => Eq (slot t) s) Finset.univ).card d": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U": {
+    "∀ (L : Pouw.Layout) (u : Nat), Eq (P.Wref L u) (Pouw.NCP.wrefU f L u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → instLENat.le n₀ (U.layout.shape u).n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": {
+    "∀ (L : Pouw.Layout) (u : Nat), Eq (P.Wref L u) (Pouw.NCP.wrefU 20 L u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → instLENat.le n₀ (U.layout.shape u).n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1": {
+    "∀ (L : Pouw.Layout) (u : Nat), Eq (P.Wref L u) (Pouw.NCP.wrefU 24 L u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → instLENat.le n₀ (U.layout.shape u).n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Pouw.SecurityProofs.OnsiteFreed": {
     "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.PearlC.GapUOnlySm120Rev1_8192": {
+    "Eq d.G 4": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedCap1000_8192": {
+    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.PearlC.GapUnpromotedCap1000_8192": {
+    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.PearlC.GapUnpromotedChainCap1000_8192": {
+    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
     "instLTNat.lt g ((Pouw.PearlC.pearlCTilesFp4 Pouw.PearlC.devFp4Sm120 (Pouw.PearlC.RowCircuit.pc4Sem Pouw.PearlC.RowCircuit.coreOps lines) ρ).tiling U.layout).NT": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -27026,28 +27074,23 @@
    },
    "Pouw.SecurityProofs.PearlCSampledByDeadline": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i (TR.tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ (TR.Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g (TR.tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ (TR.Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i (TR.tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ (TR.Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
     "instLTNat.lt 0 (instHMul.hMul L (Finset.univ.sum fun t => instHMul.hMul (instHMul.hMul (n t) (n' t)) (B t)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -27168,64 +27211,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.Fp8Atom.H1T.Proofs.h1tGap": {
-    "∀ (u : Fin N), (Us u).Legal": "Us taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (f : Pouw.Fp8Atom.H1T.MSalt Us → Rat), List.instMembership.mem L f → Set.instMembership.mem (Pouw.Fp8Atom.H1T.mfree Us) f": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.Fp8Atom.H1T.Idx Us), Exists fun r => And (List.instMembership.mem (Pouw.Dimension.H100.regs100 fpSem P L) r) (∀ (G : Pouw.Fp8Atom.H1T.MSalt Us), Eq (r G) (Pouw.Fp8Atom.H1T.mword Us x G))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.NCP.GameProofs.gapFromTTNCP": {
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (instHMul.hMul 3 (U.layout.shape u).Wmm.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U": {
-    "∀ (L : Pouw.Layout) (u : Nat), Eq (P.Wref L u) (Pouw.NCP.wrefU f L u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → instLENat.le n₀ (U.layout.shape u).n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": {
-    "∀ (L : Pouw.Layout) (u : Nat), Eq (P.Wref L u) (Pouw.NCP.wrefU 20 L u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → instLENat.le n₀ (U.layout.shape u).n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1": {
-    "∀ (L : Pouw.Layout) (u : Nat), Eq (P.Wref L u) (Pouw.NCP.wrefU 24 L u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → instLENat.le n₀ (U.layout.shape u).n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUOnlySm120Rev1_8192": {
-    "Eq d.G 4": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedCap1000_8192": {
-    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUnpromotedCap1000_8192": {
-    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUnpromotedChainCap1000_8192": {
-    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
-    "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
-    "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -44559,16 +44544,16 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Honest": {
-   "digest": "8feacca842be80d3948a384419a226e71740c8822412acfa01fc0db8f8711098",
+   "digest": "e5b5f062d45027e7b0738cda4309050afa3f10a0993a1c17e5b9e28e29238ea7",
    "definitions": {
-    "Flock.Guarantees.SampledKSLiveV5Honest": "86fe43a5138c166dfc5339168ac55c9f00f7f2a9b20e7036d926c37d35c278c2"
+    "Flock.Guarantees.SampledKSLiveV5Honest": "2d51dc8389a88d211a9c4b6d3f5484c572ba4245092713156cdce46ee5b4990b"
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "f4a5e03a37467ee9550130f729e4224b1d512d15d1a143c8d409705b8650a82d",
+   "digest": "a52751709039c044f2d371f09f5d4a3b6add496433d8ce66de9e51229f4bfb09",
    "definitions": {
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
-    "Flock.Guarantees.SampledKSLiveV5": "c07c1fe9d2b79bf57eb258a276071706ce3d2c7dfe973ef826505a6ae511701f"
+    "Flock.Guarantees.SampledKSLiveV5": "e19488d58e4d4efd7b29f80cc37fa284f2301c116aa9f90d5368a8fba1177a4c"
    }
   },
   "Proofs.Flock.Bytes": {
