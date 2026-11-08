@@ -19,7 +19,7 @@ from typing import NamedTuple, Sequence
 from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.gates import rowleaf as RG
 
-__all__ = ["LINKS", "NOKEY", "PoolRow", "decode", "empty", "encode", "fields", "genesis", "root", "width"]
+__all__ = ["LINKS", "NOKEY", "PoolRow", "decode", "empty", "encode", "fields", "genesis", "root", "row_bytes", "width"]
 
 LINKS = ("prev", "next", "cprev", "cnext")
 NOKEY = bytes(64)
@@ -89,9 +89,31 @@ def decode(nb: int, bits: Sequence[int]) -> PoolRow:
     return PoolRow(got["head"][0], got["tail"][0], *(got[f] for f in LINKS + ("mlast", "key")))
 
 
+def row_bytes(row: PoolRow) -> tuple[bytes, int]:
+    """``rowleaf.bit_row((encode(row), 1))``, the row's bytes and bits, packed in one integer rather than a bit at a
+    time: the row's elements as binary strings, last first, are its bits most significant first."""
+    nb = len(row.prev) + 1
+    NW = width(nb)
+    if any(len(getattr(row, f)) != nb - 1 for f in LINKS + ("mlast", "key")):
+        raise ValueError("a pool row's fields hold one element a block")
+    for f in ("head", "tail", *LINKS, "mlast"):
+        vs = getattr(row, f)
+        for v in (vs,) if isinstance(vs, int) else (min(vs), max(vs)):
+            if v < 0 or v >> NW:
+                raise ValueError(f"{v} doesn't fit {NW} bits")
+    if bad := next((k for k in row.key if len(k) != 64), None):
+        raise ValueError(f"a digest is 64 bytes, not {len(bad)}")
+    fmt = f"0{NW}b"
+    parts = [format(int.from_bytes(k[i:i + 8], "big"), "064b") for k in reversed(row.key) for i in range(56, -8, -8)]
+    for f in reversed(LINKS + ("mlast",)):
+        parts += [format(v, fmt) for v in reversed(getattr(row, f))]
+    s = "".join(parts) + format(row.tail, fmt) + format(row.head, fmt)
+    return int(s, 2).to_bytes((len(s) + 7) // 8, "little"), len(s)
+
+
 def root(row: PoolRow) -> bytes:
     """The row's root: its unsalted `Sha512RowSeg_v1` digest."""
-    return RL.sha512_row_seg_digest(*RL.bit_row((encode(row), 1)))
+    return RL.sha512_row_seg_digest(*row_bytes(row))
 
 
 def genesis(nb: int) -> bytes:
