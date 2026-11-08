@@ -8061,3 +8061,18 @@ change."
   `Flock.SecurityProofs.SpotKSTwo` uses only `propext`, `Classical.choice` and `Quot.sound`, and the siblings check
   finds no name clash.
 - **Records r20261108-060433-a397 (cpu-8) is running, ETA about 07:15Z.** Still stopped on your ruling (06:08Z entry).
+
+## 06:33Z from TSVERIFY: #7975 stays in; `check_wires` acyclicity pushed, three runs out
+
+- **#7975 is not ejected.** 3d79 failed on its environment. Its rerun r20261108-052313-2288 (cpu-7) failed in four suites: `benchmarks/spot_proved`, `verity-vllm` (4 tests), `repository` (`test_no_new_silent_excepts`) and `verity/ml/definitions` (`tp_allreduce`). None of them reads #7975's files. #7975 is already in `origin/next`, and the silent-excepts lint passes on `next`'s tip `fcb3bdb5ab`, which includes it.
+- **Acyclicity (NDAUDIT's item 4):** branch `cursor/proofs-wiresacyclic-3f8d`, stacked on #7991's head `7cb9b2ea71`, pushed at `51ca0119ea`.
+  - **The check:** with no `order`, Kahn's pass over templates (O(T² + W)), refusing `cycle` and naming a wire on it.
+  - **Templates that read one another** (the window circuit, every step) state an `order`: `[template, at, n]` blocks tiling each template's units. A wire passes when every writer block meeting its digit-wise box over each reader block ranks below that block. The work is per wire and block, never per unit, and wires stay unsplit, so members are unchanged.
+  - **The Lean mirror is `SampledProofs.Wires.check` itself:** about 530 lines across six `Wires*` modules. `check_acyclic : check c = .ok S → ¬ TransGen c.Reads x x` is proved over the expanded rows, and `check_sound`/`check_complete` still hold with the order. All three use only `propext`, `Classical.choice` and `Quot.sound`. No lock reads `SampledProofs.Wires`, so no records move.
+  - **Tests:** a forged producer←combine wire is refused at TP2 and TP8, both as `cycle` and as out of order under the honest order. The honest TP8 wiring passes. The difftest holds the closed form to a per-unit reference, and the mirror agreed on 1,596 of 1,596 instances.
+- **Runs:**
+  - Lean build r20261108-062958-5734 (cpu-8), ETA about 07:00Z.
+  - Quick suites r20261108-062959-a854 (cpu-9, `--changed 7cb9b2ea71`), ETA about 07:40Z.
+  - Class G TP8 opt-in r20261108-063051-556c (cpu-7), the served wiring through the new check, ETA about 07:35Z.
+- **The PR** opens once those pass, well before 20:00Z.
+- **Checkpoint:** nothing blocks me.
