@@ -1,7 +1,8 @@
 """`zk_cost.py overhead` divides by `verity.hardware.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
 132 SMs x 4096 MACs at the 1830 MHz tensor clock, the data sheet's 1,979 dense FP8 TFLOPS, and never the 1980 MHz SM clock's
 1.0705e15. Toy records of one served type, staged at two sizes and proved warm by the dev arm, give a known marginal second
-a block, so its h is fixed by the peak alone."""
+a block, so its h is fixed by the peak alone. A served type's size of 2 proves its probe's staging rather than staging the
+same 2 instances again."""
 from __future__ import annotations
 
 import argparse
@@ -58,3 +59,23 @@ def test_overhead_refuses_a_card_that_isnt_the_runs_gpu(tmp_path):
     _records(tmp_path)
     with pytest.raises(SystemExit, match="ZK_CARD"):
         Z.overhead(argparse.Namespace(out=str(tmp_path), card="rtx-pro-6000-server", run="r-test"))
+
+
+def test_a_size_of_two_proves_the_probe_staging(tmp_path, monkeypatch):
+    staged = []
+
+    def stage_served(spec, n, d):
+        staged.append((n, d))
+        d.mkdir(parents=True)
+        (d / "pin.txt").write_text(f"pin-{n}")
+        return {"n": n, "k_log": 22, "vus_per_block": 1, "ands": 1, "definition": "Fp8GroupQuantUe8m0_v1{K=384,G=128}",
+                "statics": {"K": 384, "G": 128}, "seconds": {"total": 1.0}, "stage_cpu_s": 1.0, "maxrss_gb": 1.0,
+                "circuit_sha512": "ab" * 64, "twin": None}
+
+    monkeypatch.setattr(Z, "stage_served", stage_served)
+    (tmp_path / "records").mkdir()
+    plan = Z.stage_units(argparse.Namespace(units="gq:K=384", sizes="2,64", draws="c:dev"), tmp_path)
+    assert staged == [(2, tmp_path / "gq-k384-probe"), (64, tmp_path / "gq-k384-c64" / "stage")]
+    assert not (tmp_path / "gq-k384-probe").exists()
+    assert [(p["c"], p["k"], p["pin"]) for p in plan] == [(2, 2, "pin-2"), (64, 64, "pin-64")]
+    assert plan[0]["stage_dir"] == str(tmp_path / "gq-k384-c2" / "stage")

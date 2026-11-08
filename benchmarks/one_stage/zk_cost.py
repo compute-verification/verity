@@ -16,7 +16,8 @@ sessions.
   once.
 * **Served proof-block types** (`--units`): instead of A6's coordinates, each of `benchmarks/served_units/stage.py`'s types
   (GLM-5.3's at TP8, synthetic values), staged by that script with no Program: `--sizes` takes counts or `full` (the most
-  instances under the prover's 2^35 witness bits, from a probe staging's k_log) and `half`. Their samples are uniform
+  instances under the prover's 2^35 witness bits, from a probe staging's k_log, whose 2 instances a size of 2 reuses)
+  and `half`. Their samples are uniform
   subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the newest session of each
   point and arm against the type's own partition and no Program, which it refuses once every other check has passed.
 * **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
@@ -209,7 +210,12 @@ def stage_units(a, out: Path) -> list[dict]:
         for size in a.sizes.split(","):
             want = {"full": full, "half": max(1, full // 2)}.get(size) or int(size)
             sd = out / f"{tag}-c{want}"
-            st = stage_served(spec, want, sd / "stage")
+            if want == probe["n"] and (out / f"{tag}-probe").is_dir():
+                sd.mkdir(parents=True, exist_ok=True)
+                (out / f"{tag}-probe").rename(sd / "stage")
+                st = probe
+            else:
+                st = stage_served(spec, want, sd / "stage")
             c = st["n"]
             name = spec.partition(":")[0]
             rec = {"unit": spec, "tag": tag, "c": c, "full": full, "ands": st["ands"], "k_log": st["k_log"],
