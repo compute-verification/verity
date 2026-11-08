@@ -18,7 +18,10 @@
 #    (client.jsonl), serve_tax's step trace (the record arm's), and vllm's corpus recorder (vllm_trace_plugin, OUT/sched/raw;
 #    both servers write there, each under its engine core's pid). A window whose servers rewrote no long top-k row is
 #    refused (exit 4).
-# 2. OUT/served: the window's served tokens and logprobs by engine request id (replay.py --against's format).
+# 2. OUT/served: the window's served tokens and logprobs by engine request id (replay.py --against's format). Without it the
+#    replay is held to the client's tokens and the served schedule only, and records its own logprobs for a later --against.
+#    replay_aborts.patch replays the serve's client aborts at their steps; long_rows.py splits the comparison at 2,048 keys
+#    (OUT/long_rows.json).
 # 3. replay with every hook on: spot_job.sh on that record arm from an empty engine, with capture.py (the taps, the graph-off
 #    check at each captured step and the commitment) and replay.py --logprobs --against OUT/served; its first-stage coin
 #    draws a small, a big and a long-prefill step (past 2,048 keys), kept whole while they fit the disk (KEEP_TENSORS=all);
@@ -28,10 +31,11 @@ set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; IN=$D/inputs; mkdir -p "$OUT"
 FE57=${FE57:-/workspace/research/runs/r20261107-090959-fe57}
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python
-SENT="serve_logprobs.patch dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh gpu-lease sitecustomize.py spot_canonical.sh"
+SENT="serve_logprobs.patch replay_aborts.patch dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh gpu-lease sitecustomize.py long_rows.py spot_canonical.sh"
 for f in $SENT; do [ -f "$IN/$f" ] || { echo "canonical: --send $f"; exit 2; }; done
 [ -f benchmarks/replay_ladder/run.sh ] && [ -f benchmarks/serve_tax/replay.py ] || { echo "canonical: run from the replay ladder's tree (--cwd clone)"; exit 2; }
 git apply "$IN/serve_logprobs.patch" || { echo "canonical: serve_logprobs.patch does not apply (--cwd clone of f095ae769f)"; exit 2; }
+git apply "$IN/replay_aborts.patch" || { echo "canonical: replay_aborts.patch does not apply (--cwd clone of f095ae769f)"; exit 2; }
 PLAN=${PLAN:-$FE57/out/plan/plan.jsonl}; C4=${C4:-$(ls "$FE57"/inputs/*.json.gz 2>/dev/null | head -1)}
 [ -f "$PLAN" ] && [ -f "$C4" ] || { echo "canonical: no plan ($PLAN) or C4 shard ($C4)"; exit 2; }
 { echo "tree $(git rev-parse HEAD 2>/dev/null) + serve_logprobs.patch"; (cd "$IN" && sha256sum $SENT); sha256sum "$PLAN" "$C4"; } | tee "$OUT/inputs.sha256"
@@ -115,7 +119,7 @@ print(json.dumps({"requests": len(toks), "tokens": sum(map(len, toks.values())),
 EOF
 fi
 echo "== replay with every hook on $(date -u +%FT%TZ)"
-AGAINST=; [ -f "$OUT/served.json" ] && AGAINST="--logprobs --against $OUT/served"
+AGAINST=--logprobs; [ -f "$OUT/served.json" ] && AGAINST="--logprobs --against $OUT/served"
 VERITY_DSA_TOPK_LOG=$OUT/topk-capture ARM=$R LOAD=${LOAD:-saturated} ENGINE_ENV=$OUT/serve_engine_env.txt HF_HOME=/workspace/hf \
   KEEP_TENSORS=${KEEP_TENSORS:-all} LONG=${LONG:-1} GATE_EVERY=${GATE_EVERY:-1} STAGE=${STAGE:-1} DEADLINE=${DEADLINE:-0} \
   REPLAY_ARGS="$AGAINST" VENV=$VENV bash "$IN/spot_tp8.sh"
@@ -131,7 +135,7 @@ res = {"bit_exact_tokens_and_steps": rp.get("bit_exact"), "steps_differing": rp.
        "first_differing_step": rp.get("first_differing_step"), "requests_tokens_differing": rp.get("requests_tokens_differing"),
        "logprobs": {k: (ag.get("logprobs") or {}).get(k) for k in ("requests_logprobs_differing", "first_step")},
        "first_logprob_difference": ((ag.get("logprobs") or {}).get("requests_differing") or [None])[0],
-       "checks": {}, "gate": {}}
+       "logprobs_compared": bool(ag.get("logprobs")), "aborts": rp.get("aborts"), "checks": {}, "gate": {}}
 for m in sorted(out.glob("commit/rank*/step*/meta.json")):
     res["checks"][f"{m.parent.parent.name}/{m.parent.name}"] = json.loads(m.read_text()).get("check")
 for g in sorted(out.glob("gate-step*/gate.json")):
@@ -140,6 +144,8 @@ for g in sorted(out.glob("gate-step*/gate.json")):
                                   for k, v in j["types"].items()}
 print(json.dumps(res, indent=1, default=str))
 EOF
+[ -f "$OUT/replay/replay_steps.jsonl" ] && "$PY" "$IN/long_rows.py" --tree "$(pwd)" --arm-dir "$R" --load "${LOAD:-saturated}" \
+  --replay "$OUT/replay" --out "$OUT/long_rows.json" | head -c 4000
 df -BG /workspace
 echo "canonical: done rc=$rc $(date -u +%FT%TZ)"
 exit $rc

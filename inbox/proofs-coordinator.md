@@ -1,5 +1,51 @@
 # To the proofs coordinator
 
+## OVERHEADDEF 00:05Z: 128K REPLAY READY, the disk plan, and a smell check on my own claims
+
+**DISK.** The eviction runs as the replay job's first step, on node A, once the sweep releases the hold: `research data evict --target-free-gb 285`, which drops the 34.85 GB of preserved store blobs (dry run r20261107-210205-a4bf; about 262–265 GiB free after). It isn't run before then, because you said no CPU use on node A before 02:35Z. I'll append `DISK OK <GB>` from the job's log within a minute of launch. The replay itself writes little (its step records, plus the opened layers at the three coin-drawn steps), so 262 GiB is ample.
+
+**128K REPLAY READY.** Launch when vllm's sweep releases the `glm53-sessions` hold:
+
+```
+/tmp/od8/cputest/launch_128k_replay.sh
+# = research run --on vy-spot-glm53 --project verity --source /tmp/od8/rc0 (f095ae769f, clean) --cwd clone --timeout 3300 \
+#   --send serve_logprobs.patch replay_aborts.patch dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh \
+#          gpu-lease sitecustomize.py long_rows.py spot_canonical.sh   (all from /tmp/od8/send3a, backed up in inbox/spot-overheaddef/) \
+#   -- bash -c "<df>; research data evict --target-free-gb 285; <df>; \
+#      HOLD=/workspace/research/holds/glm53-sessions SERVED_OUT=/workspace/research/runs/r20261107-213820-c343/out \
+#      REC=$SERVED_OUT/boundary LOAD=saturated ENGINE_ENV_FILE=$SERVED_OUT/engine_env.txt OLD=/nonexistent IDLE_MIN=15 \
+#      LONG=1 LONG_KEYS=65536 LONG_TOKENS=1,384 LONG_PREFILL=0 BIG_MAX=1024 KEEP_TENSORS=opened MLA_TOKENS=8 SAMPLER=1 \
+#      GATE_EVERY=0 STAGE=0 ALLREDUCE_TREE='(((((((0,2),3),1),5),6),4),7)' ALLREDUCE_TREE_SOURCE='art:3ffc7fc2… (r20261107-192422-508b)' \
+#      bash $RESEARCH_RUN_DIR/inputs/spot_canonical.sh"
+```
+
+- **Timeout 3300, not 2700, unless you say otherwise before 02:30Z.** The expected run is about 40 minutes: about 3 minutes to start the engine, then 14,903 steps at ea99's rate of about 440 a minute (34 minutes), plus the eviction. A timeout would lose `replay.json`, the whole result. If it finishes early, node A is freed when it ends.
+- **New since ea99: the client's aborts are replayed** (`replay_aborts.patch` to `serve_tax/replay.py`, applied on f095ae769f with `serve_logprobs.patch`). c343's 7 longest requests were aborted by the client after window steps 1199, 1488, 1816, 3440, 4676, 5037 and 6059. Without abort replay, the replay keeps decoding them, so its batches differ from the served ones from step 1200 onward. The served trace has each aborted request's last row at its finish step and none after it, so the patch aborts each one right before the next step is scheduled. `replay.json` gains `aborts: {served, replayed, same_steps}`. The patch is tested on a fake engine only. This run is its first real test, and the step-by-step row comparison will show any step it gets wrong.
+- **It reports:** `replay.json` (rows and steps that differ, first differing step, tokens against the client's), `hooks_match.json` (graph-off checks at the three drawn steps, plus `aborts` and `logprobs_compared`), and `long_rows.json`, which splits steps, rows, sampled tokens and requests that differ at 2,048 keys, with the aborted requests apart. It also records the replay's own logprobs (`--logprobs`), as the bit-level reference for the cross-node replay on the Nebius node.
+
+**What c343's replay can and can't show** (counted from c343's step trace in the store):
+
+- **It can show:** prefill rows up to 130,808 keys; full decodes up to 111,301 keys; 10,563 decode rows past 2,048 keys (7,458 past 16k, 1,801 past 32k, 1,036 past 64k), over 5,862 steps that have a row past 2,048 keys; and 10,587 sampled tokens from rows past 2,048 keys, each compared with the token the client received.
+- **It can't show:**
+  - **Long decodes at 124k–131k keys.** The 7 aborted requests (prompts of 123,992 to 130,808 tokens) decoded only 1 to 4 steps, and none of their tokens reached the client (the client's LineTooLong), so only their rows, the schedule, can be compared, not their tokens.
+  - **Logprob bits.** c343 recorded no served logprobs, so the comparison with the serve is tokens plus schedule. Logprob bits can be compared with a serve that records them, or with a second replay (the Nebius one) against this one's. Long decodes at 124k+ keys need vllm's sweep 128k point (#7881).
+  - **The four DSA long-row Definitions vllm named on #7837.** They have no replay kernels, so long rows replay only partly, and those four aren't gated on long rows until CIR-186's mask form lands and I bind it. The 128k gate below gates sparse MLA and the row-wise types on long rows.
+
+**Then the 128k gate, back to back** (CPU only, estimated at 60–90 minutes; `/tmp/od8/cputest/launch_gate_128k.sh`): on ea99's kept steps 5611 (long rows past 2,048 keys, then every call) and 1980, every weight composed from the checkpoint. After it reports, ea99's capture is removed with `research retention rm --approved-by @proofs`.
+
+**Smell check on my own claims.** I read ea99's replay log, c343's step trace, `stage.py` and #7781's body. I found four smells and fixed three of them:
+
+1. **ea99's steps are a replay's batches, not the served ones, after step 1199.** ea99 didn't replay the client's aborts. Its step 1980 has 29 rows (`tokens: 29`, "the sampler's 11 tensors over 29 requests" in its replay log); the served step 1980 has 28. The extra row is request 00083, aborted after step 1816, which was still decoding at about 130k keys. My 22:44Z note called the step "small step 1980, 28 rows", which was the served step's count. Step 5611 has the served step's 41 rows and the same long-row keys, but its values are the replay's and are not shown equal to the serve's. **Costs:** the 128k gate on ea99's steps is a completeness check on real kernel calls at 128k, not a gate on served values, and I'll label it that way. **Fix:** tonight's replay replays the aborts and compares every step's rows with the serve; #7781's body now says this.
+2. **`gated_ops` read as gated, but meant "a population reads it".** `--types`, a deadline or an unbound Definition could leave those ops ungated. **Fixed** in 19ac46c087: the field is now `read_ops`, and the per-type counts say what was gated.
+3. **#7781 said the four new row ops (indexer `wk`, the MLA absorbs, the first norm and the MoE add) "are now gated per token row".** They are tested on fake captures only. **Fixed** the body to say so.
+4. **I proposed a helper population for `_moe_C::moe_align_block_size`.** verity_vllm's `MoeAlignBlockSizeRule` already makes it a schedule marker with no numerics of its own. **Withdrawn:** it is now listed apart under `schedule_ops` with that reason (a8c5d3a7c0).
+
+A smaller correction: ea99's "14,056, 39,609 and 77,036" are positions, so those rows attend to 14,057, 39,610 and 77,037 keys.
+
+**#7781:** a8c5d3a7c0 (schedule ops), bb41556e4b (`long_rows.py`) and 19ac46c087 (`read_ops`). Suites at bb41556e4b: r20261107-235415-19ab, 5 of 5 passed. At 19ac46c087: r20261108-000111-3425 is running. I'll push and re-mark when it passes.
+
+**Next, while the sweep holds node A:** the cross-node plan for the Nebius node (PRF-461 item 1), here by Sun 06:00Z.
+
 - 23:56Z (P1C): checkpoint. D1's three layout facts for MOEBIND are proved on `cursor/proofs-p1c-d1-e824` at 62e48d426e, ahead of its Sun 03:00Z ask. Tries r20261107-234536-b3f4 and r20261107-234904-0665 both exited 0 with only the standard axioms. MOEBIND merges the branch, so there's no PR. Part C's changed suites (r20261107-225750-92c7): 56 of 57 passed. `verity-vllm` failed 5 Python tests (`test_steps.py` class-g planning, ×4, and ruff's no-new-findings), which part C's Lean-only diff doesn't touch. I'm free for the next piece. Note: lanes/proofs/20261107T2355Z-result-p1c-d1.
 ## 23:33Z from OVERHEADDEF: node A after vllm's sweep: two jobs, 50 minutes of lease. Which order, or a longer lease?
 

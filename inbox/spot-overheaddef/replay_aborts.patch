@@ -1,0 +1,63 @@
+diff --git a/benchmarks/serve_tax/replay.py b/benchmarks/serve_tax/replay.py
+index a59195607a..ab96f68cbc 100644
+--- a/benchmarks/serve_tax/replay.py
++++ b/benchmarks/serve_tax/replay.py
+@@ -7,7 +7,8 @@ the load's own (each load starts from an empty prefix cache and ends drained). T
+ in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the trace's header (its batch caps, chunked prefill, prefix
+ caching, async scheduling, block size and block count), compiled unless ``--eager``, and adds each request, under its served
+ engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
+-the scheduler's ``schedule``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
++the scheduler's ``schedule``), and aborts each request the trace has aborted (a client's disconnect) right before the step
++after its abort; the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
+ then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
+ that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
+ differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
+@@ -69,7 +70,9 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
+                      "max_tokens": a["sampling"].get("max_tokens"), "sampling": a["sampling"], "served": c["output_ids"]})
+     for s in steps:
+         s["step"] -= first
+-    return {"header": recs[0], "requests": reqs, "steps": steps, "tag": tag,
++    aborts = sorted((r["after_step"] - first, r["request"]) for r in recs
++                    if r["kind"] == "finish" and r.get("reason") == "abort" and mine(r["request"]))
++    return {"header": recs[0], "requests": reqs, "steps": steps, "tag": tag, "aborts": aborts,
+             "served_s": steps[-1]["t"] - arrive[0]["t"], "served_t0": arrive[0]["t"]}
+ 
+ 
+@@ -105,10 +108,16 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> di
+     ready = time.monotonic() - t0
+     trace = StepTrace().install(eng)
+     pending = sorted(w["requests"], key=lambda r: r["before_step"])
++    aborts = list(w.get("aborts", ()))
+     tokens: dict[str, list[int]] = {}
+     lps: dict[str, list[float]] = {}
+ 
+     def add_due() -> None:
++        # a served abort came from outside the scheduler after step `after`, so it is replayed right before step after + 1's schedule
++        while aborts and aborts[0][0] + 1 == trace.scheduled:
++            eng.abort_request([aborts.pop(0)[1]])
++        if aborts and aborts[0][0] + 1 < trace.scheduled:
++            raise SystemExit(f"the replay passed step {aborts[0][0] + 1} before {aborts[0][1]} was aborted")
+         while pending and pending[0]["before_step"] == trace.scheduled:
+             r = pending.pop(0)
+             eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, params(r, logprobs))
+@@ -140,7 +149,8 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> di
+     hooks.uninstall()
+     trace.uninstall()
+     return {"ready_s": ready, "wall_s": wall, "steps": [r for r in trace.records if r["kind"] == "step"], "tokens": tokens,
+-            "logprobs": lps}
++            "logprobs": lps, "aborts": sorted((r["after_step"], r["request"]) for r in trace.records
++                                              if r["kind"] == "finish" and r.get("reason") == "abort")}
+ 
+ 
+ def emitted_at(steps: list[dict]) -> dict[str, list[int]]:
+@@ -250,7 +260,9 @@ def main(argv: list[str] | None = None) -> int:
+            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
+            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
+            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
+-           "engine_ready_s": got["ready_s"], **compare(w, got)}
++           "engine_ready_s": got["ready_s"], **compare(w, got),
++           "aborts": {"served": [list(x) for x in w["aborts"]], "replayed": [list(x) for x in got["aborts"]],
++                      "same_steps": [list(x) for x in w["aborts"]] == [list(x) for x in got["aborts"]]}}
+     if a.against:
+         d = token_diff(read_tokens(a.against), got["tokens"])
+         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}

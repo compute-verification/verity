@@ -33,8 +33,10 @@ to ``--keep-max-mib`` as it is recorded, at every step or at the ``--keep-steps`
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
-recorded event names its blobs by SHA-512 and its decoder layer, so the root binds every recorded byte. Then
-`_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 draws only after that, and the layers they
+recorded event names its blobs by SHA-512 and its decoder layer, so the root binds every recorded byte. With
+``--allreduce-tree``, ``step<s>/allreduce_tree.json`` beside it holds the node's multimem reduction tree and where it was
+read, for the node's registration to commit and the match gate to bind. Then
+`_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 samples only after that, and the layers they
 open, whose parameters each rank writes beside the step (``commit.json``, ``open/``).
 """
 from __future__ import annotations
@@ -63,6 +65,24 @@ CACHES = {"_vllm_fa3_C::fwd": ("k", "v"), "_C_cache_ops::cp_gather_indexer_k_qua
 
 #: the capture's settings, which `site` writes beside its copy of this file
 CONFIG = "spot_capture.json"
+#: the node's multimem reduction tree and where it was read, beside each step's ``params.json`` (stage.py's `TREE_FILE`)
+TREE_FILE = "allreduce_tree.json"
+
+
+def reduction_tree(text: str) -> list:
+    """A binary reduction tree over ranks 0..W-1, as JSON pairs or as kernels' probe writes it, ``(((0,2),3),1)``."""
+    tree = json.loads(text.replace("(", "[").replace(")", "]"))
+
+    def leaves(x: Any) -> list[int]:
+        if isinstance(x, int) and not isinstance(x, bool):
+            return [x]
+        if not (isinstance(x, list) and len(x) == 2):
+            raise ValueError(f"allreduce tree {text}: a node is a rank or a pair of nodes, not {x!r}")
+        return leaves(x[0]) + leaves(x[1])
+    got = leaves(tree)
+    if sorted(got) != list(range(len(got))):
+        raise ValueError(f"allreduce tree {text}: its leaves must be the ranks 0..{len(got) - 1}, each once")
+    return tree
 
 
 def config() -> dict | None:
@@ -77,6 +97,7 @@ class _State:
         self.targets = set(cfg["steps"])
         self.mla_tokens = int(cfg["mla_tokens"])
         self.sampler = bool(cfg.get("sampler"))
+        self.allreduce_tree: dict | None = cfg.get("allreduce_tree")
         self.sample_at: int | None = None
         self.smp: dict | None = None
         self.open = dict(cfg["open"])
@@ -249,7 +270,7 @@ def _install() -> None:
 
 def _install_sampler() -> None:
     """Rank 0's sampler at each recorded step (``--sampler``), read only: the logits it takes, the logits entering top-k/top-p
-    (after penalties and temperature) and leaving it, the Gumbel draw's per-row seed, position and temperature, and the chosen
+    (after penalties and temperature) and leaving it, the Gumbel sample's per-row seed, position and temperature, and the chosen
     tokens, under ``step<s>/sampler/`` with their SHA-512s in ``sampler.json``, outside the step's root."""
     import torch
     from vllm.v1.worker.gpu.sample import sampler as smp
@@ -679,6 +700,8 @@ def _finish(runner: Any) -> None:
     with ThreadPoolExecutor(8) as pool:
         params = dict(pool.map(digest, sorted(S.used_params)))
     (d / "params.json").write_text(json.dumps(params, indent=0, sort_keys=True))
+    if S.allreduce_tree is not None:
+        (d / TREE_FILE).write_text(json.dumps(S.allreduce_tree, sort_keys=True))
     ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((d / "params.json").read_bytes()).hexdigest()
     meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs, "events": len(S.events),
             "blob_bytes": S.bytes, "errors": S.errors, "seconds": round(time.time() - S.t0, 1),
@@ -692,7 +715,7 @@ def _finish(runner: Any) -> None:
 
 
 def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
-    """The step's interior root over every rank's, then the coins, drawn by rank 0 only after every rank's root is fixed, and
+    """The step's interior root over every rank's, then the coins, flipped by rank 0 only after every rank's root is fixed, and
     the layers they open: ``--open`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
     writes under ``open/`` (the bytes its sampled proof blocks read). Written to ``commit.json``."""
     import torch
@@ -804,11 +827,16 @@ def main(argv: list[str]) -> int:
     s.add_argument("--min-free-gib", type=int, default=40,
                    help="with --keep all, a step stops writing outside the opened layers once its disk would fall below this")
     s.add_argument("--sampler", action="store_true", help="also record rank 0's sampler at each step (outside the step's root)")
+    s.add_argument("--allreduce-tree", metavar="TREE",
+                   help=f"the node's multimem reduction tree as its probe read it, written at each step as {TREE_FILE}")
+    s.add_argument("--allreduce-tree-source", default="", help="where TREE was read (the probe's record)")
     a = ap.parse_args(argv)
     cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
            "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()}),
-           "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib, "sampler": a.sampler}
+           "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib, "sampler": a.sampler,
+           "allreduce_tree": {"tree": reduction_tree(a.allreduce_tree), "source": a.allreduce_tree_source}
+           if a.allreduce_tree else None}
     print(site(a.dir, cfg))
     return 0
 
