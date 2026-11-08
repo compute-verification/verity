@@ -21,18 +21,18 @@ def _module(name: str, **attrs) -> types.ModuleType:
 
 
 @pytest.fixture
-def LA(monkeypatch):
+def LA(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     monkeypatch.syspath_prepend(str(DITHER))
     monkeypatch.delitem(sys.modules, "live_audit", raising=False)
     import live_audit
     return live_audit
 
 
-def _store(monkeypatch, LA, labels: dict[str, list[dict]]) -> list[list[str]]:
+def _store(monkeypatch: pytest.MonkeyPatch, LA: types.ModuleType, labels: dict[str, list[dict]]) -> list[list[str]]:
     """`research data` answering from `labels` (art -> its challenger-pins labels); the argvs it was called with."""
     calls = []
 
-    def run(argv, **kw):
+    def run(argv: list[str], **kw) -> bytes:
         calls.append(argv[1:])
         if argv[1:3] == ["data", "select"]:
             return "".join(a + "\n" for a in labels).encode()
@@ -53,7 +53,8 @@ def head(ts: str, by: str = "infra") -> dict:
     return {"by": by, "key": "challenger-pins", "value": "head", "ts": ts}
 
 
-def test_newest_pins_is_the_head_infra_labelled_last(LA, monkeypatch, tmp_path):
+def test_newest_pins_is_the_head_infra_labelled_last(LA: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+                                                     tmp_path: Path) -> None:
     calls = _store(monkeypatch, LA, {"art:4b61": [head("2026-10-23T23:43:34Z")],
                                      "art:1929": [head("2026-10-24T08:04:14Z")],
                                      "art:0000": [head("2026-10-24T09:00:00Z", by="kernels")],
@@ -64,16 +65,18 @@ def test_newest_pins_is_the_head_infra_labelled_last(LA, monkeypatch, tmp_path):
     assert calls[-1] == ["data", "fetch", "art:1929", "--to", str(tmp_path / "pins")]
 
 
-def test_newest_pins_refuses_without_an_infra_head(LA, monkeypatch, tmp_path):
+def test_newest_pins_refuses_without_an_infra_head(LA: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+                                                   tmp_path: Path) -> None:
     _store(monkeypatch, LA, {"art:0000": [head("2026-10-24T09:00:00Z", by="kernels")]})
     with pytest.raises(SystemExit, match="labelled `challenger-pins head` by infra: pass --pins"):
         LA.newest_pins(tmp_path)
 
 
-def test_manifest_check_hands_pins_and_main_to_dither_manifest(LA, monkeypatch, tmp_path):
+def test_manifest_check_hands_pins_and_main_to_dither_manifest(LA: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+                                                               tmp_path: Path) -> None:
     got = {}
 
-    def check(*args):
+    def check(*args) -> dict:
         got["args"] = args
         return {"ok": True}
 
@@ -95,10 +98,11 @@ def test_manifest_check_hands_pins_and_main_to_dither_manifest(LA, monkeypatch, 
     assert got["args"] == (p["manifest"], p["session"], [str(p["ledger"])], PINS, MAIN, "key", "p1", b"r" * 64)
 
 
-def test_dither_manifest_check_hands_pins_and_main_to_coins_check(monkeypatch, tmp_path):
+def test_dither_manifest_check_hands_pins_and_main_to_coins_check(monkeypatch: pytest.MonkeyPatch,
+                                                                  tmp_path: Path) -> None:
     got = {}
 
-    def check(*args):
+    def check(*args) -> dict:
         got["args"] = args
         return {"ok": True}
 

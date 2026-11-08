@@ -7,15 +7,18 @@ Definition at the same bindings.
     AllReduceResidualMnnvlAt_v2{WORLD,N,C,AT,SHOT}        (parts: Array<WORLD, Array<C, BF16>>, res: Array<N, BF16>) -> Array<C, BF16>
     AllReduceMultimemRow_v2{WORLD,N,ROWS,ROW,TREES,FTZ}   (parts: Array<WORLD, Array<N, BF16>>) -> Array<N, BF16>
     AllReduceCustomRow_v2{WORLD,N,ROWS,ROW,STAGE}         (parts: Array<WORLD, Array<N, BF16>>) -> Array<N, BF16>
+    RowChunks_v2{N,C}                                     (x: Array<N, BF16>) -> Tuple<Array<C, BF16>, ...>   (no gate)
 """
 from __future__ import annotations
 
 from verity.ml.definitions.boolean import sigma_lift
 from verity.ml.definitions.registry import tp_combine as TC
 
-__all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvlAt", "AllReduceResidualMnnvlCoordinate"]
+__all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvlAt", "AllReduceResidualMnnvlCoordinate",
+           "RowChunks"]
 
 AllReduceResidualMnnvlCoordinate = sigma_lift(TC.AllReduceResidualMnnvlCoordinate, 2)
 AllReduceResidualMnnvlAt = sigma_lift(TC.AllReduceResidualMnnvlAt, 2)
 AllReduceMultimemRow = sigma_lift(TC.AllReduceMultimemRow, 2)
 AllReduceCustomRow = sigma_lift(TC.AllReduceCustomRow, 2)
+RowChunks = sigma_lift(TC.RowChunks, 2)

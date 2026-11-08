@@ -491,7 +491,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
 }
 
 /// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
-/// the prover's tables after it each keep their own, never the other's; every other caller builds afresh.
+/// the prover's tables after it each keep their own, never the other's; every other caller builds its own ([`Stmt::drawn`]).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side { Fresh, Verifier, Prover }
 
@@ -504,7 +504,7 @@ fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, St
     let cache = match side {
         Side::Verifier if stmt_cache_on() => &VERIFIER_STMTS,
         Side::Prover if stmt_cache_on() => &PROVER_STMTS,
-        _ => return Stmt::new(st.c.clone(), n, id).map(Arc::new),
+        _ => return st.drawn(n, id).map(Arc::new),
     };
     STMT_LOOKUPS[(side == Side::Prover) as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     cache.drawn(st, n, id)
@@ -1096,7 +1096,16 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
                 if times {
                     eprintln!("WITNESS\t{}", Value::Object(parts));
                 }
-                return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
+                let s = t.elapsed().as_secs_f64();
+                // the slots and inputs the pack copied are freed beside the session, off its critical path (WITNESSFREE: how long)
+                flock_live::spawn(move || {
+                    let t = Instant::now();
+                    drop((host, hm, ins));
+                    if times {
+                        eprintln!("WITNESSFREE\t{}", json!({"s": t.elapsed().as_secs_f64()}));
+                    }
+                });
+                return (WitData::Dev(rows, packed, Vec::new()), s);
             }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             lap("units", &mut tl, &mut parts);
@@ -4802,7 +4811,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let Some(&(_, q)) = region_shared_columns(&st.regions).first() else {
             return json!({"case": name, "pass": true, "skipped": "no partial region: every region covers whole words"});
         };
-        let mut c = st.c.clone();
+        let mut c = (*st.c).clone();
         let r = c.ranges.iter().find(|r| q >= r.start() && q < r.start() + (r.count << r.slot_log)).cloned().expect("a slot holds the column");
         let Kind::Net(i) = r.kind else {
             return json!({"case": name, "pass": false, "why": format!("column {q} is in the mask slot")});
@@ -6865,7 +6874,7 @@ fn serve_queue(c: Composite, path: &str) {
         let mut g = state.lock().unwrap_or_else(PoisonError::into_inner);
         let (c0, stmts, last) = &mut *g;
         if last.as_ref().is_none_or(|(f, _)| *f != instances) {
-            let c = c0.as_ref().unwrap_or_else(|| &stmts[0].c);
+            let c: &Composite = c0.as_ref().unwrap_or_else(|| &stmts[0].c);
             let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
             if inst.has_rows() {
                 refuse(format!("{instances} holds rows: stage the verifier's own public file (public_only)"));
@@ -6882,8 +6891,11 @@ fn serve_queue(c: Composite, path: &str) {
         let st = match stmts.iter().find(|st| st.n == inst.n) {
             Some(st) => st.clone(),
             None => {
-                let c = c0.take().unwrap_or_else(|| stmts[0].c.clone());
-                let st = Arc::new(Stmt::new(c, inst.n, id.clone()).unwrap_or_else(|e| refuse(e)));
+                let st = match c0.take() {
+                    Some(c) => Stmt::new(c, inst.n, id.clone()),
+                    None => stmts[0].drawn(inst.n, id.clone()),
+                };
+                let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                 statement_checks(&st);
                 statement_built(&st, tb);
                 stmts.push(st.clone());
@@ -6947,7 +6959,7 @@ fn prove_stream(path: &str) {
                 c
             });
             if loaded.is_some() || last.get(&key).is_none_or(|(f, _)| *f != instances) {
-                let c = loaded.as_ref().unwrap_or_else(|| &stmts[&key][0].c);
+                let c: &Composite = loaded.as_ref().unwrap_or_else(|| &stmts[&key][0].c);
                 let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
                 check_public(c, &inst).unwrap_or_else(|e| refuse(e));
                 last.insert(key.clone(), (instances.clone(), Arc::new(inst)));
@@ -6957,14 +6969,14 @@ fn prove_stream(path: &str) {
             let st = match have.iter().find(|st| st.n == inst.n) {
                 Some(st) => st.clone(),
                 None => {
-                    let (c, id) = match loaded {
+                    let st = match loaded {
                         Some(c) => {
                             let id = identity(&c);
-                            (c, id)
+                            Stmt::new(c, inst.n, id)
                         }
-                        None => (have[0].c.clone(), have[0].identity.clone()),
+                        None => have[0].drawn(inst.n, have[0].identity.clone()),
                     };
-                    let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+                    let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                     statement_checks(&st);
                     if firewall_on(&st) {
                         refuse("--stream: no ZK server path (FC_FIREWALL=1)".into());

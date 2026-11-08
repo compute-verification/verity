@@ -64,6 +64,7 @@ untraced = [
     "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
+    "tests/test_ring_switch.py",
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",

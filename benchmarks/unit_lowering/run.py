@@ -151,8 +151,8 @@ def _netlist(f, lines: int) -> dict:
 
 def scan(path: Path) -> dict:
     """A circuit file's SHA-512, bytes, META's ``k_log`` (an instance's block, 2^k_log bits) and each ``CIRCUIT`` section's rows
-    and AND rows (`_netlist`); ``ands`` the unit section's, None for a templated file, whose unit is META's template and no
-    section."""
+    and AND rows (`_netlist`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
+    (``TEMPLATE n``, passed over here) and no ``CIRCUIT`` section."""
     with ThreadPoolExecutor(1) as pool:
         digest = pool.submit(_sha512, path)
         sections = {}
@@ -163,6 +163,10 @@ def scan(path: Path) -> dict:
                 raise ValueError(f"{path}: {tag[:80]!r} where META is")
             k_log = json.loads(meta).get("k_log")
             for line in f:
+                if line.startswith(b"TEMPLATE ") and not sections:
+                    for _ in islice(f, int(line.split()[1])):
+                        pass
+                    continue
                 tag, name, lines = line.split()
                 if tag != b"CIRCUIT":
                     raise ValueError(f"{path}: {line[:80]!r} where a CIRCUIT section starts")

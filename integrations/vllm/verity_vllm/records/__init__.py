@@ -28,6 +28,9 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `inference_blocks` -- the inference-block table's public statement (`verity-vllm/inference-blocks/v1`): its budgets, padded
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.
+* `logits_capture` -- what a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`): each
+  sampled request's logits rows, tokens and steps, as `pipeline.interior_rows.captured` reads a token select's span; its
+  `of` refuses an unknown field and `dump` writes it.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
