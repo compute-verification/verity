@@ -387,3 +387,69 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     blocks = P.mixed_population_program([(PAIR, 2), (TRIPLE, 1)] * Q)
     assert "R2-program" in _refused(lambda: stream.register_interiors(first, *_window_interior(blocks, reg.digest)))
     assert not P.in_order(blocks, WINDOW_QUERY, 3 * Q)
+
+
+def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64)) -> dict:
+    return {"templates": [{"template": P.template_id(t), "circuit": c} for t, c in zip(window, files)]}
+
+
+def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
+    """`template_circuits`: the auditor's params name each of the check's templates' circuit files by SHA-512, in the
+    check's order, as (template, circuit) pairs, for one template's check and a window's; none names no file; any other
+    form, and a list that isn't the check's templates once each in its order, is refused."""
+    ids = [P.template_id(t) for t in WINDOW]
+    assert S.template_circuits(_circuits(), WINDOW_QUERY) == ((ids[0], "ab" * 64), (ids[1], "cd" * 64))
+    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64),)
+    assert S.template_circuits(None, WINDOW_QUERY) == ()
+    entries = _circuits()["templates"]
+    for proofs, match in (({"templates": entries[::-1]}, "not the check's templates"),
+                          ({"templates": entries[:1]}, "not the check's templates"),
+                          ({"templates": [*entries, entries[0]]}, "not the check's templates"),
+                          ({"templates": [{**entries[0], "circuit": "AB" * 64}, entries[1]]}, "lowercase hex"),
+                          ({"templates": [{**entries[0], "circuit": "ab" * 64 + "\n"}, entries[1]]}, "lowercase hex"),
+                          ({"templates": [{**entries[0], "kind": "flat"}, entries[1]]}, "lowercase hex"),
+                          ({"templates": entries, "circuit": "ab" * 64}, "proofs are"), ({}, "proofs are")):
+        with pytest.raises(ValueError, match=match):
+            S.template_circuits(proofs, WINDOW_QUERY)
+    with pytest.raises(ValueError, match="a template query"):
+        S.template_circuits(_circuits(), {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}})
+
+
+def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
+    """The auditor's params reach the run of record under the interior's params, where the Lean verifier reads them
+    (`Run.templateCircuits`): an outcome naming each template's file accepts, its run carrying them; a run whose params
+    the Lean refuses fails `run`; params `template_circuits` refuses are refused before anything is decided, and a
+    one-stage stream takes none."""
+    runs, lean = [], V.lean
+    tampered = {"templates": _circuits()["templates"][::-1]}
+
+    def spy(piece, args, tamper=False):
+        if piece == "run":
+            runs.append(args)
+            if tamper:
+                args["interior"]["params"]["proofs"] = tampered
+        return lean(piece, args)
+
+    for tamper in (False, True):
+        monkeypatch.setattr(V, "lean", lambda piece, args, tamper=tamper: spy(piece, args, tamper))
+        stream = _window_stream()
+        boundary = P.population_program(MIXED, N)
+        reg = stream.register(_record(boundary, MIXED_GRAIN, BOUNDARY, N, {"law": "subset", "k": Q},
+                                      {"kind": "served", "run": RUN, "row": 0}, None),
+                              _ports(boundary, MIXED_GRAIN, BOUNDARY, N))
+        ireg = stream.register_interiors(stream.select(reg), *_window_interior(stream.interior_program(Q), reg.digest))
+        second = stream.select(ireg)
+        assert stream.deliver(second, [SESSION]) is None
+        assert _refused(lambda: stream.outcome(second, _lean(), {"statement": "stub"}, proofs=tampered)) == ("proofs",)
+        assert _refused(lambda: stream.outcome(second, _lean(), {"statement": "stub"}, proofs={})) == ("proofs",)
+        assert not runs
+        out = stream.outcome(second, _lean(), {"statement": "stub"},
+                             session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, proofs=_circuits())
+        assert runs.pop()["interior"]["params"]["proofs"] == (tampered if tamper else _circuits()) and not runs
+        assert out.accepted is not tamper and ("run" in stream.records[0]["audit"]["checks"]) is tamper
+    stream = FC.Stream(S.Spec(VALUES[:2], S.Law("subset:2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
+                                                                      proof_deadline=60.0), PUBLIC, b"two-stage-test"),
+                       BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
+    draw = stream.select(stream.register(*_boundary()))
+    stream.deliver(draw, [SESSION])
+    assert _refused(lambda: stream.outcome(draw, _lean(), {"statement": "stub"}, proofs=_circuits())) == ("proofs",)

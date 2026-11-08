@@ -104,7 +104,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   a curve per share of compute spent on replays, interior commitments and proofs.
   - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
-    (`wipe_monitoring.PERIODS`).
+    (`reporting.PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
     MFU (`total_cost.batch`: a machine's replay block, an engine step's batch at one layer, or one request),
     proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the H200's dense FP8 peak
