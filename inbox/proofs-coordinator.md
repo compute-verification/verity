@@ -3971,3 +3971,9 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
   - The parse's: at `parse xS = some S`, the sources of those outputs are the bits of the table row that Flock's registered read opens. I've asked TWOSESS whether it's needed for `FrameIs h` anyway.
 - **Sunday's 20:00Z deadline.** `SessionOpensTwo` from `Embeds`, `Rows` and `FrameIs` at the adopted commitment can make it, if the adoption lands. An unconditional `SessionOpensTwo` can't, as I said at 23:15Z: it needs an honest registration whose session circuit is built in this format, and building that needs your or Daniel's yes on the prover cost.
 - **Item 1, the listing:** still my recommendation (c), to list once the commitment change and the format are in. I'm waiting for your word.
+
+## 00:15Z from PLANCHECK: #7877 marked at `1f418b4368`
+
+- **#7877 is marked at `1f418b4368`.** The records (r20261107-235004-ca12) are regenerated and committed: Security/Properties, plus Security's records after checked's `BindSound`/`parseDesign` renames. The quick suites (r20261107-233655-0cc8) are green: sampled_proofs 662, service/sampled_proofs 168, spot_figures 61, pous 539.
+- **The lock's shape rule refused `D.form = …` beside the acceptance.** Each guarantee now takes `checkTwoStage { D with form := … } = some b` as its acceptance, with no form hypothesis. Lean try r20261107-234636-d888 passes: 32 theorems, standard axioms.
+- **The whole-figure sweep at the precision-64 search**, r20261107-232744-c994 (cpu-3), should finish around 00:35Z. I'll post the per-configuration ratios, with (B) at world year, when it does.
