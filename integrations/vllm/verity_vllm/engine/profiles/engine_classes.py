@@ -10,7 +10,8 @@ request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its 
 past INDEX_TOPK (2,048) keys compiles, its top-k computed from its logits in the Program and its rows read in ascending index
 order, the canonical row an engine under `DSA_TOPK_ENV` serves, so the served `max_model_len` reaches the class's 131,072.
 `verity_vllm.LLM(engine_class="G")` serves it at `CLASS_G_SERVED`, the limits within which every launch is written, and
-up to its 256 sequences a step, with `options`, the prefix cache off; its admission (`engine.class_admission`) refuses as it serves
+up to its 256 sequences a step, with `options`, the prefix cache off, under `DSA_TOPK_ENV`, which its build sets over the process's
+(`env`) and a built engine that doesn't carry is refused (`effective_refusals`); its admission (`engine.class_admission`) refuses as it serves
 a prompt over the served `max_model_len`, and a request in flight when a Commit window closes, since the served Commit doesn't
 commit the window's edge ports (`workload.Edge`), which a carried request's history reads.
 """
@@ -44,6 +45,8 @@ DSA_TOPK_ENV = {"VERITY_DSA_TOPK": "canonical"}
 CLASSES: dict[str, tuple[dict[str, Any], dict[str, int], dict[str, int], str]] = {
     "G": (CLASS_G, CLASS_G_LIMITS, CLASS_G_SERVED, CLASS_G_MOE_BACKEND)}
 EXECUTIONS: dict[str, dict[str, str | None]] = {"G": CLASS_G_EXECUTIONS}
+#: the environment each class's engine is built under, over whatever the process inherited (`engine.build.build_engine`'s ``env``)
+ENVS: dict[str, dict[str, str]] = {"G": DSA_TOPK_ENV}
 
 
 def of(name: str) -> tuple[dict[str, Any], dict[str, int], dict[str, int], str]:
@@ -76,6 +79,13 @@ def options(name: str, execution: str | None = None) -> dict[str, Any]:
     return out
 
 
+def env(name: str) -> dict[str, str]:
+    """The environment class ``name``'s engine is built under (`ENVS`): its build sets it over the process's, so a served row past
+    INDEX_TOPK is the canonical one its registration reads."""
+    of(name)
+    return dict(ENVS[name])
+
+
 def prompt_limit(name: str) -> int:
     """The longest prompt a served window of class ``name`` admits: its served ``max_model_len`` (a longer prompt has no position
     for its first output), prefilled in chunks of at most its long-prefill threshold."""
@@ -87,9 +97,10 @@ def max_num_seqs(name: str) -> int:
     return of(name)[1]["max_num_seqs"]
 
 
-def effective_refusals(name: str, effective: dict[str, Any]) -> list[str]:
-    """What of class ``name``'s world, served limits and prefix cache the built engine doesn't run at, read back from its vLLM
-    config (``effective``, `build.effective_execution_doc`); empty when it runs at all of them."""
+def effective_refusals(name: str, effective: dict[str, Any], env_flags: dict[str, str]) -> list[str]:
+    """What of class ``name``'s world, served limits, prefix cache and environment the built engine doesn't run at, read back from
+    its vLLM config (``effective``, `build.effective_execution_doc`) and the environment its build set (``env_flags``); empty when
+    it runs at all of them."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     facts, _, served, _ = of(name)
     want = {"tensor_parallel_size": facts["world"], **served, "enable_prefix_caching": False}
@@ -97,7 +108,8 @@ def effective_refusals(name: str, effective: dict[str, Any]) -> list[str]:
         c = TargetProfile.COMPILATIONS[compilation(name, "compiled")]
         want.update(breakable_cudagraph=True, capture_sizes=list(c["capture_sizes"]))
     return [f"the built engine's {k} is {effective.get(k)!r}, not the class's {v!r}" for k, v in want.items()
-            if effective.get(k) != v]
+            if effective.get(k) != v] + [f"the built engine's environment sets {k}={env_flags.get(k)!r}, not the class's {v!r}"
+                                         for k, v in env(name).items() if env_flags.get(k) != v]
 
 
 def check_model(name: str, model: str, revision: str) -> None:
@@ -110,5 +122,5 @@ def check_model(name: str, model: str, revision: str) -> None:
         raise Refused(f"{model}@{revision} is a {got!r} checkpoint, not the class's {want!r}", what=f"engine class {name}")
 
 
-__all__ = ["CLASSES", "CLASS_G", "CLASS_G_EXECUTIONS", "CLASS_G_LIMITS", "CLASS_G_MOE_BACKEND", "CLASS_G_SERVED", "DSA_TOPK_ENV", "EXECUTIONS",
-           "check_model", "compilation", "effective_refusals", "max_num_seqs", "of", "options", "prompt_limit"]
+__all__ = ["CLASSES", "CLASS_G", "CLASS_G_EXECUTIONS", "CLASS_G_LIMITS", "CLASS_G_MOE_BACKEND", "CLASS_G_SERVED", "DSA_TOPK_ENV", "ENVS",
+           "EXECUTIONS", "check_model", "compilation", "effective_refusals", "env", "max_num_seqs", "of", "options", "prompt_limit"]
