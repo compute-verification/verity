@@ -6,7 +6,7 @@ tree on sys.path ahead of the tree of record -- and require the precheck to fail
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh with a foreign $VERITY_TREE).
 
 Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from the root, `verity_vllm` from integrations/vllm,
-`research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
+`research` from tools/research/src where the tree holds it (the public tree doesn't).  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
 `.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
 of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import shutil
 import subprocess
 import sys
@@ -23,17 +24,16 @@ from pathlib import Path
 
 import pytest
 
-from research import pythonpath as rpp
 from verity_vllm import config as vconfig, settings as vsettings
 from verity_vllm.pipeline import cli as vcli
-from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
 from verity_vllm.pipeline import source_tree as gsid
 
 INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/integrations/vllm
 REPO = INTEGRATION.parents[1]  # <repo>
 PY = sys.executable
-CORE_ENTRIES = [os.path.dirname(d) for d in research_tools.CORE_DIRS]   # each sys.path entry that ships core, relative to the repo root
+CORE_ENTRIES = gsid.package_entries(REPO, "verity")   # each sys.path entry that ships core, relative to the repo root
+CORE_DIRS = [posixpath.join(e, "verity") for e in CORE_ENTRIES]
 PP = os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES), str(REPO / "tools" / "research" / "src")])
 
 
@@ -61,9 +61,15 @@ def _other_tree(tmp_path: Path, name: str = "other", commit: str = "deadbeefdead
 
 def test_module_layout_is_verity():
     assert sid.TREE == REPO and sid.normalise_tree(None) == os.path.realpath(REPO)
-    assert set(sid.PACKAGES) == {"verity", "verity_vllm", "research"}
-    assert "vllm-poc" not in sid.PACKAGES and "telemetry" not in sid.PACKAGES
+    assert sid.packages(REPO) == ("verity", "verity_vllm", "research")
     assert all((REPO / m).exists() for m in sid.ROOT_MARKERS)
+
+
+def test_core_entries_agree_with_researchs_workspace_walk():
+    """The precheck's stdlib walk names the directories research's tools record as core's, so the record is unchanged."""
+    rpp = pytest.importorskip("research.pythonpath")
+    assert CORE_DIRS == rpp.package_dirs(REPO, "verity")
+    assert gsid.workspace_members(REPO) == rpp.import_roots_dir(REPO)["members"]
 
 
 @pytest.mark.parametrize("tree_arg", [None, "repo", "integration"])
@@ -81,7 +87,7 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
     doc = json.loads(out.read_text())
     assert doc["ok"] is True and doc["fail_class"] is None and doc["schema"] == gsid.SCHEMA
     assert doc["requested_root"] == os.path.realpath(REPO)
-    assert set(doc["packages"]) == set(sid.PACKAGES)
+    assert set(doc["packages"]) == set(sid.packages(REPO))
     for name in ("verity", "verity_vllm", "research"):
         p = doc["packages"][name]
         assert p["repo_root"] == os.path.realpath(REPO), name
@@ -173,14 +179,29 @@ def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "VERITY_TREE" in r.stderr, r.stderr
 
 
-def test_research_must_import_from_the_path_not_be_repaired(tmp_path):
-    """No sys.path hack for `research`: without tools/research/src on the path the import fails with a message naming the fix."""
-    r = subprocess.run([PY, "-c", "import verity_vllm.pipeline.source_identity"], cwd=INTEGRATION,
-                       env=_env(PYTHONPATH=os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])), capture_output=True, text=True)
-    if r.returncode == 0:
-        pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
-    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
+def test_research_must_resolve_from_the_tree_not_be_repaired(tmp_path):
+    """No sys.path hack for `research`: in a tree that holds tools/research/src, a `research` missing from the path, or found in
+    another tree, fails the precheck by name."""
+    t = _shipped_tree(tmp_path)
+    integ = t / "integrations" / "vllm"
+    pp = os.pathsep.join([str(integ), *(str(t / e) for e in CORE_ENTRIES)])
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ)], cwd=integ,
+                       env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
+    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "research:" in r.stderr, (r.stdout, r.stderr)
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
+
+
+def test_a_tree_without_research_checks_verity_and_the_integration_only(tmp_path):
+    """The public tree has no tools/research: its precheck passes on `verity` and `verity_vllm` alone."""
+    t = _shipped_tree(tmp_path)
+    shutil.rmtree(t / "tools" / "research")
+    integ = t / "integrations" / "vllm"
+    out = tmp_path / "sid.json"
+    pp = os.pathsep.join([str(integ), *(str(t / e) for e in CORE_ENTRIES)])
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
+                       env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert set(json.loads(out.read_text())["packages"]) == {"verity", "verity_vllm"}
 
 
 def _from_harness_tool(rec: dict) -> bool:
@@ -238,19 +259,18 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
 def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers and the workspace declaration (every member's
     pyproject.toml), stub packages at Verity's locations, and the REAL source_tree and source_identity modules (with the verity_vllm.config
-    it locates the tree through and the typed records that reads, the research.pythonpath that names core's directories, and the CLI with the
-    settings it reads) so the precheck under test runs from the shipped tree itself."""
+    it locates the tree through and the typed records that reads, and the CLI with the settings it reads) so the precheck under test
+    runs from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
-    for rel in (*research_tools.CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
+    for rel in (*CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
                 "tools/research/src/research"):
         (t / rel).mkdir(parents=True)
         (t / rel / "__init__.py").write_text("")
-    for member in ["", *rpp.import_roots_dir(REPO)["members"]]:
+    for member in ["", *gsid.workspace_members(REPO)]:
         (t / member).mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / member / "pyproject.toml", t / member / "pyproject.toml")
     (t / "uv.lock").write_text("")
     shutil.copy(gsid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_tree.py")
-    shutil.copy(rpp.__file__, t / "tools" / "research" / "src" / "research" / "pythonpath.py")
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
     shutil.copy(vcli.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
@@ -310,7 +330,7 @@ def test_a_shipped_tree_with_core_split_across_members_passes_and_a_foreign_port
     """Core as a namespace (PEP 420) that two members ship: the record expects and finds both members' entries, and a third portion
     from another tree is refused by name.  `-S` keeps this interpreter's own regular `verity` from shadowing the namespace."""
     t = _shipped_tree(tmp_path)
-    for d in research_tools.CORE_DIRS:
+    for d in CORE_DIRS:
         shutil.rmtree(t / d)
     (t / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["core/upper", "core/lower", "integrations/vllm", "tools/research"]\n')
     for member, module in (("core/upper", "ml"), ("core/lower", "ir")):

@@ -78,7 +78,6 @@ integrations/vllm/verity_vllm/pipeline/research_tools.py -> tools/research/src/r
 integrations/vllm/verity_vllm/pipeline/research_tools.py -> tools/research/src/research/store/tool.py
 integrations/vllm/verity_vllm/pipeline/serve_commit.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/pipeline/serve_protocol.py -> verity/core/protocols/certifier/__init__.py
-integrations/vllm/verity_vllm/pipeline/source_identity.py -> tools/research/src/research/pythonpath.py
 integrations/vllm/verity_vllm/pipeline/window_advice.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/pipeline/window_advice.py -> verity/core/protocols/certifier/advice.py
 integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/core/protocols/certifier/__init__.py

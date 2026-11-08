@@ -15,7 +15,7 @@ verity-vllm = "verity_vllm.pipeline.cli:main"
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
 torch = ["torch>=2.4"]
-# The team's run and store tool, which the custody, telemetry and store paths (`pipeline/research*.py`, `source_identity.py`)
+# The team's run and store tool, which the custody, telemetry and store paths (`pipeline/research*.py`)
 # and their tests use; the workspace installs it with every member.
 research = ["research"]
 

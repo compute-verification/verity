@@ -12,17 +12,21 @@ record.  For every package it is asked about, this module records
 plus `sys_path0` = sys.path[0] of the resolving interpreter, and `check(...)` compares every repo_root with the REQUESTED tree: a
 mismatch is `PRECHECK_FAIL_SOURCE_IDENTITY` (the failure class the classifier reads from the precheck record), raised BEFORE any inference.
 
-`source_identity` names the packages and root markers, and runs the precheck and its CLI on top of this module.
+`package_entries(root, name)` reads the tree's uv workspace for where it ships a package, so a package that moves or splits across
+members stays covered.  `source_identity` names the packages and root markers, and runs the precheck and its CLI on top of this module.
 """
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import importlib.machinery
 import importlib.util
 import json
 import os
+import posixpath
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -168,6 +172,60 @@ def resolve_file(name: str, candidates: Iterable[str], root_markers: Iterable[st
     rec.update(tree_identity(root))
     rec["file_sha256"] = _sha256_file(rp)
     return rec
+
+
+def _toml(path: Path) -> dict[str, Any]:
+    return tomllib.loads(path.read_text()) if path.is_file() else {}
+
+
+def _at(doc: Any, *keys: str) -> Any:
+    """doc[keys[0]][keys[1]]..., or None where a table on the way is absent (a pyproject's tables are all optional)."""
+    for k in keys:
+        doc = doc.get(k) if isinstance(doc, dict) else None
+    return doc
+
+
+def _wheel_packages(doc: dict[str, Any]) -> list[str]:
+    return list(_at(doc, "tool", "hatch", "build", "targets", "wheel", "packages") or ())
+
+
+def workspace_members(root: str | os.PathLike[str]) -> list[str]:
+    """The uv workspace's members, relative to `root`, in declaration order: `[tool.uv.workspace] members` (a `*` stays in one path
+    segment) less `exclude`."""
+    t = Path(root)
+    top = _toml(t / "pyproject.toml")
+    exclude = _at(top, "tool", "uv", "workspace", "exclude") or ()
+    members: list[str] = []
+    for pat in _at(top, "tool", "uv", "workspace", "members") or ():
+        hits = (sorted(p.relative_to(t).as_posix() for p in t.glob(pat) if p.is_dir()) if any(c in pat for c in "*?[")
+                else [pat.rstrip("/")])
+        members += [h for h in hits if h not in members and not any(fnmatch.fnmatchcase(h, e) for e in exclude)]
+    return members
+
+
+def package_entries(root: str | os.PathLike[str], name: str) -> list[str]:
+    """The sys.path entries, relative to `root` ("" is the root itself), that ship the top-level package `name` in the workspace at
+    `root`: the root's own package when the root is one, then each member's import root that holds `name`, in member order.  A
+    member's import root is the parent of each of its hatch wheel packages, else its `src/` when it has one, else the member."""
+    t = Path(root)
+    top = _toml(t / "pyproject.toml")
+    entries: list[str] = []
+    if "build-system" in top and _at(top, "tool", "uv", "package") is not False:
+        own = [posixpath.normpath(p.rstrip("/")) for p in _wheel_packages(top)]
+        entries += [""] if name in own else []
+        entries += [posixpath.dirname(p) for p in own if posixpath.dirname(p)]
+    for m in workspace_members(t):
+        doc = _toml(t / m / "pyproject.toml")
+        if _at(doc, "tool", "uv", "package") is False:
+            continue
+        pkgs = _wheel_packages(doc)
+        entries += ([posixpath.normpath(posixpath.join(m, posixpath.dirname(p.rstrip("/")) or ".")) for p in pkgs] if pkgs
+                    else [posixpath.join(m, "src") if (t / m / "src").is_dir() else m])
+    out: list[str] = []
+    for e in entries:
+        if e not in out and (t / e / name).is_dir():
+            out.append(e)
+    return out
 
 
 def _same_tree(a: str | None, b: str | None) -> bool:

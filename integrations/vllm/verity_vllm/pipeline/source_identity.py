@@ -1,11 +1,11 @@
 """Verity source identity + precheck: the job runs the tree it names, and a mixed tree is refused by construction.
 
     verity-vllm source-identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
-        exit 0  every important package (verity, verity_vllm, research) resolves from ROOT
+        exit 0  every important package (verity, verity_vllm, and research in a tree that holds it) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
 The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `.`,
-`tools/research/src` and `integrations/vllm`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
+`integrations/vllm` and, outside the public tree, `tools/research/src`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
 module IS the tree that must run.  `--tree` accepts the repo root or the integration root (`integrations/vllm`, what row_pod.sh passes) and
 normalises to the repo root.  `VERITY_TREE`, when set, must name the same tree (either form) -- a caller that exports another tree is the
 mixed-tree case and is refused by name.  `--out` writes the manifest record (schema research-infra/source-identity/v1); the same record goes
@@ -19,9 +19,9 @@ In-process: `precheck(stage)` is called by the Commit (commit.main, before the e
 raises `source_tree.SourceIdentityError`, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY; where a package resolves from,
 and the record's schema, are `source_tree`'s.
 
-Import layout: `research.pythonpath`, which names the directories core ships from, must be importable as such -- on a pod row_pod.sh
-exports PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
-cannot be imported is a broken environment and is reported as one, not repaired silently (that repair is how mixed trees happen).
+On a pod row_pod.sh exports PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a
+package that resolves from elsewhere, or not at all, is a broken environment and is reported as one, not repaired silently (that
+repair is how mixed trees happen).
 """
 from __future__ import annotations
 
@@ -37,13 +37,6 @@ from verity_vllm.config import ROOT as INTEGRATION
 from verity_vllm.config import option
 from verity_vllm.pipeline import source_tree as _sid
 
-try:
-    from research.pythonpath import package_dirs as _package_dirs
-except ImportError as _e:  # pragma: no cover - environment defect, reported by name
-    raise ImportError("verity_vllm.pipeline.source_identity needs the `research` package of the tree of record on sys.path "
-                      "(PYTHONPATH must include <repo>/tools/research/src; verity-vllm row exports it); nothing is appended here on purpose: "
-                      f"{_e}") from _e
-
 INTEGRATION_REL = Path("integrations") / "vllm"
 # INTEGRATION is <repo>/integrations/vllm; the repo root is derived from the package location, never from env
 TREE = INTEGRATION.parent.parent
@@ -54,17 +47,22 @@ SourceIdentityError = _sid.SourceIdentityError
 tree_identity = _sid.tree_identity
 
 # package name -> (import name, the sys.path entries it must resolve from, relative to the repo root); core's are the requested tree's
-# workspace roots that ship it (research.pythonpath.package_dirs)
+# workspace roots that ship it (source_tree.package_entries)
 PACKAGE_ROOTS = {
     "verity_vllm": ("verity_vllm", ("integrations/vllm",)),
     "research": ("research", ("tools/research/src",)),                 # the runner/telemetry package of the tree of record
 }
-PACKAGES = ("verity", "verity_vllm", "research")
 ENV_SOURCE_SHA = "RESEARCH_SOURCE_SHA"
 
 
 def _is_repo_root(p: Path) -> bool:
     return all((p / m).exists() for m in ROOT_MARKERS)
+
+
+def packages(root: str | os.PathLike[str]) -> tuple[str, ...]:
+    """The packages the precheck resolves for the tree at `root`: `research` only where the tree holds its source (the public tree
+    has none)."""
+    return ("verity", "verity_vllm", *(("research",) if (Path(root) / PACKAGE_ROOTS["research"][1][0]).is_dir() else ()))
 
 
 def normalise_tree(tree: str | os.PathLike[str] | None) -> str:
@@ -122,17 +120,14 @@ def declared_sha(sha: str | None = None) -> tuple[str | None, str | None]:
 
 
 def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = None) -> dict[str, dict[str, Any]]:
-    """Identity of every package in PACKAGES as the CURRENT interpreter resolves it (sys.modules first, then find_spec on sys.path).
-    `sha` is the caller's explicit declaration (--sha); absent, $RESEARCH_SOURCE_SHA is the fallback."""
+    """Identity of every package in packages(root) as the CURRENT interpreter resolves it (sys.modules first, then find_spec on sys.path).
+    `sha` is the caller's explicit declaration (--sha); absent, $RESEARCH_SOURCE_SHA is the fallback.  Outside a workspace core has no
+    entry to expect, and the verdict is check()'s, on repo_root."""
     root = normalise_tree(tree)
-    try:
-        core = tuple(os.path.dirname(d) for d in _package_dirs(root, "verity"))
-    except LookupError:
-        core = ()                   # not a workspace: no entry to expect (the verdict is check()'s, on repo_root)
-    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.ml.circuits, verity.ml.circuits.silicon, verity_sp1.proofs
+    roots = {"verity": ("verity", tuple(_sid.package_entries(root, "verity"))), **PACKAGE_ROOTS}
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
-    for name in PACKAGES:
+    for name in packages(root):
         import_name, rels = roots[name]
         rec = _sid.resolve_module(import_name, ROOT_MARKERS)
         rec["package"] = name
