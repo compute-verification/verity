@@ -8,11 +8,12 @@ own opens for `WINDOW`, withheld (the verifier takes only a withheld session's c
 ends once the sample is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the sample after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
 coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
-verifier the sample's evidence (a two-stage sample's, both stages') and a two-stage sample's second-stage sessions'
-statements, an honest prover's (`statements`)."""
+verifier the sample's evidence (a two-stage sample's, both stages'), a two-stage sample's second-stage sessions'
+statements, an honest prover's (`statements`), and the auditor's params for them (`proofs`)."""
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import shutil
 import tempfile
@@ -89,7 +90,8 @@ class Stream(S.Stream):
     that reads no coins), driven as a deployment drives it: a registration names `WINDOW`'s root unless it names
     another, a sample's coins are committed to its registration's digest before it is sampled, and an outcome's run is
     given the sample's evidence unless the test gives its own (`coins`, None for none), and a two-stage one the honest
-    second-stage statements unless the test gives its own (`statements`, None for none)."""
+    second-stage statements and the auditor's params for them unless the test gives its own (`statements`, `proofs`,
+    None for none)."""
 
     _NONE: Any = object()
 
@@ -117,7 +119,8 @@ class Stream(S.Stream):
         return self.fake.evidence(registration.digest) if self.fake and after in self.fake.sessions else None
 
     def outcome(self, draw: S.Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
-                coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, **kwargs: Any) -> S.Outcome | S.Pending:
+                coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, proofs: Any = _NONE,
+                **kwargs: Any) -> S.Outcome | S.Pending:
         """A two-stage sample's evidence is both stages': the first stage's after the registration, the second's
         (`interior_coins`) after the interior registration."""
         first = draw.replay_sample or draw
@@ -127,7 +130,19 @@ class Stream(S.Stream):
             kwargs.setdefault("interior_coins", self._evidence(draw.registration))
         if statements is Stream._NONE:
             statements = None if draw.replay_sample is None else self.statements(draw)
-        return super().outcome(draw, verdicts, statement, coins=coins, statements=statements, **kwargs)
+        if proofs is Stream._NONE:
+            proofs = None if draw.replay_sample is None else self.proofs(draw)
+        return super().outcome(draw, verdicts, statement, coins=coins, statements=statements, proofs=proofs, **kwargs)
+
+    def proofs(self, second: S.Draw) -> dict[str, Any]:
+        """The auditor's params for the second-stage sessions (`service.template_circuits`), each template of the
+        interior program in the check's order: a stand-in for its circuit file's SHA-512, which nothing in this stream
+        reads, and the header of its reference statement, fixed before the run: the service's scheme, and none of the
+        run's fields (`second_stage.RUN_FIELDS`), which an honest statement's header is but for those."""
+        e = self._entries[second.registration.order]
+        return {"templates": [{"template": t, "circuit": hashlib.sha512(t.encode()).hexdigest(),
+                               "header": {"scheme": S.SCHEME, "units": {}, "frame_v3": {}}}
+                              for t, _ in P.strata(e.interior_program, self.spec.check.query)]}
 
     def statements(self, second: S.Draw) -> list[dict[str, Any]]:
         """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of

@@ -15,6 +15,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 * **Its checks**, each a code (`stmtCodes`, `stmtFailures`):
   - `second-statement`: it is not one;
   - `second-template`: its template is none of the parts', or an earlier statement's;
+  - `second-header`: its header is not the reference header the auditor's params give its template (`Own.refs`, the
+    registered reference statement's, fixed before the run), both with the run's fields blanked (`RUN_FIELDS`:
+    `instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`, which the next two checks hold to the
+    run), or the params give its template none;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
     count;
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
@@ -38,7 +42,8 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   `second-cover` for each part no statement is for (every part has one, drawn by the second draw or not), and
   `second-reported` when the `{value: root}` the verifiers of record report the sessions read (`Record.sessionRegistered`)
   is not the statements' (`statementReads`). A passing check (`check_ok`) holds the statements to the parts, one each
-  by position, every session's sample to the second draw, cell by cell, and every read it reports to a statement's.
+  by position, every header to its template's reference but for the run's fields (`check_ok_header`), every session's
+  sample to the second draw, cell by cell, and every read it reports to a statement's.
 * **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
   doesn't, no run passes (`check_refused`).
 -/
@@ -141,8 +146,9 @@ def linksOf? : Json → Option (Array Link)
 
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
-Definition makes none), and the `{value: root}` the verifiers of record report the sessions read
-(`Record.sessionRegistered`). -/
+Definition makes none), the `{value: root}` the verifiers of record report the sessions read
+(`Record.sessionRegistered`), and the reference header of each template's statement, as the auditor's params give
+it (`Run.templateCircuits`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -151,6 +157,7 @@ structure Own where
   drawn : Array Nat
   links : Option (Array Link) := some #[]
   reported : Option (Array (String × Json)) := none
+  refs : Array (String × Json) := #[]
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -270,6 +277,39 @@ def linksOk (ps : Array Part) : Option (Array Link) → Bool
 def linkOf (own : Own) (t port : String) : Option Link :=
   (own.links.getD #[]).find? fun l => l.template == t && l.port == port
 
+/-- **The run's fields** of a statement's header, each a path of keys: the only ones a header may differ from its
+template's reference in, which `second-population` and `second-roots` hold to the run instead. -/
+def RUN_FIELDS : List (List String) :=
+  [["instances"], ["units", "indices"], ["frame_v3", "roots"], ["frame_v3", "domain_ids"]]
+
+/-- Object `j` with key `k` set to `v`; anything else unchanged. -/
+def setKey (j : Json) (k : String) (v : Json) : Json :=
+  match j with
+  | .obj _ => j.setObjVal! k v
+  | _ => j
+
+/-- `j` with the field at key path `path` null where its parent is an object, each key before the last followed only
+to an object; anything else unchanged. -/
+def blankAt : Json → List String → Json
+  | j, [] => j
+  | j, [k] => setKey j k .null
+  | j, k :: ks => match field? j k with
+    | some (.obj kvs) => setKey j k (blankAt (.obj kvs) ks)
+    | _ => j
+
+/-- Header `h` with the run's fields (`RUN_FIELDS`) blanked, null. -/
+def blankRun (h : Json) : Json := RUN_FIELDS.foldl blankAt h
+
+/-- The reference header the auditor's params give template `t` (`Own.refs`). -/
+def refOf (own : Own) (t : String) : Option Json := (own.refs.find? (·.1 == t)).map (·.2)
+
+/-- Header `h` is template `t`'s reference header but for the run's fields: the two the same with those blanked
+(`blankRun`). False for a template the params give no reference. -/
+def headerOk (own : Own) (t : String) (h : Json) : Bool :=
+  match refOf own t with
+  | some r => jeq (blankRun h) (blankRun r)
+  | none => false
+
 /-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count. -/
 def populationOk (q : Nat) (p : Part) (h : Json) : Bool :=
   match getD (getD h "units") "indices", nat? (getD h "instances") with
@@ -348,7 +388,8 @@ def linkedRead (own : Own) (t : String) (reads : Array (String × Json)) : Bool 
 def stmtCodes (own : Own) (named : Bool) (p : Part) (s : Stmt) : List String :=
   let q := own.sample.size
   let reads := entries (getD s.registered "ports")
-  [("second-population", populationOk q p s.header),
+  [("second-header", headerOk own s.template s.header),
+   ("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
    ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads)].filterMap
@@ -562,15 +603,42 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         · assumption
         · simp at hrep
 
-/-- A passing statement's checks: its population, roots, sample and registered reads, every port a link names among
-them. -/
+/-- A passing statement's checks: its header, population, roots, sample and registered reads, every port a link names
+among them. -/
 theorem stmtCodes_nil {own : Own} {named : Bool} {p : Part} {s : Stmt} (h : stmtCodes own named p s = []) :
-    populationOk own.sample.size p s.header = true ∧
+    headerOk own s.template s.header = true ∧ populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
       linkedRead own p.template (entries (getD s.registered "ports")) = true := by
   simpa [stmtCodes, List.filterMap_eq_nil_iff] using h
+
+/-- **A passing `second-header`** names the reference header the auditor's params give template `t`, which header `h`
+is but for the run's fields. -/
+theorem headerOk_ref {own : Own} {t : String} {h : Json} (hh : headerOk own t h = true) :
+    ∃ r, (t, r) ∈ own.refs ∧ jeq (blankRun h) (blankRun r) = true := by
+  unfold headerOk refOf at hh
+  cases hf : own.refs.find? (·.1 == t) with
+  | none => rw [hf] at hh; simp at hh
+  | some e =>
+    rw [hf] at hh
+    obtain ⟨t', r⟩ := e
+    have ht : t' = t := by simpa using Array.find?_some hf
+    subst ht
+    exact ⟨r, Array.mem_of_find?_eq_some hf, hh⟩
+
+/-- **Every header is its template's reference** but for the run's fields (`RUN_FIELDS`): in a passing check, the
+`i`-th statement is for the template of the part at its position, and its header with those fields blanked is the
+reference header the auditor's params give that template, blanked the same (`second-header`). -/
+theorem check_ok_header {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+    ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s r, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
+      ps[i]?.map (·.template) = some s.template ∧ (s.template, r) ∈ own.refs ∧
+      jeq (blankRun s.header) (blankRun r) = true := by
+  obtain ⟨-, ps, hp, -, hst, -, -⟩ := check_ok h
+  refine ⟨ps, hp, fun i hi => ?_⟩
+  obtain ⟨s, p, hs, -, -, hi', hc⟩ := hst i hi
+  obtain ⟨r, hr, hj⟩ := headerOk_ref (stmtCodes_nil hc).1
+  exact ⟨s, r, hs, hi', hr, hj⟩
 
 private def exRoot (i : Nat) : String := String.ofList (List.replicate 128 (Char.ofNat (48 + i)))
 
@@ -579,10 +647,14 @@ private def exRec (population : Nat) (roots : List (String × Nat × Nat)) : Jso
     ("roots", Json.arr (roots.toArray.map fun (p, r, d) =>
       Json.mkObj [("port", p), ("root", exRoot r), ("domain", exRoot d), ("leaves", Lean.toJson population)]))]
 
+/-- `exStmt`'s reference header: its scheme, and none of the run's fields. -/
+private def exRef : Json :=
+  Json.mkObj [("scheme", "frame-v3-sha512/hm96-sha512"), ("units", Json.mkObj []), ("frame_v3", Json.mkObj [])]
+
 /-- A replay sample of blocks 1 and 3 of 4, three proof blocks of one template in each, units 2 and 4 drawn. -/
 private def exOwn : Own :=
   { sample := #[1, 3], parts := parts 2 #[("Pair_v0", #[(0, 6)])], interior := exRec 6 [("x", 1, 2), ("out", 3, 4)],
-    boundary := exRec 4 [("bx", 5, 6)], drawn := #[2, 4] }
+    boundary := exRec 4 [("bx", 5, 6)], drawn := #[2, 4], refs := #[("Pair_v0", exRef)] }
 
 private def exStmt (indices units : List Nat) : Json :=
   Json.mkObj [("template", "Pair_v0"), ("registered", .null),
@@ -603,6 +675,31 @@ private def exStmt (indices units : List Nat) : Json :=
 #guard (check true exOwn (some #[])).codes == #["second-cover"]
 #guard (check true exOwn none).codes == #["second-statements"]
 #guard (check true { exOwn with parts := parts 4 #[("Pair_v0", #[(0, 6)])] } none).codes == #["second-cells"]
+
+/-- `exStmt`'s honest statement, its header `f` of the honest one. -/
+private def exHeader (f : Json → Json) : Json :=
+  let s := exStmt [0, 1, 2, 3, 4, 5] [2, 4]
+  s.setObjVal! "header" (f (getD s "header"))
+
+/-- Header `h` with its object `k`'s field `f` set to `v`. -/
+private def exIn (k f : String) (v : Json) (h : Json) : Json := h.setObjVal! k ((getD h k).setObjVal! f v)
+
+/-- Round 2's codes, the form allowed, for `exHeader f` alone. -/
+private def exCodes (own : Own) (f : Json → Json) : Array String := (check true own (some #[exHeader f])).codes
+
+#guard (exCodes exOwn id).isEmpty
+#guard (exCodes { exOwn with refs := #[("Pair_v0", getD (exHeader id) "header")] } id).isEmpty
+#guard exCodes exOwn (·.setObjVal! "set" (.str "served/other/m0")) == #["second-header"]
+#guard exCodes exOwn (exIn "units" "blocks" (natsJson #[0])) == #["second-header"]
+#guard exCodes exOwn (exIn "frame_v3" "owner" (.str "other")) == #["second-header"]
+#guard exCodes exOwn (·.setObjVal! "scheme" (.str "frame-v3-sha512/other")) == #["second-header", "second-roots"]
+#guard exCodes exOwn (·.setObjVal! "instances" (Lean.toJson (7 : Nat))) == #["second-population"]
+#guard exCodes exOwn (exIn "units" "indices" (natsJson #[1, 2, 3, 4, 5, 6])) == #["second-population"]
+#guard exCodes exOwn (exIn "frame_v3" "roots" (Json.mkObj [("x", exRoot 1), ("out", exRoot 5)])) == #["second-roots"]
+#guard exCodes exOwn (exIn "frame_v3" "domain_ids" (Json.mkObj [("x", exRoot 2)])) == #["second-roots"]
+#guard exCodes { exOwn with refs := #[] } id == #["second-header"]
+#guard exCodes { exOwn with refs := #[("Other_v0", exRef)] } id == #["second-header"]
+#guard (check false { exOwn with refs := #[] } (some #[exHeader id])).codes == #["second-header"]
 
 /-- Port `x`'s statement reading `value`'s tree of `leaves` leaves at root `root`, domain `dom`, slot `k` its `reads[k]`. -/
 private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat) : Json :=

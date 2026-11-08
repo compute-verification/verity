@@ -11,6 +11,11 @@ an instance of (its stratum's name under the check's query), its public file's h
 The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
 difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
 
+Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
+``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run: the two
+the same with the run's fields blanked (`blank_run`, `RUN_FIELDS`), which ``second-population`` and ``second-roots``
+hold to the run instead (``second-header``).
+
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
 
@@ -39,6 +44,9 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
              "interior's parts, each called once and reading one parameter alone, returned alone, or returned whole as "
              "one field each")
 STMT_KEYS = ["draw", "header", "registered", "template"]
+#: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
+#: reference in, which ``second-population`` and ``second-roots`` hold to the run instead (`SecondStage.RUN_FIELDS`).
+RUN_FIELDS = (("instances",), ("units", "indices"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"))
 
 
 @dataclass(frozen=True)
@@ -79,8 +87,9 @@ class Link:
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
-    Definition makes none), and the ``{value: root}`` the verifiers of record report the sessions read
-    (`audit.session_registered`)."""
+    Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
+    (`audit.session_registered`), and the reference header of each template's statement, ``(template, header)``, as
+    the auditor's params give it (`service.template_circuits`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -89,6 +98,7 @@ class Own:
     drawn: tuple[int, ...]
     links: tuple[Link, ...] | None = ()
     reported: Mapping[str, Any] | None = None
+    refs: tuple[tuple[str, Any], ...] = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -291,6 +301,32 @@ def _link_of(own: Own, t: str, port: str) -> Link | None:
     return next((x for x in own.links or () if x.template == t and x.port == port), None)
 
 
+def _blank_at(j: Any, path: Sequence[str]) -> Any:
+    """`SecondStage.blankAt`: `j` with the field at key path `path` None where its parent is an object, each key before
+    the last followed only to an object; anything else unchanged."""
+    if not path or not isinstance(j, dict):
+        return j
+    k, rest = path[0], path[1:]
+    if not rest:
+        return {**j, k: None}
+    x = j.get(k)
+    return {**j, k: _blank_at(x, rest)} if isinstance(x, dict) else j
+
+
+def blank_run(h: Any) -> Any:
+    """`SecondStage.blankRun`: header `h` with the run's fields (`RUN_FIELDS`) blanked, None."""
+    for path in RUN_FIELDS:
+        h = _blank_at(h, path)
+    return h
+
+
+def _header_ok(own: Own, t: str, h: Any) -> bool:
+    """`SecondStage.headerOk`: header `h` is template `t`'s reference header (`Own.refs`) but for the run's fields, the
+    two the same with those blanked; False for a template the params give no reference."""
+    ref = next(((r,) for x, r in own.refs if x == t), None)
+    return ref is not None and _jeq(blank_run(h), blank_run(ref[0]))
+
+
 def _population_ok(q: int, p: Part, h: Any) -> bool:
     indices, m = _get(_get(h, "units"), "indices"), _get(h, "instances")
     return (isinstance(indices, list) and _nat(m) and m == q * p.n and len(indices) == q * p.n
@@ -382,7 +418,8 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
 
 def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
-    checks = (("second-population", _population_ok(q, p, s.header)),
+    checks = (("second-header", _header_ok(own, s.template, s.header)),
+              ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)

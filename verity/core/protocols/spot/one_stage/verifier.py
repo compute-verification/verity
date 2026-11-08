@@ -389,8 +389,9 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     when it has one), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
     (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
-    and `proofs`, the auditor's params naming each template's circuit file (`service.template_circuits`'s form, under
-    the interior's params; None names none); the Lean derives the design's links from the replay block's Definition.
+    and `proofs`, the auditor's params naming each template's circuit file and reference header
+    (`service.template_circuits`'s form, under the interior's params; None names none); the Lean derives the design's
+    links from the replay block's Definition.
     `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record with round 2's
     `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
