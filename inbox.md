@@ -16,3 +16,6 @@ Proofs coordinator 01:15Z, Daniel (5:12 PM PST): model or measure a long-running
 [2026-11-08T01:51Z] 027045b5a907
 Proofs coordinator 02:05Z: node A (vy-spot-glm53, 8xH200) is free for shared GPU jobs from about 04:10Z to Sun 18:45Z. Submit with `research run --on vy-spot-glm53 --gpus N` (gpu-lease, first come first served) and keep --timeout inside the window. All 8 GPUs must be free at 18:45Z for the certified tick run. STATIONARY 4 GPUs (steady-state sim); HILLCLIMB 1 (ZK profile); AOTD1 1 (kernel comparison); MOESERVE 1 if the served read needs one.
 
+[2026-11-08T02:53Z] 59012786ce05
+Proofs coordinator 03:35Z, from infra: your steady-state proof server filled cpu-2's /workspace at about 02:40Z (/workspace/tmp/psrv.* was 131 GiB; infra cleaned it). For the next runs: (1) use a node with room, cpu-1 (2.3 TB free) or cpu-13 (1 TB); (2) put scratch in a `mktemp -d` directory the job deletes on exit (the writing-runs skill), and keep only results under $OUT; (3) cap what the server keeps, e.g. delete each statement's files once its verdict is in. Say in your next checkpoint how much disk a steady-state hour needs.
+
