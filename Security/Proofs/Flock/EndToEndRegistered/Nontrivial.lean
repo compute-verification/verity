@@ -8,6 +8,8 @@ public import Flock.HmRow
 public import Flock.Public
 public import Flock.Registered
 public import Proofs.Flock.EndToEndRegistered.Inputs
+public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.SessionLoop.Concrete.Public
 public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Soundness.Binding.RowSeg
@@ -15,7 +17,6 @@ public import Proofs.Flock.Soundness.Binding.RowsX
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Recursive.FirewallJson
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.SessionLoop.Concrete.Inputs
 import Proofs.Flock.Soundness.Refine.Walk
@@ -138,7 +139,7 @@ def circW : Flock.Circuit := { (default : Flock.Circuit) with ports := #[{ name 
 def q0 : Fin circW.ports.size := ⟨0, by decide⟩
 
 /-- Each sampled unit's ports and one other position; one value, the empty row, under a constant registered leaf. -/
-abbrev lay0 : Layout part0 plan0 tab0 decode0 where
+abbrev lay0 : FlockSoundness.Binding.Layout part0 plan0 tab0 decode0 where
   Pos := (Fin 1 × Fin circW.ports.size) ⊕ Unit
   inhPos := ⟨Sum.inr ()⟩
   Val := Unit
@@ -223,7 +224,31 @@ def pubW : Flock.Public :=
 
 def drawU : Flock.Draw.UnitDraw := { law := .subset 1, population := 1, units := #[0] }
 
-theorem plain_recW : Flock.Firewall.plain recW = true := by kernel_rfl
+theorem drawW_obj : drawW = .obj ⟨⟨FlockDeploy.Concrete.objT drawW⟩⟩ := by kernel_rfl
+
+theorem drawW_model : (FlockDeploy.Concrete.objT drawW).toListModel =
+    [⟨"k", jn 1⟩, ⟨"law", .str "subset"⟩, ⟨"population", jn 1⟩, ⟨"units", .arr #[jn 0]⟩] := by kernel_rfl
+
+theorem drawW_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT drawW) = true := by kernel_rfl
+
+/-- `plainStr` reads its strings through `String.all`, which the kernel doesn't evaluate, so `simp` decides them. -/
+theorem plain_drawW : Flock.Firewall.plain drawW = true := by
+  rw [drawW_obj]
+  refine FlockDeploy.Concrete.plain_obj_of drawW_model drawW_asc ?_
+  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
+  simp [Flock.Firewall.plain, Flock.Firewall.plainList, Flock.Firewall.plainStr, String.all_bool_eq, jn]
+
+theorem recW_obj : recW = .obj ⟨⟨FlockDeploy.Concrete.objT recW⟩⟩ := by kernel_rfl
+
+theorem recW_model : (FlockDeploy.Concrete.objT recW).toListModel = [⟨"unit_draw", drawW⟩] := by kernel_rfl
+
+theorem recW_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT recW) = true := by kernel_rfl
+
+theorem plain_recW : Flock.Firewall.plain recW = true := by
+  rw [recW_obj]
+  refine FlockDeploy.Concrete.plain_obj_of recW_model recW_asc ?_
+  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq]
+  exact ⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], plain_drawW⟩
 
 theorem norm_recW : Recursion.FirewallJson.norm recW = recW := by kernel_rfl
 
@@ -235,6 +260,7 @@ theorem recordDraw_tr0 : recordDraw tr0.record = some drawW := by
 
 theorem ofJson_drawW : Flock.Draw.UnitDraw.ofJson drawW = .ok drawU := by kernel_rfl
 
+set_option maxHeartbeats 0 in -- the walk steps through `HmRow.drawn` and leaves closed checks to the kernel
 fwd_def drawnPub drawn_pubW : Flock.HmOut.drawn circW pubW drawW by
   [FlockDeploy.Concrete.canonUtf8_eq]
   block [Flock.canonUtf8, Flock.Sha512.hash]
@@ -255,7 +281,7 @@ theorem ownReads0 : OwnReadsHJ ins own0 circW pubW tr0 rd0.isRead rd0.port rd0.r
   subst hp
   refine ⟨0, q0, drawW, drawU, drawnPub, #[0], rfl, by simp [own0, rd0], by kernel_rfl, recordDraw_tr0,
     by rw [drawJ_one ins_count]; exact ofJson_drawW, by rw [drawJ_one ins_count]; exact drawn_pubW,
-    unitIndices_drawnPub, by decide, by kernel_rfl⟩
+    unitIndices_drawnPub, by decide +kernel, by kernel_rfl⟩
 
 /-- **The read is not `Checked`**: the public file names no path to `portW`'s root, and an empty path is no path through
 a tree of two leaves. -/
@@ -265,7 +291,7 @@ theorem notChecked0 : ¬ rd0.Checked () (regPathsHJ ins circW pubW tr0 rd0.port)
   rw [regPaths0] at h1
   simp only [Flock.Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at h1
   have h2 : ByteArray.empty.size = 64 * Flock.log2ceil 2 := h1.1.2
-  have h3 : Flock.log2ceil 2 = Nat.log2 1 + 1 := rfl
+  have h3 : Flock.log2ceil 2 = 1 := rfl
   have h4 : ByteArray.empty.size = 0 := rfl
   omega
 
