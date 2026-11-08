@@ -185,7 +185,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, the same 159 blocks in
+    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, the same 159 ranges in
     their order (`interface.ordered`), 88 registered reads (87 of the weights, one of the scan state), root reads,
     openings and 59 inference entries, the 8 Programs 4 times the units.
     The scan's wires are a lane's outputs (lane-major, so a lane's slots follow on), each output named for its lane: its

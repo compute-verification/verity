@@ -178,7 +178,7 @@ def cmp92(servers: int) -> I.Circuit:
     of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
     own weights. That split puts every inference block (slot, step) on both servers, the form network certification forbids: it is the
     negative of network certification's check (`test_cmp92s_split_across_two_servers_is_refused`). Its templates read one
-    another, so it states an order, a block each inference entry's step (`ordered`)."""
+    another, so it states an order, a range each inference entry's step (`ordered`)."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
     pos, layer = T * H, 8 * H * H

@@ -195,5 +195,5 @@ def test_a_wire_closing_a_cycle_is_refused_and_the_tp_windows_wires_have_none(to
     I.check_wires(lays, c.wires, c.cuts, honest)
     with pytest.raises(ValueError, match=f"order: wire {len(wires) - 1} "):
         I.check_wires(lays, wires, c.cuts, honest)
-    with pytest.raises(ValueError, match="cycle: no order of the blocks"):
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
         I.ordered(c.units, wires, {t: range(n) for t, n in c.units.items()})

@@ -28,7 +28,7 @@ port's outer length and words), then wire by wire `template` (its reader or writ
 input of the reader, or `out` no output of the writer), `cut` (its rows are not among the port's, or the last digit isn't
 `cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words are not the writer row's), `bounds` (a reader unit or a writer outside its
 template), then `overlap` (some reader row wired twice), then the order (the section of that name): `order` (the circuit's
-order names no template, or its blocks of a template don't tile the template's units; or, naming it, the first wire the
+order names no template, or its ranges of a template don't tile the template's units; or, naming it, the first wire the
 order doesn't put after its writers) or, with no order stated, `cycle` (the templates' wires have a cycle; naming a wire
 on it).
 -/
@@ -72,7 +72,7 @@ structure Wire where
   deriving Repr, BEq
 
 /-- A window circuit's wiring, the dataflow between its proof blocks: the templates by descriptor id, the cuts
-(`{tid: {port: k}}`), the wires, and the order of its units' blocks when it states one (`Block`). -/
+(`{tid: {port: k}}`), the wires, and the order of its units' ranges when it states one (`UnitRange`). -/
 structure Wiring where
   templates : List (String × Template)
   cuts : List (String × List (String × Nat))
@@ -221,30 +221,30 @@ def rowWords (c : Wiring) (w : Wire) : Nat :=
 
 A unit's check holds its output to its inputs, so wires with a cycle among units pass every unit's check on a fixed point
 the prover chose: the wires must be acyclic as a graph on units, every reader unit after its writers. An order ranks
-blocks of units: each entry `(tid, at, n)` is template `tid`'s units `[at, at + n)`, its rank its place in the order, and
-each template's blocks tile its units (`orderOk`), in any order of ranks. A wire is in order when, for every block meeting
-its reader units, every block meeting the bounds on the writers it reads there (`Wire.box` of the block's reader indices)
+ranges of units: each entry `(tid, at, n)` is template `tid`'s units `[at, at + n)`, its rank its place in the order, and
+each template's ranges tile its units (`orderOk`), in any order of ranks. A wire is in order when, for every range meeting
+its reader units, every range meeting the bounds on the writers it reads there (`Wire.box` of the range's reader indices)
 ranks below it (`orderedWire`): every unit a reader unit reads then ranks below it (`check_acyclic`). The order is the
-circuit's own when it states one, else each template one block, in a topological order of the templates by their wires
+circuit's own when it states one, else each template one range, in a topological order of the templates by their wires
 (`kahn`). -/
 
-/-- A block of an order: template `tid`'s units `[at, at + n)`. -/
-abbrev Block := String × Nat × Nat
+/-- A range of an order: template `tid`'s units `[at, at + n)`. -/
+abbrev UnitRange := String × Nat × Nat
 
-/-- The ranks of the order's blocks of template `t` that meet units `[lo, hi)`. -/
-def ranksIn (o : List Block) (t : String) (lo hi : Nat) : List Nat :=
+/-- The ranks of the order's ranges of template `t` that meet units `[lo, hi)`. -/
+def ranksIn (o : List UnitRange) (t : String) (lo hi : Nat) : List Nat :=
   (o.zipIdx.filter fun ((s, p0, n), _) => s == t && decide (max p0 lo < min (p0 + n) hi)).map (·.2)
 
-/-- The rank of the first block holding template `t`'s unit `u`. -/
-def blockOf (o : List Block) (t : String) (u : Nat) : Option Nat := (ranksIn o t u (u + 1)).head?
+/-- The rank of the first range holding template `t`'s unit `u`. -/
+def rangeOf (o : List UnitRange) (t : String) (u : Nat) : Option Nat := (ranksIn o t u (u + 1)).head?
 
-/-- Blocks `(at, n)`, sorted by `at`, tile units `[cur, units)`. -/
+/-- Ranges `(at, n)`, sorted by `at`, tile units `[cur, units)`. -/
 def tiles : List (Nat × Nat) → Nat → Nat → Bool
   | [], cur, units => cur == units
   | (p0, n) :: bs, cur, units => p0 == cur && 0 < n && tiles bs (cur + n) units
 
-/-- The order is well formed: each block a template's, and each template's blocks tile its units. -/
-def orderOk (c : Wiring) (o : List Block) : Bool :=
+/-- The order is well formed: each range a template's, and each template's ranges tile its units. -/
+def orderOk (c : Wiring) (o : List UnitRange) : Bool :=
   o.all (fun b => (c.templates.lookup b.1).isSome) &&
     c.templates.all fun (t, tt) =>
       tiles (((o.filter (·.1 == t)).map (·.2)).mergeSort fun a b => a.1 ≤ b.1) 0 tt.units
@@ -260,7 +260,7 @@ def kahnWalk (ins : Array (List (Nat × Nat))) (done : Array Bool) : Nat → Nat
 /-- `kahn`'s loop, `fuel` the templates not `done` (`ids` in id order, `outs` each template's readers wire by wire,
 `indeg` each template's wires from templates not done). -/
 def kahnLoop (ids : Array String) (units : String → Nat) (outs : Array (List Nat)) (ins : Array (List (Nat × Nat))) :
-    Nat → Array Bool → Array Nat → List Block → Except Refusal (List Block)
+    Nat → Array Bool → Array Nat → List UnitRange → Except Refusal (List UnitRange)
   | 0, _, _, acc => .ok acc.reverse
   | fuel + 1, done, indeg, acc =>
     match (List.range ids.size).find? (fun i => !done[i]! && indeg[i]! == 0) with
@@ -271,12 +271,12 @@ def kahnLoop (ids : Array String) (units : String → Nat) (outs : Array (List N
       let t := kahnWalk ins done rest.length (rest.headD 0)
       .error ⟨.cycle, ((ins[t]!).find? (fun (_, wr) => !done[wr]!)).map (·.1)⟩
 
-/-- **The default order**: each template one block of its units, in a topological order of the templates by their wires,
+/-- **The default order**: each template one range of its units, in a topological order of the templates by their wires,
 the next at each step the first template by id that reads none not yet placed (a template that reads itself never
 does). Where every template not placed reads one, they hold a cycle: walking back from the first of them along each one's
 first wire from one not placed, as many steps as there are of them, ends on the cycle, and the refusal names the first
 such wire of the template it ends on. In work `O(templates² + wires)`. -/
-def kahn (c : Wiring) : Except Refusal (List Block) :=
+def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let ids := ((c.templates.map (·.1)).mergeSort (· ≤ ·)).toArray
   let idx : Std.HashMap String Nat := ids.zipIdx.foldl (fun m (t, i) => m.insert t i) {}
   let es := c.wires.zipIdx.filterMap fun (w, j) => do pure (j, ← idx[w.writer]?, ← idx[w.reader]?)
@@ -287,13 +287,13 @@ def kahn (c : Wiring) : Except Refusal (List Block) :=
     (Array.replicate ids.size false) indeg []
 
 /-- The order the circuit states, else `kahn`'s. -/
-def statedOrder (c : Wiring) : Except Refusal (List Block) :=
+def statedOrder (c : Wiring) : Except Refusal (List UnitRange) :=
   match c.order with
   | some o => .ok o
   | none => kahn c
 
 /-- The order the wires are held to (`statedOrder`), refused (`order`) unless well formed. -/
-def orderOf (c : Wiring) : Except Refusal (List Block) :=
+def orderOf (c : Wiring) : Except Refusal (List UnitRange) :=
   match statedOrder c with
   | .ok o => if orderOk c o then .ok o else .error ⟨.order, none⟩
   | .error r => .error r
@@ -302,20 +302,20 @@ def orderOf (c : Wiring) : Except Refusal (List Block) :=
 def Wire.indicesIn (w : Wire) (p0 n : Nat) : Nat × Nat :=
   ((max p0 w.start - w.start) * w.cuts, (min (p0 + n) (w.start + w.readerUnits) - w.start) * w.cuts - 1)
 
-/-- Block `(t, at, n)` meets the wire's reader units. -/
-def Wire.readsIn (w : Wire) (b : Block) : Bool :=
+/-- Units `(t, at, n)` meet the wire's reader units. -/
+def Wire.readsIn (w : Wire) (b : UnitRange) : Bool :=
   b.1 == w.reader && decide (max b.2.1 w.start < min (b.2.1 + b.2.2) (w.start + w.readerUnits))
 
-/-- The wire is in order `o`, in closed form: for each block meeting its reader units, every block meeting the bounds on
+/-- The wire is in order `o`, in closed form: for each range meeting its reader units, every range meeting the bounds on
 the writers of its reader indices there ranks below it. -/
-def orderedWire (o : List Block) (w : Wire) : Bool :=
+def orderedWire (o : List UnitRange) (w : Wire) : Bool :=
   o.zipIdx.all fun (b, a) =>
     !w.readsIn b ||
       let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
       (ranksIn o w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
 
 /-- The order's refusal (`orderOf`), else the first wire `f` doesn't put in it, by index. -/
-def orderCode (c : Wiring) (f : List Block → Wire → Bool) : Option Refusal :=
+def orderCode (c : Wiring) (f : List UnitRange → Wire → Bool) : Option Refusal :=
   match orderOf c with
   | .error r => some r
   | .ok o => firstWire c fun w => if f o w then none else some .order
@@ -370,9 +370,9 @@ def wireCodeRef (c : Wiring) (w : Wire) : Option Code :=
 /-- No reader row twice among `es` (quadratic in the entries). -/
 def distinctRows (es : List Entry) : Bool := decide (es.map (·.1)).Nodup
 
-/-- The wire is in order `o`, unit by unit: for each block meeting its reader units, each block holding a unit within
+/-- The wire is in order `o`, unit by unit: for each range meeting its reader units, each range holding a unit within
 the bounds on the writers of its reader indices there ranks below it. -/
-def orderedWireRef (o : List Block) (w : Wire) : Bool :=
+def orderedWireRef (o : List UnitRange) (w : Wire) : Bool :=
   o.zipIdx.all fun (b, a) =>
     !w.readsIn b ||
       let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
@@ -402,7 +402,7 @@ An instance is `{"templates", "cuts", "wires", "queries"}`, and optionally `"ord
   `at` a natural, `radix` at least one natural each at least 1, `base` an integer, `step` one integer a digit, and `C` at
   least 1;
 * `queries`: reader rows `[tid, unit, port, row]` to look up (a sampled proof block's);
-* `order`: blocks `[tid, at, n]`, a string and two naturals each (`Block`).
+* `order`: ranges `[tid, at, n]`, a string and two naturals each (`UnitRange`).
 
 Anything else is refused as malformed. The output is `{"ok": false, "code", "wire"}` (`wire` null but for a wire's own
 refusal) or `{"ok": true, "wired_rows", "wired_bits", "spans", "lookups"}`: per wire its least and greatest writer, and per
@@ -500,9 +500,9 @@ def Wiring.ofJson (j : Json) : Except String Wiring := do
   let order ← match j.getObjVal? "order" with
     | .ok oj => do
       let bs ← (← arrOf "order" oj).mapM fun b => do
-        match ← arrOf "a block" b with
-        | [t, a, n] => pure (← strOf "a block's template" t, ← natOf "a block's first unit" a, ← natOf "a block's units" n)
-        | _ => throw "a block is [template, at, units]"
+        match ← arrOf "a range" b with
+        | [t, a, n] => pure (← strOf "a range's template" t, ← natOf "a range's first unit" a, ← natOf "a range's units" n)
+        | _ => throw "a range is [template, at, units]"
       pure (some bs)
     | .error _ => pure none
   return { templates := ts, cuts := cs, wires, order }

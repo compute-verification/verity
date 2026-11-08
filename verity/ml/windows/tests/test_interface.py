@@ -304,7 +304,7 @@ def chain() -> I.Circuit:
     """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (layer, step, request)
     order: layer 1 reads layer 0's output at its step and request, layer 0 at step s + 1 reads layer 1's output at step s,
     and layer 0's input at step 0 (the embedding) is external. The template reads itself, so the circuit states an order,
-    a block each layer and step (`ordered`)."""
+    a range each layer and step (`ordered`)."""
     layer = REQUESTS * STEPS
     wires = (I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
              I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
@@ -517,7 +517,7 @@ def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once
 
 def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
     """`Wire.box` bounds the writers of reader indices ``lo`` to ``hi`` digit by digit (`SampledProofs.Wires.Wire.box`,
-    `writerAt_mem_box`): every writer between them lies in it, and over a run of whole values of a digit, such as a block
+    `writerAt_mem_box`): every writer between them lies in it, and over a run of whole values of a digit, such as a range
     of whole steps, its bounds are writers."""
     rng = np.random.default_rng(1)
     for _ in range(500):
@@ -536,10 +536,10 @@ def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
 
 
 def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
-    """`chain`'s template reads itself, so with no order its wires are a cycle of templates; its order, a block each layer
-    and step (`ordered`), puts every block a wire reads in a block below that block. An order where a block reads a later
+    """`chain`'s template reads itself, so with no order its wires are a cycle of templates; its order, a range each layer
+    and step (`ordered`), puts every range a wire reads in a range below that range. An order where a range reads a later
     one is refused naming the first such wire, an order that doesn't tile each template's units by name, and a cut into
-    blocks no order can rank (layer 0's steps one block, read by layer 1's step 0 and reading it) as a cycle."""
+    ranges no order can rank (layer 0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
     c = chain()
     assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
     with pytest.raises(ValueError, match="cycle: wire 0 .* is on a cycle of templates"):
@@ -548,10 +548,10 @@ def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
                                                                         "order: wire 1 "),
                        (((GID, 4, 2), (GID, 0, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
-                       (((GID, 0, 8), (GID, 8, 0)), "don't tile"), ((("Z", 0, 8),), "order: block 0")]:
+                       (((GID, 0, 8), (GID, 8, 0)), "don't tile"), ((("Z", 0, 8),), "order: range 0")]:
         with pytest.raises(ValueError, match=why):
             I.check_order(c.units, c.wires, order)
-    with pytest.raises(ValueError, match="cycle: no order of the blocks"):
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
         I.ordered(c.units, c.wires, {GID: (4,)})
 
 

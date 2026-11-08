@@ -2,10 +2,10 @@ module
 
 public import SampledProofs.WiresSpan
 
-/-! **The order's closed form against its units** (`Wires` "The order"). A block meets a range of units exactly when it
-holds one of them (`mem_ranksIn_iff`), so a wire's closed form, every block meeting the bounds on its writers below the
-block they are read in, is its check unit by unit (`orderedWire_eq_ref`). A well-formed order's blocks of a template tile
-its units, so each of its units lies in a block (`ranksIn_ne_nil`). -/
+/-! **The order's closed form against its units** (`Wires` "The order"). An order's range meets a range of units
+exactly when it holds one of them (`mem_ranksIn_iff`), so a wire's closed form, every range meeting the bounds on its
+writers below the range they are read in, is its check unit by unit (`orderedWire_eq_ref`). A well-formed order's ranges
+of a template tile its units, so each of its units lies in a range (`ranksIn_ne_nil`). -/
 
 @[expose] public section
 
@@ -17,7 +17,7 @@ theorem readerUnit_lt {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0)
   have h2 : w.units / w.cuts * w.cuts = w.units := Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hd)
   exact (Nat.div_lt_iff_lt_mul (by omega)).2 (by rw [h2]; exact hi)
 
-theorem mem_ranksIn {o : List Block} {t : String} {lo hi k : Nat} :
+theorem mem_ranksIn {o : List UnitRange} {t : String} {lo hi k : Nat} :
     k ∈ ranksIn o t lo hi ↔ ∃ p0 n, o[k]? = some (t, p0, n) ∧ max p0 lo < min (p0 + n) hi := by
   simp only [ranksIn, List.mem_map, List.mem_filter, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
   constructor
@@ -26,8 +26,8 @@ theorem mem_ranksIn {o : List Block} {t : String} {lo hi k : Nat} :
   · rintro ⟨p0, n, hk, h⟩
     exact ⟨((t, p0, n), k), ⟨List.mem_zipIdx_iff_getElem?.2 hk, rfl, h⟩, rfl⟩
 
-/-- **A block meets a range exactly when it holds one of its units.** -/
-theorem mem_ranksIn_iff {o : List Block} {t : String} {lo hi k : Nat} :
+/-- **An order's range meets units `[lo, hi)` exactly when it holds one of them.** -/
+theorem mem_ranksIn_iff {o : List UnitRange} {t : String} {lo hi k : Nat} :
     k ∈ ranksIn o t lo hi ↔ ∃ u, lo ≤ u ∧ u < hi ∧ k ∈ ranksIn o t u (u + 1) := by
   simp only [mem_ranksIn]
   constructor
@@ -36,7 +36,7 @@ theorem mem_ranksIn_iff {o : List Block} {t : String} {lo hi k : Nat} :
   · rintro ⟨u, h1, h2, p0, n, hk, h⟩
     exact ⟨p0, n, hk, by omega⟩
 
-theorem all_ranksIn {o : List Block} {t : String} {lo hi a : Nat} :
+theorem all_ranksIn {o : List UnitRange} {t : String} {lo hi a : Nat} :
     (ranksIn o t lo hi).all (· < a) = (List.range' lo (hi - lo)).all fun v => (ranksIn o t v (v + 1)).all (· < a) := by
   rw [Bool.eq_iff_iff]
   simp only [List.all_eq_true, List.mem_range'_1, decide_eq_true_eq]
@@ -48,7 +48,7 @@ theorem all_ranksIn {o : List Block} {t : String} {lo hi a : Nat} :
     exact h v ⟨hv1, by omega⟩ k hk'
 
 /-- **The closed form is the check unit by unit.** -/
-theorem orderedWire_eq_ref (o : List Block) (w : Wire) : orderedWire o w = orderedWireRef o w := by
+theorem orderedWire_eq_ref (o : List UnitRange) (w : Wire) : orderedWire o w = orderedWireRef o w := by
   unfold orderedWire orderedWireRef
   congr 1
   funext ⟨b, a⟩
@@ -79,8 +79,8 @@ theorem lookup_mem {β : Type} {a : String} {b : β} : ∀ {l : List (String × 
       exact List.mem_cons_self ..
     · exact List.mem_cons_of_mem _ (lookup_mem h)
 
-/-- **A well-formed order covers every unit**: each unit of a template lies in one of its blocks. -/
-theorem ranksIn_ne_nil {c : Wiring} {o : List Block} (h : orderOk c o = true) {t : String} {tt : Template}
+/-- **A well-formed order covers every unit**: each unit of a template lies in one of its ranges. -/
+theorem ranksIn_ne_nil {c : Wiring} {o : List UnitRange} (h : orderOk c o = true) {t : String} {tt : Template}
     (ht : c.templates.lookup t = some tt) {u : Nat} (hu : u < tt.units) : ranksIn o t u (u + 1) ≠ [] := by
   simp only [orderOk, Bool.and_eq_true, List.all_eq_true] at h
   have hti := h.2 (t, tt) (lookup_mem ht)
@@ -95,16 +95,16 @@ theorem ranksIn_ne_nil {c : Wiring} {o : List Block} (h : orderOk c o = true) {t
   rw [hnil] at this
   exact List.not_mem_nil this
 
-/-- Each unit of a template has a block in a well-formed order, one meeting it. -/
-theorem blockOf_some {c : Wiring} {o : List Block} (h : orderOk c o = true) {t : String} {tt : Template}
+/-- Each unit of a template has a range in a well-formed order, one meeting it. -/
+theorem rangeOf_some {c : Wiring} {o : List UnitRange} (h : orderOk c o = true) {t : String} {tt : Template}
     (ht : c.templates.lookup t = some tt) {u : Nat} (hu : u < tt.units) :
-    ∃ k, blockOf o t u = some k ∧ k ∈ ranksIn o t u (u + 1) := by
-  unfold blockOf
+    ∃ k, rangeOf o t u = some k ∧ k ∈ ranksIn o t u (u + 1) := by
+  unfold rangeOf
   cases hl : ranksIn o t u (u + 1) with
   | nil => exact absurd hl (ranksIn_ne_nil h ht hu)
   | cons k l => exact ⟨k, rfl, List.mem_cons_self ..⟩
 
-theorem orderOf_ok {c : Wiring} {o : List Block} (h : orderOf c = .ok o) : orderOk c o = true := by
+theorem orderOf_ok {c : Wiring} {o : List UnitRange} (h : orderOf c = .ok o) : orderOk c o = true := by
   unfold orderOf at h
   split at h
   · split at h

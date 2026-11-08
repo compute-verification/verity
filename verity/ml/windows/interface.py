@@ -46,7 +46,7 @@ is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, an
 
 The wires' dataflow between units is acyclic (`check_order`), since wires with a cycle pass every unit's check on a fixed
 point the prover chose. A circuit whose templates read one another (one template's units at every step of a scan) states
-an ``order``, a ranking of blocks of its units each wire follows in closed form, block by block of its reader units
+an ``order``, a ranking of ranges of its units each wire follows in closed form, range by range of its reader units
 (`ordered` makes one); a circuit whose templates' wires have no cycle needs none.
 
 The circuit also declares what fills its other inputs (`Registered`, `Ingress`): rows of a registered parameter read at
@@ -565,11 +565,11 @@ def coalesce(patterns: Sequence[Any]) -> list[Any]:
 
 def ordered(units: Mapping[str, int], wires: Sequence[Wire],
             starts: Mapping[str, Sequence[int]]) -> tuple[tuple[str, int, int], ...]:
-    """An order for ``wires`` (`Circuit.order`, `check_order`): each template's units cut into blocks at its ``starts``
+    """An order for ``wires`` (`Circuit.order`, `check_order`): each template's units cut into ranges at its ``starts``
     (``units``: each template's, by descriptor id), in a topological order of what the wires' closed forms need, every
-    block meeting a wire's box on the writers it reads in a block (`Wire.box`) before that block, the next at each step the
-    first ready block by template and unit. The work is per block and per wire's blocks, never per unit. Refused
-    (ValueError) where those needs have a cycle, naming a wire on it: a unit then reads itself, or a block holds units on
+    range meeting a wire's box on the writers it reads in a range (`Wire.box`) before that range, the next at each step the
+    first ready range by template and unit. The work is per range and per wire's ranges, never per unit. Refused
+    (ValueError) where those needs have a cycle, naming a wire on it: a unit then reads itself, or a range holds units on
     both sides of a chain of reads."""
     cut = {t: sorted({0, *(s for s in starts.get(t, ()) if 0 < s < n)}) for t, n in units.items()}
     nodes = sorted((t, k) for t, ss in cut.items() for k in range(len(ss)))
@@ -598,8 +598,8 @@ def ordered(units: Mapping[str, int], wires: Sequence[Wire],
                 heapq.heappush(ready, j)
     if len(order) < len(nodes):
         stuck = next(i for i in range(len(nodes)) if indeg[i] and i in why)
-        raise ValueError(f"cycle: no order of the blocks {len(nodes)} puts wire {why[stuck]} {wires[why[stuck]].doc()} after "
-                         f"its writers: {len(nodes) - len(order)} blocks wait on one another")
+        raise ValueError(f"cycle: no order of the ranges {len(nodes)} puts wire {why[stuck]} {wires[why[stuck]].doc()} after "
+                         f"its writers: {len(nodes) - len(order)} ranges wait on one another")
     return tuple(order)
 
 
@@ -756,46 +756,46 @@ def check_order(units: Mapping[str, int], wires: Sequence[Wire],
                 order: Sequence[tuple[str, int, int]] | None = None) -> None:
     """Refuse (ValueError) wires whose dataflow between units isn't acyclic, as `SampledProofs.Wires.check`'s order does
     (``units``: each template's, by descriptor id; ``wires`` already through `check_wires`' other checks). ``order`` ranks
-    blocks of units by their place in it, each ``(tid, at, n)`` the units ``[at, at + n)`` of ``tid``, in any order; it
-    is refused (``order``) unless each names a template and each template's blocks tile its units. A wire is in order when,
-    for every block meeting its reader units, every block meeting the box on the writers it reads there (`Wire.box`) ranks
-    below it, refused (``order``, naming the first wire that isn't). With no order, each template is one block, in a
+    ranges of units by their place in it, each ``(tid, at, n)`` the units ``[at, at + n)`` of ``tid``, in any order; it
+    is refused (``order``) unless each names a template and each template's ranges tile its units. A wire is in order when,
+    for every range meeting its reader units, every range meeting the box on the writers it reads there (`Wire.box`) ranks
+    below it, refused (``order``, naming the first wire that isn't). With no order, each template is one range, in a
     topological order of the templates by their wires (`_kahn`), refused (``cycle``) where they have a cycle, naming a
-    wire on it. The work is per template and block, and per wire the blocks it meets, never per unit."""
+    wire on it. The work is per template and range, and per wire the ranges it meets, never per unit."""
     if order is None:
         order = _kahn(units, wires)
-    blocks: dict[str, list[tuple[int, int, int]]] = {}
+    ranges: dict[str, list[tuple[int, int, int]]] = {}
     for k, b in enumerate(order):
         if not (isinstance(b, tuple) and len(b) == 3 and isinstance(b[0], str) and _ints(b[1], b[2])) \
                 or b[0] not in units:
-            raise ValueError(f"order: block {k} {b!r} is not [template, at, n] of a template of {sorted(units)}")
-        blocks.setdefault(b[0], []).append((b[1], b[2], k))
+            raise ValueError(f"order: range {k} {b!r} is not [template, at, n] of a template of {sorted(units)}")
+        ranges.setdefault(b[0], []).append((b[1], b[2], k))
     for tid, u in units.items():
-        got = sorted(blocks.get(tid, []), key=lambda b: b[0])
+        got = sorted(ranges.get(tid, []), key=lambda b: b[0])
         ends = list(itertools.accumulate(n for _a, n, _k in got))
         if [at for at, _n, _k in got] != [0, *ends[:-1]] or any(n < 1 for _a, n, _k in got) or ends[-1] != u:
-            raise ValueError(f"order: the blocks of {tid}, {[(at, n) for at, n, _k in got][:8]}…, don't tile its {u} units")
-        blocks[tid] = got
-    starts = {t: [at for at, _n, _k in got] for t, got in blocks.items()}
+            raise ValueError(f"order: the ranges of {tid}, {[(at, n) for at, n, _k in got][:8]}…, don't tile its {u} units")
+        ranges[tid] = got
+    starts = {t: [at for at, _n, _k in got] for t, got in ranges.items()}
 
     def ranks(t: str, lo: int, hi: int) -> list[int]:
-        got = blocks[t][max(bisect.bisect_right(starts[t], lo) - 1, 0):bisect.bisect_left(starts[t], hi)] if lo < hi else []
+        got = ranges[t][max(bisect.bisect_right(starts[t], lo) - 1, 0):bisect.bisect_left(starts[t], hi)] if lo < hi else []
         return [k for _a, _n, k in got]
 
     for i, w in enumerate(wires):
-        got = blocks[w.reader]
+        got = ranges[w.reader]
         for at, n, a in got[max(bisect.bisect_right(starts[w.reader], w.at) - 1, 0):
                             bisect.bisect_left(starts[w.reader], w.at + w.reader_units)]:
             lo, hi = w.box(*w.indices_in(at, n))
             b = ranks(w.writer, max(lo, 0), max(hi, 0) + 1)
             if b and not max(b) < a:
-                raise ValueError(f"order: wire {i} {w.doc()}: its reader units in block {a}, [{at}, {at + n}), read writer "
-                                 f"units [{lo}, {hi}] in blocks ranked to {max(b)} of the order; every block a wire reads in "
-                                 "a block ranks below it, so no unit reads itself")
+                raise ValueError(f"order: wire {i} {w.doc()}: its reader units in range {a}, [{at}, {at + n}), read writer "
+                                 f"units [{lo}, {hi}] in ranges ranked to {max(b)} of the order; every range a wire reads in "
+                                 "a range ranks below it, so no unit reads itself")
 
 
 def _kahn(units: Mapping[str, int], wires: Sequence[Wire]) -> list[tuple[str, int, int]]:
-    """`SampledProofs.Wires.kahn`: each template one block of its units, in a topological order of the templates by their
+    """`SampledProofs.Wires.kahn`: each template one range of its units, in a topological order of the templates by their
     wires, the next at each step the first template by id that reads none not yet placed. Refused (``cycle``) where every
     template not placed reads one: walking back from the first of them along each one's first wire from one not placed,
     as many steps as there are of them, ends on a cycle, and the refusal names that template's first such wire."""
@@ -820,7 +820,7 @@ def _kahn(units: Mapping[str, int], wires: Sequence[Wire]) -> list[tuple[str, in
                 cycle.append(ids[u])
             raise ValueError(f"cycle: wire {j} {wires[j].doc()} is on a cycle of templates, each reading the next: "
                              f"{' <- '.join(cycle + [ids[t]])}; wires between templates with a cycle are ordered by an "
-                             "order of their units' blocks (`Circuit.order`, `ordered`)")
+                             "order of their units' ranges (`Circuit.order`, `ordered`)")
         done[i] = True
         for r in outs[i]:
             indeg[r] -= 1
@@ -1156,7 +1156,7 @@ class Circuit:
     layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`); ``order``, the order of its units'
-    blocks its wires follow (`check_order`), or None for each template one block."""
+    ranges its wires follow (`check_order`), or None for each template one range."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
@@ -1731,7 +1731,7 @@ def declarations(doc: Mapping[str, Any]) -> tuple[tuple[Wire, ...], dict[str, di
 
 
 def order_of(doc: Mapping[str, Any]) -> tuple[tuple[str, int, int], ...] | None:
-    """A stated record's order of its units' blocks (`Circuit.order`), None where it states none, refused (ValueError) unless
+    """A stated record's order of its units' ranges (`Circuit.order`), None where it states none, refused (ValueError) unless
     a list of ``[template, at, n]``; checked against the templates and wires by `check_order`."""
     if "order" not in doc:
         return None

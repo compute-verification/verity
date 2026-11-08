@@ -40,7 +40,7 @@ theorem firstWire_eq_none {c : Wiring} {f : Wire → Option Code} :
       simp [h w hw]
     rw [this]; rfl
 
-theorem orderCode_eq_none {c : Wiring} {f : List Block → Wire → Bool} :
+theorem orderCode_eq_none {c : Wiring} {f : List UnitRange → Wire → Bool} :
     orderCode c f = none ↔ ∃ o, orderOf c = .ok o ∧ ∀ w ∈ c.wires, f o w = true := by
   unfold orderCode
   split
@@ -250,14 +250,14 @@ def Wiring.Reads (c : Wiring) (x y : String × Int) : Prop :=
   ∃ w ∈ c.wires, ∃ e ∈ w.entries, x = (e.2.1, e.2.2.1) ∧ y = (e.1.1, (e.1.2.1 : Int))
 
 /-- **The wires `check` accepts are acyclic**: no unit reads itself through a chain of wires, since along every wire the
-rank of the reader unit's block in the order exceeds the writer's: the writer lies in the wire's box over the reader
-indices in the reader unit's block (`Wire.writerAt_mem_box`), and the order's closed form ranks every block meeting that
+rank of the reader unit's range in the order exceeds the writer's: the writer lies in the wire's box over the reader
+indices in the reader unit's range (`Wire.writerAt_mem_box`), and the order's closed form ranks every range meeting that
 box below it. -/
 theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : String × Int) :
     ¬ Relation.TransGen c.Reads x x := by
   obtain ⟨o, ho, hin⟩ := checkRef_order (check_sound h).2
   have hok := orderOf_ok ho
-  let ρ : String × Int → Nat := fun x => (blockOf o x.1 x.2.toNat).getD 0
+  let ρ : String × Int → Nat := fun x => (rangeOf o x.1 x.2.toNat).getD 0
   have step : ∀ x y, c.Reads x y → ρ x < ρ y := by
     rintro x y ⟨w, hw, e, he, rfl, rfl⟩
     obtain ⟨rt, wt, hr, hwt, hc, hd, hb⟩ := wireCode_shape (check_wireCode h w hw)
@@ -269,7 +269,7 @@ theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : Stri
     have hs := w.writerAt_mem_span i hi
     have hcl : orderedWire o w = true := (orderedWire_eq_ref o w).symm ▸ hin w hw
     simp only [orderedWire, List.all_eq_true] at hcl
-    obtain ⟨a, ha, ham⟩ := blockOf_some hok hr (u := w.start + i / w.cuts) (by omega)
+    obtain ⟨a, ha, ham⟩ := rangeOf_some hok hr (u := w.start + i / w.cuts) (by omega)
     obtain ⟨p0, n, hk, hmeet⟩ := mem_ranksIn.1 ham
     have hblk := hcl ((w.reader, p0, n), a) (List.mem_zipIdx_iff_getElem?.2 hk)
     have hreads : w.readsIn (w.reader, p0, n) = true := by
@@ -292,7 +292,7 @@ theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : Stri
       show i ≤ (min (p0 + n) (w.start + w.readerUnits) - w.start) * w.cuts - 1
       omega
     have hbx := w.writerAt_mem_box hlo hhi
-    obtain ⟨b, hb', hbm⟩ := blockOf_some hok hwt (u := (w.writerAt i).toNat) (by omega)
+    obtain ⟨b, hb', hbm⟩ := rangeOf_some hok hwt (u := (w.writerAt i).toNat) (by omega)
     have := hblk b (mem_ranksIn_iff.2 ⟨_, Int.toNat_le_toNat hbx.1, by have := Int.toNat_le_toNat hbx.2; omega, hbm⟩)
     simp only [ρ, Int.toNat_natCast, ha, hb', Option.getD_some]
     exact this
