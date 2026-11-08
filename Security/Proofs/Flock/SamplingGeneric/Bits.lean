@@ -39,7 +39,7 @@ import Proofs.Flock.SamplingGeneric.Fails
 # The sampled compiler's bits
 
 `Bits` from `KS` at any compiled sampled verifier whose extractor's expected reruns and own SHA-512 calls are
-`Efficient`'s (`Compiled.bits_of_ks`, `Sampling.Bits_of_KS` generic, through `Sampling.Bits_of_KSLin`). Those two
+`Efficient`'s (`Compiled.bits_of_ks`, through `Sampling.Bits_of_KSLin`). Those two
 bounds are `CompilerEfficient`'s second and third conjuncts, and `CompilerBits` takes `CompilerEfficient`'s premises,
 so `CompilerKS` and `CompilerEfficient` give `CompilerBits` (`compilerBits_of`).
 -/

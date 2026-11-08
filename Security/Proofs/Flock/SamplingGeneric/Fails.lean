@@ -44,9 +44,9 @@ import Proofs.Flock.Claims.Sampling.Extract
 /-!
 # The sampled compiler: the extraction's failure event and its probability
 
-`Claims.Sampling`'s failure event and its bound (`Proofs.Flock.Claims.Sampling.KS`), for a compiled sampled verifier `L`
-over any proof system for proof blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted
-inner run are one `Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`), as `Claims.Sampling`'s are.
+The extraction's failure event and its bound, for a compiled sampled verifier `L` over any proof system for proof
+blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted inner run are one
+`Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`).
 
 * `Found`: a sampled proof block's extraction finds a witness in `A`'s relation at its session's statement, as
   `Compiled.unitExt` runs it before its openings. `GoodAt`: the block, below `n_PU`, is at some slot of the sample, and

@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 # Claims: the sampled audit as a compiler, generic in the proof system for proof blocks
 
 `Claims.Sampling` with its Flock-specific parts as parameters: the proof system the sessions of the sampled proof blocks
-run (`Arg`, for Flock `Sampling.Deploy.flock`) and its extractor (for Flock `E^rep`, `Sampling.unitExt`). Everything
+run (`Arg`, for Flock `Sampling.Deploy.flock`) and its extractor (for Flock `E^rep`, `Arg.ofFlock`). Everything
 else is `Claims.Sampling`'s, read as it stands: the statement (`AuditStatement`), the witness (`Sampling.Wit`), the
 relation at `δ` (`Sampling.R`: the incorrect set of the extracted trace is in `M_δ = {B : P_a(B) > δ}`) and its count
 form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme and its binding (`CommitmentScheme`,
@@ -65,21 +65,23 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    proof block's interior values (`iroots`); what a session's witness reveals (`reveal`), each opening checked at
    most `openCalls` SHA-512 calls; and the bits of the unions the outer and inner waits pay for (`nOut`, `nIn`), which
    set their counts (`kOut`, `kIn`).
-3. **The extractor** (`Compiled.E`): `Sampling.E` with each sampled proof block's extraction `Arg`'s extractor at its
+3. **The extractor** (`Compiled.E`): replay; `k_out` accepted reruns among `K_out`; at each, `k_in` accepted reruns of
+   the second stage only among `K_in`; at each, each sampled proof block's extraction, `Arg`'s extractor at its
    session (`Compiled.unitExt`), each rerun the judged run's coins with the session's rounds replaced (`place`), seen as
    the session's view, then what its witness reveals that passes its opening check. Its coins are per slot of the
-   sample (`SlotEC`), as `Sampling.E`'s are, so a proof block at two slots is extracted twice, on independent coins
+   sample (`SlotEC`), so a proof block at two slots is extracted twice, on independent coins
    (`runExt`, a run's extractions). Every SHA-512 call of the extraction is an `RP.hash` (the openings it checks) or a
    rerun's, so `Bext`'s cost counts them all. The statements hold at every `A` and `H`, so that the extracted trace is
    the prover's rests on `A`'s assemble step being the program its count describes (at Flock, the deployed decoder).
-4. **The errors**: `κ_δ = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`, `Sampling.κ`
-   with the waits' counts apart and Flock's `κ_F` replaced by the largest of the proof blocks' bounds on `Arg`'s `κ`
-   (`κs`, at `κb`); `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of
-   their bounds on `Arg`'s `γ` per round (`γb` over the shape's rounds; a session's fork finder is the compiled
+4. **The errors**: `κ_δ = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`, with `κ_s`
+   the largest of the proof blocks' bounds on `Arg`'s `κ` (`κs`, at `κb`; at a frozen record, Flock's `κ_F`,
+   `Sampling.κF`) and `c` the waits' slack; `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of their bounds on `Arg`'s `γ`
+   per round (`γb` over the shape's rounds; a session's fork finder is the compiled
    verifier's `B` at a round guess among `k(x)`); `ε_bind = Pr[B_ext]`.
-5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of those
-   `Claims.Sampling`'s proofs take at Flock: the second stage samples the sample by the design (`draws`), in at most
-   `n_PU` slots (`slots`); the outer wait's union, over sets of proof blocks, is within its bits (`unions`); the
+5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of the frozen
+   hypotheses `Claims.Sampling` states at Flock (`DrawLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`): the second
+   stage samples the sample by the design (`draws`), in at most `n_PU` slots (`slots`); the outer wait's union, over
+   sets of proof blocks, is within its bits (`unions`); the
    verifier refuses what is out of scope (`refuses`); the interior roots precede the second stage (`interior`); the
    sample precedes its sessions (`fixed`); each sampled proof block's session, at the block's
    shape and within its error bounds, accepts whenever the run does and is a run of a prover against `Arg`'s verifier
@@ -109,8 +111,9 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    `Flock.KS` is its `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They take
    `Flock.KS`, the binding and the contract as hypotheses, at a record, not at a deployed verifier's code.
 
-Statements only: definitions, no proofs. `Claims.Sampling` stays as it is, frozen; it becomes this block's Flock
-instance when its extractor is restated as `Compiled.E` at `Arg.ofFlock`.
+Statements only: definitions, no proofs. A frozen `Claims.Sampling.Deploy` record is a compiled verifier over Flock, its
+extractor `Compiled.E` at `Arg.ofFlock`; `Claims.Sampling` states the record's frozen hypotheses and no extractor of its
+own.
 -/
 
 @[expose] public section
@@ -320,8 +323,8 @@ noncomputable def unitExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (
 reads its block's. -/
 abbrev BlockEC (L : Compiled Coin A) (x : Msg) := (u : Fin (L.nPU x)) → A.EC (L.sh x u)
 
-/-- The extractor's coins at one accepted inner run: one `BlockEC` per slot of the sample (`Sampling.E`'s per-slot
-coins), so a proof block at two slots is extracted twice, on independent coins. -/
+/-- The extractor's coins at one accepted inner run: one `BlockEC` per slot of the sample, so a proof block at two
+slots is extracted twice, on independent coins. -/
 abbrev SlotEC (L : Compiled Coin A) (x : Msg) := Fin (L.nPU x) → L.BlockEC x
 
 /-- The extractor's coins: the outer wait's `K_out` coin vectors; for each of its `k_out` accepted runs, the inner
@@ -340,7 +343,7 @@ noncomputable def runExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (r
       if hu : iu.2 < L.nPU x then L.unitExt x s iu.2 r v (c iu.1 ⟨iu.2, hu⟩) else .ret [])
     ((List.finRange (L.nPU x)).zip (L.checked x r))
 
-/-- **The sampling extractor** (`Sampling.E`, generic): replay the judged run; if it accepted, rerun on fresh coins
+/-- **The sampling extractor**: replay the judged run; if it accepted, rerun on fresh coins
 until `k_out` accepted runs are in hand (giving up after `K_out`); at each, rerun fresh on the second stage until `k_in`
 accepted runs are in hand (giving up after `K_in`); at each of those, extract every slot of the sample (`runExt`); and
 assemble. -/
@@ -363,8 +366,8 @@ noncomputable def E (L : Compiled Coin A) : Extractor Coin Sampling.Wit L.V wher
 
 /-! ## 4. The errors -/
 
-/-- **The sessions' knowledge error**: the largest of the proof blocks' bounds on `A`'s `κ` (`κb`; Flock's `κ_F` in
-`Sampling.κ`). -/
+/-- **The sessions' knowledge error**: the largest of the proof blocks' bounds on `A`'s `κ` (`κb`; at a frozen record,
+Flock's `κ_F`). -/
 noncomputable def κs (L : Compiled Coin A) (x : Msg) : ℝ := maxBelow (L.nPU x) (L.κb x)
 
 /-- **The sessions' `γ` per round**: the largest of the proof blocks' bounds on `A`'s `γ` (`γb`) over the rounds of
@@ -374,8 +377,7 @@ noncomputable def γs (L : Compiled Coin A) (x : Msg) : ℝ :=
 
 /-- **The knowledge error at `δ`**: `δ + ε_ks`, with
 `ε_ks = (c² − 1)·δ + c²·κ_s + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`: the outer wait's
-truncation, plus its factor `c` times the inner wait's bound, its truncation plus `c·(P_a(B) + κ_s)` (`Sampling.κ` at
-`κ_s`, with the waits' counts apart). -/
+truncation, plus its factor `c` times the inner wait's bound, its truncation plus `c·(P_a(B) + κ_s)`. -/
 noncomputable def κ (L : Compiled Coin A) (δ : ℝ) (x : Msg) : ℝ :=
   slack ^ 2 * (δ + L.κs x) + (2 * L.kOut x / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8)) +
     slack * (2 * L.kIn x / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8))
@@ -398,8 +400,7 @@ noncomputable def es (L : Compiled Coin A) (x : Msg) : ℝ :=
 def ρs (L : Compiled Coin A) (x : Msg) : ℕ := maxBelowN (L.nPU x) fun u => 1 + A.waits (L.sh x u) * A.cap (L.sh x u)
 
 /-- The extractor's expected work in runs, `1 + k_out + k_out·k_in·(1 + n_PU·e_s) + k_out·k_in·n_PU·openCalls`: its
-expected reruns and its own SHA-512 calls, the opening checks' (`Sampling.work` at `A`'s, with the waits' counts
-apart). -/
+expected reruns and its own SHA-512 calls, the opening checks'. -/
 noncomputable def work (L : Compiled Coin A) (x : Msg) : ℝ :=
   1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nPU x * L.es x) +
     (L.kOut x : ℝ) * L.kIn x * L.nPU x * L.openCalls x
@@ -470,19 +471,18 @@ structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
 /-! ## 6. The claims of a compiled verifier -/
 
 /-- **KS**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ incorrect ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with
-`ε_ks = κ − δ + √(γ·Pr[B])` and `ε_bind = Pr[B_ext]` (`Sampling.KS`, generic). -/
+`ε_ks = κ − δ + √(γ·Pr[B])` and `ε_bind = Pr[B_ext]`. -/
 def KS (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ δ : ℝ, 0 ≤ δ →
     KSLinOn H L.V L.Scope (Sampling.R H L.commit L.parse L.partition δ) L.E (L.κ δ) L.γ (fun _ => 1) (Bext H L.V L.E)
 
 /-- **KS, the count form**: fewer than `t` proof blocks are incorrect, except with probability
-`max(0, miss(t)) + ε_ks + ε_bind` (`Sampling.KSCount`, generic). -/
+`max(0, miss(t)) + ε_ks + ε_bind`. -/
 def KSCount (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ t, KSLinOn H L.V L.Scope (Sampling.RCount H L.commit L.parse L.partition t) L.E (fun x => L.κ (L.missAt t x) x)
     L.γ (fun _ => 1) (Bext H L.V L.E)
 
-/-- **Bits**, on the statements in scope, at every `δ ≥ 0`: `λ_δ = lamLin(κ_δ, γ, 1, work)` (`Sampling.Bits`,
-generic). -/
+/-- **Bits**, on the statements in scope, at every `δ ≥ 0`: `λ_δ = lamLin(κ_δ, γ, 1, work)`. -/
 def Bits (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ δ : ℝ, 0 ≤ δ →
     BitsLin H L.V L.Scope (Sampling.R H L.commit L.parse L.partition δ) L.E (Bext H L.V L.E)
@@ -490,7 +490,7 @@ def Bits (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
 
 /-- **Efficiency**: the extractor's reruns, at most `1 + K_out + k_out·(K_in + k_in·n_PU·ρ_s)` and
 `1 + k_out + k_out·k_in·(1 + n_PU·e_s)` expected; its own SHA-512 calls, the opening checks', at most
-`k_out·k_in·n_PU·openCalls` (`Sampling.Efficient`, generic, with the waits' counts apart). -/
+`k_out·k_in·n_PU·openCalls`. -/
 def Efficient (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ExtractRunsLe H L.E (fun x => 1 + L.capOut x + L.kOut x * (L.capIn x + L.kIn x * (L.nPU x * L.ρs x))) ∧
     ExtractRunsExpLe H L.E (fun x => 1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nPU x * L.es x)) ∧
