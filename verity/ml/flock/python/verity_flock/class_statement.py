@@ -67,6 +67,7 @@ from . import gf2
 from . import ir_lower as IL
 from . import partition_units as PU
 from . import read_slots as RS
+from . import read_tmpl as RT
 from . import struct_lower as SL
 from . import tmpl as TM
 
@@ -869,7 +870,9 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     its own ceil(bits / 16) u16 words, low first (`verity.ml.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them), or with ``packed`` its leaves concatenated as a row's are (`unit_ports`).
     Returns the lowering and each output port's words. ``structural``:
-    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
+    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), or a table read as the
+    verifier builds it (`read_tmpl.of`: the template `Flock.ReadNet.check` accepts, refused unless these ports are its port
+    groups, `_verifier_ports`), else `ir_lower`'s
     (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each
     table read laid out as rows of the unit (`ir_lower._Read`), or ``slots``, its reads of the pinned MUFU tables split out to
     lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, its nets' ANDs capped by ``stage_ands``, by default the caps
@@ -884,7 +887,10 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
            Tuple(tuple(Array(w, Value(16)) for w in out_words)))
     unit = SimpleNamespace(id=name, signature=lambda: sig)
     if structural:
-        t, _lw, _top = SL.lower(definition, name=name, ports=ports)
+        if (t := RT.of(definition)) is not None:
+            _verifier_ports(name, t, ports)
+        else:
+            t, _lw, _top = SL.lower(definition, name=name, ports=ports)
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
     C = unit_circuit(definition, ports, _UnitCircuit)
     in_names, out_names = [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)]
@@ -892,6 +898,20 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
         return low, out_words
     lay = IL.layout(C, in_names, out_names)
     return IL.Lowering(name, unit, units, None, lay), out_words
+
+
+def _verifier_ports(name: str, t: TM.Tmpl, ports: SL.Ports) -> None:
+    """Refuses the verifier's template ``t`` of a unit on ``ports`` unless they are its port groups as it reads them: its
+    input and output ports' widths, the arguments' bits in order from input bit 0 and the returned bits in order from output
+    bit 0, which `unit_ports` lays out when each parameter is a row of its own, in signature order."""
+    lay = _TmplLayout.of(t)
+    ins = tuple(w for _c, _n, ws in lay.in_groups for w in ws)
+    outs = tuple(w for _c, _n, ws in lay.out_groups for w in ws)
+    ret = [b for b in ports.bits if b is not None]
+    if ((ins, outs) != (ports.ins, ports.outs) or [b for lf in ports.leaves for b in lf] != list(range(sum(ins)))
+            or ret != list(range(len(ret)))):
+        raise ValueError(f"{name}: the verifier's template {t.name} reads {len(ins)} input and {len(outs)} output ports, the "
+                         "arguments' and the returned bits in order: give each parameter a row of its own, in order")
 
 
 def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
@@ -1062,9 +1082,9 @@ class UnitStager:
     (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
     (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement. ``structural`` (with ``layout``):
-    that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
-    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
-    `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
+    that template `struct_lower`'s, or a table read's the verifier's own (`read_tmpl`; `unit_lowering`'s ``structural``), the
+    flat unit never built, the outputs the template's (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit.
+    ``reads`` (``inline`` or ``slots``, flat statements only): `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
     `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
     proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
     whose Definition alone needs more witness bits than Flock's proved range is refused before it is lowered

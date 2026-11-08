@@ -69,8 +69,8 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
-from verity.core.protocols.sampled_proofs import plancheck
-from verity.core.protocols.sampled_proofs.optimize import Cell, leak_count, two_stage_design, two_stage_price
+from verity.core.protocols.spot import plancheck
+from verity.core.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
 from verity.ml.circuits.partition_v2 import unit_class
 
 SCHEMA = "spot-figure1/v2"
@@ -267,7 +267,9 @@ def _definition(block: str) -> tuple[str, int | None]:
 def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with every proof block priced in GPU-seconds from the `proof_overhead` card, and the marginal
     overhead they come to.  A stratum whose type the card measures (its block, else the card's block of the same
-    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap; a type the card doesn't
+    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap.  One the card measures only
+    at another size, 2^Δk its block's, takes 2^Δk its seconds and 2^-Δk its cap: Δk compares the two k_logs as the
+    strata estimate them, the card's block's from the strata where they hold one of its type.  A type the card doesn't
     measure is `computed` from its staged witness bits: the measured types' median seconds a witness bit, a statement's
     fixed seconds on their least-squares line in k_log, and as many blocks as a full statement holds.  Each stratum's
     `price` is the MACs that cost its seconds at that overhead, so the planner's cells and grains prove it at them."""
@@ -280,11 +282,19 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     rate = median(b["seconds_per_block"] / 2 ** b["k_log"] for b in types.values())
     slope, intercept = linear_regression([b["k_log"] for b in types.values()],
                                          [b["fixed_seconds"] for b in types.values()])
+    k_of = {x["block"]: x["k_log"] for x in part.value["strata"] if "k_log" in x}
+    held = {_definition(b["block"]): (b, k_of[b["block"]]) for b in v["blocks"] if b["block"] in k_of}
     strata = []
     for x in part.value["strata"]:
-        if b := by_name.get(x["block"]) or types.get(_definition(x["block"])):
+        if b := by_name.get(x["block"]):
             strata.append(x | {k: b[k] for k in ("seconds_per_block", "fixed_seconds", "statement_blocks")}
                           | {"priced": "measured"})
+        elif b := types.get(_definition(x["block"])):
+            b, k = held.get(_definition(x["block"]), (b, b["k_log"]))
+            dk = x["k_log"] - k if "k_log" in x else 0
+            cap = b["statement_blocks"] << -dk if dk < 0 else max(1, b["statement_blocks"] >> dk)
+            strata.append(x | {"seconds_per_block": b["seconds_per_block"] * 2.0 ** dk, "fixed_seconds": b["fixed_seconds"],
+                               "statement_blocks": cap, "priced": "measured"})
         elif "k_log" in x:
             strata.append(x | {"seconds_per_block": rate * 2 ** x["k_log"],
                                "fixed_seconds": max(0.0, intercept + slope * x["k_log"]),

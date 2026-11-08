@@ -1,10 +1,9 @@
-"""Check's preflight on each node, hourly, so a drifted toolchain is found before a lane's check is refused (network-accounting,
-infra's 6th user interview: on 30 Sep node 1's preflight refused #326's check, because uv had drifted and pod_setup.sh's links to
-elan, lake and cargo were gone).
+"""Check's preflight on each node, hourly, so a drifted toolchain (uv, or pod_setup.sh's links to elan, lake and cargo) is found
+before a lane's check is refused.
 
 Each pass updates a clean checkout of origin/main and, for each machine, launches what `check.py --record --on` launches, with
 `true` for the check: `research run --on M --preflight check --send <the Lean bundles' URLs> -- true`. Its preflight needs the URLs
-wherever a check holds the node's one warm copy of the Lean dependencies (2 Oct: refused without them, passed with them); the
+wherever a check holds the node's one warm copy of the Lean dependencies, and refuses without them; the
 runner deletes them before taking the run's record (`store.custody.CREDENTIALS`), since `true` leaves them in its inputs. The
 preflight refusing it
 (PreflightFailed) is an incident: one post in #agent-alerts naming the machine and the failure, and a "cleared" reply in that
