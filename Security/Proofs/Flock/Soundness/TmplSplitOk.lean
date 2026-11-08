@@ -95,6 +95,7 @@ theorem binds_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array 
 theorem flush_U (summed : Bool) (o : Tab) (cx cy : ℕ) (w : F128) (acc : Array F128) {ins nk : ℕ}
     (ho : UOk ins nk o) : UOk ins nk (Tab.flush summed o cx cy w acc) := by
   unfold Tab.flush
+  dsimp only
   split_ifs <;> exact ho
 
 theorem refs_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) {nk : ℕ}
@@ -108,10 +109,10 @@ theorem refs_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array �
     refine flush_U _ _ _ _ _ _ (foldl_inv (fun st : Tab × ℕ × Array F128 => UOk D.ins nk st.1) _ _ _
       (fun st v _ h => ?_) ho)
     simp only [Tab.refStep]
-    split_ifs
-    · exact h
-    · exact flush_U _ _ _ _ _ _ h
-    · exact ref_U D pt summed A B as gL pos _ hk _ _ _ h
+    split_ifs <;> first
+      | exact h
+      | exact flush_U _ _ _ _ _ _ h
+      | exact ref_U D pt summed A B as gL pos _ hk _ _ _ h
 
 theorem rows_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (rowLow : ℕ → ℕ → F128) (alpha : F128) (nk : ℕ) (rows : Array (ℕ × Array ℕ × Array ℕ)) (o : Tab)
@@ -154,8 +155,7 @@ theorem flush_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ
       (fun m s' => ?_), list_range_sum, Finset.sum_ite_eq' (Finset.range 64) s,
     if_pos (Finset.mem_range.2 hs)]
   · ring
-  · dsimp only
-    by_cases h1 : (acc.getD s' 0).isZero = true
+  · by_cases h1 : (acc.getD s' 0).isZero = true
     · rw [if_pos h1, isZero_eq h1, of_zero']
       split_ifs <;> ring
     · rw [if_neg h1, hsum_bump, of_mul]
@@ -210,7 +210,7 @@ theorem refStep_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : �
       rw [Array.size_replicate]; exact Nat.mod_lt _ (by norm_num)
     simp only [Tab.refStep, pendX, refX, hv, ↓reduceIte, Bool.false_eq_true]
     by_cases hc : pos v / A = cy
-    · simp only [hc, beq_self_eq_true, eq_self_iff_true, ↓reduceIte]
+    · simp only [hc, beq_self_eq_true, ↓reduceIte]
       rw [getD_modify _ _ hi]
       split_ifs
       · rw [of_add]; ring
@@ -235,9 +235,9 @@ theorem refStep_sum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL
   by_cases hv : v < D.cols
   · have hi : 0 < acc.size := by omega
     have hi0 : 0 < (Array.replicate 64 (0 : F128)).size := by simp
-    simp only [Tab.refStep, pendS, refS, hv, eq_self_iff_true, ↓reduceIte]
+    simp only [Tab.refStep, pendS, refS, hv, ↓reduceIte]
     by_cases hc : pos v / A = cy
-    · simp only [hc, beq_self_eq_true, eq_self_iff_true, ↓reduceIte]
+    · simp only [hc, beq_self_eq_true, ↓reduceIte]
       rw [getD_modify _ _ hi, if_pos rfl, of_add]
       ring
     · simp only [beq_eq_false_iff_ne.2 hc, Bool.false_eq_true, ↓reduceIte]
