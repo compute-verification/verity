@@ -33,7 +33,8 @@ pinned before the run (``--registered FILE``: ``{"program", "values": {param: en
 ``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
-(a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
+(a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row, a port
+committed afresh); a5 adds the member's other ports at the registration's roots (`rows.own_reads`). The reads
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
