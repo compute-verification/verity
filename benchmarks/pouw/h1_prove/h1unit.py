@@ -139,8 +139,8 @@ def layout() -> str | None:
 def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
     """``definition``'s `UnitStager` (``kw`` its ``circuit``, ``bind`` and ``public_inputs``): with ``layout`` the
     templated statement of its structural lowering (`struct_lower`, ``structural``), the flat unit never built; with
-    None, or where struct_lower refuses the Definition (its NotImplementedError: assertions or table reads, or a
-    specialization of 2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
+    None, or where struct_lower refuses the Definition (its NotImplementedError: an assertion, or a specialization of
+    2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
     (K ≤ 4096 served; past K ≈ 5,041 the lane fits no 2^27 block in either form, and compose refuses it)."""
     import sys
     from verity_flock import class_statement as CS

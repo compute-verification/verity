@@ -24,9 +24,15 @@ A V-chunk of greedy token selection (`b1.TokenSelectChunk_v1`) or its combine (`
 stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`vchunk_call`), the combine's token held to
 `TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
+A structural statement proved with ``--bin`` takes ``--tmpl-unit-bin``: flock-tmpl-unit places its unit's rows for the prover
+(`a11.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
+population Program of its one Definition at ``--n`` instances and that Program's partition (`partition.mixed_population_program`,
+as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
+Program it refuses every session once its checks pass.
+
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
-      [--structural iv/hybrid/4 | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
+      [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
 chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
@@ -411,6 +417,7 @@ def main() -> int:
                          "(read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
+    ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
     ap.add_argument("--n", type=int, default=1)
     ap.add_argument("--port", type=int, default=7611)
     ap.add_argument("--seed", type=int, default=1)
@@ -448,13 +455,29 @@ def main() -> int:
 
     d = out / "stage"
     t = time.time()
+    held, bind, base = {}, {}, 0
+    if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
+        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        from verity.ml.circuits.codec import canonical_json, encode_program
+
+        program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])
+        part = P.partition(program, query)
+        (_, base, _), = P.ranges(program, query)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "partition.json").write_text(json.dumps(part, sort_keys=True))
+        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+        held = {"partition_file": d / "partition.json", "program_file": d / "program.json"}
+        bind = {"bind": {"partition": P.digest(part), "program": part["program"]}}
     with K.no_cyclic_gc():
         st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
-                           stage_ands=None if a.stage_ands == "none" else a.stage_ands,
+                           stage_ands=None if a.stage_ands == "none" else a.stage_ands, **bind,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
     m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, ands=c["ands"], unit_rows=c.get("rows"),
+    tm = getattr(st.low, "template", None)
+    own = None if tm is None else {"defs": len(tm.defs), "rows": sum(len(df.rows) for df in tm.defs),
+                                   "refs": sum(len(x) + len(y) for df in tm.defs for _c, x, y in df.rows)}
+    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
         nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
         vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
         domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
@@ -527,7 +550,7 @@ def main() -> int:
         vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
     t = time.time()
     with K.no_cyclic_gc():
-        got = st.stage(vals, d, os.urandom(32))
+        got = st.stage(vals, d, os.urandom(32), **({"indices": range(base, base + a.n)} if held else {}))
     for f in ("inst", "pub"):
         (d / f"{f}.bin").rename(d / f"{f}-{a.n}.bin")
     IL.write_tables(d / "tables")
@@ -540,15 +563,21 @@ def main() -> int:
     if calls is False:
         return 1
     pin = st.pin
+    if a.structural:
+        from a11 import templated
+
+        form = templated(st, d, a.tmpl_unit_bin)
+    else:
+        form = {}
     del st, got
     say("released", rss_now_gb=release())
 
     t = time.time()
-    record, live = a0.session(a.bin, {"dir": d, "pin": pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
+    record, live = a0.session(a.bin, {"dir": d, "pin": pin, **form}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
     say("proved", seconds=round(time.time() - t, 1), accepted=(live or {}).get("accepted"), why=(live or {}).get("why"),
         **{k: (live or {}).get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"))
-    v = a0.lean_verify(a.lean, {"dir": d}, a.n, out / "session", zk=True)
+    v = a0.lean_verify(a.lean, {"dir": d, **form, **held}, a.n, out / "session", zk=True)
     say("verified", **v)
     return 0 if (live or {}).get("accepted") and v["accepted"] else 1
 
