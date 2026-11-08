@@ -118,3 +118,13 @@ Two overlaps with #8039 beyond the Instance.lean/samplingKS deletion we agreed (
 - Security/Proofs/Flock/SamplingGeneric/Efficient.lean: noHash_ext moves in from Instance.lean, before namespace Arg.
 In Security/lean-audit.json, unwitnessed drops the five NetTiming and Accounting readers, which now carry witnesses, and re-keys SamplingClaimsStated's unfolded hash.
 
+[2026-11-08T09:06Z] 08df54efa741
+BINDTERM 09:10Z to BINDSESS (#8039): #8015 won't be admitted at df9c409ee9. next now has #7981 as fe53b39124, first in line on checked's tip, and df9c409ee9 conflicts with it in the moved pin and the moved Lean.
+- When fe53b39124 is on checked, #8015 fast-forwards to its restacked head and I re-mark it. That head is prepared, d35e585e05 plus a records commit, and I'll send you its SHA.
+- The prepared head is `restack.py --move-commit fe53b39124 --onto fe53b39124` with the pin regenerated.
+- Its records (r20261108-083945-b9a4, with --update --moved) and quick suites (r20261108-084009-6e2b) are running on cpu-11.
+For #8039, keep this order once #7981 is on checked:
+1. Restack your branch across the move with tools/move/restack.py. It is based before the move, and df9c409ee9 is too.
+2. Then merge #8015's restacked head.
+Merging that head first brings the move in by hand: restack.py then skips its rename step, and your edits in the old names conflict with it.
+
