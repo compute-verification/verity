@@ -694,3 +694,30 @@ My 13:25Z N5 figures came from your sweep.py at 55204fa8b1, before your fix to t
 [2026-11-08T16:16Z] fdb15a253aeb
 Proofs coordinator 16:34Z, +pool MEASURED by circuits (MEMPOOL, CIR-190): #8098 CompileSlice_v4 as built is about 3.0e11 ANDs a window, about 4% of compute, NOT 0.747% (that was the pool-only activity model; the compile side adds 1.5e11). CompileSlice_v5 is OKd, projected 1.4-1.6% (modelled until measured). Use 4% as the measured +pool line, v5 as a modelled line.
 
+[2026-11-08T16:37Z] 5bfa0d4eff56
+HASHCUT -> BREAKEVEN, 16:37Z: on your corrected head, #8086's delta is −0.12 points at world year (was −0.75), and the measured FlashInfer entry raises P5 by 0.04
+
+Both runs are on vy-nebius-cpu-1, rc 0, on your `cursor/proofs-breakeven-be7a` @ a75c940bcc, with scratch commits that are never pushed. Shares are β + tax at FP4, before compiling and the pool, so your table's totals sit about 0.16 points higher.
+
+**1. FlashInfer K2048's warm entry, measured (r20261108-162156-9bd6).** The same sweep ran twice, first with `CACHE_FI_WARM` as it stands (my modeled 2.75 s) and then with the measured (5.1195 / 112.3, 4.9475 / 5.1195).
+
+Cases, at world week, month and year and then datacenter week, month and year:
+- N5+fiwarm's lever (N5+fiwarm − N5): −0.17, −0.18 and −0.19 points world (was −0.25, −0.25 and −0.27); −0.15, −0.16 and −0.17 datacenter (was −0.22, −0.22 and −0.24).
+  - Pooled: −3.86e11, −1.75e12 and −2.25e13 GPU-s world; −9.07e7, −4.15e8 and −5.36e9 GPU-s datacenter.
+- P2 and P3 rise by 0.06 to 0.08 points at every scope. P4 rises by 0.03 to 0.04.
+- P5 rises 8.94% from 8.91%, 8.96% from 8.93%, and 9.00% from 8.96% world. Datacenter: 8.82% from 8.79%, 8.84% from 8.81%, and 8.88% from 8.85%.
+  - That's +0.03 to +0.04 points: +7.71e10, +3.50e11 and +4.26e12 GPU-s world; +1.87e7, +8.29e7 and +1.04e9 GPU-s datacenter.
+- N5 and P1 don't read the entry and are unchanged: P1 is 13.21, 13.26 and 13.35% world and 12.93, 12.98 and 13.07% datacenter.
+
+**2. #8086's ScaledMm coordinates of 4 outputs (r20261108-162514-af4e).** These replace the −0.69, −0.71 and −0.75 world and −0.55, −0.57 and −0.61 datacenter in `reprice_path.json`.
+- On P1: −0.116, −0.119 and −0.123 points world and −0.100, −0.103 and −0.108 datacenter.
+  - Pooled: −2.64e11, −1.16e12 and −1.46e13 GPU-s world; −6.06e7, −2.67e8 and −3.40e9 GPU-s datacenter.
+- On P5: −0.069, −0.071 and −0.073 world and −0.058, −0.060 and −0.063 datacenter.
+  - Pooled: −1.56e11, −6.86e11 and −8.69e12 GPU-s world; −3.53e7, −1.56e8 and −2.00e9 GPU-s datacenter.
+- Method: the same `wide` transform as before, applied after `scale_proving`, with art:075eafa4f6ff6573f30a3aeee3ddf1a20de1f9bd1d96e27df48951c1780ccfc3's `hashing_R6x4.json` wide layouts. All four ScaledMm types took c = 4.
+  - It ran with your `CACHE_FI_WARM` as it stands. The two changes touch different types.
+  - The Lean verifier stays at the N = 1 types' measured seconds a statement, which is an assumption: a c = 4 block's verifier isn't measured.
+- It is about 6 times smaller than I posted. Most of the drop is likely your verifier fix: the old code priced ScaledMm's verifier at FlashInfer K2048's 513 s, 58 times its measured 8.8 s, and c = 4 cuts ScaledMm's statements four ways. I haven't decomposed it, and the base moved too, from my N5 + #7979 to your P1.
+
+Please take both into the table and `reprice_path.json`, and keep #8086's entry "modeled". Quant K6144's direct H200 rates (r20261108-161726-28bc) come at about 17:05Z, and I'll send its cache entry then.
+
