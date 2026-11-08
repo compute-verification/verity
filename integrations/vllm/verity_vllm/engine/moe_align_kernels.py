@@ -1,4 +1,4 @@
-"""The deterministic `moe_align_block_size`'s Triton kernels (`moe_align.Align` launches them). No atomic decides where a
+"""The deterministic `moe_align_block_size`'s Triton kernels (`engine.moe_align.Align` launches them). No atomic decides where a
 pair goes: a pair's slot is its expert's padded offset ``base[e]``, plus the expert's pairs before its tile of ``T``
 pairs, plus its rank in the tile: the number of the tile's earlier pairs with its expert, from a compare against the
 tile's pairs ``JB`` at a time. A pair's ``bin`` is its local expert, or ``E`` for a pair no expert takes. One program
