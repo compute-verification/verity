@@ -301,7 +301,8 @@ def run(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
     taken = taken_of(a.mix)
-    types = {t: v for t, v in staged(Path(a.staged), K).items() if t in taken and (not a.types or t in a.types.split(","))}
+    types = {t: v for t, v in staged(Path(a.staged), a.split or K).items()
+             if t in taken and (not a.types or t in a.types.split(","))}
     if not types:
         raise SystemExit(f"proof_server: no staged type of the mix under {a.staged}")
     for t, v in types.items():
@@ -406,7 +407,7 @@ def run(a) -> int:
                 verdicts.append({"type": t, "verify_s": s.get("verify_s"), "accepted": s.get("accepted"),
                                  "stmt_cache": s.get("stmt_cache")})
     rec = summarize(lives, samples, types, K)
-    rec |= {"provers": K, "verify_ahead": ahead, "sessions": a.sessions, "warm": warms,
+    rec |= {"provers": K, "split": a.split or a.provers, "verify_ahead": ahead, "sessions": a.sessions, "warm": warms,
             "route": route, "cpu": a.cpu, "plain": a.plain,
             "timed_out": timed_out, "rc": [p.returncode for p in provers], "wall_s": round(time.time() - t_start, 3),
             "host_limit": {"stopped_at_s": guard.hit and round(guard.hit - t_start, 1), "floor_gib": a.mem_floor,
@@ -583,6 +584,8 @@ def main() -> int:
     ap.add_argument("--staged", help="the staged statements, Z/<type>/c<n>/stage")
     ap.add_argument("--types", default="", help="only these staged types (comma-separated)")
     ap.add_argument("--provers", type=int, default=1)
+    ap.add_argument("--split", type=int, default=0,
+                    help="statements of full/N blocks (0: full/K), e.g. one prover on the statement K provers take")
     ap.add_argument("--sessions", type=int, default=120, help="each prover's timed sessions")
     ap.add_argument("--warm", type=int, default=0, help="each prover's warm sessions (at least one a type)")
     ap.add_argument("--route", action="store_true",

@@ -30,6 +30,7 @@
 #      ST_MEM_GIB (the host's memory where no cgroup shows it, a RunPod pod's memoryInGb: the server stops at 8 GiB free of it)
 #      ST_SERVER_TYPES=a,b (the server proves only these of the staged types the device prover takes)
 #      ST_ROUTE=1 (each type to one of the K provers, which hold every circuit once between them: proof_server.py --route)
+#      ST_SPLIT=N (statements of full/N blocks whatever K is: proof_server.py --split; unset: full/K)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -232,7 +233,7 @@ EOF2
     FC_VERIFY_AHEAD=${ST_VERIFY_AHEAD:-1} taskset -c "$PC" "$PY" benchmarks/one_stage/proof_server.py run --bin "$BIN" \
       --mix "${ST_MIX:?}" --staged "$Z" --types "$OK" --provers "$k" --sessions "${ST_SESSIONS:-120}" --warm "${ST_SERVER_WARM:-0}" \
       --out "$O/server-k$k" --scratch "$W/server-k$k" --deadline "$left" --mem-limit "${ST_MEM_GIB:-0}" \
-      $( [ "${ST_ROUTE:-0}" = 1 ] && echo --route) "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
+      $( [ "${ST_ROUTE:-0}" = 1 ] && echo --route) --split "${ST_SPLIT:-0}" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
       | grep SERVER | tee -a "$O/job.log"
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
     rm -rf "$W/server-k$k"
