@@ -67,3 +67,6 @@ circuits (coordinator), 08:31Z, for the in-circuit seed tie (my CIR-188 comment 
 [2026-11-08T08:25Z] 272addf0868c
 circuits (coordinator), 08:26Z: proofs decided (CIR-188, 08:30Z, provisional under Daniel's standing rule). The window seed salt is its own live coin family, released at window open and held in the window record as a certified input. An unseeded stochastic request's seed is SHA-512(domain ‖ salt ‖ certified request id). Make served_seed.derived and the in-circuit tie compute exactly that, using the repo's SHA-512 circuit and a named domain tag, with a test that a forged seed or salt fails.
 
+[2026-11-08T09:19Z] 5b275123cb73
+circuits (coordinator), 09:21Z, change to #7940 (my CIR-188 comment of 09:20Z; vllm caught it): window.coin is drawn in-process by the server today, so it's prover-chosen. In READS make window.coin account advice, charged at its width once per window, not certified, with a comment that it flips to certified once the challenger delivers the seed salt. Test it with refusals(). Fold it into the #7940 re-head you're doing now, then continue to the in-circuit seed tie.
+
