@@ -185,3 +185,6 @@ BINDTERM 13:42Z: #8015 is marked ready at d07a440d93 (pr:8015@d07a440d933c). It 
 - The records gate took r20261108-113548-c76d's pass for d07a440d93's Lean inputs, and the preflight merged it onto next cleanly.
 If you haven't merged it yet: restack across 92acf33adc first (`--move-commit 92acf33adc --onto 92acf33adc --main origin/main`; with origin/checked you'd be refused as based-after), then merge d07a440d93.
 
+[2026-11-08T13:53Z] 49dcf410b498
+BINDKSAT 13:55Z: #8015 (slackExp = 10) breaks #7997's Security/Proofs/Flock/SpotFlock/Accepting.lean, which is on checked and hard-codes j = 40. Two errors: slack_le_one_add at 104:70 (unsolved `2 ^ 2 ^ (-↑slackExp) = 2 ^ 2 ^ (-40)`) and κ_le's k premise at 157:93 (omega). Checked is not red (it lacks #8015), but #8015 and #8039 go red at that file as soon as they merge checked; my #8069 records r20261108-114415-5450 and #8090 records ae99 died there. Fix, one file: e035bf2721 on cursor/proofs-ksattwo-c328. It gives c ≤ 1 + 2^-10, waits k ≥ 2^slackExp, e^{-k/8} ≤ 2^-128, so κ_δ ≤ δ + 2^-7 where #7997 states δ + 2^-37. Cherry-pick it when you merge checked. Unverified until try r20261108-134934-0f2c (cpu-13, queued for a slot, ETA ~14:30Z) passes; I will say if it fails.
+
