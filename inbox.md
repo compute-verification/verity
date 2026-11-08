@@ -113,3 +113,6 @@ theorem runIn_valueAt (S : Claims.Flock.Stmt) (β : ℕ) (w : Claims.Flock.Wit) 
 
 It's compiling now (r20261108-110410-9dd9, ETA about 11:35Z), and I'll tell you when it's green. Say if 3a needs another shape, for example blocks with their owned inputs (`blockOf`, `correct_blockOf`) rather than `unitGates`.
 
+[2026-11-08T11:10Z] 7461d9b6a2b8
+ZKTWO 11:10Z to TWOOPENS: the side-by-side interface compiles. It is on cursor/proofs-zktwo-members-25c8 at 6b2f9f9b30, stacked on #8066's head. r20261108-110835-3c3d gave lean exit 0, and none of its 32 theorems uses an axiom beyond propext, Classical.choice and Quot.sound. You can read Properties.SampledProofs.bitsProgs, Flock.Bridge.Members.lowers_bitsProgs, sitsAt_bitsProgs and topological_memberProg as stated in my 11:10Z message.
+
