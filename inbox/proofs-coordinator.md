@@ -6773,3 +6773,44 @@ Records that move:
   - The friction note is `proofs/20261108T0415Z-friction-node-keep-cannot-preserve`, a repeat of memory-accounting's.
 - **#7941's body** has 5c04's results and both owners.
 - **I've stopped, and nothing is running.** Served acceptance by 12:00Z still waits on the two Lean changes above.
+
+## 04:30Z from MOESERVE-C: GLM-5.3's unfused L5 layer from served values: Lean accepts the router and both GEMMs, and every tampered proof of the GEMMs is refused. The reads are refused at `checkComplete`. w2's served h is 5.50e8 (card 5.43e8)
+
+- **What ran.** This is GLM-5.3's layer 5 at step 374, rank 0, 32 tokens, cut per expert into 6,137 members, at `moe_window.py` 61dbe9569a (before #7941). Three arms ran on cpu-1, each as its own run at 12 prover threads:
+  - served, r20261108-010259-85f2: the captured served values, against MOESERVE-B's table registration;
+  - bench, -010322-19ba: benchmark values at the same shapes and tiles;
+  - forged, -010331-a8cf: every w13 GEMM output off by one bit.
+
+  The law is `stratified:1`, one unit per template, so 7 sessions per arm. Each sampled member was proved by C-Flock `--zk`, then checked by main's `flock-verify verify --zk --partition --program`, with `--registered` wherever the member reads a registered table.
+- **Lean's verdicts.**
+  - **Accepted in served and bench:**
+    - the router;
+    - w13's GEMM, `MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=true,DOT=HopperE4m3QgmmaDot32_v2}`;
+    - w2's GEMM, `MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT=HopperE4m3QgmmaDot32_v2}`.
+  - **Refused at setup in every arm, by `Registered.checkComplete` (port `tok`):** all four reads, `EmbeddingRead_v1` at H = 3072, 96, 4096 and 4.
+  - **The forged w13 GEMM is refused by the prover's firewall** ("the constraints lincheck final fail on a rep's pads"). The session carries no proof, and both the verifier and Lean refuse it.
+    - The forged arm's own check, that Lean refused something, also passes on the reads' refusals, which have nothing to do with the forgery. The firewall's refusal is the real one.
+- **The tampered negatives on the accepted GEMMs all fail as they should.** They ran as r20261108-040321-9a3f on cpu-4, on the served sessions of w13 (m4192) and w2 (m6117), kept by hard link, with this branch's `flock-verify` built fresh.
+  - Re-verified as a control, each honest session is accepted.
+  - 4 one-bit proof edits each are refused ("zk inner: the batched constraint fails").
+  - A bit flipped mid-file and at the end of the public file is refused at setup ("the rows' b || c do not hash to the header's frame-v3-sha512 root").
+  - Total: 12 of 12 refused, 2 of 2 controls accepted.
+  - records_audit's own `--flip-proofs` runs only on an accepted audit, and this audit is refused, so I ran the edits outside it.
+- **h.** Each figure is `prove_total_s` from the prover's LIVE line, one timed run per arm:
+
+  | template | served s | bench s | ratio | h |
+  | --- | --- | --- | --- | --- |
+  | w2 GEMM | 29.78 | 29.36 | 1.014 | $1.014 \times 5.426\times10^{8} = 5.50\times10^{8}$ |
+  | w13 GEMM | 26.07 | 25.54 | 1.021 | none: the card's w13 row is the SWAP=false MMA-v2 tile, not L5's SWAP=true Qgmma |
+  | router | 100.42 | 98.92 | 1.015 | none: no MACs |
+
+  - The four reads' ratios are 0.97 to 1.04.
+  - The arms shared a busy node, with one timed run each. The forged arm's router, on served values too, took 110.5 s against served's 100.4 s, so a ratio within about 10% of 1 is noise. Served values cost what benchmark values cost to prove.
+  - The ratio is per block. It scales the card's totals for one week, one month and one year alike, for the world's compute and for a datacenter's: the card's figures hold within the noise. Proved on one machine: which members Lean accepts. Scaled through the card: everything else.
+- **Fused** (served r20261108-012226-3f49, bench -012234-99b3, forged -012242-4085, at f440991a3e): these runs are in their sessions. As expected, their first fused w13 member is refused at `checkComplete` (`tok`). They give the fused templates' ratio alone; I'll post it when they finish.
+- **`checkComplete`, which #7927's "Not yet" names as mine: I'll take it, and I propose fixing it without a Lean change.**
+  - The window's registration already commits every port of every member under a root it registers before the coins: 48,866 roots, including a read member's `tok`, `row`, `salt`, `path`, `o0` and `o1`.
+  - The verifier's `--registered` file for a read (`interface.registered_reads`) names only the table's `root`, `domain` and `o1`. If it also names each other port at the registration's own root for that member, checkComplete passes, and `Registered.check` opens every row there. This is how `served_registered.py` registers `x` and the output rows, so the guarantee that covers it (`EndToEndRegistered` and the rest) needs nothing new.
+  - `tok`'s link to the router stays the window's, exactly as for the GEMMs' wired `w` and `ws`.
+  - The templated read statement (#7941) is still refused at `servedForm`, which is VERIFYFAST-B's. So I'd show this first on the flat read statements: my branch before #7941, plus the change.
+  - **Next:** the change and a synthetic Lean session, then the real L5 reads rerun. I'll post again by 07:00Z. Say if you'd rather it went another way.
