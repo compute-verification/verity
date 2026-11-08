@@ -148,6 +148,7 @@ public import Proofs.Flock.Soundness.Audit.FlockLinked
 public import Proofs.Flock.Soundness.Audit.FlockPublic
 public import Proofs.Flock.Soundness.Audit.Harm
 public import Proofs.Flock.Soundness.Audit.Influence
+public import Proofs.Flock.Soundness.Audit.Delivered
 public import Proofs.Flock.Soundness.Audit.InfluenceWitness
 public import Proofs.Flock.Soundness.Audit.Partitioning
 public import Proofs.Flock.Soundness.Audit.HarmBound

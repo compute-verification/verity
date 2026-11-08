@@ -1,6 +1,6 @@
 """PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: PoUB's own verifier (`benchmarks/remote_session/verifier.py`'s
+One process stands in for the auditor: PoUB's own verifier (`verity/core/protocols/remote_bandwidth/session/verifier.py`'s
 `Verifier`, its coins from an in-process challenger, the Lean verifier deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
@@ -29,11 +29,10 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "remote_session"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-import verifier as V
-import wire
+from verity.core.protocols.remote_bandwidth.session import verifier as V
+from verity.core.protocols.remote_bandwidth.session import wire
 
 from verity.core.protocols.remote_bandwidth import audit
 

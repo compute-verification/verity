@@ -119,24 +119,24 @@ reading of `checkedU β` at `t + 1`. -/
 def YUChecked : Prop :=
   ∀ {Q R S : Type} (P : Params Q R S) (β : ℤ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (t i j : ℕ),
     P.d = 16 → 16 ∣ (U.layout.shape u).k → t < 3 * (U.layout.shape u).k / 16 →
-    P.YU β H s U u A t i j = wrap32 (checkedU β (U.layout.shape u).k A (U.weight (U.layout.wid u))
+    P.YU β H s U u A t i j = wrap32 (checkedU β (U.layout.shape u).k A (U.fixed (U.layout.fixedId u))
       (P.e1 H s U u A) (P.wtNoise H s U u).1 (P.wtNoise H s U u).2 (t + 1) i j)
 
 /-- **`TT_NCP_U` is `TT_NCP` of route U's protocol**, by definition. -/
 def TTNCPUIff : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
-    Assumptions.TTNCP_U β CM P D γ₀ ε ↔ Assumptions.TTNCP CM (P.toProtocolU β) P.d D γ₀ ε
+    (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ),
+    Assumptions.TTNCP_U β CM P D g₀ δ ↔ Assumptions.TTNCP CM (P.toProtocolU β) P.d D g₀ δ
 
-/-- **Satisfiability witness for TT_NCP_U** at every `γ₀ ∈ [0, 1)` (`GamePinned.TTNCPWitness` on route U): for every
+/-- **Satisfiability witness for TT_NCP_U** at every `g₀ ∈ [0, 1)` (`GamePinned.TTNCPWitness` on route U): for every
 bias `β` and NCP instance with at most `c` queries per unit and `W_ref ≥ 3·W_mm`, in the output-priced model at
-`3·m·k·n` TT_NCP_U(γ₀) holds with error 0, and one program runs route U's `H_ref` at cost `≤ W_ref` with `N·c`
+`3·m·k·n` TT_NCP_U(g₀) holds with error 0, and one program runs route U's `H_ref` at cost `≤ W_ref` with `N·c`
 oracle calls. -/
 def TTNCPUWitness : Prop :=
-  ∀ (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (P : Params Q R Salt) (β : ℤ) (c : ℕ) (γ₀ : ℝ),
-    0 ≤ γ₀ → γ₀ < 1 → P.QueryBound c →
+  ∀ (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (P : Params Q R Salt) (β : ℤ) (c : ℕ) (g₀ : ℝ),
+    0 ≤ g₀ → g₀ < 1 → P.QueryBound c →
     (∀ U : Workload, U.InDomain leadDomain → ∀ u < U.layout.N, 3 * (U.layout.shape u).Wmm ≤ P.Wref U.layout u) →
-    Assumptions.TTNCP_U β (outputPriced3 Q R Salt) P leadDomain γ₀ (fun _ _ => 0) ∧
+    Assumptions.TTNCP_U β (outputPriced3 Q R Salt) P leadDomain g₀ (fun _ _ => 0) ∧
     AdmitsRef (outputPriced3 Q R Salt) (P.toProtocolU β) leadDomain (fun U => U.layout.N * c)
 
 end
@@ -146,15 +146,15 @@ section
 open Pouw.NCP Pouw.NCP.RouteU Finset Pouw.NCP.Relation
 
 /-- **The floor for route U under independence** (`Relation.NCPWordFloorInd` for `C^U`, with NzNCP of `C^U`):
-`N·2^−(m n·(γ₀·3k/16 − 1))`. -/
+`N·2^−(m n·(g₀·3k/16 − 1))`. -/
 def NCPWordFloorIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k →
-    CheckpointIndependent k 16 R → 0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k →
+    CheckpointIndependent k 16 R → 0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     Word.NzNCP (fun _ => positions k m n) (checkedUPos β k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 /-- **The int32 range of route U's checked values** (`Chain.Int7Int32` on route U): for `β ∈ {127, 128, 129}` and
 int7 `A u`, `B u`, every checked value of unit `u` is int32 when `R` is a signed permutation and `k ≤ 2^15`, or a
@@ -176,14 +176,14 @@ def WrapFinalOnlyIndU : Prop :=
 /-- **The floor for route U's protocol checked values** (`Chain.WrapWordFloorInd` on route U, with NzNCP of the
 wrapped route-U values), under independence, in the int32-exact range. -/
 def WrapWordFloorIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k →
-    CheckpointIndependent k 16 R → 0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k →
+    CheckpointIndependent k 16 R → 0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     (∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checkedUPos β k m n N R A B ω u p)) →
     Word.NzNCP (fun _ => positions k m n) (wrappedU β k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 end
 end Pouw.Guarantees.NCP

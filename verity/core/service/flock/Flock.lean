@@ -66,7 +66,6 @@ public import Flock.RegKnown
 public import Flock.KnownRead
 public import Flock.JsonKeys
 public import Flock.RecordText
-public import Flock.Keccak
 public import Flock.RecCoins
 public import Flock.RecSetup
 public import Flock.RecBudget

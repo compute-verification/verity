@@ -252,12 +252,18 @@ def test_a_rank_reads_back_nccls_switches_and_two_records_differ_in_each_collect
     assert SV.collectives_differ({"ranks": [a]}, {"ranks": []}) == ["ranks [3] against []"]
 
 
-def test_a_route_read_that_fails_is_recorded_and_fails_nothing(vllm_stub, monkeypatch):
+def test_a_process_that_never_loaded_flashinfers_all_reduce_reads_no_backend(vllm_stub, monkeypatch):
+    monkeypatch.delitem(sys.modules, "vllm.distributed.device_communicators.flashinfer_all_reduce")
+    got = SV.read_rank(SimpleNamespace(vllm_config=_vllm_config()))
+    assert got["collectives"] == {**_ROUTES, "flashinfer_backend": None}
+
+
+def test_a_route_read_without_a_tp_group_raises(vllm_stub, monkeypatch):
     def no_group():
         raise AssertionError("tensor model parallel group is not initialized")
     monkeypatch.setattr(sys.modules["vllm.distributed.parallel_state"], "get_tp_group", no_group)
-    got = SV.read_rank(SimpleNamespace(vllm_config=_vllm_config()))
-    assert got["collectives"] == {"error": "AssertionError: tensor model parallel group is not initialized"}
+    with pytest.raises(AssertionError, match="not initialized"):
+        SV.collectives()
 
 
 def test_require_fails_the_commit_closed_and_says_why(tmp_path):
