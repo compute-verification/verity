@@ -87,6 +87,12 @@ def _record(n: int = 6, law=None, row: int = 0, previous: str | None = None, wor
     return {**rec, **change}
 
 
+def _seeded(stream: FC.Stream, at: float) -> dict:
+    """The epoch log's entry of the seed salt ``stream`` drew at its window's open, at ``at`` (`FC.Stream.open`)."""
+    return {"event": "seed-salt", "window_root": FC.WINDOW["root"],
+            "seed_salt": stream.named(_record())["window"][R.SEED_SALT], "seeded_at": at}
+
+
 def _lean(accepted=True, sessions=(SESSION,), **extra) -> dict:
     return {"lean": {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": list(sessions), **extra}}
 
@@ -102,7 +108,7 @@ def _round(stream: S.Stream, accepted=True, n: int = 6) -> S.Outcome:
 def test_round_trip_register_select_deliver_outcome():
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
-    assert reg.order == 0 and reg.receipt["received"] == "0" and reg.digest == R.digest(_record())
+    assert reg.order == 0 and reg.receipt["received"] == "0" and reg.digest == R.digest(stream.named(_record()))
     draw = stream.select(reg)
     assert draw.draw["law"] == "subset" and draw.draw["population"] == 6 and len(draw.units) == 2
     assert all(0 <= u < 6 for u in draw.units) and draw.units == sorted(draw.units)
@@ -475,7 +481,7 @@ OUTCOME_KEYS = {"format", "stream", "order", "registration", "receipt", "draw", 
 
 def test_a_late_registration_is_refused_and_ends_the_epoch():
     clock = Clock()
-    stream = _stream(_spec(registration_deadline=30.0), budget=3, clock=clock)
+    stream = _stream(_spec(registration_deadline=30.0), budget=3, clock=clock, seeded=False)
     clock.now = 5.0
     salt = b"\x5a" * 64
     stream.salt_released(salt, 5.0)
@@ -503,13 +509,13 @@ def test_an_on_time_registration_carries_both_readings():
     stream.salt_released(salt, 5.0)
     clock.now = 20.0
     assert "R3-leaves" in _refused(lambda: stream.register(_record(), {**_ports(6), "x": {**_ports(6)["x"], "leaves": 7}}))
-    assert not stream.ended and len(stream.epoch_log) == 1
+    assert not stream.ended and len(stream.epoch_log) == 2
     clock.now = 21.0
     reg = stream.register(_record(), _ports(6))
     assert (reg.salted_at, reg.received_at) == (5.0, 21.0) and reg.order == 0
-    assert reg.receipt == R.receipt(_record(), "challenger-test", received="0")
+    assert reg.receipt == R.receipt(stream.named(_record()), "challenger-test", received="0")
     assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 5.0, "external": True},
-                                {"event": "registration", "order": 0, "registration": reg.digest, "salted_at": 5.0,
+                                _seeded(stream, 20.0), {"event": "registration", "order": 0, "registration": reg.digest, "salted_at": 5.0,
                                  "received_at": 21.0})
     draw = stream.select(reg)
     stream.deliver(draw, [SESSION])
@@ -522,7 +528,7 @@ def test_an_on_time_registration_carries_both_readings():
 
 
 def test_a_registration_before_the_salt_is_late():
-    stream = _stream(_spec(registration_deadline=30.0))
+    stream = _stream(_spec(registration_deadline=30.0), seeded=False)
     readings = {"salted_at": None, "received_at": 0.0, "registration_deadline": 30.0}
     with pytest.raises(S.Refused) as e:
         stream.register(_record(), _ports(6))
@@ -536,11 +542,15 @@ def test_a_registration_before_the_salt_is_late():
 
 
 def test_no_registration_deadline_changes_nothing():
-    """Unset, the registration deadline reads no clock and logs nothing, salted or not; the Check states it either way."""
+    """Unset, the registration deadline reads no clock and logs nothing, salted or not, the window's seed salt aside,
+    drawn at its open; the Check states it either way."""
     reads: list[float] = []
     stream = _stream(clock=lambda: reads.append(0.0) or 0.0)
+    stream.open()
+    reads.clear()
     reg = stream.register(_record(), _ports(6))
-    assert (reg.salted_at, reg.received_at) == (None, None) and reads == [] and stream.epoch_log == ()
+    assert (reg.salted_at, reg.received_at) == (None, None) and reads == []
+    assert stream.epoch_log == (_seeded(stream, 0.0),)
     draw = stream.select(reg)
     stream.deliver(draw, [SESSION])
     assert stream.outcome(draw, _lean(), {}).accepted
@@ -549,7 +559,8 @@ def test_no_registration_deadline_changes_nothing():
     salted.salt_released(b"\x01", 0.0)
     clock.now = 1e6
     reg = salted.register(_record(), _ports(6))
-    assert (reg.salted_at, reg.received_at) == (None, None) and not salted.ended and len(salted.epoch_log) == 1
+    assert (reg.salted_at, reg.received_at) == (None, None) and not salted.ended
+    assert salted.epoch_log[1:] == (_seeded(salted, 1e6),)
     assert _spec().check.to_json()["registration_deadline"] is None
     assert _spec(registration_deadline=30.0).check.to_json()["registration_deadline"] == 30.0
     assert _spec(registration_deadline=30.0).digest() != _spec().digest() != _spec(proof_deadline=30.0).digest()
@@ -596,7 +607,7 @@ def test_a_released_salt_is_never_in_the_future_and_is_the_epochs_one_salt():
         stream.salt_released(b"\x02", 10.0)
     assert e.value.verdict.codes == ("salted",) and e.value.verdict.detail == {"salted": {"salted_at": 10.0}}
     assert len(stream.epoch_log) == 1
-    ended = _stream(_spec(registration_deadline=30.0), clock=clock)
+    ended = _stream(_spec(registration_deadline=30.0), clock=clock, seeded=False)
     assert _refused(lambda: ended.register(_record(), _ports(6))) == ("late-registration",)
     assert _refused(lambda: ended.salt_released(b"\x01", 5.0)) == ("epoch-ended",) and len(ended.epoch_log) == 1
     for salt in (b"", "01", bytearray(b"\x01"), None):

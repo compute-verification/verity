@@ -175,7 +175,7 @@ def test_a_window_reusing_an_earlier_records_value_runs_to_an_accepted_outcome_b
     outputs = {"t": {"record": R.digest(w), "value": "w/t"}}
     stream, honest, register = _reusing([w], entry, outputs)
     reg = register()
-    assert stream.log == (w, honest) and reg.order == 0 and reg.receipt["received"] == "1"
+    assert stream.log == (w, stream.named(honest)) and reg.order == 0 and reg.receipt["received"] == "1"
     assert stream.values == (VALUE,)
     draw = stream.select(reg)
     assert stream.deliver(draw, [SESSION]) is None

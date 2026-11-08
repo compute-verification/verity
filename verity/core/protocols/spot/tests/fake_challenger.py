@@ -96,12 +96,12 @@ class Stream(S.Stream):
     """A `service.Stream` on a test's own challenger (`coins`, a new `Challenger` unless given; none for a stream
     that reads no coins), driven as a deployment drives it: a registration names `WINDOW`'s root unless it names
     another, a sample's coins are committed to its registration's digest before it is sampled, and an outcome's run is
-    given the sample's evidence unless the test gives its own (`coins`, None for none). On this challenger's coins,
-    with a Spec that declares the window's seed salt (`registration.SEED_SALT`), the challenger releases `WINDOW`'s
-    salt at the window's open: the stream draws it before the window's first registration (`seed_salt`, from a
-    `Challenger` of the seed-salt family), each registration of the window whose window names no salt names it, and
-    the run is given its evidence, since a run on a live window refuses one without it (`Run.seedSaltOf`). A test of
-    the salt itself draws its own (`seed_salt`) or none (`seeded=False`)."""
+    given the sample's evidence unless the test gives its own (`coins`, None for none). With a Spec that declares the
+    window's seed salt (`registration.SEED_SALT`), the challenger releases `WINDOW`'s salt at the window's open, whether
+    or not the stream reads coins to sample: the stream draws it at `open`, else before the window's first registration
+    (`seed_salt`, from a `Challenger` of the seed-salt family), each registration of the window whose window names no
+    salt names it (`named`), and the run is given its evidence, since a run on a live window refuses one without it
+    (`Run.seedSaltOf`). A test of the salt itself draws its own (`seed_salt`) or none (`seeded=False`)."""
 
     _NONE: Any = object()
 
@@ -112,7 +112,7 @@ class Stream(S.Stream):
         self.fake = coins if isinstance(coins, Challenger) else None
         self.salted: tuple[Challenger, str] | None = None
         self._opened: str | None = None
-        self._seeded = seeded and self.fake is not None and any(p.item == G.SEED_SALT for p in spec.public)
+        self._seeded = seeded and any(p.item == G.SEED_SALT for p in spec.public)
         super().__init__(spec, unit, coins=coins, **kwargs)
 
     def seed_salt(self, coins: T.ChallengerCoins, window_root: str) -> bytes:
@@ -121,12 +121,16 @@ class Stream(S.Stream):
             self.salted = (coins, window_root)
         return salt
 
-    def _named(self, record: Mapping[str, Any], window_root: Any) -> Mapping[str, Any]:
+    def open(self, window_root: Any = WINDOW["root"]) -> None:
+        """`WINDOW`'s open: the challenger releases its seed salt, which the stream draws, where the stream is seeded
+        and hasn't drawn it."""
         if self._seeded and window_root == WINDOW["root"] and self.salted is None and \
                 window_root not in self._seed_salts:
-            assert self.fake is not None
-            self._opened = self.seed_salt(Challenger(f"{self.fake.seed}/seed-salt", 2, T.SEED_SALT_FAMILY),
-                                          window_root).hex()
+            seed = self.fake.seed if self.fake is not None else "fake"
+            self._opened = self.seed_salt(Challenger(f"{seed}/seed-salt", 2, T.SEED_SALT_FAMILY), window_root).hex()
+
+    def named(self, record: Mapping[str, Any], window_root: Any = WINDOW["root"]) -> Mapping[str, Any]:
+        """``record`` as the stream registers it: its window naming the seed salt `open` drew, unless it names one."""
         window = record.get("window") if isinstance(record, Mapping) else None
         if self._opened is None or window_root != WINDOW["root"] or not isinstance(window, Mapping) or \
                 G.SEED_SALT in window:
@@ -136,12 +140,14 @@ class Stream(S.Stream):
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                  **kwargs: Any) -> S.WindowCommitmentRecord:
         kwargs = {"window_root": WINDOW["root"], **kwargs}
-        return super().register(self._named(record, kwargs["window_root"]), ports, **kwargs)
+        self.open(kwargs["window_root"])
+        return super().register(self.named(record, kwargs["window_root"]), ports, **kwargs)
 
     def register_interiors(self, draw: S.Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                            **kwargs: Any) -> S.WindowCommitmentRecord:
         kwargs = {"window_root": WINDOW["root"], **kwargs}
-        return super().register_interiors(draw, self._named(record, kwargs["window_root"]), ports, **kwargs)
+        self.open(kwargs["window_root"])
+        return super().register_interiors(draw, self.named(record, kwargs["window_root"]), ports, **kwargs)
 
     def select(self, registration: S.WindowCommitmentRecord, **kwargs: Any) -> S.Draw:
         if self.fake is not None and bytes.fromhex(registration.digest) not in self.fake.sessions:
