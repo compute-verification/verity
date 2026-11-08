@@ -1,16 +1,18 @@
 module
 
 public import Proofs.Flock.SpotFlock.UnitEmbeds
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 
 @[expose] public section
 
 /-!
 # Where a layout places each checked unit, and `Embeds` there
 
-`TemplatesOk h`: what `Embeds` reads of SPOT[Flock]'s registration, per template `t`. Member `t`'s unit net is built
-(`Built`) with at most `2^32` gates (`unitLog ≤ 32`), and member `t`'s circuit is the statement circuit
-(`Readable.Read.stmt`: the circuit the scope check parses, unrolled) of the template's reference session statement
-`xS₀ t`.
+`templateOk_facts`: what `Embeds` reads of SPOT[Flock]'s registration, per template `t`, where the design evaluates
+(`templateOk_of_two`). Member `t`'s circuit is the statement circuit (`Readable.Read.stmt`: the circuit the scope check
+parses, unrolled) of the template's reference session statement `xS₀ t` (`Held.ms`), whose unit net is built (`Built`,
+from the circuit file's descriptor: `stmt_of_parseStmt`, `built_of_parseStmt`) with at most `2^32` gates
+(`unitLog ≤ 32`).
 
 `stmt_of_pin`: a session statement that is a reference statement but for its sample and its registered reads (`pinOk`)
 has the reference statement's statement circuit, which reads only the statement's tags, circuit file, table files and
@@ -22,8 +24,8 @@ circuit unrolls to member `t`'s, `L` puts the unit at a block and a template ins
 the unit computes or reads, at its position in the members' program, to the gate of one of the placed unit's columns
 on that wire (`unitPlace`). `exists_wire`: a placed unit's columns cover every such wire.
 
-`embeds_of_placesAt`: under `TemplatesOk h`, a layout that places each checked unit in its session statement holds
-each checked unit's circuit gates there (`Embeds`). The unit's session statement is pinned to its template's reference
+`embeds_of_placesAt`: a layout that places each checked unit in its session statement holds each checked unit's
+circuit gates there (`Embeds`). The unit's session statement is pinned to its template's reference
 statement, so each of its tables' accepted statements unrolls to the unit's member circuit (`accepted_check`,
 `stmt_of_pin`), and `embeds_unitPlace` holds the unit's gates and constants at the placed columns.
 -/
@@ -125,16 +127,60 @@ theorem stmt_of_pin {xS xS₀ : Msg} {w w₀ : FlockDeploy.Raw} (hw : FlockDeplo
   unfold Readable.Read.stmt Readable.Read.circ
   rw [hT, hc, hc₀, e2, htb, htb₀, e3]
 
+/-- **A hidden-output reading's statement circuit is its circuit file's descriptor's** (`Desc.parseStmt`), at untyped
+tags: a templated file's committed circuit unrolled, a flat file's parse, which carries no template (`ParseFacts`). -/
+theorem stmt_of_parseStmt {r : Readable.Read} {D : Desc} (hh : r.tags.hiddenOutputs = true)
+    (ht : r.tags.typed = false) (hD : Desc.parseStmt r.tags r.I.circuitFile r.I.tables = .ok D) :
+    r.stmt = D.unroll := by
+  unfold Readable.Read.stmt Readable.Read.circ ProvedScope.circuitOf HmOut.parseCommit
+  unfold Desc.parseStmt at hD
+  simp only [hh, ↓reduceIte]
+  cases hi : r.tags.isTmpl
+  · simp only [hi, Bool.false_eq_true, ↓reduceIte] at hD ⊢
+    unfold Desc.parse at hD
+    split at hD
+    · next c hc =>
+      cases hD
+      rw [hc]
+      exact unrolled_flat (parse_facts (Hidden.parse_untyped ht hc).1).tmpl
+    · cases hD
+  · simp only [hi, ↓reduceIte] at hD ⊢
+    split at hD
+    · next c hc =>
+      cases hD
+      simp only [hc, Desc.unroll]
+    · cases hD
+
 /-! ## Placing each checked unit -/
 
 variable (h : Held)
 
-/-- **SPOT[Flock]'s templates, as `Embeds` reads them**: each member's unit net is built (`Built`) with at most `2^32`
-gates (`unitLog ≤ 32`), and each member's circuit is the statement circuit (`Read.stmt`) of its template's reference
-session statement. -/
-def TemplatesOk : Prop :=
-  ∀ t (ht : t < h.ms.length), Built h.ms[t].1.unit ∧ h.ms[t].1.unit.unitLog ≤ 32 ∧
-    (FlockDeploy.readOf true (h.xS₀ t)).map Readable.Read.stmt = some h.ms[t].1
+/-- **A template whose reference statement reads as a member's** (`templateOk`): member `t`'s circuit is the reference
+statement's statement circuit (`Held.ms`), whose unit net is built (`Built`, from its circuit file's descriptor:
+`stmt_of_parseStmt`, `built_of_parseStmt`) with at most `2^32` gates. -/
+theorem templateOk_facts {t : ℕ} (hok : templateOk h t = true) (ht : t < h.ms.length) :
+    (FlockDeploy.readOf true (h.xS₀ t)).map Readable.Read.stmt = some h.ms[t].1 ∧ Built h.ms[t].1.unit ∧
+      h.ms[t].1.unit.unitLog ≤ 32 := by
+  have hms : h.ms[t].1 = stmtOf (h.xS₀ t) := by simp [Held.ms]
+  unfold templateOk at hok
+  cases hr : FlockDeploy.readOf true (h.xS₀ t) with
+  | none => rw [hr] at hok; cases hok
+  | some r =>
+    rw [hr] at hok
+    have hst : h.ms[t].1 = r.stmt := by
+      rw [hms]
+      unfold stmtOf
+      rw [hr]
+      rfl
+    simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq] at hok
+    obtain ⟨⟨⟨⟨hh, hty⟩, hD⟩, hlog⟩, -⟩ := hok
+    rw [hst]
+    split at hD
+    · next D hD' =>
+      refine ⟨rfl, ?_, hlog⟩
+      rw [stmt_of_parseStmt hh hty hD']
+      exact Hidden.built_of_parseStmt hD' hty
+    · cases hD
 
 /-- **Member `t`'s key program's partition**, as Bridge lowers it. -/
 noncomputable abbrev keyP (t : ℕ) (ht : t < h.ms.length) (hU : Built h.ms[t].1.unit) :=
@@ -170,37 +216,39 @@ def PlacesAt (L : SpotFlock.Layout) (x m₁ xS : Msg) (u : ℕ) : Prop :=
               j * 2 ^ (toReadable relation p).kLog + ((placed h t ht hU a hparse k hg o).col cc).val
 
 /-- **A layout that places each checked unit in its session statement holds each checked unit's gates there**
-(`Embeds`), under `TemplatesOk h`. A checked unit `u` is member `t`'s unit `k`, whose lowering sits in the run's program
-(`shape_of_checked`); its session statement passes round 2 at template `t` (`stmtOkAt_unit`, `templateOf_unitBase`),
-so it is parsed and checked with hidden outputs (`parsed_of_stmtOkAt`) and pinned to `xS₀ t` (`pin_of_stmtOkAt`).
-Each of its tables has an accepted statement whose circuit is the scope check's (`accepted_check`), the pinned
-statement's statement circuit unrolls it to `xS₀ t`'s (`stmt_of_pin`), and that is member `t`'s; at the placement the
-layout gives, the unit's gates and constants hold (`embeds_unitPlace`). -/
-theorem embeds_of_placesAt (hT : TemplatesOk h) {L : SpotFlock.Layout}
+(`Embeds`). Where the design evaluates, each template's reference statement reads as a member's (`templateOk_facts`).
+A checked unit `u` is member `t`'s unit `k`, whose lowering sits in the run's program (`shape_of_checked`); its session
+statement passes round 2 at template `t` (`stmtOkAt_unit`, `templateOf_unitBase`), so it is parsed and checked with
+hidden outputs (`parsed_of_stmtOkAt`) and pinned to `xS₀ t` (`pin_of_stmtOkAt`). Each of its tables has an accepted
+statement whose circuit is the scope check's (`accepted_check`), the pinned statement's statement circuit unrolls it to
+`xS₀ t`'s (`stmt_of_pin`), and that is member `t`'s; at the placement the layout gives, the unit's gates and constants
+hold (`embeds_unitPlace`). -/
+theorem embeds_of_placesAt {L : SpotFlock.Layout}
     (hL : ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) u, parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true →
       u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) → PlacesAt h L x m₁ (unitStmt h m₂ u) u) :
     Embeds h L := by
   intro x s Pt d m₁ m₂ c₀ c₁ u b ρ rb S hx hP h2 hin hok hu hS hb hρ hrb
+  have hT := fun t (ht : t < h.ms.length) => templateOk_facts h (templateOk_of_two h h2 ht) ht
   obtain ⟨t, ht, k, hut, hsit, rfl⟩ :=
-    shape_of_checked h (fun t ht => ⟨(hT t ht).1, (hT t ht).2.1⟩) hx hP h2 hin hb hρ
+    shape_of_checked h (fun t ht => ⟨(hT t ht).2.1, (hT t ht).2.2⟩) hx hP h2 hin hb hρ
   have hokAt := stmtOkAt_unit h hx hok hu
   obtain ⟨p, hpb, rfl, hpp, hc, hh⟩ := parsed_of_stmtOkAt h hokAt hS
   have htu : templateOf h.ms u = t := by
     rw [hut]
     exact templateOf_unitBase ht k.isLt
-  obtain ⟨j, hj, hpl⟩ := hL x s m₁ m₂ c₀ c₁ u hx hok hu p hpb t ht (hT t ht).1 k hut
+  obtain ⟨j, hj, hpl⟩ := hL x s m₁ m₂ c₀ c₁ u hx hok hu p hpb t ht (hT t ht).2.1 k hut
   obtain ⟨T, a, hst, hk, hcirc, hsat⟩ := accepted_check hpp hc hh hj
   have hparse : HmOut.unrolled a.st.c = h.ms[t].1 := by
     obtain ⟨-, -, w, w₀, -, -, hw, hw₀, he, -⟩ := pin_of_stmtOkAt h hokAt
-    obtain ⟨r₀, hr₀, hstmt⟩ := Option.map_eq_some_iff.1 (hT t ht).2.2
+    obtain ⟨r₀, hr₀, hstmt⟩ := Option.map_eq_some_iff.1 (hT t ht).1
     rw [htu] at hw₀
     rw [← hcirc, ← hstmt]
     exact stmt_of_pin hw hw₀ he (readOf_of_parseBytes hpb) hr₀
   obtain ⟨gi, hg, o, hβ, hW⟩ := hpl T a hparse hst
   refine ⟨_, _, _, _, k, _, hsit, rfl, o.val, hβ, fun w hR => ?_⟩
-  have hE := embeds_unitPlace (hT t ht).1 a hparse hj hk k hg o hR (hsat w hR)
+  have hE := embeds_unitPlace (hT t ht).2.1 a hparse hj hk k hg o hR (hsat w hR)
     (fun y => L.wire x m₁ (unitStmt h m₂ u) u
-      (Spot.Bits.base h.ms t + _root_.Flock.Bridge.posOf (keyC h t ht (hT t ht).1) y)) hW
+      (Spot.Bits.base h.ms t + _root_.Flock.Bridge.posOf (keyC h t ht (hT t ht).2.1) y)) hW
   exact hE
 
 end SpotFlock

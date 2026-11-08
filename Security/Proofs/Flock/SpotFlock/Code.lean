@@ -6,6 +6,7 @@ public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
 public import Properties.Spot.Members
+public import Flock.Desc
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -17,9 +18,10 @@ registration's roots (`iroots`). This is the deployment layer: the compiler's th
 these definitions from the premises it names, and nothing here imports a proof. A running verifier is this one only
 where it makes every check below.
 
-**The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; the templates'
-circuit files and units (`ms`), whose lowerings side by side are the statement's program (`bitsProgs`) and whose units
-are its proof blocks (`membersPart`); the statement's partition query; the two-stage registration the samples read
+**The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; each template's
+units (`vus`), over which the members (`Held.ms`) put template `t`'s reference statement's circuit, whose lowerings side
+by side are the statement's program (`bitsProgs`) and whose units are its proof blocks (`membersPart`); the statement's
+partition query; the two-stage registration the samples read
 (`RegTwo`), whose proof block `blockOf ρ t p` the verifier checks is request `ρ`'s unit `p` of template `t`
 (`filesBlockOf`); the second
 stage's count per stratum; the registered reads template `t`'s session must open against at a run's roots and interior
@@ -52,8 +54,9 @@ The design's replay partition is the members' (`filesReplay`: each request's uni
 it evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
 proof-block partition a partition of it, each proof block in one replay block and the design well formed) and that the
 replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
-each member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
-verifier refuses every statement out of scope.
+each member has room for its units, and the registration's blocks are theirs), and that each template's reference
+statement reads as a member's (`templateOk`: hidden outputs, untyped tags, a circuit file `Desc.parseStmt` reads, at
+most `2^32` rows a unit, one table); every check is a decision, so the verifier refuses every statement out of scope.
 
 So every checked unit has its template's session (`templateOf`) on that session's rounds (`session`), and at a run
 refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The
@@ -80,15 +83,15 @@ def zkOk (xS : Msg) : Bool :=
       sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
   | none => false
 
-/-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), the templates' circuit
-files and units (`ms`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
+/-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), each template's units
+(`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
 stage's count per stratum (`k`), the registered reads template `t`'s session
 opens against at a run's roots and interior roots (`registered t`), template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), and the commitment's layout and the reference prover's framing
-(`frame`). -/
+(`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). -/
 structure Held where
   desc : Msg
-  ms : Spot.Bits.Members
+  vus : List (Array ℕ)
   query : Query
   reg : RegTwo
   k : List ℕ
@@ -96,6 +99,16 @@ structure Held where
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
   frame : Code
+
+/-- **A session statement's circuit**: its reading's statement circuit (`Read.stmt`, a templated statement's
+unrolled); `default` where it doesn't read. -/
+def stmtOf (xS : Msg) : _root_.Flock.Circuit :=
+  ((FlockDeploy.readOf true xS).map _root_.Flock.Readable.Read.stmt).getD default
+
+/-- **The members**: template `t`'s circuit is its reference statement's (`stmtOf (xS₀ t)`), over its units
+`vus[t]`. -/
+def Held.ms (h : Held) : Spot.Bits.Members :=
+  (List.range h.vus.length).map fun t => (stmtOf (h.xS₀ t), h.vus.getD t #[])
 
 /-- **The run's statement**: the roots the boundary values are committed under. -/
 structure Roots where
@@ -219,6 +232,19 @@ other), and with hidden outputs (`hiddenOf`), as the deployed session circuit ha
 def sessionOk (t : ℕ) (xS : Msg) : Bool :=
   zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS
 
+/-- **Template `t`'s reference statement reads as a member's**, decided: it reads with hidden outputs and untyped tags,
+its circuit file's descriptor reads (`Desc.parseStmt`), its statement circuit's unit has at most `2^32` rows, and it
+sets up in one table. -/
+def templateOk (t : ℕ) : Bool :=
+  match FlockDeploy.readOf true (h.xS₀ t) with
+  | some r =>
+    r.tags.hiddenOutputs && !r.tags.typed &&
+      (match _root_.Flock.Desc.parseStmt r.tags r.I.circuitFile r.I.tables with
+        | .ok _ => true
+        | .error _ => false) &&
+      decide (r.stmt.unit.unitLog ≤ 32) && (shapeOf (h.xS₀ t)).length == 1
+  | none => false
+
 /-- **The first stage's design**: the one `Select.select` samples on the boundary registration (`slotDesign`). -/
 def replayDesign : Option Design :=
   (slotDesign h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table).toOption
@@ -235,13 +261,13 @@ def partition (_ : AuditStatement) : Option Partition :=
   some (membersPart h.ms)
 
 /-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
-the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`) and the layout
-fits the members' files (`filesOk`). -/
+the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`), the layout
+fits the members' files (`filesOk`) and every template's reference statement reads as a member's (`templateOk`). -/
 def two (_ : AuditStatement) : Option Design.Two :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
   | some l, some d =>
     if scopeOk (bitsProgs h.ms) (membersPart h.ms) ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ &&
-        filesOk h.reg h.ms l h.k then
+        filesOk h.reg h.ms l h.k && (List.range h.ms.length).all (templateOk h) then
       some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩
     else none
   | _, _ => none

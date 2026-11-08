@@ -276,8 +276,25 @@ theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
       split at hd
       · rename_i hc
         cases hd
-        rw [Bool.and_eq_true] at hc
-        exact ⟨l, ok_of_toOption hl, by simp, rfl, hc.1, hc.2⟩
+        simp only [Bool.and_eq_true] at hc
+        exact ⟨l, ok_of_toOption hl, by simp, rfl, hc.1.1, hc.1.2⟩
+      · cases hd
+
+/-- **Where the design evaluates, every template's reference statement reads as a member's** (`templateOk`). -/
+theorem templateOk_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
+    (ht : t < h.ms.length) : templateOk h t = true := by
+  unfold two at hd
+  cases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with
+  | none => simp [hl] at hd
+  | some l =>
+    cases hr : replayDesign h with
+    | none => simp [hl, hr] at hd
+    | some dr =>
+      simp only [hl, hr] at hd
+      split at hd
+      · rename_i hc
+        simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hc
+        exact hc.2 t ht
       · cases hd
 
 /-- **The statement round 2 checks is in scope**: it parses, its partition and design evaluate, and so the two-stage
