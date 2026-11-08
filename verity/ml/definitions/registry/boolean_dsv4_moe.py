@@ -45,7 +45,7 @@ products read the words it reads (as `boolean_moe.MoeRouterBiasTopK_v1` traces i
     SiluMulClamp_v2            I `SiluMulClampBf16_v2`
 
 A comparison is of f32 order keys (`boolean_moe._key`, +0 and -0 at one place): the ordered ``t < -126`` and ``x > 20`` are
-false at a NaN, and a slot's argmax is strict with the lower expert winning ties, `RouterArgmaxStep_v1`'s scan on currents that
+false at a NaN, and a slot's argmax is strict with the lower expert winning ties, `ArgmaxStepF32_v1`'s scan on currents that
 are never NaN.  A slot's score is the XOR of the scores under the one-hot decode of its expert.  The sums are
 `moe._lane0_sum`'s tree with F32Add_v1's NaN words; no NaN of them reaches an output, since a NaN sum makes the divisor 1.
 """

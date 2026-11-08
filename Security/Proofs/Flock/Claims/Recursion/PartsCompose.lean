@@ -808,13 +808,13 @@ theorem stmtFixes_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed �
 
 /-! ## The dense corollaries, from the parts' lowering facts -/
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record, from
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record, from
 the parts' lowering facts**: `ksLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition
 (`decompB_partAccepts_of_parts`). At a split `S` of the element-level verifier's acceptance (proved by its
 construction), an inventory `own` and per-part predicates `PC`, what it takes in `DecompB`'s place: at each part, its
 circuit accepting implies `PC` (`hlow`, the lowering facts); `own` gives each check to a part whose `PC` implies it
 (`OwnedBy`) or to the statement, which fixes it (`StmtFixes`). The readers' `ReadersTrue` and `recRead` reading the
-coin server's transcript `recTr aux nOf hd recRest` back (`ReadsBackB`) are `ksLin2_deployed_partAccepts`' own. This
+challenger's live-coin part's transcript `recTr aux nOf hd recRest` back (`ReadsBackB`) are `ksLin2_deployed_partAccepts`' own. This
 bounds no number by itself: those premises are open. -/
 theorem ksLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -838,7 +838,7 @@ theorem ksLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Floc
   obtain rfl := List.mem_singleton.1 hsh
   exact decompB_partAccepts_of_parts _ _ _ _ _ _ _ _ S own PC hlow hown hfix
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record,
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record,
 from the parts' lowering facts**: `bitsLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition.
 It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_composed`'s open
 premises: a bound on a number under named premises, not a proved security level. -/

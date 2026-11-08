@@ -8,8 +8,10 @@
 DEST gets the files `public_boundary.py` judges public (`public_boundary.toml`), in a new repository with one commit. A
 manifest's entry that names what the export doesn't copy is dropped: a lakefile's roots, executables, input files and path
 `require`s (with their `lake-manifest.json` entries), and each pyproject's members, sources, conflicts, extras, dependency
-groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. Each
-rewrite must read, as TOML or JSON, as the old manifest less exactly those entries. A path `require`, an extra's entry and a
+groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. A
+list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the dead-code
+census's roots and keep-list), so a file made private takes its entries with it. Each rewrite must read, as TOML or JSON, as
+the old file less exactly those entries. A path `require`, an extra's entry and a
 dependency group's are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite
 kept one; every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the
 export doesn't copy.
@@ -22,7 +24,7 @@ The report gives:
   lane handles, dates, names);
 * the known residue (`public_boundary.toml`'s `[[residue]]`), each entry's sites, and the change that removes it;
 * the third-party code DEST pins: the Lean packages its manifests pin, the Python distributions its lock resolves, and the
-  Rust upstream C-Flock patches;
+  Rust upstream Flock patches;
 * with `--build`, each Lake package's `lake build` and the workspace's `uv sync` (a node's work: `research run`), and the
   licenses of what they fetched and of the Rust upstream at its pin.
 """
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fnmatch
 import importlib.util
 import json
 import os
@@ -341,8 +344,86 @@ def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], w
     return _checked("".join(out), expect, _norm(here, "pyproject.toml")), dropped
 
 
+#: the lists whose entries name the tree's paths, by their path inside the `tests/` directory holding them: a lint
+#: allowlist's `file`s, and the dead-code census's roots (a shell, a directory or a dotted module a line) and its keep-list's
+#: modules
+PATH_LISTS = {"lint/allowlists/*.json": "allowlist", "census_roots.txt": "roots", "dead_code_keep.json": "keep"}
+
+
+def path_list(f: str) -> tuple[str, str] | None:
+    """(kind, base) when ``f`` is one of `PATH_LISTS`, ``base`` the directory holding its `tests/`."""
+    base, sep, rest = f.rpartition("tests/")
+    if sep and (not base or base.endswith("/")):
+        for pattern, kind in PATH_LISTS.items():
+            if fnmatch.fnmatchcase(rest, pattern):
+                return kind, base.rstrip("/")
+    return None
+
+
+def rewrite_path_list(text: str, f: str, tracked: set[str], copied: set[str]) -> tuple[str, list[tuple[str, str]]]:
+    """The list of the tree's paths at ``f`` (`PATH_LISTS`) less each entry naming a tracked file or directory the export
+    doesn't copy, so a file made private takes its entries with it. An entry names its path from the directory holding the
+    list's `tests/` or, naming nothing there, from the root, as the lists' readers resolve it; a glob, and an entry naming
+    nothing tracked, stay."""
+    kind, base = path_list(f)
+    tracked_dirs = {d for p in tracked for d in _parents(p)}
+    copied_dirs = {d for p in copied for d in _parents(p)}
+
+    def gone(entry: str, module: bool = False) -> bool:
+        if any(c in entry for c in "*?["):
+            return False
+        p = entry.rstrip("/")
+        names = [p.replace(".", "/") + s for s in (".py", "/__init__.py", "")] if module else [p]
+        for n in ([_norm(base, n) for n in names] + names) if base else names:
+            if n in tracked or n in tracked_dirs:
+                return n not in copied and n not in copied_dirs
+        return False
+
+    lines = text.splitlines(keepends=True)
+    if kind == "roots":
+        def root(line: str) -> str:
+            return line.split("#", 1)[0].strip()
+        gone_roots = {e for line in lines if (e := root(line)) and gone(e, module=not e.endswith((".sh", "/")))}
+        if not gone_roots:
+            return text, []
+        return "".join(line for line in lines if root(line) not in gone_roots), [("root", e) for e in sorted(gone_roots)]
+
+    doc = json.loads(text)
+    if kind == "allowlist":
+        drop = [e for e in doc["entries"] if isinstance(e, dict) and isinstance(e.get("file"), str) and gone(e["file"])]
+        expect = doc | {"entries": [e for e in doc["entries"] if e not in drop]}
+        dropped = [("file", p) for p in dict.fromkeys(e["file"] for e in drop)]
+    else:
+        drop = [{m: why} for m, why in doc["modules"].items() if gone(m, module=True)]
+        expect = doc | {"modules": {m: why for m, why in doc["modules"].items() if {m: why} not in drop}}
+        dropped = [("module", next(iter(d))) for d in drop]
+    if not dropped:
+        return text, []
+
+    def item(line: str) -> object:
+        """The entry ``line`` holds, or, for a line holding none (a bracket, another key), its decode error, which no
+        dropped entry equals."""
+        s = line.strip().rstrip(",")
+        try:
+            return json.loads(s if kind == "allowlist" else "{" + s + "}")
+        except json.JSONDecodeError as e:
+            return e
+
+    new = re.sub(r",(\s*\n\s*[\]}])", r"\1", "".join(line for line in lines if item(line) not in drop))
+    try:
+        same = json.loads(new) == expect
+    except json.JSONDecodeError as e:
+        raise ValueError(f"public_export: the rewrite of {f} isn't JSON ({e}); lay that list out one entry a line, or "
+                         "teach the rewrite its layout") from e
+    if not same:
+        raise ValueError(f"public_export: the rewrite of {f} reads as more than the old list less the entries it drops; "
+                         "lay that list out one entry a line, or teach the rewrite its layout")
+    return new, dropped
+
+
 def export(tree, boundary, judgment, dest: Path) -> dict:
-    """Copy ``judgment``'s public set into ``dest``, rewrite its manifests, and commit it as a new repository's one commit."""
+    """Copy ``judgment``'s public set into ``dest``, rewrite its manifests and its lists of the tree's paths, and commit it
+    as a new repository's one commit."""
     copied = set(judgment.public)
     for f in sorted(copied):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
@@ -354,12 +435,15 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
                 if (n := PB._norm_dist(PB._requirement_name(r))) in dists and n not in exported}
     rewrites: dict[str, list[tuple[str, str]]] = {}
     targets: dict[str, dict] = {}
+    tracked = set(tree.files)
     for f in sorted(copied):
         name, here = f.rpartition("/")[2], os.path.dirname(f)
-        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml"):
+        listed = path_list(f) is not None
+        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml") and not listed:
             continue
         old = (dest / f).read_text(encoding="utf-8")
-        new, dropped = (rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
+        new, dropped = (rewrite_path_list(old, f, tracked, copied) if listed
+                        else rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required))
         if dropped:

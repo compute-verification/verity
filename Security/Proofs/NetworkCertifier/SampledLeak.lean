@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.Prob
 /-!
 # The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count
 
-On `RAcc δ` the faulty set is one of `faultySets d P δ` (`faulty_mem_faultySets`), and every observation sequence the
+On `RAcc δ` the incorrect set is one of `faultySets d P δ` (`faulty_mem_faultySets`), and every observation sequence the
 trace's transfer gates carry with every status complete is `Accepted` with advice held only at that set's committed
 gates and the trace's committed values as the inputs besides the ingress. With those inputs moved into `As`
 (`AdviceIn`), it is then among the sequences `AccSeqsSampled` counts, so
@@ -180,7 +180,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- **The leak bound under a sampled audit**, at any deployment `D` of the sampled verifier where `KS` holds, given
 `SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
 lists every trace within Flock's radius, and for each statement and values `ρ` inputs besides the ingress `As s ρ`, at
-most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible faulty set's committed
+most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible incorrect set's committed
 bits (`faultyBits`). On the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`, `KSAccepted`'s bound: except with that probability, every observation

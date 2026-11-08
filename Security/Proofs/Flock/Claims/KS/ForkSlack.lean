@@ -47,7 +47,7 @@ simulated fork's bound is the deployed fork's, at round `j`, and the slack
 `Σ_{j<i<K} Δ_{j,i}·Pr[F_i] + Δ_{j,K}·Pr[F_K]` (`forkSlack`), with `F_i` the accepting fork at round `i` with a
 collision (`forkEv`) and `F_K` the accepting run with a collision (`oneEv`, `forkPrAt`).
 
-* **The coupling.** `ForkCoinCoupling` is the step on the fork's coin law: the simulated fork at round `t` is at most
+* **The coupling.** `ForkCoinCoupling` is the step on the fork's coin distribution: the simulated fork at round `t` is at most
   the deployed one there and `δ_t` times the simulated fork at `t + 1`, and past the last round at most `F_K`;
   `sim_le_slack` unrolls it into the slack, so the coupling gives the slack form (`slack_of_coupling`). At a
   simulator's coins `Φ` the simulated fork is `simForkPr`, the two runs at the tape and the live coins of a live
@@ -213,7 +213,7 @@ noncomputable def simForkPr [Fintype Coin] {τ LC : Type} [Fintype τ] [Fintype 
     (t : ℕ) : ℝ :=
   Pr fun p : τ × (Fin n → LC) × (Fin n → LC) => pairEv H V P x ω (Φ (p.1, p.2.1)) (Φ (p.1, lf t p.2.1 p.2.2))
 
-/-- **The coupling of the fork's coin law**: at chances `δ`, the simulated forks `sim` are at most the deployed fork
+/-- **The coupling of the fork's coin distribution**: at chances `δ`, the simulated forks `sim` are at most the deployed fork
 at each round `t` and `δ_t` times the simulated fork at `t + 1`, and past the last round at most the one-run event.
 At a simulator whose tape holds uniform functions of its live coins' history (`fnC`), against the deployed verifier
 revealing whole coins, `δ_t` is the chance that a fresh live coin agrees with the first branch's on the function's

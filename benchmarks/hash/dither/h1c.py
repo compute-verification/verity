@@ -1,6 +1,6 @@
-"""`h1c.cu` from torch: the served window's tables, `served_h1/commit.py`'s format bit for bit, built on the device.
+"""`h1c.cu` from torch: the served execution phase's tables, `served_h1/commit.py`'s format bit for bit, built on the device.
 
-    lib = H1C("libh1c.so", key)                  # the window's 64-byte key (the salts'); hm96's byte tables go up once
+    lib = H1C("libh1c.so", key)                  # the execution phase's 64-byte key (the salts'); hm96's byte tables go up once
     st = lib.set([Tab(...), ...])                # one launch set: its device table and buffers, allocated once
     lib.build(st, step)                          # domains, segments, leaves, levels on the current stream; step (1,) int32
     st.root(i)                                   # table i's root: 8 int64 big-endian words, a device view

@@ -152,7 +152,7 @@ end Node
 /-! ## Answers between the locations that depend on the mix (`e > 0`) -/
 
 /-- A node whose locations answer each other as functions of the mix too (`e > 0`): `node`'s programs, state and
-memory, fixed before the mix is drawn, with what the rest answers the GPU (`gpuSide`) and what the GPU sends the rest
+memory, fixed before the mix is sampled, with what the rest answers the GPU (`gpuSide`) and what the GPU sends the rest
 (`restSide`) any functions of the mix, the store and the tile outputs. -/
 structure InteractiveNode (N a b h S L q Lz qz : ℕ) where
   node : Node N a b h S L q Lz qz

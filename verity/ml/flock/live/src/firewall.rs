@@ -197,7 +197,7 @@ pub fn core_firewall_exe() -> std::path::PathBuf {
 
 /// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every sample of this process
 /// that is not a rep's own (`zk_hooks::set_os_source`): level 0's hiding, every tree's salts but the pads'. The mask slot's
-/// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first draw. A tap that fails later panics, as an OS
+/// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first sample. A tap that fails later panics, as an OS
 /// generator that fails does.
 #[cfg(feature = "sha512")]
 pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
@@ -333,7 +333,7 @@ pub fn rep_body(vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Ve
     b
 }
 
-/// The ZK server's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
+/// The ZK server's proof files of record on a ZK server session: the Lean session loop's finish (`Flock.Firewall.Finish`
 /// in the Lean verifier) on the session's statement, which reads each table's level 0 from the loop's own
 /// ([`LeanFinish::level0`]), then per rep, once its algebraic phase ended, is asked for its salts for levels ≥ 1, which it
 /// samples itself, and at its end given its request, which it proves with the pads the rep's Lean frame drew. It ends at
@@ -393,9 +393,9 @@ impl LeanFinish {
         self.ask(&format!("level0 {i}"), root)
     }
 
-    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish draws from the OS once, for the rep's proof
+    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish samples from the OS once, for the rep's proof
     /// file: one byte string a level, levels `1` to `R` in order, each 192 bytes a leaf (`Finish.saltsBytes`). The loop's
-    /// finish draws them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
+    /// finish samples them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
     pub fn salts(&mut self, i: usize, r: usize) -> Result<Vec<Vec<u8>>, String> {
         let b = self.ask(&format!("salts {i} {r}"), &[])?;
         let bad = || refused(format!("the Lean finish's salts of table {i} rep {r}: {} bytes that do not parse", b.len()));
@@ -575,10 +575,10 @@ pub struct Level0Ask<'a> {
 
 /// The level-0 hiding of record on a session's firewalled tables under the Lean session loop: the loop, on its frames port
 /// `addr`, takes every table's packed witness in one request (`level0 SESSION M LEN …`, a pair a table in table order,
-/// followed by the witnesses), and only then draws each table's mask slot's words, level 0's hiding and salts from the OS,
+/// followed by the witnesses), and only then samples each table's mask slot's words, level 0's hiding and salts from the OS,
 /// writes the words into the witness's mask slot, commits level 0 on them and keeps them for the session `session` names
 /// ([`level0_session`]) until that session ends. It answers each table in order, `ok N R` and the samples then the root, its
-/// last `R` bytes, or the request `err WHY`, nothing drawn. So no table's witness can depend on another table's draws. The
+/// last `R` bytes, or the request `err WHY`, nothing sampled. So no table's witness can depend on another table's samples. The
 /// loop takes one request a session, with every table's witness, and refuses any other.
 #[cfg(feature = "sha512")]
 pub fn lean_level0(addr: &str, session: &str, asks: &[Level0Ask]) -> Result<Vec<LeanLevel0>, String> {
@@ -896,7 +896,7 @@ pub fn lean_salts(addr: &str, refs: &[u8]) -> Result<Vec<u8>, String> {
 /// round, which the Lean session loop's frame of the rep checks and masks, or a firewalled rep's inner proof's round, the
 /// session's Lean finish's, which the frame holds to its own: `flock-circuit`'s `zk_finish_fw`), what the masking
 /// challenger hands it is dropped, and at the round's squeeze the release, and only the release, goes to the stream. With
-/// no release set it passes every call through: unfirewalled reps.
+/// no release set it passes every call through: unserved reps.
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,

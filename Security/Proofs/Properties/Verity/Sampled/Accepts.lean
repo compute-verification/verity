@@ -6,7 +6,7 @@ public import Proofs.Flock.Recursive.Witness
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Lookups
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 
 /-!
 # Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files
@@ -18,7 +18,7 @@ v2 judges the session's files on the blobs sent with `flock-verify --zk` as `Sam
 are one check on one pair of byte strings, and the writer carries the acceptance to what it writes:
 
 * **v2's session is `--zk`'s** (`buildSessionOf_ok`, `sessionAt_ok`, `setupAt_ok`, `setup_eq`, `setupAt_setupOfP`):
-  the session `setupAt` sets up at a record's own draw is `Exec.setupOfP` at `--zk`'s inputs (`ZkExec.zkInputs`) of v2's
+  the session `setupAt` sets up at a record's own sample is `Exec.setupOfP` at `--zk`'s inputs (`ZkExec.zkInputs`) of v2's
   (`toExec`), with no public inputs (`Recursion.Witness.setupOf_eq`), and every table passes `Zk.shapeOk`.
 * **What v2 verified is accepted** (`v2Verified_accepts`): the record and the proof files v2's check verified
   (`V2Verified`) are a transcript `AcceptsZKP` accepts at v2's inputs, and the record decodes (`zkVerify_decode`).
@@ -37,7 +37,7 @@ are one check on one pair of byte strings, and the writer carries the acceptance
 * **v2's verdict at `A`** (`accepts_sent`): the record and the proof files v2 reads in what the prover sent
   (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own` accepts.
 * **The writer** (`MovesOf`, `wr_accepts_of_verdict`): where the session's writer keeps an accepted transcript's view
-  (`WritesView`, which `wrZP` does), what it writes for moves v2's files decode to, at a draw the record carries
+  (`WritesView`, which `wrZP` does), what it writes for moves v2's files decode to, at a sample the record carries
   (`MovesOf`), is accepted.
 * **The pointwise acceptance** (`play_ends`, `MovesReach`, `decodes_of`, `filesOn_play`, `decodes_of_digests`): a
   play of the period's game ends at its parameters and committed files, so `Decodes` holds wherever v2 reads `A`'s
@@ -122,7 +122,7 @@ theorem setupAt_ok {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStag
   | error e => rw [hs] at h1; cases h1
   | ok b => rw [hs] at h1; cases h1; rfl
 
-/-- **v2's setup at a record's own draw is the event's** (`Recursion.Witness.setupOf_eq`): `Exec.setupOfP` at `--zk`'s
+/-- **v2's setup at a record's own sample is the event's** (`Recursion.Witness.setupOf_eq`): `Exec.setupOfP` at `--zk`'s
 inputs of v2's, with no public inputs. -/
 theorem setup_eq (W : Flock.Witness.Inputs) (record : String) :
     Flock.Stmt.setupTables (Flock.Witness.zkTags W) W.circuitFile W.publicFile (Flock.Witness.zkCoins W) W.count
@@ -130,7 +130,7 @@ theorem setup_eq (W : Flock.Witness.Inputs) (record : String) :
       Exec.setupOfP (ZkExec.zkInputs (toExec W)) none record :=
   setupOf_eq W record
 
-/-- **v2's session at a record's own draw is `--zk`'s**: where `setupAt` sets up `(spec, tabs)`, `Exec.setupOfP` at
+/-- **v2's session at a record's own sample is `--zk`'s**: where `setupAt` sets up `(spec, tabs)`, `Exec.setupOfP` at
 `--zk`'s inputs of v2's, with no public inputs, sets up `spec` with statements that each pass `Zk.shapeOk` and whose
 verifier-side setups are `tabs`. -/
 theorem setupAt_setupOfP {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {record : String}
@@ -350,8 +350,8 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
 
 /-! ## The writer -/
 
-/-- **The moves of `out` are those v2's files decode to** in what the prover sent `s`, at the draw `S`: v2's record
-carries the draw `A.dj S`, and `out`'s roots, link points and rounds are those of the session the record decodes to at
+/-- **The moves of `out` are those v2's files decode to** in what the prover sent `s`, at the sample `S`: v2's record
+carries the sample `A.dj S`, and `out`'s roots, link points and rounds are those of the session the record decodes to at
 the session `--zk` sets up at `A`'s inputs, and its proof files are v2's. -/
 def MovesOf (A : Live) (s : Verity.Sent) (S : Finset (Fin A.n)) (R : A.Reg) (out : LiveOutJ (A.J S R) A.mP) : Prop :=
   ∀ record proofs spec sts sess, sentRecord s = some record → sentProofs s = some proofs →
@@ -402,7 +402,7 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
 /-- **The outcomes on the joint law's support are the writer's at moves v2's files decode to** (the decoders' and the
 coin map's premise): on the joint law's support off the held-off events `BL` and `B`, beside a tape whose play's sampled
 verdict at `k` accepts, that misses at no round and not at the record, and whose play `P` holds of, the outcome is the
-writer's at a draw `S`, a registration `R` and an outcome `out` of the live session whose moves are those v2's files
+writer's at a sample `S`, a registration `R` and an outcome `out` of the live session whose moves are those v2's files
 decode to in what the prover sent (`MovesOf`). -/
 def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (k : Verity.Registration.Composite)
     (P : Verity.Exchange → Prop) (A : Live) (rd : Reading A.rounds) (σ : Verity.Game.Strategy (V.game θ F c))
