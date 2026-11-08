@@ -20,6 +20,8 @@ outputs the trace commits, at its bucket, and nothing else.
 * `Served.lead l`: the incorrect proof blocks of the windows before the first whose sample holds one of its own;
 * `Served.Undetected M l`: the audit leaves `M` incorrect proof blocks undetected: an accepted window's sample held one
   of its incorrect proof blocks, or the windows before the first sampled one hold at least `M`;
+* `Served.UndetectedLe M δ run`: on every run, the audit leaves `M` incorrect proof blocks undetected with probability
+  at most `δ`;
 * `Served.Local C E Ou L θ r l`: each window that releases changes at most `E` of its slots per incorrect proof block,
   against the served function's honest answer to the outsider's query at the window's advice. It is what the layers
   below the composition give: the network certifier ties the release to the trace's outputs, and the trace differs
@@ -76,6 +78,11 @@ proof blocks, or the windows before the first sampled one hold at least `M`. Out
 the first rejection is one whose sample missed its incorrect proof blocks, and they hold fewer than `M`. -/
 def Undetected (M : ℕ) (l : List (Served O V Tick Adv)) : Prop :=
   (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ M ≤ lead l
+
+open scoped ENNReal in
+/-- **The audit leaves `M` incorrect proof blocks undetected with probability at most `δ`** on every run `run θ r`. -/
+def UndetectedLe (M : ℕ) (δ : ℝ≥0∞) (run : Θ → R → Verity.Game (List (Served O V Tick Adv))) : Prop :=
+  ∀ θ r, Verity.Game.value (Undetected M) (run θ r) ≤ δ
 
 open Classical in
 /-- **The slots window `n`'s release changes**: those where it differs from the served function `C`'s honest answer at

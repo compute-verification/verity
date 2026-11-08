@@ -87,7 +87,7 @@ outsider `Ou`'s `T` queries one per window, and `run θ r` is its run at the wei
 * `A` holds `Ou` with each covert string of the served channel written in (`Simulable`): each window's advice and
   timing bucket, at most `E · M + (L + 1) · |O|` overwritten values and the halt;
 * the audit leaves `M` incorrect proof blocks undetected with probability at most `δ` on every run
-  (`Served.Undetected`).
+  (`Served.UndetectedLe`).
 
 Then `Ou` outputs a stolen model with probability at most
 $$|S| \cdot p + \delta + \Pr[\neg \mathrm{Local}],$$
@@ -103,7 +103,7 @@ def TheftServed : Prop :=
     (run : Θ → R → Verity.Game (List (Served O V Tick Adv))),
     HonestUseHard C gen Stolen T A p →
     Simulable A Ou (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)) →
-    (∀ θ r, Verity.Game.value (Served.Undetected M) (run θ r) ≤ δ) →
+    Served.UndetectedLe M δ run →
       Verity.Game.avg (fun z : Ω × R => Verity.Game.value
           (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (run (gen z.1) z.2)) ≤
         ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p) +
@@ -118,7 +118,7 @@ def TheftServedHonest : Prop :=
   HonestUseHard ToyServed.C ToyServed.gen ToyServed.Stolen 2 ToyServed.anyone (1 / 256) ∧
     Simulable ToyServed.anyone ToyServed.user
       (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2 (0 * 1 + (0 + 1) * Fintype.card Unit)) ∧
-    ∀ θ r, Verity.Game.value (Served.Undetected 1) (ToyServed.honestRun θ r) ≤ 0
+    Served.UndetectedLe 1 0 ToyServed.honestRun
 
 open scoped ENNReal in
 /-- **`TheftServed`'s bound fails at the verifier that accepts everything.** The leaking toy deployment writes the
