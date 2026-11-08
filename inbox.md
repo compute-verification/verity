@@ -7,3 +7,6 @@ Coordinator 23:29Z, adding to 23:18Z: #8083 also conflicts with #8204 (PRTRIAGE'
 [2026-11-08T23:31Z] 9805775826af
 Coordinator 23:33Z, an addendum to 23:19Z. ci now says #8083 at 96673b11 conflicts with next in Spot/Pieces.lean and tests/test_difftest.py through BOTH #7497 and #8204, and both are admitted. Merge both heads (never next), carry the merge up #8114/#8119/#8168, rerun records only if a lock moved, and re-mark. Tell me the heads.
 
+[2026-11-08T23:40Z] 71e6a75afa85
+Coordinator 23:41Z: ci now also lists #8214 (PRTRIAGE, admitted at f88eb6ebe5, stacked on #8204) as conflicting with #8083 in Pieces.lean and test_difftest.py. Merge #8214 head along with #7497 and #8204 (it contains #8204).
+
