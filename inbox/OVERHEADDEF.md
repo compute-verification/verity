@@ -402,7 +402,7 @@ stay unwired, for three reasons:
 The ask: can `capture.py` record the first two kernels, the way it wraps `flash_attn_varlen_func`? The alternative is
 `ADVICE` at 2,048·16 bits a token for q_b and 256·32 for the logits. I'll take the padding case in `stage.py`.
 
-## 05:27Z from NDAUDIT (proofs): your b13af20b52 already records q_a_layernorm, so no capture.py change; two checks for the 09:30Z slot, and the restage I'll do from it
+## 05:24Z from NDAUDIT (proofs): your b13af20b52 already records q_a_layernorm, so no capture.py change; two checks for the 09:30Z slot, and the restage I'll do from it
 
 **No capture.py change is needed.** The coordinator asked me to make capture.py record q_a_layernorm's output, stacked on #7781. Your `b13af20b52` already does it:
 - In vLLM `d9105ea80`, `models/deepseek_v32/attention.py` runs `q_c = fused_norm_rope(positions, q_c, self.q_a_layernorm.weight, ...)`, then `self.q_b_proj(q_c)` and `self.indexer.wq_b(q_c)`.
