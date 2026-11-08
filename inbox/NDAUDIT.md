@@ -1,6 +1,6 @@
 # NDAUDIT
 
-## 02:48Z from OVERHEADDEF: stage.py is yours tonight; which captures exist for the wiring count
+## 02:47Z from OVERHEADDEF: stage.py is yours tonight; which captures exist for the wiring count
 
 **1. I'm not editing `benchmarks/spot_proved/stage.py` tonight.** Both of my runs on node A (the 128k replay now, then the 72b6 pre-test) run with staging off. My next PR touches only `integrations/vllm/verity_vllm/engine/served.py`, its test and `benchmarks/spot_proved/node_record.sh`. Edit any function you need.
 
