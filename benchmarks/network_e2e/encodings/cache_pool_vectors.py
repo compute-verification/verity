@@ -137,8 +137,8 @@ class Call:
 
 
 class _Driver:
-    def __init__(self, S, inp: Input, record: int | None, every: bool = True) -> None:
-        self.S, self.inp, self.record, self.every = S, inp, record, every
+    def __init__(self, S, inp: Input, record: int | None, every: bool = True, progress=None) -> None:
+        self.S, self.inp, self.record, self.every, self.progress = S, inp, record, every, progress
         self.ncalls, self.seen = 0, None
         self.pool = C2.empty(S)
         self.slots: dict[int, int] = {}
@@ -175,6 +175,8 @@ class _Driver:
             self.calls.append(Call(kind, op, u0, known, refused))
         self.ncalls += 1
         self.counts[kind] += 1
+        if self.progress and self.ncalls % 10000 == 0:
+            self.progress(self.ncalls, op.r)
         self.pool = out.pool
         self.counts["entries_max"] = max(self.counts["entries_max"], sum(x is not None for x in out.pool.table))
         self.counts["copies_max"] = max(self.counts["copies_max"], max((len(x.copies) for x in out.pool.table if x), default=0))
@@ -389,13 +391,14 @@ def _tapped(drv: _Driver):
             setattr(K, n, orig[n])
 
 
-def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True) -> _Driver:
+def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True, progress=None) -> _Driver:
     """The unit over the whole trace, held to `BlockPool` (the module's docstring); the first `record` calls kept (all with
     None). Raises AssertionError where the two disagree. With `every` the pools are compared after each of `BlockPool`'s
     operations; without it only after one that made a call or changed `BlockPool`'s counts (its free blocks, cached
-    hashes or holding requests), which a trace of thousands of blocks and steps needs."""
+    hashes or holding requests), which a trace of thousands of blocks and steps needs. `progress(calls, request)` is
+    told every 10,000 calls."""
     S = SimpleNamespace(**st)
-    drv = _Driver(S, inp, record, every)
+    drv = _Driver(S, inp, record, every, progress)
     parent: dict[int, int] = {}
 
     def descends(x: int, h: int) -> bool:
@@ -475,7 +478,10 @@ def _drive_one(job: tuple[str, Path, dict[str, Any]]) -> dict[str, Any]:
         st = statics_for(inp, L=SLICES.get(p.name, {}).get("L"), R=R, D=o["copies"], SW=o["stamp_width"])
         row |= {"requests": len(inp.requests), "num_gpu_blocks": e.num_gpu_blocks, "block_size": e.block_size,
                 "async": e.async_scheduling, "statics": st}
-        row["counts"] = dict(drive(inp, st, every=not o["sparse"]).counts)
+        def progress(calls: int, r: int) -> None:
+            print(f"{label}: {calls} calls, request {r} of {len(inp.requests)}, {time.perf_counter() - t0:.0f} s", flush=True)
+
+        row["counts"] = dict(drive(inp, st, every=not o["sparse"], progress=progress if o["sparse"] else None).counts)
     except (AssertionError, ValueError, RuntimeError, OSError) as ex:  # a disagreement, or a trace the replay can't read
         row["error"] = f"{type(ex).__name__}: {ex}"
     row["seconds"] = round(time.perf_counter() - t0, 1)
