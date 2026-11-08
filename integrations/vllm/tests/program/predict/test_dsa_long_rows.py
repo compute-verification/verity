@@ -88,13 +88,18 @@ def test_a_row_past_index_topk_selects_its_top_k_in_the_mask_form(phi):
 
 
 def test_a_long_rows_keys_past_its_own_score_the_pad(phi):
-    """Row 4's mask reads its 5 logits, then 3 references to one constant word, PAD_SCORE."""
+    """Row 4's mask reads its 5 logits, then the first 3 words of the Program's one block of PAD_SCORE (a batch of the constant,
+    TOPK - 1 words), one run of references; its rows past its own are the first 3 x 576 words of the one block of zero words.
+    The Program holds those two blocks and no other batch of a constant."""
     r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
     nodes = r.program.fn.body.nodes
     first = _calls(r, "DsaTopKMask_v1")[0]
-    (logits, *pads) = runs(first.args[0].refs)
+    logits, pad = runs(first.args[0].refs)
     assert logits[0] == "n" and nodes[logits[1]].fn.id.startswith("DsaMqaLogits_v3{N=5,") and logits[2:] == (0, 5)
-    assert len(pads) == 3 and len({p[1] for p in pads}) == 1 and nodes[pads[0][1]].fn.id == f"Const32[0x{PAD_SCORE:08x}]_v1"
+    assert (nodes[pad[1]].form, nodes[pad[1]].fn.id, nodes[pad[1]].n, pad[2:]) == ("batch", f"Const32[0x{PAD_SCORE:08x}]_v1", TOPK - 1, (0, 3))
+    zero = runs(_calls(r, "DsaButterflyRows_v1")[0].args[1].refs)[-1]
+    assert (nodes[zero[1]].form, nodes[zero[1]].fn.id, nodes[zero[1]].n, zero[2:]) == ("batch", "Const16[0x0000]_v1", (TOPK - 1) * 576, (0, 3 * 576))
+    assert [i for i, n in enumerate(nodes) if n.form == "batch" and n.fn.id.startswith("Const")] == sorted({pad[1], zero[1]})
 
 
 def test_the_shared_layer_reads_the_last_indexer_layers_settings(phi):
@@ -233,8 +238,8 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
 
 @pytest.mark.slow
 @pytest.mark.skipif(not CTX131K, reason="hours and hundreds of GB at the served 131,072 positions: VERITY_VLLM_CTX131K=LAYERS[:KEYS] "
-                                        "compiles GLM-5.3's first LAYERS layers for one request of KEYS positions (default: the "
-                                        "served max_model_len)")
+                                        "compiles GLM-5.3's first LAYERS layers (at least its 3 dense ones) for one request of KEYS "
+                                        "positions (default: the served max_model_len)")
 def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     """Class G at its served limits (`CLASS_G_SERVED`): one greedy request of KEYS positions (KEYS - 1 prompt tokens and one
     output; KEYS the served max_model_len unless stated), its prompt prefilled alone in chunks of the long-prefill threshold, its
@@ -242,7 +247,7 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     INDEX_TOPK (2,048) in the mask form at its class: no `run` input and no checks, one DsaTopKMask per full indexer layer and row
     past INDEX_TOPK, at most KEYS / INDEX_TOPK classes. What no cheaper test can: that a request at the served limit compiles, at
     the real INDEX_TOPK; a run of it measures its time and memory. GLM-5.3's 78 layers don't fit one machine unrolled at 131,072
-    positions, so LAYERS cuts the checkpoint (4: three dense full-indexer layers, then a MoE layer sharing the third's top-k)."""
+    positions, so LAYERS cuts the checkpoint (3: its dense full-indexer layers; 4: then a MoE layer sharing the third's top-k)."""
     layers, _, keys = CTX131K.partition(":")
     KEYS, CH = int(keys or CLASS_G_SERVED["max_model_len"]), CLASS_G_SERVED["long_prefill_token_threshold"]
     assert KEYS <= CLASS_G_SERVED["max_model_len"]

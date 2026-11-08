@@ -217,6 +217,7 @@ class _Model:
         self.logs: dict[int, dict[str, PartLog]] = {}
         self.topk: dict[int, Coll] = {}
         self._kinds: dict[tuple, object] = {}
+        self._pads: dict[tuple[int, int], Refs] = {}
         C = self.C
         self.H, self.EPS, self.G = int(C["H"]), float(C["EPS"]), int(C["FP8_BLOCK"])
 
@@ -228,6 +229,12 @@ class _Model:
 
     def call(self, fn, *refs: Refs) -> Coll:
         return self.B.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs)))
+
+    def pad(self, w: int, bits: int, words: int, count: int) -> Refs:
+        """``count`` words of ``bits``: a slice of the Program's one block of them (`vllm_dsa.pad_words`), as `vllm_dsa` pads."""
+        if (w, bits) not in self._pads:
+            self._pads[(w, bits)] = self.B.batch(self.k("const", W=w, BITS=bits), axes=(), n=words).refs
+        return self._pads[(w, bits)].slice(0, count)
 
     def open_with(self, prefix: list[Coll], C: int) -> None:
         """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
@@ -369,7 +376,7 @@ class _Model:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_dsa import (DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY, PAD_SCORE,
-                                                                 long_row_keys, repeat)
+                                                                 long_row_keys, pad_words)
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -382,13 +389,6 @@ class _Model:
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
         if keys[-1] > TOPK and self.net.long_rows:
             _refuse(self.net.long_rows)
-        consts: dict[int, Coll] = {}
-
-        def const(w: int, bits: int) -> Coll:
-            if w not in consts:
-                consts[w] = self.call(self.k("const", W=w, BITS=bits))
-            return consts[w]
-
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
         wkp = self.cublas(x, w("wk_w")) if indexer else None
@@ -424,7 +424,7 @@ class _Model:
                     self.call(select, self.call(self.k("const", W=32, BITS=n)).refs)
                     continue
                 N = long_row_keys(n, TOPK)
-                scores = concat([logits.refs, repeat(const(32, PAD_SCORE), N - n)]) if N > n else logits.refs
+                scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs
                 mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
                 self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
         if own:
@@ -438,7 +438,7 @@ class _Model:
             if n > TOPK:
                 N = long_row_keys(n, TOPK)
                 if N > n:
-                    kv = logs["latent"].cut(n, [repeat(const(16, 0), (N - n) * (KVL + R))])
+                    kv = logs["latent"].cut(n, [self.pad(16, 0, pad_words(TOPK, KVL + R), (N - n) * (KVL + R))])
                 kv = self.call(self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)

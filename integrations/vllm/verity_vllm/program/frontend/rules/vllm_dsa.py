@@ -31,7 +31,7 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import torch
 
-from verity.ml.circuits.refs import Coll, PartLog, Refs, array_of, broadcast, concat
+from verity.ml.circuits.refs import Coll, PartLog, Refs, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
@@ -86,10 +86,10 @@ def long_row_keys(n: int, topk: int) -> int:
     return -(-int(n) // int(topk)) * int(topk)
 
 
-def repeat(pad: Coll, count: int) -> Refs:
-    """``count`` references to ``pad``'s one leaf (a long row's keys past its own: `long_row_keys`)."""
-    r = pad.refs
-    return broadcast(r.space, r.idx, r.base, count)
+def pad_words(topk: int, words: int = 1) -> int:
+    """The words of a Program's one block of a pad (a batch of one constant, sliced at each long row, so a row's pad is one run
+    of references, not one per word): the most keys a row's class adds (`long_row_keys`), topk - 1, of ``words`` words each."""
+    return (int(topk) - 1) * int(words)
 
 
 def _args(node, names: tuple[str, ...]) -> dict:
@@ -563,12 +563,14 @@ class DsaIndexerAttnRule(StateRule):
             by_keys = dict(zip(batch, launch_num_splits(batch, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0))))
             splits = [by_keys[min(n, TOPK)] for n in keys]
         past = [P for P, n in zip(pos, keys) if n > TOPK]
-        consts: dict[int, Coll] = {}
+        pads = ctx.state.setdefault("dsa_pads", {})
 
-        def const(w: int, bits: int) -> Coll:
-            if w not in consts:
-                consts[w] = ctx.call(ctx.kind("const", node, W=w, BITS=bits), node=node, rule=self, name=f"{h}/pad{w}")
-            return consts[w]
+        def pad(w: int, bits: int, words: int, count: int) -> Refs:
+            if (w, bits) not in pads:
+                pads[(w, bits)] = ctx.B.batch(ctx.kind("const", node, W=w, BITS=bits), axes=(), n=words, name=f"{h}/pad{w}").refs
+                k = len(ctx.B.nodes) - 1
+                ctx.node_hints[k], ctx.node_sources[k], ctx.node_fx[k] = f"{h}/pad{w}", node.name, node
+            return pads[(w, bits)].slice(0, count)
 
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
@@ -585,7 +587,8 @@ class DsaIndexerAttnRule(StateRule):
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
                     continue
                 N = long_row_keys(n, TOPK)
-                scores = Coll(Array(N, Value(32)), concat([logits.refs, repeat(const(32, PAD_SCORE), N - n)]) if N > n else logits.refs)
+                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n
+                              else logits.refs)
                 mask = ctx.call(ctx.kind("dsa_topk_mask", node, N=N, TOPK=TOPK), scores, node=node, rule=self,
                                 name=f"{h}/topk_mask[t={P}]")
                 selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
@@ -615,7 +618,7 @@ class DsaIndexerAttnRule(StateRule):
             if n > TOPK:
                 N = long_row_keys(n, TOPK)
                 if N > n:
-                    kv = Coll(Array(N, row), latent.cut(n, [repeat(const(16, 0), (N - n) * (L + R))]))
+                    kv = Coll(Array(N, row), latent.cut(n, [pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R))]))
                 kv = ctx.call(ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R), selected[P], kv, node=node, rule=self,
                               name=f"{h}/rows[t={P}]")
             outs.append(ctx.call(attn, ql[i], qr[i], kv, node=node, rule=self, name=f"{h}[t={P}]"))

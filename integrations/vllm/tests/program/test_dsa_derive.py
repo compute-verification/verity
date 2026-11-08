@@ -552,7 +552,8 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
 @pytest.mark.slow
 def test_a_row_past_topk_selects_its_top_k_from_its_logits_in_the_mask_form(served):
     """TOPK 2: the decode row at position 2 has 3 keys, so its class is 4 (`vllm_dsa.long_row_keys`).  The indexer layer marks
-    the top-2 set of its 3 logits and one `PAD_SCORE` (`DsaTopKMask_v1{N=4,TOPK=2}`) and sets the concentrator from that mask
+    the top-2 set of its 3 logits and one `PAD_SCORE` (the Program's one block of it, a batch of the constant:
+    `DsaTopKMask_v1{N=4,TOPK=2}`) and sets the concentrator from that mask
     (`DsaButterflySettings_v1{N=4,K=2}`), and both layers' `SparseMla_v1{T=2}` read the 2 rows `DsaButterflyRows_v1{N=4,K=2}`
     routes at those settings over the layer's 3 history rows and one zero row, in that order.  The Program reads no `run` input
     and returns no checks, and evaluates to the module's outputs at the top-2 set's rows in ascending index order, and to no other
@@ -571,7 +572,7 @@ def test_a_row_past_topk_selects_its_top_k_from_its_logits_in_the_mask_form(serv
     (m,) = [n for n in nodes if n.fn.id == mask]
     (lg, pad) = runs(m.args[0].refs)
     assert nodes[lg[1]].fn.id == bind(dsa.DsaMqaLogitsV3, N=3, H=H, D=D).id and lg[2:] == (0, 3)
-    assert nodes[pad[1]].fn.id == f"Const32[0x{vllm_dsa.PAD_SCORE:08x}]_v1" and pad[2:] == (0, 1)
+    assert (nodes[pad[1]].form, nodes[pad[1]].fn.id, nodes[pad[1]].n, pad[2:]) == ("batch", f"Const32[0x{vllm_dsa.PAD_SCORE:08x}]_v1", 1, (0, 1))
     (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"
               and a["preconditions_checked"]["indexer"] and a["preconditions_checked"]["past_topk"]]
     assert app["preconditions_checked"]["past_topk"] == [2]

@@ -106,7 +106,7 @@ def dead_free_versions() -> dict[str, Any]:
 def swapped(body: Body) -> Body:
     """`body` with each node of a Definition `dead_free_versions` names bound to its dead-free version at the same statics."""
     table = dead_free_versions()
-    nodes = [replace(n, fn=bind(table[n.fn.base_id], **n.fn.bindings)) if n.form != "primitive" and n.fn.base_id in table else n
+    nodes = [replace(n, fn=bind(table[n.fn.base_id], **n.fn.bindings)) if getattr(n.fn, "base_id", None) in table else n
              for n in body.nodes]
     if all(a is b for a, b in zip(nodes, body.nodes)):
         return body
