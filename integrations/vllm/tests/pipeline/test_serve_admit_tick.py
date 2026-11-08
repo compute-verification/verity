@@ -93,7 +93,7 @@ def plan(n: int = 40, seed: int = 7) -> tuple[list[float], list[int]]:
 def simulate(seed: int, *, gated: bool = True, n: int = 40) -> list[list[str]]:
     """Serve `plan` in simulated physical time: request i is released at rel[i] (its bucket ⌊rel/τ_b⌋), the release record
     reaches the gate up to 20 ms later and the request the engine up to 250 ms later, watermark line t up to 60 ms after
-    its bucket closes, and each step takes 20 to 50 ms, all drawn from ``seed``. Without the gate each request is added
+    its bucket closes, and each step takes 20 to 50 ms, all sampled from ``seed``. Without the gate each request is added
     when it reaches the engine. Returns the scheduled steps."""
     rel, out = plan(n)
     rng = random.Random(seed)

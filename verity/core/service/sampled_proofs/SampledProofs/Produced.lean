@@ -1,20 +1,20 @@
 /-
-Produced values (`one_stage/produced.py`): rows the prover computes after the draw from what it committed
+Produced values (`one_stage/produced.py`): rows the prover computes after the sample from what it committed
 before it, committed under hiding leaves and read as inputs by several statements of a session, each read opened against
-the one root the record names. They are never outputs. H1's drawn leaf is proved as its 32 lanes and their combine
+the one root the record names. They are never outputs. H1's sampled leaf is proved as its 32 lanes and their combine
 (`pouw.leaf_lanes`), which share the leaf's lane partials (`partials`, row l lane l).
 
 * `domain`: a registered value's (`Registered.domainBound`) with `"produced": D` in its binding, D the digest of the
-  registration record whose draw the values follow, so a produced tree opens under no other registration's domain and a
+  registration record whose sample the values follow, so a produced tree opens under no other registration's domain and a
   registered value's root (whose binding never has `"produced"`) opens under none;
 * `check`: the post-draw record `{"format", "registration", "draw", "produced": [{"value", "root", "leaves", "words",
-  "domain"} ...], "openings": {value: [[position, b ‖ c] ...]}}` against the verifier's registration digest, its draw's
+  "domain"} ...], "openings": {value: [[position, b ‖ c] ...]}}` against the verifier's registration digest, its sample's
   digest and its own entries (`Mine`), Python's P- codes in its order, a value's codes in the order of the verifier's
   value names; `openings` is each row's commit-time opening by its digest `b ‖ c`, every row of each produced value and
   the read rows of the registered values the sessions read (`P-openings`);
-* `opened`: the roots the verifiers of record report opening the produced values against (`Record.sessionRegistered`)
+* `opened`: the roots the verifiers report opening the produced values against (`Record.sessionRegistered`)
   must each be the accepted record's (`P-opened`);
-* `wanted`, `shared`: every row the verifiers of record report opening (their verdicts' `openings`, `Flock.registeredOpenings`) of
+* `wanted`, `shared`: every row the verifiers report opening (their verdicts' `openings`, `Flock.registeredOpenings`) of
   a value the verifier holds openings of must be that opening (`P-shared`), so the sessions that read a row read the one
   opening the record fixed, with no appeal to SHA-512's collision resistance;
 * `known`: a port the verifier registers at known content (`produced.known_port`): the root and `b ‖ c` of its row under
@@ -119,7 +119,7 @@ def check (rec : Json) (registration draw : String) (mine : Array Mine) : Array 
   return c
 
 /-- `produced.opened`: `#["P-opened"]` unless every produced value of the accepted record `rec` was opened against its
-root, `opened` the `{value: root}` the verifiers of record report (none: they report none). -/
+root, `opened` the `{value: root}` the verifiers report (none: they report none). -/
 def opened (rec : Json) (opened : Option (Array (String × Json))) : Array String :=
   let got := opened.getD #[]
   let want := match getD rec "produced" with | .arr es => es | _ => #[]

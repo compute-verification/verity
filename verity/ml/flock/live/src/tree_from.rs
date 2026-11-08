@@ -1,17 +1,17 @@
 //! The challenger's coin trees (`flock-circuit serve --tree-from HOST:PORT [--tree-secret-file F]`): the verifier's coin
 //! server takes each session's keyed coin tree ([`crate::coin_tree`]) from the challenger, the auditor's device on a host the
-//! prover doesn't control, instead of drawing it here. At `Hello` the challenger samples the tree under the prover's nonce and
+//! prover doesn't control, instead of sampling it here. At `Hello` the challenger samples the tree under the prover's nonce and
 //! answers its root and session key; it opens each round itself, after what the round follows (the link points after
 //! `root_F` and each table's `root_B`, [`link_after`]; every other round after its message's SHA-512, the record's
 //! `msg_sha512`), and logs each before it answers. The client checks every opening against the tree it sampled
-//! ([`Challenger::tree_open`]) before the coin server answers the prover, so the session's record is the one a tree drawn
+//! ([`Challenger::tree_open`]) before the challenger's live-coin part answers the prover, so the session's record is the one a tree sampled
 //! here would give, and the challenger's release log is what the audit holds it to.
 //!
 //! The frames are `verity.core.protocols.sampled_proofs.remote`'s: `u32be len(head) ‖ u32be 0 ‖ head`, the head a JSON
 //! object with its `type`. The client sends `hello` (with the session's `secret` in hex when it has one), then
 //! `tree {nonce, spec}` per session and `tree-open {after, n, round, stream, tree}` per round, then `close`. A refusal, a
 //! broken stream, a malformed answer or an opening that doesn't open its tree ends the connection, and every request after
-//! it is refused: a retry never redraws.
+//! it is refused: a retry never resamples.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -36,7 +36,7 @@ pub struct Challenger {
     trees: BTreeMap<[u8; 64], (Spec, Rules)>,
 }
 
-/// A [`Challenger`] the coin server's sessions share: one request and its answer at a time.
+/// A [`Challenger`] the challenger's live-coin part's sessions share: one request and its answer at a time.
 pub type Shared = Arc<Mutex<Challenger>>;
 
 /// What a session's link points are opened after: the SHA-512 of its `root_F` and each table's `root_B`, in table-name

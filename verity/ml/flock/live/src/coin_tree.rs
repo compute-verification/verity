@@ -1,4 +1,4 @@
-//! The verifier's per-session coin commitment (C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
+//! The verifier's per-session coin commitment (Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
 //! (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md).
 //!
 //! At `Hello`, before the prover's first message, the verifier samples every coin of the session and commits to all of them
@@ -9,7 +9,7 @@
 //! v2 keys the tree to the session. The prover's `Hello` carries a fresh 32-byte nonce `ν`, and every SHA-512 input of the
 //! tree is `ν ‖ (v1's input)`, so a collision stored in the verifier's auxiliary input, made before `ν` existed, opens
 //! nothing (binding is collision resistance of `x ↦ SHA-512(ν ‖ x)`). The verifier answers `Hello` with the root and a
-//! fresh hm96 key `K` of its own, drawn for this session's tree, never reused and never revealed before the answer, so hm96's
+//! fresh hm96 key `K` of its own, sampled for this session's tree, never reused and never revealed before the answer, so hm96's
 //! hiding holds for every nonce the prover picks.
 //!
 //! A leaf commits to a fixed block of `block` coins through a hash chain, so an opening reveals only the `n` coins the round
@@ -258,7 +258,7 @@ fn path(t: &[Hash], n: usize, mut j: usize) -> Vec<Hash> {
 }
 
 impl CoinTree {
-    /// Draw the session key, then every coin and salt, from `rand` (the OS in a verifier, a seeded tape in a test harness) and
+    /// Sample the session key, then every coin and salt, from `rand` (the OS in a verifier, a seeded tape in a test harness) and
     /// commit under the prover's nonce.
     pub fn draw(spec: Spec, nonce: &[u8; NONCE_BYTES], rand: &mut dyn FnMut(&mut [u8])) -> Self {
         Self::draw_with(spec, nonce, rand, &|_, _, _| {})
@@ -340,7 +340,7 @@ impl CoinTree {
     }
 }
 
-/// A session's committed coins as the verifier's coin server holds them: drawn here ([`CoinTree`]), or sampled by the
+/// A session's committed coins as the verifier's live-coin part holds them: sampled here ([`CoinTree`]), or sampled by the
 /// challenger ([`crate::tree_from`]), which keeps the coins and salts on its host and opens each round after what it follows.
 /// Either way `Hello` is answered with the root and the session key, and each round with its coins and their opening.
 pub struct Held {
@@ -434,7 +434,7 @@ pub fn check(spec: &Spec, rules: &Rules, root: &[u8; 64], stream: usize, round: 
 /// The prover's transport under a committed coin schedule: takes its own nonce and the link points' count from the `Hello`
 /// it sends and the root and session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every
 /// coin the verifier sends (the link points, every round) against them before handing it on, stripped of its opening.
-/// Anything else stops the prover there (a refusal), before it answers anything that depends on it. A firewalled session's
+/// Anything else stops the prover there (a refusal), before it answers anything that depends on it. A ZK server session's
 /// coin check of record is the Lean session loop's instead (`Flock.Firewall.Session`), which owns its connection.
 pub struct Checked<T: Transport> {
     pub inner: T,

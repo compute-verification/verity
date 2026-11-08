@@ -335,8 +335,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
                              -> per request step s: every sequence the engine step schedules, its query rows and the position of its
                                 first row (`batch_by_step`); max_seqlen_q follows from it.  Without batch invariance every
                                 token-count-dependent kernel choice reads it (`launch_tokens`, `launch_keys`)
+        dict {"batch": ..., "chunks": [n0, n1, ...]}
+                             -> the same, for a request whose prefill ran in launches of n0, n1, ... rows in turn (`chunks`; the
+                                chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`): its steps are its chunks, then its decodes
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]})."""
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]},
+    + "chunks": [int, ...])."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -360,7 +364,10 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         if spec.get("conflict"):
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
         if "batch" in spec:
-            return _launch_batch(spec["batch"])
+            return _launch_batch(spec["batch"], spec.get("chunks"))
+        if "chunks" in spec:
+            raise ValueError("launch context: prefill chunks without their launch batch (on a batch-invariant target a chunked prefill "
+                             "is the request wrapper's Program)")
         src = spec.get("max_seqlen_q_by_step", spec)
         by = {int(k): int(v) for k, v in src.items()}
     else:
@@ -370,7 +377,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
 
 
-def _launch_batch(steps) -> dict[str, Any]:
+def _launch_batch(steps, chunks=None) -> dict[str, Any]:
     if not isinstance(steps, list) or not steps:
         raise ValueError(f"launch context: batch must be a non-empty list of steps, got {steps!r}")
     batch: dict[int, list[tuple[int, int]]] = {}
@@ -379,8 +386,14 @@ def _launch_batch(steps) -> dict[str, Any]:
         if not seqs or any(n < 1 or p < 0 for n, p in seqs):
             raise ValueError(f"launch context: step {s} schedules {seqs}: every step holds sequences of >= 1 rows at positions >= 0")
         batch[s] = seqs
-    return {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
-            "declared": True}
+    out = {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
+           "declared": True}
+    if chunks:
+        if not isinstance(chunks, list) or len(chunks) < 2 or len(chunks) > len(steps) or any(int(n) < 1 for n in chunks):
+            raise ValueError(f"launch context: chunks must list a prefill's two or more launches of >= 1 rows, one a step of its batch, "
+                             f"got {chunks!r} over {len(steps)} steps")
+        out["chunks"] = [int(n) for n in chunks]
+    return out
 
 
 class LaunchContextInvalid(ValueError):

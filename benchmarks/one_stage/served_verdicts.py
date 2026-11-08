@@ -12,7 +12,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-                              [--product P]
+                              [--product P] [--deferred WHY]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -25,10 +25,10 @@ count its blocks. ``public-lines`` prints each line of stdin in its published fo
 appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
-verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
+verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+(`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -63,8 +63,8 @@ reserves (a window opens at its first engine step): its circuit is the Program d
 (serve.json's ``protocols.program``, ``h1/window-program.meta.json``), its rows and rounds the server's T and S, and its
 circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1 --out DIR --live T,S``'s manifest),
 held to that digest, T and S (`period_open_argv`). The live template's file is required. A stratum whose ``k<K>`` file
-isn't built yet is left out and named: core's credit refuses a drawn statement at that K (``circuit``), nothing else.
-Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its draw K ``--draw-k``, else
+isn't built yet is left out and named: core's credit refuses a sampled statement at that K (``circuit``), nothing else.
+Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its sample K ``--draw-k``, else
 `pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's registration of ``--model`` under the
 digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
 then refuses the window at its weights). The open's answer goes
@@ -77,13 +77,14 @@ them (the Program is a function of the linears, T and S, and of the pouw setting
 serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
-(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
-gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
+(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session and its sample's
+session (the record's ``draw_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
+log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
-the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
@@ -110,7 +111,10 @@ a subprotocol: its verdict and, unless it accepted here, why; an accept here wit
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
 with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
-elsewhere, and the reason.
+elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
+is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
+the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
+memory), which composes the final record on another host, the record's node still ``--node``.
 """
 from __future__ import annotations
 
@@ -174,6 +178,12 @@ DEVELOPMENT = "development.json"
 DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
            "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
            "whose open commits its draw K, rows and weights")
+#: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
+COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
+                 "file on the node changes its row")
+#: what `record` composes from off the served node (a deferral's follow-on): the prover's copy of those files
+COPIED_FROM = ("a prover-side copy of each piece's answer file as the served node wrote it, not the party that produced it: "
+               "an edit to that file on the node or to its copy changes its row")
 #: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
 DEV_VERDICT = "development run, credits nothing"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
@@ -449,7 +459,7 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
+    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and law), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
     scope's ``steps``, the window's engine steps, stay on the node too."""
@@ -641,7 +651,9 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
     weights = ["--model", model] if model else []
     compact = {"sort_keys": True, "separators": (",", ":")}
-    argv = ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
+    # One served window is two of the gate's sessions, its own and its withheld draw session, and the gate counts
+    # each against the period's cap; credit reads the close's list as window, then draw (credit._period_of).
+    argv = ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
             *weights, "--circuit-files", json.dumps(files, **compact), "--length", json.dumps(length, **compact)]
     return argv, {"circuit": circuit, "rows": rows, "steps": steps, "draw_k": k, "circuit_files": files,
                   "missing": missing, "length": length, "weights": weights}
@@ -692,7 +704,7 @@ def period_close(serve_dir: Path, gate: str) -> dict[str, Any]:
 def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
     """What core's credit reads of the window beyond its record and session, as ``--check-challenger``'s flags: the
     declared Program serve-openai wrote (``--descriptor``, `pouw_h1.PROGRAM`), the period ``period open`` opened
-    (``--period``, `PERIOD`), the drawn calls' statements (``--statements``) and the live evidence (``--live-evidence``,
+    (``--period``, `PERIOD`), the sampled calls' statements (``--statements``) and the live evidence (``--live-evidence``,
     ``h1_prove/live.py evidence``'s), each where it exists."""
     got: dict[str, str] = {}
     if (p := serve_dir / "h1" / "window-program.json.gz").is_file():
@@ -766,7 +778,7 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
          check: Check, statements: Path | None = None, live: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
-    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the sampled
     calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
     out.mkdir(parents=True, exist_ok=True)
     inputs = credit_inputs(serve_dir, statements, live)
@@ -788,14 +800,17 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
         try:
             if not (gate and key):
                 raise ValueError("no gate or no key pin to check the window's session by (H1_GATE, H1_KEY_SHA512)")
-            sid = json.loads(calls.read_text())["commitment"]["session"]["session"]
+            com = json.loads(calls.read_text())["commitment"]
+            sid, dsid = com["session"]["session"], (com.get("draw_session") or {}).get("session")
             tgz, tree = out / "session.tgz", out / "session"
-            tgz.write_bytes(_gate_out(gate, "fetch", sid))
-            with tarfile.open(tgz) as t:
-                t.extractall(tree, filter="data")
+            for s in (sid, dsid) if dsid else (sid,):
+                tgz.write_bytes(_gate_out(gate, "fetch", s))
+                with tarfile.open(tgz) as t:
+                    t.extractall(tree, filter="data")
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
-            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", inputs)
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check",
+                        {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {})})
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:
@@ -822,7 +837,7 @@ def check_answer(a: Any) -> dict[str, Any]:
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
-    """A sampled protocol's bound on wrong units (``public.bound``) over its checked level's size (`Core.Integrity`), or
+    """A sampled protocol's bound on incorrect proof blocks (``public.bound``) over its checked level's size (`Core.Integrity`), or
     None for an answer that has no such bound."""
     public, profile = a.get("public"), a.get("profile")
     levels = profile.get("levels") if isinstance(profile, Mapping) else None
@@ -973,12 +988,13 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite"
-           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
+           deferred: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
-    answer is about ``node``, and a piece's that names no server isn't carried."""
+    answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
+    follow-on and why, which the report and the line carry."""
     from verity_e2e_demo import block_record as BR
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
@@ -994,8 +1010,11 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as e:
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
+    host = socket.gethostname()
+    where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM if host == node else COPIED_FROM}
+    left = {"deferred": deferred} if deferred else {}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
-              "servers": {k: at[k][0] for k in rows}}
+              "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
@@ -1004,8 +1023,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                       if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
-    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere,
-             **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
+             **left, **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
@@ -1090,6 +1109,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--sampled-proofs", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
+    r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -1193,7 +1213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     got = {k: piece(k, a.pieces, run) for k in keys}
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               servers={k: at for k, (_, at) in got.items()}, product=a.product)
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

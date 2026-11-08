@@ -40,24 +40,24 @@ import Proofs.Flock.Soundness.Game.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The draw bounds, as the claims read probabilities
+# The sample bounds, as the claims read probabilities
 
-The sampling compiler's knowledge error carries the draw's term: if at least `t` regions are wrong, the verifier's draw
-misses all of them with probability at most its law's bound. Each registered law (`Flock.Draw.Law`: `subset`,
+The sampling compiler's knowledge error carries the sample's term: if at least `t` regions are wrong, the verifier's sample
+misses all of them with probability at most its sampling design's bound. Each registered law (`Flock.Draw.Law`: `subset`,
 `bernoulli`, `stratified`, `work`) has that bound proved already, in `ℝ≥0∞` over the audit layer's `prCoin`
 (`FlockSoundness.Audit.Law`). This file states each in `Claims.Pr`, the uniform average the claims use, through
 `Pr_eq_toReal_prCoin`:
 
 * `subset_miss_eq`, `subset_miss_le`: a uniform `k`-subset misses `B` with probability `C(n − |B|, k)/C(n, k)`, at most
   `C(n − t, k)/C(n, k)` when `t ≤ |B|` (`Law.subset_escape`);
-* `bernoulli_miss_eq`, `bernoulli_miss_le`: each unit drawn when its coin in `[0, den)` is below `num` misses `B` with
+* `bernoulli_miss_eq`, `bernoulli_miss_le`: each unit sampled when its coin in `[0, den)` is below `num` misses `B` with
   probability `((den − num)/den)^|B|`, at most `((den − num)/den)^t` (`Law.bernoulli_escape`);
 * `stratified_miss_eq`: independent uniform `k_s`-subsets of the strata miss `B` with probability
   `∏ s C(n_s − m_s, k_s)/C(n_s, k_s)` (`Law.stratified_escape`), and `stratified_miss_le`: at most `(1 − π)^t` when every
-  non-empty stratum draws at least a fraction `π` of its units;
-* `work_miss_le`: the work law misses units doing at least `T` of the work `W` with probability at most
+  non-empty stratum samples at least a fraction `π` of its units;
+* `work_miss_le`: the work sampling design misses units doing at least `T` of the work `W` with probability at most
   `((W − T)/W)^K` (`Law.work_escape_le`);
-* `miss_le_count`: any law misses `B` with at most its count curve at `t ≤ |B|` (`Law.miss`), which
+* `miss_le_count`: any sampling design misses `B` with at most its count curve at `t ≤ |B|` (`Law.miss`), which
   `Law.stratified_miss_eq_greedy` computes for the stratified and work laws.
 
 `miss_le_of` turns each into its form at `δ`: a bound of at most `δ` at `t` is a miss probability of at most `δ`.
@@ -77,7 +77,7 @@ theorem Pr_eq_toReal_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.
   unfold Claims.Pr
   congr 2
 
-/-- A law's miss probability, in the claims' terms, is its escape. -/
+/-- A sampling design's miss probability, in the claims' terms, is its escape. -/
 theorem Pr_miss_eq {n : ℕ} (L : Law n) (B : Finset (Fin n)) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) = (L.escape B).toReal :=
   Pr_eq_toReal_prCoin _
@@ -116,7 +116,7 @@ theorem bernFactor_zero (num den : ℕ) [NeZero den] :
   unfold Law.bernFactor
   rw [mul_zero, zero_add, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
-/-- **The Bernoulli draw misses `B`** with probability `((den − num)/den)^|B|`: unit `u` is drawn when its coin
+/-- **The Bernoulli sample misses `B`** with probability `((den − num)/den)^|B|`: unit `u` is sampled when its coin
 `ω u ∈ [0, den)` is below `num`. -/
 theorem bernoulli_miss_eq {n num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
     Claims.Pr (fun ω : Fin n → Fin den => Disjoint (univ.filter fun u => (ω u).val < num) B) =
@@ -125,7 +125,7 @@ theorem bernoulli_miss_eq {n num den : ℕ} [NeZero den] (h : num ≤ den) (B : 
   rw [Law.bernoulli_escape h, ENNReal.toReal_pow, bernFactor_zero num den] at this
   exact this
 
-/-- **The Bernoulli draw misses `t` wrong regions** with probability at most `((den − num)/den)^t`. -/
+/-- **The Bernoulli sample misses `t` wrong regions** with probability at most `((den − num)/den)^t`. -/
 theorem bernoulli_miss_le {n num den t : ℕ} [NeZero den] (h : num ≤ den) {B : Finset (Fin n)} (ht : t ≤ B.card) :
     Claims.Pr (fun ω : Fin n → Fin den => Disjoint (univ.filter fun u => (ω u).val < num) B) ≤
       (((den - num : ℕ) : ℝ) / den) ^ t := by
@@ -137,7 +137,7 @@ theorem bernoulli_miss_le {n num den t : ℕ} [NeZero den] (h : num ≤ den) {B 
 
 /-! ## Stratified -/
 
-/-- **The stratified draw misses `B`** with probability `∏ s C(n_s − m_s, k_s)/C(n_s, k_s)`, with `n_s` the stratum's
+/-- **The stratified sample misses `B`** with probability `∏ s C(n_s − m_s, k_s)/C(n_s, k_s)`, with `n_s` the stratum's
 units and `m_s` those of `B`. -/
 theorem stratified_miss_eq {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (Law.stratum σ s).card)
     (B : Finset (Fin n)) :
@@ -148,7 +148,7 @@ theorem stratified_miss_eq {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ
   refine Finset.prod_congr rfl fun s _ => ?_
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
-/-- One hypergeometric factor, at most the per-unit miss to the power of the wrong units: `C(N − b, k)/C(N, k) ≤
+/-- One hypergeometric factor, at most the per-unit miss to the power of the incorrect proof blocks: `C(N − b, k)/C(N, k) ≤
 (1 − π)^b` when `π·N ≤ k` and `b ≤ N`. -/
 theorem choose_ratio_le_pow {N k b : ℕ} {π : ℝ} (hk : k ≤ N) (hb : b ≤ N)
     (hπ : 0 < N → π * N ≤ k) : ((N - b).choose k : ℝ) / (N.choose k : ℝ) ≤ (1 - π) ^ b := by
@@ -166,8 +166,8 @@ theorem choose_ratio_le_pow {N k b : ℕ} {π : ℝ} (hk : k ≤ N) (hb : b ≤ 
   rw [div_le_iff₀ hNr, Nat.cast_sub hk]
   nlinarith [hπ hN]
 
-/-- **The stratified draw misses `t` wrong regions** with probability at most `(1 − π)^t`, when every non-empty
-stratum draws at least a fraction `π ≤ 1` of its units: each unit is drawn with probability at least `π`. -/
+/-- **The stratified sample misses `t` wrong regions** with probability at most `(1 − π)^t`, when every non-empty
+stratum samples at least a fraction `π ≤ 1` of its units: each unit is sampled with probability at least `π`. -/
 theorem stratified_miss_le {n m t : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (Law.stratum σ s).card)
     {π : ℝ} (hπ0 : 0 ≤ π) (hπ1 : π ≤ 1) (hπ : ∀ s, 0 < (Law.stratum σ s).card → π * (Law.stratum σ s).card ≤ k s)
     {B : Finset (Fin n)} (ht : t ≤ B.card) :
@@ -192,7 +192,7 @@ theorem stratified_miss_le {n m t : ℕ} (σ : Fin n → Fin m) (k : Fin m → �
 
 /-! ## Work -/
 
-/-- **The work draw misses units doing at least `T` of the work** `W` with probability at most `((W − T)/W)^K`. -/
+/-- **The work sample misses units doing at least `T` of the work** `W` with probability at most `((W − T)/W)^K`. -/
 theorem work_miss_le {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < Law.totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ Law.workOf σ w B) :
     Claims.Pr (fun ω : (Law.work σ w f K).Ω => Disjoint ((Law.work σ w f K).draw ω) B) ≤

@@ -3,8 +3,8 @@
 # restart, and a temporary setting is a commit here too. A `--config FILE` on drive's machine is refused, naming each key, unless
 # every key it sets has this file's value; a command-line flag overrides its key only where `command_line` lets it. Before it
 # syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
-# each machine of `on`, each of `landing_gates` and `warn_gates` (`drive_names`). ci owns this file; infra runs drive from it on
-# the control pod.
+# each machine of `on`, each of `landing_gates` and `warn_gates` (`drive_names`). Its owner is the handle whose `owns` in
+# .agents/skills/using-slack/registry.json covers it; drive runs from it on the control pod.
 
 # the keys drive's command line (the control pod's /data/drive/args) may override: `--on`; any other flag there that sets a key
 # refuses the tick. The landing order is no key: it is drive's priority file (`--priority-file`), read again at each sync
@@ -27,13 +27,13 @@ regenerate_locks = true
 # whole tree, and each move of `main` re-judged every member cold (a 514-PR rebuild took 70 min, about 8 s a merge).
 # A ready mark admits a PR: its merge onto `next` at the sync (a conflict, these gates) is the only check before it joins, and
 # the sync runs no preflight.
-# unread_gate (tools/verity/lean/unread_gate.py) is left out while it can't judge a merge onto a commit whose Lean no recorded
-# check has published facts for yet (each Lean landing until its lock run ends) and the sync takes that as a refusal, which
-# ejects the PR and withdraws its mark; the after-landing run's unread ratchet still catches what it would refuse.
-landing_gates = []
+# unread_gate (tools/verity/lean/unread_gate.py) refuses a merge that grows a package's unread Lean modules past its cap; one
+# it can't judge yet (no recorded check has published facts for the merge's Lean, as after a Lean landing until its lock run
+# ends) waits on `next` with its mark, and the next sync tries again.
+landing_gates = ["tools/verity/lean/unread_gate.py"]
 # scripts run as the landing gates are, whose failure keeps no PR out: the ready mark prints it as a warning, and drive lands
-# the PR and tells its owner and ci once a head, the owner fixing it in their next PR. A Markdown file a merge puts over its
-# cap (tests/test_repository.py)
+# the PR and tells its owner and drive's `CI` once a head (`tell_warned`), the owner fixing it in their next PR. A Markdown
+# file a merge puts over its cap (tests/test_repository.py)
 warn_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # the check's steps whose red after a landing drive never reverts: it names the culprit, each merge ratchet-gate's log fails,
 # and rings its lane and the owner of what failed once, the lane fixing it forward in its next PR; the next run's ratchet-gate
@@ -71,16 +71,20 @@ after_landing_shards = 3
 # run passed its preflights and its steps on the gate: a red ratchet-gate, off it (policy.toml's `off_gate`), holds `main` no
 # more than in a run of every step
 executor = "shadow"
-# infra's enqueue command, the words of its argv (`research.executor.QueueTransport`), run with `--priority N --check
-# after-landing:SHA` (and `--schema verity-graph/v2` when on); unset, each tip the executor would check is recorded incomplete
-# in shadow, and when on is told to CI, so nothing checks it and `main` stays. "on" needs a command that takes those
-# arguments and an executor that labels each graph (`verity_graph`) and each task's result/v1 (`result`) as
+# the task executor's enqueue command, the words of its argv (`research.executor.QueueTransport`), run with `--priority N
+# --check after-landing:SHA` (and `--schema verity-graph/v2` when on); unset, each tip the executor would check is recorded
+# incomplete in shadow, and when on is told to drive's `CI`, so nothing checks it and `main` stays. "on" needs a command that
+# takes those arguments and an executor that labels each graph (`verity_graph`) and each task's result/v1 (`result`) as
 # `research.executor` reads them
 # executor_enqueue = ["CMD", "ARG"]
 # every sync, members with a land verdict go below those waiting for one, so a member waiting for its review holds only itself;
 # one that gains its verdict goes after those already moved, so none below it is merged again. A held member goes to `next`'s
 # top every sync, this on or not
 verdict_first = true
+# how many restacks across a move the syncs run at once in the background: one `restack.py` per head merged above a move it
+# lacks, each rewriting a whole tree on one core, its PR waiting off `next` until a later sync reads the result. The control
+# pod has 4 cores, and the tick needs one
+restack_jobs = 3
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;

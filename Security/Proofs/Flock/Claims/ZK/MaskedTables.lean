@@ -50,7 +50,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 The masked session's tables are `setupOf true x`'s (`stsOf`). Each is a `--zk` table built from its statement alone
 (`ZkHidden.ZkTab`, `ZkTab.table`: the plan of the single-input-group form, which the tree had only at a hidden-output
-draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`setupTable_zkTab`).
+sample, `DrawSetupZHJ.table`), so every table is a table the session sets up (`setupTable_zkTab`).
 
 * `ZkHidden.schedule_ok_of_shapeOk`: a statement the `--zk` shape check passes has a `--zk` schedule (`queries0` puts
   `m` in `[25, 35]`, where `Zk.schedule` accepts, `scheduleOkB_all`).

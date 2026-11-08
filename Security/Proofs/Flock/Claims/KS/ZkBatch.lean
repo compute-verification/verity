@@ -203,7 +203,7 @@ end Session
 /-! ## At the masked simulator -/
 
 /-- **The simulated strategy follows the deployed schedule**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
+sample, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
 simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
 coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
 before the tables after it flip any, short of runs where table `j` opens nothing. -/
@@ -228,7 +228,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated strategy follows the deployed schedule**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
+sample, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
 simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
 coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
 before the tables after it flip any, short of runs where table `j` opens nothing. -/

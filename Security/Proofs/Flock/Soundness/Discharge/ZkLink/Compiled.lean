@@ -27,7 +27,7 @@ identity at every query, and every pads path to the pads root), and every row pa
 its salt, level 0's rows being 68 lanes wide (`OpensOKZ`).
 
 `sessionZG` is `Exec.sessionG` over `--zk` tables: `sessionZK` is its instance at `TabZK.after` (`sessionZK_eq`), and the
-compiled session `sessionZC` its instance at `tabAfterZC`. `batchedSessionZC` is the compiled session on a draw, as
+compiled session `sessionZC` its instance at `tabAfterZC`. `batchedSessionZC` is the compiled session on a sample, as
 `batchedSessionZK` is the interactive-oracle one.
 
 **Extraction** (as `SessionBatchAcc.lean` at M0): table `j`'s extractor fills its level-0 oracle from the verifying
@@ -280,7 +280,7 @@ def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
 /-! ## The session -/
 
 /-- **A batched session over `--zk` tables and any table run** (`Flock.Record`; `Exec.sessionG` over `TabZK`): `Commit`
-sends every table's commitment `Cm`, then one link-point draw, then every table's run `tab` after them, concurrently. -/
+sends every table's commitment `Cm`, then one link-point sample, then every table's run `tab` after them, concurrently. -/
 def sessionZG {Cm Out : Type} (tab : TabZK F mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
     (ts : List (TabZK F mPts)) : Game (List Out) :=
   Game.send (Fin ts.length → Cm) fun cms =>
@@ -299,12 +299,12 @@ noncomputable def gamesZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK
     List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)) :=
   List.ofFn fun i => tabAfterZC A Hs (ts.get i) (caps i)
 
-/-- After `Commit`: one link-point draw, then the games concurrently. -/
+/-- After `Commit`: one link-point sample, then the games concurrently. -/
 noncomputable def sessAfterZC (fs : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) :
     Game (List (OutZC F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
-/-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point draw, then
+/-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point sample, then
 every table's compiled reps and openings concurrently. -/
 noncomputable def sessionZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
     Game (List (OutZC F D Sl)) :=
@@ -326,7 +326,7 @@ variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
 
 open Classical in
-/-- **The compiled batched `--zk` session on a draw**: the plan's tables in one compiled session; it accepts when every
+/-- **The compiled batched `--zk` session on a sample**: the plan's tables in one compiled session; it accepts when every
 table accepts. -/
 noncomputable def batchedSessionZC (S : Finset (Fin n)) (R : Reg) : Game Bool :=
   (sessionZC A Hs (planZ S R)).map fun outs => decide (acceptedZC (planZ S R) outs)
