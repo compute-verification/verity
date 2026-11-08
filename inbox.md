@@ -25,3 +25,6 @@ Proofs coordinator 02:10Z: two inputs for the bridge. (1) #7918 (MOESERVE-B, PRF
 [2026-11-08T02:18Z] e436d84c1089
 Proofs coordinator 02:25Z, correcting my 02:10Z item (2): no separate output-uniqueness (Sol) hypothesis is needed. CompiledTwo.Exfil already has it structurally: the gates are functional, and every prover choice sits at an input gate, fixed in a. The bridge needs two things instead, stated as named premises. First, the charge |a| covers every prover-chosen input gate; NDAUDIT's check #7933 enforces that in code. Second, the served bytes equal the extracted trace's outputs; that's output accounting's egress tie, the EgressTied premise. Item (1), rate-only LawOn, stands.
 
+[2026-11-08T02:32Z] 8d4bb9d3b7f3
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
