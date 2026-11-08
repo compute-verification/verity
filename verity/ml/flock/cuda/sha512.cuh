@@ -153,10 +153,43 @@ __global__ void hm96_midstates(const uint8_t* prefixes, uint64_t* mid) {
     }
 }
 
-// Leaves [base, n) of `tree`, leaf i's salt at salts[48 (i - base)] (little-endian words, the host's bytes).
-__global__ void hm96_finish_leaves(uint8_t* tree, const uint32_t* __restrict__ salts, long long base, long long n,
-                                   const uint64_t* __restrict__ tables, const uint64_t* __restrict__ mid) {
-    long long i = base + blockIdx.x * (long long)blockDim.x + threadIdx.x;
+// the most threads a block of hm96_finish_leaves has
+static constexpr int HM96_TPB = 256;
+
+// Leaves [base, n) of `tree`, leaf i's salt at salts[48 (i - base)] (little-endian words, the host's bytes); blocks of at most
+// HM96_TPB threads, a multiple of 4, block b finishing the blockDim.x leaves from base + b blockDim.x.
+// The mask reads one 64-byte table entry per salt byte, at a random value: four lanes share a leaf and each reads one 16-byte
+// quarter of every entry, so a warp's load touches 8 entries' lines rather than 32. Each lane XORs its quarter (the order of
+// the XORs changes no bit), the block meets in shared memory, and each thread then hashes its own leaf.
+__global__ void __launch_bounds__(HM96_TPB) hm96_finish_leaves(uint8_t* tree, const uint32_t* __restrict__ salts, long long base,
+                                                              long long n, const uint64_t* __restrict__ tables,
+                                                              const uint64_t* __restrict__ mid) {
+    __shared__ ulonglong2 sm[HM96_TPB * 4];
+    const long long first = base + blockIdx.x * (long long)blockDim.x;
+    const int k = threadIdx.x & 3;
+    for (int l = threadIdx.x >> 2; l < (int)blockDim.x; l += blockDim.x >> 2) {
+        ulonglong2 acc = make_ulonglong2(0, 0);
+        if (first + l < n) {
+            const uint4* sy = (const uint4*)(salts + 48 * (first + l - base));
+            // salt byte p is byte p % 4 of word p / 4 (little-endian); unrolled, so the table rows' loads are independent
+#pragma unroll
+            for (int q = 0; q < 12; q++) {
+                const uint4 v = __ldg(sy + q);
+                const uint32_t w[4] = {v.x, v.y, v.z, v.w};
+#pragma unroll
+                for (int j = 0; j < 16; j++) {
+                    const int p = 16 * q + j;
+                    const ulonglong2 e =
+                        __ldg((const ulonglong2*)(tables + ((size_t)p * 256 + ((w[j >> 2] >> (8 * (j & 3))) & 0xff)) * 8) + k);
+                    acc.x ^= e.x;
+                    acc.y ^= e.y;
+                }
+            }
+        }
+        sm[4 * l + k] = acc;
+    }
+    __syncthreads();
+    const long long i = first + threadIdx.x;
     if (i >= n) return;
     uint32_t yw[48];
     const uint4* sy = (const uint4*)(salts + 48 * (i - base));
@@ -165,26 +198,14 @@ __global__ void hm96_finish_leaves(uint8_t* tree, const uint32_t* __restrict__ s
         const uint4 v = __ldg(sy + q);
         yw[4 * q] = v.x; yw[4 * q + 1] = v.y; yw[4 * q + 2] = v.z; yw[4 * q + 3] = v.w;
     }
-    // salt byte p is byte p % 4 of word p / 4 (little-endian); unrolled, so the salt stays in registers and the table rows'
-    // loads (64 bytes each, 16 at a time) are independent
-    uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-#pragma unroll
-    for (int q = 0; q < 48; q++) {
-#pragma unroll
-        for (int r = 0; r < 4; r++) {
-            const ulonglong2* e = (const ulonglong2*)(tables + ((size_t)(4 * q + r) * 256 + ((yw[q] >> (8 * r)) & 0xff)) * 8);
-#pragma unroll
-            for (int k = 0; k < 4; k++) {
-                const ulonglong2 v = __ldg(e + k);
-                m[2 * k] ^= v.x;
-                m[2 * k + 1] ^= v.y;
-            }
-        }
-    }
     const uint64_t* x = (const uint64_t*)(tree + i * 64);   // the digest's bytes as little-endian words, as the mask's limbs
     uint64_t b[8];
 #pragma unroll
-    for (int k = 0; k < 8; k++) b[k] = x[k] ^ m[k];
+    for (int q = 0; q < 4; q++) {
+        const ulonglong2 v = sm[4 * threadIdx.x + q];
+        b[2 * q] = x[2 * q] ^ v.x;
+        b[2 * q + 1] = x[2 * q + 1] ^ v.y;
+    }
     uint64_t st[8], w[16];
 #pragma unroll
     for (int j = 0; j < 8; j++) st[j] = mid[j];

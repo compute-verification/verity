@@ -35,6 +35,7 @@ untraced = [
     "tests/test_class_statement_redteam_1178.py",
     "tests/test_flock_rows.py",
     "tests/test_flock_rows_vectors.py",
+    "tests/test_hm96_leaves.py",
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
     "tests/test_ir_sampling.py",
