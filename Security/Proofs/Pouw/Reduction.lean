@@ -27,21 +27,21 @@ theorem correctSet_subset_range (P : Protocol Q R S) (U : Workload) (H : Q → R
     correctSet P U H s τ ⊆ range U.layout.N := fun u hu => by
   simp only [correctSet, Finset.mem_filter] at hu; exact hu.1
 
-theorem one_sub_reductionGamma (γ₀ Ωmax : ℝ) : 1 - reductionGamma γ₀ Ωmax = (1 - γ₀) / Ωmax := by
-  unfold reductionGamma; ring
+theorem one_sub_reductionGap (g₀ Ωmax : ℝ) : 1 - reductionGap g₀ Ωmax = (1 - g₀) / Ωmax := by
+  unfold reductionGap; ring
 
-theorem reductionGamma_lt_one {γ₀ Ωmax : ℝ} (hγ₀ : γ₀ < 1) (hΩ : 0 < Ωmax) : reductionGamma γ₀ Ωmax < 1 := by
-  have : 0 < (1 - γ₀) / Ωmax := div_pos (by linarith) hΩ
-  unfold reductionGamma; linarith
+theorem reductionGap_lt_one {g₀ Ωmax : ℝ} (hg₀ : g₀ < 1) (hΩ : 0 < Ωmax) : reductionGap g₀ Ωmax < 1 := by
+  have : 0 < (1 - g₀) / Ωmax := div_pos (by linarith) hΩ
+  unfold reductionGap; linarith
 
-/-- The pointwise reduction: a win at `γ = 1 − (1 − γ₀)/Ω_max` is a TT event. -/
-theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ₀ Ωmax T : ℝ}
+/-- The pointwise reduction: a win at `g = 1 − (1 − g₀)/Ω_max` is a TT event. -/
+theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ))
-    (hwin : Wins P U (reductionGamma γ₀ Ωmax) T τ H s) :
-    T / (1 - γ₀) < ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
+    (hwin : Wins P U (reductionGap g₀ Ωmax) T τ H s) :
+    T / (1 - g₀) < ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
   unfold Wins at hwin
-  rw [one_sub_reductionGamma, div_div_eq_mul_div] at hwin
+  rw [one_sub_reductionGap, div_div_eq_mul_div] at hwin
   have h1 : ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
       ≤ Ωmax * ∑ u ∈ correctSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
     rw [Finset.mul_sum]
@@ -49,23 +49,23 @@ theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (�
   have h2 : ∑ u ∈ correctSet P U H s τ, ((U.layout.shape u).Wmm : ℝ)
       ≤ ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) :=
     Finset.sum_le_sum_of_subset_of_nonneg (correctSet_subset_checkedSet P U H s τ) fun _ _ _ => by positivity
-  have h3 : T * Ωmax / (1 - γ₀) = Ωmax * (T / (1 - γ₀)) := by ring
+  have h3 : T * Ωmax / (1 - g₀) = Ωmax * (T / (1 - g₀)) := by ring
   rw [h3] at hwin
-  have h4 : Ωmax * (T / (1 - γ₀)) < Ωmax * ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) :=
+  have h4 : Ωmax * (T / (1 - g₀)) < Ωmax * ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) :=
     lt_of_lt_of_le hwin (h1.trans (mul_le_mul_of_nonneg_left h2 hΩ.le))
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
-/-- **(a)** `G_γ` from TT, with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε_TT(q)`. -/
-theorem gammaFromTT : Pinned.GammaFromTT := by
-  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA
+/-- **(a)** `G_g` from TT, with `g = 1 − (1 − g₀)/Ω_max` and `δ = ε_TT(q)`. -/
+theorem gapFromTT : Pinned.GapFromTT := by
+  intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ ⟨hwin, hb⟩
   exact ⟨wins_imp_tt P U H s _ hΩ (hW U hU) hwin, hb⟩
 
-/-- **The overhead budget**: `γ ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
-theorem gammaBudget : Pinned.GammaBudget := by
+/-- **The overhead budget**: `g ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
+theorem gapBudget : Pinned.GapBudget := by
   intro Ωmax hΩ
-  unfold reductionGamma Params.γ0
+  unfold reductionGap Params.gap0
   rw [show (1 : ℝ) - 1 / 200 = 199 / 200 by norm_num]
   constructor
   · intro h

@@ -43,7 +43,7 @@ kept: B is fixed before seed_B, and A before seed_A.
 - Checked values: the output tile only.  D1 checks the running sums after every 16-deep step, which Lemma 1 needs.
 - Useful output: Pearl's peel and unscale (`useful`) lie outside the checked values (barrier class (a)).
 - Inputs: Pearl restricts them by its policy; D1 takes worst-case inputs.
-- Conjecture: Pearl's Assumption 1 (informal quantized-subspace hardness) with the policy; it names no γ_0, no concrete
+- Conjecture: Pearl's Assumption 1 (informal quantized-subspace hardness) with the policy; it names no target gap g₀, no concrete
   constant and no joint form.  The policy admits 5% skippable summands by design.
 """
 
@@ -646,7 +646,7 @@ class PearlKW:
     def wref(self, shape: Shape) -> int:
         """The FP8 GEMM with FP32 accumulation at 2 W1 units per MAC (512 per SM per clock on the 4090), and the peel in
         BF16 at 4 units per MAC: A·F_B (m·k·r) and the 2r extra columns (m·n·2r).  Noise, quantization, hashing and memory
-        are Pearl's exclusions; the harness's γ accounting prices them."""
+        are Pearl's exclusions; the harness's gap accounting prices them."""
         m, k, n = shape.m, shape.k, shape.n
         return 2 * m * k * n + 4 * (m * k * R + 2 * R * m * n)
 
