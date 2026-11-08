@@ -13,6 +13,7 @@ statements, an honest prover's (`statements`)."""
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import shutil
 import tempfile
@@ -23,13 +24,24 @@ from typing import Any, Mapping
 from verity.core.protocols.spot import (challenger as C, coins as T, remote as R, second_stage as SS,
                                                   service as S)
 from verity.core.protocols.spot.one_stage import draw as D, partition as P
-from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.commitments.identity import canonical_json_text
 
 from test_challenger import HOST, entropy
 from test_remote import HOST_PINS, MAIN, SCHEME, WINDOW, Ledger, at, pinned_key
 
 LABEL = "positions"
+
+
+def checked(statement: Mapping[str, Any]) -> dict[str, Any]:
+    """What `flock-verify verify`'s verdict names of the session of second-stage statement `statement` it checked, which
+    round 2 holds the statement to (`second_stage.verified_of`): the SHA-512 of its header's canonical JSON, of its
+    registered reads' when it reads any, and its sample."""
+    names = {"public_header_sha512": hashlib.sha512(canonical_json(statement.get("header"))).hexdigest(),
+             "unit_draw": statement.get("draw")}
+    if statement.get("registered") is not None:
+        names["registered_sha512"] = hashlib.sha512(canonical_json(statement["registered"])).hexdigest()
+    return names
 
 
 class Challenger(T.ChallengerCoins):

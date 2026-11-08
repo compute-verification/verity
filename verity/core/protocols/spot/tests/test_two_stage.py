@@ -6,7 +6,6 @@ profile at the footprint."""
 
 from __future__ import annotations
 
-import hashlib
 import random
 from fractions import Fraction
 from math import comb
@@ -95,10 +94,6 @@ def _interior(m: int, previous: str, row=0, **change) -> tuple[dict, dict]:
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
 
 
-def _digest(j) -> str:
-    return hashlib.sha512(codec.canonical_json(j)).hexdigest()
-
-
 def _lean(accepted=True, reads=None, checked=None) -> dict:
     """The verdict of record, accepted or not, reporting the sessions' registered reads `reads`, and naming what
     `flock-verify verify` names of the session of statement `checked` it checked: its header's and registered reads'
@@ -107,9 +102,7 @@ def _lean(accepted=True, reads=None, checked=None) -> dict:
     if reads is not None:
         v["registered"] = reads
     if isinstance(checked, dict):
-        v |= {"public_header_sha512": _digest(checked.get("header")), "unit_draw": checked.get("draw")}
-        if checked.get("registered") is not None:
-            v["registered_sha512"] = _digest(checked["registered"])
+        v |= FC.checked(checked)
     return {"lean": v}
 
 
