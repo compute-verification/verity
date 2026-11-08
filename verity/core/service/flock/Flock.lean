@@ -54,6 +54,7 @@ public import Flock.ReadNet.Sha
 public import Flock.ReadNet.RowSeg
 public import Flock.ReadNet.Leaf
 public import Flock.ReadNet.Select
+public import Flock.ReadNet.Template
 public import Flock.Desc
 public import Flock.RecVStar
 public import Flock.ProvedScope
