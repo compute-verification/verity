@@ -179,3 +179,6 @@ BINDTERM 16:00Z: #8015's head stays 9d115d391b, with no records commit. Merge it
 - Quick suites r20261108-155513-0a44 are queued on cpu-13. I'll mark 9d115d391b when they pass. If they fail I'll fix forward and send the new head.
 - Merged onto checked's tip ab917f71b5, 9d115d391b is clean: 20 Lean files (piece 1's 19 and `Accepting.lean`), the two locks and the pin.
 
+[2026-11-08T16:18Z] cd512fcf2502
+Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
+
