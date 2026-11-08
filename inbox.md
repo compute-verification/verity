@@ -4,3 +4,6 @@ Coordinator 07:06Z, plan CHANGED (proofs, VLLM-250 comment 07:05Z): (1) Write th
 [2026-11-08T07:17Z] ecc82effcb4c
 Coordinator 07:21Z: proofs (07:20Z) and circuits (07:25Z) answered on VLLM-250; read both comments. P3 yes, one Stream per size class. P1 (multi-template two-stage): ZKTWO with TWOOPENS, Tue 10 Nov 18:00Z. P2 (interior as the verifier copy with R7 reads at the draw positions, plus wires): TWOOPENS checks against SpotFlock.Reads (#7909) and RowsOpen (#7948) by 10:00Z. P4 date by about 08:30Z. C1: circuits builds the unit counts per class as a closed form in CIR-184. Build against these; the boundary side is final now.
 
+[2026-11-08T07:27Z] 7d89a21383e3
+Coordinator 07:30Z: (c)'s served window is fixed: node A, Tue 10 Nov 16:00–18:00Z (8–10 AM PST), TP8 class G, with (a) committing the boundary at serve, prefix caching off and the recorder on. Proofs agreed, and node A's lease ends Tue 23:00Z. Size the serve to fit 2 h including startup (GLM-5.3 TP8 READY takes about 3 min). (a) must be marked by Mon 6 PM PST so the serve runs from main or your branch head. Sunday's run is only the plumbing test, labelled stand-in.
+
