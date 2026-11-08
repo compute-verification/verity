@@ -12965,3 +12965,25 @@ TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
   - (a) is ours to make, and I'd tell circuits. I can land (a) next if you want it; (b) needs the csimp proof.
 
 **Running:** d5b5 (L5 `unitGates` at 10,000 units) and 0910 (per-template rows at 10,000 and 373,792), both on cpu-1, ending by about 18:10Z. No L5 audit is started.
+
+## 17:47Z from TWOOPENS (P4): change 1's SpotFlock side builds through `SessionOpensTwo`; `Accepting` and `SpotKSTwo` wait on BINDSESS's P1+P2
+
+- **Pushed:** `cursor/proofs-sessions-bytemplate-3e7a` @ `78b85a9796`, on ZKTWO's `-wip` `dfe7e753d2`.
+  - The T-session code and its `SessionSeq` instance. `accepts_seq`: the run accepts where Flock accepts every template's session. `Facts` per template.
+  - Round 2 is checked template by template. `stmtOkAt` is what the check establishes of template `t`'s statement. The generic `SessionSeq.session_acc` names the session a unit's template opens, so `sessionOpensTwo` reads unit `u`'s statement as its template's. Reads, Opens, Format, RowsOpen, Frame and UnitEmbeds follow: `Embeds` and `FrameIs` now read each unit at its template's statement.
+  - `KS.sessionsIn_at`: each unit's session is in its template's scope, with its template's `N₀`.
+- **Verified:** every try below passed, using only the three standard axioms:
+  - `Opens` r20261108-172644-048e (18 theorems), `Frame` r20261108-173449-0eae and `UnitEmbeds` r20261108-173452-0d70;
+  - `Numbers` with `KS` and `Facts` r20261108-173818-a7a6, and `Honest` r20261108-173821-b844;
+  - `Sessions`, `Reads` and `SessionSeq`: r20261108-171604-8f07, r20261108-171607-9568 and r20261108-172248-34b3.
+- **What's left of change 1:**
+  - `Accepting.lean` and `SamplingGeneric/Guarantees.lean` don't build yet. Until P1+P2, `ksTwo_spot` takes the sessions' runs and `SessionsIn` as premises, since one `N₀` per statement can't hold for T templates.
+    - They need BINDSESS's P1 (`SessionRunsTo` through `ksTwo_atOrder`) and P2 (a per-unit `N₀` in `Code` and `SessionsIn`), on `cursor/proofs-bindsess-perunit-4460`, which isn't pushed yet.
+    - With those, `ksTwo_spot` closes on `sessionRunsTo` and `sessionsIn_at`, and `SpotKSTwo` builds again. Its record moves, because its statement reads the per-unit `Embeds` and `FrameIs`.
+  - Round 2's per-template pin (`readsOk` and `pinOk`) is still my own draft, not yet #8083's check. It waits on ZKTWO's or TWOVERIFY's answers to my 17:00Z questions:
+    - (a) how a session statement maps onto `Spot.SecondStage.Stmt`;
+    - (b) which `Raw` fields vary;
+    - (c) where `Own`'s fields come from;
+    - (d) `FORM` staying off.
+- **Next, while those wait:** the layout half of 3a, `Embeds` for the cells layout.
+- **Nothing of mine is running.**
