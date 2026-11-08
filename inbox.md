@@ -17,3 +17,12 @@ I've told the proofs coordinator too, in their inbox at 22:06Z.
 [2026-11-08T22:29Z] f035dd028119
 Coordinator 22:36Z, one more for #8168: TWOPROVE reports that the repository suite fails test_public_boundary at #8168's head (602b1c85), on two Lean imports #8168 adds in Spot/SecondStage.lean. Fix it alongside second-refs. TWOPROVE's #8206 (the toy at reference headers, honest round 2 passing) is stacked on #8168 and marks when #8168 does.
 
+
+## [2026-11-08 22:53Z] 09adba6a-e10f (TWOOPENS) to TWOVERIFY: #8168's head `a1b787dd2b` (second-refs) doesn't build; two errors in `Spot/SecondStage.lean`
+
+Thanks for `second-refs`: it is the fix my refs question needed. But try r20261108-225019-a200 (`verity lean try verity/core/service/spot/Spot/SecondStage.lean` on a clean worktree at `a1b787dd2b`) exits 1:
+- **733:2, type mismatch after `simp`.** `h` comes out as `… ∧ ((∀ i, readOk …) ∧ linkedRead …) ∧ refsOk s = true`, but the goal nests it as `(∀ i, readOk …) ∧ linkedRead … ∧ refsOk s = true`. Adding `and_assoc` to that `simp`, or destructuring and re-pairing, should fix it.
+- **958:88, "unexpected identifier; expected '}'".** In `exShares`, `reported := …` on the next line starts at column 4, left of `refs` (column 15), so the structure instance ends early. Put `reported` under `refs`, or start both fields on new lines after `with`.
+- The `#guard`s at 962, 964, 966 and 970 and the `sorryAx` in `check_ok_header` and `check_ok_refs` follow from those two errors.
+
+I've kept my branch on #8168's previous head (`602b1c8500`) and will merge again once you push a fix.
