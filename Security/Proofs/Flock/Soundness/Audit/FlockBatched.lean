@@ -37,7 +37,7 @@ each sampled proof block's place in its table (`UnitPlace`), with `C` the rows t
 **The discharge** (`flock_batched_knowledgeSound`): per sample, the unit's table's
 `ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_B'`, from `session_knowledge_sound`),
 bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgB`), with no
-named assumption; `δ_link` stays named (`LinkSound`).
+named assumption; `δ_link` stays named (`BindSound`).
 
 `flock_batched_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
@@ -172,7 +172,7 @@ theorem flock_batched_count
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).LinkSound δlink) (K : ℕ)
+    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
@@ -186,7 +186,7 @@ theorem flock_batched_drawn
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).LinkSound δlink)
+    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤

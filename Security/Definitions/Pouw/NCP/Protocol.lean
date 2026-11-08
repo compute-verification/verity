@@ -75,11 +75,11 @@ variable {Q R S : Type} (P : Params Q R S)
 
 /-- Unit `u`'s `E₁`. -/
 def e1 (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
-  P.expAct (U.layout.shape u) ((P.qAct s u A (U.layout.wid u)).map H)
+  P.expAct (U.layout.shape u) ((P.qAct s u A (U.layout.fixedId u)).map H)
 
 /-- Unit `u`'s weight noise `(F₁, R)`, shared by every unit on the same (epoch, weight). -/
 def wtNoise (H : Q → R) (s : S) (U : Workload) (u : ℕ) : Mat × Mat :=
-  P.expWt (U.layout.shape u) ((P.qWt s (U.layout.wid u)).map H)
+  P.expWt (U.layout.shape u) ((P.qWt s (U.layout.fixedId u)).map H)
 
 /-- The stacked activations `X`. -/
 def opX (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
@@ -87,7 +87,7 @@ def opX (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
 
 /-- The stacked weights `Y`. -/
 def opY (H : Q → R) (s : S) (U : Workload) (u : ℕ) : Mat :=
-  stackY (U.layout.shape u).k (U.weight (U.layout.wid u)) (P.wtNoise H s U u).2 (P.wtNoise H s U u).1
+  stackY (U.layout.shape u).k (U.fixed (U.layout.fixedId u)) (P.wtNoise H s U u).2 (P.wtNoise H s U u).1
 
 /-- The checked values: block `t` is the running sum of `X·Y` up to `blockEnd d (3k) t`, mod `2^32` (its int32
 two's-complement value, `mmW`), so no int32 range bound is needed. -/

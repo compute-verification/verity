@@ -1,9 +1,9 @@
 //! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (verity/ml/flock/cuda/prove_circuit.cuh,
 //! installed by verity/ml/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions'
 //! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
-//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's witness and level-0 commitment (`Reuse`).
+//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
 
-use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock, time::Instant};
+use std::{ffi::c_void, ptr::{null, null_mut}, sync::{Mutex, OnceLock}, time::Instant};
 
 use flock_field::F128;
 use flock_prover::{
@@ -143,7 +143,7 @@ unsafe extern "C" fn hm96_tree(ctx: *mut c_void, tree: i32, leaves: i64) -> *con
             0 => s.level0(leaves as usize),
             _ => {
                 let id = s.next_id();
-                std::sync::Arc::new(s.expand(id, leaves as usize))
+                s.take(id, leaves as usize)
             }
         };
         let p = b.as_ptr();
@@ -207,12 +207,15 @@ unsafe extern "C" {
     fn flock_cuda_hm96_leaves(x: *const u8, salts: *const u8, n: i64, prefixes: *const u8, tables: *const u64, out: *mut u8) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
     fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
+    fn flock_cuda_host_register(p: *mut c_void, bytes: usize) -> i32;
+    fn flock_cuda_host_unregister(p: *mut c_void);
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
+    fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
 }
 
-/// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
-/// device for the session's tag, and rep 1 takes them. Where the device has no room to keep them, rep 1 proves in full.
+/// Rep 1 proves from rep 0's level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps it on the device for the
+/// session's tag, and rep 1 takes it and builds its witness again. Where nothing was kept, rep 1 proves in full.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reuse {
     None,
@@ -220,9 +223,33 @@ pub enum Reuse {
     Take(u64),
 }
 
-/// Whether the device holds a rep 0's witness and level-0 commitment for `tag`.
+/// Whether the device holds a rep 0's level-0 commitment for `tag`.
 pub fn kept(tag: u64) -> bool {
     unsafe { flock_cuda_circuit_kept(tag) != 0 }
+}
+
+/// Salts page-locked for the device's copies, unlocked when dropped; holding them, so they are never freed while locked.
+pub struct Pinned(std::sync::Arc<Vec<u8>>);
+
+impl Pinned {
+    /// `b` page-locked; None where the runtime refuses (its copies then stage through pageable memory)
+    pub fn new(b: &std::sync::Arc<Vec<u8>>) -> Option<Self> {
+        (!b.is_empty() && unsafe { flock_cuda_host_register(b.as_ptr() as *mut c_void, b.len()) } != 0).then(|| Pinned(b.clone()))
+    }
+
+    /// Its `n` bytes rewritten in place by `fill` and shared again, still page-locked; None, and `fill` not called, while
+    /// anything else holds them or at another size.
+    pub fn refill(&mut self, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Option<std::sync::Arc<Vec<u8>>> {
+        let b = std::sync::Arc::get_mut(&mut self.0).filter(|b| b.len() == n)?;
+        fill(b);
+        Some(self.0.clone())
+    }
+}
+
+impl Drop for Pinned {
+    fn drop(&mut self) {
+        unsafe { flock_cuda_host_unregister(self.0.as_ptr() as *mut c_void) }
+    }
 }
 
 /// The device's unit kernel syncs once per AND-level for 32 units per CTA, so a deep unit leaves the device idle (a flattened
@@ -369,9 +396,9 @@ impl Default for HostBuf {
     }
 }
 
-/// Device memory holding a copy of host words ([`HostSlots::upload`]). Dropped buffers go back to a pool, not to `cudaFree`,
-/// which would synchronize the device under the session proving there; a process allocates at most `FC_DEV_PREFETCH_GB`
-/// (default 16) of them.
+/// Device memory holding a copy of host words ([`HostSlots::upload`]). Dropped buffers are zeroed and go back to a pool, not to
+/// `cudaFree`, which would synchronize the device under the session proving there; a process allocates at most
+/// `FC_DEV_PREFETCH_GB` (default 16) of them.
 pub struct DevBuf {
     ptr: usize,
     len: usize,
@@ -427,7 +454,11 @@ impl DevBuf {
 }
 
 impl Drop for DevBuf {
+    /// A buffer the device can't zero never goes back to the pool: its words stay out of any later witness's copy
     fn drop(&mut self) {
+        if unsafe { flock_cuda_dev_zero(self.ptr as *mut c_void, 8 * self.cap) } != 0 {
+            return;
+        }
         DEV_POOL.lock().unwrap_or_else(std::sync::PoisonError::into_inner).0.push((self.ptr, self.cap));
     }
 }
@@ -709,9 +740,15 @@ struct Types {
     hsched: UnitSched,
 }
 
+/// The circuit's slot types, built once per circuit and kept for the process: the device keys its copies of their arrays by
+/// their addresses (`FcUploads`, prove_circuit.cuh), so they are never freed.
 fn types(st: &Stmt) -> &'static Types {
-    static T: OnceLock<Types> = OnceLock::new();
-    T.get_or_init(|| {
+    static T: Mutex<Vec<([u8; 64], &'static Types)>> = Mutex::new(Vec::new());
+    let mut held = T.lock().unwrap();
+    if let Some(&(_, t)) = held.iter().find(|(k, _)| *k == st.c.sha512) {
+        return t;
+    }
+    let t: &'static Types = Box::leak(Box::new({
         let c = &st.c;
         let mut logs = Vec::new();
         let mut csc = Vec::new();
@@ -746,7 +783,9 @@ fn types(st: &Stmt) -> &'static Types {
         let u_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.unit_net)).unwrap();
         let h_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.sha_net)).unwrap();
         Types { logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(&c.nets[c.sha_net].1) }
-    })
+    }));
+    held.push((st.c.sha512, t));
+    t
 }
 
 /// The device witness's host inputs for an honest prover: every compression slot's input words, the hm96 slots' witness, and
@@ -778,7 +817,8 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 /// setup: parameters and schedule; staging the witness's inputs and host slots; decoding the proof). Under M1 (`Live::Zk`) the proof is the
 /// unmasked one the CPU prover leaves before masking (with level 0's hiding messages and record, and lincheck's folded comb),
 /// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns. With
-/// `Reuse::Take` of a kept tag, `src` is not read: the witness and level-0 commitment are rep 0's (never under M1).
+/// `Reuse::Take` of a kept tag, the level-0 commitment is rep 0's (under M1 with level 0's pads and extra lanes, the session's,
+/// so `level0`'s are not read), and the witness is built again from `src`.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_circuit(
     st: &Stmt,
@@ -812,8 +852,6 @@ pub fn prove_circuit(
         Some(r) => params.with_rounds(r),
         None => params,
     };
-    // M1's level-0 commitment and lane phase are its own (fc_commit_l0_zk, ligerito_zk.cuh): both reps prove in full under it
-    let reuse = if level0.is_some() { Reuse::None } else { reuse };
     let t = types(st);
     let unit = st.c.unit();
     let n_claims = 2 + 2 * st.regions.len();
@@ -833,7 +871,6 @@ pub fn prove_circuit(
     let taken = matches!(reuse, Reuse::Take(tag) if kept(tag));
     let mut u_host = 0;
     match &src {
-        _ if taken => {}
         CircuitSrc::Host { z, a, b } => {
             assert_eq!(z.len(), 1 << (m - 7));
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
@@ -960,16 +997,18 @@ pub fn prove_circuit(
     #[cfg(not(feature = "sha512"))]
     let _ = native_sha;
     #[cfg(feature = "sha512")]
-    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.map(|z| {
+    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (z.pads.concat(), z.extra.concat())
+        (crate::concat(&z.pads), crate::concat(&z.extra))
     });
     #[cfg(feature = "sha512")]
-    if let (Some(z), Some((pads, extra))) = (level0, &zk_words) {
+    if let Some(z) = level0 {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
-        (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+        if let Some((pads, extra)) = &zk_words {
+            (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+        }
     }
     #[cfg(not(feature = "sha512"))]
     let _ = level0;
