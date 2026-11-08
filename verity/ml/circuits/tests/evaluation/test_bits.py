@@ -146,6 +146,43 @@ def test_a_batch_holds_a_shared_argument_once(monkeypatch) -> None:
     assert np.array_equal(BS.evaluate_bits(SHARED_CARRY, *inputs), ref)
 
 
+#: (c, v) -> c ^ parity(v): a member of a batch over an inner axis beside a shared bit
+PARITY3_XOR = CompositeDefinition("BitsTestParity3Xor", 1, (), lambda S: ((("c", BIT), ("v", Array(3, BIT))), BIT),
+                                  lambda B, S, c, v: B.call(BL.XOR, ops(c, B.call(PARITY3, v))), register=False)
+SHARED_OUT = 2 * W + 3 * (W + 1) + 3 * 2 * W + W
+
+
+def _shared(B, S, x, y, m):
+    """Each form of batch that shares an argument: full adders over a shared carry, ripple-carry adders (a scan) over a shared
+    word, a batch of `SHARED_CARRY`, whose members batch over a shared carry of their own, and parities over m's inner axis
+    beside a shared bit."""
+    c = B.call(BL.AND, ops(x[0], y[0]))
+    fas = B.batch(FULL_ADDER, c, x, y, axes=(None, 0, 0))
+    adds = B.batch(ADDER, x, m, axes=(None, 0))
+    nested = B.batch(SHARED_CARRY, x, m, axes=(None, 0))
+    cols = B.batch(PARITY3_XOR, B.call(BL.XOR, ops(x[1], y[2])), m, axes=(None, 1))
+    return _cat(Array(SHARED_OUT, BIT), fas, adds, nested, cols)
+
+
+SHARED = CompositeDefinition(
+    "BitsTestShared", 1, (),
+    lambda S: ((("x", Array(W, BIT)), ("y", Array(W, BIT)), ("m", Array(3, Array(W, BIT)))), Array(SHARED_OUT, BIT)),
+    _shared, register=False)
+
+
+@pytest.mark.parametrize("row_budget", [None, 1, 5])
+def test_a_batch_over_a_shared_argument_computes_what_the_reference_does(monkeypatch, row_budget) -> None:
+    """Every form of batch that shares an argument gives the plain-integer reference's outputs, evaluated whole and in runs of
+    one or a few members (``_ROW_BUDGET``), which slice `Members` where a shared argument is held once."""
+    spec = bind(SHARED)
+    inputs = [_bits(np.random.default_rng(11), 200, t) for _, t in spec.signature()[0]]
+    ref = E.evaluate_batch(spec, *inputs, kernel="reference")
+    if row_budget is not None:
+        monkeypatch.setattr(BS, "_ROW_BUDGET", row_budget)
+    got = BS.evaluate_bits(SHARED, *inputs)
+    assert got.shape == ref.shape and np.array_equal(got, ref)
+
+
 def test_the_word_view_adds() -> None:
     rng = np.random.default_rng(1)
     x = rng.integers(0, 1 << W, size=1000, dtype=np.uint16)
