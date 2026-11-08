@@ -282,6 +282,79 @@ def norm_dir(lm: LM, w: torch.Tensor) -> torch.Tensor:
     return w / w.pow(2).mean().sqrt()
 
 
+def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor, T: torch.Tensor, a) -> dict:
+    """What a decoder that doesn't know E, g or b uses instead: per served precision, estimates of E[T] diag(g) and
+    E[T] b, each up to a constant a column (softmax's shift absorbs it), read from served logprobs on the tokens T by
+    logit bias, T[0] the reference every query also shows. Taking them costs 2 d faults for every k - 1 tokens of T,
+    once for every row read after.
+
+    saturate  paired faults of ±2^30 at coordinate i of the residual stream after the last layer saturate the final
+              norm, whose output becomes g * (±s u_i) + b with u_i = e_i (RMSNorm; s = sqrt d) or e_i - 1/d (LayerNorm;
+              s = d / sqrt(d - 1)). The pair's half-difference over s reads column i of E diag(g), centred over the
+              coordinates under LayerNorm, which is all a centred state sees; the half-sums read E b.
+    box, own  paired final-site faults ±v at coordinate i (v its box, or one FP8 code at its token's own group scale)
+              read column i of E from their half-difference over v. g and b are then fitted to honest final states
+              read through that estimate: RMSNorm's output has mean square 1, so sum_i h_i^2 / g_i^2 = d for each
+              state, linear in 1/g^2; LayerNorm's also has mean 0, which makes the same constraint linear in 1/g^2,
+              b/g^2 and |b/g|^2. The signs of g are taken from the truth: d residual-stream faults of a known sign
+              would show them."""
+    E = lm.E.float()
+    V, d = E.shape
+    L = lm.spec.layers
+    ln = lm.spec.arch == "gpt2"
+    g, b = final_norm_params(lm)
+    if a.peel == "saturate":
+        if lm.boxes is not None:
+            raise SystemExit("--peel saturate needs unclamped faults: drop --boxes, or peel with box or own")
+        site, layer, s = "resid", L - 1, (d / math.sqrt(d - 1) if ln else math.sqrt(d))
+        amps = torch.full((d,), 2.0 ** 30)
+    else:
+        if lm.boxes is None:
+            raise SystemExit(f"--peel {a.peel} reads at the boxes' amplitudes: give --boxes")
+        site, layer, s = "final", L, 1.0
+        hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
+        amps = torch.tensor([float(hi[i]) if a.peel == "box" else fault_values("own", i, h0, 0.0, hi, None)[1][0]
+                             for i in range(d)])
+    amps = amps.to(torch.bfloat16).double()
+    obs = {prec: [] for prec in a.precisions}
+    for c0 in range(0, d, max(a.batch // 2, 1)):
+        cs = list(range(c0, min(d, c0 + max(a.batch // 2, 1))))
+        z = faulted_logits(lm, pre, last, t0, [(site, layer, i, sg * float(amps[i])) for sg in (1.0, -1.0) for i in cs])
+        for prec in a.precisions:
+            lp = served_logprobs(z, prec)[:, T].double()
+            obs[prec].append((lp - lp[:, :1]).view(2, len(cs), len(T)))
+    W_true = E[T].double() * g.double()
+    if ln and a.peel == "saturate":
+        W_true = W_true - W_true.mean(1, keepdim=True)
+    W_true = W_true - W_true[:1]
+    H = honest_states(lm, tok, len(PROMPTS), a.new).double() if a.peel != "saturate" else None
+    res = {}
+    for prec in a.precisions:
+        o = torch.cat(obs[prec], 1)
+        col = ((o[0] - o[1]) / (2 * s * amps[:, None])).T
+        if a.peel == "saturate":
+            W, beta, g_hat = col, ((o[0] + o[1]) / 2).mean(0), g.double()
+        else:
+            Z = H @ E[T].double().T
+            if prec == "bf16":
+                Z = Z.float().to(torch.bfloat16).double()
+            A = torch.cat([col, torch.ones(len(T), 1, dtype=torch.float64)], 1)
+            Hh = torch.linalg.lstsq(A, Z.T).solution[:d].T
+            rhs = torch.full((Hh.shape[0], 1), float(d), dtype=torch.float64)
+            if ln:
+                sol = torch.linalg.lstsq(torch.cat([Hh.pow(2), -2 * Hh, torch.ones_like(rhs)], 1), rhs).solution[:, 0]
+                p, q = sol[:d].clamp_min(1e-12), sol[d:2 * d]
+                b_hat = q / p
+            else:
+                p, b_hat = torch.linalg.lstsq(Hh.pow(2), rhs).solution[:, 0].clamp_min(1e-12), torch.zeros(d)
+            g_hat = torch.sign(g.double()) / p.sqrt()
+            W, beta = col * g_hat, col @ b_hat.double()
+        res[prec] = {"W": W, "beta": beta,
+                     "W_mse_over_var": float((W - W_true).pow(2).mean() / W_true.pow(2).mean()),
+                     "g_mse_over_var": float((g_hat - g.double()).pow(2).mean() / g.double().pow(2).mean())}
+    return res
+
+
 def part_rows(lm: LM, tok, a) -> dict:
     E = lm.E.float()
     V, d = E.shape
@@ -299,6 +372,13 @@ def part_rows(lm: LM, tok, a) -> dict:
     z0 = lm.forward(last, pre.expand(1), taps=taps0)[0, -1]
     h0 = taps0[("final", lm.spec.layers)][0, 0].float()
     amax = torch.load(a.boxes)["amax"] if a.boxes is not None else None
+    T = est = None
+    if a.peel:
+        T = torch.randperm(V, generator=gen)[:max(reads)]
+        est = peel(lm, tok, pre, last, t0, h0, T, a)
+        print(f"peel {a.peel}: " + ", ".join(f"{p} E diag(g) mse/var {e['W_mse_over_var']:.3g}, g mse/var "
+                                             f"{e['g_mse_over_var']:.3g}" for p, e in est.items())
+              + f", {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
     for l in layers:
         x0 = taps0[(site, l)][0, 0].float()
         rms = float(x0.pow(2).mean().sqrt())
@@ -331,10 +411,15 @@ def part_rows(lm: LM, tok, a) -> dict:
                     else:
                         r_c = float((best - tru).pow(2).mean())
                     for m in reads:
-                        toks = torch.randperm(V, generator=gen)[:m]
-                        r, mi, xf = read_row(E, g, b, zs[bi], toks, prec, 1.0, tru, lm)
+                        if est is None:
+                            toks = torch.randperm(V, generator=gen)[:m]
+                            head = (E[toks], g, E[toks] @ b)
+                        else:
+                            toks = T[:m]
+                            head = (est[prec]["W"][:m], torch.ones(d), est[prec]["beta"][:m])
+                        r, mi, xf = read_row(*head, zs[bi][toks], prec, 1.0, tru, lm)
                         if a.differential:
-                            r = differential_error(xf, read_row(E, g, b, zs0, toks, prec, 1.0, tru, lm)[2], tru)
+                            r = differential_error(xf, read_row(*head, zs0[toks], prec, 1.0, tru, lm)[2], tru)
                         out.append((l, v_spec, prec, m, j, r_c, r, mi))
     rows = []
     groups = {}
@@ -374,14 +459,14 @@ def differential_error(xf: torch.Tensor, xh: torch.Tensor, tru: torch.Tensor) ->
     return float((alpha * est - t).pow(2).mean() / t.pow(2).mean())
 
 
-def read_row(E, g, b, z, toks, precision, s, tru, lm) -> tuple[float, float, torch.Tensor]:
-    """MMSE estimate of the normalized row x from the served logits z[toks] = E[toks] (g * s x + b) + c + rounding, the
-    constant c (softmax's shift) unknown, x's prior N(0, I); returns its error against `tru`, the Gaussian
-    information the read carries about x, 1/2 log2 det of the prior over the posterior covariance, and the estimate."""
-    Et = E[toks].double()
-    A = torch.cat([Et * (s * g.double()), torch.ones(len(toks), 1, dtype=torch.float64)], 1)
-    y = z[toks].double() - Et @ b.double()
-    w = 1.0 / ulp2(z[toks].double(), precision)
+def read_row(Et, g, Eb, zt, precision, s, tru, lm) -> tuple[float, float, torch.Tensor]:
+    """MMSE estimate of the normalized row x from the served logits zt = Et (g * s x) + Eb + c + rounding on the read
+    tokens (Et and Eb: the decoder's E[toks] and E[toks] b), the constant c (softmax's shift) unknown, x's prior
+    N(0, I); returns its error against `tru`, the Gaussian information the read carries about x, 1/2 log2 det of the
+    prior over the posterior covariance, and the estimate."""
+    A = torch.cat([Et.double() * (s * g.double()), torch.ones(len(zt), 1, dtype=torch.float64)], 1)
+    y = zt.double() - Eb.double()
+    w = 1.0 / ulp2(zt.double(), precision)
     P = (A * w[:, None]).T @ A
     P[:-1, :-1] += torch.eye(A.shape[1] - 1, dtype=torch.float64)
     P[-1, -1] += 1e-12
@@ -426,6 +511,9 @@ def main() -> int:
                     help="final and rows: the decoder also reads the same tokens' logprobs from an honest query on "
                          "the same prompt and reads the fault from the difference; final then picks its k tokens by "
                          "logit bias, at random, instead of reading the top k")
+    ap.add_argument("--peel", choices=("saturate", "box", "own"),
+                    help="rows: the decoder estimates E, g and b from faults on the last layer instead of knowing them "
+                         "(`peel`): saturate, unclamped; box or own, at the final site under --boxes")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
@@ -446,6 +534,7 @@ def main() -> int:
                 "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
                 "seconds": time.time() - t})
     tag = ("-fp4" if a.fp4 else "") + ("-clamped" if a.boxes is not None else "") + ("-diff" if a.differential else "")
+    tag += f"-peel-{a.peel}" if a.peel else ""
     (a.out / f"extract-{a.part}{tag}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res, indent=1))
     return 0
