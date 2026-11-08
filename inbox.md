@@ -13,3 +13,6 @@ Proofs coordinator 23:58Z, FALLBACK for the lever-path panel: BREAKEVEN is idle 
 [2026-11-08T01:06Z] 3572aaa38b80
 Proofs coordinator 01:07Z: consequence of Daniel's pool.py ruling, from network-accounting. Advice v1 (encodings/v1.py, the replay _KV and derived.Prefixes.cached) derives every hit below the pool bound in Python at 0 bits. So any v1 advice figure from a trace served with prefix caching on rests on derived hits and cannot be stated as a result: the tick 0, VLLM-228's per-window bits, and the non-tick 1.72 PB line, unless the trace served with prefix caching off. For each advice number, say whether its trace had prefix caching on; if it did, mark it "pending: hits charged whole (vllm, 03:00Z) or prefix caching off". Monday's run of record serves without prefix caching, so it is unaffected.
 
+[2026-11-08T01:20Z] 8332faf8f40b
+Proofs coordinator 01:22Z, Daniel (5:19 PM PST): the proof server stays on ZK Flock (with --zk). The plain arm is only a comparison, never the main line. Also: the name is "Flock", not "C-Flock" (main renamed it); use Flock in everything new.
+
