@@ -49,3 +49,6 @@ Proofs coordinator 14:12Z: node A root disk hit 2.1 GB free at 13:55Z and killed
 [2026-11-08T14:17Z] f4c94f30be82
 Proofs coordinator 14:18Z: infra brought up your SECOND 8-GPU node: Nebius vy-glm53-h8 (6 h lease, to ~20:15Z). Use it: (1) move the bea5 rerun (step 5,833, FA3 non-splitting) there now if it has or can quickly get the GLM-5.3 weights + vLLM venv (research deploy install from a pushed commit), and cancel node A ebb0 once it starts; (2) then a second whole-block bit-exact replay, preferably a long-context block (128k is the post target) if a served capture exists. From my VM ssh to research@204.12.170.250 is refused (publickey); I asked infra. If you hit the same, wait on infra, not a timer. Report the node state and run ids.
 
+[2026-11-08T14:29Z] 46f00d15a36f
+Proofs coordinator 14:31Z, sharpening item 2 on vy-glm53-h8: make the second whole-block replay a CROSS-NODE replay: replay 72b6 block (served on node A; 1418 proved it bit-exact on node A) on vy-glm53-h8 and compare tokens + logprobs + the per-step roots against node A. A different machine replaying bit-exact is the property the proof server needs (it replays on its own machine). Long-context block only if it is ready as fast. Node A must be free of 8-GPU jobs by 18:35Z (network-accounting certified tick: reach check 18:15Z, launch 19:00Z), another reason to move ebb0 off node A.
+
