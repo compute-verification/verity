@@ -1588,6 +1588,11 @@
     },
     {
       "paths": {
+        "benchmarks/covert_witness/grader/": "benchmarks/training_slowdown/grader/"
+      }
+    },
+    {
+      "paths": {
         "Security/Definitions/Population.lean": "Security/Definitions/SampledProofs.lean",
         "Security/Definitions/Population/": "Security/Definitions/SampledProofs/",
         "Security/Proofs/Population.lean": "Security/Proofs/SampledProofs.lean",
@@ -1673,11 +1678,6 @@
         "Security/Properties/RemoteAudit/Schedule.lean": "Security/Properties/Accounting/Remote/Schedule.lean",
         "Security/Properties/RemoteAudit/Shared.lean": "Security/Properties/Accounting/Remote/Shared.lean",
         "Security/Properties/RemoteAudit/Subprotocol.lean": "Security/Properties/Accounting/Remote/Subprotocol.lean"
-      }
-    },
-    {
-      "paths": {
-        "benchmarks/covert_witness/grader/": "benchmarks/training_slowdown/grader/"
       }
     }
   ]
