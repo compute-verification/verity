@@ -153,7 +153,6 @@ public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGapTol
 public import Proofs.Pouw.PearlC.TileDrawGap
 public import Proofs.Pouw.PearlC.TileGap
-public import Proofs.Pouw.PearlC.TileUOnlyGap
 public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.W1BudgetAbort
