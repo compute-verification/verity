@@ -355,6 +355,18 @@ def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     from verity.ml.definitions.registry import fa3_split as _f3s
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
+
+def _attention_head_lse(T, D, BN, DOT, INV, MASKED_FROM, PER):
+    from verity.ml.definitions.registry import fa3_split as _f3s
+    if PER is None:
+        return ir_bind(_f3s.AttentionHeadLse, T=T, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM)
+    return ir_bind(_f3s.AttentionHeadSplitLse, T=T, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
+
+
+def _merge_attn_states(NH, D):
+    from verity.ml.definitions.registry import merge_attn_states as _mas
+    return ir_bind(_mas.MergeAttnStates, NH=NH, D=D)
+
 # -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # the v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
@@ -472,9 +484,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
-           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked against the top-TOPK set,
-           # and the rows the same settings read
-           "dsa_topk_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKOrder, N=N, TOPK=TOPK),
+           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked to be the top-TOPK set
+           # in ascending index order, and the rows the same settings read
+           "dsa_topk_long_row": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKLongRow, N=N, TOPK=TOPK),
            "dsa_waksman_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaWaksmanOrder, N=N, TOPK=TOPK),
            "dsa_waksman_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaWaksmanRows, N=N, K=TOPK, W=W, E=16),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
@@ -496,6 +508,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
            "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
                ir_bind(_sparse_mla_split.SparseMlaSplit, T=T, NS=NS, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
+           # the dense-MHA prefill of a step with context (registry.fa3_split, registry.merge_attn_states): one head of FA3's output with
+           # its lse, split where a PER is given, and the merge of a token's context and suffix partials. `predict.dsa` asks for them.
+           "attention_head_lse": lambda T, D, BN, DOT, INV, MASKED_FROM, PER=None: _attention_head_lse(T, D, BN, DOT, INV, MASKED_FROM, PER),
+           "merge_attn_states": lambda NH, D: _merge_attn_states(NH, D),
            # [DSV4] DeepSeek-V4's mHC on the H200 (registry.mhc), per token. `rules/vllm_mhc.py` asks for them.
            "mhc_pre_broadcast": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
                ir_bind(_mhc.MhcPreBroadcast, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
@@ -625,9 +641,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
-           "dsa_topk_order": "DsaTopKOrder_v1{N,TOPK}: the selection relation of a row of N > TOPK keys (cooperative_topk's "
-                             "histogram_4096_topk) -- 1 when a TOPK-slot order is a permutation of the top-TOPK set of the "
-                             "logits by convert_to_uint32_v2 key descending, then index ascending",
+           "dsa_topk_long_row": "DsaTopKLongRow_v1{N,TOPK}: the canonical row of N > TOPK keys (VERITY_DSA_TOPK=canonical's "
+                                "rewrite of the top-k kernels' row) -- 1 when a TOPK-slot order is the top-TOPK set of the logits by "
+                                "convert_to_uint32_v2 key descending, then index ascending, listed in ascending index order",
            "dsa_waksman_order": "DsaWaksmanOrder_v1{N,TOPK}: the order a Waksman network of N rows reads its first TOPK outputs in at "
                                 "the run's settings (the indices 0..N-1 routed through it)",
            "dsa_waksman_rows": "DsaWaksmanRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows a Waksman network of N rows routes to its "
@@ -649,6 +665,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                          "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
                          "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue",
            "sparse_mla_split": "SparseMlaSplit_v1{T,NS,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3 sparse MLA at the token's default split count",
+           "attention_head_lse": "AttentionHeadLse_v1{T,D,BN,DOT,INV,MASKED_FROM}: one head of FA3's dense prefill row over T keys with "
+                                 "its lse (return_softmax_lse); with PER, AttentionHeadSplitLse_v1, its splits combined with the lse",
+           "merge_attn_states": "MergeAttnStates_v1{NH,D}: vLLM's merge_attn_states of one token's NH heads, the context's and the "
+                                "suffix's partial outputs by their lse",
            "mhc_pre_broadcast": "MhcPreBroadcast_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: layer 0's mHC pre on the embedding -- DeepGEMM's TF32 "
                                 "hc-prenorm GEMM over fn_broadcast in NS splits, the mixes, Sinkhorn and the fused RMS norm",
            "mhc_residual_broadcast": "MhcResidualBroadcast_v1{HC,H}: layer 0's embedding copied to the HC streams",

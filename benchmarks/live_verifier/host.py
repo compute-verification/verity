@@ -1,5 +1,5 @@
 """The auditor host's verifier service: PoUB's verifier
-(`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
+(`verity/core/protocols/remote_bandwidth/session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
@@ -107,7 +107,7 @@ from typing import Any, BinaryIO, Callable, Iterator
 
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
-VERIFIER = TREE / "benchmarks" / "remote_session" / "verifier.py"
+VERIFIER = TREE / "benchmarks" / "remote_session" / "verifier_process.py"
 REPLAY = TREE / "verity" / "core" / "protocols" / "remote_bandwidth" / "lean" / "tests"
 DIFFTEST = TREE / "verity" / "core" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
@@ -140,7 +140,7 @@ STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
-           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
+           "challenger_party": ("pous", "verity.core.devices.memory_challenger.challenger_party", 47610),
            "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
@@ -366,7 +366,7 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
-    argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
+    argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier_process.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],

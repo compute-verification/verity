@@ -22,6 +22,7 @@ public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.Complete
+public import Proofs.Flock.SamplingGeneric.TwoRankin
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -80,7 +81,9 @@ bound over the first `K` slots gives the compiled error.
 
 At a two-stage design whose first stage samples a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
 at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ)` (`SamplingGeneric/TwoBernoulli.lean`:
-`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance.
+`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance. At a first stage below independent catches at
+rates `q_ρ`, the admissible sets' count and their patterns' count are at most `δ^{−θ}` times a product over the replay
+blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
 -/
 
 @[expose] public section

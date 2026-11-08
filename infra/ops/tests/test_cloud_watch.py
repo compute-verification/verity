@@ -1,4 +1,4 @@
-"""The cloud watch (INF-73, infra/control/cloud_watch.py) posts an anomaly once when it opens and once when it clears, reads each
+"""The cloud watch (infra/control/cloud_watch.py) posts an anomaly once when it opens and once when it clears, reads each
 control-pod loop's success marker, sweeps R2 a bounded number of pages a pass, and compares spend with budgets.toml's lines."""
 import calendar
 import copy
