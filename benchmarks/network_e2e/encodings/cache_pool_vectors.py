@@ -24,7 +24,7 @@ queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each h
     python3 cache_pool_vectors.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
         [--out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json]
     python3 cache_pool_vectors.py LABEL=CORPUS_TRACE_DIR ... --slots 256 --copies 64 --stamp-width 40 --sparse \\
-        [--jobs N] [--json OUT]    # a served trace-corpus trace: R its max_num_seqs, SW its frees' clock
+        --arrivals first [--jobs N] [--json OUT]    # a served trace-corpus trace: R its max_num_seqs, SW its frees' clock
 """
 from __future__ import annotations
 
@@ -391,12 +391,15 @@ def _tapped(drv: _Driver):
             setattr(K, n, orig[n])
 
 
-def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True, progress=None) -> _Driver:
+def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True, progress=None,
+          arrivals: str = "admit") -> _Driver:
     """The unit over the whole trace, held to `BlockPool` (the module's docstring); the first `record` calls kept (all with
     None). Raises AssertionError where the two disagree. With `every` the pools are compared after each of `BlockPool`'s
     operations; without it only after one that made a call or changed `BlockPool`'s counts (its free blocks, cached
     hashes or holding requests), which a trace of thousands of blocks and steps needs. `progress(calls, request)` is
-    told every 10,000 calls."""
+    told every 10,000 calls. Requests arrive at their `before` steps (`arrivals="admit"`), or as the advice encoder
+    replays a record (`"first"`: request i has arrived at step k once k reaches its first scheduled step), which follows
+    an async trace where an empty schedule shares its step count with the next."""
     S = SimpleNamespace(**st)
     drv = _Driver(S, inp, record, every, progress)
     parent: dict[int, int] = {}
@@ -413,7 +416,14 @@ def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True
     H.__call__ = call
     try:
         with _tapped(drv):
-            rp = RP.replay(inp.engine, inp.requests, admit=inp.before)
+            if arrivals == "first":
+                first = [len(inp.rows)] * len(inp.requests)
+                for k in reversed(range(len(inp.rows))):
+                    for j, _, _ in inp.rows[k]:
+                        first[j] = k
+                rp = RP.replay(inp.engine, inp.requests, decide=lambda i, k, _: k >= first[i])
+            else:
+                rp = RP.replay(inp.engine, inp.requests, admit=inp.before)
     finally:
         H.__call__ = intern
     got = [list(s.rows) for s in rp.steps]
@@ -473,7 +483,8 @@ def _drive_one(job: tuple[str, Path, dict[str, Any]]) -> dict[str, Any]:
         def progress(calls: int, r: int) -> None:
             print(f"{label}: {calls} calls, request {r} of {len(inp.requests)}, {time.perf_counter() - t0:.0f} s", flush=True)
 
-        row["counts"] = dict(drive(inp, st, every=not o["sparse"], progress=progress if o["sparse"] else None).counts)
+        row["counts"] = dict(drive(inp, st, every=not o["sparse"], progress=progress if o["sparse"] else None,
+                                   arrivals=o["arrivals"]).counts)
     except (AssertionError, ValueError, RuntimeError, OSError) as ex:  # a disagreement, or a trace the replay can't read
         row["error"] = f"{type(ex).__name__}: {ex}"
     row["seconds"] = round(time.perf_counter() - t0, 1)
@@ -488,10 +499,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--copies", type=int, default=4, help="D, the copies an entry holds")
     ap.add_argument("--stamp-width", type=int, default=16, help="SW: it must hold the clock, KU a free")
     ap.add_argument("--sparse", action="store_true", help="compare the pools only where either changed (`drive`'s every)")
+    ap.add_argument("--arrivals", choices=("admit", "first"), default="admit", help="`drive`'s arrivals")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--json", type=Path, help="write each trace's counts, statics and seconds here")
     a = ap.parse_args(argv)
-    o = {"slots": a.slots, "copies": a.copies, "stamp_width": a.stamp_width, "sparse": a.sparse}
+    o = {"slots": a.slots, "copies": a.copies, "stamp_width": a.stamp_width, "sparse": a.sparse, "arrivals": a.arrivals}
     jobs = [(t.split("=", 1)[0], Path(t.split("=", 1)[1]), o) if "=" in t else (Path(t).name, Path(t), o) for t in a.traces]
     with ProcessPoolExecutor(a.jobs) if a.jobs > 1 else nullcontext() as ex:
         rows = []
