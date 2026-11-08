@@ -4156,6 +4156,15 @@ def writable(pkg: Path) -> list[Path]:
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
+def build_roots_over(path: Path, pkgs) -> list[Path]:
+    """The `writable` roots of ``pkgs``' builds that ``path`` lies in or that lie in it, resolved as `sandbox.sh` binds them.
+    In the sandbox those are all a build can write that outlives it, so a cache none overlaps (`--replay-cache`,
+    `--facts-cache`) holds only what the audit itself stored: its entries' checks catch corruption and staleness, not a
+    writer that rewrites an entry consistently, which this rules out on a node whose builds are sandboxed (`sandboxed`)."""
+    p = path.resolve()
+    return sorted({r for q in pkgs for r in (d.resolve() for d in writable(q)) if p.is_relative_to(r) or r.is_relative_to(p)})
+
+
 def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], dict]:
     """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
     the node's artifact cache (`ARTIFACTS`) indexes under its key, its artifacts checked (``mk``: `module_keys`,
@@ -5034,7 +5043,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     directory, `--facts-only` with the replay and the tests off) writes it instead under its content address
     (`facts_key`), so the lock run and the records step of one landing share the one document; the report's `facts_key`
     and `facts_document` name it (the caller drops it on a tamper).  With ``facts_reuse`` (`--facts-cache`, a judging
-    audit) it is stored with its sidecar (`store_cached_facts`), which `read_cached_facts` checks on a reuse; without it
+    audit) it is stored with its sidecar (`store_cached_facts`), which `read_cached_facts` checks on a reuse, and only on a
+    node whose builds are sandboxed (`sandboxed`), where no build can write the cache (`build_roots_over`); without it
     (`--facts-only`, the graph's stage A) the document alone is written, so stage A's output stays the bytes the graph's
     content cutoff compares."""
     rep, policy, work = _open(pkg, out)
@@ -5253,6 +5263,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    if facts_cache is not None and facts_reuse and not sandboxed():
+        rep["facts_cache"] = "not stored: this node builds without the sandbox, so a build could have written the cache"
+        log(f"facts: {pkg}: {rep['facts_cache']}")
+        facts_cache = None
     if facts_cache is not None:
         rep["facts_key"] = facts_key(facts, current, rep["toolchain"], pkg, files, moved)
         facts_out = facts_cache / f"{rep['facts_key']}.json.gz"
@@ -5652,6 +5666,10 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache)):
+        if d is not None and (over := build_roots_over(d, pkgs)):
+            ap.error(f"{flag} {d} overlaps {', '.join(map(str, over))}, which a build writes, so a build could forge its "
+                     f"entries: put the cache outside every audited package's .lake and its path dependencies'")
     if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
@@ -5671,7 +5689,7 @@ def main(argv: list[str]) -> int:
     bins = [b for tc in toolchains for b in toolchain_bins(tc)]
     seals = {str(p): sha256(p) for p in [*(p for d in (HERE, TOOL) for p in sorted(d.iterdir())), *bins] if p.is_file()}
     lock = threading.Lock()
-    if a.build or a.all:
+    if a.build or a.all or a.facts_cache:
         sandboxed()                                     # probed once, before anything runs beside the probe
     built = {p: threading.Event() for p in pkgs}
     passed: set[Path] = set()

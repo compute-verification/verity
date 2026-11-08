@@ -1318,12 +1318,42 @@ def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered
     assert A.read_cached_facts(cache, key) is None, "a document without its sidecar is a miss, never a hit"
 
 
+def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, capsys):
+    """A facts sidecar's SHA-256 catches corruption and staleness, not a writer that rewrites the document and its sidecar
+    consistently, and a replay entry is no harder to forge. So each cache must lie outside all a sandboxed build writes:
+    every audited package's `.lake` and its path dependencies' (`writable`, `sandbox.sh`'s RW_DIRs). `build_roots_over`
+    finds an overlap either way (the cache in a root, or a root in the cache) and through a symlink, and the CLI refuses
+    such a cache before anything builds."""
+    pkg, dep = tmp_path / "tree" / "P", tmp_path / "tree" / "D"
+    (pkg / ".lake").mkdir(parents=True)
+    dep.mkdir()
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "D", "type": "path", "dir": "../D"}]}))
+    roots = [pkg.resolve() / ".lake", dep.resolve() / ".lake"]
+    assert A.writable(pkg) == roots
+    assert A.build_roots_over(tmp_path / "facts", [pkg]) == []
+    assert A.build_roots_over(tmp_path / "tree" / "facts", [pkg]) == [], "beside the packages, as lean_changed keeps it"
+    assert A.build_roots_over(pkg / ".lake" / "facts", [pkg]) == roots[:1]
+    assert A.build_roots_over(dep / ".lake" / "x", [pkg]) == roots[1:], "a path dependency's .lake is written too"
+    assert A.build_roots_over(tmp_path / "tree", [pkg]) == sorted(roots), "a cache holding a root"
+    (tmp_path / "link").symlink_to(pkg / ".lake", target_is_directory=True)
+    assert A.build_roots_over(tmp_path / "link" / "facts", [pkg]) == roots[:1], "resolved, as sandbox.sh binds"
+
+    ctl = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", ctl, ignore=shutil.ignore_patterns(".lake"))
+    for flag in ("--facts-cache", "--replay-cache"):
+        with pytest.raises(SystemExit):
+            A.main([str(ctl), flag, str(ctl / ".lake" / "cache"), "--out", str(tmp_path / "out")])
+        assert f"{flag} {ctl / '.lake' / 'cache'} overlaps {(ctl / '.lake').resolve()}" in capsys.readouterr().err
+    assert not (ctl / ".lake").exists(), "refused before anything built"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges_as_usual(tmp_path):
+def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges_as_usual(tmp_path, monkeypatch):
     """`--facts-cache` (`audit(facts_cache=, facts_reuse=True)`, what lean_changed's records step passes) judges as a plain
     audit does and also stores the sealed document with its sidecar under the build's `facts_key`; a second audit of the
     same tree recomputes that key and reads the document back as a hit. `--facts-only` (the graph's stage A) still writes
-    the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other."""
+    the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other. A
+    node whose builds aren't sandboxed stores nothing: any build there could have written the cache."""
     noop = lambda *_: None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -1331,6 +1361,13 @@ def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges
     A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
     plain = A.audit(pkg, tmp_path / "plain", build=False, replay=False, runs=False, log=noop)
 
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    bare = tmp_path / "bare"
+    d = A.audit(pkg, tmp_path / "d", build=False, replay=False, runs=False, facts_cache=bare, facts_reuse=True, log=noop)
+    assert not bare.exists() and "facts_key" not in d and "sandbox" in d["facts_cache"], "no sandbox: nothing stored"
+    assert d["failures"] == [], "and the audit judges as usual"
+
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
     cache = tmp_path / "facts"
     a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, facts_reuse=True, log=noop)
     key = a["facts_key"]
