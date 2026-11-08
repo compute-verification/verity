@@ -20,7 +20,7 @@ import pytest
 from verity.ml.commitments import hm96
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 
 pytestmark = pytest.mark.slow
 N = 8
@@ -70,7 +70,7 @@ def head(d: Path, f: str = "pub") -> dict:
 def partitioned(s):
     """The circuit with META naming the statement's program (`population_program` of the template at N) and its
     ``verity/partition/v1`` object, as `rec_inner.stage` binds it; the program and the object."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     program = P.population_program(s.template, N)
     part = P.partition(program, P.template_instance_query(s.template))
@@ -123,7 +123,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
     class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
     partition object, is refused."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+    from verity.core.protocols.spot.one_stage import partition as P, registration as R
 
     text, program, part = partitioned(staged)
     d = stage(staged, "bound", text=text)

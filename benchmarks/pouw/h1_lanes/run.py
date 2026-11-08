@@ -104,10 +104,10 @@ from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.ml.protocols.pouw.circuit import h1tile as H  # noqa: E402
 from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 
 RC = (32, 32)
 SCHEME = "frame-v3-sha512/hm96-sha512"

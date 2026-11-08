@@ -17,7 +17,7 @@ public import Flock.With.SetupEq
 hypotheses: `Bridge.RowsOk`, `Registered.dupName = none`, `RootFixesDomainL` at the public file's leaf map, and
 `Bridge.PopMatches`. The verifiers refuse every file and registration that fails them: `verify --zk` runs `Flock.PortRoots.checkOf` and then
 `Flock.KsScope.checkOf` last in its verdict (`Main.verifyCmd`), on the circuit `ProvedScope.circuitOf` reads, and the
-sampled-proofs run refuses the registration (`SampledProofs.Run.run`, `population-order`, `SampledProofs.Slots.popOk`).
+sampled-proofs run refuses the registration (`Spot.Run.run`, `population-order`, `Spot.Slots.popOk`).
 
 `PortRoots` reads the public file as `HmOut.loadPublic` loads it, without the circuit's public input words, while V5
 reads it over them (`HmIn.loadPublic`). Both are `HmRow.loadPublic` at one circuit's ports with other output ports, and
@@ -317,7 +317,7 @@ def SampledKSLiveV5Accepted : Prop :=
     -- the circuit's constants and every proof block's public input bits, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
     -- the sampling design's design, the registration's strata, and the sampling design's own miss of `B`
-    let r := Properties.SampledProofs.oneStageOf law
+    let r := Properties.Spot.oneStageOf law
     let ns := Bridge.nsOf desc qr
     let δ : ℝ := (Bridge.designOf r).Pa (Bridge.partOf P κ ns) B
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
