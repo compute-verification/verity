@@ -14505,3 +14505,47 @@ escape bound loses `Σ eo` (its `d5d38ef68a`, pushed about 00:15Z).
 
 **Still yours to decide:** the parked `cursor/proofs-memlemma-355d-cont` (`ContinuationCertified`, network-accounting's
 stamp-rule ask). Should it become a small PR, or be dropped?
+
+## 23:59Z from CARRYLEAN: `PeriodRoots` replaced by a pointwise `CarriedRoots`, tried and pushed; the run layer is in its first tries
+
+Branch `cursor/proofs-carrylean-6b00` @ `d5d38ef68a`, pushed. The statement diff is in note
+`proofs/20261108T2205Z-report-carrylean`, sections 23:30Z and 23:40Z.
+
+- **A red-team finding changed one premise.** MEMLEMMA found that `PeriodRoots` had no small honest `eo`: after a failed
+  run `i − 1`, R7 restarts from the empty root, while `poolOpen` with `chains` fixed still names run `i − 1`'s row.
+  - In its place is `CarriedRoots`, a pointwise domain premise with no probability: rows that every run accepts open, at
+    each run, the root of the row the record rule names.
+  - The escape bound drops `Σ eo` and is now `(1 − q)^Fmax + Σ e + Σ e' + Σ_i Pr[PoolColl i]`. The count is unchanged.
+  - MEMLEMMA's `RootsOfChecked` (`cursor/proofs-memlemma-355d-roots`) derives `CarriedRoots` from each run's root check
+    (`CheckedRoots`) and R7. It now concludes `CarriedRoots` itself (`e469a9a888`).
+  - The guarantee takes `CarriedRoots` rather than those two premises. It is the weaker hypothesis, so the guarantee is
+    the stronger theorem, and it keeps `pin`/`pout` out of the statement.
+- **Tries on vy-nebius-cpu-1 `--pool proofs`:**
+  - `r20261108-233017-9476`: the proof with `--siblings`. Its 6 theorems use only `propext`, `Classical.choice` and
+    `Quot.sound`, and the siblings are clean.
+  - `r20261108-233037-993c`: the nontrivial witness, clean.
+- **Records:** `r20261108-233336-be75` (`--records Security --update` on `d5d38ef68a`) found exactly two failures, both
+  fixed in `b393c858ea` (local, pushed with the next commit):
+  - The witness form, which needed the honest half's `unwitnessed` entry. It is now added from the run's hashes, as a
+    new entry; nothing existing is re-keyed.
+  - A layer rule: `Definitions.NetworkCertifier` could not import `Definitions.Hash`, which holds the rows' root
+    (`sha512/row-seg/v1`). The lock's layer now admits the hash area, as PoUW's and Accounting's do. This follows the
+    one-vocabulary rule: hashes are defined once, in `Hash`, and every area reads them there.
+- **The run layer (my part of the split) changed shape.** A `leakAtCarried_of_checked` with rows picked by
+  `Classical.choose` would put the collision term at rows no algorithm computes, and SHA-512's collision resistance
+  can't bound that. So I'm adding `SampledLeakCarried` instead: `SampledLeakChecked` for one carried run.
+  - Its relation `RLeakCarried` reads both rows off the extracted witness: the trace's values at `prow`, and the trace
+    run's values at `nrow`. The class's `rLeakChecked_of` already builds the accepted run from the trace, so a collision
+    at an opening is one found from two runs' extracted witnesses.
+  - Its count at a fixed opened row is `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #faultySets(δ) · 2^β · Dj^k`, from the
+    class's count with the opening gates registered.
+  - New domain premise `OpensAtInputs`: the opening gates are inputs of the circuit.
+  - Its nontrivial witness mirrors `SampledLeakChecked`'s. The honest half is `unwitnessed`.
+  - Tries: `r20261108-235149-7eed` passed. The proof file's 11 theorems, the run layer included, use only the three
+    standard axioms, and the siblings are clean. The witness try is running.
+- **For network-accounting:** the statement they OK'd changed only by `CarriedRoots` replacing `PeriodRoots` and `eo`.
+  Please route that diff.
+- **ETAs:**
+  - `SampledLeakCarried` committed and its records run launched: about 00:30Z.
+  - Lock records for both guarantees passing, and pushed: about 02:00Z.
+  - Due Tue 06:00Z.
