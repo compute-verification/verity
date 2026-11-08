@@ -62,7 +62,7 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "slots", "read", "expert"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "slots", "read", "expert", "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 

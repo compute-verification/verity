@@ -31,9 +31,9 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   blocks `d.𝓘` its owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters
   (`VerifierOwn`), and every such registered circuit's inference blocks meet the policy (`PolicyMet`): every one has
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
-  (`Nci.CompliesRate Γ α`), and it has a `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a
-  `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
-  `W` bits wide; and the record sampled proofs' case commits to names, by its SHA-512, the program the form its params
+  (`Nci.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
+  bit wide, its bit-level expansion a `(ΓW, ⌊αΓW⌋)`-partition when they are at most `W` bits wide, with no assumption
+  that it is Boolean or of positive fan-in; and the record sampled proofs' case commits to names, by its SHA-512, the program the form its params
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
   registered circuit the policy checked and the program sampled proofs verifies have one SHA-512.
@@ -65,15 +65,18 @@ open NciCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceH
 open NciCheck.Protocol (instanceOf trustedOf)
 
 /-- The policy, met by the declaration `d` and its division `U` at `Γ` and `α`: every inference block of `U` has at most
-`Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`Nci.CompliesRate`); when `d` is
-Boolean it has a division that is a `(Γ, ⌊αΓ⌋)`-partition (`Partition.IsCK`); and when every gate of `d` reads a gate
-of positive width where it has one (`BitFaninPos`) and every computed gate is 1 to `W` bits wide, `d`'s bit-level
-expansion has a division that is a `(ΓW, ⌊αΓW⌋)`-partition. -/
+`Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`Nci.CompliesRate`); and `d`
+with its constants registered (`RegisteredCircuit.constInputs`, as the model takes a constant) has a division that is
+a `(Γ, ⌊αΓ⌋)`-partition (`Partition.IsCK`) when every gate of `d` is one bit wide, and a bit-level expansion with a
+division that is a `(ΓW, ⌊αΓW⌋)`-partition when every gate is at most `W` bits wide. Neither clause assumes `d`
+Boolean or of positive fan-in: registering its constants makes it so. Where `d` is Boolean, or of positive fan-in in
+bits with every computed gate at least a bit wide, it has no constant, and the clauses give partitions of `d` and its
+expansion themselves (`SecurityProofs.policyMet_old_clauses`). -/
 def PolicyMet (d : RegisteredCircuit) {n : ℕ} (U : Partition d.D n) (Γ : ℕ) (α : ℝ) : Prop :=
   (∀ u, Meets d U Γ α u) ∧ Nci.CompliesRate Γ α d ∧
-    (d.D.Boolean → ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d Γ ⌊α * Γ⌋₊) ∧
-    ∀ W : ℕ, d.D.BitFaninPos → (∀ g, d.D.isInput g = false → 1 ≤ d.D.w g) → (∀ g, d.D.w g ≤ W) →
-      ∃ (B : ℕ) (P : Partition d.expand.D B), P.IsCK d.expand (Γ * W) ⌊α * (Γ * W : ℕ)⌋₊
+    ((∀ g, d.D.w g = 1) → ∃ (B : ℕ) (P : Partition d.constInputs.D B), P.IsCK d.constInputs Γ ⌊α * Γ⌋₊) ∧
+    ∀ W : ℕ, (∀ g, d.D.w g ≤ W) →
+      ∃ (B : ℕ) (P : Partition d.constInputs.expand.D B), P.IsCK d.constInputs.expand (Γ * W) ⌊α * (Γ * W : ℕ)⌋₊
 
 /-- The parse `i` of the policy's instance carries the policy's own parameters `p`: its program, and `Γ` and
 `α = num / den` as the parameters write them. -/

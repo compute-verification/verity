@@ -590,7 +590,7 @@ class DsaIndexerAttnRule(StateRule):
                     ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
                     continue
-                sw = ctx.run_value(f"{layer}/topk_switches[t={P}]", Array(dsa_topk.waksman_switches(n, TOPK), Value(1)), node)
+                sw = ctx.run_value(f"{layer}/topk_switches[t={P}]", Array(dsa_topk.waksman_switches(n, TOPK), Value(1)), "dsa_topk_switches", node)
                 order = ctx.call(ctx.kind("dsa_waksman_order", node, N=n, TOPK=TOPK), sw, node=node, rule=self,
                                  name=f"{h}/topk[t={P}]")
                 ok = ctx.call(ctx.kind("dsa_topk_long_row", node, N=n, TOPK=TOPK), logits, order, node=node, rule=self,

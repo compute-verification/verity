@@ -1678,6 +1678,9 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
                                   [])
 
 
+ONSITE_PIECES = HERE.parents[2] / "benchmarks" / "pous" / "onsite_pieces.sh"
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
@@ -1726,17 +1729,75 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
-    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
-    the preflight refuses any onsite piece's command set, before anything runs."""
+    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece, with ONSITE_PIECES naming the file of
+    onsite's defaults, its default WIPE_CMD isn't set, and the preflight refuses any onsite piece's command set, before
+    anything runs."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
-           "PRODUCT": product, **extra}
+           "PRODUCT": product, "ONSITE_PIECES": str(ONSITE_PIECES), **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+@pytest.mark.parametrize("product, pieces, called", [
+    ("onsite", "pieces.sh", ["onsite"]),
+    ("onsite", None, []),
+    ("remote", "pieces.sh", []),
+])
+def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, product, pieces, called):
+    """Under PRODUCT=onsite, ONSITE_PIECES (a path from the tree) names the file whose `onsite_piece_commands` sets the
+    onsite pieces' defaults; unset, nothing is sourced, and under PRODUCT=remote the file is read but sets none."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    (tree / "pieces.sh").write_text(f'onsite_piece_commands() {{ echo "$PRODUCT" >> {tmp_path}/called; }}\n')
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "PRODUCT": product, **({"ONSITE_PIECES": pieces} if pieces else {})}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    assert (rc, (tmp_path / "called").read_text().split() if (tmp_path / "called").exists() else []) == (0, called)
+
+
+def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "ONSITE_PIECES": "nowhere/pieces.sh"}
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                         check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: ONSITE_PIECES={tree}/nowhere/pieces.sh is not a file")
+
+
+@pytest.mark.parametrize("files, keys, want", [
+    ((), (), ("", "", "")),
+    (("benchmarks/pous/streamed_wipe/served_wipe.sh",), (), ("wipe", "", "")),
+    (("benchmarks/pous/served_piece.sh",), ("vy-auditor2-pous",), ("", "pous", "collect")),
+    (("benchmarks/one_stage/served_bandwidth.sh", "store/setup.json"), ("vy-auditor2-bw",), ("", "", "session")),
+    (("benchmarks/one_stage/served_bandwidth.sh",), ("vy-auditor2-bw",), ("", "", "")),
+])
+def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
+    """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
+    POUS_CMD where it has PoUS's and the node the memory challenger's key, and BANDWIDTH_CMD to collect PoUS's session
+    then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
+    tree, home = tmp_path / "tree", tmp_path / "home"
+    for f in files:
+        (tree / f).parent.mkdir(parents=True, exist_ok=True)
+        (tree / f).write_text("")
+    (home / ".ssh").mkdir(parents=True)
+    for k in keys:
+        (home / ".ssh" / k).write_text("")
+    got = subprocess.run(["bash", "-c", f'. {ONSITE_PIECES}; onsite_piece_commands; '
+                          'printf "%s\\n" "${WIPE_CMD-}" "${POUS_CMD-}" "${BANDWIDTH_CMD-}"'],
+                         env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree), "BW_STORE": str(tree / "store")},
+                         check=True, capture_output=True, text=True).stdout.split("\n")[:3]
+    marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_bandwidth.py collect",
+             "session": "served_bandwidth.sh"}
+    assert all((marks[w] in g) if w else g == "" for w, g in zip(want, got)), got
 
 
 def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
@@ -1782,7 +1843,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
-    and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
+    and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
+    says so and fails, since no Lean answered. PRODUCT=remote needs no
     served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and under it no
@@ -1821,6 +1883,11 @@ sys.exit(1)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text() == ("COMPOSITE: not run, onsite's own cases come from ONSITE_PIECES's file, "
+                                                  "and it is unset\n")
+    (out / "verdicts.txt").unlink()
+    env["ONSITE_PIECES"] = str(ONSITE_PIECES)
     r = run()
     assert r.returncode == 0, r.stderr
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()

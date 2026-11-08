@@ -1,0 +1,11 @@
+# The deterministic moe_align_block_size (README.md). Not a package: the plugin and the stress run in a node's pinned vLLM
+# venv; the suite tests the canonical outputs on hand-made cases and against the align Definitions keyed by pair index,
+# the wrapper and plugin on stand-ins, and, where Triton is importable, the kernels in Triton's interpreter.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test_moe_align holds the canonical order to the align Definitions' row kernels with every pair keyed by its index
+inputs = ["verity/__init__.py", "verity/ml/__init__.py", "verity/ml/definitions/__init__.py",
+          "verity/ml/definitions/numerics/__init__.py", "verity/ml/definitions/numerics/moe_align_rows.py"]

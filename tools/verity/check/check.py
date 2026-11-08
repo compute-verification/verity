@@ -757,6 +757,32 @@ def lean_fast(out: Path) -> str | None:
     return None
 
 
+def lean_passes(out: Path, done: list[dict], lc=None) -> dict[str, str]:
+    """{inputs key: package} for each package the lean-audit step audited and passed on this tree's own lock (no failure, the
+    kernel replay, not passed on a record it regenerated), each key `lean_changed.inputs_key` (``lc``, the module) of this tree:
+    the key a records run of the commit keeps and `lean_changed.py --inputs-key` prints, so `research queue`'s records gate
+    finds a check's passes as it finds a records run's.  None from a step that didn't end with the audit's verdict
+    (refused, hung, stopped) or from an audit that failed without reporting a package (check.py crashed)."""
+    step = next((s for s in done if s.get("step") == "lean-audit"), None)
+    if step is None or step.get("status") not in ("passed", "failed") or step.get("rc") not in (0, 1) or step.get("detail"):
+        return {}
+    try:
+        doc = json.loads((out / "lean-audit" / "audit.json").read_text())
+        reports = {r["package"]: r for r in doc["packages"] if isinstance(r.get("package"), str)}
+        if any(f not in reports for f in doc.get("failed") or []):
+            return {}
+        regenerated = doc.get("regenerated") or {}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"check: lean-audit's report can't be read ({type(e).__name__}: {e}), so the result lists no Lean passes",
+              file=sys.stderr)
+        return {}
+    lc = lc or _load("lean_changed", LEAN_JOBS)
+    ok = [p for p, r in sorted(reports.items()) if r.get("failures") == [] and not r.get("settled") and p not in regenerated
+          and r.get("kind") != lc.FAST_KIND and isinstance(r.get("seconds"), dict) and "replay" in r["seconds"]]
+    files = tracked_files(ROOT) if ok else None
+    return {lc.inputs_key(p, files): p for p in ok} if files is not None else {}
+
+
 def lean_slot(cmd: list[str]) -> list[str]:
     """`--lean-slot CMD...`, the lean-audit step: CMD in one of the node's Lean audit slots when it will audit a package, as it
     is when it only reuses passes, which would otherwise wait behind an hour-long audit for seconds of work. CMD runs with
@@ -2790,8 +2816,9 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
     config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for an
-    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
-    ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
+    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  Its `passes` are the lean-audit step's
+    (`lean_passes`), which the store indexes as `passes.<key>`.  A run ``stopped_by`` a signal is `not_run`: no verdict and
+    no passes, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
@@ -2804,6 +2831,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
+           "passes": {} if stopped_by else lean_passes(run_dir, done),
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", f"{CC_SHARDS}/", "lean-audit/",
                                                     *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG, LIVE.LIVE_FILE,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
