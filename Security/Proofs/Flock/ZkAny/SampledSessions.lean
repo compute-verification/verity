@@ -17,7 +17,7 @@ through a bijection `eC` with a type of the session's index alone, its error at 
 simulated in turn (`PerOutcome.stream`) with the errors added, and `SampledAuditAny` gives the view.
 
 * `recOf`: the record a stack hands the loop.
-* `Sessions`: the sampled sessions' statements, verifiers, prover parameters and witnesses.
+* `Sessions`: the sampled sessions' statements, verifiers, prover parameters and witnesses, at what each releases.
 * `Sessions.rel`, `Sessions.outc`, `Sessions.sim`: session `j`'s released messages, its outcome and its simulator.
 * `sampledAudit_zkOut`: the view at `ℓ` sessions of a protocol that meets `ZKOut`.
 -/
@@ -34,20 +34,20 @@ def recOf {K S Ys V O T R : Type} (sv : Service K S Ys V O T R) (n : ℕ) {m : �
     (p : K × (Fin m → S)) : RegistrationRecord S O T R :=
   sv.handed p.1 n v p.2 (st p.1 v (sv.views p.1 v p.2))
 
-/-- **An audit's sampled sessions of one protocol**, oldest first. Session `j` at the record `ρ` the loop admitted, the
-sample `χ` and the earlier sessions' messages `b`: its statement `x`, its verifier `Vs` and the verifier's tape `θ`. At
-the registration's randomness `p`, the sample, the earlier sessions' randomness `π` and their messages: its prover's
-parameters `i` and its witness `w`. -/
-structure Sessions (Rec Xs P ι W A Θ : Type) where
-  x : (j : ℕ) → Rec → Xs → Tup (fun _ => List (Msg × Out)) j → Msg
-  Vs : (j : ℕ) → Rec → Xs → Tup (fun _ => List (Msg × Out)) j → VStar Θ
-  θ : (j : ℕ) → Rec → Xs → Tup (fun _ => List (Msg × Out)) j → Θ
-  i : (j : ℕ) → P → Xs → Tup (fun _ => A) j → Tup (fun _ => List (Msg × Out)) j → ι
-  w : (j : ℕ) → P → Xs → Tup (fun _ => A) j → Tup (fun _ => List (Msg × Out)) j → W
+/-- **An audit's sampled sessions of one protocol**, oldest first, each releasing a `B`. Session `j` at the record `ρ`
+the loop admitted, the sample `χ` and the earlier sessions' releases `b`: its statement `x`, its verifier `Vs` and the
+verifier's tape `θ`. At the registration's randomness `p`, the sample, the earlier sessions' randomness `π` and their
+releases: its prover's parameters `i` and its witness `w`. -/
+structure Sessions (Rec Xs P ι W A Θ B : Type) where
+  x : (j : ℕ) → Rec → Xs → Tup (fun _ => B) j → Msg
+  Vs : (j : ℕ) → Rec → Xs → Tup (fun _ => B) j → VStar Θ
+  θ : (j : ℕ) → Rec → Xs → Tup (fun _ => B) j → Θ
+  i : (j : ℕ) → P → Xs → Tup (fun _ => A) j → Tup (fun _ => B) j → ι
+  w : (j : ℕ) → P → Xs → Tup (fun _ => A) j → Tup (fun _ => B) j → W
 
 namespace Sessions
 
-variable {Rec Xs P ι W A Θ St : Type} (Q : Sessions Rec Xs P ι W A Θ)
+variable {Rec Xs P ι W A Θ St : Type} (Q : Sessions Rec Xs P ι W A Θ (List (Msg × Out)))
 
 /-- **Session `j`'s messages** at its own randomness `ω`: the prover `Pv` at the session's parameters and witness,
 against its verifier, at its statement, the record being `ρ p`. -/
@@ -85,7 +85,7 @@ theorem sampledAudit_zkOut {K S Ys V O T R Xs ι W St N₀ Ω₀ Θ : Type} [Fin
     {ε : ι → (x : Msg) → W → (Θ' : Type) → VStar Θ' → Θ' → St → ℝ} {ok : ι → Prop}
     (hZ : ∀ i, ok i → ZKOut (fun _ => N₀) (fun _ => Ω₀) H k (Pv i) Rl out Sm (ε i))
     (sv : Service K S Ys V O T R) (n m : ℕ) (v v₀ : V) (st : Stack K V S O T R m) (k₀ : K) (ℓ : ℕ)
-    (Q : Sessions (RegistrationRecord S O T R) Xs (K × (Fin m → S)) ι W (N₀ × Ω₀) Θ)
+    (Q : Sessions (RegistrationRecord S O T R) Xs (K × (Fin m → S)) ι W (N₀ × Ω₀) Θ (List (Msg × Out)))
     (eC : ∀ j ρ χ b, CB j ≃ Sm.C (Q.x j ρ χ b)) (εS : ℕ → St → ℝ≥0∞) (δ : ℝ≥0∞) (hown : ZkServerOwnUser st)
     (hok : ∀ j p χ π b, ok (Q.i j p χ π b))
     (hR : ∀ j p χ π b, Rl (Q.x j (recOf sv n v st p) χ b) (Q.w j p χ π b))

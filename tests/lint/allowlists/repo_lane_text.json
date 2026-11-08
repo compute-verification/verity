@@ -180,7 +180,6 @@
     {"file": "verity/core/claims/__init__.py", "count": 5},
     {"file": "verity/core/difftest/tests/test_constants.py", "count": 1},
     {"file": "verity/core/primitives/evaluate/README.md", "count": 2},
-    {"file": "verity/core/primitives/evaluate/lakefile.toml", "count": 1},
     {"file": "verity/core/primitives/evaluate/tests/test_difftest.py", "count": 5},
     {"file": "verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "count": 1},
     {"file": "verity/core/protocols/certifier/README.md", "count": 3},
@@ -219,6 +218,7 @@
     {"file": "tools/research/tests/test_withdraw.py", "count": 1},
     {"file": "verity/core/difftest/python/verity_difftest/__init__.py", "count": 1},
     {"file": "verity/core/protocols/remote/README.md", "count": 1},
+    {"file": "verity/core/primitives/evaluate/lakefile.toml", "count": 1},
     {"file": "verity/core/protocols/onsite/CoreOnsite.lean", "count": 3},
     {"file": "verity/core/protocols/remote/CoreRemote.lean", "count": 3},
     {"file": "verity/ml/flock/tests/test_lean_record_checks.py", "count": 1}

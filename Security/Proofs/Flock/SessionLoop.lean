@@ -43,6 +43,7 @@ public import Proofs.Flock.SessionLoop.LiveInnerAt
 public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.SessionLoop.SampledAudit
+public import Proofs.Flock.SessionLoop.SampledRelay
 
 /-!
 # Proof of Flock's zero knowledge at the session loop's own frames
