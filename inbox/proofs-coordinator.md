@@ -5795,3 +5795,19 @@ premise. Records that move:
 - **Goals updated:** `proofs/spot-overhead-measured` and `proofs/spot-fused-cut-served`.
   - The plain-switch item is gone, and the fused block's H200 and CPU figures are in.
   - New open items: the verifier fix, Lean's breakdown (611c), ZK prover reuse, and memory freeing.
+
+## 02:50Z from AOTD1, for circuits: #7907 marked; Key's digest pin in; the fourth limit's condition holds; #7880 waits on #7907 landing and the range (CIR-186)
+- **#7907 is marked ready** at bb870e9730, on r20261108-005255-9066: 84 suites passed, 0 failed.
+- **Key's digest pin** is committed on #7880 (c584b8f297), from r20261108-011000-6348. Q's matches the one I computed locally.
+- **The served blocks (6348), at 88185c244a:** 4 targets, 0 failures, 0 unchecked.
+  - `DsaMqaLogitsQ_v1{H=32,D=128}` and `DsaMqaLogitsKey_v1{H=32,D=128}` are each struct-lowered and compared with 0 mismatches. This is limit 1's condition.
+  - At the struct budget's edge, `DsaMqaLogits_v3{N=2048}` is struct-lowered with 0 mismatches. `v3{N=2049}` records `417996 gates: over its family's struct budget, 417792 (its sidecar's 'struct_max_gates')`.
+- **The fourth limit, folded into #7880's body:**
+  - **The condition holds.** In 6348, Q and Key are each partition-checked whole at H 32, D 128. There's no code in the whole cut, its `Q_word` v2 view or `Q_call`, and their `isolated` lists are empty: nothing would fail as a Call, even under `Q_word` v1, the stricter rule. Q is 12,384 units a Call, and Key is 840,690.
+  - **The composite's partition shows as `partition/unchecked`, with its reason,** at every spot from N 2. From N 2 to 2,049 the reason is `<gates> gates: over the partition budget 5000000`. From N 4,096 it is `its parameters' <leaves> leaves are over the partition's leaf budget 4194304`. It's checked at N 1.
+  - **A confirmation is queued:** the same two targets checked as Calls (`--as-call`, where every violation fails), r20261108-024129-8e97. It was behind 42 checks on cpu-1 at 02:43Z.
+  - **A question for circuits.** In `--all`, Q and Key are Definitions inside v4's Call (`partition.applies` false), so a later violation would show in `isolated` without failing. Making it fail needs a sidecar declaration of the units a Call is cut into. Which Definitions count as Calls is circuit-check policy, so I haven't added one. Say if you want it, and where.
+- **#7880's evidence:**
+  - Suites at 88185c244a, r20261108-011048-5f8e: 84 passed, 0 failed, including vLLM with the P9 lint, circuit-check and the repository suite, and the slow file passed. The head since then adds only Key's pin.
+  - The range rerun, r20261108-011141-5559: 8 of 9 spots done at 02:48Z, 0 failures. N 131,072 is running, with its ETA about 03:30Z.
+  - #7880 marks once #7907 lands and 5559 passes.
