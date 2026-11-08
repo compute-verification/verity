@@ -3,7 +3,7 @@ openings proved in zero knowledge through the proof system in place of opened (P
 deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
 
     python benchmarks/one_stage/a8.py --bin flock-circuit --lean flock-verify --out DIR [--blocks 4096] [--plan 64]
-      [--samples 16] [--points 1,4,16] [--arms nofw,fw] [--cold 1] [--gpu [--lease CMD]] [--no-audit]
+      [--samples 16] [--points 1,4,16] [--arms nofw,fw,plain] [--cold 1] [--gpu [--lease CMD]] [--no-audit]
 
 * **Store and window.** ``--blocks`` N seeded payloads (each 64-byte word's top byte zero, p512's words) registered under
   p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past Flock's K_MAX), sketch-sha512
@@ -33,7 +33,8 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   (``inst-*.bin``) is the positive control.
 * **Cost** (``--points``): sessions on the honest statement whose verifier samples its first k proof blocks, cold (one prover
   process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the ZK server's send check, `FC_FIREWALL=1`, the design's
-  path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
+  path, which rechecks a host witness; ``nofw``; ``plain``: both sides without ``--zk``, on the keyed coin tree
+  (`FC_COINS=tree`), Lean verifying with ``--coins tree``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
   stages only the honest statement and runs the points, Lean verifying each arm's session at the largest k. ``--lease``
   is a command each prover process runs under (`a8_gpu.sh`'s GPU lease), so the device is held for the proofs alone; the
@@ -199,17 +200,19 @@ def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[
     return m
 
 
-def session(a, m: dict, sdir: Path, draw: list[int], port: int, env: dict | None = None) -> tuple[dict | None, dict, dict]:
-    """One live --zk session on member m's statement: the server serving ``draw`` (the verifier's own, `serve --draw-file`)
-    and one prover process (`prove --zk`, with ``--gpu`` on the device). Returns the server's record, the prover's LIVE
-    line, and the prover process's wall and CPU seconds."""
+def session(a, m: dict, sdir: Path, draw: list[int], port: int, env: dict | None = None,
+            zk: bool = True) -> tuple[dict | None, dict, dict]:
+    """One live session on member m's statement, --zk unless ``zk`` is false: the server serving ``draw`` (the verifier's
+    own, `serve --draw-file`) and one prover process (`prove`, with ``--gpu`` on the device). Returns the server's record,
+    the prover's LIVE line, and the prover process's wall and CPU seconds."""
     sdir.mkdir(parents=True, exist_ok=True)
     df = sdir / "draw.json"
     df.write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(draw), "units": draw}, sort_keys=True))
     d, n = m["dir"], m["n"]
     env = {**os.environ, **(env or {})}
+    zf = ["--zk"] if zk else []
     with open(sdir / "serve.log", "w") as slog:
-        serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(sdir / "sessions"),
+        serve = subprocess.Popen([a.bin, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(sdir / "sessions"),
                                   "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables",
                                   str(d / "tables"), "--pin", m["pin"], "--operator", "one-stage-a8", "--draw-file", str(df),
                                   "--sessions", "1"], stdout=slog, stderr=subprocess.STDOUT, text=True, env=env)
@@ -218,7 +221,7 @@ def session(a, m: dict, sdir: Path, draw: list[int], port: int, env: dict | None
                 if "SERVING" in (sdir / "serve.log").read_text() or serve.poll() is not None:
                     break
                 time.sleep(0.5)
-            cmd = [*a.lease, a.bin, "prove", "--zk", *(["--gpu"] if a.gpu else []), "--verifier", f"127.0.0.1:{port}",
+            cmd = [*a.lease, a.bin, "prove", *zf, *(["--gpu"] if a.gpu else []), "--verifier", f"127.0.0.1:{port}",
                    "--instances", str(d / f"inst-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"),
                    "--runs", "1", "--warm", "0"]
             r0, t = resource.getrusage(resource.RUSAGE_CHILDREN), time.time()
@@ -393,18 +396,19 @@ def cost(a, m: dict, out: Path, port: int) -> list[dict]:
     rows = []
     ks = sorted({k for k in a.points if 1 <= k <= m["n"]})
     for arm in a.arms:
+        zk = arm != "plain"
         env = {"FC_FIREWALL": "1" if arm == "fw" else "0", **({"FC_HOST_WITNESS": "1"} if a.gpu else {}),
-               **(a0.firewall_env(m) if arm == "fw" else {})}
+               **(a0.firewall_env(m) if arm == "fw" else {}), **({} if zk else {"FC_COINS": "tree"})}
         for k in ks:
             for rep in range(a.cold):
                 sdir = out / f"{arm}-k{k}-r{rep}"
-                record, live, proc = session(a, m, sdir, list(range(k)), port + len(rows), env)
+                record, live, proc = session(a, m, sdir, list(range(k)), port + len(rows), env, zk=zk)
                 row = {"arm": arm, "k": k, "rep": rep, "staged": m["n"], "gpu": a.gpu, **proc,
                        "accepted": bool(live.get("accepted")) and ((record or {}).get("verdict") or {}).get("accepted") is True,
                        "why": live.get("why") or ((record or {}).get("verdict") or {}).get("why"),
                        **{x: live.get(x) for x in TIMING if x != "gpu"}}
                 if k == ks[-1] and rep == 0:
-                    lv = a0.lean_verify(a.lean, m, m["n"], sdir, zk=True)
+                    lv = a0.lean_verify(a.lean, m, m["n"], sdir, zk=zk, flags=() if zk else ("--coins", "tree"))
                     row["lean"] = {x: lv.get(x) for x in ("accepted", "why", "verify_s")}
                 rows.append(row)
                 with open(out / "cost.jsonl", "a") as f:
@@ -426,7 +430,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=8)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--points", default="", help="cost points: the k sampled proof blocks of each session, comma-separated")
-    ap.add_argument("--arms", default="nofw", help="nofw, fw or both, comma-separated")
+    ap.add_argument("--arms", default="nofw", help="nofw, fw, plain or several, comma-separated")
     ap.add_argument("--cold", type=int, default=1)
     ap.add_argument("--gpu", action="store_true")
     ap.add_argument("--no-audit", action="store_true", help="stage the honest statement and run the cost points only")
