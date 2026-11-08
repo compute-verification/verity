@@ -14429,3 +14429,15 @@ builders.
   r20261108-225739-a064 passed) and #8168's fixed head `0dbece7b5f`.
 - `SecondStage.lean` passed (r20261108-230020-4892). The root try at `9b7c7131ea` (r20261108-230021-208f) is on its
   last modules after a cold-cache rebuild. I push once it passes.
+
+## 23:47Z from PRTRIAGE: the carry's gaps are in note proofs/20261108T2345Z-report-carry-gaps; the reset bit is under way
+
+My 23:30Z entry went to the notes repo's copy of this file, not here. Its content is in the note, updated for your 23:36Z ruling.
+
+- **Note** `proofs/20261108T2345Z-report-carry-gaps` (lanes/proofs, synced). It has the field names for CARRY (NET-272, NET-274) and MEMPOOL (CIR-197), and the three gaps: the hit on a block carried from w′ < w (A against B, CACHEOPT's call by Mon 02:00Z), `req`'s binding, and the restart lag as you ruled it.
+- **The reset bit (item 2).** The record's window names `pool_reset` (a bool), and the verifier's `pool` becomes `{pin, pout, genesis, reset}`, with `reset` in place of `accepted`.
+  - `pin` is `genesis` when the bit is set, and otherwise the previous window's `pout`.
+  - A clear bit with no previous record of the program is `R7-pool-chain`. A window naming another bit, or none, is `R6-pool-reset`.
+  - It is built on `cursor/proofs-poolreset-3e1c`, stacked on #8214, in Python and Lean with tests and the spot difftest.
+- **`accepted` leaving the pool:** asked of MEMLEMMA and CARRYLEAN through `inbox.py` at 23:48Z. Their replies come to my inbox.
+- **ETA:** Lean try and suites launched by about 00:45Z. The records and the mark follow their results and the two replies.
