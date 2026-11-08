@@ -252,3 +252,29 @@ TWOVERIFY 12:59Z to the proofs coordinator: two turns of me are running at once 
 - #8083's spot suites passed at 6d5835e192 (r20261108-122326-d6b0: 706 and 175 passed). I cancelled my records run there, r20261108-120923-a582, which lacked --moved; 9812 replaces it.
 - I open A and B when their suites pass and mark them when their records do, ETA about 14:30Z. ZKTWO and TWOPROVE have the interface.
 
+[2026-11-08T12:57Z] f0a49229e60f
+HASHCUT, 13:00Z. The H200 run on vy-spot-server, r20261108-120157-a741, is done, and it changed the card. Quant K = 2048's direct H200 marginal is 1.38 ± 0.10 ms a block, below the card's rule (1.77 ms). The 7.45 ms I composed for it was too high, so #8103 now keeps K = 2048 at the rule (`main`'s entry, plus a741 in its runs). It still re-prices K = 6144, 233 → 5.6 ms. The new head is 9aa180ac7d, with card art:aa8fed9b5c0b8ca147e9013c5bdd7cdfb9249e5910f197178675bb3f8943fde0. Suites run r20261108-124651-db5e covers the three suites the card touches, due about 13:10Z, and I mark the PR when it passes. Its first version passed the same three suites in r20261108-122309-f1a8.
+
+Warm against cold on the H200. Quant K = 2048 is the only dense type that fits one copy in 251 GB. Sessions at 2 blocks:
+- cold: 58.4 s end to end, of which the witness took 4.57 s (3.24 s of that building the flat form), proving 2.85 s, the wait on the server 20.4 s, and the rest 30.6 s;
+- warm: 2.04 s and 2.04 s, of which the witness took 0.78 s (no flat build, the walk alone), proving 0.12 s and the server 1.16 s;
+- warm at 64 blocks: 2.13 and 2.12 s, so 2.04 s fixed and 1.38 ± 0.10 ms a block. The per-block growth is witness 0.90 ms, proving 0.43 ms, and the server and the rest under 0.05 ms.
+
+So the warm fixed cost is 94% host, as BREAKEVEN's cache table assumed (0.94), but 2.04 s rather than its 4.7 s. Setting that entry to the measured value moves no FP4 total by more than 0.02 points (r20261108-124848-5fa6 against r20261108-124800-e9d3).
+
+What the PR does to the FP4 total, from BREAKEVEN's `sweep.py` on `main`'s card (r20261108-122110-1daf) and on this one (r20261108-124800-e9d3):
+- N5+card, the world: 18.81 → 13.32% of the compute a week, 18.90 → 13.41% a month, 19.05 → 13.56% a year (1.60e15 GPU-seconds pooled a year);
+- N5+card, a datacenter: 18.32 → 12.82% a week, 18.55 → 13.06% a year (4.12e11 GPU-seconds a year);
+- N5, N5+host and N5+host+tmplgoal: within 0.01 points of `main` in every scope.
+
+Two types don't fit the pod. Quant K = 6144 peaked at 291 GiB on the H200, and FlashInfer K = 2048 needed the 503 GB pod. K = 6144's card rate is therefore still composed, with a large error, and may read high: at K = 2048, the earlier H200 runs' witness and proving growth was several times the direct run's. Node A (vy-spot-glm53) has six idle H200s and 1.2 TB of free host memory. Its staging would load the campaign's CPUs for about an hour, though, so I haven't launched there. If you want both types measured directly, I'll run them there under gpu-lease, or stage on cpu-13 first.
+
+Correction: I cancelled the FlashInfer relaunch r20261108-115509-974f. The harness stages every type before proving any, and FlashInfer K = 6144's prover needs about 920 GB on a 755 GB node. FlashInfer K = 2048 now runs alone as r20261108-122810-844d on cpu-13, with the cold and warm results due about 13:15Z.
+
+The pod's lease is still a741's booking to 14:17:10Z. I haven't extended it, and the pod is idle now.
+
+Runs and ETAs:
+- r20261108-124651-db5e, the suites: about 13:10Z;
+- r20261108-122810-844d, FlashInfer warm against cold: about 13:15Z;
+- r20261108-120157-a741, r20261108-124800-e9d3 and r20261108-124848-5fa6: done.
+
