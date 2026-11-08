@@ -30,8 +30,9 @@ top-k inputs (`long_rows`).
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
 * **Wires.** Each value a staged instance reads has a source under the step root (`Wires`): the recorded call that output it
   (or wrote its real rows through a strided view: a padded batch's rows past the step's tokens are in no population, so
-  they cost nothing), a parameter held to ``params.json``, or an `ADVICE` input charged at its width. A MoE pair's expert is the router's output
-  (`ROUTERS`), never the align's schedule. An instance that reads anything else is not staged, and its reason names the fix.
+  they cost nothing), a parameter held to ``params.json``, or an `ADVICE` input charged at the parts of it staged instances
+  read (of a split's K/V rows, a token's slots past its keys and the rows no staged split reads cost nothing). A MoE pair's
+  expert is the router's output (`ROUTERS`), never the align's schedule. An instance that reads anything else is not staged, and its reason names the fix.
   Staging checks the wiring against the committed capture; a11 proves the staged units alone and doesn't read it.
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
   staged labels), ``window.json`` (what the replay block is, how its values link to serving, and the wiring: each staged
@@ -169,6 +170,18 @@ class Capture:
         if hashlib.sha512(raw).hexdigest() != h:
             raise SystemExit(f"rank {r}: blob {h[:16]} is not its name")
         return np.frombuffer(raw, dtype=NP[ref["dtype"]]).reshape(ref["shape"])
+
+    def part(self, r: int, ref: dict, key: tuple) -> np.ndarray:
+        """``tensor(r, ref)[key]``, ``key`` ints and unit-step slices over the leading axes, its read recorded with the part it
+        takes, as [start, stop) per axis: an `ADVICE` input is charged at the parts staged instances read."""
+        reads, self.reads = self.reads, None
+        try:
+            x = self.tensor(r, ref)
+        finally:
+            self.reads = reads
+        if reads is not None:
+            reads.append((r, ref, _part(ref["shape"], key)))
+        return x[key]
 
     def kept(self, r: int, ref: dict) -> bool:
         """Whether a recorded tensor's bytes are in the capture."""
@@ -818,7 +831,7 @@ def mla_split_part_instances(cap: Capture):
                 yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
                        lambda r=r, e=e, tap=tap, i=i, t=t, h=h, lo=lo, hi=hi: [
                            cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
-                           cap.tensor(r, tap["in"]["kv_gathered"])[i, lo:hi]],
+                           cap.part(r, tap["in"]["kv_gathered"], (i, slice(lo, hi)))],
                        lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
                                                         cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 
@@ -869,8 +882,8 @@ GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm
 SCHEDULE_OPS = {"_moe_C::moe_align_block_size": (
     "a schedule marker (verity_vllm's MoeAlignBlockSizeRule): the fused MoE launches use its sorted order only for addressing, "
     "and the Program is the unpermuted pair set, which the MoE launches' per-pair gates sample")}
-#: inputs a population reads that no recorded call of the step outputs, each charged as advice at its width: (the recorded op,
-#: its argument) -> why
+#: inputs a population reads that no recorded call of the step outputs, each charged as advice at the parts staged instances
+#: read (`Capture.part`), else at its width: (the recorded op, its argument) -> why
 ADVICE = {("fa3_sparse_mla", "kv_gathered"): (
     "the K/V rows a split reads, which this step's and earlier steps' cache writes put in the paged cache: the step's record "
     "holds the cache by shape only, and no cache write is a proof block")}
@@ -881,6 +894,32 @@ _EVERY: dict = {}
 
 class Unwired(LookupError):
     """A value an instance reads that is no recorded call's output, no parameter and no `ADVICE` input."""
+
+
+def _part(shape: list[int], key) -> list[list[int]]:
+    """``key`` (ints and unit-step slices over the leading axes of a tensor of ``shape``) as [start, stop) per axis."""
+    out = []
+    for n, k in zip(shape, key if isinstance(key, tuple) else (key,)):
+        if isinstance(k, slice):
+            lo, hi, step = k.indices(n)
+            if step != 1:
+                raise ValueError(f"a part's slice steps by 1, not {step}")
+            out.append([lo, max(lo, hi)])
+        else:
+            i = int(k) + (n if int(k) < 0 else 0)
+            out.append([i, i + 1])
+    return out
+
+
+def _advice_bits(width: int, shape: list[int] | None, parts: list | None) -> int:
+    """An `ADVICE` input's charge: its ``width`` in bits, or with ``parts`` (`Capture.part`) the elements their union covers."""
+    if parts is None or not shape:
+        return width
+    d = max(len(p) for p in parts)
+    mask = np.zeros(shape[:d], bool)
+    for p in parts:
+        mask[tuple(slice(lo, hi) for lo, hi in p)] = True
+    return int(mask.sum()) * (width // int(np.prod(shape[:d], dtype=np.int64)))
 
 
 def traced(cap: Capture, args_of, reads: list):
@@ -897,8 +936,8 @@ def traced(cap: Capture, args_of, reads: list):
 class Wires:
     """Where each value an instance reads comes from, under the step's root: a staged unit's input is wired to the recorded call
     that output it (``block`` when a population gates that call's op or one enclosing it, ``call`` when none does: committed
-    but not proved), read from a parameter held to ``params.json`` (``registered``), or an `ADVICE` input charged at its width
-    (``advice``). An input of a call is wired to the latest earlier call on its rank (one enclosing it excepted, whose outputs
+    but not proved), read from a parameter held to ``params.json`` (``registered``), or an `ADVICE` input charged at the parts
+    of it read (``advice``, `of`). An input of a call is wired to the latest earlier call on its rank (one enclosing it excepted, whose outputs
     come after) that output the same bytes, else that output a tensor it is a strided view of (its recorded strides from some
     offset), else whose output is a strided view into its real rows (`cover`: an ``out=`` buffer a later call reads whole);
     an output read is its own call's. Anything else is `Unwired`."""
@@ -927,12 +966,20 @@ class Wires:
         return out
 
     def of(self, reads: list) -> list[dict]:
-        """Each distinct reference in ``reads`` (`traced`), with its source."""
-        seen, out = set(), []
-        for r, ref in reads:
-            if id(ref) not in seen:
-                seen.add(id(ref))
-                out.append(self.source(r, ref))
+        """Each distinct reference in ``reads`` (`traced`), with its source; an `ADVICE` source names the ``parts`` of it the
+        reads took (`Capture.part`) and is charged at their union, unless a read took it whole."""
+        order: dict[int, tuple[int, dict]] = {}
+        parts: dict[int, list | None] = {}
+        for r, ref, *part in reads:
+            order.setdefault(id(ref), (r, ref))
+            got = parts.get(id(ref), [])
+            parts[id(ref)] = None if not part or got is None else got + part
+        out = []
+        for k, (r, ref) in order.items():
+            s = self.source(r, ref)
+            if s["kind"] == "advice" and parts[k] is not None:
+                s = {**s, "parts": parts[k], "bits": _advice_bits(s["width"], s["shape"], parts[k])}
+            out.append(s)
         return out
 
     def source(self, r: int, ref: dict) -> dict:
@@ -961,7 +1008,8 @@ class Wires:
             return self.call(r, seq, name)
         if (e["op"], name) in ADVICE:
             bits = int(np.prod(ref["shape"], dtype=np.int64)) * 8 * np.dtype(NP[ref["dtype"]]).itemsize
-            return {"kind": "advice", "rank": r, "seq": seq, "op": e["op"], "in": name, "bits": bits, "why": ADVICE[(e["op"], name)]}
+            return {"kind": "advice", "rank": r, "seq": seq, "op": e["op"], "in": name, "shape": list(ref["shape"]), "width": bits,
+                    "bits": bits, "why": ADVICE[(e["op"], name)]}
         skip = {x["seq"] for x in self.enclosing(r, seq)}
         hit = next(((s, o, {}) for s, o in reversed(self.made.get((r, ref.get("sha512")), [])) if s < seq and s not in skip), None)
         hit = hit or self.view(r, seq, ref, skip) or self.cover(r, seq, ref, skip)
@@ -969,7 +1017,7 @@ class Wires:
             raise Unwired(f"rank {r} {e['op']} (seq {seq}) reads {name}, a {ref.get('dtype')} {ref.get('shape')} that no earlier "
                           f"recorded call output, whole or as a strided view, or wrote through one, and that is no parameter: "
                           f"wire it (record the call that writes it in capture.py) or declare ({e['op']!r}, {name!r}) in "
-                          f"stage.ADVICE, charged at its width")
+                          f"stage.ADVICE, charged at what instances read of it")
         s, o, how = hit
         return {**self.call(r, s, o), "into": {"seq": seq, "op": e["op"], "in": name}, **how}
 
@@ -1042,9 +1090,9 @@ class Wires:
 
 
 def wiring(types: dict) -> dict:
-    """``window.json``'s wiring: each staged instance's inputs with their sources (`Wires`), the advice they read charged at its
-    width (each argument once), the calls they're wired to that no population gates, and the drawn instances left unstaged
-    for an unwired input."""
+    """``window.json``'s wiring: each staged instance's inputs with their sources (`Wires`), the advice they read (each argument
+    charged once, at the union of the parts staged instances read, or at its width if one read it whole), the calls they're
+    wired to that no population gates, and the drawn instances left unstaged for an unwired input."""
     inputs: dict = {}
     advice: dict = {}
     unproved: dict = {}
@@ -1055,11 +1103,13 @@ def wiring(types: dict) -> dict:
             inputs.setdefault(label, []).append({"key": g["key"], "sources": g["sources"]})
             for s in g["sources"]:
                 if s["kind"] == "advice":
-                    advice[(s["rank"], s["seq"], s["in"])] = s["bits"]
+                    k = (s["rank"], s["seq"], s["in"])
+                    width, shape, got = advice.get(k, (s.get("width", s["bits"]), s.get("shape"), []))
+                    advice[k] = (width, shape, None if got is None or "parts" not in s else got + s["parts"])
                 elif s["kind"] == "call":
                     unproved.setdefault(s["op"], set()).add((s["rank"], s["seq"]))
     unwired = {label: [g["unwired"] for g in rec.get("gate", ()) if "unwired" in g] for label, rec in types.items()}
-    return {"inputs": inputs, "advice_bits": sum(advice.values()),
+    return {"inputs": inputs, "advice_bits": sum(_advice_bits(*v) for v in advice.values()),
             "unproved_calls": {op: len(v) for op, v in sorted(unproved.items())}, "unwired": {k: v for k, v in unwired.items() if v}}
 
 
