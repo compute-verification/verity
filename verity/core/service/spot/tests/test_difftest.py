@@ -3429,16 +3429,22 @@ def _values_and_items(*setups: Setup) -> tuple[list, list]:
     return values, public
 
 
+def _circuit(t: str) -> str:
+    """The SHA-512 of template `t`'s circuit file, which the params commit and its session's public file names."""
+    return hashlib.sha512(b"circuit/" + t.encode()).hexdigest()
+
+
 def _second_statement(rec: dict, part: SS.Part, q: int, drawn, named: bool, registered=None) -> dict:
     """The statement of `part`'s second-stage session as an honest prover's run makes it (`second_stage`): its template,
     its public file's header over the part's slots at the interior record `rec`'s roots of the template's ports (each
-    `<template>/<port>` in `rec` when `named`), its sample the second stage's units `drawn` among them, counted from its
-    first, over a replay sample of `q`, and its registered reads."""
+    `<template>/<port>` in `rec` when `named`), naming its template's circuit file (`_circuit`), its sample the second
+    stage's units `drawn` among them, counted from its first, over a replay sample of `q`, and its registered reads."""
     prefix, lo, m = f"{part.template}/" if named else "", part.lo, q * part.n
     roots = {r["port"].removeprefix(prefix): r for r in rec["roots"] if r["port"].startswith(prefix)}
     units = [u - lo for u in drawn if lo <= u < lo + m]
     return {"template": part.template, "registered": registered,
             "header": {"scheme": rec["scheme"], "instances": m, "units": {"indices": list(range(lo, lo + m))},
+                       "circuit_sha512": _circuit(part.template),
                        "frame_v3": {"roots": {p: r["root"] for p, r in roots.items()},
                                     "domain_ids": {p: r["domain"] for p, r in roots.items()}}},
             "draw": {"law": "subset", "population": m, "k": len(units), "units": units}}
@@ -3640,6 +3646,9 @@ def second_statements(j):
     if not all(isinstance(v, dict) for v in verdicts.values()):
         raise D.Reject("a verdict is not an object")
     _registered_reads(verdicts)
+    circuits = _obj(j.get("circuits"), "circuits")
+    if not all(isinstance(c, str) for c in circuits.values()):
+        raise D.Reject("circuits is not an object of strings")
     if not desc:
         raise D.Reject("not a program descriptor")
     sha = PO.program_sha512(desc)
@@ -3653,7 +3662,7 @@ def second_statements(j):
     if not (statements is None or isinstance(statements, list)):
         raise D.Reject("statements is not a list")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
-                 tuple(j["drawn"]), links, audit.session_registered(verdicts))
+                 tuple(j["drawn"]), links, audit.session_registered(verdicts), tuple(circuits.items()))
     return SS.check(j["allow"], own, statements).to_json()
 
 
@@ -3673,7 +3682,8 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     when `named`), a tree of the template's slots each, the second stage's units `drawn`, and each part's statement
     (`_second_statement`); the templates in `links` read their `x` from the boundary's `x` at their cells' replay
     blocks instead, the design linking it and the interior then not registering it, and those in `own` read it from
-    their own `x`, each slot its own row; the verifier of record reports those reads."""
+    their own `x`, each slot its own row; the verifier of record reports those reads, and the params commit each
+    template's circuit file (`_circuit`)."""
     q, strata = len(sample), P.strata(s.program, s.query)
     parts = [SS.Part(t, lo, (hi - lo) // q) for t, ((lo, hi),) in strata]
     slots = {t: hi - lo for t, ((lo, hi),) in strata}
@@ -3703,7 +3713,8 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     lean = {"of_record": True, "accepted": True, **({"registered": reported} if reported else {})}
     return {"allow": allow, "sample": sample, "drawn": drawn, "program": s.desc, "query": s.query, "interior": rec,
             "boundary": SECOND_BOUNDARY, "statements": statements, "verdicts": {"lean": lean},
-            "links": [{"template": t, "port": "x", "value": BX} for t in sorted(links)]}
+            "links": [{"template": t, "port": "x", "value": BX} for t in sorted(links)],
+            "circuits": {t: _circuit(t) for t in s.templates}}
 
 
 def _shifted(ss, k: int):
@@ -3742,13 +3753,28 @@ def _reported(c: dict, x: int) -> dict:
         {"lean": {**plain, "registered": {"r": {"value": BX}}}}, 5, {"lean": 5}, {}][x % 6]}
 
 
+def _recircuited(c: dict, x: int) -> dict:
+    """`c` with the params committing no circuit file, another for each template or one only for a template of no part,
+    or its first statement's header naming another, or none."""
+    ss = c["statements"] if isinstance(c.get("statements"), list) else []
+    if x % 5 < 3:
+        cs = c["circuits"] if isinstance(c.get("circuits"), dict) else {}
+        return {**c, "circuits": [{}, {t: "00" * 64 for t in cs}, {"Other_v0": _circuit("Other_v0")}][x % 5]}
+    return {**c, "statements": [
+        {**s, "header": {**s["header"], "circuit_sha512": ["00" * 64, None][x % 5 - 3]}}
+        if i == 0 and isinstance(s, dict) and isinstance(s.get("header"), dict) else s for i, s in enumerate(ss)]
+        if ss else c.get("statements")}
+
+
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
-#: no interior root, every read moved on, the design's links, or the reads the verifier of record reports.
+#: no interior root, every read moved on, the design's links, the reads the verifier of record reports, or the circuit
+#: files the params commit or a header names.
 SECOND_CHANGES = [
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
     _relinked,
     _reported,
+    _recircuited,
     lambda c, x: {**c, "statements": _restated(c["statements"], x)},
     lambda c, x: {**c, "statements": c["statements"] and c["statements"][::-1]},
     lambda c, x: {**c, "statements": c["statements"] and c["statements"][1:]},
@@ -3789,7 +3815,8 @@ def second_statement_runs(draw) -> dict:
         key, value = draw(st.sampled_from([
             ("allow", 1), ("allow", None), ("sample", [-1]), ("sample", "s"), ("drawn", [True]), ("drawn", None),
             ("program", []), ("query", None), ("query", {}), ("statements", 5), ("interior", 5), ("boundary", None),
-            ("links", 5), ("verdicts", None), ("verdicts", {"lean": 5}), (None, None)]))
+            ("links", 5), ("verdicts", None), ("verdicts", {"lean": 5}), ("circuits", None),
+            ("circuits", {"Pair_v0": 5}), (None, None)]))
         drop = draw(st.sampled_from(sorted(c)))
         c = {k: v for k, v in c.items() if k != drop} if key is None else {**c, key: value}
     return c
@@ -4876,8 +4903,10 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     second stage drew in it (`second-cover`); a read of the boundary at another cell's replay block, of its own `x` at
     another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but the boundary port
     its link names, or a linked port not read (`second-read`) is refused, as are reads the verifier of record doesn't
-    report (`second-reported`); links none derived, or one for a template of no part, are refused (`second-links`);
-    and a replay sample of three, which TRIPLE's four slots aren't a multiple of, makes no parts (`second-cells`)."""
+    report (`second-reported`); a session over a circuit file other than the one the params commit for its template,
+    or one they commit none for, is refused (`second-circuit`); links none derived, or one for a template of no part,
+    are refused (`second-links`); and a replay sample of three, which TRIPLE's four slots aren't a multiple of, makes no
+    parts (`second-cells`)."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
     honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
@@ -4907,6 +4936,10 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         ({**own, "links": [*own["links"], {"template": pair, "port": "x", "value": BX}]}, ["second-read"]),
         ({**own, "verdicts": {"lean": {"of_record": True, "accepted": True}}}, ["second-reported"]),
         (_second_with(honest, 0, registered=bx), ["second-read", "second-reported"]),
+        (_second_with(honest, 1, header={**honest["statements"][1]["header"], "circuit_sha512": _circuit(pair)}),
+         ["second-circuit"]),
+        ({**honest, "circuits": {pair: _circuit(pair)}}, ["second-circuit"]),
+        ({**honest, "circuits": {triple: _circuit(pair), pair: _circuit(pair)}}, ["second-circuit"]),
         ({**linked, "links": None}, ["second-links"]),
         ({**linked, "links": [*linked["links"], {"template": "Other_v0", "port": "x", "value": BX}]}, ["second-links"]),
         (_second_case(SECOND_MIXED, True, [0, 1, 2], drawn, allow=True), ["second-cells"]),

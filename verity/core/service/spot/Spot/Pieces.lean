@@ -633,8 +633,8 @@ def run (j : Json) : V Json := do
 /-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
 first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
 registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`'), null for none, the
-verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`), and the statements, null
-for none. -/
+verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`), the circuit files the
+params commit (`circuits`, `{template: SHA-512}`), and the statements, null for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -654,6 +654,11 @@ def secondStatements (j : Json) : V Json := do
       jeq (getD v "accepted") (.bool true) && (getD v "registered" matches .obj _)) ||
       (entries (getD v "registered")).all fun (_, e) => (getD e "value" matches .str _) && (field? e "root").isSome) do
     throw "a verdict is not an object, or one of record reports reads that are not objects with a string value and a root"
+  let .obj _ := getD j "circuits" | throw "circuits is not an object"
+  let some circuits := (entries (getD j "circuits")).mapM fun (t, c) => match c with
+      | .str c => some (t, c)
+      | _ => none
+    | throw "circuits is not an object of strings"
   let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
   let stmts ← match getD j "statements" with
     | .null => pure none
@@ -661,7 +666,7 @@ def secondStatements (j : Json) : V Json := do
     | _ => throw "statements is not a list"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
-      boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts }
+      boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts, circuits }
   return (SecondStage.check allow own stmts).toJson
 
 /-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay

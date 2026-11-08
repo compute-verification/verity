@@ -78,8 +78,8 @@ class Link:
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
-    Definition makes none), and the ``{value: root}`` the verifiers of record report the sessions read
-    (`audit.session_registered`)."""
+    Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
+    (`audit.session_registered`), and the circuit files the params commit, ``(template, SHA-512)`` each."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -88,6 +88,7 @@ class Own:
     drawn: tuple[int, ...]
     links: tuple[Link, ...] | None = ()
     reported: Mapping[str, Any] | None = None
+    circuits: tuple[tuple[str, str], ...] = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -344,9 +345,17 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
+def _circuit_ok(own: Own, t: str, h: Any) -> bool:
+    """`SecondStage.circuitOk`: the header's ``circuit_sha512`` is the SHA-512 the params commit for template `t`'s
+    circuit file."""
+    c, x = next((c for k, c in own.circuits if k == t), None), _get(h, "circuit_sha512")
+    return c is not None and isinstance(x, str) and x == c
+
+
 def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
-    checks = (("second-population", _population_ok(q, p, s.header)),
+    checks = (("second-circuit", _circuit_ok(own, s.template, s.header)),
+              ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
