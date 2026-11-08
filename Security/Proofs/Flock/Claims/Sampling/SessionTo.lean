@@ -18,7 +18,7 @@ coins, so one session's run needn't decide whether the sampled run accepts.
 
 namespace Claims.Sampling
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+variable {Coin Col T : Type} [Inhabited Coin]
 
 /-- **A checked unit's session is a Flock run that the sampled run's acceptance carries**: `SessionRuns` with, at coins
 `r'` agreeing with `r` off `u`'s rounds, the sampled run accepting only when `P'`'s run on `r'`'s session coins does. -/
