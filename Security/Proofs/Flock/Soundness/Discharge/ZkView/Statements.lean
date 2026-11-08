@@ -40,6 +40,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Proofs.Flock.Soundness.Discharge.Hm.Slot
 import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
 import Proofs.Flock.Soundness.Knowledge
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.LigeritoWeights

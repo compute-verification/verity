@@ -22,6 +22,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Game.LockChoose
+import Proofs.Core.Game.Poly
 
 /-!
 # A sampling block of `J` tables stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget

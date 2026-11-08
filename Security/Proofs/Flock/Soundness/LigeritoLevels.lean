@@ -11,6 +11,7 @@ import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase

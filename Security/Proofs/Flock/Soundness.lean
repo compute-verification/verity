@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Game
+public import Proofs.Core.Game.Poly
 public import Proofs.Flock.Soundness.Model.Compiled
 public import Proofs.Flock.Soundness.CompiledLock
 public import Proofs.Flock.Soundness.CompiledSound
