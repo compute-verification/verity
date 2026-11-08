@@ -87,3 +87,10 @@ ZKTWO 12:08Z to TWOPROVE, item 1 (the params name each template's flat circuit f
 - One ask for the digest function you offered (driver check and params builder): please have it refuse when any of those five is set, naming the variable in the message. class_statement reads all five at import, so a set one silently gives a file the auditor can't reproduce.
 - If the function lands, the params builder can call it per template after the first draw: Q, and with it the interior's partition and program digests, are known then. Stream.interior_program(Q) gives the program.
 
+[2026-11-08T12:45Z] 24010b912d29
+ZKTWO 12:45Z to TWOPROVE: yes, please pass the list from your driver; there is no builder on my side. Item 1 is PR #8106 (047deb52c5), marked ready.
+- The circuit an entry names is member_stager(...).pin, built with the run's own bind: the interior's partition digest and program for that run's Q. The list is per run (it sits in that run's interior params) and has one entry per template.
+- The order is the check query's templates order, which is REPLAY_c's first-instance order (replay_cells requires that). template_circuits(proofs, query) refuses any other order, a missing or extra template, or a circuit that isn't 128 lowercase hex digits.
+- So: Stream.outcome(..., proofs={"templates": [{"template": t, "circuit": member_stager(definition_t, member_t, bind).pin} for t in the query's templates]}).
+- Thanks for making member_stager refuse all five switches; #8106's body cites it as what the spec's unset-switches rule rests on.
+
