@@ -157,7 +157,7 @@ theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P 
     have : (1 - g) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ≤ T :=
       (mul_le_mul_of_nonneg_left hle (sub_nonneg.2 hg)).trans hcost
     exact absurd hlt (not_lt.2 this)
-  simp only [pr, hempty, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div, le_refl]
+  simp only [pr, Claims.Pr, Claims.prUniform, hempty, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div, le_refl]
 
 /-- **Decision 107's domain holds a workload**: one coordinate unit `(1, 4096, 1)` with zero weights. -/
 theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.layout.N = 1 := by

@@ -338,9 +338,8 @@ def retree(inv: dict[str, Any], trees: Mapping[tuple[str, int], Mapping[str, Any
     return inv
 
 
-#: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893,
-#: art:b56410cabae792600c86d960160b0c8da7a3ca408b867357103ce4719e07dd47): nnz_a + nnz_b of one registered unit (the RMSNorm
-#: figure is the fused lowering's unit, one warp)
+#: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893):
+#: nnz_a + nnz_b of one registered unit (the RMSNorm figure is the fused lowering's unit, one warp)
 CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 378_759, "f32mul-ftz": 94_333,
                "rmsnorm-fused-warp-n2048": 8_045_790}
 
