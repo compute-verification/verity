@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 import Mathlib.Algebra.Order.Floor.Semifield
@@ -24,9 +23,9 @@ place of `Prices.sm120`: each is `<instance at Prices.sm120Loop> CM (devSm120vX 
 the instances from `CapLoopGap`, `ChainCapLoopGap` and `UOnlyLoopGap`. This file adds no definitions.
 * **The domains are not empty** at the in-loop records (`devSm120v1Loop_domain`, `devSm120v2Loop_domain`).
 * **v1 under rev1**, cap 1/400: `310284613/59477920000` (0.52168%) at 8192³ and `1802569231/352995040000` (0.51065%)
-  at 16384³, per unit and per audit tile, and with U-only binding (per unit and per audit tile) at 8192³.
+  at 16384³, per unit and per audit tile, and with U-only binding per unit at 8192³.
 * **v2 at the cap 1/1,000**: `522517/139900000` (0.37349%) at 8192³ and `3000127/829300000` (0.36177%) at 16384³, per
-  unit and per audit tile, and with U-only binding (per unit and per audit tile) at 8192³.
+  unit and per audit tile, and with U-only binding per unit at 8192³.
 * **v2 at the chain cap 1/1,000**: per unit `64899/17487500` (0.37112%) and `373769/103662500` (0.36056%), per audit
   tile the 1/1,000 row's.
 
@@ -105,15 +104,6 @@ theorem pearlCGapUOnlySm120v1LoopRev1_8192
       (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) ((310284613 / 59477920000 : ℚ) : ℝ) δPearlC :=
   pearlCGapUOnlySm120LoopRev1_8192 CM (devSm120v1 Prices.sm120Loop) sem rfl rfl hTT
 
-/-- **v1 under rev1 per audit tile with U-only binding at 8192³**, in the loop (an upper bound):
-`g = 310284613/59477920000`. Twin of `pearlCSampledUOnlySm120v1Rev1_8192`. -/
-theorem pearlCSampledUOnlySm120v1LoopRev1_8192
-    (hTT : TTOutTilePearlCDevUOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
-    GGapSampledU CM (pearlCProtocolDevRev1 (devSm120v1 Prices.sm120Loop) sem (1 / 400))
-      (pearlCTilesDevRev1 (devSm120v1 Prices.sm120Loop) sem (1 / 400))
-      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) ((310284613 / 59477920000 : ℚ) : ℝ) δPearlC :=
-  pearlCSampledUOnlySm120LoopRev1_8192 CM (devSm120v1 Prices.sm120Loop) sem rfl rfl hTT
-
 /-! ## v2 (`devSm120v2 Prices.sm120Loop`, G = 0) at the cap 1/1,000 -/
 
 /-- **v2 at the cap 1/1,000 at 8192³**, in the loop (an upper bound): `g = 522517/139900000`. Twin of
@@ -157,15 +147,6 @@ theorem pearlCGapUOnlySm120v2LoopCap1000_8192
     GGapU CM (pearlCProtocolDevRev1 (devSm120v2 Prices.sm120Loop) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120Loop) sh8192) ((522517 / 139900000 : ℚ) : ℝ) δPearlC :=
   pearlCGapUOnlyUnpromotedCap1000Loop_8192 CM (devSm120v2 Prices.sm120Loop) sem rfl rfl hTT
-
-/-- **v2 at the cap 1/1,000 per audit tile with U-only binding at 8192³**, in the loop (an upper bound):
-`g = 522517/139900000`. Twin of `pearlCSampledUOnlySm120v2Cap1000_8192`. -/
-theorem pearlCSampledUOnlySm120v2LoopCap1000_8192
-    (hTT : TTOutTilePearlCDevUOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
-    GGapSampledU CM (pearlCProtocolDevRev1 (devSm120v2 Prices.sm120Loop) sem (1 / 1000))
-      (pearlCTilesDevRev1 (devSm120v2 Prices.sm120Loop) sem (1 / 1000))
-      (pearlCDomainDevAt (devSm120v2 Prices.sm120Loop) sh8192) ((522517 / 139900000 : ℚ) : ℝ) δPearlC :=
-  pearlCSampledUOnlyUnpromotedCap1000Loop_8192 CM (devSm120v2 Prices.sm120Loop) sem rfl rfl hTT
 
 /-! ## v2 at the chain cap 1/1,000 -/
 

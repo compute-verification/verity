@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{ir_block::IrUnitNet, lookup::LookupNet};
+use crate::{ir_block::{IrUnitNet, RowRead}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit/types";
 pub const STATEMENT: &str = "verity/flock-circuit/types";
@@ -596,12 +596,12 @@ fn gen_rows(name: &str, sha: &str, words: &'static [u32], n: usize, lo: usize, b
     let group = |g: &crate::ir_block::Group| (g.col, g.words, g.bits.clone());
     let out0 = net.out_groups[0].col * WORD;
     let rows = Rows {
-        rows: net.a.iter().cloned().zip(net.b.iter().cloned()).collect(), konst: net.const_pos,
+        rows: (0..net.a.n_rows().min(net.b.n_rows())).map(|r| (net.a.row_cols(r).collect(), net.b.row_cols(r).collect())).collect(), konst: net.const_pos,
         in_groups: net.in_groups.iter().map(group).collect(), out_groups: net.out_groups.iter().map(group).collect(),
         in_cols: (0..n).collect(), out_cols: (out0..out0 + bits).collect(), read: Some((sha.to_string(), n, lo, ln.k, ln.prod0(), ln.lo_top())),
     };
     let word = |r: usize| r < WORD || (out0..out0 + WORD).contains(&r);
-    let ands = (0..net.useful).filter(|&r| r != net.const_pos && !word(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count();
+    let ands = (0..net.useful).filter(|&r| r != net.const_pos && !word(r) && !(net.a.row_len(r) == 0 && net.b.row_len(r) == 0)).count();
     let slot = (rows, net, ln, ands);
     BUILT.get_or_init(Default::default).lock().unwrap().insert(key, slot.clone());
     Ok(slot)

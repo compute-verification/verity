@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "CacheStep_v3{NS=2,NE=2,NB=6,RW=4,KW=3,REFW=3,TW=8}": {
+   "and": 37812,
+   "type": "ec47e5a673e2c0e03a9ab527bc75c4dabe8514149d64a3ab9281ec74fa271b131052fbeb749b1772ddc68703d66c4757683d227ec8a5608194274f22999c0388"
+  },
+  "PoolEnd_v1{NB=6,RW=4,KW=3,REFW=3,TW=8}": {
+   "and": 129,
+   "type": "57fc0b06e113bca62fdcae0b735d4d4d2bd64e2522319e22c48c7ea956c88627656dfca6378100b82c0a9d797952f12349aaffa05e9819a865fc7554224a64c2"
+  },
+  "PoolEntry_v1{NB=6,RW=4,KW=3,REFW=3,TW=8}": {
+   "and": 10349,
+   "type": "c23a4e4a63475790423bdbd6ae8d124198dd3ba79327b677545ff4c103a78d90136cd4b016772ce784fc7164708ce595aaee84b8ebb796bb3e340daa223de1be"
+  },
+  "PoolSlot_v1{NB=6,RW=4,KW=3,REFW=3,TW=8}": {
+   "and": 14172,
+   "type": "2a9bf7f42b949a116505e3d43f3e749268ad847a6a68b80b64d5f98731c430cb79db3e172384b89fec90ebd8081961a9b4f4aed5bc5493bde34dc6b888b8a561"
+  }
+ }
+}

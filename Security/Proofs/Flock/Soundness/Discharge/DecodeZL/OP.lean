@@ -20,7 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 
 /-!
-# The opening's rounds carry its messages (R11b)
+# The opening's rounds carry its messages (`DecodesOn`'s message half)
 
 `op_carries`: the ring switches' rounds of `rsFrames`, read by `wOP`, are `opMsgs`, cut at `opShape`'s coins. Each ring
 switch's round closes at its `sq 2 7` and carries the switch's 128 values (`carries_switch`; the batch label rides in

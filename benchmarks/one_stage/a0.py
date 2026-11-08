@@ -32,8 +32,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.core.protocols.spot import challenger as Ch, coins as CC
+from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 
@@ -193,6 +193,13 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
+def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
+    """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
+    keyed coin tree)."""
+    senv = {**os.environ, **(env or {})}
+    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -209,9 +216,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     tables = d / "tables"
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
-    senv = {**os.environ, **(env or {})}
     ch = None
-    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+    if own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -452,7 +458,7 @@ def main() -> int:
     n = s.n
     template = s.subcircuit.definition()
     law_text = f"subset:{a.k}"
-    law = D.parse_law(law_text)
+    law = D.parse_design(law_text)
     summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
@@ -521,7 +527,7 @@ def main() -> int:
     v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_law(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, program, query, D.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -565,7 +571,7 @@ def main() -> int:
     if a.bind:
         hold_bound(tst, tprog, query)
     theader = public_header(tst["dir"], tn)
-    tlaw = D.parse_law("subset:2")
+    tlaw = D.parse_design("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
     trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},

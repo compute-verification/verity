@@ -69,8 +69,8 @@ structure Tags where
   `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's samples were ChaCha20 streams of the
   prover's seed -/
   osMasks : Bool := false
-  /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`flock-verify
-  --upstream-plain`: the agreement corpus's sessions, from upstream's builds); by default they are the deployed prover's,
+  /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`flock-verify agree
+  --upstream-plain`, a form `verify` refuses: the agreement corpus's sessions, from upstream's builds); by default they are the deployed prover's,
   the zk patch's build (`pod/60-circuit.sh`), with its `zk_level0 = None` tag after, the one form `decodeProof` accepts;
   the verifier decodes upstream's as the file then that tag, and S17 hashes the file (`verifyFiles (plainBytes true)`;
   `Flock.Proof`, D17) -/
@@ -424,8 +424,9 @@ def find? (name : String) : Option Tags := all.find? (·.name == name)
 /-- The templated statement's name (`circuitTmpl`, `isTmpl`). -/
 def tmplName : String := "verity/flock-circuit/tmpl"
 
-/-- `verity/flock-circuit/tmpl`: `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template
-and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds from the template
+/-- `verity/flock-circuit/tmpl`: `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template, in a
+section of its own right after META, and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds
+from the template
 (`Stmt.partialRangesT`). The identity and the statement digest's leading tag name it, with its own Σ tag and domain. -/
 def circuitTmpl : Tags :=
   { circuit with

@@ -106,6 +106,19 @@ A spec-level reference for network accounting's timing channel:
   evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
   ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
   (`free_width`), and the charge is ℓ_w;
+- the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4`, `CompileSlice_v3` with its
+  pool calls records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys
+  the arrivals' `BlockKey_v1` chains printed under a live coin. The hits, evictable counts and returns the steps read,
+  and the stream's slots and touched list, are checked witness, unique and bound by live coins. Until a Lean lemma
+  shows that uniqueness (CIR-190's checked-witness class), the witness counts as free input at its width, so the free
+  input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
+  `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the replay's `_KV`;
+- the compile slice at its window's activity (`compile_slice_v5`): `CompileSlice_v5`, `CompileSlice_v4` with the
+  arrivals' tokens registered in ``req`` as one ragged row of the NRK blocks the window keys (a keyed block count a
+  slot, and one key a block), RB's touched list the NRB addresses the stream touches, and each running slot's request
+  number carried in the slot row, which ``cout`` registers, rather than looked up at every call. Its free input is the
+  advice and the checked witness, as v4's (`free_width`), and its verdict adds bit 6 ``keys``. `parts` prices it at any
+  class, which `benchmarks/mempool/cost.py` does at a served load's;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`
@@ -132,6 +145,11 @@ A spec-level reference for network accounting's timing channel:
   hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
   leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
   cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
+- the block pool as memory-checked RAM (`cache_step_v3`): `CacheStep_v3`, a window's pool calls as one stream of NS
+  access slots over the five memories vLLM's `BlockPool` is made of (blocks, keys, key copies, request blocks, request
+  keys), checked by `MemCheck_v1`'s fingerprint under live coins, with a bus product of the calls' records for
+  `ReplayStep_v1`. A window's price is NS slots and NE list entries from a public ladder, whatever the pool's size;
+  `Stream` is its specification, held to the replay's pool by `benchmarks/mempool/stream.py`;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
@@ -150,10 +168,12 @@ A spec-level reference for network accounting's timing channel:
   v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
   `code_v1` codes them, with the order's position and rank added to the carry and chained under the value
   `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
-- the active network certifier (`warden`): a relay that knows bytes only, between any client and any server. It forwards
-  each direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
-  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
-  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+- the active network certifier (`warden`): a relay between any client and any server. It forwards each direction's
+  bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in bucket
+  s + D + ⌊i/r⌋ from its admission s. In the id egress form, its default, it releases a server's cell only if
+  `io_tie.parse_cell` reads it ("The egress record"), and fails the connection (`format`) at any other, never
+  rewriting it. A miss fails the connection closed with a `FAIL` cell that carries no reason. It records and
+  certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `benchmarks/network_traces/warden_serve.py`
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
@@ -277,8 +297,8 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
-The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `compile_slice_v2`,
-`compile_slice_v3`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
@@ -337,15 +357,15 @@ certifier-serve run's execution phases this way through the link's own stream, a
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
-  commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
+  commitment. That is a provisional exception to the four public kinds, not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
 `LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
-they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
-to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
+they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
+`lean` under the friction skill's switching ruling, on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
@@ -359,11 +379,10 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   certifier case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included: 193 execution phases of seven runs, plain and served, 180 accepted and 13 refused, each with nine
-  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
-  network certifier runs give 30 execution phases from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a
-  sample of 8 on the H200 network certifier run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused
-  (r20261026-104647-c07b, r20261026-105654-6220). Each has ten controls: nine that both reject, among them another
-  network certifier's digest, and `unread`, a sync off Σ_sync that changes neither verdict.
+  injected controls that both reject. The network certifier runs give 30 execution phases from two runs, the latter a
+  sample of 8 on the H200 network certifier. Of those, 21 are accepted and 9 refused. Each has ten controls: nine that
+  both reject, among them another network certifier's digest, and `unread`, a sync off Σ_sync that changes neither
+  verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
@@ -378,7 +397,7 @@ A proof of the proof block is held to its circuit. Each gate names its Definitio
 which the spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any
 other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
 
-The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
+The certificate signs no hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
 (`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
