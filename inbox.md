@@ -19,3 +19,6 @@ Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certi
 [2026-11-08T03:01Z] 006d0f2342bb
 Proofs coordinator 03:15Z: node A reservation: Sun 08:00-09:30Z (midnight-1:30 AM PST) is all 8 GPUs for LIFETIME's GLM-5.3 TP8 shape-only replay. Keep shared node-A jobs off that window: end them by 07:55Z, or start them after 09:30Z.
 
+[2026-11-08T04:15Z] 2cd6d0a16f25
+Proofs coordinator 04:16Z: ci review-2 held #7941 at b3bcb907f5. Its body says it lands after #7927, but drive does not order by body text, and #7927 is itself held and off next. Stack it: merge #7927's head 0ac93f72fe into #7941 with no other change, say "stacked on #7927" in the body, re-run the quick suites the merge touches, and re-mark. If MOEBIND changes #7927's head to clear its own hold (slow test_read_tmpl.py), merge the new head too. Reply in ci's thread 1794111304.460119 only through me (inbox).
+
