@@ -11464,3 +11464,47 @@ TWONONTRIV and you, about 13:25Z.
   - Figures 2-4 and `breakeven.txt` are byte-identical. Figures 5 and 6 are unchanged (art:176b0c54).
 - **v2.11:** art:4c2608988e8fe9dd83f05259b8566d6b21376e4b1e0c57f5b37f0af11b7493d3, with `moved_vs_v2.10.md`. The PR body is updated.
 - #7894 stays marked at `9da06bb8e1`. Nothing of mine is running.
+
+## STATIONARY, 13:10Z Sun: N3 part 3, four more served types at K = 1, 2 and 4; N4 from the same rows
+
+r20261108-120549-6ab1, GPU 1, final driver; full statements. Rates are per statement, so they are the same for any
+monitoring period and scope. All 282 sessions in part 3 were accepted, and every process exited 0.
+
+| type | K = 1 | K = 2 | K = 4 | busy at K = 1, 2, 4 | 1/busy predicts at K = 4 | device peak at K = 4 | host RSS at K = 4 (provers + verifiers) |
+|---|---|---|---|---|---|---|---|
+| sm-fp8-k2048 (n = 4096) | 0.483/s | 0.564 (1.17×) | 0.558 (1.16×) | 0.45, 0.64, 0.71 | 2.22× | 117.3 GiB | 70 + 11 GiB |
+| sm-fp8-k6144 (n = 2048) | 0.500/s | 0.518 (1.04×) | 0.550 (1.10×) | 0.48, 0.59, 0.66 | 2.08× | 118.6 GiB | 72 + 22 GiB |
+| dsa-logits-v3 (n = 4096) | 0.363/s | 0.401 (1.10×) | 0.412 (1.13×) | 0.61, 0.73, 0.85 | 1.63× | 118.8 GiB | 66 + 13 GiB |
+| residual-add (n = 512) | 0.405/s | 0.441 (1.09×) | 0.485 (1.20×) | 0.62, 0.75, 0.91 | 1.60× | 120.8 GiB | 90 + 67 GiB |
+
+- **Each prover's device time stretches by about K.** These H200s run in Default compute mode with no MPS. So K
+  provers' kernels time-slice the GPU and never run concurrently, and only host work overlaps another prover's device
+  work.
+  - Device-busy seconds a statement grow with K: sm-fp8-k2048 0.93 → 1.13 → 1.27 s, dsa-logits 1.69 → 1.82 → 2.06 s,
+    residual-add 1.54 → 1.70 → 1.88 s. That is the time-slicing and contention cost (kernels' wb prices the
+    mechanism).
+  - So the gain stops near 1.1–1.2× for these types, well under 1/busy.
+- **MPS is untested.** It would let the K provers' kernels share the SMs. If BREAKEVEN wants that as a lever, I can run
+  a few rows under a private MPS daemon on a leased GPU in a later window.
+- **N4, measured:** the front hidden a statement is the K = 1 period minus the K period. In seconds, and as a share of
+  K = 1's median front:
+
+  | type | K = 1 front | hidden at K = 2 | hidden at K = 4 |
+  |---|---|---|---|
+  | sm-fp8-k2048 | 0.91 s | 0.30 s (33%) | 0.28 s (31%) |
+  | sm-fp8-k6144 | 0.79 s | 0.07 s (9%) | 0.18 s (23%) |
+  | dsa-logits-v3 | 0.80 s | 0.26 s (33%) | 0.32 s (41%) |
+  | residual-add | 0.48 s | 0.20 s (41%) | 0.41 s (84%) |
+  | ar-multimem | 0.85 s | 0.13 s (16%) | 0 |
+  | rmsnorm-v8 | 2.69 s | 1.28 s (48%) | 2.44 s (91%) |
+  | fr-w13 | 1.35 s | 0.63 s (46%) | 1.07 s (79%) |
+
+  At K = 1 the server hides none: the period equals e2e, because one streaming prover runs its sessions one after
+  another.
+- **Provers' CPU-s a statement** rise with K (sm-fp8-k2048 18.2 → 19.7 → 22.3), and warm-up takes 16–68 s a row.
+- **Conditions:** node load ran 25–142, with CPU throttling of 4–78 s a row.
+
+Running:
+- 6ab1 part 4: fr-w13 and fr-w2 at K = 2 and 4 on the final driver, from 13:07Z. The ETA is about 13:30Z, and the lease
+  ends by 13:47Z.
+- r20261108-120831-602b: the four light types' Lean on CPU once the lease exits. The ETA is about 14:10Z.
