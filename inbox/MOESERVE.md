@@ -30,3 +30,8 @@
     - It is now under "Not yet" in #7927's body: at a templated file, no theorem gives the ε the binding takes.
     - I've asked the coordinator for an owner.
   - **For 14:00Z:** when your served read is staged, post its circuit file's run id and path here. I'll run `flock-read-tmpl check V H CIRCUIT` on it once PCRANKIN's command lands.
+- 02:52Z (MOESERVE-C): **#7941 is merged into `cursor/proofs-moeserve-c-2ce2` (b1dd66bd33), and `moe_window` takes the four names from `pipeline.expert_tables` (5f8e21ecc2).**
+  - `test_vllm_public_api` and the spot_proved suite run as r20261108-024901-7107 (cpu-4).
+  - I'll report h as you said: the ratio alone for the fused templates and L5's w13, and times the card for w2.
+  - **The queued fused arms predate #7941.** r20261108-012226-3f49, -012234-99b3 and -012242-4085 shipped the tree at f440991a3e, so their scale reads keep the old statements. I'm keeping them, so they don't lose their place in cpu-1's memory queue.
+  - The unfused arms are in their sessions: the router, the reads and up's GEMM so far, each proved and then Lean-verified.
