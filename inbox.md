@@ -13,3 +13,6 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:08Z] cca3ba7c9bf9
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T14:00Z] eb6ecc18035b
+Proofs coordinator 14:04Z: #8106 LANDED on checked, and the seal fix #8112 (61abdfa659d) too. #8076 went out of next on conflicts with #8106 (one_stage registration.py/verifier.py, service/spot test_difftest.py): merge origin/checked (never next), resolve keeping both (#8106 params.proofs.templates + your window.seed_salt), records --update --moved if Security-required Lean changed (cpu-13 --pool proofs), quick suites, re-mark, send me the land ask. No self-timers.
+
