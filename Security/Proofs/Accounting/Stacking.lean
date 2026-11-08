@@ -31,7 +31,7 @@ is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). That store 
 prefix before the pass, which `KeyBinding` moves to a uniform store independent of the session's coins, where the
 deployed guarantee's one-pass family bound holds (`SketchDeployedSession.pr_pass_le`). So the unpaid windows cost
 `n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)` (`SketchDeployedSession.pr_unpaidOn_le`). The passes' correct receipts are a
-causal family of the windows' samples, whatever stores they are on (`pr_draws_causal_le`), so the samples' terms are the
+causal family of the windows' samples, whatever stores they are on (`pr_samples_causal_le`), so the samples' terms are the
 deployed guarantee's (`pr_deployed_of_unpaid_causal`).
 
 `Accounting.SecurityProofs.StackedSessionConservationRelay` simulates each pass device by one that reruns its carrier's
@@ -877,9 +877,9 @@ theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedSession n P N
           ring
 
 /-- **The samples are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
-sampled before the session: both pooled-draw readings of `pr_draws_le_map`, for correct sets `cor` in place of one
+sampled before the session: both pooled-draw readings of `pr_samples_le_map`, for correct sets `cor` in place of one
 store's. -/
-theorem pr_draws_causal_le {Ω : Type} [Fintype Ω]
+theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
     (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
       cor o x w = cor o x' w) (K Kw : ℕ) :
@@ -948,7 +948,7 @@ theorem pr_paid_of_unpaid_causal {Ω : Type} [Fintype Ω]
           ∃ w, rd z.1 z.2 w + P * slack < (Kw + 1) * (m * 256)))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + εu := by
-  have h₁ := pr_draws_causal_le cor hcor K Kw
+  have h₁ := pr_samples_causal_le cor hcor K Kw
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ hu))
   obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
   · by_cases hD : ∑ w, (cor x.1 x.2 w).card ≤ K ∨ ∃ w, (cor x.1 x.2 w).card ≤ Kw
@@ -1011,7 +1011,7 @@ theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) le_rfl
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Rate.Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+      exact Rate.Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
@@ -1035,7 +1035,7 @@ theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
   gcongr
-  · exact Rate.Deployed.horizon_deployed n hn
+  · exact Rate.Deployed.pooled_deployed n hn
   · exact Rate.Deployed.window_deployed n (by omega)
 
 end SketchDeployedSession

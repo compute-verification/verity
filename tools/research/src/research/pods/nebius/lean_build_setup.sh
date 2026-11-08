@@ -7,7 +7,7 @@
 #   - /build (root, 0755), where `vy-lean-sandbox checkout` makes /build/verity, and /opt/elan (root, 0755, empty), the toolchain's
 #     mount point inside the unit, which systemd would otherwise make on the host's disk;
 #   - DATA (/workspace/lean-build, root, 0755) with build/, bind-mounted on /build by /etc/fstab, and deps/, run-daily's copies of
-#     each package's dependencies: ~40 GB that would otherwise land on the root disk, which filled on 6 Oct. The line has nofail
+#     each package's dependencies: ~40 GB that would otherwise fill the root disk. The line has nofail
 #     (a missing /workspace must not stop the boot); vy-lean-cache-daily.service requires the mount, so no build runs without it.
 # Then it checks all of that from lean-build's side, and exits 1 when something doesn't hold.
 set -euo pipefail

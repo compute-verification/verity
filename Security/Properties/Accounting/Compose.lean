@@ -55,7 +55,7 @@ program `p` and query:
   fails wherever a value's IR cut is before the sample and it isn't a computed value only its own unit reads (every run
   input any gate reads, `Properties.Served.SeededScheduleNotLive`), which is why the live statements credit nothing
   on today's code;
-  the seeded statements' binding layer (`Declared.atDraw`) cuts every value at the sample, no earlier than this;
+  the seeded statements' binding layer (`Declared.atSample`) cuts every value at the sample, no earlier than this;
 * **seed preimages**: what the code's seeds name (`Declared.seedNames`). Each unit's seed is `seeds.PouwSeed` of the
   salt, its position and its seed group's `pouw.roots` slot; the salt's derivation reads the weights' root
   (`PouwCommit.saltOf`), and `pouw.roots` is a Program input that no check ties to the unit's operand rows. So a

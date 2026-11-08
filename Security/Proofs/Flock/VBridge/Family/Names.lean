@@ -5,6 +5,7 @@ import all Init.Data.String.Legacy
 import all Init.Data.String.Defs
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
+import Std.Data.String.ToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -325,6 +326,29 @@ theorem getElem!_str (a : Array String) (i : ℕ) : a[i]! = a.getD i "" := by
   simp only [getElem!_def, Array.getD_eq_getD_getElem?]
   cases a[i]? <;> rfl
 
+theorem toNat_unit : ("unit" : String).toNat? = none := by
+  rw [← String.toNat?_toSlice, String.Slice.toNat?_eq_none_iff, String.isNat_toSlice, ← Bool.not_eq_true,
+    String.isNat_iff]
+  simp
+
+theorem toNat_empty : ("" : String).toNat? = none := by
+  rw [← String.toNat?_toSlice, String.Slice.toNat?_eq_none_iff, String.isNat_toSlice, ← Bool.not_eq_true,
+    String.isNat_iff]
+  simp
+
+/-- **`HmRow.tmplLines` passes over nothing** unless line 2 is two tokens, the second a numeral (`TEMPLATE n`): the
+sections then start right after META. -/
+theorem tmplLines_eq_zero {tags : Tags} {lines : Array String}
+    (h : (tokens (lines.getD 2 "")).size ≠ 2 ∨ ((tokens (lines.getD 2 "")).getD 1 "").toNat? = none) :
+    HmRow.tmplLines tags lines = 0 := by
+  unfold HmRow.tmplLines
+  try dsimp only
+  generalize tokens (lines.getD 2 "") = t at h ⊢
+  rcases h with h | h
+  · simp [h]
+  · rw [getElem!_str t 1, h]
+    simp
+
 /-- The first net read is the `Net.parse` of the lines after line 2, under line 2's second token. -/
 def FirstNet (lines : Array String) (nets : Array (String × Net)) : Prop :=
   ∃ n net, 3 + n ≤ lines.size ∧ Net.parse (lines.extract 3 (3 + n)) = .ok net ∧
@@ -478,9 +502,13 @@ theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × B
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]; rfl
     rw [e] at hu
     simp [tokens_eq] at hu
+  have hat0 : at0 = 2 := by
+    have htl : HmRow.tmplLines tags lines = 0 := tmplLines_eq_zero (Or.inr (by rw [hu]; exact toNat_unit))
+    show 2 + HmRow.tmplLines tags lines = 2
+    omega
   have hfirst : FirstNet lines s1.1 := by
     refine loop_inv' (fun b : Array (String × Net) × ℕ => FirstNet lines b.1 ∨ (b.1 = #[] ∧ b.2 = 2))
-      (fun b => FirstNet lines b.1) (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl (Or.inr ⟨rfl, rfl⟩) hwhile
+      (fun b => FirstNet lines b.1) (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl (Or.inr ⟨rfl, hat0⟩) hwhile
     intro b hb s h
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at_ at h)
     split at h

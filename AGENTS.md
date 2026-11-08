@@ -109,8 +109,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
   blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
   (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
-  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
-  unique, and it is still a function.
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its outputs are
+  unique: a Lean lemma, once per Definition and for all its other inputs, that any two witnesses it accepts give the
+  same value on every output wire. Its witness then carries no bits; until the lemma holds, it counts as free input at
+  its width.
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
@@ -239,13 +241,13 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
-  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
-  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it). Each
-  deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's collision resistance, uniform
-  randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on (`trust.extra`, each with its
-  reason), only on the premises its `trust_gap` entry lists, which `--update` never adds to; the check prints each one's
-  gap, the number Daniel drives to zero.
+  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean` or a module under it, and
+  every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
+  `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
+  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
+  (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
+  to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails

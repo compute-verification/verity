@@ -431,7 +431,7 @@ def cmd_select(argv: list[str]) -> int:
     `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
     (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
     stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
-    an empty answer would mean nothing, so it exits 1 naming what is missing (a `research run` job's store, 19 Oct)."""
+    an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
     from . import bucket_index as BI  # noqa: PLC0415
 
     ns = _select_parser().parse_args(argv)
@@ -493,7 +493,20 @@ def cmd_snapshot(argv: list[str]) -> int:
     return 0
 
 
+def _hide_tokens(v):
+    """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
+    minutes and lands in worker logs and run outputs, so the text views never print one (`--json` keeps the whole value)."""
+    if isinstance(v, dict):
+        return {k: _hide_tokens(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_hide_tokens(x) for x in v]
+    if isinstance(v, str) and v.startswith("eyJ") and v.count(".") == 2:
+        return f"<token, {len(v)} chars>"
+    return v
+
+
 def _fmt_label_value(v) -> str:
+    v = _hide_tokens(v)
     return v if isinstance(v, str) else json.dumps(v)
 
 
@@ -544,7 +557,7 @@ def cmd_labels(argv: list[str]) -> int:
         _dump([lab.to_doc() for lab in labs])
         return 0
     for lab in labs:
-        print(f"{lab.ts}  {lab.key}={json.dumps(lab.value) if not isinstance(lab.value, str) else lab.value}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
+        print(f"{lab.ts}  {lab.key}={_fmt_label_value(lab.value)}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
     if not labs:
         print(f"no labels on {ns.target}", file=sys.stderr)
     return 0
