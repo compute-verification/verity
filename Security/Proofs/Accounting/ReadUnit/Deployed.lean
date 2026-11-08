@@ -157,4 +157,53 @@ theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash
   rw [hp]
   exact gatesRefine_partsOf key D hU n hr hsound consts (R.unit i) hj (hone _) (hone_io _) (hok _ j hj)
 
+/-- **`readUnitDrawn_partsOf` at the parsed file's layout.** Its premises that each unit's constant gate is among its
+inputs and each copy's verdict gate is committed hold where the stack has a copy (`hupv`), the read has more than
+`16 H` outputs (`hlen`), and its verdict, output `16 H`, sits on bit 0 of every copy's returned leaf `H` (`hout`,
+`hleaves`): the unit's constant gate is opened at the unit (`Flock.Bridge.constGate_mem_io`), and a copy's gate on a
+returned leaf is committed (`Flock.Bridge.copyGate_mem_committed`). -/
+theorem readUnitDrawn_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
+    (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
+    (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
+    (hsound : ∀ z : Fin (FlockSoundness.Rows.ofNet hU).w → Bool, (FlockSoundness.Rows.ofNet hU).Sat z →
+      z (FlockSoundness.Rows.ofNet hU).one = true →
+      evs (fun v => z (hr.φ v)) run.1.1 =
+          Hash.EmbeddingRead.h V H (readTok fun v => z (hr.φ v))
+            (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v)) ∧
+        (ev (fun v => z (hr.φ v)) run.1.2 = true →
+          Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
+            (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
+            (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
+    (hupv : 0 < D.unroll.upv) (hlen : 16 * H < (run.1.1 ++ [run.1.2]).length)
+    (hout : (hr.out (16 * H)).val = FlockSoundness.Discharge.Layout.outCol D.unroll H 0)
+    (hleaves : ∀ j < D.unroll.upv, H < (D.unroll.leavesOut.getD j #[]).size)
+    (consts : Fin (Flock.Bridge.circuitOf D hU n).N → Option Bool)
+    (hone : ∀ u, consts (Flock.Bridge.constGate D hU n u) = some true)
+    {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
+    (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
+      R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Transcript)
+    (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
+        ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i)
+          (tr ω))) ≤ ε)
+    (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key drawn tr cost)) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
+      (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
+        (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤
+      ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) := by
+  obtain ⟨i, hi⟩ := hr.output (16 * H) hlen
+  have hcol : (hr.out (16 * H)).val = (FlockSoundness.Rows.ofNet hU).nIn + i.val := by
+    rw [hi]
+    rfl
+  have hlt := i.isLt
+  exact readUnitDrawn_partsOf key D hU n hr hsound consts hone
+    (fun u => Flock.Bridge.constGate_mem_io D hU n u hupv)
+    (fun u j hj => Flock.Bridge.copyGate_mem_committed D hU n u hj (hr.out (16 * H)) (hleaves j hj) (by omega) hout
+      (by omega) (by omega))
+    R hR acc drawn tr cost ε hcommitted below hcr
+
 end Accounting.ReadUnit.Gates
