@@ -74,13 +74,23 @@ public budget.
 
 **The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` proof blocks, and `bernoulli:NUM/DEN` takes each proof block
 independently with probability `NUM/DEN`.
-The default is `stratified:K`: one stratum per subcircuit, and inside each an independent uniform sample
+`stratified:K` has one stratum per subcircuit, and inside each an independent uniform sample
 without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, that is `K n_s / N` rounded half up and never fewer
 than one, so every subcircuit is exercised in every audit. `work:K` keeps those strata and that sampler
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
 soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
+
+**A Spec states a rate.** The prover sizes each registration's `N`, so a `Spec`'s rule is a rate, which names its design
+only once `N` is known: `rate:NUM/DEN[:T]` is `subset:K` at `K = ⌈NUM·N/DEN⌉` rounded up to a multiple of `T`;
+`stratified-rate:NUM/DEN` is `work:1` over a work table with every stratum at work one and floor `⌈NUM·n_s/DEN⌉`; and
+`work-rate:NUM/DEN` is `work:K` at `K = ⌈NUM·N/DEN⌉` over the verifier's work table with each floor raised to
+`⌈NUM·n_s/DEN⌉` (`service.selection_law`, `service.selection_table`; Lean's `Select.Rule.lawOver`, `Select.Rule.tableOver`).
+Each proof block is then sampled with probability at least `NUM/DEN` however the prover pads `N` or spreads it over
+subcircuits (`Rate.count_ge`, `Rate.workK_ge`). A fixed count, `subset:K`, `stratified:K` or `work:K`, samples each with
+`K/N` as `N` grows, so both verifiers refuse it as a Spec's rule and as a two-stage design's first stage, whose replay law
+is a `rate:` law (`service.fixed`, Lean's `Select.FIXED`).
 
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -227,7 +237,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
     is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
-    and the window is sampled once by `stratified:K`, a stratum per subcircuit.
+    and the window is sampled once by its rule, `stratified-rate:NUM/DEN` or `work-rate:NUM/DEN`, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
@@ -379,6 +389,10 @@ Code and records call a sampling design a `law`; the name stays until a format v
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
   --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a sample's `p` too).
+- A Spec's rule's text is a rate, `rate:NUM/DEN[:T]`, `stratified-rate:NUM/DEN` or `work-rate:NUM/DEN` with `0 < NUM ≤ DEN`
+  (`draw.parse_rate`, `draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which registration refuses; one-stage's parameters
+  may state a rate in place of the design it resolves to over their program (`service.params_law`, Lean's
+  `OneStage.design`).
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
