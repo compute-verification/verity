@@ -256,7 +256,8 @@ theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) 
     have h : (effL Coin).nPU x = 1 := rfl
     omega)
   unfold Compiled.runExt
-  rw [hd, show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
+  rw [hd]
+  simp only [show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
   rw [dite_eq_left (show 0 < (effL Coin).nPU x ∧ ((effL Coin).sessSlots x [0] 0).head? = some 0 from ⟨h1, rfl⟩),

@@ -137,7 +137,7 @@ theorem of_eq_right {p q q' : RP R α} (e : q = q') (h : Agree H run p q') : Agr
 
 theorem flatMap_singleton {γ : Type} (f : β → RP R (List γ)) (b : β) : Agree H run (f b) (flatMapRP f [b]) := by
   show Agree H run (f b) ((f b).bind fun cs => .ret (cs ++ []))
-  exact ⟨by simp only [RP.eval_bind_ret, List.append_nil],
+  exact ⟨by rw [RP.eval_bind_ret]; exact (List.append_nil _).symm,
     by simp only [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog, List.append_nil]⟩
 
 theorem ite_pos {c : Prop} [Decidable c] {p p' q q' : RP R α} (hc : c) (h : Agree H run p q) :
@@ -484,7 +484,8 @@ theorem sessExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
     exact hfw.trans (e3.symm.trans e4.symm)
   · rcases o with _ | w
     · exact Agree.refl _
-    · exact Agree.flatMap_singleton _ u
+    · exact Agree.flatMap_singleton (fun u' => Claims.Sampling.checkRevealed (ofDeploy D iroots).commit
+        ((ofDeploy D iroots).reveal s u' (run H P D.V x ω r).seen w)) u
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **A sampled proof block not below `n_PU` is not extracted**: on a statement in scope its session's witness would

@@ -62,9 +62,9 @@ With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Opening waitAccC forkOn flatMapRP assemble ownLog ownLog_bind accList OwnColl
-  flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair mem_checkRevealed agree_of_passes
-  val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
+open Claims.Sampling (AuditStatement Opening waitAccC forkOn flatMapRP checkRevealed assemble ownLog ownLog_bind accList
+  OwnColl flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair mem_checkRevealed
+  agree_of_passes val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
 open Claims.Recursion (serve viewing)
 
 namespace Compiled
@@ -255,7 +255,9 @@ theorem good_found (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
       ∀ q ∈ L.reveal s v (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen w, L.commit.Opens H q.1 q.2 = true →
         q ∈ L.found H x s (run H P L.V x ω) c Z := by
   obtain ⟨i, hvlt, hvi, i₀, u₀, hlead, hu₀, xS, vS, hsess, hsh, w, hw, hR⟩ := hgood
-  have hacc : (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc := acc_of_accList hl
+  have hacc : (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc := by
+    have h := acc_of_accList hl
+    exact h
   obtain ⟨hk, hc, hfirst⟩ := of_leadOf hlead
   have hsv := hshared _ _ _ _ _ hacc hu₀ hvi hk
   refine ⟨List.mem_of_getElem? hvi, xS, vS, w, by rw [← hsv]; exact hsess, hR, fun q hq hok => ?_⟩
