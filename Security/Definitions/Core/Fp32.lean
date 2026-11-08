@@ -1,7 +1,9 @@
-/-!
-# FP32 arithmetic: `verity.ml.fp32`
+module
 
-The FP32 and BF16 primitives of `packages/verity/src/verity/ml/fp32.py` as total functions on words, in
+/-!
+# FP32 arithmetic: `verity.ml.circuits.ops.fp32`
+
+The FP32 and BF16 primitives of `verity/ml/circuits/ops/fp32.py` as total functions on words, in
 `Verity.TC.Spec`'s encoding: an FP32 word is a natural number below `2^32`, a BF16 word one below `2^16`, and the bit
 operations are Python's. Each definition is named after its primitive and version (`F32Add` v2 is `f32AddV2`, `F32Fma`
 v1 is `f32Fma`) and equals the primitive's evaluator on every word of its domain.
@@ -18,6 +20,8 @@ or fused `a * b + c` of finite words is a rational `n / d` in those units, and `
 the nearest word. The Python computes add, sub, mul and div in numpy `float32` (the x86-64 host's IEEE arithmetic) and
 the FMA in exact rational arithmetic; `Verity.SecurityProofs.Fp32.Vectors` holds both to these definitions.
 -/
+
+@[expose] public section
 
 namespace Verity.Fp32
 

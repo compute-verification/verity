@@ -5,11 +5,12 @@
 # core, C-Flock and the interface.
 name = "core_sampled_proofs"
 defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "sampled-proofs-difftest",
-  "sampled-proofs-verifier", "site-difftest"]
+  "sampled-proofs-verifier", "site-difftest", "sampled-proofs-plancheck"]
 
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"
@@ -46,6 +47,12 @@ root = "SampledProofs.DifftestMain"
 [[lean_exe]]
 name = "sampled-proofs-verifier"
 root = "SampledProofs.VerifierMain"
+
+# The planner's designs checked in exact arithmetic (`SampledProofs.PlanCheck`), which
+# `verity/core/protocols/sampled_proofs/plancheck.py` calls.
+[[lean_exe]]
+name = "sampled-proofs-plancheck"
+root = "SampledProofs.PlanCheckMain"
 
 # The Site's port (`CoreProtocol.Site`), which `tests/test_site_difftest.py` holds to `verity.core.site`: the
 # registration log is the proof service's record, and this package requires both the interface and the harness.

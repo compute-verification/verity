@@ -20,15 +20,21 @@ The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the i
 up for V*'s native side, read once, since the inner circuit can be tens of GB; `verify --rec-inner F` reads the line it
 printed.
 -/
-import Flock.HmRow
-import Flock.ProvedScope
-import Flock.RecOpening
-import Flock.Registered
-import Flock.WindowRecord
-import VStar.Cli
-import VStar.Compose
-import VStar.Stage
-import Flock.JsonParse
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+public import Flock.RecOpening
+public import Flock.Registered
+public import Flock.WindowRecord
+public import VStar.Cli
+public import VStar.Compose
+public import VStar.Stage
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace RecVStar
@@ -79,8 +85,18 @@ structure Inner where
   links : Option LinkShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- The inner session's keyed coin tree: the session's stream (the link points), the circuit table's two reps, each rep's
+sparse phase and candidate 3's stacked table R (`rec_live.INNER_COIN_STREAMS`), 512 rounds of at most 512 coins each, as
+`Zk.coinSpec` has them. A session that opens fewer streams leaves the rest unopened. -/
+def innerCoinSpec : CoinTree.Spec :=
+  ⟨#["session", "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"], 9, 512⟩
+
+/-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
+def innerTree : Coins := .tree innerCoinSpec
+
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the challenger's coin tree (`innerTree`), under the statement's own
+tags. -/
+def innerTags : Tags := Tags.circuitPlainLeaves
 
 /-- The fewest bits that number `n` things: `0` for at most one. -/
 def bitsFor (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
@@ -95,7 +111,7 @@ def linkShapeOf (st : Stmt) (rows : Nat) : LinkShape :=
 with `links`, the row count of the link table the statement carries, that table's shape (`linkShapeOf`). -/
 def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false)
     (links : Option Nat := none) : V Inner := do
-  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
+  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB innerTree 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo,
          links := links.map (linkShapeOf st) }
@@ -255,7 +271,7 @@ abbrev SchedRound := Nat × Array Nat × Nat × Bool
 def bitLength (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
 
 /-- `rec_live.rep_rounds`: one fast100 rep's rounds for a table of `2^m` packed elements, `2^k_log` a block, with `claims`
-claims, in `rec_algebra.run`'s order of draws: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
+claims, in `rec_algebra.run`'s order of samples: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
 def repRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
   let sch ← fast100 m
   let lv := sch.levels
@@ -300,7 +316,7 @@ def holoRepRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
 /-- **V*'s list holds every level's committed tops**: exactly one statement is RecCap at level 0, over the `2^cap₀` nodes
 of `root_B`'s level-0 cap (`cap₀` of `fast100(m)`'s level 0), and exactly one is RecCap at each later level `l`, over both
 reps' `2 · 2^cap_l` nodes of its tops, and none is at a level past the last, so every node of every level's tops is held
-at a fixed row whatever the coins draw (`RecCoins.checkCap`). A list without one, or with one at another node count, is
+at a fixed row whatever the coins sample (`RecCoins.checkCap`). A list without one, or with one at another node count, is
 refused. -/
 def checkCapListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
   let some sch := fast100 i.m | throw s!"V*'s list: the inner session's m {i.m} has no fast100 schedule"
@@ -326,7 +342,7 @@ is level `g + 1`'s (`topRow`). -/
 def topSizes (rs : Array SchedRound) : List Nat := rs.toList.flatMap (·.2.1.toList)
 
 /-- **The later levels' caps hold the tops the reps' schedule commits**: the inner shape's rep schedule (`repRounds`,
-`holoRepRounds` when its circuits are private, the one `checkLinkRounds` holds the coin server's tops to) commits, past
+`holoRepRounds` when its circuits are private, the one `checkLinkRounds` holds the challenger's live-coin part's tops to) commits, past
 `root_B`, one top a later level of `caps` (`VStar.levelCapStatements`), in order, each of half its cap's nodes (a rep's of
 both reps'). So every round that commits tops has each of them held by its level's cap. -/
 def checkTopsListed (i : Inner) (caps : Array VStar.Stmt) : Except String Unit := do
@@ -414,7 +430,7 @@ def checkRoundWords (ss : Array VStar.Stmt) : Except String Unit :=
 /-- **V*'s list holds every message round a rep absorbs, at one width**: each `k`-th round of the inner shape's rep
 schedule that absorbs a message (`commitRounds` of `repRounds`, `holoRepRounds` when its circuits are private), whose
 `c_k` the inner transcript fixes as `rec-c<k>` (`fixedRow`), is a message-round port of one of its statements at both
-reps' rows (`roundListed`), so some part holds each rep's every absorbed message whatever the coins draw, and every
+reps' rows (`roundListed`), so some part holds each rep's every absorbed message whatever the coins sample, and every
 holder of a round reads its row at the same words (`checkRoundWords`). A list without one, or with two holders of a
 round at different words, is refused. -/
 def checkRoundsListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
@@ -621,7 +637,7 @@ def checkPart (s : VStar.Stmt) (c : Circuit) : V Unit :=
                 else pure ()
   | _ => pure ()
 
-/-- A statement's population: the registered population's instances for a drawn session, else its own. -/
+/-- A statement's population: the registered population's instances for a sampled session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
 /-- META's bindings (`VStar.Bindings`, `VStar/Compose.lean:52-55`, written at `Compose.lean:228-229`): the
@@ -881,16 +897,11 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
-/-- The first name two of the verifier's registered ports share. -/
-def dupName? (registered : Array Registered.Port) : Option String :=
-  let names := registered.toList.map (·.name)
-  names.find? fun nm => names.count nm != 1
-
-/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
-port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
-once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+/-- **The verifier's reads file names each port once** (`Registered.dupName?`): `checkAcc` and `checkAccReads` read a
+name's first port (`find?`), so a second port of that name would be one neither checks. `Registered.ofJson` refuses a file
+naming a port twice by the same check; this refusal holds whatever list of ports the verifier is given. -/
 def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
-  match dupName? registered with
+  match Registered.dupName? registered.toList with
   | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
   | none => pure ()
 
@@ -1017,11 +1028,11 @@ def coinsOf (r : Json) : Array String := (r.getObjValAs? (Array String) "coins")
 def SPARSE : String := "sparse"
 def STACKED : String := "stacked"
 
-/-- One stream of the inner session as the coin server recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
+/-- One stream of the inner session as the challenger's live-coin part recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
 round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
 level 0 the table's `root_B` from `Commit` (the record's `link.roots`; R, which has none there, its binding round's salted
 top), then each later salted top in the order the stream's rounds absorbed them. A sparse stream belongs to no table and has
-none. `coins`: each round's coins, in round order, as the coin server drew them (check 5's coins of the sparse phases and
+none. `coins`: each round's coins, in round order, as the challenger's live-coin part drew them (check 5's coins of the sparse phases and
 of R, which the prover's record does not hold). -/
 structure InnerStream where
   name : String
@@ -1132,7 +1143,7 @@ def stackedRounds (sh : StackedShape) : Option (Array SchedRound) := do
   let rep ← repRounds sh.m 6 sh.claims
   return #[(7, #[2 ^ (sch.levels.getD 0 default).cap], 0, true)] ++ rep.extract (sh.m + 1) rep.size
 
-/-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s draws: ζ_c, H2's rounds, v2's (no
+/-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s samples: ζ_c, H2's rounds, v2's (no
 coins), H3's, u's (ζ_p), at T > 1 vt's (ρ_t), and last the registered claim's (no coins). Each absorbs one message but
 ζ_c's. -/
 def sparsePhaseRounds (sh : RecSparse.Shape) : Array SchedRound :=
@@ -1170,13 +1181,13 @@ def checkStackedShape (s : String) (sh : StackedShape) (rs : Array Json) : V Uni
 /-- **Candidate 3's session** (`rec_live.schedule_for` with `sparse`, and `stacked`): the circuit table `t`'s two reps, both
 reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`) and the streams its message
 rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end of the rep's stream, the
-reps and R at round 0 of no parent), each with every round from 0 to its count; the sparse streams and R's are the coin
-server's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
+reps and R at round 0 of no parent), each with every round from 0 to its count; the sparse streams and R's are the challenger's
+live-coin part's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
 `t`'s alone (the inner statement's Hello), R's root being the top its stream's binding round commits; each round's tops are
 lists of `b ‖ c`, none in a sparse stream; R's binding round's first top makes R's registered entry `regR` (the
 registration's `program` and its `stacked` entry, `topEntry`, as `rec_vstar.registered` holds it); R's rounds are those of
 the shape staging committed R at (`shape`, META's, `checkStackedShape`); and every `b ‖ c` the session holds (roots, tops,
-`c_k`) is a distinct one, since the firewall commits each under a fresh salt. -/
+`c_k`) is a distinct one, since the ZK server commits each under a fresh salt. -/
 def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List String)
     (msgs : Array (String × Nat × ByteArray)) (regR : Option (String × Json) := none)
     (shape : Option StackedShape := none) : V (Array InnerStream) := do
@@ -1260,7 +1271,7 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
     seen := seen.insert h
   return out
 
-/-- **The inner session finished**: the coin server's record ends `finish` (`rec_live.Proxy`'s `Finish`). A stopped
+/-- **The inner session finished**: the challenger's live-coin part's record ends `finish` (`rec_live.Proxy`'s `Finish`). A stopped
 session's record (`end`: `stop`, a refusal or a connection that ended without `Finish`) is no inner proof, and neither is
 one that names no end. This refuses only what the record says: the proxy that holds a session to its schedule runs on
 the prover's side, so a record ending `finish` is not thereby on the schedule, which `checkSchedule` holds it to. -/
@@ -1286,12 +1297,12 @@ def scheduleOf (i : Inner) (t : String) : Option (Array (String × String × Nat
     | none => pure #[]
   return #[0, 1].map (fun x => (s!"{t}/rep{x}", "", 0, rep)) ++ sp ++ r
 
-/-- **The coin server's record is on the verifier's schedule** (`rec_live.on_schedule`): at the verifier's inner shape
+/-- **The challenger's live-coin part's record is on the verifier's schedule** (`rec_live.on_schedule`): at the verifier's inner shape
 `i`, the record `tr` declares exactly `scheduleOf i`'s streams, each at its parent's round with its round count, and its
 rounds are the schedule's in its order, each its stream's round `k`, with the schedule's coin count (`n` and the coins
-drawn), its tops' node counts and copies of level 0's top (`schedOf`), and a `c_k` exactly where the round absorbs a
+flipped), its tops' node counts and copies of level 0's top (`schedOf`), and a `c_k` exactly where the round absorbs a
 message (one: `innerCommits`, which runs first). `rec_live.Proxy` holds a session to the same schedule round by round,
-and it runs on the prover's side: a session that bypasses it reaches the coin server with any rounds, and its record
+and it runs on the prover's side: a session that bypasses it reaches the challenger's live-coin part with any rounds, and its record
 still ends `finish`. This holds that record to the schedule here, by counts alone, one comparison a round of the
 schedule. It reads the schedule right only at `k_log ≥ 6`: below it `SchedRound`'s absorb flag can't tell z_partial's
 round from a 2-element one, and `statements`, which every V* session's setup runs, refuses such a shape. -/
@@ -1325,14 +1336,14 @@ def checkSchedule (i : Inner) (tr : Json) : V Unit := do
       throw (s!"rec inner transcript: {at_}: round {j} is {rs.getD "no stream"} round {rk.getD 0} (n {n.getD 0}) " ++
         s!"{showSched (schedOf r)}, and the schedule's {s} round {k} (n {w.1}) {showSched w}")
 
-/-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
+/-- **Each rep's `c_k`**: the message rounds of the challenger's live-coin part's record of V*'s inner session (`--rec-inner-transcript`,
 `rec/inner-transcript/v1`, of a session that finished: `checkFinished`),
 those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
 its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). The inner
 session's record (`--rec-inner-session`) is the prover's, the one check 5 reads, and holds the two reps alone: each rep's
 rounds' coins must be the record's at the same round, z_partial's split aside (`repCoins`). With candidate 3's streams beside
-the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it from the coin
-server's record alone. R has no root at `Commit`, so the circuit registration binds it before any coin: the record `reg`
+the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it from the challenger's
+live-coin part's record alone. R has no root at `Commit`, so the circuit registration binds it before any coin: the record `reg`
 (`--rec-inner-registration`) must be the one the inner circuit's META binds (`bound`, its `registration`; `registration`), a
 session with R's stream needs the record's `stacked` entry, which its binding round's top must make (`candidate3`); and a
 session whose registration names R needs R's stream, whose opening the statement then reads (a session without it is a
@@ -1396,9 +1407,9 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR shape, stacked := shape }
   return { reps }
 
-/-- **Each sparse phase draws its schedule's coins round for round**: under the verifier's RecSparse shape, every held
+/-- **Each sparse phase flips its schedule's coins round for round**: under the verifier's RecSparse shape, every held
 stream named `sparse/…` holds `sparsePhaseRounds`' coin count at each of its rounds, as `checkCommitRounds` holds the
-reps' streams to theirs (`sparseCoins` counts only the rounds that draw coins). -/
+reps' streams to theirs (`sparseCoins` counts only the rounds that flip coins). -/
 def checkSparseCoins (i : Inner) (cs : InnerCommits) : V Unit := do
   if let some sh := i.sparse then
     for st in cs.streams do
@@ -1414,7 +1425,7 @@ and R's (`stacked/rep0`) at `stackedRounds` of the verifier's R shape, R's held 
 this check is what puts the `j`-th `c_k` the verifier holds at the schedule's `j`-th message round. `checkStackedShape`
 holds R's transcript rounds to its schedule; this holds the `c_k` and tops the verifier keeps of them, and refuses R's
 stream under an inner shape naming no schedule of R's. It reads `sparse/rep0` and `sparse/rep1` only, so it refuses
-any other held stream named `sparse/…`. Every held stream draws its schedule's coins round for round: the reps' at
+any other held stream named `sparse/…`. Every held stream flips its schedule's coins round for round: the reps' at
 their schedule, the sparse phases' at `sparsePhaseRounds` (`checkSparseCoins`). -/
 def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
   let some rep := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
@@ -1526,9 +1537,9 @@ def sparseRow (cs : InnerCommits) (sh : RecSparse.Shape) (p : String) (x : Nat) 
   .ok (s!"{s}'s c_{i} ({p}, inner round {k})", c)
 
 /-- **`rec-claim`'s row `x`, the verifier's own**: rep `x`'s registered claim is its sparse phase's last message, the claim
-round (`rec_live.sparse_rounds`, after u's, and vt's at T > 1), whose `c_k` the coin server records; so row `x` of
+round (`rec_live.sparse_rounds`, after u's, and vt's at T > 1), whose `c_k` the challenger's live-coin part records; so row `x` of
 `rec-claim` is `sparse/rep<x>`'s claim round's `c_k` at the verifier's RecSparse shape `sh` (`rec-inner --sparse`), and a claim
-row the firewall did not commit, however consistently registered, opens no statement that reads it (RecSparse's `claim`, R's
+row the ZK server did not commit, however consistently registered, opens no statement that reads it (RecSparse's `claim`, R's
 opening's `claim<k>`). -/
 def claimRow (cs : InnerCommits) (sh : RecSparse.Shape) (x : Nat) : Except String (String × ByteArray) :=
   sparseRow cs sh "claim" x
@@ -1575,7 +1586,7 @@ own. A rec-sparse unit's `claim` port and an R opening unit's `claim<k>` ports r
 `Registered.check` puts each instance's row at the position its unit reads. An R opening unit
 (`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). A table
 with a port reading the reps' `c_k` (`rec-c<i>`) labels its instances `0` to `n - 1` in order
-(`Registered.unitIndices`), as a V* session's full draw of its two reps does, so instance `x` reads rep `x`'s row. -/
+(`Registered.unitIndices`), as a V* session's full sample of its two reps does, so instance `x` reads rep `x`'s row. -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
     (commits : Option InnerCommits) (sparse : Option RecSparse.Shape := none) : V Unit := do
   let unit := st.c.unit.name
@@ -1620,7 +1631,7 @@ climb to. -/
 def topLevel (value : String) : Option Nat :=
   if value.startsWith "rec-top-L" then (value.drop 9).toString.toNat? else none
 
-/-- What the coin server's record of the inner session fixes of the circuit table at every shape, dense, holo or
+/-- What the challenger's live-coin part's record of the inner session fixes of the circuit table at every shape, dense, holo or
 candidate 3's: Hello's one table (`table`), its level-0 top (`root`, `root_B` from `Commit`, the record's `link.roots`,
 one `b ‖ c` a node), each rep's later salted tops (`tops`, rep `x` at `x`: each top's round and its nodes' `b ‖ c`, in
 round order, `rec_vstar.tops` past level 0) and the link points it drew after `root_B` (`points`, one array of `m` a
@@ -1635,13 +1646,13 @@ structure InnerLink where
 private def f128sOfHex (ctx : String) (xs : Array String) : V (Array F128) :=
   xs.mapM fun h => (f128OfHex h).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
 
-/-- **The circuit table's tops and the link points, as the coin server recorded them** (`--rec-inner-transcript`,
+/-- **The circuit table's tops and the link points, as the challenger's live-coin part recorded them** (`--rec-inner-transcript`,
 `rec/inner-transcript/v1`, of a session that finished: `checkFinished`):
 Hello's one table `t`, its `root_B` (`link.roots`, `t`'s alone), every salted top of
 `t/rep0`'s and `t/rep1`'s rounds in round order (a round's copies of a level-0 top, `level0`, are not tops of their own),
 and the link points (`link.points`, `hello.link`'s `points × m` coins). The inner session's record `record` (the
 prover's, which check 5 reads, `RecCoins.Inner.load`) must hold those very points: check 5 takes the extra claims at the
-record's points, and only the coin server's were drawn after `root_B`. -/
+record's points, and only the challenger's live-coin part's were sampled after `root_B`. -/
 def innerLink (tr : Json) (record : String) : V InnerLink := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then
     throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
@@ -1720,9 +1731,9 @@ def checkTopRowsAt (unit name value : String) (lk : InnerLink) (l : Nat) (positi
     | .error why =>
       throw s!"rec-tops: {unit}: port {name}'s table row {r} reads row {positions[r]!} of {value}, and {why}"
 
-/-- **`pub.bin`'s rows at its reads of the circuit table's tops are the `b ‖ c` the coin server recorded**: for each port
+/-- **`pub.bin`'s rows at its reads of the circuit table's tops are the `b ‖ c` the challenger's live-coin part recorded**: for each port
 of the verifier's reads file registering `rec-top-L<l>` (`topLevel`), every row of the port's table, at the registered
-position `x` it opens, is row `x` of `topRow lk l` (`checkTopRowsAt`). So an opening's `out` row opens a node the firewall
+position `x` it opens, is row `x` of `topRow lk l` (`checkTopRowsAt`). So an opening's `out` row opens a node the ZK server
 committed before the coins after it, never a top the prover chose after them. -/
 def checkTopRows (st : Stmt) (registered : Option (Array Registered.Port)) (link : Option InnerLink) : V Unit := do
   let unit := st.c.unit.name
@@ -1754,8 +1765,8 @@ def checkLinkRounds (i : Inner) (lk : InnerLink) : V Unit := do
     if got != want then
       throw s!"rec inner transcript: rep {x}'s tops (round, nodes) are {got}, and its schedule's {want}"
 
-/-- Table `j`'s draw among `count` tables of a session drawn by `d`, as `Stmt.setupTables` builds it: `d` at one table,
-else part `j` of `d`'s units, a subset draw of the population. -/
+/-- Table `j`'s sample among `count` tables of a session sampled by `d`, as `Stmt.setupTables` builds it: `d` at one table,
+else part `j` of `d`'s units, a subset sample of the population. -/
 def tableDraw (d : Json) (count j : Nat) : Json :=
   if count ≤ 1 then d else
     match Draw.UnitDraw.ofJson d with
@@ -1765,18 +1776,18 @@ def tableDraw (d : Json) (count j : Nat) : Json :=
           (j * (u.units.size / count) + u.units.size / count)).map Lean.toJson))]
     | .error _ => d
 
-/-- Table `j`'s statement labels its instances with the units its draw `dj` proves. -/
+/-- Table `j`'s statement labels its instances with the units its sample `dj` proves. -/
 def checkLabel (dj : Json) (pub : Public) (j : Nat) : V Unit := do
   let D ← Draw.UnitDraw.ofJson dj
   let idx ← Registered.unitIndices pub
   if idx != D.proved then
     throw s!"rec-labels: table {j} labels its instances {idx}, not the units its draw proves {D.proved}"
 
-/-- **A drawn session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
-`units.indices`, exactly the units its draw proves (`tableDraw`). A registered read's position is read at an instance's
+/-- **A sampled session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
+`units.indices`, exactly the units its sample proves (`tableDraw`). A registered read's position is read at an instance's
 label (`Registered.checkPort`), so the label must be the unit. V*'s populations are their units `0..n-1`, so an honest
-statement's labels (the population's labels of the drawn units) are those units; a population labelled from another
-start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a draw
+statement's labels (the population's labels of the sampled proof blocks) are those units; a population labelled from another
+start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a sample
 passes. -/
 def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :=
   match draw with

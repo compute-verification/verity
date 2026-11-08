@@ -1,4 +1,6 @@
-import Definitions.Accounting.Gates.Ranges
+module
+
+public import Definitions.Accounting.Gates.Ranges
 
 /-!
 # Declared bounds, earned: what a declared interval may rest on, and the int8 circuits that need nothing else (trusted)
@@ -17,6 +19,8 @@ code, both zero-padded to `32·S` keys). The 32-bit primitives whose value no bo
 clamp's `F32Fmaxf` and `F32Fminf`, the row scale's fold, each reading the row's `Bf16ToF32` widening, an affine
 `×2^16` folded into them) are each `word32 f` for an arbitrary `f`: the window holds whatever they compute.
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 

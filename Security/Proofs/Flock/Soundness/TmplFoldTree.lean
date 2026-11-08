@@ -1,4 +1,13 @@
-import Proofs.Flock.Soundness.TmplFoldDef
+module
+
+public import Flock.TmplFold
+public import Proofs.Flock.Level3.GF128Field
+public import Proofs.Flock.Soundness.TmplFoldDef
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
 # The template fold's reference over the call tree
@@ -7,6 +16,8 @@ import Proofs.Flock.Soundness.TmplFoldDef
 of `foldRef` is the sum over the call tree (`placeSum`) of every copy's own rows, each reference read through the copy's
 binding (`Def.ref`) and uncancelled (`sum_canon`), plus the constant's row.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

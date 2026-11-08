@@ -105,7 +105,7 @@ SHA = "f2b7cd4ca31e4adf0ce1e656bb0a2ef882f02301d5058670350b9c2b8d1f81a6"
 
 
 def _with_instances(run_id: str, lo: int, hi: int, sha: str = SHA, **overrides):
-    inst = contract.instances_ref("vu-k1536", lo, hi, sha)
+    inst = contract.input_set_ref("vu-k1536", lo, hi, sha)
     res = conforming_result(run_id, B=hi - lo, instances=inst, **overrides)
     for m in res["measurements"]:
         if m["name"] == "vu.count":

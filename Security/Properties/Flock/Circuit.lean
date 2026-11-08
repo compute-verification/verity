@@ -1,8 +1,12 @@
-import Properties.Flock.Circuit.Outs
-import Properties.Flock.Circuit.CircuitOf
+module
+
+public import Properties.Flock.Circuit.Outs
+public import Properties.Flock.Circuit.CircuitOf
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
-# The circuit a registered C-Flock circuit file describes
+# The circuit a registered Flock circuit file describes
 
 The definitions the parsed circuit file's circuit is built from: the program of its units on Δ's source keys
 (`Placed.keyProg`, over a unit net `Net.ofRows` built, `Built`) and its returned outputs' bits (`Layout.outsOf`),
@@ -11,3 +15,5 @@ committed circuit and public files). They are stated over the executable verifie
 sit in the properties tree, where a property's statement may read them. Each module says where its definitions
 moved from; the proofs about them stay in `Proofs.Flock.Soundness`.
 -/
+
+@[expose] public section

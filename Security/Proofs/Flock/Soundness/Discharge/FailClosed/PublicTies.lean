@@ -1,18 +1,37 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.One
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # What an accepted statement's public file is tied to (`flock_verify_public_ties`)
 
-Every statement `flock-verify verify` sets up passed the check of its public file (PROTOCOL.md §16.10):
+Every statement `flock-verify verify` sets up passed the check of its public file (`Flock.HmRow`):
 `HmRow.checkPublic` (`Exec.setupH_public`), with hidden outputs `HmOut.checkPublic` (`Hidden.Spec.checkPublic`). The
 check recomputes the frame-v3-sha512 trees natively; the circuit proves only the `hm96-sha512` leaves. `PublicTies`
 restates what it established as equalities, and `flock_verify_public_ties` states them of every statement an acceptance
 sets up, with or without `--zk` or `--registered F`, public or hidden outputs. No probability, no assumption.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -24,7 +43,7 @@ open Flock Exec ZkExec Refine
 def rowSchema (port : Port) : String :=
   if port.segs.isSome then HmRow.ROW_SCHEMA_SEG else if port.v2 then HmRow.ROW_SCHEMA_V2 else HmRow.ROW_SCHEMA
 
-/-- The population the roots are over: a drawn statement's registered one (`Public.population`), else the file's own
+/-- The population the roots are over: a sampled statement's registered one (`Public.population`), else the file's own
 instance count, `b ‖ c` and output words. -/
 def popOf (pub : Public) : ℕ × Array ByteArray × Array ℕ := pub.population.getD (pub.n, pub.digests, pub.outputs)
 
@@ -57,7 +76,7 @@ def dummyBc (hidden : Bool) (c : Circuit) (p : ℕ) : ByteArray :=
   if hidden then HmOut.rowBcZeroSalt c.ports[p]! (HmOut.dummyRow c p) else HmRow.zeroRowBc c.ports[p]!
 
 /-- **What the public file of a statement over circuit `c` is tied to**: the header's `frame_v3.frame` is
-`frame-v3-sha512` and its `row_key_sha512` the hex SHA-512 of hm96's default key; with a unit draw, `instances` and the
+`frame-v3-sha512` and its `row_key_sha512` the hex SHA-512 of hm96's default key; with a unit sample, `instances` and the
 statement's instance count are its proved units'; each input port's `frame_v3.schemas` entry is its leaves' schema, its
 `frame_v3.roots` entry the frame-v3-sha512 root of its rows' `b ‖ c` under its `frame_v3.domain_ids` entry, and its
 pinned dummy `b ‖ c` is `dummyBc`; with public outputs, each output port's root is that of its words. -/
@@ -204,7 +223,7 @@ theorem ties_of_setupOf {I : Inputs} {record : String} {spec : SessionSpec} {sts
 `--zk` or `--registered F`: the acceptances `flock_verify_sound` quantifies), the statement it set up (`setupOf`, at the
 `--zk` inputs under `--zk`) has a table, and each table's public file is tied to it (`PublicTies`): its header's
 `frame_v3` pins the frame and row key, and its schemas, domains and roots are those of the population's `b ‖ c` rows and,
-with public outputs, output words; `instances` is the unit draw's proved count; the dummy rows are the pinned ones. The
+with public outputs, output words; `instances` is the unit sample's proved count; the dummy rows are the pinned ones. The
 verifier recomputes the trees natively, so this is deterministic. -/
 theorem flock_verify_public_ties (zk : Bool) (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript)
     (h : FlockVerifyAccepts zk I t ∨ FlockVerifyAcceptsR zk I own t) :

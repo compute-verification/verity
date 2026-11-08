@@ -1,7 +1,7 @@
 # proof_throughput: the proof system's throughput on GLM-5.3's dot products
 
-How many verification units (VU) per second Flock proves and the Lean verifier accepts, as a function of the batch size B,
-for the dot products GLM-5.3 serves. The report is the throughput frontier over B: one row per B with VU/s, the overhead
+How many proof blocks per second Flock proves and the Lean verifier accepts, as a function of the batch size B,
+for the dot products GLM-5.3 serves. The report is the throughput frontier over B: one row per B with proof blocks per second, the overhead
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
 ~~~text
@@ -18,13 +18,15 @@ verity bench proof_throughput zk                              configuration 2: w
 ## What a point is
 
 A point is B coordinates of one workload per session, sampled afresh from its frozen population of `n_max` instances by the
-stratified law the Lean verifier's soundness covers:
+stratified sampling design the Lean verifier's soundness covers:
 
 1. **Prover run** (`job.sh`, a `research run --queue --on vy-nebius-1 --gpu-host` job, tool `proof_throughput_prover`): builds
    `flock-circuit` with CUDA for sm_120, stages the whole population (the same staged statement for every B) and checks its
    instances against the manifest outside any GPU lease, then proves `WARM` warm and `RUNS` timed sessions on one GPU taken
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
-   (`FC_COINS=os`). The server samples each session's B units at its Register by the verifier's law (`serve --draw-law`,
+   on the challenger's keyed coin tree (`FC_COINS=tree`, `serve --tree-from`: `70-class-sweep.sh` gives the server its own
+   challenger and accepts the point only if the challenger's audit holds every session's record to its release log, which the
+   bundle carries). The server samples each session's B units at its Register by the verifier's sampling design (`serve --draw-law`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
@@ -33,17 +35,17 @@ stratified law the Lean verifier's soundness covers:
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):
-   builds the compiled Lean verifier (`flock-verify`, `verity/core/service/flock/`), runs `flock-verify verify --coins os
+   builds the compiled Lean verifier (`flock-verify`, `verity/core/service/flock/`), runs `flock-verify verify --coins tree
    --program P --stratified B --partition F` on every session of the bundle one at a time under `/usr/bin/time`, with its
    own copies of the population's program and of the `verity/partition/v1` object the circuit binds (derived from the
-   workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified law for B
+   workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified sampling design for B
    itself and refuses a session whose sample was taken by any other. It writes the point's result of record: the prover's
    measurements and the Lean verifier's. It passes only when the live verifier accepted every session and the Lean
    verifier accepted every timed one.
 
 **Counted sessions.** A session counts toward throughput only if the Lean verifier accepts it. A sweep that proves the
 whole staged set with no sample passes every check, and the verifier refuses it under D12
-(`verity/ml/flock/verifier/PROTOCOL.md` §16.15). Such runs are labelled "checks pass, refused under D12 (no sample)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
+(`Flock.ProvedScope`). Such runs are labelled "checks pass, refused under D12 (no sample)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
 and `table` and `baseline` read none of them.
 
 ## The result contract
@@ -51,7 +53,7 @@ and `table` and `baseline` read none of them.
 Each point's `result.json` is the campaign contract's, `benchmarks/numerical/python/verity_numerical/bench/contract.py`,
 imported as it is and checked by its `validate()` before it is written:
 
-- VU = one output coordinate, `GemmCoordinate<K>`: K MACs (2K FLOP). `vu.count` = B, `vu.per_second` = B / `t.total`.
+- A proof block is one output coordinate, `GemmCoordinate<K>`: K MACs (2K FLOP). `vu.count` = B, `vu.per_second` = B / `t.total`.
 - `t.total`: the median timed statement's prover seconds (the witness wait plus both repetitions, as the GEMM hill-climb's
   `statement_seconds`); `t.total_live` adds the waits on the live verifier. The contract's buckets are summed over the two
   repetitions: `t.witness`, `t.encoding_commitment`, `t.arithmetic` (zerocheck, lincheck, ring switch, Ligerito, each also
@@ -64,11 +66,11 @@ imported as it is and checked by its `validate()` before it is written:
   again) and `verify.session_s` (one session's checks). The rest is the proved-scope check (`ProvedScope.check`), which a
   call runs once, before its first session's clock starts.
 - `verifier.cpu_seconds_per_vu` = `verify.cpu_s` / B and `verifier.cores_per_gpu` = `verify.cpu_s` / `t.total`: the
-  verifier's CPU per VU, and the cores that keep up with one GPU proving back to back (`contract.verifier_rates`,
+  verifier's CPU per proof block, and the cores that keep up with one GPU proving back to back (`contract.verifier_rates`,
   recomputed by `validate`).
 - `fixed.setup_seconds`: staging the population, once per point. `rounds.protocol`: the live session's rounds.
 - The identity (`contract.IDENTITY_FIELDS`): proof class `NON_ZK_PROOF`, profile, K, B, the probed hardware, the security
-  target (Fast100, 2 repetitions, 2^-100), plus the workload, its VU, the configuration, the population's reference
+  target (Fast100, 2 repetitions, 2^-100), plus the workload, its proof block, the configuration, the population's reference
   (`population`) and the sample (`draw`: stratified, k = B). `instances` is null: a sample fixes no id range.
 
 `compare` and `table` refuse results that don't conform, didn't pass, or whose identities differ (`table` lets B alone
@@ -80,7 +82,8 @@ the sweep's results, `table --baseline` renders it, and a candidate is `compare`
 
 R_native is the H200's dense peak for the workload's number format. The census has no H200 line, and the H200 has the
 H100 SXM5's tensor cores and clocks (it differs in memory), so the profiles' anchors are the H100 SXM5's dense peaks:
-`bf16-hopper-mma-draft/2026-09-22` (989.4 TFLOPS bf16) and `fp8-hopper-wgmma-draft/2026-09-22` (1978.9 TFLOPS e4m3).
+the frozen bf16 and fp8 Hopper input sets, `workloads.BF16` (989.4 TFLOPS bf16) and `workloads.FP8` (1978.9 TFLOPS
+e4m3).
 
 ## The verifier's profile
 
@@ -93,12 +96,12 @@ busy.
 
 ## Workloads
 
-`verity_proof_throughput/workloads.py`, one VU family each, at GLM-5.3's served K:
+`verity_proof_throughput/workloads.py`, one proof-block family each, at GLM-5.3's served K:
 
-| workload | VU | served at | cap B |
+| workload | proof block | served at | cap B |
 |---|---|---|---|
 | `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
-| `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the block-scaled FP8 GEMMs | declared |
+| `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the FP8 GEMMs with scale groups | declared |
 
 The bf16 sites are those of `verity/ml/definitions/registry/bf16_gemm_check.py`. The cap is the largest
 power of two of coordinates one statement holds at the hill-climb's 2^35 witness bits (each coordinate one 2^25-bit block
@@ -108,9 +111,9 @@ staging them through `benchmarks/served_units/stage.py` is the next workload's w
 ## Instances
 
 `proof-throughput/v2`, one population per workload, pinned by `instances/<workload>.json`
-(`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's VU Definition (core's
+(`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's proof block's Definition (core's
 `population_program` at v0, whose digest every lane is derived from, `verity_proof_throughput/population.py`), each
-instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified law samples B
+instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified sampling design samples B
 of its proof blocks uniformly. The lanes are those Flock's class sweep
 gives that proof-block class at seed 0. The manifest pins every lane's digest and the population's; the prover run recomputes
 them before proving, and the result names the manifest by its SHA-256. The words are uniform 16-bit encodings: at K = 6144
@@ -123,7 +126,7 @@ Workers would prove the inner statement natively with ZK off and the outer proof
 (compiled Lean, CPU) would sample the masks and salts, check the outer relations and release; the auditor runs the Lean
 verifier. That split doesn't exist. The ZK point measures today's stand-in,
 labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same sampled sessions with
-`flock-circuit prove --zk --gpu` (M1's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
+`flock-circuit prove --zk --gpu` (Flock ZK's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
 checks on its host threads and the Lean (`verity/core/service/flock/Flock/Firewall`, the `flock-firewall` processes the
 prover starts on the same node: the session loop, the frames and the finish, which commits level 0 and computes the
 opening and the proof file), and `zk-point` writes the result: the prover process's CPU seconds per session, the

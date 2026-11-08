@@ -1,5 +1,23 @@
-import Flock.RecAlgebra
-import Proofs.Flock.VBridge.OfVStar
+module
+
+public import Flock.RecAlgebra
+public import Proofs.Flock.VBridge.OfVStar
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import VCVio.Prelude.Core
 
 /-!
 # E's `GfResiduals` read as V*'s
@@ -14,6 +32,8 @@ computes `resVal (gfS S) (termVal w v)` over V*'s S (`VStar.GfS`, lists) and the
   is 0, as `w[i]!` reads it).
 * `residuals_toV`: when `Algebra.residuals S w v = .ok rs`, the ports have S's sizes and `rs[r]` is V*'s residual `r`.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

@@ -2,8 +2,34 @@
 Words of the builder (`Flock.HmNets`) and what their gadgets force: a word's value as a `BitVec 64`, rotations, shifts and
 XORs as `BitVec` operations, `Ch` and `Maj` bit by bit, commit, and the ripple-carry adder as addition mod `2^64`.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-import Proofs.Flock.Soundness.Discharge.Hm.Spec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
+public import Proofs.Flock.Soundness.Discharge.Hm.Spec
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToDual
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

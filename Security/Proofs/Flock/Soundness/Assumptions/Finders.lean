@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # cr/sha-512 at the prover's own finders
@@ -12,6 +14,8 @@ instances, each the definition it stands for at the same arguments: `TableCRAt` 
 `TableCRZAt` and `LinkCRZCAt` under `--zk`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Assumptions
 
 /-- **`SHA512CRStrict` at table `j`'s finders in a batched session** (`Discharge.Exec.TableCRL`): the rewinding finders at
@@ -19,7 +23,7 @@ budget `qF` and the self-clash finder at budget `qS`, each built from the prover
 def TableCRAt := @Discharge.Exec.TableCRL
 
 /-- **A2 at the prover's link finders** (`Discharge.Exec.LinkCRL`): `SHA512CRExpected` for the finder built for each
-commit string a draw can read, at the registration and the prover's continuation. -/
+commit string a sample can read, at the registration and the prover's continuation. -/
 def LinkCRAt := @Discharge.Exec.LinkCRL
 
 /-- **`SHA512CRStrict` at table `j`'s finders in a batched `--zk` session** (`Discharge.ZkLink.TableCRZ`), as

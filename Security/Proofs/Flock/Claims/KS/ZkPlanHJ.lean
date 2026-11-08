@@ -1,24 +1,66 @@
-import Proofs.Flock.Claims.KS.ZkPlanJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Claims.KS.ZkPlanJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 /-!
 # The old hidden-output `--zk` plan at the deployed masked statement is `zkTabs`
 
 `ZkPlanJ` under hidden outputs (`Stmt.setupHidden`, `ZkHidden/DefsJ.lean`): the old hidden-output `--zk` theorems run
 their decoders on the plan `ZkHidden.planZHJ`, whose table `j` is the table `verify --zk` sets up at table `j`'s inputs
-and draw (`DrawSetupZHJ.table`). Where `verify --zk` sets its session up and its tables pass the `--zk` shape check,
+and sample (`DrawSetupZHJ.table`). Where `verify --zk` sets its session up and its tables pass the `--zk` shape check,
 that plan is `zkTabs` too, so the old hidden-output decoders are right at `zkTabs`:
 
-* `setupAt_tableJH`: `ZkHidden.setupOf_tableJH` at a draw value (`setupAt`).
+* `setupAt_tableJH`: `ZkHidden.setupOf_tableJH` at a sample value (`setupAt`).
 * `tableH_eq_zkTab`: a `DrawSetupZHJ`'s table is `zkTab` at its statement, at every layout and link layout (`Layout`
   is a `Prop`, and `Layout.model` is `stmtOf` at setupHidden's statement: `Integrate.model_eq` at its parse facts and
   default leaf, `Hidden.setupHidden_spec'`).
-* `setupZHJ_of_setupAt`: where `verify --zk` sets its session up at the draw `dj S`, `DrawOkZKHJ` holds and table `j`
+* `setupZHJ_of_setupAt`: where `verify --zk` sets its session up at the sample `dj S`, `DrawOkZKHJ` holds and table `j`
   passes the shape check and has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZHJ` at its statement.
 * `tableZHJ_eq_zkTabs`, `planZHJ_eq_tabsJ`: so the plan there is `tabsJ` of `zkTabs`, at every layout.
-* `drawOkZKHJ_empty`: at no drawn units, `DrawOkZKHJ` is the tables' link points (`setupTables_pointsAny`).
+* `drawOkZKHJ_empty`: at no sampled proof blocks, `DrawOkZKHJ` is the tables' link points (`setupTables_pointsAny`).
 * `opnAtZHJ_eq_opnD`: the old hidden-output openings at the plan are `opnD` where `verify --zk` sets the session up.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -48,8 +90,8 @@ theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {
   unfold DrawSetupZHJ.table DrawSetupZHJ.tabAt zkTab
   congr 1
 
-/-- **`verify --zk` sets table `j` up under its tags at its draw, under hidden outputs** (`ZkHidden.setupOf_tableJH`
-at the draw `d` itself): `setupTables` at `zkInputs I` has `nTab I` tables, table `j` setupHidden's statement under
+/-- **`verify --zk` sets table `j` up under its tags at its sample, under hidden outputs** (`ZkHidden.setupOf_tableJH`
+at the sample `d` itself): `setupTables` at `zkInputs I` has `nTab I` tables, table `j` setupHidden's statement under
 `tagsAt` at `drawJ`. -/
 theorem setupAt_tableJH {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {sts : Array Stmt}
     (hh : I.tags.hiddenOutputs = true) (hs : setupAt (ZkExec.zkInputs I) (some d) = .ok (spec, sts)) :
@@ -83,10 +125,10 @@ theorem setupAt_tableJH {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {
     rw [e1, hpart]
     exact hall j hj
 
-/-- **Hidden-output table `j` is set up where `verify --zk` sets its session up**: at the draw `dj S`, on untyped
+/-- **Hidden-output table `j` is set up where `verify --zk` sets its session up**: at the sample `dj S`, on untyped
 inputs whose circuit file `HmOut.parse` accepts, where `DrawOkZKHJ` holds, the tables pass the `--zk` shape check and
-table `j` has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZHJ` at its inputs, its draw's units of `S` and its
-draw, at its statement and schedule. -/
+table `j` has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZHJ` at its inputs, its sample's units of `S` and its
+sample, at its statement and schedule. -/
 theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
@@ -106,7 +148,7 @@ theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true)
     (sch := sch) (tPad := tPad) (by rw [hx]; exact hz)
   exact ⟨y, by rw [hyx, hx], hys, hyt⟩
 
-/-- **The hidden-output plan's table `j` is `zkTabs`'s** where `verify --zk` sets its session up at the draw `dj S`,
+/-- **The hidden-output plan's table `j` is `zkTabs`'s** where `verify --zk` sets its session up at the sample `dj S`,
 the tables pass the shape check and `DrawOkZKHJ` holds. -/
 theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -124,7 +166,7 @@ theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) 
   rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩), DrawSetupZHJ.table_eq _ y, zkTabs_of_lt h0 L hz hk hlay hj]
   exact tableH_eq_zkTab (Composed.typedJ ht j.val) y hyst (L j.val hj) (hz j.val hj) (hk j.val hj) (hlay j.val hj)
 
-/-- **The hidden-output plan is `tabsJ` of `zkTabs`** where `verify --zk` sets its session up at the draw `dj S`, the
+/-- **The hidden-output plan is `tabsJ` of `zkTabs`** where `verify --zk` sets its session up at the sample `dj S`, the
 tables pass the shape check and `DrawOkZKHJ` holds, at every registration: the setup has the plan's `nTab I` tables
 (`setupAt_tableJH`), each `zkTabs`'s. -/
 theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
@@ -143,7 +185,7 @@ theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (h
   simp only [planZHJ, tabsJ, List.get_eq_getElem, List.getElem_ofFn]
   exact tableZHJ_eq_zkTabs hh ht dj y₀ hs hshape hok h0 L hz hk hlay ⟨i, hi⟩ (by omega)
 
-/-- **`DrawOkZKHJ` at no drawn units** is the tables' link points, which are the session's (`setupTables_pointsAny`). -/
+/-- **`DrawOkZKHJ` at no sampled proof blocks** is the tables' link points, which are the session's (`setupTables_pointsAny`). -/
 theorem drawOkZKHJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) : DrawOkZKHJ I dj spec.mPts ∅ := by
@@ -155,7 +197,7 @@ theorem drawOkZKHJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) {n
   obtain rfl : st = sts[j.val] := Except.ok.inj (hst.symm.trans (hstJ j.val hj))
   exact hpts j.val hj
 
-/-- **The old hidden-output `--zk` openings are `opnD`** where `verify --zk` sets its session up at the draw `dj S`,
+/-- **The old hidden-output `--zk` openings are `opnD`** where `verify --zk` sets its session up at the sample `dj S`,
 at a plan of the session's number of tables: table `j`'s `setupHidden` statement is the session's
 (`setupAt_tableJH`). -/
 theorem opnAtZHJ_eq_opnD {I : Exec.Inputs} {n mPts : ℕ} {Reg : Type}

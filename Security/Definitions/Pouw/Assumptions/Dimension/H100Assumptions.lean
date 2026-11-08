@@ -1,4 +1,9 @@
-import Definitions.Pouw.Dimension.Defs
+module
+
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Rat.Init
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # `MH100`'s price table and the hypothesis `H32` (draft semantics)
@@ -41,6 +46,8 @@ quarter, of the `wgmma` rate per MAC.
   lanes. It restricts the adversary's cheap tensor-core instructions for the k8 lemma, and it is not needed where
   `H32` holds. Its witness is `FragLanesSat`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

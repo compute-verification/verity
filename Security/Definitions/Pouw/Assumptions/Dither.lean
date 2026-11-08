@@ -1,5 +1,7 @@
-import Definitions.Claims
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Claims
+public import Definitions.Pouw.Dither
 
 /-!
 # The no-fold Dither protocol's work-soundness: its named premises (trusted)
@@ -14,7 +16,7 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 * `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work, the one premise that prices outside
   machines;
 * `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
-  (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
+  (Flock sound and zero knowledge, live coins from the auditor's challenger);
 * `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
 
 `Definitions.Pouw.Guarantees.Dither.FleetSound` adds two on the challenger's coins across a fleet's replicas:
@@ -35,6 +37,10 @@ as zero noise), advice that holds the un-noised product answers the check for fr
 public best; it enters `κ` once a round.
 -/
 
+@[expose] public section
+
+open Claims renaming Ex → avg
+
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither
@@ -48,7 +54,7 @@ priced cost `pub a`, outside a set `Deg` of the round's dithers of probability a
 
 `pub a` is the public best matmul method's priced cost of the instance's words at the period's dual
 prices: no program computes the noised products' segment prefix sums (or all but a small fraction of the words the
-check could draw) more cheaply at `μ` than the best public method. Exchanged bits are priced by
+check could sample) more cheaply at `μ` than the best public method. Exchanged bits are priced by
 `OutsourceWithinEgress`, not here.
 
 **What the advice holds.** Anything computed before the round within (G1)'s memory, so `pub` must hold against that
@@ -76,8 +82,9 @@ structured), so the premise needs `η · pub ≤ π s (1 − p)`, `π` the sampl
 and `s` its checked cells. That is necessary only against small skipped fractions: for `s ≥ 2`,
 skipping the whole sampling block binds first. The sufficient condition is `η · pub ≤ π` (`Pouw.SakLb.rate_bern`),
 sharp at `−log(1 − π (1 − p^s))` (`rate_bern_sharp`, at `p = 0`: past `−log(1 − π)` a program that skips the block
-wins). On the served block, selected or not (`ditherSelected`), the premise follows from `Pouw.SakLb.SAKResidual` at
-that rate (`Pouw.SakLb.sakMatmul_of_residual_bern`). -/
+wins). On the round that checks on every coin the premise follows from `Pouw.SakLb.SAKResidual`
+(`Pouw.SakLb.sakMatmul_of_residual`); on the served block, selected or not (`ditherSelected`), no theorem derives it,
+and it is taken as stated. -/
 def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Inst) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
@@ -105,10 +112,10 @@ hashes part of the tree is caught where the check selects a cell outside that pa
 `pub w` is the pinned public implementation's priced cost of block `w`'s commitment at the period's dual prices, at
 every instance of `Reg w`.
 Under the random oracle it is the realization of `ShaRealize`: each oracle query costs at least the public
-implementation's, so the honest prover meets it with shortfall 0. The card model's θ floors (on `Open.sync`, `b1` and
-`madHi`) are what keep the model from hashing faster than the card. The premise is meant for models whose programs
-reach the oracle only through their calls (`Accel.OracleCalls` at the round's table): where a program reads the table
-as data it is false, and the headline says nothing. -/
+implementation's, so the honest prover meets it with shortfall 0. The card model has no hash op: its programs hash
+only through their priced calls, which is what keeps it from hashing faster than the card. The premise is meant for
+models whose programs reach the oracle only through their calls (`Accel.OracleCalls` at the round's table): where a
+program reads the table as data it is false, and the headline says nothing. -/
 def SAKSha (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
   G.G1 → G.G2 → G.G3 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),
@@ -138,10 +145,10 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
     G.Mc.eval f' i = G.Mc.eval f i ∧ G.ext f' i = 0 ∧ G.cost μ f' i ≤ G.cost μ f i + β * G.ext f i
 
 /-- `pouw-nofold-service` (proposed; `pouw-rs-staged-service`'s form, per prover, on a period of rounds). **The proof
-service's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
+system's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
 with probability `κ_S` over the oracle and the verifier's coins, for every prover: every block's committed instance is
-one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside C-Flock's zero-knowledge
-proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
+one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside Flock's zero-knowledge
+proofs (sound and zero knowledge), on live coins flipped by the auditor's challenger after each block's commitments
 (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code. It assumes nothing of the prover's algorithms. -/
 def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
@@ -160,7 +167,7 @@ def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (v
 
 /-- `pouw-own-dither` (proposed; the challenger on `trusted-host`). **Each
 replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,
-drawn fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
+flipped fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
 carries the uniform measure on `Ω` to the uniform measure on `Fin N → Fin k → Draw × Chk`). With each replica's own
 coins uniform, as `MomentSound`'s sample space has them, this makes the replicas' coins independent across the fleet.
 

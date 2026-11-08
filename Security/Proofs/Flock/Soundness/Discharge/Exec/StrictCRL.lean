@@ -1,6 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The salted compiled and knowledge terms under strict-time collision resistance
@@ -12,10 +15,12 @@ different rows, a collision of `H` (`op₀L_conflict_collision`, `opRL_conflict_
 * `table_sound_compiled_strictL`: the salted compiled theorem at its finders' budgets;
 * `ksBoundAccB_le_strictL`: a salted table's knowledge bound in a session is at most `StrictCR.ksStrict`;
 * `ksAvgBE_le_strictL`: the salted audit's knowledge term is at most `StrictCR.ksAvgStrict`, the same closed form as
-  the unsalted one: it reads only the plan, the law and the budgets.
+  the unsalted one: it reads only the plan, the sampling design and the budgets.
 
 The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -246,7 +251,7 @@ theorem ksBoundAccB_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkl
 end Session
 
 /-- **The knowledge term with the expected-time extractor, under `SHA512CRStrict`**: `ksAvgBEL` is at most `ksAvgStrict`
-at a prover each of whose tables' finders, after each draw, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
+at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
 (`TableCRL`). -/
 theorem ksAvgBE_le_strictL {n : ℕ} {Reg D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
     {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.Law n} (k : ℕ) {qF qS : ℝ} (R : Reg)

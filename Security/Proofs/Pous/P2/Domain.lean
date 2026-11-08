@@ -1,10 +1,35 @@
-import Proofs.Pous.P2.Rows
+module
+
+public import Proofs.Pous.P2.Rows
+public import Proofs.Pous.P2.Count
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iTimed
+import Proofs.Pous.TrackA.A3Prime
 
 /-!
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
 
 P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The abstract model `Pous.m1p B w p b`
-(`Security/Definitions/Pous/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on
+(`Security/Definitions/Pous/Model/M1p.lean`) samples `B` independent uniform permutations of `Fin p`; they act on
 `w`-bit strings through the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits,
 zero-extended to `w` bits. These are theorems about `m1p` at P2's parameters, not about the concrete P2's
 square–mask–square maps. This file proves, with no hypothesis beyond what the rows discharge:
@@ -35,6 +60,8 @@ The generic count (`PousGen`) is `Security/Proofs/Pous/P2/Count.lean`, the certi
 plumbing (`PousP2`, up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
 A3′ is `PousTrackA.a3_prime_lam`. This module's own part is `PousP2p`.
 -/
+
+@[expose] public section
 
 /-! ## M1 on P2's exact domain `[0, p)`: `Pous.m1p` -/
 

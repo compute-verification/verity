@@ -1,10 +1,12 @@
-import PouwWindow.Lanes
-import Flock.Registered
+module
+
+public import PouwWindow.Lanes
+public import Flock.Registered
 
 /-!
-# A drawn H1 leaf's registered data ports
+# A sampled H1 leaf's registered data ports
 
-The ports of the verifier's own `--registered` file (`Flock.Registered.Port`) that a drawn leaf's statement reads at a
+The ports of the verifier's own `--registered` file (`Flock.Registered.Port`) that a sampled leaf's statement reads at a
 registered value's row (`Source.read`): `leaf_lanes.registered_file` at `leaf_lanes.reads`, whose rows
 `tests/test_lanes.py` holds `lanePorts`' and `combinePorts`' sources to. Each value is placed in one registered table,
 the same in all 33 statements (`place v`, the table and its base row; `roots` of the table: its registered root, leaf
@@ -19,11 +21,13 @@ count, row width, domain and schema), read at the layout's row from that base:
   several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
 * `checkOwn want own`: the leaf verifier's check that a statement's parsed `--registered` file (`own`) holds the ports
   `want` (`ownOf` at the roots it takes from the accepted registration, round log and produced record and the
-  placement it takes from the window descriptor, `PouwWindow.Lanes.want?`),
+  placement it takes from the execution phase descriptor, `PouwWindow.Lanes.want?`),
   each the file's first port of its name (`checkOwn_ok`), which `pouw-leaf-own` runs on every statement's file;
 * `checkOneRead own`: the leaf verifier's check that every port of the file, data or known, has one read
   (`checkOneRead_ok`), a statement being one unit, which `pouw-leaf-own` runs too.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 

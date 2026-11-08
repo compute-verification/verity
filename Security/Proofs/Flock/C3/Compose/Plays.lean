@@ -1,5 +1,19 @@
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.Soundness.Refine.LiveSim
+module
+
+public import Proofs.Flock.C3.Compose.Honest
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A stage's decode is its play
@@ -8,6 +22,8 @@ A game plays on at most one prefix of a tape, to one output (`playsT_prefix`), s
 prefix of is that play (`stageOf_of_playsT`). The read facts' dischargers (`hSparse_of_read`, `hRegLevels_of_read`)
 decode their stages through it.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

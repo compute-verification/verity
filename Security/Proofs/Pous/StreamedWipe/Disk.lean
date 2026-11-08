@@ -1,4 +1,10 @@
-import Definitions.Pous.Guarantees.StreamedWipeDisk
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipeDisk
+public import Definitions.Pous.Model.StreamedWipeDisk
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.StreamedWipe.Server
 import Proofs.Pous.StreamedWipe.Witnesses
 
@@ -10,6 +16,8 @@ import Proofs.Pous.StreamedWipe.Witnesses
 honest and nontrivial lemmas are at the session on the deployed H200's card (`StreamedWipe.h200`) and its disks as
 measured (`StreamedWipe.h200Disks`), in the pattern of `Security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

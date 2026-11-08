@@ -1,4 +1,22 @@
-import Proofs.Flock.Recursive.Registrants
+module
+
+public import Proofs.Flock.Recursive.Flock
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # Recursion: a session's registered read off the table's leaf, priced by a finder of the recursive audit
@@ -17,6 +35,8 @@ which reads every session's outcome at one history, the pair is a history's, so 
   public file's digest (`FlockC3.RegLevels.regLeaf_inl`) and the path the public file header's (`regPathsHJ`), so an
   honest budget counts the audit run and, at each registered read, the two openings' recomputation.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

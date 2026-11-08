@@ -1,4 +1,24 @@
-import Proofs.Flock.Recursive.HoloExec
+module
+
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # Piece (a), R's opening count: the registered opening is sound at unique decoding
@@ -15,6 +35,8 @@ message within `udRadius` of `w` (`card_closeL_ud_le`), the folds' MCA events st
 queries catch a fold `udRadius`-far from it at a cost of `udQueryError` (`udQueryError_eq`). Every later level is
 `ligerito_sound`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

@@ -1,4 +1,8 @@
-import Proofs.Properties.Pous.WipeSigned.Tree
+module
+
+public import Proofs.Properties.Pous.WipeSigned.Tree
+import all Init.Data.String.Defs
+import Mathlib.Basic.ENNReal.Real
 import Proofs.Properties.Pous.MemoryChallenger.Inputs
 
 /-!
@@ -8,6 +12,8 @@ The wipe's `message` and `recordsRoot` unfolded to the SHA-512 inputs they hash 
 session input split back into its header and records root (`session_split`), a batch's value into its batch
 (`value_inj`, `batches_inj`), and the wipe's session input told apart from PoUS's by their tags (`tags_differ`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.WipeInputs
 

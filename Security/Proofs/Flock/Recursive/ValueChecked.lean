@@ -1,5 +1,25 @@
-import Proofs.Flock.Recursive.ValueInner
-import Proofs.Flock.C3.PubRows.Shape
+module
+
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.ValueFinder
+import Proofs.Flock.Recursive.ValueSource
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 /-!
 # The value tie at a statement check 5 accepted
@@ -14,9 +34,11 @@ from `RecCoins.check` at a statement of session `j`'s circuit, at each unit wher
   `innerRows_dirs`);
 * `value_tie_residuals`: a `rec-residuals` unit's `v` (`residualsCheck_of_check`, `residuals_of_check`, `innerRows_v`);
 * `value_tie_sparse`: a `rec-sparse` unit's `v` (`sparseCheck_of_check`, `sparse_of_check`, `innerRows_sparse`);
-* `coins_of_session`: where a session accepts and its record draws, the statement setting up a drawn unit's part has
+* `coins_of_session`: where a session accepts and its record samples, the statement setting up a sampled proof block's part has
   the session's circuit and passes check 5 (`FlockC3.PubRows.stmt_of_session`'s argument, at `RecCoins.check`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -218,8 +240,8 @@ open FlockSoundness.Discharge.ZkReg FlockSoundness.Discharge.ZkExec FlockSoundne
 open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
-/-- **A session's statement check 5 accepted**: where the session accepts and its record draws, the statement setting
-up a drawn unit's part has the session's circuit and passes `RecCoins.check`, as `ChecksC3` runs it. -/
+/-- **A session's statement check 5 accepted**: where the session accepts and its record samples, the statement setting
+up a sampled proof block's part has the session's circuit and passes `RecCoins.check`, as `ChecksC3` runs it. -/
 theorem coins_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {coins : Option Flock.RecCoins.Source}

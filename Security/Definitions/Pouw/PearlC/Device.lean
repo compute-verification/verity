@@ -1,9 +1,10 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Accum
-import Definitions.Pouw.PearlC.PeelExactP
-import Definitions.Pouw.PearlC.SkipP
-import Definitions.Pouw.PearlC.FormingPDefs
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.PearlC.PeelExactP
+public import Definitions.Pouw.PearlC.SkipP
+public import Definitions.Pouw.PearlC.FormingPDefs
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
 # Pearl-C at a device record (trusted)
@@ -18,17 +19,19 @@ are H100 W1 prices. A device record makes each of them a parameter, as the schem
 - `pearlCProtocolDev` and `pearlCTilesDev`: the named protocol and its audit tiles at a device record. The domain rules
   (`PearlCSem.OperandOK`) are E4M3's, and `sem` still carries the noise, the forming chain and the scales.
 - `devH100`: today's H100 record. `pearlCProtocolDev devH100 = pearlCProtocol · Costs.adopted`
-  (`pearlCProtocolDev_h100`, `DeviceGamma.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
+  (`pearlCProtocolDev_h100`, `DeviceGap.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
 
 - `devAt p G pr`: the record at any captured FP8 step `p` (a `Pipeline`), from the FP8 lane's twins: `Accum.chainAt`,
   `PeelExactP.peelExactValP`, `SkipP.unitFlagsAt` and `FormingP.saltDeadP`. At `hopperE4m3K32`, 4 and `Prices.h100` it
-  is `devH100` (`devAt_hopper`, `DeviceGamma.lean`).
+  is `devH100` (`devAt_hopper`, `DeviceGap.lean`).
 - `devSm120v1 pr`: `pearl-c-sm120` v1, the RTX PRO 6000's E4M3 step `⟨[32], 26, −133⟩` (`sm120E4m3`) promoted every 4
   atoms, at prices `pr`. Its named assumption takes `sem.fc = FormingP.atomMixP sm120E4m3`, the sm_120 atom-mix.
 - `devSm120v2 pr`: `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its flags are `SkipP.unitFlagsAt`'s
   at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not `SkipP.unitFlagsP · 0`, which would judge one group
   over all of k.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -109,7 +112,7 @@ noncomputable def PearlCSem.unitUsefulDev (sem : PearlCSem Q R S) (d : PearlCDev
     (u : ℕ) (act : Codes) : Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
   let be := fun (β : ℚ) (e : Fin Params.pi.r → Code) (p : Fin 32) => codeBf16 (lineCodes β e p)
@@ -132,7 +135,7 @@ noncomputable def pearlCProtocolDev (d : PearlCDevice) (sem : PearlCSem Q R S) (
   ticket := fun H s U u act => atNat (d.ticket (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUsefulDev d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
+  fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act => debitDev d (sem.unitDebitDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)
@@ -143,9 +146,9 @@ kernel tiles and, when the record promotes, of promotion groups, and `k ≤ 2^16
 condition is void: read as `32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is
 `pearlCDomain Params.pi` with `n`'s floor (`pearlCDomainDev_h100`).
 
-The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `εPearlC` allows. The binding
+The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `δPearlC` allows. The binding
 attack is partial guessing: compute most of a unit's words and guess the rest. Under W1 a winning strategy must save the
-unit's `n·c` (the weight-side forming and `B̃·F_A`, online and uncredited) plus `γ₀` of its credit, and the cheapest
+unit's `n·c` (the weight-side forming and `B̃·F_A`, online and uncredited) plus `g₀` of its credit, and the cheapest
 such saving guesses about 96% of one row: 124 words at `n = 64` on the H100 (123 on sm_120), about 995 at `n = 512`.
 Each guessed word then needs only about 1.04 bits of salt-dependent min-entropy at `n = 64`, and about 0.13 at
 `n = 512`, which TT_OUT already assumes. `64 ∣ n` matters as much as `64 ≤ n`: a `1 × (n mod 64)` edge tile is guessed

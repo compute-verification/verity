@@ -1,12 +1,61 @@
-import Proofs.Flock.Claims.KS.PlainLeafDecJK
-import Proofs.Flock.Claims.KS.PlainClash0K
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0
+public import Proofs.Flock.Claims.KS.PlainDrawAccJK
+public import Proofs.Flock.Claims.KS.PlainLeafDecJK
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.PlainDrawDecJK
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# The level-0 clash's draw half at the parsed record
+# The level-0 clash's sample half at the parsed record
 
 `PlainClash0`'s and `PlainClash0K`'s `keep` lemmas at `wrPDJK` (`EntriesClashJK`, `plain_clash₀AtJK`,
 `plain_clash₀HAtJK`), on `PlainDrawAccJK`'s acceptance lemmas.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -35,7 +84,7 @@ def EntriesClashJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : Tran
 
 open DecodeZL Integrate in
 /-- **A level-0 self-clash at the deployed plain decoders is a clash of the reps' entries**, at one table: where
-`verify` at `keep` accepts a transcript `t` recording `o` at the setup at the draw `dj S` (`hrl`), two pendings the
+`verify` at `keep` accepts a transcript `t` recording `o` at the setup at the sample `dj S` (`hrl`), two pendings the
 reps' decoded tapes play to (`hp`), whose output at `o`'s cap and openings has two openings of one position to different
 columns verifying at level 0 (`hcl`), give two of the reps' `plainRepColsOf` entries at the setup's table, its `fast100`
 schedule and `t`'s proof files at one position with different columns. -/
@@ -301,8 +350,8 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw**: `clash₀_wrK_ofJ` at the statement's
-draw `d` and no drawn unit, as `plain_hdecAtK_ofJ` is `decodesTable_wrK_sc_ofJ` there. -/
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `clash₀_wrK_ofJ` at the statement's
+sample `d` and no sampled proof block, as `plain_hdecAtK_ofJ` is `decodesTable_wrK_sc_ofJ` there. -/
 theorem plain_clash₀AtK_ofJ (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -345,8 +394,8 @@ theorem plain_clash₀AtK_ofJ (keep : Bool → Bool)
   · exact hp
   · exact hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under a leaf form
-`F`**: `clash₀_wrKHLf_ofJ` at the statement's draw `d` and no drawn unit. -/
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under a leaf form
+`F`**: `clash₀_wrKHLf_ofJ` at the statement's sample `d` and no sampled proof block. -/
 theorem plain_clash₀HLfAtK_ofJ (keep : Bool → Bool) (F : AtDraw.LeafFormJ)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -390,8 +439,8 @@ theorem plain_clash₀HLfAtK_ofJ (keep : Bool → Bool) (F : AtDraw.LeafFormJ)
   · exact hp
   · exact hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
-`clash₀_wrKH_ofJ` at the statement's draw `d` and no drawn unit, as `plain_hdecHAtK_ofJ` is `decodesTable_wrK_scH_ofJ`
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
+`clash₀_wrKH_ofJ` at the statement's sample `d` and no sampled proof block, as `plain_hdecHAtK_ofJ` is `decodesTable_wrK_scH_ofJ`
 there; `plain_clash₀HLfAtK_ofJ` at `hm96`. -/
 theorem plain_clash₀HAtK_ofJ (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -476,7 +525,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw**: `plain_clash₀AtK_ofJ` at what
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `plain_clash₀AtK_ofJ` at what
 `wrPDJK keep` writes for `o` (`plain_clash₀At`). -/
 theorem plain_clash₀AtJK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -497,7 +546,7 @@ theorem plain_clash₀AtJK (keep : Bool → Bool)
   plain_clash₀AtK_ofJ keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o (recordsLiveAtDJK_wrPDJK keep _ d o)
     hacc pend' hp hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
 `plain_clash₀HAtK_ofJ` at what `wrPDJK keep` writes for `o` (`plain_clash₀HAt`). -/
 theorem plain_clash₀HAtJK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)

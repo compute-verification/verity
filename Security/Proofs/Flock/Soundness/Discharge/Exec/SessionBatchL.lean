@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
-import Proofs.Flock.Soundness.SessionBatch
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Several salted tables in one batched session
@@ -9,6 +13,8 @@ with table `j` at position `j` (`sessAfterB_gamesBL`), so `session_knowledge_sou
 `joint_le_BL'` (`Pr[the session accepts] · failProbBL ≤ ksBoundBL`) and the audit's `cover`
 (`one_le_fail_add_BL`, `one_le_fail_add_BL'`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -1,4 +1,8 @@
-import Proofs.Nci.FitSlotsWitness
+module
+
+public import Proofs.Nci.FitSlotsWitness
+public import Definitions.Nci.Assumptions.Threads
+import Mathlib.Data.NNRat.Floor
 import Proofs.Nci.Threads
 
 /-!
@@ -14,6 +18,8 @@ At `b_w = 4`, `b_a = 1`, `WeightsIncompressible` charges it `2 · 4 + 2 = 10 > 6
 over all 64 subsets of the computed gates (`weightsIncompressibleSlots`). The circuit is `(1, 0)`-threaded (`threaded`),
 so `ThreadedReadsSlots` applies here (`reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.WeightsSlotsWitness
 

@@ -1,5 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
-import Flock.Firewall.Frame
+module
+
+public import Flock.Firewall.Frame
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # The frame's round over a round's frames
@@ -20,6 +43,8 @@ loop on those bytes:
   `absorb1` over the values its body holds (`observe_loop`), read through the frame's own byte reads (`header_at`,
   `body_at`, `word_lo`, `word_hi`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

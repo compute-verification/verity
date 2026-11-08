@@ -1,9 +1,13 @@
-import Definitions.Pouw.NCP.Relation
-import Proofs.Pouw.NCP.WordProofs
+module
+
+public import Definitions.Pouw.NCP.Relation
+public import Proofs.Pouw.NCP.WordProofs
 
 /-!
 # The reduction, FinalOnly for NCP, and the floor without FinalOnly
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RelationProofs
 
@@ -178,38 +182,6 @@ theorem ck_expand (k : ℕ) (E F R : Mat) (hE : ∀ i l, k ≤ l → E i l = 0) 
   refine sum_congr rfl fun a _ => sum_congr rfl fun l _ => ?_
   ring
 
-theorem checked_decomp {k m n N : ℕ} (R : Mat) (ω : Noise N m n k) (u : ℕ) (hmn : 0 < m * n) (q : ℕ) :
-    checked k m n N R (fun _ => 0) (fun _ => 0) ω u q =
-      ∑ t ∈ range (m * n) ×ˢ (range k ×ˢ range k),
-        e1Of ω u (t.1 / n) t.2.1 * f1Of ω t.2.2 (t.1 % n) * coefAt k m n R q t.1 t.2.1 t.2.2 := by
-  have hE : ∀ i l, k ≤ l → e1Of ω u i l = 0 := fun i l hl => by
-    simp only [e1Of]; rw [dif_neg]; omega
-  have hF : ∀ l j, k ≤ l → f1Of ω l j = 0 := fun l j hl => by
-    simp only [f1Of]; rw [dif_neg]; omega
-  rw [Finset.sum_product (range (m * n)) (range k ×ˢ range k), Finset.sum_eq_single (q % (m * n))]
-  · simp only [checked, ck_expand k _ _ R hE hF, sum_product, coefAt, if_true]
-  · intro e _ he
-    simp [coefAt, Ne.symm he]
-  · intro h
-    exact absurd (mem_range.2 (Nat.mod_lt q hmn)) h
-
-theorem target_sum (r : Word.Rule) {ι : Type} (s : Finset ι) (c : ι → ℤ) (x : ι → ℕ → ℤ) :
-    r.target (fun q => ∑ t ∈ s, c t * x t q) =
-      ∑ t ∈ s, c t * (r.target (x t) - r.target (fun _ => 0)) + r.target (fun _ => 0) := by
-  cases r <;> simp [Word.Rule.target, mul_sum, sum_add_distrib] <;> (try ring_nf) <;>
-    simp only [mul_left_comm, mul_comm, sum_add_distrib]
-
-theorem reductionIf : ReductionIf := by
-  intro k m n N R u p r hmn hrel h0 ω
-  have hfun : checked k m n N R (fun _ => 0) (fun _ => 0) ω u = fun q =>
-      ∑ t ∈ range (m * n) ×ˢ (range k ×ˢ range k),
-        e1Of ω u (t.1 / n) t.2.1 * f1Of ω t.2.2 (t.1 % n) * coefAt k m n R q t.1 t.2.1 t.2.2 :=
-    funext (checked_decomp R ω u hmn)
-  rw [hfun, target_sum, h0, add_zero]
-  refine sum_congr rfl fun t ht => ?_
-  simp only [mem_product, mem_range] at ht
-  rw [hrel t.1 ht.1 t.2.1 ht.2.1 t.2.2 ht.2.2, h0]
-
 theorem div_lt_of_mod_eq {x p c : ℕ} (h : x < p) (hm : x % c = p % c) : x / c < p / c := by
   by_contra hc
   have h1 := Nat.div_add_mod x c
@@ -303,12 +275,12 @@ theorem ncpFinalOnly : NCPFinalOnly := by
     rw [← Nat.div_add_mod p (m * n), ← Nat.div_add_mod p' (m * n), e1, e2, h]
 
 theorem ncpWordFloor : NCPWordFloor := by
-  intro k m n N R A B adv γ₀ h16 hRF hγ0 hγ1 hV hNz
-  refine (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (checked k m n N R A B) N adv γ₀
-    hγ0 hγ1 hV hNz).trans ?_
-  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * ((fun _ => positions k m n) u : ℕ) -
+  intro k m n N R A B adv g₀ h16 hRF hg0 hg1 hV hNz
+  refine (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (checked k m n N R A B) N adv g₀
+    hg0 hg1 hV hNz).trans ?_
+  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * ((fun _ => positions k m n) u : ℕ) -
         Word.identCount (fun _ => positions k m n) (checked k m n N R A B) adv u))
-      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
+      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
         apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
         have h1 : (Word.identCount (fun _ => positions k m n) (checked k m n N R A B) adv u : ℝ) ≤ (m * n : ℕ) := by
           exact_mod_cast ncpFinalOnly k m n N R A B adv h16 hRF hV u (mem_range.1 hu)
@@ -316,7 +288,7 @@ theorem ncpWordFloor : NCPWordFloor := by
         simp only [positions]
         push_cast at h1 ⊢
         nlinarith
-    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := by
+    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := by
         rw [sum_const, card_range, nsmul_eq_mul]
 
 end Pouw.NCP.RelationProofs

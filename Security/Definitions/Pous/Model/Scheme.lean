@@ -1,5 +1,7 @@
-import Mathlib.Data.Rat.Defs
-import Definitions.Pous.Game.Oracle
+module
+
+public import Mathlib.Data.Rat.Defs
+public import Definitions.Pous.Game.Oracle
 
 /-!
 # Encoding schemes
@@ -10,6 +12,8 @@ it, as a trapdoor would let it), and its coins are erased after encoding. The de
 through queries and never sees the coins. There is no verifier key: responses are checked against the true blocks
 (`Model/Audit.lean`), which idealizes the per-block tags.
 -/
+
+@[expose] public section
 
 namespace Pous
 
@@ -22,7 +26,7 @@ structure Scheme (M : IdealModel) : Type 1 where
   B : ℕ
   ℓ : ℕ
   B_pos : 0 < B
-  /-- The encoder's coins, drawn uniformly and erased after encoding. -/
+  /-- The encoder's coins, flipped uniformly and erased after encoding. -/
   Coins : Type
   [fintypeCoins : Fintype Coins]
   [nonemptyCoins : Nonempty Coins]

@@ -1,5 +1,9 @@
-import Definitions.Pouw.PearlC.TileCircuit
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.Fp4
+public import Definitions.Pouw.PearlC.TileCircuit
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
 
 /-!
 # Pearl-C4's tile unit as a core circuit (definitions only)
@@ -17,13 +21,15 @@ import Definitions.Pouw.PearlC.DeviceFp4
     64 code pairs and 4 scale bytes per operand, with no promotion. The last is `C̃_ij` (`c4Gate`);
   * **U**: four `HopperBF16WgmmaDot16_v1` steps (`TileCircuit.peelF`) from `C̃_ij` over the slices of `P_A,i` and
     `P_B,j`, as in `pc8`. The last is `U_ij` (`u4Gate`).
-* **One proof unit** (`Spec.part`) holds every computed gate.
+* **One proof block** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
 templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The trusted part is as in `TileCircuit`: the
 order of a gate's reads and each primitive's semantics, here `nvf4Word` for the FP4 step (the primitive's three rules,
 with `Fp4Atom.step sm120Nvf4` on a finite accumulator and valid scale bytes).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

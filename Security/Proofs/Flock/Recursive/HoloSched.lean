@@ -1,4 +1,6 @@
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
 
 /-!
 # Candidate 3's inner schedule, and where its transcript holds each fixed value
@@ -8,7 +10,7 @@ which the guarantee's record map (`holoMap`, `Recursive/HoloMap.lean`) reads:
 * a rep's rounds with hidden unit circuits (`holoRounds`, `rec_live.holo_rounds`), a rep's sparse phase's
   (`sparseRounds`, `rec_live.sparse_rounds`) and R's (`RecVStar.stackedRounds`), and the session's streams in
   `schedule_for`'s order (`holoStreams`);
-* a stream's message rounds (`msgRounds`), the rounds that draw coins (`coinRounds`), and the tops it commits
+* a stream's message rounds (`msgRounds`), the rounds that flip coins (`coinRounds`), and the tops it commits
   (`topRounds`);
 * the stream and round at which the inner transcript holds row `x` of each value `RecVStar.fixedRow` names
   (`valueRound`): `rec-c<i>` at rep `x`'s `i`-th message round, `rec-opening-c<i>` at R's stream's `i`-th (row 0),
@@ -18,6 +20,8 @@ which the guarantee's record map (`holoMap`, `Recursive/HoloMap.lean`) reads:
 A round's `SchedRound` is `rec_live`'s tuple with its absorbed elements read as whether it absorbs a message, as
 `RecVStar.repRounds` has it.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -36,7 +40,7 @@ def holoRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
   if out[k]? != some ((1, #[], 0, true) : SchedRound) then none
   return out.extract 0 k ++ #[((0, #[], 0, true) : SchedRound), (1, #[], 0, true)] ++ out.extract (k + 1) out.size
 
-/-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s draws: ζ_c, H2's rounds, v2's (no
+/-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s samples: ζ_c, H2's rounds, v2's (no
 coins), H3's, u's (ζ_p), at T > 1 vt's (ρ_t), and last the registered claim's (no coins). Each absorbs one message but
 ζ_c's. -/
 def sparseRounds (sh : RecSparse.Shape) : Array SchedRound :=
@@ -77,7 +81,7 @@ inner transcript records. -/
 def msgRounds (rs : Array SchedRound) : List Nat :=
   (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
 
-/-- The rounds of `rs` that draw coins, in order. -/
+/-- The rounds of `rs` that flip coins, in order. -/
 def coinRounds (rs : Array SchedRound) : List Nat :=
   (List.range rs.size).filter fun k => 0 < (rs.getD k default).1
 

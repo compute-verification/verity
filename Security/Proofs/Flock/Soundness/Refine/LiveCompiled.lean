@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
 
 /-!
 # The transfer for the compiled table
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.Refine.LiveSim
 live run goes on the model can still play. `allInh_repC` proves it for the compiled reps, from `AllInh` of each game
 they are built from. `live_le_tableC` is then the transfer for `tableC` itself: its one hypothesis is `Decodes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
@@ -79,19 +83,6 @@ theorem allInh_lincheckRounds [Field F] [Fintype F] : ∀ (n : ℕ) (claim : F),
         | split
         | dsimp only)
       all_goals exact allInh_lincheckRounds n _
-
-theorem allInh_lincheck [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : AllInh (lincheck A S zc) := by
-  unfold lincheck
-  repeat' (first
-    | exact AllInh.ret _
-    | exact AllInh.pure' _
-    | exact AllInh.recv' _
-    | exact AllInh.draw' _
-    | refine AllInh.bind' ?_ fun _ => ?_
-    | intro _
-    | split
-    | dsimp only)
-  all_goals exact allInh_lincheckRounds _ _
 
 theorem allInh_opening [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
     AllInh (opening A hm claims) := by

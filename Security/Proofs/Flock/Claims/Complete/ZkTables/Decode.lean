@@ -1,7 +1,49 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Names
-import Proofs.Flock.Claims.Complete.Zk.Json.Decode
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+public import Proofs.Flock.Claims.Complete.ZkTables.Names
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Hex
+import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import Proofs.Flock.Claims.Complete.Json.Spec
+import Proofs.Flock.Claims.JsonNorm
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest masked record decodes and reads live, at any number of tables
@@ -10,8 +52,10 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 `root_B` per table is printable (`good_recordObjZkJ`); a printable object with the plain record's fields decodes as
 `sessOf` (`decodeZk_ofFieldsJ`: S5 reads each table's `root_B` under its name, and S11/S13 find each rep stream under
 its name, `find?_name`), and `liveOf` reads it (`liveZk_ofFieldsJ`); so the masked record decodes
-(`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the draw (`recordDraw_recordObjZkJ`).
+(`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the sample (`recordDraw_recordObjZkJ`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -34,7 +78,7 @@ theorem good_linkObjJ {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (h : 
   obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
   exact good_arr_str _
 
-/-- **The masked record is printable** at any number of tables, named distinctly, when the statement's draw is. -/
+/-- **The masked record is printable** at any number of tables, named distinctly, when the statement's sample is. -/
 theorem good_recordObjZkJ {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (h : ByteArray → ByteArray)
     (hz : String) (ct : CoinTree.Spec) {rootB : Array ByteArray} (hs : rootB.size = spec.tables.size)
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
@@ -384,7 +428,7 @@ theorem liveZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
     exact hr]
   rfl
 
-/-- **A printable object with the honest record's fields carries the statement's draw**, up to key order, at any root
+/-- **A printable object with the honest record's fields carries the statement's sample**, up to key order, at any root
 `B`s, as `recordDrawZk_ofFields`. -/
 theorem recordDrawZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hdraw : DrawOk spec) (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
@@ -453,7 +497,7 @@ theorem live_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
   liveZk_ofFieldsJ (h := h) (spec := specZ spec hz) hn hrbs hss proofs
     (good_recordObjZkJ hn h hz ct hrbs points streams proofs hd) fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
-/-- **The honest masked record's draw is the statement's**, up to key order (`JsonEquiv`), at any number of tables
+/-- **The honest masked record's sample is the statement's**, up to key order (`JsonEquiv`), at any number of tables
 named distinctly. -/
 theorem recordDraw_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hn : spec.tables.toList.Nodup) (hdraw : DrawOk spec) (hz : String) (ct : CoinTree.Spec)

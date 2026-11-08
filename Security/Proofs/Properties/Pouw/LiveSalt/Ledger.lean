@@ -1,6 +1,10 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.Pouw.LiveSalt
-import Std.Tactic.Do
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.Pouw.LiveSalt
+public import Std.Tactic.Do
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`
@@ -21,6 +25,10 @@ holds of the whole ledger (`verifyLedger_inv`).
 The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
 it back at an `.ok` result.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 set_option mvcgen.warning false
 
@@ -108,6 +116,8 @@ theorem ledgerMessage_spec (I : ByteArray) (m : Json) : ⦃⌜True⌝⦄ ledgerM
 
 theorem join_spec (ps : Array MonitoringPeriod) (cur : Array (String × String)) (i : Nat) (lane s : String) :
     ⦃⌜True⌝⦄ join ps cur i lane s ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+theorem verifyDays_spec (es : Array LedgerEntry) : ⦃⌜True⌝⦄ verifyDays es ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem inv_nil : LedgerInv [] #[] false where
   seq := by simp
@@ -357,7 +367,7 @@ theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Arr
   · have hr : r.1 = s.1 := by
       refine of_triple (Q := fun r => r.1 = s.1) ?_ h
       clear hI hs h
-      mvcgen [-Spec.throw_Except, throw_spec]
+      mvcgen [-Spec.throw_Except, throw_spec, verifyDays_spec]
     rw [hr]; exact ⟨_, hI⟩
   · intro pre e s t hI hb
     obtain ⟨wins, leaves, records, periods, current, reserves, prev, last, v2, twoStep⟩ := s
@@ -498,7 +508,7 @@ theorem nat_nonnull {j : Json} {n : Nat} (h : SampledProofs.nat? j = some n) : j
 theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j = .str s := by
   cases j <;> first | (subst h; rfl) | exact absurd h.symm hs
 
-theorem getD_root (x : Json) : SampledProofs.getD (Json.mkObj [("root", x)]) "root" = x := rfl
+theorem getD_root (x : Json) : SampledProofs.getD (Json.mkObj [("root", x)]) "root" = x := (rfl)
 
 theorem idx_session {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : LedgerInv pre wins v2)
     {i j : Nat} (hi : i < wins.size) (hj : j < wins.size)

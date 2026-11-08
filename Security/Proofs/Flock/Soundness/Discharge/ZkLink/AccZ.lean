@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.BadZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.ChooseZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.BadZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.ChooseZ
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Lock
 
 /-!
 # A cap's openings on accepting runs
@@ -16,6 +21,8 @@ read the chooser (`forkE_lockSessZ_choose`):
 * `ind_capAcc_eq`: on runs where tables `0, …, n` accept, a cap's filtered event is its plain one at table `n`;
 * `forkE_capAcc_le`: a cap's filtered fork event is at most its plain one.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

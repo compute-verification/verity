@@ -1,6 +1,9 @@
-import PousCheck.RunProtocol
-import MemoryChallenger.WipeProtocol
-import Properties.Pous.EndToEndAt
+module
+
+public import PousCheck.RunProtocol
+public import MemoryChallenger.WipeProtocol
+public import Properties.Pous.EndToEndAt
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS and the wipe as components: what their compiled checks' acceptance gives the guarantees
@@ -8,7 +11,7 @@ import Properties.Pous.EndToEndAt
 `Pous.Period.PeriodHeldAt` bounds the probability that the verifier's whole decision at a point `pt`
 (`Pous.EndToEnd.AcceptedAt`, read by `AuditsOf.Accepts`) accepts a period with no break while the node held too few
 bit-ticks, over an audit whose verifier's keys and session id are fixed and whose setup commitment, `C*`, setup outputs
-and table are functions of the coins drawn before the memory challenger's (`AuditsOf`). Onsite's verifier of record
+and table are functions of the coins flipped before the memory challenger's (`AuditsOf`). Onsite's verifier
 runs `PousCheck.RunProtocol.protocol` on bytes instead: the one theorem's leg for PoUS turns that protocol's acceptance
 into `AcceptedAt` on fields of that kind.
 Each statement below is one step of it, about one function of the code, in the shape of the code's properties.
@@ -42,6 +45,8 @@ the compiled check's type: at the compiled check each is its guarantee (`Iff.rfl
 everything (`AcceptsAll`) each is false, which is each guarantee's nontrivial lemma. The digests have none: they are
 equations about the code's digest, and no check takes part in them.
 -/
+
+@[expose] public section
 
 open MemoryChallenger MemoryChallenger.Properties
 open PousCheck PousCheck.Properties

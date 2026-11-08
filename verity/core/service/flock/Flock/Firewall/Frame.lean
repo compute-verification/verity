@@ -1,10 +1,10 @@
 /-
 # The outer frame (live PROTOCOL.md §10.1): a masked rep's randomness, its refusals, and what leaves
 
-The outer firewall's release function, with the rep's prover randomness and its two refusals. At the rep's start the frame
-draws from the operating system's bytes (`IO.getRandomBytes`) everything the rep's hiding rests on (`Draws`): the pads `h`
+The outer ZK server's release function, with the rep's prover randomness and its two refusals. At the rep's start the frame
+samples from the operating system's bytes (`IO.getRandomBytes`) everything the rep's hiding rests on (`Draws`): the pads `h`
 (with `h_ab = h_a h_b` and the triple's `w = x y`), the dot-product mask `μ`, each inner row's padding, `τ`'s salt and the
-pads tree's leaf salts, and it commits them itself (`padsRoot`, the tree the inner proof opens). The draws never leave the
+pads tree's leaf salts, and it commits them itself (`padsRoot`, the tree the inner proof opens). The samples never leave the
 frame: the prover gets their root alone, and the frame masks with them.
 
 `round` takes one device round as the device frames it (transcript-v2, its values unmasked, ending in its squeeze) and the
@@ -20,13 +20,13 @@ round it released): a zerocheck outer coin `r_j = 1`; at the opening's label, a 
 points of the table's reps so far (`prior`'s, then this rep's, each from its coins: `claimPoints`) have less than full rank
 (`maskRank`); level 0's `ρ_0, ρ_1` dependent over F128 (`Zk.rhoIndependent`, the coins after its last masked value); and
 `β = 0` in the inner proof (its third round's coin, counted from `Zk.LABEL_INNER`). Each is a stop the public coins decide
-(`STOP`): nothing of the round leaves. The inner proof is the firewall's own, and its rounds leave through the frame
-unmasked, in the form the frame fixes (`innerOwn`): `(ρ, σ)` and `Y` are the frame's, from its draws and the coins, and of
-its other two rounds only `final_c'` and `τ`'s commitment are the firewall's.
+(`STOP`): nothing of the round leaves. The inner proof is the ZK server's own, and its rounds leave through the frame
+unmasked, in the form the frame fixes (`innerOwn`): `(ρ, σ)` and `Y` are the frame's, from its samples and the coins, and of
+its other two rounds only `final_c'` and `τ`'s commitment are the ZK server's.
 
-The frame makes the pass decision on each device round (`check`, `passes`): the firewall hands it the device round with
+The frame makes the pass decision on each device round (`check`, `passes`): the ZK server hands it the device round with
 the statement's scheduled round in its place, the skeleton's round with every value zero in the algebraic phase and the
-firewall's own opening round in the opening, and the device round passes when it is the scheduled round byte for byte but
+ZK server's own opening round in the opening, and the device round passes when it is the scheduled round byte for byte but
 for the values the algebraic phase masks. Rust keeps no round check of its own (live PROTOCOL.md §10.1): what fails a
 rep outside the frame (its worker, the end check on its proof, Rust's masking cross-checks) can only fail a round more,
 the rep's rounds then reaching the frame as no device round, which it fails.
@@ -36,16 +36,18 @@ The scheduled round then leaves in the device's place, and every value of the al
 (`0 + h_i`), whatever value the round carries, so what leaves before `Finish` has the same form and distribution as an
 honest rep's. A stopped rep's `finish` is `stop`.
 
-`flock-firewall frame` serves this to the firewall (`cmd`), which releases only what it returns, and the session loop
+`flock-firewall frame` serves this to the ZK server (`cmd`), which releases only what it returns, and the session loop
 serves it on connections of its own (`serveWith`, `Session.frames`), where the coins a frame takes are the ones the loop
 opened (`Frames`). Each request is one pure step of the rep's state (`step`, folded by `run`); `serveWith` only reads the
 request's bytes, runs the host's hooks and writes the answer. Rust's `zk_veil::Masking` and `zk_veil::Pads` do the same
-on the unfirewalled `--zk` path, which no ZK server serves.
+on the unserved `--zk` path, which no ZK server serves.
 -/
-import Flock.Zk
-import Flock.ZkLigerito
-import Flock.Firewall.Coins
-import Flock.JsonParse
+module
+
+public import Flock.Zk
+public import Flock.Firewall.Coins
+
+@[expose] public section
 
 namespace Flock.Firewall.Frame
 
@@ -90,12 +92,12 @@ def absorbed (l : Zk.PadLayout) : Array Nat := Id.run do
     v := v ++ #[l.lgE 0 0, l.lgE 0 1, l.lgE 1 0, l.lgE 1 1]
   return v
 
-/-! ## The rep's draws -/
+/-! ## The rep's samples -/
 
 /-- The inner code's length for layout `l`, the pads tree's leaves (`zk_veil::Code::new`). -/
 def codeLen (l : Zk.PadLayout) : Nat := (l.len + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
 
-/-- The OS bytes a rep's draws take: `h`, `μ` and the two rows' padding (16 bytes a word), `τ`'s salt, a salt per leaf. -/
+/-- The OS bytes a rep's samples take: `h`, `μ` and the two rows' padding (16 bytes a word), `τ`'s salt, a salt per leaf. -/
 def drawBytes (l : Zk.PadLayout) : Nat := 16 * (2 * l.len + 2 * Zk.K_PAD) + Zk.TAU_SALT_BYTES + SALT * codeLen l
 
 /-- `n` words of `b` from byte `o`, 16 bytes each, low then high, little-endian. -/
@@ -114,7 +116,7 @@ structure Draws where
   salts : ByteArray
   deriving Inhabited
 
-/-- The draws in the bytes `b` (`drawBytes l` of them): `h`, `μ`, the rows' padding, `τ`'s salt and the leaf salts, in that
+/-- The samples in the bytes `b` (`drawBytes l` of them): `h`, `μ`, the rows' padding, `τ`'s salt and the leaf salts, in that
 order, with `h_ab := h_a h_b` and `w := x y` (the triple) set from the others. -/
 def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
   let s := l.len
@@ -126,13 +128,13 @@ def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
     tauSalt := b.extract o (o + Zk.TAU_SALT_BYTES),
     salts := b.extract (o + Zk.TAU_SALT_BYTES) (o + Zk.TAU_SALT_BYTES + SALT * codeLen l) }
 
-/-- The draws in the bytes `b` one read returned, refused unless there are exactly `drawBytes l` of them: `Draws.ofBytes`
+/-- The samples in the bytes `b` one read returned, refused unless there are exactly `drawBytes l` of them: `Draws.ofBytes`
 reads past a short input as zeros, which would be pads no one drew. -/
 def Draws.ofRead (l : Zk.PadLayout) (b : ByteArray) : Except String Draws :=
   if b.size = drawBytes l then .ok (Draws.ofBytes l b)
   else .error s!"{b.size} bytes where the draws take {drawBytes l}"
 
-/-- The rep's draws from a byte source, in one read of `drawBytes l` bytes from `get` (`cmd`'s is `IO.getRandomBytes`). -/
+/-- The rep's samples from a byte source, in one read of `drawBytes l` bytes from `get` (`cmd`'s is `IO.getRandomBytes`). -/
 def drawsWith {m : Type → Type} [Monad m] (get : USize → m ByteArray) (l : Zk.PadLayout) : m (Except String Draws) :=
   Draws.ofRead l <$> get (drawBytes l).toUSize
 
@@ -156,7 +158,7 @@ def padsRoot (l : Zk.PadLayout) (d : Draws) : ByteArray :=
 /-! ## The refusals -/
 
 /-- The two z-claims' word coordinates (`x[1..]` of each claim point the opening takes) from the algebraic phase's coins
-alone, in the verifier's draw order (`Zk.replay`: the skip's, the outer ones, `z`, the multilinear rounds', `α`, `β`, the
+alone, in the verifier's sample order (`Zk.replay`: the skip's, the outer ones, `z`, the multilinear rounds', `α`, `β`, the
 lincheck's, `r'`); `zk_veil::points_from_coins` and `claim_word_points`. -/
 def claimPoints (l : Zk.PadLayout) (c : Array F128) : V (Array (Array F128)) := do
   let nOuter := l.nMlv - N_INNER
@@ -246,7 +248,7 @@ structure Cfg where
   rowMu : Array F128 := #[]
   deriving Inhabited
 
-/-- The configuration of a rep of layout `l` with the draws `d` and the statement's mask slot: `d`'s pads and rows, and the
+/-- The configuration of a rep of layout `l` with the samples `d` and the statement's mask slot: `d`'s pads and rows, and the
 root the frame computes over `d` (`padsRoot`). -/
 def Cfg.ofDraws (l : Zk.PadLayout) (d : Draws) (mask : Option MaskSlot) : Cfg :=
   { lay := l, h := d.h, order := absorbed l, nPiop := (absorbed l).size - nLig l, lig := l.k0 > 0,
@@ -280,7 +282,7 @@ structure Masker where
   /-- the inner proof's `ε` and `β`, once the stream answered them -/
   eps : F128 := 0
   beta : F128 := 0
-  /-- a round failed the firewall's check or was refused: the algebraic phase's values leave as their pads alone, and the
+  /-- a round failed the ZK server's check or was refused: the algebraic phase's values leave as their pads alone, and the
   rep ends in `stop` -/
   stopped : Bool := false
   deriving Inhabited
@@ -383,10 +385,10 @@ def Masker.unfinished (c : Cfg) (s : Masker) : Option String :=
   else none
 
 /-- The inner proof's round `k` (`zk_veil::prove_inner`, `Zk.verifyInner`), `content` squeezing `n` coins, as the frame
-fixes it: every frame, kind and length, and every value the frame can compute from its draws and the coins. Round 0 is the
+fixes it: every frame, kind and length, and every value the frame can compute from its samples and the coins. Round 0 is the
 inner label, `final_c'` and `ε`'s squeeze; round 1 is `(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` and the batching coins;
 round 2 is `τ`'s 64-byte commitment and `β`'s squeeze; round 3 is `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries. Only
-`final_c'` and `τ`'s commitment are the firewall's: `final_c'` masks the device's `final_c` under `h_fc`, and
+`final_c'` and `τ`'s commitment are the ZK server's: `final_c'` masks the device's `final_c` under `h_fc`, and
 `τ = ⟨c, μ ‖ pad_μ⟩` reads the batched constraints the frame does not derive. -/
 def innerOwn (c : Cfg) (s : Masker) (k : Nat) (content : ByteArray) (n : Nat) : V Unit := do
   let fixedBut := fun (pre : ByteArray) (free : Nat) (post : ByteArray) =>
@@ -410,7 +412,7 @@ def innerOwn (c : Cfg) (s : Masker) (k : Nat) (content : ByteArray) (n : Nat) : 
       throw "the inner proof's round 3 is not the rep's Y = (h ‖ pad_h) + β (μ ‖ pad_μ) and the queries"
   | _ => throw s!"a round after the inner proof's {INNER_ROUNDS}"
 
-/-- **The firewall's own round `k` of the inner proof** at the configuration `c` and the state `s` (its `ε` and `β`),
+/-- **The ZK server's own round `k` of the inner proof** at the configuration `c` and the state `s` (its `ε` and `β`),
 squeezing `n` coins, as the frame fixes it (`innerOwn`): round 0 the inner label, `final_c'`'s word `w` and `ε`'s
 squeeze; round 1 `(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` and the batching coins; round 2 `τ`'s 64-byte commitment `t`
 and `β`'s squeeze; round 3 `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries. -/
@@ -424,7 +426,7 @@ def ownRound (c : Cfg) (s : Masker) (w t : ByteArray) (n : Nat) : Nat → ByteAr
     header 3 2 y.size ++ wordBytes y ++ header 4 2 n
 
 /-- **The inner proof's round `k` as the frame schedules it** from the rounds `fin` the rep's finish computed: the
-firewall's own round (`ownRound`) at the frame's configuration and state, its `final_c'` round 0's word after its label
+ZK server's own round (`ownRound`) at the frame's configuration and state, its `final_c'` round 0's word after its label
 frame and observe header, and `τ`'s commitment round 2's four words after its header. Only those two are the finish's;
 every other byte is the frame's own, so the round has `innerOwn`'s shape whatever `fin` holds. -/
 def innerSched (c : Cfg) (s : Masker) (fin : Array ByteArray) (n k : Nat) : ByteArray :=
@@ -503,7 +505,7 @@ def firstDiff (v r : ByteArray) (free : Array Nat) : Option Nat :=
 the rep's state `s`: why `v` fails, if it does. `v` passes when it is `r` byte for byte but for the values `r` absorbs in
 the algebraic phase (`roundFree`), which may be any, since each leaves masked: in the algebraic phase `r` is the skeleton's
 round with every value zero, so `v` must have its frames, labels, bytes, kinds, lengths, padding and coin count; in the
-opening `r` is the firewall's own opening round (`Drive.openStep`), which `v` must equal byte for byte, level 0's masked
+opening `r` is the ZK server's own opening round (`Drive.openStep`), which `v` must equal byte for byte, level 0's masked
 values included. The frame's refusal of `r` itself, or a stop the coins decide at
 it, is an error. -/
 def passes (c : Cfg) (s : Masker) (v r : ByteArray) (n : Nat) : V (Option String) := do
@@ -531,7 +533,7 @@ def check (c : Cfg) (s : Masker) (v r : ByteArray) (n : Nat) : V (ByteArray × M
     | .error e => if e.startsWith STOP then throw e else standIn c s r n e
 
 /-- The rep's start, from `flock-firewall frame`'s first line: `{"layout": {"n_mlv", "n_lc", "n_ood0", "k0"}, "mask":
-{"w0", "n", "blocks"}}` (`mask` optional: without it, no rank check). Anything else is refused: the frame draws the rep's
+{"w0", "n", "blocks"}}` (`mask` optional: without it, no rank check). Anything else is refused: the frame samples the rep's
 randomness itself. -/
 def start (j : Json) : V (Zk.PadLayout × Option MaskSlot) := do
   let keys := (← j.getObj?).keys
@@ -664,9 +666,9 @@ def run (c : Cfg) : State → List Req → State × Bool
     let (a, st') := step c st q
     if a.ends then (st', true) else run c st' qs
 
-/-- One rep's draws, refusals and release, served on `ch` beside the host's hooks `hk`, its draws read from `get`.
-The first line starts the rep (`start`): the frame draws `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
-any other count), commits them (`padsRoot`), and answers `ok 64` followed by the root alone: the draws never leave the
+/-- One rep's samples, refusals and release, served on `ch` beside the host's hooks `hk`, its samples read from `get`.
+The first line starts the rep (`start`): the frame samples `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
+any other count), commits them (`padsRoot`), and answers `ok 64` followed by the root alone: the samples never leave the
 frame. `prior N` followed by `16 N` bytes, before the first round, is an
 earlier rep of the table's algebraic-phase coins, whose claim points the rank check covers too; it is answered `ok`.
 
@@ -674,9 +676,9 @@ earlier rep of the table's algebraic-phase coins, whose claim points the rank ch
 in its place, is the pass decision (`check`): `ok LEN' pass` followed by the `LEN'` bytes that leave, the device round's
 release, or `ok LEN' fail WHY` followed by the scheduled round's release as a stopped rep's, the rep stopping. Each
 round that leaves goes to `hk.released` first. Then `coins N` followed by the `16 N` bytes of the coins the stream
-answered it is answered `ok`, at the coins `hk.coins` gives for them; no round is taken before the last one's coins. `round N LEN fail` is the scheduled round where no device round passed the firewall's own check (a
+answered it is answered `ok`, at the coins `hk.coins` gives for them; no round is taken before the last one's coins. `round N LEN fail` is the scheduled round where no device round passed the ZK server's own check (a
 worker that failed, or one Rust's checks fail): it stops the rep first, and is answered `ok LEN'`. `round N LEN` alone is
-one of the inner proof's `INNER_ROUNDS` rounds, the firewall's own, after the opening's: answered `ok LEN'` when it is the
+one of the inner proof's `INNER_ROUNDS` rounds, the ZK server's own, after the opening's: answered `ok LEN'` when it is the
 round `innerOwn` fixes, and refused anywhere else. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep. A round or coins the
 refusals stop are answered `stop WHY` (`STOP`), nothing of the round leaving, and end the rep. `finish` is answered `ok`,
 or `stop` for a stopped rep, when every masked phase closed with every pad used and the inner proof's rounds all left.
@@ -766,13 +768,13 @@ def serveWith (get : USize → IO ByteArray) (ch : Chan) (hk : Hooks) : IO UInt3
 def cmdWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   serveWith get (← stdio) {}
 
-/-- `flock-firewall frame` at the operating system's bytes: `cmdWith`, the rep's draws read from `IO.getRandomBytes`. -/
+/-- `flock-firewall frame` at the operating system's bytes: `cmdWith`, the rep's samples read from `IO.getRandomBytes`. -/
 def cmd : List String → IO UInt32 := cmdWith IO.getRandomBytes
 
 /-- The most bytes one `tap` request takes. -/
 def TAP_MAX : Nat := 2 ^ 24
 
-/-- `flock-firewall tap`: the OS bytes of every other draw of a firewalled prover (level 0's hiding, the leaf salts of every
+/-- `flock-firewall tap`: the OS bytes of every other sample of a firewalled prover (level 0's hiding, the leaf salts of every
 tree but the pads', the coin tree's nonce), which the prover takes from here and never from the OS itself. The mask slot's
 words are the session loop's own (`Session.level0`). Each request is a line `N`, `N ≤ TAP_MAX`, answered with `N` bytes of
 `IO.getRandomBytes`. Anything else ends it with exit 1, and its end of input with exit 0. -/

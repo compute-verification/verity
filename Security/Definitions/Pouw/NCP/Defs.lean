@@ -1,6 +1,7 @@
-import Definitions.Pouw.Basic.Mat
-import Mathlib.Logic.Equiv.Defs
-import Mathlib.Data.Fintype.Basic
+module
+
+public import Definitions.Pouw.Basic.Mat
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # Noise that cancels inside one checked product: definitions (trusted)
@@ -13,6 +14,8 @@ E₂ = E₁·R,   F₂ = −R·F₁,   E₃ = E₁ + E₂,   F₃ = F₁ + F₂,
 X = [A + E₁ | A + E₂ | −(A + E₃)]   (m × 3k),      Y = [B + F₁; B + F₂; B + F₃]   (3k × n).
 ~~~
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP
 

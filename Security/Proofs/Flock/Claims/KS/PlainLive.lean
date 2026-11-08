@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLead
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLead
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator's live strategy submits rep 0's rounds first
@@ -14,6 +16,8 @@ least two levels. So its live strategy, read through `liveSession_eq` as its byt
 * `plainRepNs_length`: `|plainRepNs| = repRounds` at two levels or more;
 * `plainSchedAlign`: so `PlainSchedAlign` holds at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -34,7 +38,7 @@ theorem heq_send {M : Type} {k k' : M → Game β} (e : Game.send M k = Game.sen
   obtain rfl := eq_of_heq h
   exact ⟨rfl, HEq.rfl⟩
 
-/-- Equal strategies of equal games drawing a coin agree at each coin. -/
+/-- Equal strategies of equal games sampling a coin agree at each coin. -/
 theorem heq_coin {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : C → Game β} (hk : k = k')
     {s : Strategy (@Game.coin β C iF iN k)} {s' : Strategy (@Game.coin β C iF' iN k')} (h : HEq s s') (c : C) :
     HEq (s c) (s' c) := by
@@ -141,13 +145,6 @@ theorem plainSim_subK (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : h
     exact plainSub_round _ _ _ (plainRep_lt spec st (k + 1)) (plainCnt_le x spec st (Nat.succ_ne_zero k))
   exact ⟨_, e, rfl⟩
 
-/-- `plainSim_subK` at the deployed plain verifier (`keep := id`). -/
-theorem plainSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
-    (hk : k + 1 ≤ plainN x) :
-    ∃ s : SubmitJ 1, (plainW spec hw x).sub (((plainSim P x spec st).next x hist (ω, u)).eval sha512).1 = some s ∧
-      s.rep.val = plainRep spec st (k + 1) :=
-  plainSim_subK id (x := x) (spec := spec) (st := st) (hw := hw) (P := P) (ω := ω) (u := u) (hist := hist) (k := k) (hl := hl) (hk := hk)
-
 /-- **The simulator's bytes prover keeps `SchedK`** after `k + 1` messages, with `|plainRepNs| - k` rounds of rep 0
 left. -/
 theorem schedK_plainK (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
@@ -242,7 +239,7 @@ theorem plainRepNs_length {spec : SessionSpec} {st : Stmt} {s : Flock.Schedule} 
 table whose schedule has at least two levels. -/
 theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
-    {sch : Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
     (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec) (plainLiveK keep x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)
@@ -263,7 +260,7 @@ theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {s
 /-- `plainLive_schedLK` at the deployed plain verifier (`keep := id`). -/
 theorem plainLive_schedL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
-    {sch : Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
     (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec) (plainLive x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)

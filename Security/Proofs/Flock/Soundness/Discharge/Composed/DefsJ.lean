@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.Discharge.Tables
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 
 /-!
 # One `--zk` sampled session of `J` tables: the pieces `zk_session_soundJ` reads
@@ -9,13 +11,13 @@ import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 `zk_session_sound` (`Composed/Sound.lean`) reads one table. `flock-circuit serve|prove --zk --session-tables J` on the
 CPU prover (`--gpu` refuses `J > 1`), and `flock-verify verify --zk --session-tables J`, run `J` tables in one session.
 `Stmt.setupTables` then sets table `j` up under `tagsAt` (`Tags.tableIdentity count j`) at part `j` of the session's
-subset draw (`partJson`, `accepts_tables`); at one table it is `zk_session_sound`'s table. Here are the pieces at `J`
+subset sample (`partJson`, `accepts_tables`); at one table it is `zk_session_sound`'s table. Here are the pieces at `J`
 tables, each the one-table piece's counterpart:
 
-* `nTab`, `inputsJ`, `drawJ`, `partOf`, `partS`: the number of tables, table `j`'s inputs and draw, the table unit `u`
-  is drawn into (its position among the draw's units over the parts' size), and the drawn units of table `j`.
+* `nTab`, `inputsJ`, `drawJ`, `partOf`, `partS`: the number of tables, table `j`'s inputs and sample, the table unit `u`
+  is sampled into (its position among the sample's units over the parts' size), and the sampled proof blocks of table `j`.
 * `DrawSetupZJ`, `tableZJ`, `planZJ`, `tabZJ`: `DrawSetupZK`, `tableAtZK`, `planZAt` and `tabZAt` at table `j`'s inputs
-  and draw (where `verify --zk` sets none up, the refused table of `y₀`, a `DrawSetupZJ` at table 0's inputs).
+  and sample (where `verify --zk` sets none up, the refused table of `y₀`, a `DrawSetupZJ` at table 0's inputs).
 * `tableShJ`, `planShJ`, `sitesShJ`, `sitesZJ`, `layZJ`, `rsZJ`, `rsZJ_computes`: `ZkBind`'s public shadow, sites,
   layout and rows (`At.lean`) at `J` tables.
 * `liveOfZJ`, `DecodesOnZKJ`, `simZJ`, `zk_headline_exec_tables`: `Tables.liveOfJ`, `DecodesOnJ`, `simAuditJ` and
@@ -24,6 +26,8 @@ tables, each the one-table piece's counterpart:
 * `TagsOkZJ`, `RecordsLiveZKJ`, `DrawOkZKJ`: `TagsOk` without `count ≤ 1`, and `RecordsLiveZK`, `DrawOkZK` at `J` tables.
 * `runsZCJ_live`: `runsZC_live` at `J` tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -51,17 +55,17 @@ theorem nTab_pos (I : Inputs) : 0 < nTab I := by
 `Tags.tableIdentity count j` at several). -/
 def inputsJ (I : Inputs) (j : ℕ) : Inputs := { zkInputs I with tags := tagsAt (zkTags I) I.count j }
 
-/-- Table `j`'s draw: the session's draw at one table, its part `j` (`partJson`) at several. -/
+/-- Table `j`'s sample: the session's sample at one table, its part `j` (`partJson`) at several. -/
 def drawJ (I : Inputs) (d : Lean.Json) (j : ℕ) : Lean.Json := if I.count ≤ 1 then d else partJson d I.count j
 
-/-- **The table unit `u` is drawn into** at the session's draw `d`: its position among `d`'s units over the parts' size
+/-- **The table unit `u` is sampled into** at the session's sample `d`: its position among `d`'s units over the parts' size
 (`partDraw`'s equal consecutive parts), within the tables; table 0 at one table. -/
 def partOf (I : Inputs) (d : Lean.Json) (u : ℕ) : Fin (nTab I) :=
   ⟨min (match Draw.UnitDraw.ofJson d with
       | .ok D => D.units.toList.idxOf u / (D.units.size / I.count)
       | .error _ => 0) (nTab I - 1), by have := nTab_pos I; omega⟩
 
-/-- The drawn units of `S` that table `j` proves. -/
+/-- The sampled proof blocks of `S` that table `j` proves. -/
 def partS (I : Inputs) (d : Lean.Json) (S : Finset (Fin n)) (j : Fin (nTab I)) : Finset (Fin n) :=
   S.filter fun u => partOf I d u.val = j
 
@@ -153,21 +157,21 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at draw `S`** (`tableAtZK` at table `j`): the table `verify --zk` sets up at table `j`'s inputs and draw
+/-- **Table `j` at sample `S`** (`tableAtZK` at table `j`): the table `verify --zk` sets up at table `j`'s inputs and sample
 when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at table 0's inputs, which every
-session `verify --zk` accepts at a draw `DrawOkZKJ` admits has: `setupZJ_of_acceptsZK`). -/
+session `verify --zk` accepts at a sample `DrawOkZKJ` admits has: `setupZJ_of_acceptsZK`). -/
 noncomputable def tableZJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
   else y₀.refused
 
-/-- **The plan of `J` tables**: at draw `S`, table `j` is `tableZJ … S j`, for every registration. -/
+/-- **The plan of `J` tables**: at sample `S`, table `j` is `tableZJ … S j`, for every registration. -/
 noncomputable def planZJ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) := fun S _ => List.ofFn (tableZJ dj y₀ S)
 
 theorem planZJ_length (S : Finset (Fin n)) (R : Reg) : (planZJ (Reg := Reg) dj y₀ S R).length = nTab I :=
   List.length_ofFn
 
-/-- Each drawn unit is in the table it is drawn into (`partOf`). -/
+/-- Each sampled proof block is in the table it is sampled into (`partOf`). -/
 noncomputable def tabZJ : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZJ (Reg := Reg) dj y₀ S R).length :=
   fun S R u => Fin.cast (planZJ_length dj y₀ S R).symm (partOf I (dj S) u.val)
 
@@ -185,7 +189,7 @@ theorem typedJ (j : ℕ) : (inputsJ I j).tags.typed = false := (Exec.tagsAt_type
 
 include ht in
 open Classical in
-/-- **The public table at table `j`'s draw** (`tableSh`): its `DrawSetupZJ`'s table, or `y₀`'s refused one. -/
+/-- **The public table at table `j`'s sample** (`tableSh`): its `DrawSetupZJ`'s table, or `y₀`'s refused one. -/
 noncomputable def tableShJ (S : Finset (Fin n)) (j : Fin (nTab I)) : Integrate.Table mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).x.table (typedJ ht j)
@@ -197,7 +201,7 @@ theorem tableZJ_S (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableZJ dj y₀ S j
   · exact (table_stmtOf (typedJ ht j) _).symm
   · exact (model_eq_stmtOf (typedJ ht 0) y₀.x.h y₀.x.wf.1 _).symm
 
-/-- The public plan at the same draws. -/
+/-- The public plan at the same samples. -/
 noncomputable def planShJ : Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j => (tableShJ dj y₀ ht S j).T
 
@@ -217,7 +221,7 @@ theorem planZJ_S : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n),
     (tabOfZ (planZJ dj y₀) (tabZJ dj y₀) S R u).S = (Partition.tabOf (planShJ dj y₀ ht) (tabShJ dj y₀ ht) S R u).S :=
   fun S R u => (tableShJ_tabOfZ dj y₀ ht S R u).symm.trans (congrArg TabSpec.S (tabOfShJ_eq dj y₀ ht S R u)).symm
 
-/-- The public plan's sites: each drawn unit's acceptance, VU and block are its table's. -/
+/-- The public plan's sites: each sampled proof block's acceptance, VU and block are its table's. -/
 noncomputable def sitesShJ : Placed.Sites (planShJ (Reg := Reg) dj y₀ ht) (tabShJ dj y₀ ht) where
   acc S R u _ := recastAcc (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc
     (congrArg TabSpec.S (tabOfShJ_eq dj y₀ ht S R u)).symm
@@ -226,7 +230,7 @@ noncomputable def sitesShJ : Placed.Sites (planShJ (Reg := Reg) dj y₀ ht) (tab
   o S R u h := Fin.cast (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShJ_eq dj y₀ ht S R u)).symm
     ((tableShJ dj y₀ ht S (partOf I (dj S) u.val)).o u (mem_partS h))
 
-/-- **The `--zk` sites at `J` tables**: each drawn unit's acceptance, VU and block are its table's public table's. -/
+/-- **The `--zk` sites at `J` tables**: each sampled proof block's acceptance, VU and block are its table's public table's. -/
 noncomputable def sitesZJ : SitesZ (planZJ (Reg := Reg) dj y₀) (tabZJ dj y₀) where
   acc S R u _ := recastAcc (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc (tableShJ_tabOfZ dj y₀ ht S R u)
   vu S _ u h := (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).vu u (mem_partS h)
@@ -395,7 +399,7 @@ theorem live_le_sessionZJ (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List 
   rw [Exec.prob_cast]
   exact live_le_session _ _ _ pL opn dg dec one fin capOf N _ _ hdec Pr
 
-/-- **The live audit's session at a draw**: `liveSession` over the plan's `J` tables, written out by `wr`. -/
+/-- **The live audit's session at a sample**: `liveSession` over the plan's `J` tables, written out by `wr`. -/
 def liveOfZJ (dg : ByteArray → ByteArray) (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (N : ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
     (S : Finset (Fin n)) (R : Reg) : Game Exec.Transcript :=
@@ -410,8 +414,8 @@ variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (planZ : Finset (Fin n) → 
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) (L : Law n)
 
-/-- **The decoder is right at the law's draws, table by table** (`DecodesOnJ` at the compiled `--zk` tables): at every
-draw `L.draw ω`, registration and table `j`, on every live outcome flock-verify `--zk` accepts, table `j`'s compiled
+/-- **The decoder is right at the sampling design's samples, table by table** (`DecodesOnJ` at the compiled `--zk` tables): at every
+sample `L.draw ω`, registration and table `j`, on every live outcome flock-verify `--zk` accepts, table `j`'s compiled
 reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and its proof files, and table `j`'s compiled verdict
 on those runs holds. -/
 def DecodesOnZKJ : Prop :=
@@ -432,7 +436,7 @@ noncomputable def simZJ (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin cap
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 at `--zk` for sessions of `J` tables** (`execRefines_tables` at the compiled `--zk` tables). -/
+/-- **The refinement at `--zk` for sessions of `J` tables** (`execRefines_tables` at the compiled `--zk` tables). -/
 theorem execRefinesZK_tables (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) :
     ExecRefines (auditLive L Reg (liveOfZJ dg planZ N wr)) τ (LiveAcceptsZK I) (fun _ => False)
@@ -482,7 +486,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : Law n)
 
-/-- **`RunsOnZC` at `J` tables**: at the law's draws, on every live outcome flock-verify `--zk` accepts, each table's
+/-- **`RunsOnZC` at `J` tables**: at the sampling design's samples, on every live outcome flock-verify `--zk` accepts, each table's
 reps have a `RepRun` on their streams' rounds along `repShapeZ`, with `fin`'s messages as the tail, and the table's
 compiled verdict accepts at the two runs' ends, with its cap and openings. -/
 def RunsOnZCJ : Prop :=
@@ -509,7 +513,7 @@ theorem outZC_lig {T : TabZK 𝔽 mPts} {cap : Cap D} {pend : PendZ 𝔽 D Sl ×
   exact ⟨ne_reject_of_verdict h.1.1, ne_reject_of_verdict h.1.2⟩
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
-/-- **The decoder at the law's draws, table by table, from `RunsOnZCJ`** (`decodesOnZK_of_runsOnZC`), with the coin
+/-- **The decoder at the sampling design's samples, table by table, from `RunsOnZCJ`** (`decodesOnZK_of_runsOnZC`), with the coin
 step `true`. -/
 theorem decodesOnZKJ_of_runsOnZCJ (h : RunsOnZCJ A Hs planZ I wr opn dec fin capOf L) :
     DecodesOnZKJ A Hs planZ I wr opn dec (fun _ _ _ _ => true) fin capOf L := by
@@ -521,16 +525,16 @@ theorem decodesOnZKJ_of_runsOnZCJ (h : RunsOnZCJ A Hs planZ I wr opn dec fin cap
 
 end Runs
 
-/-! ## The live session's record, the coin server's draws, and the tags -/
+/-! ## The live session's record, the challenger's live-coin part's samples, and the tags -/
 
 /-- **The verify command's tags at any number of tables** (`TagsOk` without `count ≤ 1`): public outputs, retained
 rounds, `hm96-sha512/v1` leaves. -/
 def TagsOkZJ (I : Inputs) : Prop :=
   I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1"
 
-/-- **`wr` is the coin server's record of the live `--zk` session of `J` tables** (`RecordsLiveZK` at `J` tables, as
-`RecordsLiveJ` is at the public path): whenever flock-verify `--zk` accepts what `wr` writes for the outcome `o` at draw
-`S`, the record carries the draw `dj S`, the proof files are `o`'s, and the record decodes to a session whose link
+/-- **`wr` is the challenger's live-coin part's record of the live `--zk` session of `J` tables** (`RecordsLiveZK` at `J` tables, as
+`RecordsLiveJ` is at the public path): whenever flock-verify `--zk` accepts what `wr` writes for the outcome `o` at sample
+`S`, the record carries the sample `dj S`, the proof files are `o`'s, and the record decodes to a session whose link
 points are `o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
 def RecordsLiveZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript) : Prop :=
@@ -543,8 +547,8 @@ def RecordsLiveZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (Jf : Finset
         sess.streams.find? (fun x => x.name == toString spec.tables[j.val]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = o.reps j r
 
-/-- **The coin server's draw at `S`, at `J` tables** (`DrawOkZK` at table `j`'s inputs and draw): each table's draw
-proves the drawn units it is given (`partS`), and setupH sets each table up at it with `mPts` link points. At one table
+/-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`DrawOkZK` at table `j`'s inputs and sample): each table's sample
+proves the sampled proof blocks it is given (`partS`), and setupH sets each table up at it with `mPts` link points. At one table
 it is `DrawOkZK`. -/
 def DrawOkZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
@@ -564,7 +568,7 @@ noncomputable def decAtZJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 m
     ((planZ S R).get j).sch ((planZ S R).get j).t ((planZ S R).get j).np)
 
 /-- **The `--zk` openings at table `j`** (`opnAtZ`): `opnZ` at the statement setupH sets up under table `j`'s tags at
-its draw, and its `--zk` schedule, on proof files `2j` and `2j + 1`. -/
+its sample, and its `--zk` schedule, on proof files `2j` and `2j + 1`. -/
 noncomputable def opnAtZJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (I : Inputs)
     (dj : Finset (Fin n) → Lean.Json) (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray)
     (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
@@ -621,7 +625,7 @@ theorem DrawSetupZJ.table_lay (y : DrawSetupZJ I' mPts S d) : ZkTabLay y.table (
 
 end Live
 
-/-- **`verify --zk` sets table `j` up under its tags at its draw**: at the record's draw `d`, `setupTables` at
+/-- **`verify --zk` sets table `j` up under its tags at its sample**: at the record's sample `d`, `setupTables` at
 `zkInputs I` has `nTab I` tables, table `j` setupH's statement under `tagsAt` at `drawJ` (`setupTables_ok` at one table,
 `setupTables_parts` at several). -/
 theorem setupOf_tableJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
@@ -664,9 +668,9 @@ theorem outZC_of_accZ {D Sl : Type} [Inhabited D] [Inhabited Sl]
   unfold accZ ZkExec.outZ at h
   exact (of_decide_eq_true h) ⟨0, by simp⟩
 
-/-- **`RunsZC` at the live `--zk` tables of a session of `J` tables, at the law's draws** (`runsZC_live` at `J`
-tables): on untyped inputs under the tags `TagsOkZJ` fixes, with `wr` the coin server's record of the live session and
-each of the law's draws setting each table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZJ` under
+/-- **`RunsZC` at the live `--zk` tables of a session of `J` tables, at the sampling design's samples** (`runsZC_live` at `J`
+tables): on untyped inputs under the tags `TagsOkZJ` fixes, with `wr` the challenger's live-coin part's record of the live session and
+each of the sampling design's samples setting each table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZJ` under
 `hm96-sha512/v1`, with the decoder `decAtZJ`, the openings `opnAtZJ`, no tail and table `j`'s cap from `root_B[j]`. -/
 theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)

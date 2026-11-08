@@ -1,5 +1,44 @@
-import Proofs.Flock.Claims.ZK.GK
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.ZK.GK
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The rewinding argument, over abstract runs
@@ -16,6 +55,8 @@ import Proofs.Flock.Claims.Prob
   involution swapping the first run with the first successful rewind; what is left is the first run opening some coins
   and no rewind opening any, `Q·(1−Q)^N ≤ 1/(N+1)` (`mul_one_sub_pow_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -121,7 +162,7 @@ theorem Pr_exists_le {α : Type} [Fintype α] : ∀ (n : ℕ) (p : Fin n → α 
       rw [e, Fin.sum_univ_succ]
       exact (Pr_or_le _ _).trans (add_le_add le_rfl (Pr_exists_le n _))
 
-/-- **One of `n` independent samples** has the law of one sample. -/
+/-- **One of `n` independent samples** has the sampling design of one sample. -/
 theorem Pr_coord {α β : Type} [Fintype α] [Fintype β] [Nonempty β] {n : ℕ} (i : Fin n) (p : α → β → Prop) :
     Pr (fun q : α × (Fin n → β) => p q.1 (q.2 i)) = Pr fun q : α × β => p q.1 q.2 := by
   classical

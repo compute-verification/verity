@@ -1,6 +1,6 @@
 """Direct environment reads in every tracked Python file outside ``integrations/vllm/`` and ``archive/``, held to
-``allowlists/repo_env_reads.json``: S1 of the quality rollout, so no area adds one
-while its owner builds the settings registry that declares each variable once.
+``allowlists/repo_env_reads.json``, so no area adds one while its owner builds the settings registry that declares each
+variable once.
 
 The integration has its own settings rule (P7, ``integrations/vllm/tests/lint/test_p07_declared_inputs.py``) and ``archive/``
 is kept but not developed, so neither is held here (``LEFT_OUT``).  A read is ``os.environ[...]``, ``os.environ.get(...)``,
@@ -15,7 +15,7 @@ deletes and lowers what this tree no longer finds.
 An area's settings registry is where reads belong, so it is exempt: a module named ``settings.py``, or one the list marks
 ``{"file": PATH, "registry": true}``.  A file that moves takes its entries with it, in the same change (``--move``): this lint
 reads no history, so a renamed file's reads count under its new path.  The ratchet gate (``integrations/vllm/tools/
-ratchet_gate.py``) refuses a change whose Python gains a read, or that grows this list or leaves a renamed file's entries
+ratchet_gate.py``) fails a change whose Python gains a read, or that grows this list or leaves a renamed file's entries
 behind, and judges a change to this module by running it as the change's base has it on the change's tree.  So it imports only
 the standard library, ``test_no_new_reads`` takes no fixture, and the gate reads ``LEFT_OUT``, ``FIX``, ``reads``, ``parse``
 and ``is_registry`` from the base's copy of this module.

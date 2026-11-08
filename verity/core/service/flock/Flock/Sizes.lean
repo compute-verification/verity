@@ -2,7 +2,11 @@
 Parsed JSON shrinks inward: a member of an array or an object is smaller than it, what recursion over parsed JSON
 terminates by.
 -/
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json.Basic
+
+@[expose] public section
 
 namespace Flock
 

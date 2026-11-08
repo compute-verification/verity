@@ -1,8 +1,10 @@
-import Difftest
-import VStar
-import Flock.RecResiduals
-import Flock.RecSetup
-import Flock.RecLinkRef
+module
+
+public import Difftest
+public import VStar
+public import Flock.RecResiduals
+public import Flock.RecSetup
+public import Flock.RecLinkRef
 
 /-!
 # V*'s difftest executable
@@ -15,11 +17,13 @@ SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`)
 `inner_circuit_holo` and `verifier_parts_holo` are those over a holo inner session (`VStar.Holo`). `verifier_parts` holds the Lean
 verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
 (`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`. `inner_draw`
-holds `rec_live.inner_draw`, the prover's reading of the inner session's draw, to the verifier's (`Flock.RecSetup.innerDrawn`).
+holds `rec_live.inner_draw`, the prover's reading of the inner session's sample, to the verifier's (`Flock.RecSetup.innerDrawn`).
 `link_unit` holds V*'s link unit (`VStar.linkUnit`) to `rec_link.lowering`, `link_tree` the verifier's rows trees
 (`Flock.RecLinkTree`) to `rec_link.Tree`, and `link_ref` the unit's Lean reference (`Flock.RecLinkRef.linkRef`) to
 `rec_link.link_ref`.
 -/
+
+@[expose] public section
 
 namespace VStar.DT
 
@@ -225,7 +229,7 @@ def verifierAlgebraFn (j : Json) : Except String Json := do
       ("v", natsJson Vs.toList), ("unit", unit)])
   pure (Json.mkObj ([("parts", Json.arr out)] ++ (← gfSummary (algGfS S))))
 
-/-- `rec_live.inner_draw` on an inner session's record: its draw, or the verifier's refusal of a session over it
+/-- `rec_live.inner_draw` on an inner session's record: its sample, or the verifier's refusal of a session over it
 (`Flock.RecSetup.innerDrawn`, the same at the inner statement's files and at the verifier's inner coins). -/
 def innerDraw (j : Json) : Except String Json := do
   let o ← input' j ["record"]

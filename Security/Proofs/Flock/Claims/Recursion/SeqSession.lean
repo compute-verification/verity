@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.Recursion.SeqSim
-import Proofs.Flock.Claims.ZK.Deployed
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqSim
+public import Proofs.Flock.Claims.ZK.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployZK
+import Proofs.Flock.Claims.ZK.Flock
 
 /-!
 # The V\* sessions of the masked recursion, from Flock's zero knowledge
@@ -23,6 +58,8 @@ masked record whose rounds with `Hello` are the protocol's (`Flock.zkAt_of_table
 assembles the two: `ZKBoundM` at `DF = deployZkRec relO` from the first part, the witness, the models at the recursive
 setup, the leaf counts within the record's (`Brings.zl`), and the record's hiding bound giving the pinned key's.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -109,38 +146,6 @@ theorem zkBoundM_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (ivScop
       x (hsh t ht δ₁ hδ x)) hW
 
 end RecDeploy
-
-namespace Claims.ZKMal
-
-open Claims
-open FlockSoundness.Discharge
-
-/-- **Flock's zero knowledge at any masked record, at the session's tables**: `Flock.zk_deployZk_of_tables_bind` at a
-masked record `D` whose rounds with `Hello` are the protocol's, in place of `FlockDeploy.deployZk`. -/
-theorem Flock.zkAt_of_tables_bind {Coin Col T : Type} (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T)
-    (G : Proto Flock.Wit) [Fintype G.Coin] (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x)
-    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
-    (Mp : ∀ x, G.Nonce → G.TPreModel x) (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x)
-    (nL nB : Msg → ℕ) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
-    (hL : G.TMsgLink H (Flock.R D.parse) Mp Mc) (hOK : G.TablesOK Mp Mc) (hC : G.Binding H) :
-    Claims.Flock.ZKAt H D G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
-      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
-  have hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : G.Nonce)
-      (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop),
-      |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
-        Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤
-        2 * nL x * δ₁.toReal := by
-    intro x w hR ν V E
-    calc _ ≤ 2 * (Mp x ν).size * δ₁.toReal :=
-          (Mp x ν).runs_close H hT1 hδ₁ ν w (hL x w hR ν).1 (hOK.1 x ν) V E
-      _ ≤ 2 * nL x * δ₁.toReal := by
-          have : ((Mp x ν).size : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
-          gcongr
-  rw [← G.withSim_prover Mc]
-  exact Flock.zkR_gkE_hm96_bind H D (G.withSim Mc) t ht hzk hk δ₁ nL nB hA
-    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) hC
-
-end Claims.ZKMal
 
 namespace RecDeploy
 

@@ -1,18 +1,36 @@
-import Proofs.Flock.C3.RegLevels.ROpens
-import Proofs.Flock.C3.RegLevels.SrcUnits
-import Proofs.Flock.C3.RegLevels.Maps
-import Proofs.Flock.C3.Reps.SrcOpens
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Reps.ReadSib
-import Proofs.Flock.C3.Reps.SrcOK
+module
+
+public import Proofs.Flock.C3.RegLevels.Maps
+public import Proofs.Flock.C3.RegLevels.ROpens
+public import Proofs.Flock.C3.Reps.OpensRead
+public import Proofs.Flock.C3.Reps.ReadSib
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.SrcOK
+public import Proofs.Flock.C3.VStarList.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.VStarList.Statements
+import Proofs.Flock.C3.Reps.IoCols
+import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Pinned
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # n11: R's openings at `pR`, read from the layers (`ROpensOfLayers`, `RRowsPinned`)
 
-At the proof G's lig lane builds (`pR` over `StackedMaps.ops`), R's openings are `ligOfRead`'s at R's rows and siblings.
+At the proof Lig.lean builds (`pR` over `StackedMaps.ops`), R's openings are `ligOfRead`'s at R's rows and siblings.
 Where those are the read of R's map's units (`StackedReads`, by construction) and that read's columns are input columns
 a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensReadAt_two_of_layers`' hypotheses both hold.
 `StackedOpenCols` is `RepMaps.openCols_of_readCol`'s at R's map (`stackedOpenCols_of`), from its units' parameters
@@ -40,6 +58,8 @@ and R's shape at `fast100`'s schedule at R's `m` (`shape?_opening`).
   the woven steps have its kinds, messages and coin steps (`levelTie_of_maps`' `hk`, `hl` and its coins), and no tie
   changes them (`lg_tied_repsOfVals_ligOfVals`); `os_two_tied_repsOfVals_ligOfVals` is its `ho`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

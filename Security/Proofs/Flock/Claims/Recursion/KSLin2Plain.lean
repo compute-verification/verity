@@ -1,5 +1,41 @@
-import Proofs.Flock.Claims.Recursion.KSLin2Deployed
-import Proofs.Flock.Claims.KS.PlainKSLin
+module
+
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.KS.PlainKSLin
+public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.KSLin2Deployed
+public import Proofs.Flock.Claims.Recursion.LastColsDeployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `KSLin2` at the intended choice, with `KSFlockLin` at `DE` proved
@@ -11,6 +47,8 @@ as `deployPlainTrim` does (`FlockDeploy.KS.plain_KSFlockLin`): `plain_KSFlockLin
 canonicity (`CanonicalProofFiles`), the calls half of the plain verifier's last-message binding
 (`PlainCallsBindOrSlack`), and the code facts of the staging, V*'s parts and the readers.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

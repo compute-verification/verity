@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding draw
+# zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding sample
 # level0_zk) priced on node 1's GPU prover, one build against another, on 85-rec-reprice.sh's statements (one Call of
 # Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances). One step per job (research run --queue --cwd source);
 # binaries and statements stay under $FLOCK_WORK for the next step, out/ gets the records:
@@ -7,7 +7,9 @@
 #               same build with the selftests' seed-injection beside it, Lean's flock-verify (keyed by its sources), and each
 #               of STATEMENTS staged into data/k<K>/stage (class_statement --stage-only, BATCH=fixed N) with its partition object
 #   STEP=prove  (GPU) for each build of BUILDS (the keys build steps printed; default this tree's), in order, on statement K:
-#               loopback M0 (M0=1) and --zk, WARM + RUNS sessions each, upstream's replay --zk of the last --zk session, and
+#               loopback M0 (M0=1, on the coin tree: FC_COINS=tree) and --zk, WARM + RUNS sessions each, every session's
+#               coin tree from that loopback's own challenger (challenger.sh: serve --tree-from) and its records held to
+#               the challenger's release log, upstream's replay --zk of the last --zk session, and
 #               the seed-injection build's prover_is_deterministic --zk --gpu, every later build's transcript digest checked
 #               against the first's (equal: byte-identical proofs and transcripts)
 #   STEP=lean   (CPU) Lean's flock-verify verify --zk on each build's last --zk session of statement K; the job fails
@@ -50,7 +52,9 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
-export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+CHALLENGER_REPO=$REPO CHALLENGER_WORK=$FW/challengers/${RESEARCH_RUN_ID:-local-$$} CHALLENGER_PY=python3
+. verity/ml/flock/pod/challenger.sh
 GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
@@ -82,17 +86,23 @@ EOF
   grep -h panicked $d/prove.err | head -3
 }
 
-# loopback NAME BIN [--zk]: a verifier process (BIN serve, on the verifier's cores, every session at once) and prove_live
-# against it; the sessions under $DD/prove-NAME/sessions, the last one's directory in $LAST
+# loopback NAME BIN [--zk]: a verifier process (BIN serve, on the verifier's cores, every session at once, each on a coin
+# tree its own challenger samples and opens: challenger.sh) and prove_live against it; the sessions under
+# $DD/prove-NAME/sessions, the last one's directory in $LAST, the challenger's record and audit.json under $O/prove/NAME/challenger
 loopback() {
   local name=$1 b=$2 zk=${3:-} s=$DD/prove-$1 PORT=$(free_port) PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/prove/$name
+  challenger_start $O/prove/$name/challenger || return 1
   taskset -c $VCPU $b serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $D/pub-$N.bin --circuit $D/circuit.txt --pin $PIN \
-    --operator loopback --concurrency $((NS + 1)) > $O/prove/$name/serve.log 2>&1 &
+    --operator loopback --concurrency $((NS + 1)) --sessions $NS "${TREE_FROM[@]}" > $O/prove/$name/serve.log 2>&1 &
   local SP=$!
   wait_serving $O/prove/$name/serve.log $SP || { tail -20 $O/prove/$name/serve.log; return 1; }
   prove_live $name $b 127.0.0.1:$PORT $zk
-  kill $SP; wait $SP 2>/dev/null
+  # serve closes after its last session, and its challenger once serve has; stop serve if the prover left a session open
+  [ "$(grep -c $'\tLIVE\t' $O/prove/$name/prove.tsv)" = $NS ] || kill $SP
+  wait $SP 2>/dev/null
+  challenger_end $O/prove/$name/challenger; echo "$name challenger exit $?"
+  challenger_audit $O/prove/$name/challenger $(dirname $(ls -1 $s/sessions/*/session.json)) > /dev/null; echo "$name audit exit $?"
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
 }
 
@@ -267,6 +277,7 @@ prove)
   [ -f $D/inst-$N.bin ] || { echo "k$K: run STEP=build first"; exit 1; }
   for b in $BUILDS; do [ -x $(bin $b) ] && [ -x $(dirname $(bin $b))/flock-circuit-selftest ] || { echo "build $b: run STEP=build at its tree"; exit 1; }; done
   mkdir -p $O/prove
+  challenger_build; challenger_built || exit 1
   PIN_T=
   for b in $BUILDS; do
     B=$(bin $b)

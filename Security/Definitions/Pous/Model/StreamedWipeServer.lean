@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe on one server: its threshold, and the 5 GB point
@@ -16,6 +18,8 @@ The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the
 (`Acceptance`, with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so
 they can be stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
 -/
+
+@[expose] public section
 
 namespace Pous.StreamedWipe
 

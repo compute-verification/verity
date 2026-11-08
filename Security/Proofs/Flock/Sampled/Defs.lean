@@ -1,41 +1,48 @@
-import Mathlib.Data.Finset.Sort
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Prob
-import Flock.Statement
-import Proofs.Flock.Verifier.Registered
-import VStar.Stage
+module
+
+public import Mathlib.Data.Finset.Sort
+public import Proofs.Flock.Verifier.Registered
+public import VStar.Stage
+public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Game.Prob
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Sampling with prover-chosen batching, the partition hidden: the model
 
 The trace is committed under one registered root, a record per unit at the unit's position holding the unit's type (from
-the hidden partition) and its values. The auditor draws units over the padded indices by a law
-(`FlockSoundness.Audit.Law`). The prover batches the drawn units into the slots of sessions whose shapes come from a
+the hidden partition) and its values. The auditor samples units over the padded indices by a sampling design
+(`FlockSoundness.Audit.Law`). The prover batches the sampled proof blocks into the slots of sessions whose shapes come from a
 public menu: each slot selects its unit's type's matrix by a hidden index into its session's type table, which holds at
 most the shape's public type bound and is padded up to it, each matrix padded to the shape's nonzero bound; each session
-is one C-Flock session, which F1's recursion proves. The auditor sees only the sessions' shapes, and checks them against
-the menu's padded sessions for the draw's size. That each drawn unit sits in exactly one slot is checked once, globally,
-in the outer proof: the slots' records pass up V*'s levels, and the top statement routes them into the draw's order. Each
+is one Flock session, which the recursion proves. The auditor sees only the sessions' shapes, and checks them against
+the menu's padded sessions for the sample's size. That each sampled proof block sits in exactly one slot is checked once, globally,
+in the outer proof: the slots' records pass up V*'s levels, and the top statement routes them into the sample's order. Each
 slot is bound to its unit's committed record by its opening of the root.
 
 * `Shape`, `Menu`, `Menu.Staged`, `Menu.InRange`, `Menu.Within`: a session's slots and nonzero bound; the menu's shapes,
   the inner shape V* is staged over for each (`Menu.vstar`, Lean's `VStar.statements`), each shape's type bound and the
-  padded sessions of an audit of `k` draws (`Menu.padded`); the obligations that V* stages the menu and that the live
+  padded sessions of an audit of `k` samples (`Menu.padded`); the obligations that V* stages the menu and that the live
   verifier's range check accepts it (`Menu.rangeCheck`); a placement of types at the menu's shapes within its bounds.
 * `Trace`, `Types`, `Types.FitsIn`, `wrong`: the committed trace, partial (it holds nothing at a position no record
   opens); each type's relation, its matrix's nonzeros and its unit's template instances; a type within a shape's nonzero
   bound and unit positions; the units wrong in a trace.
 * `Batching`, `Hidden`, `Hidden.honest`: the prover's sessions, with their slots' hidden types; those with each slot's
   opening; and the honest prover's openings.
-* `drawOrder`, `CoverCheck`, `Bound`, `Covers`: the drawn units in order; the outer proof's coverage check; each held
-  slot on its unit's committed type and values; each drawn unit in exactly one slot, on them.
+* `drawOrder`, `CoverCheck`, `Bound`, `Covers`: the sampled proof blocks in order; the outer proof's coverage check; each held
+  slot on its unit's committed type and values; each sampled proof block in exactly one slot, on them.
 * `Commit`, `Commit.Injective`, `Commit.Committed`, `Commit.SlotOpens`, `recordPair`, `SlotBreak`: the trace commitment;
   the record's format; the trace it commits; the slots' openings; the SHA-512 inputs two openings at one position give;
   slot binding's break.
 * `Proves`, `Accepts`, `sampledAudit`, `Reaches`, `Public`, `reveal`, `Recursion`: the statement the sessions prove; the
-  auditor's verdict; F2's audit at a registration; an outcome a run reaches; the reveal list and an honest audit's; and
-  F1's conclusion as F2 uses it, an interface, its soundness and its zero knowledge.
+  auditor's verdict; the sampled audit at a registration; an outcome a run reaches; the reveal list and an honest
+  audit's; and the recursion's conclusion as the sampled audit uses it, an interface, its soundness and its zero
+  knowledge.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 
@@ -58,7 +65,7 @@ structure Shape where
 /-- The menu, public and fixed per model, never per audit. `shapes`: the shapes a session may take; `inner s`: the inner
 session's shape V* is staged over for a session of shape `s` (a pinned menu's is `VStar.Menu.inner`, in
 `Menu.ofEntries`); `types s`: the public bound on the types a session of shape `s` selects among
-(its type table's size, the real count padded up to it); `padded k`: the sessions an audit of `k` drawn units runs, by
+(its type table's size, the real count padded up to it); `padded k`: the sessions an audit of `k` sampled proof blocks runs, by
 shape and in order, a function of `k` and the menu alone. -/
 structure Menu where
   shapes : List Shape
@@ -174,16 +181,16 @@ def Hidden.honest {N : ℕ} {T V : Type} (β : Batching N T V) (path₀ : Fin N 
 
 /-! ## Coverage -/
 
-/-- The drawn units in the draw's order, then dummies (`none`): position `j` holds `S`'s `j`-th unit in increasing
-order, the order the auditor fixes from its own draw. -/
+/-- The sampled proof blocks in the sample's order, then dummies (`none`): position `j` holds `S`'s `j`-th unit in increasing
+order, the order the auditor fixes from its own sample. -/
 def drawOrder {N : ℕ} (S : Finset (Fin N)) (j : ℕ) : Option (Fin N) :=
   if h : j < S.card then some (S.orderEmbOfFin rfl ⟨j, h⟩) else none
 
 /-- **The outer proof's coverage check**, made once, globally, against the committed hidden partition, with no coin:
 every session outputs its slots' records, which pass up V*'s levels; the top statement routes them all through a
 permutation network whose switches the prover sets (`route`, a Beneš network's permutation of the slots), then checks
-that position `j` holds the draw's `j`-th unit for each `j < |S|`, and a dummy after (`drawOrder`). A switch network only
-permutes, so each drawn unit is held exactly once, and the prover still picks the batching. -/
+that position `j` holds the sample's `j`-th unit for each `j < |S|`, and a dummy after (`drawOrder`). A switch network only
+permutes, so each sampled proof block is held exactly once, and the prover still picks the batching. -/
 def CoverCheck {N : ℕ} {T V : Type} (S : Finset (Fin N)) (β : Batching N T V) : Prop :=
   ∃ (n : ℕ) (route : Fin n ≃ β.Pos), S.card ≤ n ∧ ∀ j : Fin n, β.held (route j) = drawOrder S j
 
@@ -191,7 +198,7 @@ def CoverCheck {N : ℕ} {T V : Type} (S : Finset (Fin N)) (β : Batching N T V)
 def Bound {N : ℕ} {T V : Type} (X : Trace N T V) (β : Batching N T V) : Prop :=
   ∀ p i, β.held p = some i → X i = some (β.slotTyp p, β.slotVal p)
 
-/-- Each drawn unit sits in exactly one slot, of its committed type, on its committed values. -/
+/-- Each sampled proof block sits in exactly one slot, of its committed type, on its committed values. -/
 def Covers {N : ℕ} {T V : Type} (X : Trace N T V) (S : Finset (Fin N)) (β : Batching N T V) : Prop :=
   ∀ i ∈ S, ∃! p : β.Pos, β.held p = some i ∧ X i = some (β.slotTyp p, β.slotVal p)
 
@@ -215,7 +222,7 @@ def Injective (C : Commit N T V) : Prop := ∀ t v t' v', C.enc t v = C.enc t' v
 
 /-- `X` is a trace committed under `C`'s root, with the openings `path₀`: each unit `X` holds opens the root at its
 position, and `X` holds a unit wherever some record opens. It is an analysis device, fixed by the root alone, so before
-the draw. -/
+the sample. -/
 structure Committed (C : Commit N T V) (X : Trace N T V) (path₀ : Fin N → ByteArray) : Prop where
   opens : ∀ i t v, X i = some (t, v) → Flock.Registered.opens C.rt (C.enc t v) (C.pos i) (path₀ i) = true
   full : ∀ i t v path, Flock.Registered.opens C.rt (C.enc t v) (C.pos i) path = true → (X i).isSome = true
@@ -228,8 +235,8 @@ def SlotOpens (C : Commit N T V) (h : Hidden N T V) : Prop :=
 end Commit
 
 /-- The SHA-512 inputs that two records' openings at one position give: their tree leaves' inputs when the leaves
-agree, and the two leaves' openings' pair (`Flock.Registered.openPair`) otherwise. F1's `bcPair` restated (same `if`),
-which replaces it when F1 lands. -/
+agree, and the two leaves' openings' pair (`Flock.Registered.openPair`) otherwise. The recursion's `bcPair` restated
+(same `if`). -/
 def recordPair (rt : Flock.Registered.Port) (pos : ℕ) (x path y path' : ByteArray) : ByteArray × ByteArray :=
   if Flock.Hm96.Default512.treeLeaf x = Flock.Hm96.Default512.treeLeaf y then
     (Flock.Hm96.Default512.leafPrefix ++ x, Flock.Hm96.Default512.leafPrefix ++ y)
@@ -246,7 +253,7 @@ def SlotBreak {N : ℕ} {T V : Type} (C : Commit N T V) (X : Trace N T V) (path�
 
 /-! ## The audit -/
 
-/-- **The statement the sessions prove**, about what they hold hidden: the coverage check against the draw `S`, each held
+/-- **The statement the sessions prove**, about what they hold hidden: the coverage check against the sample `S`, each held
 slot's opening of the root, each held slot's type fitting its shape (`Types.FitsIn`), and each held slot's values in its
 type's relation (`holds`: the slot check, candidate 3, the bit-committed sumcheck at w = 1, over the shape's unit
 positions with dummy copies in those the type doesn't fill; kept abstract here). -/
@@ -257,56 +264,56 @@ structure Proves {N : ℕ} {T V : Type} (Ty : Types T V) (C : Commit N T V) (S :
   fits : ∀ p i, h.β.held p = some i → Ty.FitsIn (h.β.slotTyp p) (h.β.shape p.1)
   holds : ∀ p i, h.β.held p = some i → Ty.holds (h.β.slotTyp p) (h.β.slotVal p)
 
-/-- **The auditor's verdict** on an outcome at the draw `S`: the sessions' shapes are the menu's padded sessions for `S`'s
+/-- **The auditor's verdict** on an outcome at the sample `S`: the sessions' shapes are the menu's padded sessions for `S`'s
 size, and every session verifies. It reads the outcome only through `view` and `verifies`. -/
 def Accepts {N : ℕ} {O : Type} (M : Menu) (view : O → List Shape) (verifies : O → Bool) (S : Finset (Fin N))
     (o : O) : Prop :=
   view o = M.padded S.card ∧ verifies o = true
 
-/-- **F2's audit at a registration**, one game per registration with its sessions in the continuation: the prover has
-registered `R` (its trace root among it); the auditor draws `S` by `L`; the sessions on the drawn units run against `R`.
-Output: the outcome and the draw. -/
+/-- **The sampled audit at a registration**, one game per registration with its sessions in the continuation: the prover
+has registered `R` (its trace root among it); the auditor samples `S` by `L`; the sessions on the sampled proof blocks run against
+`R`. Output: the outcome and the sample. -/
 def sampledAudit {N : ℕ} (L : Law N) {Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (R : Reg) :
     Game (O × Finset (Fin N)) :=
   .coin L.Ω fun ω => (session (L.draw ω) R).map fun o => (o, L.draw ω)
 
-/-- The prover's session strategy at each draw. -/
+/-- The prover's session strategy at each sample. -/
 def contOf {N : ℕ} {L : Law N} {Reg O : Type} {session : Finset (Fin N) → Reg → Game O} {R : Reg}
     (σ : Strategy (sampledAudit L session R)) (ω : L.Ω) : Strategy (session (L.draw ω) R) :=
   Strategy.ofMap _ _ (σ ω)
 
-/-- **An outcome a run reaches**: `τ` plays `g` to `o` at some coins. F1's `Game.Outcome` restated, which replaces it
-when F1 lands. -/
+/-- **An outcome a run reaches**: `τ` plays `g` to `o` at some coins. The recursion's `Game.Outcome` restated. -/
 def Reaches {O : Type} : (g : Game O) → Strategy g → O → Prop
   | .ret b, _, o => b = o
   | .send _ k, τ, o => Reaches (k τ.1) τ.2 o
   | @Game.coin _ _ _ _ k, τ, o => ∃ c, Reaches (k c) (τ c) o
 
-/-- **The reveal list** at a draw, all F2's zero-knowledge simulator reads: the menu (its shapes, nonzero bounds and type
-bounds), the draw (the auditor's own coins, so `k = |S|`), the sessions' shapes in order, and the owed public outputs. -/
+/-- **The reveal list** at a sample, all the sampled audit's zero-knowledge simulator reads: the menu (its shapes, nonzero
+bounds and type bounds), the sample (the auditor's own coins, so `k = |S|`), the sessions' shapes in order, and the owed
+public outputs. -/
 structure Public (N : ℕ) (Out : Type) where
   menu : Menu
   draw : Finset (Fin N)
   shapes : List Shape
   out : Out
 
-/-- An honest audit's reveal list at the draw `S`: its sessions' shapes are the menu's padded sessions for `|S|`. -/
+/-- An honest audit's reveal list at the sample `S`: its sessions' shapes are the menu's padded sessions for `|S|`. -/
 def reveal {N : ℕ} {Out : Type} (M : Menu) (S : Finset (Fin N)) (out : Out) : Public N Out :=
   ⟨M, S, M.padded S.card, out⟩
 
-/-- **F1's conclusion, as F2 uses it**: an interface, not F1's statement (`PublicAudit`, or `RecursiveAudit` at
-registered units).
+/-- **The recursion's conclusion, as the sampled audit uses it**: an interface, not the recursion's statement
+(`PublicAudit`, or `RecursiveAudit` at registered units).
 
 (i), soundness: `verifies`, the sessions' verdict on an outcome; `hid`, what they hold hidden behind it, as the extractor
-recovers it (an analysis device). At every registration `R` and draw `S`, for every prover of the sessions: a break of
-its runs (`Break`: F1's forks, or a read commit string whose opening collides with the registered one's), or the sessions
-verify while the statement they prove fails with probability at most `ε`.
+recovers it (an analysis device). At every registration `R` and sample `S`, for every prover of the sessions: a break of
+its runs (`Break`: the recursion's forks, or a read commit string whose opening collides with the registered one's), or
+the sessions verify while the statement they prove fails with probability at most `ε`.
 
-(ii), zero knowledge (`RecursiveFirewallPrivate`, being restated at `hidingGap`; its form is F1's, not pinned here):
-`out R`, the owed outputs the registration names; `real x R h`, the auditor's view of the honest sessions at the reveal
-list `x`, on the registration `R` (its root among it) and the hidden `h`; `sim x`, the simulated view, reading `x` alone;
-`hides`, that the two are close (`Close`, F1's notion and gap) at every honest witness: the owed outputs `R`'s, the
-sessions at `x`'s shapes, proving the statement at `x`'s draw. -/
+(ii), zero knowledge (`RecursiveFirewallPrivate`, being restated at `hidingGap`; its form is the recursion's, not pinned
+here): `out R`, the owed outputs the registration names; `real x R h`, the auditor's view of the honest sessions at the
+reveal list `x`, on the registration `R` (its root among it) and the hidden `h`; `sim x`, the simulated view, reading
+`x` alone; `hides`, that the two are close (`Close`, the recursion's notion and gap) at every honest witness: the owed
+outputs `R`'s, the sessions at `x`'s shapes, proving the statement at `x`'s sample. -/
 structure Recursion {N : ℕ} {T V Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (Ty : Types T V)
     (com : Reg → Commit N T V) where
   verifies : O → Bool

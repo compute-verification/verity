@@ -1,6 +1,46 @@
-import Proofs.Flock.Claims.Complete.Zk.RepRounds
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RepRounds
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.ZK.CutSession
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Link
+import Proofs.Flock.Claims.ZK.SimZerocheck
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A cut rep's rounds are its log's bodies (`repCut_rounds`)
@@ -17,6 +57,8 @@ The squeezes' sizes are those of `RepRounds.lean`'s walk (`repPZk_grows`): the z
 switch's `7` and claims, Ligerito's `n` and its levels' (the recursive levels' out-of-domain sizes carried by the loop,
 `loopR_logs`), and the inner proof's constraints and `Zk.Q`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RepLog
 
@@ -416,6 +458,7 @@ theorem piopCut_logs (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root 
   obtain ⟨ss, T, sws⟩ := r
   exact (logS _).pure _
 
+-- `ligeritoCut`'s unfolded run with its loops (`forIn_loopR`), the invariant checked at each step with `omega`
 set_option maxHeartbeats 1000000 in
 /-- **The cut's Ligerito opening keeps the invariant**, given `2`, `n + 1` and every level's `q + 1` at most `B`. -/
 theorem ligeritoCut_logs (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)

@@ -1,7 +1,18 @@
-import Proofs.Flock.Soundness.Refine.Opening
+module
+
+public import Proofs.Flock.Soundness.Refine.Opening
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
-# Element seams over `K = GF(2^256)` (PROTOCOL.md §2.4, §13)
+# Element seams over `K = GF(2^256)` (`Flock.Field`, `Flock.Ligerito`)
 
 The model's Ligerito computes in `K` through `execArith.embed` and `execArith.u`; the executable computes on `F256`
 words. `gOf` (`GF256.of`) maps a word to its field element and is a ring homomorphism (`gOf_add`, `gOf_mul`). On top of
@@ -12,6 +23,8 @@ level 3's `ofLimbs`:
 * both equality tables are the model's `eqList`: `eqTable` over `F` (`eqTable_eqList`), `eqTableK` over `K`
   (`eqTableK_eqList`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

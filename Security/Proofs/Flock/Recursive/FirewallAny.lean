@@ -1,12 +1,15 @@
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallLive
+module
+
+public import Proofs.Flock.Recursive.FirewallTemplate
+public import Proofs.Flock.Recursive.FirewallLive
+import all Lean.Data.Json.Basic
 
 /-!
 # The live firewall at any requests
 
 `rec_live --lean` relays every request of an inner session to `flock-firewall live` (`Flock.Firewall.liveWith`), and the
-coin server receives only what it sends. `liveSends_of_accepts` is about the honest worker's requests; here they are any
-bytes at all. Whatever the inner worker sends, the live firewall sends the coin server the pinned schedule's transcript
+challenger's live-coin part receives only what it sends. `liveSends_of_accepts` is about the honest worker's requests; here they are any
+bytes at all. Whatever the inner worker sends, the live firewall sends the challenger's live-coin part the pinned schedule's transcript
 (`FirewallTemplate.tmpl s s.tables`, Commit naming the schedule's tables in its order, the only order `step` takes),
 filled with the commit strings of 64-byte digests under the salts it read, in order, and cut after one of its messages:
 the whole transcript when the session finishes, else the place where it stopped. The digests, the place and how the
@@ -23,12 +26,14 @@ Two live sessions on requests of one shape refuse at the same request and send t
 strings, those of the same digests (`liveOut_rel`, from `FirewallRun.stepOf_rel` one request at a time).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Recursion.FirewallAny
 
 open Flock Flock.Firewall FirewallRun FirewallTemplate FirewallLive
 
 /-- **A live session at any requests** (`liveWith`'s loop over `liveStep`): from the state `st`, each request with the
-fresh salts read for it, what the firewall sends the coin server, in order, up to the first refusal, and how the session
+fresh salts read for it, what the ZK server sends the challenger's live-coin part, in order, up to the first refusal, and how the session
 ends: `some t` at the state `t` after the last request when nothing was refused, `none` at a refusal, after which
 `liveWith` answers every request with the stop and sends nothing. A line that is not hex stops it the same way. -/
 def liveOut (s : Schedule) : State → List (ByteArray × List ByteArray) → List Sent × Option State
@@ -277,9 +282,9 @@ theorem shape_canon (R : List (ByteArray × Nat)) :
     simp only [shape, List.map_cons, List.length_replicate] at ih ⊢
     rw [ih]
 
-/-! ## The firewall at any requests -/
+/-! ## The ZK server at any requests -/
 
-/-- **The firewall at any requests**: for any requests and any number `n` of salts, there are 64-byte digests `ds`, a
+/-- **The ZK server at any requests**: for any requests and any number `n` of salts, there are 64-byte digests `ds`, a
 place `k` of the schedule's transcript and an end `fin` such that at every salt list of length `n`, `run` sends the
 schedule's transcript (`tmpl s s.tables`), filled with the commit strings of `ds` under the salts in order, cut after its
 first `k` messages, and finishes exactly when `fin`; a session that finishes sends the whole transcript. -/
@@ -357,7 +362,7 @@ open FirewallRun FirewallTemplate FirewallAny
 /-- **The live firewall at any requests sends the schedule's transcript, filled at the strings it accepted, or stops at
 a public place.** For any requests, each with how many fresh salts are read for it (`R`), there are 64-byte digests
 `ds`, a place `k` of the schedule's transcript and an end `fin` such that every live session on those requests
-(`liveOut`, `flock-firewall live`'s loop), whatever salts it reads (`shape L = R`), sends the coin server the schedule's
+(`liveOut`, `flock-firewall live`'s loop), whatever salts it reads (`shape L = R`), sends the challenger's live-coin part the schedule's
 transcript (`tmpl s s.tables`, Commit naming the schedule's tables in its order, the only order `step` takes), filled
 with the commit strings of `ds` under the salts read, in order, and cut after its first `k` messages, and finishes exactly
 when `fin`. A session that finishes sends the whole transcript; one that stops has sent its first `k` messages. No

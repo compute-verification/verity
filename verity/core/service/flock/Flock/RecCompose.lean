@@ -5,7 +5,7 @@ recursion's guarantee reads (`RecDeploy.V`, `Proofs.Flock.Claims.Recursion.Deplo
 `RecDeploy.partRaw … s p`: of what `verify` reads, only the part's Flock statement (its circuit, partition, program and
 registered reads, with its staged public file), its index and the verifier's own bindings of it vary by part, and every
 other input is one value for every part (`Shared`, with the shared rows `--rec-rows`): the verifier's inner shape, the
-inner statement's files and how it is set up, the inner session's record, the coin server's transcript, the circuit
+inner statement's files and how it is set up, the inner session's record, the challenger's live-coin part's transcript, the circuit
 registration and the inner population's link table (`--rec-links`). No part sees another, so only the composition can
 hold every part to one set. Each part's `VERDICT` names
 the SHA-512 of each (`rec_shared`, `rec_rows_sha512`), whether it ran `--zk` (`zk`), and its session's coin key
@@ -28,13 +28,17 @@ then the close. It accepts only when the staging is the record's first event, at
 set every part read; each of V*'s statements has exactly one session opened and no other index has one; every opened
 session is a composed part's (its part and coin key) and every composed part's session is among them; and the close is
 the last event (`checkRun`). `OneRun` states it, and `check_oneRun` proves it of `check`. The record holds no coin:
-each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, never committed before the run. The
+each session's coins are its own keyed coin tree's, sampled fresh at its `Hello`, never committed before the run. The
 record is read once, in comparisons quadratic in V*'s statement count (at most 16, `RecBudget`), never per gate.
 -/
-import Lean.Data.Json
-import Flock.JsonParse
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Flock.JsonParse
+public import Flock.Bytes
+public import Flock.Hash
+public import Lean.Data.Json.FromToJson.Basic
+
+@[expose] public section
 
 namespace Flock
 namespace RecCompose
@@ -47,9 +51,9 @@ def digest (b : ByteArray) : String := hexOf (Sha512.hash b)
 /-- **What every part of one recursive statement reads alike**, as its `VERDICT` names it (`rec_shared`): the SHA-512 of
 the verifier's own inner shape (`--rec-inner`), of the inner statement's files (`--rec-inner-circuit`,
 `--rec-inner-public`, `--rec-inner-partition`), of a record of check 5's coins (`--rec-inner-coins`, which `verify`
-refuses), of the inner session's record (`--rec-inner-session`'s `session.json`), of the coin server's transcript
+refuses), of the inner session's record (`--rec-inner-session`'s `session.json`), of the challenger's live-coin part's transcript
 (`--rec-inner-transcript`) and of the circuit registration (`--rec-inner-registration`); how the inner statement is set
-up (`--rec-inner-statement`, its coins `os` as `true`, each lookup table's name and SHA-512, and the SHA-512 of
+up (`--rec-inner-statement`, each lookup table's name and SHA-512, and the SHA-512 of
 `--rec-inner-draw`); the inner population's link table (`--rec-links ROOT:N`: its root in hex and its row count); and
 the SHA-512 of the verifier's own program of the inner statement (`--rec-inner-program`), under which its Linking is
 checked. `none` where `verify` held no such input. -/
@@ -63,7 +67,6 @@ structure Shared where
   transcript : Option String
   registration : Option String
   innerStatement : Option String
-  innerStatementCoins : Option Bool
   innerTables : Option (List (String × String))
   innerDraw : Option String
   links : Option (String × Nat)
@@ -75,12 +78,12 @@ def linksOf (links : Option (ByteArray × Nat)) : Option (String × Nat) := link
 
 /-- **The shared inputs' digests**, from the bytes `verify` read. -/
 def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript registration :
-    Option ByteArray) (innerStatement : Option String) (innerStatementCoins : Option Bool)
+    Option ByteArray) (innerStatement : Option String)
     (innerTables : Option (List (String × ByteArray))) (innerDraw : Option ByteArray)
     (links : Option (ByteArray × Nat)) (innerProgram : Option ByteArray) : Shared :=
   ⟨recInner.map digest, innerCircuit.map digest, innerPublic.map digest, innerPartition.map digest,
     innerCoins.map digest, innerSession.map digest, transcript.map digest, registration.map digest, innerStatement,
-    innerStatementCoins, innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links,
+    innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links,
     innerProgram.map digest⟩
 
 /-- A string or `null`. -/
@@ -104,7 +107,6 @@ def Shared.toJson (s : Shared) : Json :=
     ("inner_coins", optJson s.innerCoins), ("inner_session", optJson s.innerSession),
     ("inner_transcript", optJson s.transcript), ("inner_registration", optJson s.registration),
     ("inner_statement", optJson s.innerStatement),
-    ("inner_statement_coins", optJson (s.innerStatementCoins.map fun os => if os then "os" else "seed")),
     ("inner_tables", match s.innerTables with
       | none => .null
       | some ts => .arr (ts.map fun t => Json.arr #[.str t.1, .str t.2]).toArray),
@@ -127,11 +129,6 @@ def readTable : Json → Option (String × String)
 
 /-- `Shared.toJson` read back; nothing where a field is absent or not in its form. -/
 def Shared.ofJson? (j : Json) : Option Shared := do
-  let coins ← match j.getObjVal? "inner_statement_coins" with
-    | .ok .null => some none
-    | .ok (.str "os") => some (some true)
-    | .ok (.str "seed") => some (some false)
-    | _ => none
   let tables ← match j.getObjVal? "inner_tables" with
     | .ok .null => some none
     | .ok (.arr ts) => some <$> ts.toList.mapM readTable
@@ -142,7 +139,7 @@ def Shared.ofJson? (j : Json) : Option Shared := do
     | _ => none
   pure ⟨← readOpt j "rec_inner", ← readOpt j "inner_circuit", ← readOpt j "inner_public", ← readOpt j "inner_partition",
     ← readOpt j "inner_coins", ← readOpt j "inner_session", ← readOpt j "inner_transcript",
-    ← readOpt j "inner_registration", ← readOpt j "inner_statement", coins, tables, ← readOpt j "inner_draw", links,
+    ← readOpt j "inner_registration", ← readOpt j "inner_statement", tables, ← readOpt j "inner_draw", links,
     ← readOpt j "inner_program"⟩
 
 /-- The first field in which `s` differs from `t`, the first part's, as a refusal's reason. -/
@@ -159,8 +156,6 @@ def Shared.diff (s t : Shared) : String :=
     one "inner_transcript" "the coin server's transcript, --rec-inner-transcript" s.transcript t.transcript <|>
     one "inner_registration" "the circuit registration, --rec-inner-registration" s.registration t.registration <|>
     one "inner_statement" "how the inner statement is proved, --rec-inner-statement" s.innerStatement t.innerStatement <|>
-    one "inner_statement_coins" "the inner statement's coins, --rec-inner-statement-coins"
-      (s.innerStatementCoins.map toString) (t.innerStatementCoins.map toString) <|>
     one "inner_tables" "the inner statement's lookup tables, --rec-inner-tables"
       (s.innerTables.map toString) (t.innerTables.map toString) <|>
     one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerDraw t.innerDraw <|>
@@ -194,12 +189,12 @@ def PartVerdict.ofJson (j : Json) : PartVerdict where
 
 /-- **The shared inputs in the compiled verifier's form**: every part of `RecDeploy.V` reads the verifier's own inner
 shape, here the composition's (`inner`, its SHA-512), the inner statement's three files, the inner session's record,
-the coin server's transcript and how the inner statement is proved, and no record of check 5's coins; and the link
+the challenger's live-coin part's transcript and how the inner statement is proved, and no record of check 5's coins; and the link
 table it reads is the composition's own (`links`, `--rec-links`). -/
 def Shared.Complete (inner : String) (links : Option (String × Nat)) (s : Shared) : Prop :=
   s.recInner = some inner ∧ s.innerCircuit.isSome ∧ s.innerPublic.isSome ∧ s.innerPartition.isSome ∧
     s.innerCoins = none ∧ s.innerSession.isSome ∧ s.transcript.isSome ∧ s.innerStatement.isSome ∧
-    s.innerStatementCoins.isSome ∧ s.innerTables.isSome ∧ s.links = links
+    s.innerTables.isSome ∧ s.links = links
 
 /-- **`rec-compose`'s acceptance** over the parts' verdicts, at V*'s `n` statements, the composition's own rows file's
 SHA-512 `rows`, inner shape's `inner` and link table `links`: one verdict per statement, `rec_part` `j` once for each
@@ -265,7 +260,6 @@ def checkForm (name inner : String) (links : Option (String × Nat)) (s : Shared
     else if s.innerSession.isNone then .error (held name "inner session's record (--rec-inner-session)")
     else if s.transcript.isNone then .error (held name "coin server's transcript (--rec-inner-transcript)")
     else if s.innerStatement.isNone then .error (held name "word on how the inner statement is proved (--rec-inner-statement)")
-    else if s.innerStatementCoins.isNone then .error (held name "inner statement's coins (--rec-inner-statement)")
     else if s.innerTables.isNone then .error (held name "inner statement's lookup tables (--rec-inner-statement)")
     else if s.links ≠ links then
       .error s!"{name}: verified at the link table {linksShow s.links}, not the composition's own --rec-links {linksShow links}"
@@ -499,11 +493,10 @@ theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s :
     obtain ⟨h6, h⟩ := ite_error_ok h
     obtain ⟨h7, h⟩ := ite_error_ok h
     obtain ⟨h8, h⟩ := ite_error_ok h
-    obtain ⟨h9, h⟩ := ite_error_ok h
-    obtain ⟨h10, -⟩ := ite_error_ok h
+    obtain ⟨h9, -⟩ := ite_error_ok h
     unfold Shared.Complete
     refine ⟨by rw [hr, Decidable.byContradiction hi], some_of h1, some_of h2, some_of h3, ?_, some_of h5, some_of h6,
-      some_of h7, some_of h8, some_of h9, Decidable.byContradiction h10⟩
+      some_of h7, some_of h8, Decidable.byContradiction h9⟩
     cases e : s.innerCoins with
     | none => rfl
     | some _ => rw [e] at h4; exact absurd rfl h4

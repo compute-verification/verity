@@ -1,5 +1,7 @@
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipe
 import Mathlib.Analysis.Complex.ExponentialBounds
-import Mathlib.Data.Nat.Choose.Bounds
 import Proofs.Pous.StreamedWipe.Bound
 
 /-!
@@ -14,6 +16,8 @@ import Proofs.Pous.StreamedWipe.Bound
 
 Both lemmas are stated for any `N`, `D` and `k`, so that no power of the deployed numbers is ever evaluated.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

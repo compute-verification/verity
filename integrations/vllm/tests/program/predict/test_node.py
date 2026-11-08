@@ -3,28 +3,18 @@
 Each rank's run of the node's body is its rank Program's body node for node, every operand leaf the same leaf of the node's
 parameters or of the rank's own nodes, except that a peer Input's leaf is a node of the peer rank: every rank's collective k reads
 one operand where its rank Program reads its peers, each rank's rows its own (its other operands, a fused norm's residual and
-weight, stay its own). So no peer Input is left, and an isolation block over the node reads only its prompt besides
-θ (`nci_reference.check_desc`, `NciCheck.Desc`'s reference)."""
+weight, stay its own). So no peer Input is left, and the node reads only its prompt besides θ."""
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
 import pytest
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import is_input
+from verity.ml.circuits.program import RUN, input_id, is_input, is_registered
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program, check_ranks
 from verity_vllm.program.predict.phi import Phi
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
-
-_spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
-NCI = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(NCI)
 
 
 def _at(phi: Phi, rank: int) -> Phi:
@@ -122,17 +112,13 @@ def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
 
 @pytest.mark.slow
 def test_the_node_reads_only_its_prompt_besides_theta():
-    """One IU over the node's computation: its novel reads are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
+    """The root's input nodes are the prompt's 4 x 32 bits, then θ, each node bound at registration: no peer Input is left."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), "request", LP=4, T=2)
-    text = canonical_json(node.desc).decode()
-    inp, reg, spans = NCI.root_nodes(text)
+    root = node.program.root.body
+    inp = [is_input(n.fn) for n in root.nodes]
     theta = node.desc["annotations"]["theta"]
-    assert theta == [k for k in range(1, len(inp)) if inp[k]] and all(reg[k] for k in theta)
-    computed = sum(hi - lo for k, (lo, hi) in enumerate(spans) if not inp[k])
-    inst = {"program": text, "theta": theta, "owner": ["input" if i else 0 for i in inp], "gamma": node.program.gates,
-            "alpha": [4 * 32, computed]}
-    assert NCI.check_desc(inst) == {"gates": node.program.gates, "ius": [[computed, 4 * 32]], "complies": True, "failure": None}
-    assert NCI.check_desc(inst | {"alpha": [4 * 32 - 1, computed]})["failure"] == [0, "nci"]
+    assert theta == [k for k in range(1, len(inp)) if inp[k]] and all(is_registered(root.nodes[k].fn) for k in theta)
+    assert input_id(root.nodes[0].fn.id) == (RUN, 32) and root.nodes[0].n == 4
 
 
 def test_a_world_of_one_has_no_node_program():

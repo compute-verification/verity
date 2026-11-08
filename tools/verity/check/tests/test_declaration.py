@@ -25,6 +25,11 @@ TOOL = _module("repo_check_tool", ROOT / "tools" / "verity" / "check" / "tool.py
 HANDLES = {"ci", "lean", "proofs"}
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path):
     declared: dict[int, list[str]] = {}
     for j in D.load():
@@ -35,7 +40,7 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
-    assert runs == [["pytest"], ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+    assert runs == [["pytest"], ["flock-circuit-build", "flock-rust-tests", "circuit-check"],
                     ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"],
                     ["ratchet-gate"]]
     assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
@@ -171,7 +176,7 @@ def _run_two_groups(tmp_path, monkeypatch, first_status: str):
     monkeypatch.setattr(CHECK.threading, "Event", Event)
     monkeypatch.setattr(CHECK, "preflight", lambda: [])
     monkeypatch.setattr(CHECK, "take_lean_deps_urls", lambda out: None)
-    monkeypatch.setattr(CHECK.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(CHECK, "prebuild", lambda out, steps: None)
     monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls, **kw: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
     monkeypatch.setattr(CHECK, "_step", step)
     ok, results = CHECK.run(tmp_path, 2)

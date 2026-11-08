@@ -1,11 +1,12 @@
-# The security analysis's trusted text: Definitions (each component's vocabulary) and Models (its named assumptions
-# and guarantee statements), on Mathlib. The proofs are the nested package `Proofs/` (security_proofs).
+# The security analysis's spec, on Mathlib: Definitions, each component's vocabulary, named assumptions and guarantee
+# statements. The proofs are the nested package `Proofs/` (security_proofs).
 name = "security"
-defaultTargets = ["Definitions", "Models"]
+defaultTargets = ["Definitions"]
 
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "mathlib"
@@ -14,6 +15,3 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
 [[lean_lib]]
 name = "Definitions"
-
-[[lean_lib]]
-name = "Models"

@@ -24,7 +24,7 @@ from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
@@ -954,7 +954,7 @@ def test_the_batch_order_is_model_runner_v2s():
 
 
 AUDITOR = "vy-challenger-1:7811"
-#: where a window's draw session is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
+#: where a window's sample session is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
 DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
 
 
@@ -964,7 +964,7 @@ def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=No
     commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its challenge phase, which the
     ledger `ledger` (its own, `<name>.jsonl`, unless given) reserves (unless not `reserved`), and `_gate` opens it, the
     ledger opening it for the H1 window's open root (unless not `gated`, for `CH.WINDOW` at once); `DRAW_RESERVED` names
-    the window's draw session, which `_gate` opens withheld on its draw root (`challenger_host.Host.open_draw`)."""
+    the window's sample session, which `_gate` opens withheld on its sample root (`challenger_host.Host.open_draw`)."""
     host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed, session, leaves,
                    ledger, gated=gated, reserved=reserved)
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(
@@ -982,7 +982,7 @@ _GATES: dict = {}
 
 def _gate(session, root, withhold=False):
     """The gate (`pouw_h1_window.Gate`) of the host `_host` made last: its window's session, or with `withhold` its
-    draw session (`challenger_host.Host.open_draw`)."""
+    sample session (`challenger_host.Host.open_draw`)."""
     host = _GATES["host"]
     return host.open_draw(session, root) if withhold else host.open(session, root)
 
@@ -1009,7 +1009,7 @@ def _serve_window(settings):
 SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "root": "ca" * 64, "commitment": "c0" * 64}
 #: the gate's reserve answer for an H1 window (its challenge phase `_host`'s), which the window opens itself (`_gate`)
 RESERVED = {"session": CH.session_id(1), "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
-#: the gate's reserve answer for an H1 window's draw session, which the window opens withheld on its draw root (`_gate`)
+#: the gate's reserve answer for an H1 window's sample session, which the window opens withheld on its sample root (`_gate`)
 DRAW_RESERVED = {"session": CH.session_id(0xd)}
 
 
@@ -1022,9 +1022,9 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     """With the setting ``challenger`` the window's one challenge phase on the auditor host, reserved on the gate, is
     opened on the window's open root once round 0 is admitted (over the weights' root, round 0's request table and the
     challenge phase), its salt coin after that root and round s's coin after round s's root, and closes once the window
-    has finished; its draw coin is its draw's challenge phase's (the setting ``draw_session``), which the gate opens
-    withheld on the window's draw root; the verifier, reading the challenger's own directories under its key, trusts the
-    window's coins (`trusted_rounds_reason`) only with the host's pins log and the draw's directory, and every request
+    has finished; its sampling coin is its sample's challenge phase's (the setting ``draw_session``), which the gate opens
+    withheld on the window's sample root; the verifier, reading the challenger's own directories under its key, trusts the
+    window's coins (`trusted_rounds_reason`) only with the host's pins log and the sample's directory, and every request
     entry and slot still opens under its round's root. Without ``draw_session`` the install is refused."""
     from verity_vllm.protocols.pouw.h1 import window as PHW
     host = _host(tmp_path, monkeypatch)
@@ -1112,8 +1112,8 @@ def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refus
 
 
 def _drawn(host, sid, root, withhold=True):
-    """The draw coin of `host`'s window from its draw session `sid`, which the gate opens (withheld unless not
-    `withhold`) on the draw root `root`, opened once after it and the session closed and ended."""
+    """The sampling coin of `host`'s window from its sample session `sid`, which the gate opens (withheld unless not
+    `withhold`) on the sample root `root`, opened once after it and the session closed and ended."""
     host.open_draw(sid, root.hex(), withhold)
     with host.draw.client as client:
         opened = client.open(Wd.DRAW, 0, root)

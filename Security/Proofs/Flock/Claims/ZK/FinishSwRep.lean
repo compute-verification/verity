@@ -1,36 +1,42 @@
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.FinishSwBit
-import Proofs.Flock.Claims.ZK.FinishSwLigE
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSrc
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.FinishSwBit
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSrc
 
 /-!
-# The firewall's rep is the switched source's cut
+# The ZK server's rep is the switched source's cut
 
-`FinishSrc.repCut_fw` takes a rep source holding four things at the firewall's runs: the masked values (`hmk`), the
+`FinishSrc.repCut_fw` takes a rep source holding four things at the ZK server's runs: the masked values (`hmk`), the
 rank check and switched vectors at its zerocheck and lincheck (`hpiop`), level 0's opening at its PIOP (`hlig`), and the
-inner proof's at its Ligerito and constraints (`hinner`). Here the switched prover's source (`swSrcE`) at the firewall's
-clear values (`valsFw`) is shown to hold all four at table `j`'s rep `r`, at the firewall's request `q`, the opened
-coins (`ligCoin`) and the packed table of the witness's trace (`ligTab`). So the firewall's rep returns, up to
+inner proof's at its Ligerito and constraints (`hinner`). Here the switched prover's source (`swSrcE`) at the ZK server's
+clear values (`valsFw`) is shown to hold all four at table `j`'s rep `r`, at the ZK server's request `q`, the opened
+coins (`ligCoin`) and the packed table of the witness's trace (`ligTab`). So the ZK server's rep returns, up to
 `eraseZ`, what the cut returns from the switched source.
 
-* `repFwC_piopFw`: where the firewall's rep returned, so did its PIOP.
+* `repFwC_piopFw`: where the ZK server's rep returned, so did its PIOP.
 * `zcCoins_ligRespE`, `lcCoins_ligRespE`, `rsCoins_ligRespE`: the closed forms' coins at the replies `ligRespE c` are
   the opened coins.
+* `LigLock.LigHyp.ofSalt`, `LigLock.LigHyp.ofLanes`: `LigHyp` reads levels ≥ 1's salts only on the schedule, and the
+  extra lanes and lane paddings only within level 0's sizes.
 * **`swSrcE_repCut`**: `repCut_fw` at the switched source. `hmk` is `swSrcE_hmk_frame`. `hpiop`'s rank half is
-  `rank_at_admits`, and its switched vectors are the prover's (`swSrc_sv`), whose claims have the firewall's points
+  `rank_at_admits`, and its switched vectors are the prover's (`swSrc_sv`), whose claims have the ZK server's points
   (`zerocheckCut_at`, `lincheckCut_at`, `claims_x`) and `m − 6` coordinates (`claims_xsize'`), read off the packed
-  table as off the trace (`switchVec_packed`). `hlig` is `swSrcE_ligHyp_E`, the firewall's PIOP having sent
+  table as off the trace (`switchVec_packed`). `hlig` is `swSrcE_ligHyp_E`, the ZK server's PIOP having sent
   `piopRoundsZk` bodies from the rep's base and switched `swsE` (`piopFw_at`). `hinner` is `swSrcE_hinner_sv`.
 
-Premises: the firewall's packed table is the witness's (`hg`), a trust in the host's inputs as `LinkIs` is for the link;
+Premises: the ZK server's packed table is the witness's (`hg`), a trust in the host's inputs as `LinkIs` is for the link;
 the opened coins are admitted; and level 0's clear values are `l0Clear` at the coins (`hB`, as `swSrcE_ligHyp_E` takes
-it). That the rep's base is before the stop comes from the firewall's PIOP having returned (`repFwC_piopFw`, `piopFw_at`'s
+it). That the rep's base is before the stop comes from the ZK server's PIOP having returned (`repFwC_piopFw`, `piopFw_at`'s
 bound), and that no refusal shows by round `n` from the admitted coins (`not_refused_of_admits`).
 -/
 
+@[expose] public section
+
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Flock.Firewall.Finish
 open Flock Transcript
@@ -76,6 +82,47 @@ theorem LigHyp.ofSalt {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {m
     LigHyp coin n p0 ms sch t b lay h rep tPad extra lanePad salt' src :=
   { H with salt := fun a b' i h1 h2 q hq => by rw [hs i h1 h2 q hq]; exact H.salt a b' i h1 h2 q hq }
 
+/-- **`LigHyp` reads the extra lanes and lane paddings only within level 0's sizes**: it holds at extra lanes that agree
+with its own below the folded table's size, and at lane paddings that agree on the `2^lanes + 4` lanes below `t_pad`,
+for rep `0` or `1`. -/
+theorem LigHyp.ofLanes {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {ms : _root_.Flock.MerkleScheme}
+    {sch : _root_.Flock.Schedule} {t b : Array _root_.Flock.F128} {lay : _root_.Flock.Zk.PadLayout}
+    {h : Array _root_.Flock.F128} {rep tPad : ℕ} {extra lanePad extra' lanePad' : ℕ → ℕ → _root_.Flock.F128}
+    {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc}
+    (H : LigHyp coin n p0 ms sch t b lay h rep tPad extra lanePad salt src)
+    (he : ∀ e c, c < (tabS coin p0 t sch.k0).size → extra' e c = extra e c)
+    (hp : ∀ l i, l < 2 ^ (sch.levels.getD 0 default).lanes + _root_.Flock.Zk.EXTRA_LANES → i < tPad →
+      lanePad' l i = lanePad l i)
+    (hr : rep < 2) :
+    LigHyp coin n p0 ms sch t b lay h rep tPad extra' lanePad' salt src := by
+  have hA : ∀ e, (Array.range (tabS coin p0 t sch.k0).size).map (extra' e) =
+      (Array.range (tabS coin p0 t sch.k0).size).map (extra e) := fun e =>
+    Array.map_congr_left fun c hc => he e c (Array.mem_range.1 hc)
+  have hE : _root_.Flock.Zk.EXTRA_LANES = 4 := rfl
+  have hB : (Array.range tPad).map (fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad' l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) =
+      (Array.range tPad).map (fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) := by
+    refine Array.map_congr_left fun i hi => ?_
+    have hi' := Array.mem_range.1 hi
+    rw [hp (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i (by omega) hi',
+      hp (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i (by omega) hi']
+    exact List.foldl_ext _ _ _ fun acc l hl => by
+      have := List.mem_range.1 hl
+      try dsimp only
+      rw [hp l i (by omega) hi']
+  exact { H with
+    e0 := by rw [hA]; exact H.e0
+    e1 := by rw [hA]; exact H.e1
+    y1 := fun a b' => by rw [hA, hA]; exact H.y1 a b'
+    ybar := fun a b' => by rw [hB]; exact H.ybar a b' }
+
 end FlockComplete.LigLock
 
 namespace Claims.ZKMal
@@ -100,12 +147,12 @@ theorem rsCoins_ligRespE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (L n 
   unfold FlockComplete.Replay.Rs.coinsAt
   simp only [coinOf_ligRespE]
 
-/-- **The firewall's rep is the switched source's cut**: at a live statement, a witness, a tape, admitted opened coins,
+/-- **The ZK server's rep is the switched source's cut**: at a live statement, a witness, a tape, admitted opened coins,
 any stop `n`, the session's setup, table `j` and its extra claims, and at
-`pads_frame`'s premises at the firewall's request `q`, where table `j`'s rows hold at its base, level 0's part of the
-firewall's clear values is `l0Clear` at the coins, the firewall's packed table is the witness's (`hg`), and its levels ≥ 1
+`pads_frame`'s premises at the ZK server's request `q`, where table `j`'s rows hold at its base, level 0's part of the
+ZK server's clear values is `l0Clear` at the coins, the ZK server's packed table is the witness's (`hg`), and its levels ≥ 1
 salts are the tape's on the schedule (`hsalt`, all `LigHyp` reads of them, `LigHyp.ofSalt`): where the
-firewall's rep returns a proof `p` from the log `l` at the rep's base, the cut from the switched source returns the same
+ZK server's rep returns a proof `p` from the log `l` at the rep's base, the cut from the switched source returns the same
 transcript and log and a proof `p'` with `eraseZ p' = eraseZ p`. -/
 theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
@@ -192,7 +239,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     unfold FlockComplete.piopRoundsZk
     rw [hesz]
     omega
-  -- the firewall's PIOP returned, so it sent all its bodies before the stop
+  -- the ZK server's PIOP returned, so it sent all its bodies before the stop
   have hP0 : ligP0 x j r ≤ n := by
     obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.Firewall.Finish.repFwC_piopFw h
     obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopFw_at hm14 hpf (trsE x w (UE.tapeZk τ))[j.val]!
@@ -207,7 +254,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
       ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := fun i hi =>
     swSrcE_hmk_frame Lr ρ tz frep x c w A B τ j r q hA hq hlayR hz htape hrows i (by rw [← hLyE]; exact hi)
-  -- the switched vectors at the firewall's zerocheck and lincheck
+  -- the switched vectors at the ZK server's zerocheck and lincheck
   have hsv : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -291,7 +338,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     (Composed.maskWordsOf (stsOf x)[j.val]!) t₀ l hm14 hln hkL hmk hpiop ?_
     (swSrcE_hinner_sv Lr ρ tz frep x hx w τ c n hnr s spec hs j r A B q hA hq hlayR hz htape hpads hrows st hst
       (zkTab x j).tPad dom (ligTab x w τ j) cm0 extras hesz ic _ _ _ ht₀ hl hsv) h
-  -- level 0's opening: the firewall's PIOP ends at `ligP0` and switched `swsE`
+  -- level 0's opening: the ZK server's PIOP ends at `ligP0` and switched `swsE`
   intro zp lp ss T sws t₃ l₃ h₃
   obtain ⟨hsws, hl₃, -⟩ := FlockComplete.piopFw_at hm14 h₃ (trsE x w (UE.tapeZk τ))[j.val]!
   have hl3 : l₃.size = ligP0 x j r := by

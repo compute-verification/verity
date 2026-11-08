@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """SHA-512 Merkle trees with hm96-sha512/v1 leaves on the device for verity/flock-circuit: install verity/ml/flock/cuda/sha512.cuh into a Flock b684b12
-checkout and widen every Merkle node from 32 to 64 bytes (FLOCK_HB): the tree kernels, the node gathers and cap copies, the
-proof writer, and the tree allocations and cap observations of the chunk and circuit provers and the Ligerito levels.
+checkout, with the GPU's one SHA-512 (verity/ml/kernels/sha512.cuh) beside it as kernels_sha512.cuh, and widen every Merkle
+node from 32 to 64 bytes (FLOCK_HB): the tree kernels, the node gathers and cap copies, the proof writer, and the tree
+allocations and cap observations of the chunk and circuit provers and the Ligerito levels.
 
 Run from the flock checkout after verity/ml/flock/cuda_circuit_patch.py, together with verity/ml/flock/flock-sha512-b684b12.patch
 (the Rust side: 64-byte digests, HashKind::Sha512); flock-live's feature `sha512` selects it. Every edit must match exactly
@@ -15,7 +16,11 @@ here = pathlib.Path(__file__).resolve().parent
 g = pathlib.Path("cuda-ghash")
 if "FLOCK_HB" in (g / "merkle_open.hpp").read_text():
     raise SystemExit("cuda_sha512_patch: already applied")
-shutil.copy(here / "cuda" / "sha512.cuh", g / "sha512.cuh")
+KERNELS_SHA = '#include "../../kernels/sha512.cuh"\n'
+shutil.copy(here.parent / "kernels" / "sha512.cuh", g / "kernels_sha512.cuh")
+s = (here / "cuda" / "sha512.cuh").read_text()
+assert s.count(KERNELS_SHA) == 1, f"cuda/sha512.cuh: {KERNELS_SHA!r} occurs {s.count(KERNELS_SHA)} times, expected 1"
+(g / "sha512.cuh").write_text(s.replace(KERNELS_SHA, '#include "kernels_sha512.cuh"\n'))
 
 GUARD = "#ifndef FLOCK_HB\n#define FLOCK_HB 64   // Merkle node bytes: SHA-512 (verity's cuda_sha512_patch.py)\n#endif\n"
 

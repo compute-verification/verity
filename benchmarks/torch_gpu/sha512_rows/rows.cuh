@@ -169,7 +169,7 @@ SX_HD void chacha20(const u32* key, u64 counter, u64 nonce, u32* out) {
 #undef SXR_QR
 
 // y as SALT_U32 little-endian words, word w at y[w ys]: ChaCha20 blocks 3 salt_row .. 3 salt_row + 2 under key with nonce
-// (C-Flock's hm96_salt)
+// (Flock's hm96_salt)
 SX_HD void salt_key_words(const u32* key, u64 nonce, u64 salt_row, u32* y, u32 ys) {
   for (int c = 0; c < 3; ++c) {
     u32 o[16];

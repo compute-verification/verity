@@ -1,3 +1,10 @@
+module
+
+public import Flock.HmRow
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.ExecParse
 
 /-!
@@ -10,6 +17,8 @@ whole SHA-512 blocks (`rowPorts_words`), the unit, `sha512x3` and `hm96` nets an
 (`wires_prefix`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -112,6 +121,7 @@ theorem wires_prefix {wires derived : Array Wire} {p : ℕ → Bool}
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hw
     simpa using hrest i hi
 
+-- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
 /-- `HmRow.rowPorts`' `sha512/row/v1` ports are whole SHA-512 blocks. -/
 theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
@@ -170,6 +180,7 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
     cases hf
     cases hv
 
+-- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
 /-- `HmRow.rowPorts`' `sha512/row/v1` ports are not segmented (a segmented row is a bit row). -/
 theorem rowPorts_v1 {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
@@ -349,6 +360,8 @@ theorem unitPre_flat {c : Circuit} (h : c.tmpl = none) : unitPre c = #[] := by s
 theorem unitPre_tmpl {c : Circuit} {tu : TmplUnit} (h : c.tmpl = some tu) : unitPre c = #[("unit", tu.net)] := by
   simp [unitPre, h]
 
+-- one proof of a few hundred lines down `HmRow.parse`'s unfolded body: `split` and `cases` at each branch, a bind step
+-- per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, or a
 templated file's committed unit net): its nets are `pre`'s, then the file's own, each `Net.parse`'s or a lookup slot,

@@ -1,6 +1,13 @@
-import Proofs.Core.Game.Basic
+module
+
+public import Definitions.Core.Game
+public import Mathlib.Algebra.MvPolynomial.Degrees
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+public import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Algebra.MvPolynomial.SchwartzZippel
-import Mathlib.Algebra.Polynomial.Roots
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Core.Game.Basic
 
 /-!
 # A live coin hits a zero of a fixed polynomial rarely
@@ -10,6 +17,8 @@ fixed a nonzero polynomial, a uniform coin is one of its zeros with probability 
 degree over the field size (Schwartz–Zippel; Mathlib's `schwartz_zippel_totalDegree` and root
 counting).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

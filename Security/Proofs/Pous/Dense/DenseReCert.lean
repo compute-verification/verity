@@ -1,5 +1,15 @@
-import Mathlib.Data.Nat.Bitwise
-import Proofs.Pous.Dense.DenseMeets
+module
+
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Model.SegLift
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Nat.Bitwise
+public import Proofs.Pous.Dense.DenseMeets
+import Proofs.Pous.B5.ExPostFacto
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iTimed
+import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # Dense scheme re-certificate at the 64 KB operating point, and the multi-segment lemma
@@ -20,6 +30,8 @@ Everything is in the random-oracle model. The multi-segment lemma (`dense_meets_
 distinct-tagged segments; it is structured so the concrete overwrite-chain `H` (`ChainExPostFacto`, `sponge-dense`) can
 replace the random oracle segment-by-segment without touching the composition.
 -/
+
+@[expose] public section
 
 namespace PousDenseReCert
 

@@ -1,5 +1,11 @@
-import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Lowering
+module
+
+public import Proofs.Flock.Soundness.Types.Flat
+public import Definitions.Flock.Lowering
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A unit's rows in logical order (verified-lowering phase 1, 1d step 1)
@@ -22,6 +28,8 @@ binds it):
 - `Rows.compose_eval`: satisfied composed rows, with `one` at 1, carry the type's outputs (`Types.eval`) on the output
   columns. This is `Types.compose_sound` read through the logical order.
 -/
+
+@[expose] public section
 
 open Flock Flock.Derive
 

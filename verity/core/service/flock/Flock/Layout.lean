@@ -21,11 +21,14 @@ own-region size, the count `derive`'s v2 rule makes; `check_ok` says acceptance 
 - **A read's rows are `table/v2`'s,** with product rows for its low `k` value bits: a library table's up to its highest
   varying bit (the rest are constant, and wired), a program table's all, so no shape depends on a program table's values.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.CircuitType
-import Flock.JsonParse
+module
+
+public import Flock.Canon
+public import Flock.CircuitType
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

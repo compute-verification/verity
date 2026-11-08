@@ -1,5 +1,10 @@
-import CoreProtocol.Cli
-import PousCheck.Setup
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Protocol
+public import PousCheck.Setup
+meta import CoreProtocol.Cli
+meta import PousCheck.Setup
 
 /-!
 # The public-encoder setup as a core protocol
@@ -26,6 +31,10 @@ as Python's `verifier_key_from_encoding` refuses it.
 On acceptance the public outputs are `{"blocks":B,"commitment":hex,"root":hex,"salt":hex}` (`Public.ofJson` reads them
 back) and the profile is `{"mode":"public"}`: Python's setup records nothing beyond its mode (`protocol.PUBLIC`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.SetupProtocol
 

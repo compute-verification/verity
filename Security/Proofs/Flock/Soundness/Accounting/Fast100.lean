@@ -1,10 +1,15 @@
-import Definitions.Flock.Accounting.Fast100
+module
+
+public import Definitions.Flock.Accounting.Fast100
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The bound for `fast100` run twice on one root
 
 For every witness size the profile supports and every statement shape the three statements of
-PROTOCOL.md §16 can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
+`Flock.Statement` can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
 coordinates, well beyond today's statements), `tableError` is at most
 
 * `2^-205` for every `22 ≤ m ≤ 35` (`tableError_le_of_le_33`, `tableError_le_of_34_35`), at the
@@ -19,6 +24,8 @@ bound, and the mutual-correlated-agreement numerator of BCHKS25 Theorem 4.6 by a
 form (its terms sit below 2^-180, against about 2^-102.5 for the queries). The rational bound is then
 checked by exact arithmetic for each `m`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

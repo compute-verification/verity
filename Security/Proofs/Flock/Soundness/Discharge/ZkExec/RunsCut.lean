@@ -1,3 +1,22 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 
@@ -11,6 +30,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 * `roundGroups_succ`: from round 1 on, `decZ`'s groups are `decOf`'s, which `DecodeZL.roundGroups_eq` gives as the
   chunks' reads, and `DecodeZL.cut_of_carries` cuts `zk_carries` into the same.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

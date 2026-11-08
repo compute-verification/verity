@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.String.Defs
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The zerocheck's and lincheck's rounds carry their messages (R11b)
@@ -7,6 +25,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 are `zcMsgs ++ lcMsgs`, cut at `zcShape ++ lcShape`'s coins. The frames split into rounds that each close at their last
 frame (`carries_one`), the residual rounds by induction (`carries_pairs`), and the rounds glue (`Carries.append`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

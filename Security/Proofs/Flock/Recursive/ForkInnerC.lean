@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.ForkLast
+module
+
+public import Proofs.Flock.Recursive.ForkLast
+public import Proofs.Flock.Recursive.ForkInner
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # Recursion: gap 2 at the committed rounds
@@ -15,6 +32,8 @@ leaf decodes. The conclusion is `zk_sessions_recursive_fork_inner`'s.
 * `zk_sessions_recursive_fork_innerC`: it for an inner verifier and a pick that ignore the last coin (`Inner.LastFree`,
   `PickLastFree`), the inner term from `innerAtLeavesL_of_forkOn`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

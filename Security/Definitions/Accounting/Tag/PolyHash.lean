@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.ZMod.Defs
-import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.Prob
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.ZMod.Defs
+public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Core.Prob
 
 /-!
 # The keyed polynomial hash over `GF(2^31 − 1)` (trusted)
@@ -20,6 +22,8 @@ A word enters the field as its residue: `int(w) % MOD` in the reference, one Mer
 GPU, which agrees mod `p`. Since `2^32 > 2p`, every word has another word with its residue (`w` and `w ± p`), so the
 hash binds residues, not words: two blocks whose words agree mod `p` hash alike at every key.
 -/
+
+@[expose] public section
 
 namespace Accounting.Tag
 
@@ -58,7 +62,7 @@ def fold (z : ZMod P) (hs : List (ZMod P)) : ZMod P :=
 def digest {R W : ℕ} (g z : ZMod P) (xs : Fin R → Chunk W) : ZMod P :=
   fold z (List.ofFn fun r => blockHash g (xs r))
 
-/-- **The best guess of word `j`** of a block drawn from `μ`, by one who knows every other word of the block: the largest
+/-- **The best guess of word `j`** of a block sampled from `μ`, by one who knows every other word of the block: the largest
 conditional probability `μ(x) / μ(blocks that agree with x off j)` (`0` where that class has probability `0`). Its
 `−log₂` is word `j`'s conditional min-entropy given the rest of the block: `2^-32` for a uniform word independent of the
 rest, `1` for a word the rest determines. -/

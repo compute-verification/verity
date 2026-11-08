@@ -1,6 +1,9 @@
+module
+
+public import Definitions.Accounting.Memory
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Basic.ENNReal.Real
 import Mathlib.Data.Fintype.BigOperators
-import Definitions.Accounting.Memory
 
 /-!
 # The counting core of lemma M
@@ -9,6 +12,8 @@ The fibres of `π : (Fin M → Bool) → Fin q → Bool` partition the `2^M` sta
 than `T` states number at most `2^M / T` (`card_heavy_mul_le`, Markov's inequality over `z`). At `T = 2^(M − q + k)`
 that is at most `2^(q − k)` of the `2^q` values (`counting`).
 -/
+
+@[expose] public section
 
 namespace Accounting.MemoryProofs
 

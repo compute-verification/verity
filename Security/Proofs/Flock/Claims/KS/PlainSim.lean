@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainWire
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.KS.ForkCoupling
-import Proofs.Flock.Claims.KS.RoundsN
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainWire
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.ForkCoupling
+public import Proofs.Flock.Claims.KS.RoundsN
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator
@@ -12,6 +14,8 @@ uniform function per deployed round of the live coins' revealed history (`plainT
 feeds `P` are `fnC` of that tape and the live coins' revealed entries (`simCoins`), which are `plainΦ`'s coins
 (`Claims.Bridge.Live.fnAt` at the history key `FnFork.histKey`) wherever the history is the live session's.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -274,12 +278,6 @@ theorem plainSim_firstK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω
     (((plainSimK keep P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 := by
   simp only [plainSimK, Claims.OC.eval, plainMsgK]
   rfl
-
-/-- `plainSim_firstK` at the deployed plain verifier (`keep := id`). -/
-theorem plainSim_first {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (u : plainTape x) :
-    (((plainSim P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 :=
-  plainSim_firstK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (u := u)
 
 /-- **The simulator sends `P`'s roots** (`plainRoot_of_first`). -/
 theorem plainSim_rootK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)

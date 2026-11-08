@@ -1,4 +1,6 @@
-import Definitions.Core.TC.Spec
+module
+
+public import Definitions.Core.TC.Spec
 
 /-!
 # Named assumptions
@@ -8,6 +10,8 @@ The hardware semantics and the deployment Verity's theorems take without proof, 
 deployment assumption's moniker is its `verity.claims` id. An area's `Definitions/<Area>/Assumptions` cites these rather
 than restating them.
 -/
+
+@[expose] public section
 
 namespace Verity.Assumptions
 

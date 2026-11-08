@@ -1,5 +1,7 @@
-import Mathlib.Data.Nat.Choose.Basic
-import Definitions.Pous.Game.Prob
+module
+
+public import Mathlib.Data.Nat.Choose.Basic
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The streamed-label wipe (experimental)
@@ -18,13 +20,15 @@ too, from `ξ` and the indices it is sent, so whatever the two sides do during t
 The prover *keeps* `z` when a function of `σ`, `ξ` and the challenges returns it (`Keeps`): then `z` survives the
 wipe, inside the boundary or out.
 
-The labels are the auditor's PRF, `L = prf K` under a uniform key `K : Bits κ` (`winReal`). The ideal game draws them
+The labels are the auditor's PRF, `L = prf K` under a uniform key `K : Bits κ` (`winReal`). The ideal game samples them
 uniform (`winIdeal`), and the difference is the PRF's advantage (`prfAdvantage`) against the distinguisher the game
 makes of the prover (`wipeDistinguisher`): with coins `(z, c)` and labels `L`, it runs the prover and outputs whether
 the prover won.
 
 Provers are deterministic: a randomized prover is an average of deterministic ones (`Pous.pr`).
 -/
+
+@[expose] public section
 
 namespace Pous.StreamedWipe
 

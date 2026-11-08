@@ -1,17 +1,52 @@
-import Proofs.Flock.Claims.ZK.FinishRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The firewall's rep reads the extra claims' coordinates alone
+# The ZK server's rep reads the extra claims' coordinates alone
 
 The ring switch reads a claim's coordinates `x` and nothing else (its value and skip weights go to the verifier), and the
-firewall's rep reads the extra claims only through the ring switch on `abcClaims ++ extras`. So two lists of extra
-claims with the same coordinates give one rep: the firewall's `claimsOf xs` and a session's extra claims at `xs`.
+ZK server's rep reads the extra claims only through the ring switch on `abcClaims ++ extras`. So two lists of extra
+claims with the same coordinates give one rep: the ZK server's `claimsOf xs` and a session's extra claims at `xs`.
 
 * `getElem!_x`: claim `k`'s coordinates are entry `k` of the coordinates, in range or not.
 * `FlockComplete.ringSwitchCut_x`: the ring switch at claims with the same coordinates is one run.
 * `switchVec_x`, `ringSwitchCut_switchVec`: so is the ring switch on their switched vectors of a packed table.
 * **`repFwC_claims_x`**: `repFwC` at extra claims with the same coordinates is one run.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -60,7 +95,7 @@ theorem ringSwitchCut_switchVec (io : FlockComplete.Asks M) (g : Array F128) {cs
   rw [e]
   exact FlockComplete.ringSwitchCut_x io _ hx
 
-/-- **`repFwC_claims_x`: the firewall's rep reads the extra claims' coordinates alone**: at extra claims with the same
+/-- **`repFwC_claims_x`: the ZK server's rep reads the extra claims' coordinates alone**: at extra claims with the same
 coordinates it is one run, so at `claimsOf xs` and at any claims at `xs`. -/
 theorem repFwC_claims_x (io : FlockComplete.Asks M) (hs : Hashes M) (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit) {E E' : Array Claim}

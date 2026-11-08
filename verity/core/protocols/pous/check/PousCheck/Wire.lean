@@ -1,10 +1,11 @@
-import Flock.Canon
-import Identity.Tagged
-import PousCheck.Commit
-import PousCheck.Merkle
-import PousCheck.Challenge
-import PousCheck.Wire.Codec
-import PousCheck.Prim.PyJson
+module
+
+public import Flock.Canon
+public import PousCheck.Commit
+public import PousCheck.Merkle
+public import PousCheck.Challenge
+public import PousCheck.Wire.Codec
+public import PousCheck.Prim.PyJson
 
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
@@ -32,6 +33,8 @@ Every check is the Python's, in the Python's order, because the first failing ch
 
 Latencies are data (the verifier's measurements, `elapsed`), never read here.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Wire
 

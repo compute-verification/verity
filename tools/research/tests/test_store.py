@@ -416,6 +416,30 @@ def test_cli_push_run_and_pending(store, fs_remote, tmp_path, capsys):
     assert main(["push", "nonsense"]) == 1 and "not an artifact or run id" in capsys.readouterr().err
 
 
+def test_push_refuses_an_artifact_withdrawn_from_the_shared_store_even_when_another_machine_withdrew_it(store, fs_remote, env, tmp_path,
+                                                                                                        capsys):
+    """A node kept its copy of a run's private scan files after they were withdrawn elsewhere; `push --pending` would have put
+    them back on the remote.  `research data push` pulls the targets' labels first, so the refusal holds on any machine."""
+    from research.store import vocab
+    from research.store.cli import main
+
+    src = tmp_path / "scan.json"
+    src.write_bytes(b"private answers")
+    art = store.put_artifact("evidence/v1", {"n": 1}, file=src)
+    keep = store.put_artifact("evidence/v1", {"n": 2}, file=src)
+    other = LocalStore(env / "other", config_path=env / "store.toml")
+    other.add_label(art, vocab.WITHDRAWN, "private scan answers", "vllm")
+    assert other.push_labels([art])["failed"] == []
+    assert store.withdrawn(art) is None, "only the remote has it so far"
+    assert main(["push", "--pending"]) == 1
+    out = capsys.readouterr().out
+    assert f"{art}  ?  NOT preserved: StoreError: {art} was withdrawn from the shared store ('private scan answers', by vllm)" in out
+    assert f"{keep}  evidence/v1  PRESERVED" in out
+    assert not (fs_remote / "manifests" / f"{art.removeprefix('art:')}.json").exists()
+    with pytest.raises(StoreError, match="never pushed back"):
+        store.push(art)
+
+
 def test_unusable_remote_degrades_to_local(env, monkeypatch):
     """store.toml names an S3 bucket but the credential env vars are unset (a pod, a test, a laptop without `source r2.env`): the
     local store must keep working -- reads, puts, attempt publication -- and only push/push_attempt name the missing credentials."""
@@ -1151,7 +1175,7 @@ def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, caps
     out = capsys.readouterr().out
     line = out.splitlines()[0]
     assert line.startswith(f"{art}  run-files/v1  PRESERVED  26 objects (26 uploaded, 0 already there)") and "obj/s" in line and "verified sha256-readback" in line
-    assert "1/1 preserved" in out and sum(1 for x in s.log if x[0] == "GET") == 26
+    assert "1/1 preserved" in out and sum(1 for x in s.log if x[0] == "GET" and x[1]) == 26     # a readback each; the other GET lists its labels
     assert main(["push", art, "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     x = doc["pushed"][0]
@@ -1470,3 +1494,28 @@ def test_index_artifact_holds_the_write_lock_before_it_reads(tmp_path):
     ix.db.set_trace_callback(None)
     assert took == [False]
     assert ix.db.execute("SELECT kind FROM artifacts").fetchall() == [("blob/v1",)]
+
+
+def test_each_catalog_write_finds_its_rows_through_an_index(tmp_path):
+    """Every process on a machine writes its one catalog, and a write holds the lock until it commits, so a write statement that
+    scans its table holds every other writer off for a pass over it.  A refresh (`research queue ready`'s records gate) writes
+    the remote's attempts one after another: with a scan of each attempt table in each, the machine's other writers (`research
+    data put`) fail "database is locked" until it ends.  Each statement the writes run that reads rows searches an index."""
+    from research.store.index import Index
+
+    ix = Index(tmp_path / "catalog.sqlite")
+    art = "art:" + "0" * 64
+    ran: list[str] = []
+    ix.db.set_trace_callback(ran.append)
+    ix.index_artifact({"kind": "blob/v1", "payload": {"bytes": 0}, "meta": {"a": 1}, "refs": {"r": "art:" + "1" * 64}}, art)
+    ix.index_attempt(_attempt(outputs={"result": art}, inputs={"x": "art:" + "1" * 64}))
+    ix.index_label({"target": art, "key": "k", "value": True, "by": "lane", "ts": "2026-09-22T11:00:00Z"}, tmp_path / "label.json")
+    ix.set_presence(art, local=True)
+    ix.set_replica(art, "remote", "2026-09-22T11:00:00Z", verified="etag-md5")
+    ix.db.set_trace_callback(None)
+    plans = {s: [row[3] for row in ix.db.execute(f"EXPLAIN QUERY PLAN {s}")] for s in dict.fromkeys(ran)
+             if s.split(None, 1)[0].upper() in ("SELECT", "UPDATE", "DELETE")}
+    assert {t for s in plans for t in ("attempt_params", "attempt_conditions", "attempt_outputs", "attempt_inputs")
+            if s.startswith(f"DELETE FROM {t} ")} == {"attempt_params", "attempt_conditions", "attempt_outputs", "attempt_inputs"}
+    scans = {s: p for s, p in plans.items() if any(step.startswith("SCAN") for step in p)}
+    assert not scans, f"catalog writes that scan a table under the write lock (index the column they look up): {scans}"

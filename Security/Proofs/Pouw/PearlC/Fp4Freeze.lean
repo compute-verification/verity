@@ -1,8 +1,12 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.PearlC.Fp4Skip
-import Proofs.Pouw.PearlC.AccumProofs
+module
+
+public import Definitions.Pouw.PearlC.Fp4Skip
+public import Proofs.Pouw.PearlC.AccumProofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.AtomErr
+import Proofs.Pouw.PearlC.PeelExactProofs
 
 /-!
 # Pearl-C4's replayed debit: exactness, and the soundness of terms 2 and 3
@@ -11,7 +15,7 @@ Proofs about `Pouw.PearlC.Fp4Skip` on any `Fp4Atom` (`sm120Nvf4`, `sm120Mxf4`), 
 
 * **The exactness lemma** (`step_exact`, `chainMask_exact`, `cTilde_exact`, `cTilde_dot`). A step is exact when
   - `NoLoss`: no addend loses a bit to the step's grid `2^lsb` (`gridLsb`), i.e. every group's scaled dot and the
-    accumulator's significand are multiples of `2^lsb` (`fp4_census.py`'s step with no `glost` and no `alost`); and
+    accumulator's significand are multiples of `2^lsb` (the FP4 census's step with no `glost` and no `alost`); and
   - `Fits`: the exact sum is a binary32 value (no `nlost`, no overflow).
 
   Such a step writes exactly the accumulator plus `Σ mant·2^unit` (`step_exact`). An `ExactRun`, whose unskipped steps
@@ -53,6 +57,8 @@ Proofs about `Pouw.PearlC.Fp4Skip` on any `Fp4Atom` (`sm120Nvf4`, `sm120Mxf4`), 
     - the salt-dead bound `#salt-dead ≤ ρ_D·m·k`, as a hypothesis;
     - `f_s`, as a price.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Fp4Freeze
 
@@ -265,7 +271,7 @@ def gridLsb (p : Fp4Atom) (ts : List GroupTerm) (c : Term) : ℤ :=
   | [] => p.gridFloor
   | x :: xs => max (xs.foldl max x) p.gridFloor
 
-/-- **No addend loses a bit to the grid** (`fp4_census.py`'s step without `glost` or `alost`): every group's scaled dot
+/-- **No addend loses a bit to the grid** (the FP4 census's step without `glost` or `alost`): every group's scaled dot
 `mant·2^unit` and the accumulator's significand `mag·2^(exp − 23)` are multiples of `2^lsb`. -/
 structure NoLoss (p : Fp4Atom) (ts : List GroupTerm) (c : Term) : Prop where
   groups : ∀ h ∈ ts, h.unit < gridLsb p ts c → (2 ^ (gridLsb p ts c - h.unit).toNat : ℤ) ∣ h.mant

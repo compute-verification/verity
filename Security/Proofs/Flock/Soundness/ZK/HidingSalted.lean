@@ -1,4 +1,18 @@
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+public import Proofs.Flock.Soundness.ZK.Hiding
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Rewinding
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Zero knowledge: T1 over leaves whose digests read the earlier salts
@@ -10,6 +24,8 @@ read by the last leaf alone, so `ideal_leaf_swap` replaces that leaf, with the e
 ideal leaf reads its salt only through `c(y)`, so the leaves before it form an experiment of the same shape, one leaf
 shorter.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

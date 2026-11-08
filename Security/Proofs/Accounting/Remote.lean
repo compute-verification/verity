@@ -1,15 +1,46 @@
-import Definitions.Accounting.Assumptions.Remote
-import Proofs.Pouw.Prob
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Accounting.Assumptions.Remote
+public import Proofs.Pouw.Prob
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The remote audit's compositions, from their routes
 
-Statements about a run of the remote audit (`Accounting.Remote.Run`), each at the coins drawn (a per-run reading): the
+Statements about a run of the remote audit (`Accounting.Remote.Run`), each at the coins flipped (a per-run reading): the
 routes it composes are bounds at each outcome, taken as hypotheses, and the statement bounds the probability, over the
 audit's coins, that the audit accepts and the bound fails, by the routes' errors summed.
 
@@ -40,6 +71,8 @@ the node-level reading that is listed. The memory a session shows held is the me
 (`Accounting.Guarantees.Remote.Held` and its time-held forms), and Mbw is the bandwidth game's
 (`Bandwidth.Guarantees.Mbw`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

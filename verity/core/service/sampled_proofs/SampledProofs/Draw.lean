@@ -1,20 +1,25 @@
 /-
-The draw (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a draw held to the
-registration and to that law (`checkDraw`), and the proved statement's units held to the draw (`checkProved`). The strata,
-their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
+The sample (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a sample held to the
+registration and to that sampling design (`checkDraw`), and the proved statement's units held to the sample (`checkProved`). The strata,
+their rules, the sampling design object and the samplers are Flock's (`Flock.Draw`). The check samples nothing: the sample comes from
 the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
-import Flock.Draw
-import SampledProofs.Partition
+module
+
+public import SampledProofs.Partition
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Draw
 
 open Lean (Json)
 open Flock (V)
-/-- `draw.derive`'s expansion as C-Flock's law: `stratified` and `work` (the rule, or an expanded law, whose strata are
+/-- `draw.derive`'s expansion as Flock's law: `stratified` and `work` (the rule, or an expanded law, whose strata are
 ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its
 work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchanged. An error when the query doesn't apply,
-`k` isn't in `[1, population]`, a work law has no table, the table names no work for a template, or the population does
+`k` isn't in `[1, population]`, a work sampling design has no table, the table names no work for a template, or the population does
 none. -/
 def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option Flock.Draw.Law) := do
   let kind := match getD law "law" with | .str s => s | _ => ""
@@ -27,14 +32,14 @@ def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option
   let some t := table | throw "a work law needs the verifier's work table"
   return some (← Flock.Draw.deriveWork k strata (← Flock.Draw.workTableOfJson t))
 
-/-- `draw.derive`: the law object of `deriveLaw`'s expansion, and `law` itself where it has none. -/
+/-- `draw.derive`: the sampling design object of `deriveLaw`'s expansion, and `law` itself where it has none. -/
 def derive (p : Program) (query law : Json) (table : Option Json) : V Json :=
   return ((← deriveLaw p query law table).map (·.toJson)).getD law
 
-/-- `draw.same_law`: the same canonical bytes. -/
+/-- `draw.same_design`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b
 
-/-- `draw.law_of`: the law a draw names. -/
+/-- `draw.law_of`: the sampling design a sample names. -/
 def lawOf (draw : Json) : Json :=
   let kind := getD draw "law"
   if jeq kind "stratified" || jeq kind "work" then
@@ -60,7 +65,7 @@ def ranges? : Json → Option (Array (Int × Int))
 private def natRanges (rs : Array (Int × Int)) : Option (Array (Nat × Nat)) :=
   rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
 
-/-- One stratum of a draw's law: exactly its keys, a string template, its units ranges, an integer `k` and, for a work
+/-- One stratum of a sample's law: exactly its keys, a string template, its units ranges, an integer `k` and, for a work
 stratum, natural `work` and `floor`. A negative bound or `k` can't tile `[0, population)` or meet its rule, so it is a
 problem here already. -/
 private def stratum? (work : Bool) (s : Json) : Option Flock.Draw.WorkStratum := do
@@ -72,9 +77,9 @@ private def stratum? (work : Bool) (s : Json) : Option Flock.Draw.WorkStratum :=
   let f ← if work then nat? (getD s "floor") else some 0
   return { template := t, units := rs, k, work := w, floor := f }
 
-/-- `draw.strata_problem`: whether a stratified or work law is not well formed over `population` units. Each stratum is
+/-- `draw.strata_problem`: whether a stratified or work sampling design is not well formed over `population` units. Each stratum is
 exactly its keys with a distinct template, its ranges ascending, disjoint, not adjacent and tiling `[0, population)`, and
-its `k` the rule's; the problems after parsing are C-Flock's (`Flock.Draw.strataProblem`, `Flock.Draw.workProblem`). -/
+its `k` the rule's; the problems after parsing are Flock's (`Flock.Draw.strataProblem`, `Flock.Draw.workProblem`). -/
 def strataProblem (law : Json) (population : Int) : Bool := Id.run do
   let work := jeq (getD law "law") "work"
   let .arr ss := getD law "strata" | return true
@@ -99,19 +104,20 @@ def probability? (p : String) : Option (Nat × Nat) :=
   | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
   | _ => none
 
-/-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
-up tables of different shapes: `bernoulli` at `0 < p < 1`, which the sampled audit's soundness statement doesn't cover.
-The stream's run (`Run.run`: `shapes`) and the audit (`OneStage.paramsOfJson`) refuse it. -/
-def countVaries (law : Json) : Bool :=
-  match getD law "law", getD law "p" with
-  | .str "bernoulli", .str p => match probability? p with
-    | some (num, den) => 0 < num && num < den
-    | none => false
-  | _, _ => false
+/-- `service.bernoulli`: the sampling design is `bernoulli`, at any `p`, which the sampled audit's soundness statement
+doesn't cover (at `0 < p < 1` its sampled count varies; at `p = 0` it samples nothing, at `p = 1` everything, and neither
+is covered either). The audit (`OneStage.paramsOfJson`) and the stream's run (`Run.run`: `bernoulli`) refuse it. -/
+def bernoulli (law : Json) : Bool :=
+  match getD law "law" with
+  | .str "bernoulli" => true
+  | _ => false
+
+/-- The refusal of a `bernoulli` sampling design (`service.BERNOULLI`). -/
+def BERNOULLI : String := "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
 
 private def sumSizes (rs : Array (Int × Int)) : Int := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
 
-/-- `draw.strata_problem`'s words for why a stratified or work law is not well formed over `population` units, in its
+/-- `draw.strata_problem`'s words for why a stratified or work sampling design is not well formed over `population` units, in its
 order: `k` and the strata, a work stratum's keys, work and floor, the population's work, then each stratum's keys and
 template, its ranges, its floor and its `k`, and last the tiling. -/
 def strataMessage (law : Json) (population : Int) : Option String := Id.run do
@@ -153,7 +159,7 @@ def strataMessage (law : Json) (population : Int) : Option String := Id.run do
     at_ := hi
   return if at_ == population then none else some "the strata don't tile the population"
 
-/-- `draw.check_draw`: the draw is well formed, over the registered population, under the verifier's law (for
+/-- `draw.check_draw`: the sample is well formed, over the registered population, under the verifier's law (for
 `stratified` and `work`, the expanded law of `derive`), each failure with Python's detail. -/
 def checkDrawFull (draw population law : Json) : Check := Id.run do
   let kind := match getD draw "law" with | .str s => s | _ => ""
@@ -222,14 +228,14 @@ def checkDrawFull (draw population law : Json) : Check := Id.run do
 /-- `draw.check_draw`'s failure codes. -/
 def checkDraw (draw population law : Json) : Array String := (checkDrawFull draw population law).codes
 
-/-- `draw.proved`: the drawn units and a work draw's closure, ascending. -/
+/-- `draw.proved`: the sampled proof blocks and a work sample's closure, ascending. -/
 def proved (draw : Json) : Array Int :=
   let get := fun (k : String) => match getD draw k with
     | .arr xs => xs.filterMap int?
     | _ => #[]
   (get "units" ++ get "closure").qsort (· < ·)
 
-/-- `draw.check_proved`'s failure codes: the proved statement's instances are exactly the units the draw proves, in
+/-- `draw.check_proved`'s failure codes: the proved statement's instances are exactly the units the sample proves, in
 ascending order. -/
 def checkProvedFull (draw : Json) (provedUnits : Array Json) (instances : Json) : Check := Id.run do
   let want := proved draw
@@ -250,10 +256,10 @@ def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray :
   set (at_ + need)
   return src.extract at_ (at_ + need)
 
-/-- The C-Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
+/-- The Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
 `coins.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
-the law is not exactly a one-stage law's keys (`coins._law_problem`), a subset exceeds the population, or a stratified
-or work law isn't well formed over it (`strataProblem`). -/
+the sampling design is not exactly a one-stage law's keys (`coins._law_problem`), a subset exceeds the population, or a stratified
+or work sampling design isn't well formed over it (`strataProblem`). -/
 def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := do
   let kind := match getD law "law" with | .str s => s | _ => ""
   match kind with
@@ -276,7 +282,7 @@ def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := d
       pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
     | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
 
-/-- The units `law` draws over `[0, population)` as `Flock.Draw.drawWith` samples them from `src` read in order (`take`):
+/-- The units `law` samples over `[0, population)` as `Flock.Draw.drawWith` samples them from `src` read in order (`take`):
 `subset` and `bernoulli` on one stream, `stratified` and `work` one stream per stratum, each extended and rerun when it
 runs out; with the number of bytes of `src` read. An error when `src` runs out. -/
 def drawUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Except String (Array Nat × Nat) := do
@@ -284,15 +290,15 @@ def drawUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Exce
     | throw "the draw did not end"
   return (d.units, read)
 
-/-- `coins.draw_first` without a closure map: the one-stage draw object of the verifier's law over `[0, population)`
-(the law as `derive` expands it, with `population` and the drawn `units`), its units drawn from `src` (`drawUnits`) under
-the law's C-Flock law (`flockLaw`). An error where either is. With the draw, the number of bytes of `src` it read. -/
+/-- `coins.draw_first` without a closure map: the one-stage sample object of the verifier's law over `[0, population)`
+(the sampling design as `derive` expands it, with `population` and the sampled `units`), its units sampled from `src` (`drawUnits`) under
+the sampling design's Flock law (`flockLaw`). An error where either is. With the sample, the number of bytes of `src` it read. -/
 def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
   let (units, read) ← drawUnits (← flockLaw law population) population src
   return (Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson units)]),
     read)
 
-/-- `drawFirstRead`'s draw. -/
+/-- `drawFirstRead`'s sample. -/
 def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json :=
   (·.1) <$> drawFirstRead law population src
 

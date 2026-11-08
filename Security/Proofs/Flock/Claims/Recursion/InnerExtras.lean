@@ -1,6 +1,50 @@
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.InnerSetupSame
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+import all Init.Data.Array.Basic
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.InnerForm
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # Check 5's extra claims and comb are the deployed table's
@@ -11,12 +55,14 @@ fold (`staged_comb`). Check 5 takes the inner session's extra claims and comb fr
 which is the deployed one as the algebra reads it (`innerSetup_same`), and the extra claims at its record's link
 points, which are `pointsOf` the first coin:
 
-* the record's link points are the coin server's: `RecVStar.innerLink` refuses others (`innerLink_points`, `held_eq`);
-* the coin server's record read in its own format holds them (`RecSetup.checkReads`), and the reader reads that record
+* the record's link points are the challenger's live-coin part's: `RecVStar.innerLink` refuses others (`innerLink_points`, `held_eq`);
+* the challenger's live-coin part's record read in its own format holds them (`RecSetup.checkReads`), and the reader reads that record
   back off the first coin (`Drawn`);
-* the record decodes at a spec of two points of the files' `m_pts`, whatever full draw it carries (`drawnSpec_shape`),
+* the record decodes at a spec of two points of the files' `m_pts`, whatever full sample it carries (`drawnSpec_shape`),
   as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerExtras
 
@@ -103,7 +149,7 @@ theorem points_of_flat {α : Type} (d : α) {P : Array (Array α)} {n m : ℕ} {
   rw [hrowp, e1, e3] at e
   exact e.symm
 
-/-! ## The link points, as the record and the coin server's transcript hold them -/
+/-! ## The link points, as the record and the challenger's live-coin part's transcript hold them -/
 
 theorem mapError_ok {ε ε' α : Type} {x : Except ε α} {g : ε → ε'} {a : α} (h : x.mapError g = .ok a) :
     x = .ok a := by
@@ -138,7 +184,7 @@ theorem getArr_ok {q : Lean.Json} {a : Array Lean.Json} (h : q.getArr? = .ok a) 
   subst h
   rfl
 
-/-- **The inner session's record's link points are the coin server's**: `RecVStar.innerLink` reads the record's
+/-- **The inner session's record's link points are the challenger's live-coin part's**: `RecVStar.innerLink` reads the record's
 `link.points` as hex coins and refuses them unless they are the transcript's (`lk.points`). -/
 theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink} {j l : Lean.Json}
     (hj : Flock.JsonParse.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
@@ -198,7 +244,7 @@ theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : L
 /-! ## The inner session check 5 loads -/
 
 /-- **What `Inner.load` reads its extra claims at**: the files' statement's, at the link points of the record decoded
-at the spec its draw gives (`Files.drawnSpec`). -/
+at the spec its sample gives (`Files.drawnSpec`). -/
 theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (h : RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec st specD sess, f.stmt unit = .ok (spec, st) ∧ f.drawnSpec spec st = .ok specD ∧
@@ -223,12 +269,13 @@ theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     cases hsp
     exact ⟨_, _, hs, by assumption, by assumption, rfl⟩
 
-/-- **The record decodes at two link points of the files' `m_pts`**: without a draw at the files' spec, and at a draw
-that proves every unit in order (the only one `drawnSpec` takes) at the drawn statement's, whose `nbl` is the files'
+/-- **The record decodes at two link points of the files' `m_pts`**: without a sample at the files' spec, and at a sample
+that proves every unit in order (the only one `drawnSpec` takes) at the sampled statement's, whose `nbl` is the files'
 (`drawn_same`). -/
 theorem drawnSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
     (h : f.drawnSpec spec' st' = .ok specD)
-    (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st')
+    (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
+      .ok st')
     (hspec : spec' = st'.spec) : specD.points = 2 ∧ specD.mPts = st'.mPts := by
   unfold RecCoins.Files.drawnSpec RecCoins.drawnSpec at h
   cases hr : RecCoins.recordDraw f.record with
@@ -294,7 +341,7 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   have hins := (setupO_some hsu).1
   obtain ⟨hc, ms, _, _, _, hxO, -, -⟩ := hsh
   subst hxO
-  -- the coin server's record, its link points the first coin's
+  -- the challenger's live-coin part's record, its link points the first coin's
   obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins
   rw [hr] at hxr
   cases hxr
@@ -353,7 +400,7 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   rw [← hstLe] at hext
   obtain ⟨hst', hspec'⟩ := files_stmt hstm
   obtain ⟨hDp, hDm⟩ := drawnSpec_shape hdS hst' hspec'
-  -- the decoded link points are the coin server's, so the first coin's
+  -- the decoded link points are the challenger's live-coin part's, so the first coin's
   have hdec' : Record.decode specD record = .ok sess := by rw [← hrec]; exact hdec
   obtain ⟨j, l, -, hj, hl, -⟩ := Claims.Bridge.Custody.decode_ok hdec'
   obtain ⟨rp, hrp, hh⟩ := innerLink_points hj (fld_val hl) hlk

@@ -8,6 +8,7 @@ defaultTargets = ["CertifierDevice", "certifier-device-difftest", "certifier-iss
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "certifier_program"

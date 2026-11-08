@@ -1,8 +1,11 @@
-import Proofs.Pouw.Receipt.Duo
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Logic.Equiv.Fin.Basic
+module
+
+public import Definitions.Pouw.Receipt.Duo
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.Ring
 import Mathlib.Data.BitVec
-import Mathlib.Tactic.Ring
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # duo runs at one start state: three words are never bound
@@ -12,6 +15,8 @@ different runs reach one state, whatever the keys and the state (`duoRun_atState
 checkpoint after a block of three or more free words binds them only with a probability over the words, never for
 every choice of them.
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

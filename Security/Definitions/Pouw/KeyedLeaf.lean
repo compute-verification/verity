@@ -1,13 +1,50 @@
-import Definitions.Hash.Keyed
-import Definitions.Hash.Hm96
-import Definitions.Pouw.Basic.Prob
+module
+
+public import Definitions.Hash.Keyed
+public import Definitions.Hash.Hm96
+public import Definitions.Pouw.Basic.Prob
+public import Mathlib.Data.FinEnum
+public import Mathlib.Data.Finset.Max
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The keyed leaf's hiding game (trusted)
 
 A window's lead commits each of its `n` instances (a call's `A` rows, a forward's words) as a keyed leaf
 (`Hash.Keyed`): instance `i`'s public digest is `H(ks ‖ salt ‖ top i)` over its top message `top i`, under the window's
-key `ks` (64 OS bytes) and live salt `salt`. Before the salt is drawn it records the key leaf, the hm96 leaf over `ks`
+key `ks` (64 OS bytes) and live salt `salt`. Before the salt is sampled it records the key leaf, the hm96 leaf over `ks`
 under 192 OS salt bytes `y₀` (`Hm96.leaf` at `x = ks`). What the verifier sees of the window is the key leaf and the
 digests (`view`), and `real` is the probability that a predicate `A` of the view holds, over a uniform `ks` and `y₀`.
 
@@ -26,6 +63,8 @@ tops is an explicit distinguisher's advantage, built from `A`, in a game of its 
 uniform bytes independent of `ks`, and once the digests are, a view of distinct top messages is a uniform tuple
 whatever they are.
 -/
+
+@[expose] public section
 
 namespace Pouw.KeyedLeaf
 

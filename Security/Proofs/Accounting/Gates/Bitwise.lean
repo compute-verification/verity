@@ -1,24 +1,28 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.List
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.List.GetD
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum.Basic
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
-import Definitions.Accounting.Guarantees.GatesBitwise
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.List.GetD
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum.Basic
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
+public import Proofs.Accounting.Lemmas.GatesBitwise
 
 /-!
 # Bits for free, proved
 
 `EncodeChainRefuted` by construction. Gates `0` and `1` are the constants `0` and `1`; each coin byte of the codec's
-draw (its round constants', its mask's and word 1's tweak's, `slotOf`) is a coin input, and each of its bits a table
+sample (its round constants', its mask's and word 1's tweak's, `slotOf`) is a coin input, and each of its bits a table
 read (`bitG`, a gather of the byte's low 8 bits over a constant `0`/`1` column) whose derived interval is `[0, 1]`.
 Over those bits any Boolean formula (`BF`) compiles to free gates (`compile`): NOT is the affine map `1 − u` and AND
 the u8 s8-family step `0 + u·v`, each derived `[0, 1]`. An output byte is its 8 bits' formulas summed by affine maps
-(`buildSum`, derived `[0, 2^t − 1]` after `t` bits). Every function of the draw's bits has a formula (`shannon`), so
+(`buildSum`, derived `[0, 2^t − 1]` after `t` bits). Every function of the sample's bits has a formula (`shannon`), so
 every target byte of every word does, and the circuit's only units are its table reads' (`ubG`, at most `9` a bit).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.GatesBitwise
 
@@ -833,7 +837,7 @@ lemma declared_of_good (C : IntDag ι) (x : ι → ℤ) (hC : ∀ g ∈ C, GoodG
   | budgeted cls f => rw [hop] at hg; exact hg.elim
   | _ => rw [hop] at hnd; exact absurd trivial hnd
 
-/-! ## The codec's draw, read back from the coin bytes' bits -/
+/-! ## The codec's sample, read back from the coin bytes' bits -/
 
 /-- The coin bytes: the `k` round constants', the mask's and word 1's tweak's, `n/8` each. -/
 def NN (F : Field) (k : ℕ) : ℕ := (k + 2) * F.bytes
@@ -844,7 +848,7 @@ def slotOf (F : Field) (k j : ℕ) : Slot :=
   else if j < (k + 1) * F.bytes then .mask (j - k * F.bytes)
   else .tweak 1 (j - (k + 1) * F.bytes)
 
-/-- The coin inputs on draw `d`: each slot's byte. -/
+/-- The coin inputs on sample `d`: each slot's byte. -/
 def xd (F : Field) (k : ℕ) (d : Draw k) (s : Slot) : ℤ := s.value F d (fun _ => 0)
 
 lemma byte_le (N l : ℕ) : byte N l ≤ 255 := by

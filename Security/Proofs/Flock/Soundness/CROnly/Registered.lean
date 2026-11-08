@@ -1,4 +1,11 @@
-import Proofs.Flock.Soundness.Registered.E2E
+module
+
+public import Proofs.Flock.Soundness.CROnly.Defs
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.Registered.E2E
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
@@ -9,6 +16,8 @@ for `hCR : LinkCR …`, as `CROnly.E2E` restates the forms they extend: the boun
 `strictRunCost t' q` in place of `t'`, and every other hypothesis is the original's, unchanged. So `ε_ks`, `δ_link`,
 `δ_tree` and `δ_reg` are all under `SHA512CRStrict` (`hKS`, `hCRs`, `hT`, `hR`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

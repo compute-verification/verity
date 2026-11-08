@@ -24,7 +24,7 @@ it, over the m blocks. Every slot is the same class Program lowered side by side
 fresh input is the circuit's over m.
 
 **Table** (private; `rows`, `decode`). `ROW_BYTES`-byte rows, integers little-endian: row 0 the header (`MAGIC`, the
-SHA-512 of the circuit's Program, m, the entry count), then one row an entry: its template (`partition_v2.definition_digest`,
+SHA-512 of the circuit's Program, m, the entry count), then one row an entry: its template (`partition_v2.id_digest`,
 64 bytes), its first unit (8 bytes), its digit count and which digit is the slot (a byte each, then 6 zero bytes) and its
 radix (4 bytes a digit, at most `DIGITS`); every unused byte 0. `commit` pads them with zero rows to grid(R) and commits
 them with `verity.ml.commitments.advice` before any coin: hm96-sha512/row/v2 hiding leaves under fresh salts in one
@@ -84,7 +84,7 @@ def rows(circuit: IF.Circuit, program: str | None = None) -> list[bytes]:
     for e in b.inference:
         if len(e.radix) > DIGITS:
             raise ValueError(f"inference entry {e.doc()}: {len(e.radix)} digits, past a row's {DIGITS}")
-        out.append(_row(bytes.fromhex(PV2.definition_digest(circuit.template(e.template))), _u(e.at, 8),
+        out.append(_row(bytes.fromhex(PV2.id_digest(circuit.template(e.template))), _u(e.at, 8),
                         _u(len(e.radix), 1), _u(e.axes.index("slot"), 1), bytes(6), *(_u(r, 4) for r in e.radix)))
     return out
 

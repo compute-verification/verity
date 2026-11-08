@@ -1,4 +1,26 @@
-import Proofs.Properties.Nci.BodiesOk.Composite
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Composite
+public import Proofs.Properties.Nci.BodiesOk.Decode
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Std.Data.HashMap.Lemmas
 
 /-!
 # What `decode` returns
@@ -7,6 +29,8 @@ import Proofs.Properties.Nci.BodiesOk.Composite
 (`specs`, from the empty state through `go`), and its root is a composite (`decode`'s own check). `decode_root`: the
 root is one of them (`getDef`'s index), a composite without parameters (`decode`'s check, `CalleeOk`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

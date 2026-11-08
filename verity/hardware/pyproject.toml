@@ -4,6 +4,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test_lean.py holds the Lean card tables to the card files, and reads the stores, resources and formats of Isa.lean.
+# test_lean.py holds the Lean card tables and the B200's data sheet to the card files, and reads the stores, resources
+# and formats of Isa.lean.
 inputs = ["verity/__init__.py", "verity/errors.py", "Security/Definitions/Core/Accel/Isa.lean",
-          "Security/Definitions/Core/Accel/H200.lean", "Security/Definitions/Core/Accel/Sm120.lean"]
+          "Security/Definitions/Core/Accel/H200.lean", "Security/Definitions/Core/Accel/Sm120.lean",
+          "Security/Definitions/Accounting/Sheets/B200.lean"]

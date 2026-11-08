@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Definitions.Core.Game
+public import Proofs.Flock.Soundness.ZK.Hiding
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
 
 /-!
 # One committed round's leaf
@@ -9,6 +14,8 @@ import Proofs.Flock.Soundness.ZK.Hiding
   (uniform on all salts when the fiber is empty, a value the real round never takes).
 * `fiber_avg`: redrawing the salt from its posterior given its own leaf leaves a uniform salt's average unchanged.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 
