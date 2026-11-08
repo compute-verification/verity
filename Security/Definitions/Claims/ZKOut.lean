@@ -1,6 +1,37 @@
 module
 
 public import Definitions.Core.Interaction
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Claims: zero knowledge with a public outcome
@@ -12,7 +43,7 @@ given the outcome, of the event, plus an error of the statement, the witness, th
 * `SimOut`: a simulator given the outcome, fixed before the witness and the verifier.
 * `ZKOut`: zero knowledge per outcome (`ZKmalRx`'s one-sided form at each outcome).
 * `ZKOutLeak`: the leak form over finitely many outcomes, its corollary: the number of outcomes times the simulator
-  that draws the outcome uniformly, plus the sum of the outcomes' errors.
+  that samples the outcome uniformly, plus the sum of the outcomes' errors.
 -/
 
 @[expose] public section
@@ -50,7 +81,7 @@ def ZKOut {W St : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Non
       Pr (fun c : S.C x => Ev ((S.given o).out H Vs θ x c)) + ε x w Θ Vs θ o
 
 /-- **The leak form, from the per-outcome form**: over finitely many outcomes, on every event the honest transcript's
-probability is at most the number of outcomes times the simulator's that draws the outcome uniformly, plus the sum of
+probability is at most the number of outcomes times the simulator's that samples the outcome uniformly, plus the sum of
 the outcomes' errors. -/
 def ZKOutLeak : Prop :=
   ∀ {W St : Type} [Fintype St] [Nonempty St] (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]

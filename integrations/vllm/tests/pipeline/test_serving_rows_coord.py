@@ -2,7 +2,7 @@
 ``COORDS``): a ``MoeExpertFp8Gemm(W)_v1{N}`` row is N units of its Definition at N = 1, unit n reading the row's leading operands
 whole and ``w[:, n, :]``, ``ws[:, n // G, :]`` of every expert, its output port the row's output word n; a
 ``FlashInferFp8Linear_v1{K,N}`` row likewise, unit n reading the bf16 row whole (each unit quantises it itself), ``w[n]`` and
-``ws[n // 128]``.  The units cover the row's outputs with nothing left over (N units under one index entry, unit n's output
+``ws[n // 128]`` (its parts, which quantise it once: `test_serving_rows_flashinfer_parts`).  The units cover the row's outputs with nothing left over (N units under one index entry, unit n's output
 port word n) and compute them: the coordinate Definition on each unit's committed rows is the row's Definition's word n."""
 from __future__ import annotations
 
@@ -18,7 +18,9 @@ from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity_vllm.pipeline import serving_rows as SRW
 from verity.ml.definitions.numerics import deepgemm_twins as DT
 from verity.ml.definitions.registry import boolean_deepgemm as BDG
+from verity.ml.commitments.gates import embedding as EMB
 from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe as FM
 from verity.ml.definitions.registry import deepgemm as DG
 from verity.ml.definitions.registry import fp8_moe_experts as X
 from verity.ml.definitions.registry.fp8 import FP8_BLOCK
@@ -30,6 +32,18 @@ OP = "model.layers.3.mlp.experts"
 
 def gemm(routed: bool, n: int):
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=E, K=K, N=n, G=G, KB=KB, SWAP=False, DOT=HopperE4m3MmaV2Dot32)
+
+
+def per_expert(routed: bool, n_rows: int) -> tuple[tuple[str, int], ...]:
+    """A pair row's per-expert templates (`serving_templates.EXPERTS`): at each block of n rows, a power of two dividing its N
+    and G, the block GEMM and the read of its rows, N / n each, then the read of its G-blocks' scale rows."""
+    fam = FM.MoeExpertFp8BlockGemmWV3 if routed else FM.MoeExpertFp8BlockGemmV3
+    out: tuple[tuple[str, int], ...] = ()
+    for n in (1, 2, 4, 8):
+        if n_rows % n == 0:
+            block = descriptor_id(bind(fam, K=K, N=n, G=G, KB=KB, SWAP=False, DOT=HopperE4m3MmaV2Dot32))
+            out += ((block, n_rows // n), (descriptor_id(EMB.read(E, n * K // 2)), n_rows // n))
+    return (*out, (descriptor_id(EMB.read(E, 2 * K // G)), -(-n_rows // G)))
 
 
 def _bits(a: np.ndarray) -> np.ndarray:
@@ -81,8 +95,9 @@ def test_a_pair_row_holds_its_n_coordinates():
         spec = descriptor_id(gemm(routed, N))
         chunks = () if routed else tuple((descriptor_id(bind(X.MoeExpertFp8CoordinateChunk, E=E, K=K // 2, G=G, KB=KB, SWAP=False,
                                                              DOT=HopperE4m3MmaV2Dot32, FIRST=f, LAST=not f)), N) for f in (True, False))
-        assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(gemm(routed, 1)), N), *chunks)
-        assert SRW.unit_templates(descriptor_id(gemm(routed, 1))) == ((descriptor_id(gemm(routed, 1)), 1), *((t, 1) for t, _n in chunks))
+        assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(gemm(routed, 1)), N), *chunks, *per_expert(routed, N))
+        assert SRW.unit_templates(descriptor_id(gemm(routed, 1))) == ((descriptor_id(gemm(routed, 1)), 1), *((t, 1) for t, _n in chunks),
+                                                                      *per_expert(routed, 1))
         assert SRW.template(descriptor_id(gemm(routed, 1))).layout == "coord"
     boolean = bind(BFM.MoeExpertFp8GemmWV2, E=E, K=K, N=1, G=G, KB=KB, SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)
     t = SRW.template(descriptor_id(boolean))
@@ -136,7 +151,7 @@ def test_flashinfer_s_linear_is_its_n_coordinates_each_quantising_the_row(monkey
     """N = 200 spans a whole 128-wide weight block and a partial one, so the units read both of ``ws``'s rows."""
     assert SRW.COORDS["FlashInferFp8Linear_v1"] == {"E": 1, "G": FP8_BLOCK}
     spec, T = descriptor_id(linear(FN)), descriptor_id(linear(1))
-    assert SRW.unit_templates(spec) == ((spec, 1), (T, FN))
+    assert SRW.unit_templates(spec)[:2] == ((spec, 1), (T, FN))
     boolean = SRW.template(descriptor_id(bind(BDG.FlashInferFp8LinearV2, K=FK, N=1)))
     assert (boolean.layout, boolean.word, boolean.packed) == ("coord", T, (16, 8, 32, 16))
     rng = np.random.default_rng(5)

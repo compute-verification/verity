@@ -7,8 +7,8 @@ kept certificate's the Lean check's, which refuses the changed one's window besi
 window's sync the Lean's read of the clock openings, which leaves no window one beside a reference that signs a changed
 clock certificate;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
-window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
+several runs, and counts a negative that escaped a sampled sample within the sample's bound but never one whose incorrect
+window was sampled; the sample's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a network certifier run's files, and refuses a sample and a
 network certifier the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
@@ -44,7 +44,7 @@ from verity.core.protocols.certifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
 
 
 def _load(name: str):

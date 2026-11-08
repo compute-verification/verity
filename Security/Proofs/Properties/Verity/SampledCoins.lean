@@ -1,24 +1,60 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDrawOS
-public import Proofs.Flock.Soundness.ZK.Hiding
-public import Proofs.Properties.CertifierNetwork.Frames
+public import Batteries.Data.ByteArray
+public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Properties.NetworkCertifier.DeviceOutput.Frames
 public import Properties.Challenger
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.ZK.Hiding
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# A3 at the game's own bits: the bytes a sampled draw reads are uniform
+# A3 at the game's own bits: the bytes a sampled sample reads are uniform
 
 In the causal game (`Verity.releases`) the challenger releases each coin as `8 * B` uniform bits (`B` is
-`Challenger.COIN_BYTES`), and a draw reads the concatenation of the coins it was released as bytes, bit `t` of a coin's
+`Challenger.COIN_BYTES`), and a sample reads the concatenation of the coins it was released as bytes, bit `t` of a coin's
 bits being bit `t mod 8` of its byte `⌊t/8⌋` (`Properties.Challenger.bitsOf`). So over the game's bits for `k`
-coins, `Ω = Fin k → Fin (8 * B) → Bool`, the draw's byte source is `coinBytes k B`: one stream of `k * B` bytes, coin
+coins, `Ω = Fin k → Fin (8 * B) → Bool`, the sample's byte source is `coinBytes k B`: one stream of `k * B` bytes, coin
 `c`'s byte `q` at `c * B + q`. It is a bijection (`coinBytesEquiv`), so it carries the uniform law on the bits to the
 uniform law on the bytes, which is `Assumptions.UniformRandomBytes` at it (`uniformRandomBytes_coinBytes`): A3 holds
 there as a theorem, with no premise on the operating system.
 
 `bitsAt_coinBytes` and `testBit_coinBytes` say what the bytes are; `bitsOf_streamOf_coinBytes` that their bits, as
 `bitsOf` reads them, are the coins' bits in order; and `streamOf_coinBytes_of_bitsOf` that they are the only bytes with
-those bits (`bitsOf_injective`), so the bytes a draw reads, when their bits are the game's coins, are
+those bits (`bitsOf_injective`), so the bytes a sample reads, when their bits are the game's coins, are
 `streamOf (coinBytes k B ω 0)`. `bitsOf_append` splits the bits of a concatenation of coins.
 -/
 

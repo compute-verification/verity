@@ -65,6 +65,8 @@ from typing import BinaryIO
 
 import numpy as np
 
+from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
+
 from . import ir_lower as IL
 
 FORMAT = "flock-circuit"
@@ -101,10 +103,8 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
 #: ZK off only: ``flock-circuit --zk`` refuses it (``live/src/circuit.rs``'s ``leaf_scheme_plain`` is the same object).
 LEAF_SCHEME_PLAIN = {"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
                      "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}
-SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
-SHA_LOG = HM_LOG = 18
-MASK_LOG = 14
-K_MAX = 27
+SHA_NET, HM_NET = "sha512x3", "hm96"
+SHA_LOG = HM_LOG = SLOT_LOG
 #: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
@@ -403,7 +403,7 @@ def _ranges(items: list[tuple[str, int, int, dict]]) -> tuple[list[dict], int]:
         at = -(-at // (1 << sl)) << sl
         out[i] = {"type": typ, "slot_log": sl, "pos0": at >> sl, "count": n, **extra}
         at += n << sl
-    return out, max(20, (at - 1).bit_length())
+    return out, max(K_MIN, (at - 1).bit_length())
 
 
 #: MUFU lookup slots: low decoder bits per table (``lookup.rs``); the high decoder takes the rest
@@ -573,7 +573,7 @@ def unit_witness(definition) -> dict:
 
 
 def past_range(w: dict) -> str | None:
-    """Why a unit needing `unit_witness`'s ``w`` is past C-Flock's proved range of 2^`K_MAX` witness bits, or None."""
+    """Why a unit needing `unit_witness`'s ``w`` is past Flock's proved range of 2^`K_MAX` witness bits, or None."""
     if w["k"] <= K_MAX:
         return None
     return (f"the unit needs a slot of 2^{w['k']} witness bits ({w['ands']:,} ANDs and {w['port_bits']:,} port bits, read off its "
@@ -583,7 +583,7 @@ def past_range(w: dict) -> str | None:
 
 def refuse_past_range(definition, name: str) -> dict:
     """`unit_witness`, or ValueError (`past_range`), before any lowering, for a unit whose Definition alone needs more than
-    C-Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
+    Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
     32 × 32 H1 tile at K = 2048 ran out of 600 GiB on the way). `compose` refuses every unit this refuses unless its
     lowering lays out fewer than half the witness bits its Definition counts (its slot alone would be 2^`K_MAX`)."""
     w = unit_witness(definition)
@@ -621,7 +621,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
     commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
-    descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
+    descriptor id of the Definition the unit lowers, which a template query may list (a size class's own template id is
     ``unit-class/...``). ``extra_meta``: keys a statement adds to META for its verifier (`rec_residuals.HOLO_KEY`), none of
     them one META already has.
 
@@ -636,7 +636,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
     META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
     ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
-    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form.
+    the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
     (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
@@ -990,7 +990,7 @@ def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | Non
     """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's): fresh from the
     OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's verifier pod can stage its own public
     file. A key makes the salts known to whoever holds it; the verifier's checking process never reads them either way (its file
-    has none). A serving committer draws its own."""
+    has none). A serving committer samples its own."""
     rows = {p.name: range(tables[p.name]) if tables else range(lo, hi) for p in ports}
     if key is None:
         return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}
@@ -1278,7 +1278,7 @@ def main(argv=None) -> int:
     (repeatable): an input port the verifier recomputes from public data (:func:`compose`'s ``public_inputs``)."""
     import argparse
 
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--input-set", required=True)

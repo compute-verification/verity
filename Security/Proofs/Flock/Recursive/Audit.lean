@@ -27,9 +27,9 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
 * the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
-(i) is at the law of the registration's draws (`drawLaw`), nonempty by the element its space comes with. Still taken by
+(i) is at the sampling design of the registration's samples (`drawLaw`), nonempty by the element its space comes with. Still taken by
 the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
-(`honest`) and the obligations on the firewall's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
+(`honest`) and the obligations on the ZK server's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
 `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`); in (i) the obligation that V*'s statements'
 files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code that every session's inputs carry the
 tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
@@ -44,23 +44,12 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **V*'s staging reads only the inner statement's shape**: two statements of one shape (`shapeOf`: their regions'
-bytes aside) give V* as many outer statements, over one class with as many regions (`execClassAt_shape`). -/
-theorem outerStatementsAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf st') :
-    Flock.Guarantees.outerStatementsAt st = Flock.Guarantees.outerStatementsAt st' := by
-  obtain ⟨hc, hl, -⟩ := execClassAt_shape h
-  show Flock.Guarantees.outerParts (execClassAt st).cls.m (execClassAt st).cls.kLog
-      (2 + 2 * (execClassAt st).regs.length) =
-    Flock.Guarantees.outerParts (execClassAt st').cls.m (execClassAt st').cls.kLog
-      (2 + 2 * (execClassAt st').regs.length)
-  rw [hl, hc]
-
 /-- **A statement of the registration's rows reads a list's first `rt.leaves` commit strings only.** -/
 theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → Ω → H) :
     ReadsBelow rt.leaves (Flock.Guarantees.stmtAt rt stmt) :=
   fun _ _ h ω => congrArg (fun f : Fin rt.leaves → ByteArray => stmt f ω) (funext fun r => h r r.2)
 
-/-- **The recursive audit, as the verifier of record runs it.** -/
+/-- **The recursive audit, as the verifier runs it.** -/
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap

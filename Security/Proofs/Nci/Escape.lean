@@ -15,9 +15,20 @@ other), so their expected work is at most the escaped blocks' plus `B`; and each
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.SecurityProofs
 
 open Nci.Dampener
+
+open scoped Classical in
+/-- On a finite outcome space, `prob μ E` is `∑_{ω ∈ E} μ(ω)`. -/
+theorem prob_eq_sum {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
+    prob μ E = ∑ ω, if E ω then (μ ω).toReal else 0 := by
+  rw [Verity.Game.prPMFReal, Verity.Game.prPMF, PMF.toOuterMeasure_apply, tsum_fintype,
+    ENNReal.toReal_sum fun ω _ => ne_top_of_le_ne_top (μ.apply_ne_top ω) (Set.indicator_le_self _ _ ω)]
+  refine Finset.sum_congr rfl fun ω _ => ?_
+  by_cases h : E ω <;> simp [Set.indicator, h]
 
 /-- The outcomes' weights sum to 1. -/
 theorem sum_toReal {Ω : Type} [Fintype Ω] (μ : PMF Ω) : ∑ ω, (μ ω).toReal = 1 := by
@@ -47,7 +58,7 @@ theorem expected_filter {Ω β : Type} [Fintype Ω] (μ : PMF Ω) (bad : Ω → 
   simp only [e, Finset.mul_sum]
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun b _ => ?_
-  unfold prob
+  simp only [prob_eq_sum]
   rw [Finset.mul_sum]
   refine Finset.sum_congr rfl fun ω _ => ?_
   by_cases h : b ∈ bad ω ∧ P ω b
@@ -72,7 +83,7 @@ theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β �
 `q ∈ (0, 1]`, with each faulty block skipping `w_b ∈ [0, B]`, the declared work that identity `j`'s faulty blocks
 accepted before its first detection (`escaped`) skip is at most `((1 − q)/q) B` in expectation.
 
-Each faulty block is caught with probability at least `q` whatever came before, its coins live and drawn independently,
+Each faulty block is caught with probability at least `q` whatever came before, its coins live and sampled independently,
 so the number an identity runs before its first detection is stochastically dominated by a geometric variable with mean
 `∑_{k ≥ 1} (1 − q)^k = (1 − q)/q`: it runs `k` or more with probability at most `(1 − q)^k`. The proof is the same
 count in Wald's form, over the outcomes with no independence beyond that premise: the identity's faulty blocks with no
@@ -135,7 +146,7 @@ theorem sampled_escape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF
             mul_le_mul_of_nonneg_left (hS b) (hw b)
         _ = (1 - q) * (w b * prob μ (fun ω => b ∈ bad ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b)) := by
             ring
-    · simp [hj, prob]
+    · simp [hj, prob_eq_sum]
   have hEY : ∑ ω, (μ ω).toReal * Y ω = ∑ ω, (μ ω).toReal * X ω + ∑ ω, (μ ω).toReal * Z ω := by
     rw [← Finset.sum_add_distrib]
     refine Finset.sum_congr rfl fun ω _ => ?_

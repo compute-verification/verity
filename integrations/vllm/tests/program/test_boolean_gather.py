@@ -1,11 +1,11 @@
-"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers and embedding agree with `GatherBf16x{V}_v1`,
-`GatherF32x{V}_v1` and `Embedding_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are
-pinned by gate count and program digest, and cut under `Q_word_v1{X=16,W=32}` into one unit of 16 output bits per gather, with
-no gate two gathers compute. `GatherF32x{V}_v2` is one Definition, the word family's Boolean version made on demand and
-`boolean_fp8_moe`'s expert gather alike. `GatherF32Chunked_v1{V, W}` is `GatherF32x{V}_v1` and `GatherF32x{V}_v2` at every token, V-chunk
-boundaries and the wrap past i32's extremes included, and `W_MAX` is where `circuit.compose`'s block of 2^27 bits ends. The
-gathers over more than 1024 words are trees of Calls whose chunk Definition takes seconds to compile, so their tests are
-slow; the quick ones cover the multiplexer tree traced whole."""
+"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers, embedding and bit selection agree with
+`GatherBf16x{V}_v1`, `GatherF32x{V}_v1`, `Embedding_v1` and `BitAtx{W}_v1` on edge and random tokens (negative, past the
+vocabulary, at every chunk boundary), are pinned by gate count and program digest, and cut under `Q_word_v1{X=16,W=32}` into one
+unit of 16 output bits per gather, with no gate two gathers compute. `GatherF32x{V}_v2` is one Definition, the word family's
+Boolean version made on demand and `boolean_fp8_moe`'s expert gather alike. `GatherF32Chunked_v1{V, W}` is `GatherF32x{V}_v1`
+and `GatherF32x{V}_v2` at every token, V-chunk boundaries and the wrap past i32's extremes included, and `W_MAX` is where
+`circuit.compose`'s block of 2^27 bits ends. The gathers over more than 1024 words are trees of Calls whose chunk Definition
+takes seconds to compile, so their tests are slow; the quick ones cover the multiplexer tree traced whole."""
 from __future__ import annotations
 
 import json
@@ -58,6 +58,7 @@ PINS = {
     "GatherF32x25u22_v1": (1408, 2176, 180, "8058a76e03075fcfff33325f2b5d2869c9eeab3114dff9ba1a15077cba71cc0b0963677b1269053eb5a3b0585b8751fb318032c37e5430198dbfd00c6254ff7b"),
     "GatherF32x768u10_v1": (24576, 49120, 9, "96be69465c6be5897f8834275589041120e5748474f9ffe5c4ea131f356c5f75349b046ac8a402b6e4d81ba6a0ec3c89adf6df05dfcb9404ea1393eea7aaac4f"),
     "GatherF32x42u22_v1": (1920, 3232, 171, "31b0ed477c18305eb76a24e7ca54a5a841d33519e20dfbced8cf0ea2b6db9134406feaff2f036564f20624f8fbf71a1ddf4956251d85db01fa048ba9575df5b6"),
+    "BitAtx32_v2": (58, 89, 0, "fb8ec4e743bf5393db3093af9048767760a22c67808dd984dc9439415d269cfa6dc1cdbeaee5dfb4f5343cf60ac71830a41ac44fbf6153febf8d229aa6db5c06"),
 }
 QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16),
          bind(BGA.gather_f32(64)), bind(BGA.gather_index(128, 10, "F32")), bind(BGA.gather_index(50, 22, "F32")),
@@ -65,7 +66,7 @@ QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gat
          bind(BGA.GatherChunkOffsets, V=TRAINING_VOCAB, W=BGA.W_MAX), bind(BGA.GatherChunkOffsets, V=LLAMA_VOCAB, W=BGA.W_MAX),
          bind(BGA.GatherChunkXor, C=2), bind(BGA.GatherChunkXor, C=3),
          bind(BGA.gather_index(576, 10, "F32")), bind(BGA.gather_index(25, 22, "F32")), bind(BGA.gather_index(768, 10, "F32")),
-         bind(BGA.gather_index(42, 22, "F32"))]
+         bind(BGA.gather_index(42, 22, "F32")), bind(BGA.bit_at(32))]
 TREES = [bind(BGA.gather_index(1024, 10)), bind(BGA.gather_bf16(1100)), bind(BGA.Embedding, V=1100, H=2),
          bind(BGA.gather_index(1024, 10, "F32"))]
 
@@ -268,7 +269,7 @@ def test_the_vocabularies_chunked_gathers_are_the_whole_gather(V: int) -> None:
 
 
 def _block(d) -> dict:
-    """``d`` as one C-Flock block, as `benchmarks/unit_block` composes it (each parameter one ``hm96-sha512/row/v2`` bit row and
+    """``d`` as one Flock block, as `benchmarks/unit_block` composes it (each parameter one ``hm96-sha512/row/v2`` bit row and
     its return one more): its META."""
     return CS.UnitStager(d, f"unit-block/{d.name}", [(p, V2, t.leaves, [p]) for p, t in d.signature()[0]], [(V2, (0,))]).meta
 
@@ -300,6 +301,18 @@ def test_the_embedding_agrees_with_embedding_v1(V: int, H: int) -> None:
     rng = np.random.default_rng(V * H)
     tok = _tokens(V, rng, 100)
     _agree(e, tok, rng.integers(0, 1 << 16, (len(tok), V, H), dtype=np.uint64).astype(np.uint16))
+
+
+@pytest.mark.parametrize("width", [1, 5, 32])
+def test_bit_at_agrees_with_bit_at_v1(width: int) -> None:
+    """Every index from -3 to W + 2, i32's extremes, then in-range and arbitrary indices over random words."""
+    b = bind(BGA.bit_at(width))
+    assert word_of(b).id == f"BitAtx{width}_v1" and BGA.bit_at(width) is BGA.bit_at(width)
+    rng = np.random.default_rng(width)
+    edge = list(range(-3, width + 3)) + [(1 << 31) - 1, 1 << 31, (1 << 32) - 1]
+    i = np.array([e % (1 << 32) for e in edge] + list(rng.integers(0, width, 300)) + list(rng.integers(0, 1 << 32, 100)),
+                 np.uint32)
+    _agree(b, rng.integers(0, 1 << width, len(i), dtype=np.uint64), i)
 
 
 def test_the_embedding_over_a_tree_agrees_with_embedding_v1() -> None:
@@ -336,3 +349,5 @@ def test_what_a_gather_cannot_select_is_refused() -> None:
             BGA.gather_index(n, k)
     with pytest.raises(ValueError, match="at least one word"):
         BGA.gather_bf16(0)
+    with pytest.raises(ValueError, match="at least one bit"):
+        BGA.bit_at(0)

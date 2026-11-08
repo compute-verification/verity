@@ -171,10 +171,10 @@ def _released_as_signed(out: dict) -> list[int]:
     signed = {name: stream - 1 for name, stream in ar.released_sessions(records).items()}
     run_id = bytes.fromhex(json.loads((run / "deployment.json").read_text())["run_id"])
     assert out["released"] == signed and sorted(signed.values()) == list(range(len(signed)))
-    assert sorted(out["releases"]) == [(n, run_id) for n in range(len(signed))]
+    assert sorted(out["releases"]) == [(n, run_id, None) for n in range(len(signed))]
     frames = b"".join(f for r in records for row in r.grid for f in row[:active.row_count(row)])
     assert b"x-verity-release" not in frames.lower()
-    return [n for n, _ in out["releases"]]
+    return [n for n, _, _ in out["releases"]]
 
 
 def _late_is_uncertified(run: dict) -> None:
@@ -270,7 +270,7 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     assert ar.released_sessions(records) == {"served.0": 1, "served.2": 2, "served.3": 3}
     released = dict(json.loads((tmp_path / "server.json").read_text())["released"])
     assert released == {"served.0": 0, "served.2": 1, "served.3": 2}
-    assert [n for n, _ in releases] == [0, 1, 2] and len({run for _, run in releases}) == 1
+    assert [n for n, _, _ in releases] == [0, 1, 2] and len({run for _, run, _ in releases}) == 1
     audit = ar.audit_configuration(plan, report, tmp_path)
     faulted = [r for r in audit["rows"] if r["raw"]]
     assert {(r["direction"], r["window"]) for r in faulted} == {("egress", 0), ("ingress", 0)}

@@ -203,7 +203,7 @@ inline Bytes leaf_prefix(const Bytes& key) {
   return b;
 }
 
-// pouw (verity.core.protocols.pouw.circuit.seeds)
+// pouw (verity.ml.protocols.pouw.circuit.seeds)
 inline Bytes call_seed_tag() { return str("verity/pouw/call-seed/v1", 24); }
 inline Bytes noise_tag() {
   Bytes t = str("verity/pouw/noise/v1");
@@ -264,7 +264,7 @@ inline Ref reference(const Window& w, u64 call, const uint8_t* a, size_t bytes) 
 }
 
 // One call's constants for the kernels, every digest and block in SHA-512's big-endian words. Nothing in them reads A_j,
-// so a window computes them all once its salt is drawn.
+// so a window computes them all once its salt is sampled.
 struct Call {
   u64 leaf_tpl[3][24];      // the A leaf's prefix (P = 158 + 2 nb bytes) with rank and position zero, nb = 1, 2, 3
   u64 node_mid[LEVELS][8];  // a node message's first-block state by level (only the level varies in it)

@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Regions
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The salted scheme `hm96-sha512/v1` refines the model's salted leaves (R7 and R8 for hm96; `Flock.Merkle`)

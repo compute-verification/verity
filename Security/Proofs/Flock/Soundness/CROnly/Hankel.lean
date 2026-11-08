@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.Hiding
+public import Mathlib.Data.Fintype.Pi
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # hm96's Hankel family is universal
@@ -106,7 +109,7 @@ theorem hankel_surjective {d : Fin l → F} (hd : d ≠ 0) :
   obtain ⟨v, hv⟩ := Finite.injective_iff_surjective.1 hinj u
   exact ⟨shiftKey j₀ v, hv⟩
 
-/-- **hm96's Hankel family is universal** (`verity/commitments/hm96/PROTOCOL.md` §2): for `y ≠ y'`,
+/-- **hm96's Hankel family is universal** (`verity/ml/commitments/hm96/PROTOCOL.md` §2): for `y ≠ y'`,
 `M(κ)·y = M(κ)·y'` for at most a `1/|F|^n` fraction of the keys `κ`. -/
 theorem hankel_universal : Universal (hankel : (Fin (n + l - 1) → F) → (Fin l → F) → Fin n → F) := by
   classical

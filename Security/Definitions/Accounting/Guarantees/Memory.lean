@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Accounting.Memory
-public import Definitions.Pous.P2.Cost
 public import Definitions.Pous.Assumptions.P2
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Memory adds, by counting (trusted)

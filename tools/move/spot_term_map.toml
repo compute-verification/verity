@@ -1,0 +1,50 @@
+# SPOT's term: what `tools/move/rename.py --map tools/move/spot_term_map.toml` renames, the sampled proof system's older
+# name "sampled proofs" to SPOT (GLOSSARY.md, Older names; `tests/test_retired_terms.py`'s `SPOT_NAMES` holds what is left
+# from growing). SPOT is one system, so a verb it is the subject of takes the singular: a phrase whose verb agrees with
+# "sampled proofs" comes before the phrase alone, and a compound subject ("PoUW and sampled proofs commit") keeps its verb.
+# Phrases come before the words they hold. "A sampled proof", "the sampled proof blocks" and every other use of "sampled"
+# for a proof block that was sampled keep their sense and their words.
+#
+# This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
+# string, backticks or a data file, so it moves no path, renames no declaration, leaves every lock and pin as it is, and
+# `move_check.py` certifies it without a build. The code's names (`sampled_proofs`, `SampledProofs`, `sampled-proofs`
+# and the protocol ids under `verity/sampled-proofs/`) are a path and code move's of their own.
+scope = "prose"
+
+[words]
+# --- possessives: SPOT's, never SPOT'
+"the sampled proofs'" = "SPOT's"
+"The sampled proofs'" = "SPOT's"
+"sampled proofs'" = "SPOT's"
+"Sampled proofs'" = "SPOT's"
+
+# --- a verb whose subject is SPOT alone takes the singular
+"the sampled proofs let" = "SPOT lets"
+"the sampled proofs prove" = "SPOT proves"
+"the sampled proofs partition" = "SPOT partitions"
+"The sampled proofs sample" = "SPOT samples"
+"that sampled proofs commit" = "that SPOT commits"
+"where sampled proofs read" = "where SPOT reads"
+"sampled proofs add their" = "SPOT adds its"
+"sampled proofs hold" = "SPOT holds"
+"sampled proofs catch" = "SPOT catches"
+"Sampled proofs catch" = "SPOT catches"
+"sampled proofs certify" = "SPOT certifies"
+"Sampled proofs certify" = "SPOT certifies"
+"sampled proofs show" = "SPOT shows"
+"sampled proofs accept" = "SPOT accepts"
+"sampled proofs are" = "SPOT is"
+"Sampled proofs run" = "SPOT runs"
+"Sampled proofs check" = "SPOT checks"
+"Sampled proofs spot-check" = "SPOT spot-checks"
+
+# --- the name as a noun's modifier keeps its article
+"the sampled proofs verifier" = "the SPOT verifier"
+"the sampled proofs service" = "the SPOT service"
+"the sampled proofs bound" = "the SPOT bound"
+
+# --- the name
+"the sampled proofs" = "SPOT"
+"The sampled proofs" = "SPOT"
+"sampled proofs" = "SPOT"
+"Sampled proofs" = "SPOT"

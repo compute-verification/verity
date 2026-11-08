@@ -26,7 +26,7 @@ A bound too small fails (`not_efficient_plain`, `not_efficient_zk`): on no colum
 the decoder still fills its words, so no `p` with `p(0) = 0`, `0` and `X` among them, bounds its count.
 
 At the deployed numbers (`erepRuns_plain`, `erepRuns_zk`), `E^rep` makes `Numbers.waits = 210` waits of at most
-`Numbers.cap = 2^256` draws, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
+`Numbers.cap = 2^256` samples, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
 expectation, `k = ⌈4·N₀/e⌉` with `N₀` the tables' level-0 codeword lengths summed (`2^d` at one table).
 -/
 
@@ -150,13 +150,6 @@ theorem not_efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Pars
 theorem not_efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployZkTrim rel) p :=
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.zkCountedRD_nil_pos)
-
-/-- **Neither record is `Efficient` at `0` or at `X`.** -/
-theorem not_efficient_zero_X (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    ¬ Claims.Flock.Efficient H (deployPlainTrim rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployPlainTrim rel) Polynomial.X ∧
-      ¬ Claims.Flock.Efficient H (deployZkTrim rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployZkTrim rel) Polynomial.X :=
-  ⟨not_efficient_plain H rel 0 (eval_zero), not_efficient_plain H rel Polynomial.X (eval_X),
-    not_efficient_zk H rel 0 (eval_zero), not_efficient_zk H rel Polynomial.X (eval_X)⟩
 
 /-- **`E^rep`'s reruns at the deployed plain verifier**, at every decoder: at most `1 + 210·2^256`, and
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/

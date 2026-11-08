@@ -2,6 +2,38 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishSwLig
 public import Proofs.Flock.Claims.ZK.FinishSwSv
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # Level 0's opening at the switched source, at the coins
@@ -19,7 +51,7 @@ or a pad. So those are the honest source's, and the honest source's are what the
   and rep.
 * **`Masked.swSrcE_ligHyp_E`**: `LigHyp` at the switched source at the deployed rep's coins, the packed table, the
   basis of the PIOP's switched vectors and the tape's extra lanes, lane paddings and salts, at the request's pads,
-  where level 0's part of the firewall's clear values is `l0Clear` there.
+  where level 0's part of the ZK server's clear values is `l0Clear` there.
 -/
 
 @[expose] public section
@@ -151,8 +183,8 @@ theorem swSrcE_restart (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cl
 
 /-- **`repCut_fw`'s `hlig` at the switched source, at the deployed rep's coins**: at a live statement, a witness, a
 tape, opened coins not refused by round `n`, the session's setup, table `j`, rep `r` and the table's extra claims, and
-at `pads_frame`'s premises at the firewall's request `q`, where table `j`'s rows hold at its base and level 0's part of
-the firewall's clear values is `l0Clear` at the coins from `ligP0`, the packed table and the basis of the PIOP's
+at `pads_frame`'s premises at the ZK server's request `q`, where table `j`'s rows hold at its base and level 0's part of
+the ZK server's clear values is `l0Clear` at the coins from `ligP0`, the packed table and the basis of the PIOP's
 switched vectors, rep `r`'s switched source holds level 0's opening (`LigHyp`) at the request's pads and the tape's
 extra lanes, lane paddings and salts. -/
 theorem swSrcE_ligHyp_E {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)

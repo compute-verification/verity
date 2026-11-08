@@ -331,8 +331,8 @@ def whole_quiet(cluster: Cluster, node: str, job: Job) -> bool:
 
 
 #: a `requeue` allocation's grace before an ordinary job may evict it: its own `max_s`, at most GRACE_MAX_S, else GRACE_S;
-#: `gpu-lease`'s own rule (GPU_LEASE_PREEMPT_GRACE_S, _MAX_S) on node 2 (INF-194: 24 Oct, 23 benchmark points SIGTERMed 1.5-35
-#: min in, so none finished). A quiet job still clears its node at once.
+#: `gpu-lease`'s own rule (GPU_LEASE_PREEMPT_GRACE_S, _MAX_S) on node 2 (a shorter grace
+#: SIGTERMs benchmark points minutes into 40-50 min leases, so none finish). A quiet job still clears its node at once.
 GRACE_S = 600
 GRACE_MAX_S = 2400
 

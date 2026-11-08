@@ -1,6 +1,42 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.DeployFacts
+public import Proofs.Flock.Claims.Recursion.OuterKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The compiled verifier runs each V* session as the outer verifier (`SessionRuns`)
@@ -510,7 +546,7 @@ theorem range_map_drop {α : Type} (f : ℕ → α) (a b : ℕ) :
   rw [List.range_add, List.map_append, List.drop_left' (by simp), List.map_map]
   rfl
 
-/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second draw. -/
+/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second sample. -/
 theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ} (hb : b ≤ n) :
     ((List.range (off + b)).map (coinSeq (Claims.Recursion.fork off r d))).drop off =
       (List.range b).map (coinSeq (sessCoins off d n)) := by
@@ -519,7 +555,7 @@ theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ}
   rw [List.mem_range] at hi
   rw [coinSeq_fork_ge off r d (Nat.le_add_right _ _), coinSeq_sessCoins off d n (by omega)]
 
-/-- **The coins before round `off` of a fork at `off`** are the first draw's. -/
+/-- **The coins before round `off` of a fork at `off`** are the first sample's. -/
 theorem fork_take_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {m : ℕ} (hm : m ≤ off) :
     (List.range m).map (coinSeq (Claims.Recursion.fork off r d)) = (List.range m).map (coinSeq r) :=
   List.map_congr_left fun i hi => coinSeq_fork_lt off r d (by rw [List.mem_range] at hi; omega)
@@ -776,7 +812,7 @@ theorem outerAtEnd_sha512 : OuterAtEnd FlockDeploy.sha512 := fun _ _ _ hcs h => 
 open Classical in
 /-- **Session `s` of an accepted run, run alone**: at its first round `off` and its V* statement `xO`, read off the
 judged run's inner rounds, the outer verifier's run against `P` after the judged run's first `off` messages, at the
-second draw's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
+second sample's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
 theorem session_core (H : Msg → Msg) (hO : OuterAtEnd H) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {s : ℕ}
     (hs : s < nS x) {Ω : Type} (P : Prover Ω) (ω : Ω) (r d : Fin ((V IV st).k x) → Coin)
     (hacc : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} {xs : List Msg} {xO : Msg}

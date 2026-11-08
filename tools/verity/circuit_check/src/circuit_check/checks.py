@@ -7,17 +7,21 @@
                      kernel (`verity.ml.circuits.evaluation.self_check`, which must be `SelfCheck.ok`: some vector compared, and
                      none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
                      template's evaluated target where it is another Definition, and
-                     the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
+                     the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
                      (``word:<word>``): the Boolean Definition is the definition.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
-                     entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read
+                     entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read; an
+                     operand over the input budget (`targets.LAZY_OPERANDS`, a weight) takes its edge and random words one
+                     vector at a time and is read lazily (`vectors.wide_words`), recorded under ``wide`` with the reads of
+                     its words, plus a random vector per index probe (`targets.OPERAND_PROBES`: a shard's or an expert
+                     count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
-                     folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
+                     folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
     redundant gates  a value computed twice inside one proof block: the gates `verity.ml.definitions.word.Graph` finds recomputed
@@ -40,12 +44,12 @@
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
                      `sidecars`; a Boolean Definition's lowering has at most its own And gates, besides its builder's
-                     commits), a template proof block's circuit digest against its C-Flock module's `PINS`, and the Boolean
+                     commits), a template proof block's circuit digest against its Flock module's `PINS`, and the Boolean
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
-                     head check) against its ``digests`` pin
-    block            the witness bits a whole Definition needs as one C-Flock unit, read off it (its ANDs and port bits,
-                     `verity_flock.circuit.unit_witness`), within C-Flock's proved range of 2^``K_MAX`` (`block_range`): past
+                     head check) against its ``digests`` pin, as is any Definition's that holds one (a served-size binding)
+    block            the witness bits a whole Definition needs as one Flock unit, read off it (its ANDs and port bits,
+                     `verity_flock.circuit.unit_witness`), within Flock's proved range of 2^``K_MAX`` (`block_range`): past
                      it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
                      for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
 
@@ -103,7 +107,7 @@ class Options:
     partition_max_gates: int = 5_000_000
     partition_max_leaves: int = 1 << 22
     lower_max_gates: int = 256
-    lower_max_ands: int = 60_000
+    lower_max_ands: int = 1 << 16
     input_budget: int = 1 << 22
     lane_budget: int = 1 << 16
     dead_ids: int = 1 << 17
@@ -170,9 +174,11 @@ def _gates(t: Any) -> int:
     return 1 if isinstance(t, (PrimitiveDefinition, ScalarReference)) else int(t.gates)
 
 
-def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
+def _n_vectors(t: Any, opts: Options, lazy: int | Iterable[int] = ()) -> int:
+    """The vectors of ``t``'s correspondence; the parameters ``lazy`` names are read lazily, so their leaves don't count."""
     params, _ = signature_of(t)
-    leaves = sum(pt.leaves for j, pt in enumerate(params) if j != table)
+    skip = {lazy} if isinstance(lazy, int) else set(lazy)
+    leaves = sum(pt.leaves for j, pt in enumerate(params) if j not in skip)
     n = max(opts.min_vectors, min(opts.vectors, opts.reference_budget // max(1, _gates(t))))
     return max(1, min(n, opts.input_budget // max(1, leaves)))
 
@@ -220,20 +226,139 @@ def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, 
     return rec, None, ref
 
 
+_WIDE_HOLDERS: dict[str, PrimitiveDefinition] = {}
+
+
+def _wide_holder(name: str) -> PrimitiveDefinition:
+    """A primitive declaring ``name`` a registered table, as `RegisteredTable` requires of what it reads: an operand read lazily
+    is declared by no Definition."""
+    h = _WIDE_HOLDERS.get(name)
+    if h is None:
+        from verity.ml.circuits.types import Value
+
+        h = _WIDE_HOLDERS[name] = PrimitiveDefinition("CircuitCheckLazyOperand", 1, (("x", Value(64)),), Value(64), lambda x: x,
+                                                        register=False, tables=((name, "registered"),))
+    return h
+
+
+def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None:
+    """Why ``t``'s parameters ``wide`` can't be read lazily on `_wide_correspondence`'s vectors, or None."""
+    from .targets import lazy_operands
+
+    names = [n for n, _ in resolve(t).signature()[0]] if not isinstance(t, ScalarReference) else []
+    listed = set(lazy_operands(t))
+    for j in wide:
+        if not names or names[j] not in listed:
+            return (f"parameter {j} has {params[j].leaves} leaves, over the input budget, and is neither a registered table a probe "
+                    "reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily (`circuit_check.targets.LAZY_OPERANDS`)")
+        w = params[j].homogeneous_width()
+        if w is None or w > 64:
+            return f"parameter {j} ({names[j]!r}) is read lazily, so it needs one width of at most 64 bits"
+    if isinstance(t, PrimitiveDefinition):
+        if getattr(t, "evaluate_lazy", None) is None:
+            return f"{t.id} is a primitive without `evaluate_lazy`, so it reads every leaf of a parameter"
+        return None
+    from verity.ml.circuits.refs import Affine
+
+    prog, _call = standalone_call(t)
+    for j in wide:
+        refs = prog.input_coll(j).refs
+        if not (isinstance(refs, Affine) and refs.count == params[j].leaves):
+            return f"parameter {j} ({names[j]!r}) is read lazily, so it needs one contiguous run of Input gates, not {refs!r}"
+    return None
+
+
+def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Options, F: Findings) -> tuple[dict, None, list]:
+    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`): every
+    parameter takes its edge and random words, the wide ones one vector at a time (`vectors.wide_words`), each read lazily as a
+    `RegisteredTable`, then one random vector per index probe (`targets.OPERAND_PROBES`) with its index parameters set.  An
+    operand no vector reads is a warning.  No kernel takes them."""
+    from verity.ml.circuits.evaluation import RegisteredTable
+    from verity.ml.circuits.types import Value
+
+    from .targets import operand_probes
+    from .vectors import edges, wide_words
+
+    n = _n_vectors(t, opts, wide)
+    rest = [j for j in range(len(params)) if j not in wide]
+    other = [params[j] for j in rest]
+    arrays = vectors(other, n, opts.seed)
+    n_edge = min(n, max([edge_count(other)] + [len(edges(params[j].homogeneous_width())) for j in wide]))
+    names = [nm for nm, _ in resolve(t).signature()[0]]
+    reads = dict.fromkeys(wide, 0)
+    probes = operand_probes(t)
+    at = {nm: k for k, nm in enumerate(names[j] for j in rest)}
+    scalars = sorted(nm for nm, k in at.items() if isinstance(other[k], Value))
+    for p in probes:
+        if not set(p) <= set(scalars):
+            raise ValueError(f"{t.id}: the operand probe {p} sets a parameter that isn't one of its Value parameters {scalars} "
+                             "(`circuit_check.targets.OPERAND_PROBES`)")
+    E0 = edge_count(other)
+    extra = vectors(other, E0 + len(probes), opts.seed + 1) if probes else []
+
+    def small(i: int) -> list:
+        if i < n:
+            return instance_args(other, arrays, i)
+        a = instance_args(other, extra, E0 + i - n)
+        for nm, v in probes[i - n].items():
+            a[at[nm]] = v
+        return a
+
+    def lazily(j: int, word: Callable[[int], int]) -> Callable[[int], int]:
+        def read(k: int) -> int:
+            reads[j] += 1
+            return word(k)
+        return read
+
+    total = n + len(probes)
+    ref: list[tuple[int, ...] | None] = []
+    raised: list[dict] = []
+    for i in range(total):
+        args: list[Any] = [None] * len(params)
+        for j, a in zip(rest, small(i)):
+            args[j] = a
+        for j in wide:
+            args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, wide_words(params[j], i, n_edge, opts.seed, j)),
+                                      params[j].leaves, _wide_holder(f"operand:{names[j]}"))
+        try:
+            ref.append(tuple(evaluate(t, *args)))
+        except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
+            ref.append(None)
+            raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
+    rec: dict[str, Any] = {"vectors": total, "edge_vectors": n_edge, "reference_raised": len(raised), "realizations": [],
+                           "wide": [{"param": j, "name": names[j], "leaves": params[j].leaves,
+                                     "width": params[j].homogeneous_width(), "reads": reads[j]} for j in wide]}
+    if probes:
+        rec["probes"] = probes
+    if raised:
+        F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {total} vectors",
+               examples=raised[:_EXAMPLES])
+    for j in wide:
+        if not reads[j]:
+            F.warn("correspondence", "operand-unread", t.id, 1, f"no vector read {names[j]!r}, so its words are checked on "
+                   "none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)")
+    lazy = ", ".join(repr(names[j]) for j in wide)
+    for name in sorted(kernels(t)):
+        rec["realizations"].append({"via": f"kernel:{name}", "declines": f"a kernel takes arrays, not {lazy} read lazily"})
+    return rec, None, ref
+
+
 def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.ndarray] | None, list]:
     """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
-    Definition reads a registered table (probed, `_probed_correspondence`) or has a parameter over the input budget that is none
-    (a failure)."""
+    Definition reads a registered table (probed, `_probed_correspondence`) or an operand over the input budget (read lazily,
+    `_wide_correspondence`), or has a parameter over the input budget that is neither (a failure)."""
     from .targets import table_probe
 
     params, _ret = signature_of(t)
     probe = table_probe(t)
     if probe is not None:
         return _probed_correspondence(t, params, probe, opts, F)
-    wide = [(j, pt.leaves) for j, pt in enumerate(params) if pt.leaves > opts.input_budget]
+    wide = [j for j, pt in enumerate(params) if pt.leaves > opts.input_budget]
     if wide:
-        F.fail("correspondence", "unprobed-table", t.id, f"parameter {wide[0][0]} has {wide[0][1]} leaves, over the input budget "
-               f"{opts.input_budget}, and no registered table probes it (`circuit_check.targets.TABLE_PROBES`)")
+        why = _unread_operand(t, params, wide)
+        if why is None:
+            return _wide_correspondence(t, params, wide, opts, F)
+        F.fail("correspondence", "unprobed-table", t.id, why)
         return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
     n = _n_vectors(t, opts)
     arrays = vectors(params, n, opts.seed)
@@ -275,7 +400,7 @@ def _bounds(rs: Sequence, full: Callable) -> list:
 
 
 def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tuple[int, int] | None] = ()) -> list:
-    """`arrays` with each parameter's leaves folded into its drawn interval (`draw[j]`), else each leaf of a bounded parameter
+    """`arrays` with each parameter's leaves folded into its sampled interval (`draw[j]`), else each leaf of a bounded parameter
     into its bound: an interval's two ends first, then the vectors' values within it."""
     from verity.ml.circuits import ports as P
 
@@ -631,7 +756,7 @@ def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> 
 
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
-    """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
+    """The Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
     reference on the correspondence vectors; its redundant ANDs; a primitive's AND count and digest against the piece pins.  A composite's
     mismatch names the pieces that already differ from their own primitive (``memo["pieces"]``: piece -> mismatching vectors)."""
     from verity_flock import gf2
@@ -647,13 +772,13 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         if t.id.startswith("TopPMaskWordx") and t.id not in IL.PIECES:
             return _topp_word(t, arrays, ref, F)
         if t.id not in IL.PIECES:
-            return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
+            return {"lowered": False, "reason": IL.no_piece([t.id])}
     elif t.gates > opts.lower_max_gates and not is_boolean(t):
         return {"lowered": False, "reason": f"{t.gates} IR gates: lowered as a template's units, not whole (budget {opts.lower_max_gates})"}
     else:
         used, missing, est = _pieces_used(t, pins)
         if missing:
-            return {"lowered": False, "reason": "C-Flock has no piece for " + ", ".join(sorted(missing))}
+            return {"lowered": False, "reason": IL.no_piece(sorted(missing))}
         if est > opts.lower_max_ands:
             return {"lowered": False, "reason": f"about {est} ANDs: over the whole-Definition budget ({opts.lower_max_ands})"}
         for p in used:
@@ -932,7 +1057,8 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     with spent("lowering"):
         if arrays is None:
             low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
-                   "registered table lazily" if "table" in corr else "no vectors"}
+                   "registered table lazily" if "table" in corr else "a lowering takes every input leaf, and this Definition's "
+                   "correspondence reads an operand over the input budget lazily" if "wide" in corr else "no vectors"}
         elif lower_whole or kind != "composite":
             low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
         else:
@@ -974,7 +1100,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
-    if getattr(getattr(t, "defn", t), "gated", False):
+    if getattr(getattr(t, "defn", t), "gated", False) or t.id in pins.get("digests", {}):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
     if kind != "reference":
@@ -985,7 +1111,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     return entry
 
 
-#: the packages whose Definitions are each staged whole as one C-Flock unit (`verity_flock.class_statement.UnitStager`), so
+#: the packages whose Definitions are each staged whole as one Flock unit (`verity_flock.class_statement.UnitStager`), so
 #: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
 #: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
 UNIT_OWNERS = ("verity.core.protocols.pouw.",)
@@ -998,8 +1124,8 @@ def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
 
 
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
-    """The witness bits ``t`` needs as one C-Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
-    C-Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
+    """The witness bits ``t`` needs as one Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
+    Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
     subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
     before lowering."""
     from verity_flock import circuit as FC
@@ -1013,7 +1139,8 @@ def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
     names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
-    place of the digest is the Definition's."""
+    place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
+    over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
     from verity.ml.circuits.codec import program_digest
     from verity.ml.circuits.program import Program
 
@@ -1052,7 +1179,7 @@ def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
-    """A subcircuit's C-Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
+    """A subcircuit's Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
     their pin and the Boolean export, its redundant ANDs, and the laid-out proof blocks against the reference on the edge and
     random vectors."""
     from verity_flock import ir_lower as IL
@@ -1140,7 +1267,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
 def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
                      pins: dict | None = None) -> dict:
     """Every check on a subcircuit: its Definition (and its evaluated target where that is another Definition) at each binding of
-    its instance statics, and its C-Flock lowering."""
+    its instance statics, and its Flock lowering."""
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     F = Findings()

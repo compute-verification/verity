@@ -113,7 +113,8 @@ def traced_launch_tokens(own: int) -> int:
         return int(own)
     from verity_vllm.program.frontend import targets as T
     step, rows = region
-    return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled")
+    return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled",
+                           capture_sizes=active_target_profile().graph_capture_sizes())
 
 
 def _launch_of(node, read):
@@ -132,12 +133,14 @@ def _launch_of(node, read):
 
 
 def launch_tokens_of(node, own: int) -> int:
-    """The rows of the launch a node's `own` rows run in (`targets.launch_tokens` at the node's `launch_region` tag), for a kernel
-    choice that reads the launch's token count; `own` without a declared batch."""
+    """The rows of the launch a node's `own` rows run in (`targets.launch_tokens` at the node's `launch_region` tag, padded to the
+    target's capture size under breakable CUDA graphs), for a kernel choice that reads the launch's token count; `own` without a
+    declared batch."""
     if not launch_batch_declared():
         return int(own)
     from verity_vllm.program.frontend import targets as T
-    return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled))
+    sizes = active_target_profile().graph_capture_sizes()
+    return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled, capture_sizes=sizes))
 
 
 def launch_sequences_of(node) -> list[tuple[int, int]] | None:

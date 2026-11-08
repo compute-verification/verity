@@ -2,22 +2,30 @@ module
 
 public import Proofs.Flock.Soundness.Audit.TwoStage
 public import Mathlib.Logic.Equiv.Fin.Basic
-public import Mathlib.Tactic.FinCases
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Tactic.FinCases
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Tightness and insecurity: NOT chains
 
 `K` chains of `nv` NOT gates. Chain `c` is one coarse unit and each of its gates one fine unit, so a
-prover can move a lie to any fine unit of a wrong chain. The second stage draws a uniform
-`k₂`-subset of each drawn chain's gates. The session is ideal: it accepts exactly when every drawn
+prover can move a lie to any fine unit of a wrong chain. The second stage samples a uniform
+`k₂`-subset of each sampled chain's gates. The session is ideal: it accepts exactly when every sampled
 fine unit is correct.
 
 * `two_stage_b_tight`: for **every** first-stage law, a prover whose chains are all wrong is accepted
-  with probability exactly `effEscape univ`, so `twoStage_count`'s bound is attained;
+  with probability exactly `effAcceptProb univ`, so `twoStage_count`'s bound is attained;
 * `naive_two_level_unsound`: that is more than `L₁.miss K`, what one-stage over the coarse
   partition with `L₁` (and the `m`-dependent reading at `m = nv`) would promise. Nested sampling
-  dilutes: after the first draw the prover concentrates each lie into one fine unit;
-* `late_interior_insecure`: if the interior is committed after the fine draw, a wrong chain is
+  dilutes: after the first sample the prover concentrates each lie into one fine unit;
+* `late_interior_insecure`: if the interior is committed after the fine sample, a wrong chain is
   accepted with certainty.
 -/
 
@@ -30,7 +38,7 @@ open scoped ENNReal
 
 namespace Law
 
-/-- A law relabelled along an embedding of its units. -/
+/-- A sampling design relabelled along an embedding of its units. -/
 def map {m n : ℕ} (L : Law m) (e : Fin m ↪ Fin n) : Law n where
   Ω := L.Ω
   draw ω := (L.draw ω).map e
@@ -224,7 +232,7 @@ def L₂ {k₂ : ℕ} (hk : k₂ ≤ nv) (c : Fin K) : Law (K * nv) :=
 abbrev Tr := Fin (K * (nv + 1)) → Bool
 
 open Classical in
-/-- The ideal session: it accepts exactly when every drawn fine unit is correct in the fine
+/-- The ideal session: it accepts exactly when every sampled fine unit is correct in the fine
 transcript (the coarse committed wires from the registration, the rest from the interior). -/
 noncomputable def session (S : Finset (Fin (K * nv))) (R : Tr K nv) (_S₁ : Finset (Fin K))
     (I : Tr K nv) : Game Bool :=
@@ -316,10 +324,10 @@ theorem subset_miss_one {k₂ : ℕ} (hk : k₂ ≤ nv) (i : Fin nv) :
   exact congrArg prCoin (funext fun ω => propext Finset.disjoint_singleton_right.symm)
 
 /-- The effective escape of the chains, for any first-stage law. -/
-theorem effEscape_chains {L₁ : Law K} {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1 ≤ nv) (B : Finset (Fin K)) :
-    effEscape L₁ (L₂ K nv hk) (refines K nv).parent B =
+theorem effAcceptProb_chains {L₁ : Law K} {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1 ≤ nv) (B : Finset (Fin K)) :
+    effAcceptProb L₁ (L₂ K nv hk) (refines K nv).parent B =
       avg fun ω₁ => (((nv - 1).choose k₂ : ℝ≥0∞) / (nv.choose k₂ : ℝ≥0∞)) ^ (B ∩ L₁.draw ω₁).card := by
-  unfold effEscape
+  unfold effAcceptProb
   refine congrArg avg (funext fun ω₁ => ?_)
   rw [← Finset.prod_const]
   refine Finset.prod_congr rfl fun c _ => le_antisymm (iSup₂_le fun v hv => ?_) ?_
@@ -352,7 +360,7 @@ theorem interior_not_committed (c : Fin K) (j : Fin (nv + 1)) (h0 : j.val ≠ 0)
     rw [coarse_unit, coarse_unit]
     simp [h0, hj']
 
-/-- The ideal session's acceptance, for a prover whose interior depends only on the first draw. -/
+/-- The ideal session's acceptance, for a prover whose interior depends only on the first sample. -/
 theorem prob_ideal (L₁ : Law K) (L₂ : Fin K → Law (K * nv)) (R : Tr K nv) (I : L₁.Ω → Tr K nv) :
     prob (fun o => o.1 = true) (twoStage L₁ L₂ (Tr K nv) (fun _ => Tr K nv) (session K nv))
         ⟨R, fun ω₁ => ⟨I ω₁, fun _ => PUnit.unit⟩⟩ =
@@ -396,10 +404,10 @@ theorem prob_σT (L₁ : Law K) {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1 ≤ nv)
 
 /-- The profile's bound for `K` wrong chains is the effective escape of all of them. -/
 theorem bound_chains (L₁ : Law K) {k₂ : ℕ} (hk : k₂ ≤ nv) :
-    (⨆ (B : Finset (Fin K)) (_ : K ≤ B.card), effEscape L₁ (L₂ K nv hk) (refines K nv).parent B) =
-      effEscape L₁ (L₂ K nv hk) (refines K nv).parent Finset.univ := by
+    (⨆ (B : Finset (Fin K)) (_ : K ≤ B.card), effAcceptProb L₁ (L₂ K nv hk) (refines K nv).parent B) =
+      effAcceptProb L₁ (L₂ K nv hk) (refines K nv).parent Finset.univ := by
   refine le_antisymm (iSup₂_le fun B hB => ?_) (le_iSup₂_of_le (f := fun (B : Finset (Fin K)) (_ : K ≤ B.card) =>
-    effEscape L₁ (L₂ K nv hk) (refines K nv).parent B) Finset.univ (by simp) le_rfl)
+    effAcceptProb L₁ (L₂ K nv hk) (refines K nv).parent B) Finset.univ (by simp) le_rfl)
   rw [Finset.eq_univ_of_card B (le_antisymm (by simpa using Finset.card_le_univ B) (by simpa using hB))]
 
 /-- **Tight.** For every first-stage law, a prover whose `K` chains are all wrong is accepted with
@@ -408,13 +416,13 @@ theorem two_stage_b_tight (L₁ : Law K) {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 
     K ≤ ((coarse K nv).wrong (reg₂ (σT K nv L₁ hk))).card ∧
     prob (fun o => o.1 = true) (twoStage L₁ (L₂ K nv hk) (Tr K nv) (fun _ => Tr K nv) (session K nv))
         (σT K nv L₁ hk) =
-      ⨆ (B : Finset (Fin K)) (_ : K ≤ B.card), effEscape L₁ (L₂ K nv hk) (refines K nv).parent B := by
+      ⨆ (B : Finset (Fin K)) (_ : K ≤ B.card), effAcceptProb L₁ (L₂ K nv hk) (refines K nv).parent B := by
   refine ⟨T_coarse_wrong_card hnv, ?_⟩
-  rw [bound_chains, effEscape_chains hk hnv, prob_σT L₁ hk hnv]
+  rw [bound_chains, effAcceptProb_chains hk hnv, prob_σT L₁ hk hnv]
   simp only [Finset.univ_inter]
 
-/-- **Nested sampling dilutes.** When the second stage leaves some fine unit undrawn and the first
-draws something, a prover with `K` wrong chains is accepted with probability above `L₁.miss K`:
+/-- **Nested sampling dilutes.** When the second stage leaves some fine unit unsampled and the first
+samples something, a prover with `K` wrong chains is accepted with probability above `L₁.miss K`:
 more than one-stage over the coarse partition with `L₁` promises, and more than the `m`-dependent
 reading of the retired Python `TwoStageLaw.profile` gave at `m = nv`. -/
 theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ nv)
@@ -430,7 +438,7 @@ theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ n
   have hq : q ≠ 0 := by
     refine ENNReal.div_ne_zero.2 ⟨?_, ENNReal.natCast_ne_top _⟩
     exact_mod_cast (Nat.choose_pos (by omega)).ne'
-  -- `miss K` is the probability that the first draw is empty
+  -- `miss K` is the probability that the first sample is empty
   have hmiss : L₁.miss K = prCoin fun ω => L₁.draw ω = ∅ := by
     refine le_antisymm (iSup₂_le fun B hB => ?_) ?_
     · rw [Finset.eq_univ_of_card B (le_antisymm (by simpa using Finset.card_le_univ B) (by simpa using hB))]
@@ -455,8 +463,8 @@ theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ n
 
 /-! ## (b2) with a Bernoulli first stage is one-stage over the coarse partition, thinned -/
 
-/-- The factor identity behind thinning: a coordinate drawn with probability `num/den` and then
-missed with probability `1 − k₂/nv` is a coordinate drawn with probability `num·k₂/(den·nv)`. -/
+/-- The factor identity behind thinning: a coordinate sampled with probability `num/den` and then
+missed with probability `1 − k₂/nv` is a coordinate sampled with probability `num·k₂/(den·nv)`. -/
 theorem bernFactor_thin {num den k₂ : ℕ} (hnum : num ≤ den) (hden : 1 ≤ den) (hk : k₂ ≤ nv)
     (hnv : 1 ≤ nv) :
     Law.bernFactor num den (((nv - k₂ : ℕ) : ℝ≥0∞) / (nv : ℝ≥0∞)) =
@@ -480,21 +488,21 @@ theorem bernFactor_thin {num den k₂ : ℕ} (hnum : num ≤ den) (hden : 1 ≤ 
         exact_mod_cast hnat
 
 /-- **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli(`num/den`) first
-stage and a uniform `k₂`-subset of each drawn chain's `nv` gates, the effective escape of any set of
-chains is its escape under the one-stage Bernoulli(`num·k₂/(den·nv)`) draw. -/
-theorem effEscape_bernoulli {num den k₂ : ℕ} [NeZero den] [NeZero nv] (hnum : num ≤ den)
+stage and a uniform `k₂`-subset of each sampled chain's `nv` gates, the effective escape of any set of
+chains is its escape under the one-stage Bernoulli(`num·k₂/(den·nv)`) sample. -/
+theorem effAcceptProb_bernoulli {num den k₂ : ℕ} [NeZero den] [NeZero nv] (hnum : num ≤ den)
     (hk : k₂ ≤ nv) (B : Finset (Fin K)) :
-    effEscape (Law.bernoulli K num den) (L₂ K nv hk) (refines K nv).parent B =
+    effAcceptProb (Law.bernoulli K num den) (L₂ K nv hk) (refines K nv).parent B =
       (Law.bernoulli K (num * k₂) (den * nv)).escape B := by
   have hnv : 1 ≤ nv := Nat.one_le_iff_ne_zero.2 (NeZero.ne nv)
   have hden : 1 ≤ den := Nat.one_le_iff_ne_zero.2 (NeZero.ne den)
-  rw [effEscape_chains hk hnv B, Law.bernoulli_escape (Nat.mul_le_mul hnum hk) B]
+  rw [effAcceptProb_chains hk hnv B, Law.bernoulli_escape (Nat.mul_le_mul hnum hk) B]
   simp only [← Finset.prod_const]
   rw [Law.bernoulli_avg_prod hnum, Law.choose_ratio hk hnv, bernFactor_thin hnum hden hk hnv]
 
-/-! ## Fine values chosen after the fine draw -/
+/-! ## Fine values chosen after the fine sample -/
 
-/-- **(b) with the interior committed after the second draw**: the naive ordering. -/
+/-- **(b) with the interior committed after the second sample**: the naive ordering. -/
 def twoStageLate {nc nf : ℕ} (L₁ : Law nc) (L₂ : Fin nc → Law nf) (Reg : Type)
     (Int : Finset (Fin nc) → Type)
     (session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool) :
@@ -516,12 +524,12 @@ theorem prob_ideal_late (L₁ : Law K) (L₂ : Fin K → Law (K * nv)) (R : Tr K
   refine congrArg avg (funext fun ω₂ => ?_)
   simp [prob, session, Game.map]
 
-/-- One chain of two NOT gates; the second stage draws one of its two gates. -/
+/-- One chain of two NOT gates; the second stage samples one of its two gates. -/
 noncomputable abbrev lateGame :=
   twoStageLate (Law.subset 1 1 le_rfl) (L₂ 1 2 (k₂ := 1) (by omega)) (Tr 1 2) (fun _ => Tr 1 2)
     (session 1 2)
 
-/-- The prover sets the middle gate after seeing which gate is drawn, so that the drawn one is
+/-- The prover sets the middle gate after seeing which gate is sampled, so that the sampled one is
 correct and the lie sits in the other. -/
 def lateInterior (ω₂ : ∀ c, (L₂ 1 2 (k₂ := 1) (by omega) c).Ω) : Tr 1 2 := fun g =>
   if g = E 1 2 (0, 1) then decide ((0 : Fin 2) ∈ (ω₂ 0).1) else T 1 2 g
@@ -544,7 +552,7 @@ theorem late_extend (ω₂ : ∀ c, (L₂ 1 2 (k₂ := 1) (by omega) c).Ω) (g :
     simp [interior_not_committed (K := 1) (nv := 2) 0 1 (by decide) (by decide)]
   · simp [hg]
 
-/-- **Fine values chosen after the fine draw break the audit**: a wrong chain is accepted with
+/-- **Fine values chosen after the fine sample break the audit**: a wrong chain is accepted with
 certainty. -/
 theorem late_interior_insecure :
     ((coarse 1 2).wrong (T 1 2)).card = 1 ∧ prob (fun o => o.1 = true) lateGame σLate = 1 := by

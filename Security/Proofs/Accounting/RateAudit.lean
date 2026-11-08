@@ -47,7 +47,7 @@ are ground against the Fiat–Shamir seed (`Accounting.SecurityProofs.RateGrindP
 bound over the monitoring period on the samples (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the
 route `Sampled` it gives a window (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation
 with the compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`),
-with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a
+with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled sample of a window and of a
 session of windows, over the monitoring period and in every window (`Accounting.SecurityProofs.RateWindowDraw`,
 `RateSessionDraw`), with its route `Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote
 bandwidth audit as deployed, one guarantee over a session of ground, chained windows of devices with partial completion

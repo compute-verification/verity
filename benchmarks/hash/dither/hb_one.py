@@ -6,14 +6,14 @@ the one-stream unit h1u.cu's `kh_one` (the h1u walk, its receipts, and z = O' - 
 an install after it would be too late). A call keeps dither-1s's A slot and A table: on dither-rtx's 007a40aac1 and later
 (the DitherState has `apre`) one `h1c_a_call` (the slot rows and the table, with `h1c_a_step` once a step in the DitherState's own
 step hook), before it h1o_slot and h1c_build. Then h1r's seeds (version 0) and `kh_one` on the A slot (xq's rows < m and
-zero rows above) and the layer's B, into the window's z slot, the plan's seeds and receipts at the call's offsets, and
-the op's z and y. The step (m, flags) is read from the window's step on the device, as h1o reads it, and the flags mean
+zero rows above) and the layer's B, into the execution phase's z slot, the plan's seeds and receipts at the call's offsets, and
+the op's z and y. The step (m, flags) is read from the execution phase's step on the device, as h1o reads it, and the flags mean
 h1o's (F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB): so `dither_one.check`, with h1o.so's own references
 (h1o_ref, h1r v1, the CPU H1V3 units, H1V3's h1tile.reference), gates this kernel unchanged. One difference: under the
 gate's no-write control (F_NW_TILES) the slot may go unwritten, so that one step's y comes from the poisoned slot (h1o
 reads xq); dither-1s arms' tokens are reported, not gated.
 
-The workspace (`kh_unit_ws`' noise, the largest linear's `kh_ws_bytes` at T rows) is allocated at the window's first
+The workspace (`kh_unit_ws`' noise, the largest linear's `kh_ws_bytes` at T rows) is allocated at the execution phase's first
 call, vLLM's eager profile run; each call's J is set for the row tiles its M can hold live (M is fixed per captured
 graph). The library is h1u.cu built by job.sh (`HB_H1U`), in the run's inputs.
 
@@ -31,7 +31,7 @@ from hb_side import auto_j
 
 
 class One:
-    """`kh_one` over the window's calls: per linear its seed and receipt offsets in the window's plan."""
+    """`kh_one` over the execution phase's calls: per linear its seed and receipt offsets in the execution phase's plan."""
 
     def __init__(self, path: str, win: DO.DitherState, peel: bool = False):
         h = self.h = C.CDLL(path)

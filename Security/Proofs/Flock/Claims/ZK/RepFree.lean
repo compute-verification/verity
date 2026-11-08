@@ -1,27 +1,60 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishSrc
-public import Proofs.Flock.Claims.ZK.PiopFree
+public import Proofs.Flock.Claims.ZK.CutSession
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Runs
+import Proofs.Flock.Claims.ZK.SimLig
+import Proofs.Flock.Claims.ZK.SimZerocheck
 
 /-!
 # The cut rep returns on its coins alone
 
 Answered by `asksCut`, a rep's sends are counted by its coins and its public sizes: every squeeze sends one body and is
 answered by the coin of the log's size, every absorb, commitment and state step sends nothing, and the only refusals
-past the PIOP read coins (the pair `ρ₀, ρ₁`, `β`). So where the firewall's rep returns, the rep from any source returns
+past the PIOP read coins (the pair `ρ₀, ρ₁`, `β`). So where the ZK server's rep returns, the rep from any source returns
 from a log of the same size, with a log of the same size, whatever values either sends.
 
 * **Forward runs** (`Fw R x y`): where `x` returns, `y` returns with a log of the same size and a result related by
   `R`. Binds (`fw_bind`), the shared squeezes (`Coined`), and on Ligerito's state, `FwL`: from states with as many
   messages, the same.
-* **`ligeritoPZk_cut_fw`**: the firewall's masked Ligerito opening and the cut's, from logs of one size: where the
-  firewall's returns, the cut's returns, with as many messages, lane challenges and out-of-domain values.
+* **`ligeritoPZk_cut_fw`**: the ZK server's masked Ligerito opening and the cut's, from logs of one size: where the
+  ZK server's returns, the cut's returns, with as many messages, lane challenges and out-of-domain values.
 -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockComplete.CutFree
 
@@ -379,8 +412,9 @@ theorem fw_runL_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : LP P
 
 /-! ## The Ligerito opening -/
 
+-- `ligeritoPZk`'s and `ligeritoCut`'s unfolded runs taken together, a `*_bind` step per bind on both sides
 set_option maxHeartbeats 4000000 in
-/-- **The cut's Ligerito opening returns where the firewall's did**: answered by `asksCut` from logs of one size, where
+/-- **The cut's Ligerito opening returns where the ZK server's did**: answered by `asksCut` from logs of one size, where
 the masked opening (`ligeritoPZk`, every nonce `0`) returns, the opening from any source returns, with a log of the
 same size and as many messages, lane challenges and out-of-domain values; whatever the tables, bases, layouts, pads,
 commitments, schemes and hashes on either side. -/

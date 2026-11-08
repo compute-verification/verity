@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
-public import Proofs.Flock.Soundness.Refine.Table
+public import Proofs.Flock.Soundness.Refine.Rep
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The PIOP's rounds, as the frames they emit (R11b)
@@ -222,7 +226,7 @@ theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (ses
           repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T := by
         simp [repFrames, List.append_assoc]
       rw [hfr] at e
-      obtain ⟨-, hk, hR, -⟩ := e
+      obtain ⟨-, hk, hR, -, -⟩ := e
       refine ⟨by rw [← c2, hk]; simp, fun j hj => ?_⟩
       have hj' : j < (chunks (repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T)).1.length := by
         rw [← c2, hk] at hj; simpa using hj

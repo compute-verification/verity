@@ -47,7 +47,7 @@ def DeadZ (n : ℕ) (outs : List (OutZC 𝔽 D Sl)) : Prop :=
 
 /-- **The filtered conflict is `0` at a run whose table `n` opens nothing.** -/
 theorem ind_conflictAcc_nul (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
-    (sch : Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)} (h : DeadZ n b) :
+    (sch : FlockSoundness.Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)} (h : DeadZ n b) :
     ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p,
       Rewinding.ConflictAt (opRAccZ H E Lf sch n r ℓ d) x p) (b, b') = 0 := by
   unfold ind
@@ -203,7 +203,7 @@ end Session
 /-! ## At the masked simulator -/
 
 /-- **The simulated strategy follows the deployed schedule**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
+sample, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
 simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
 coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
 before the tables after it flip any, short of runs where table `j` opens nothing. -/
@@ -228,7 +228,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated strategy follows the deployed schedule**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
+sample, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
 simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
 coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
 before the tables after it flip any, short of runs where table `j` opens nothing. -/

@@ -1,22 +1,55 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishLig
+public import Proofs.Flock.Claims.ZK.FinishCommit
 public import Proofs.Flock.Claims.ZK.FinishInner
+public import Proofs.Flock.Claims.ZK.FinishLig
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
-# The firewall's rep in the analysis's terms
+# The ZK server's rep in the analysis's terms
 
 `Flock.Firewall.Finish.repFw` is the analysis's phases one for one, its copies held to them in `FinishCommit`,
 `FinishPiop`, `FinishLig` and `FinishInner`. Here they are put together:
 
-* `repFwC`: the firewall's rep in `FlockComplete`'s terms. `piopCut`'s zerocheck, lincheck and ring switch at the masked
+* `repFwC`: the ZK server's rep in `FlockComplete`'s terms. `piopCut`'s zerocheck, lincheck and ring switch at the masked
   values `vals + h` and the switched vectors of the packed table, with no rank check (the frame's,
   `LeanRelease.FrameAdmits`); `FlockComplete.ligeritoPZk` at SHA-512 and `hm96-sha512/v1`; the session's replay and
   constraints; the stop where one fails on the pads; then `FlockComplete.innerP`.
-* **`repFw_eq`**: at the firewall's commitment (`commitFw`) and a scheme of `hm96-sha512/v1`, at pads with
+* **`repFw_eq`**: at the ZK server's commitment (`commitFw`) and a scheme of `hm96-sha512/v1`, at pads with
   `h_ab = h_a·h_b` and `w = x·y` on the layout's length, in a monad where a throw ends the run, `repFw` is `repFwC`.
   Where the stop fires, both stop with the same message; elsewhere no constraint fails on the pads, so the batched
-  constraint holds at every coin (`batched_of_noFail`) and the firewall's inner proof is `FlockComplete.innerP`'s
+  constraint holds at every coin (`batched_of_noFail`) and the ZK server's inner proof is `FlockComplete.innerP`'s
   (`innerP_eq`).
 * `evalL_combo_linAt`, `batched_of_noFail`: `Lin.combo` on the pads' length is the weighted sum of `failingOn`'s values
   of its forms (`linAt`), whatever their lengths, so where none fails on the pads the batched constraint holds, with no
@@ -148,7 +181,7 @@ section
 
 variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **The firewall's rep in the analysis's terms**: `piopCut`'s zerocheck, lincheck and ring switch at the masked values
+/-- **The ZK server's rep in the analysis's terms**: `piopCut`'s zerocheck, lincheck and ring switch at the masked values
 `vals + h` and the switched vectors of `g`, with no rank check; `FlockComplete.ligeritoPZk` at SHA-512 and
 `hm96-sha512/v1`; the session's replay and constraints; the stop where one fails on the pads; then
 `FlockComplete.innerP`. -/
@@ -184,7 +217,7 @@ theorem flat_eq (cap : Array ByteArray) : flat cap = FlockComplete.flat cap := r
 
 theorem InnerCommit.toC_root (ic : InnerCommit) : ic.toC.root = ic.root := rfl
 
-/-- **The firewall's rep is `repFwC`** at its own commitment and `hm96-sha512/v1`, at pads with `h_ab = h_a·h_b` and
+/-- **The ZK server's rep is `repFwC`** at its own commitment and `hm96-sha512/v1`, at pads with `h_ab = h_a·h_b` and
 `w = x·y` on the layout's length, in a monad where a throw ends the run. -/
 theorem repFw_eq (io : Asks M) (hs : Hashes M) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim)

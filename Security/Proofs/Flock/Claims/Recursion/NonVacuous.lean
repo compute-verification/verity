@@ -1,15 +1,44 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictAssembly
-public import Proofs.Flock.Claims.Recursion.VerdictLoop
-public import Proofs.Flock.Claims.Recursion.VerdictPieces
-public import Proofs.Flock.Claims.Recursion.VerdictRun
-public import Proofs.Flock.Claims.Recursion.RecRecord
-public import Proofs.Flock.Claims.Recursion.FinOpen
-public import Proofs.Flock.Claims.Recursion.LayoutBTops
-public import Proofs.Flock.Claims.Recursion.DeployOuter
-public import Proofs.Flock.Claims.Recursion.BindsDeployed
 public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
+public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowE
+public import Proofs.Flock.Claims.Recursion.VerdictRowR
+public import Proofs.Flock.Claims.Recursion.VerdictRun
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.VerdictAssembly
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # `RecursiveKS`'s premise at `nextR`, from the verdict's rows
@@ -314,14 +343,14 @@ abbrev bdR (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opti
 abbrev layR (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : LayoutB :=
   layoutBTops (finOpen fin)
 
-/-- The compiled record at the coin server's transcript, whose inner view runs `IVStar` at `nextR rd`. -/
+/-- The compiled record at the challenger's live-coin part's transcript, whose inner view runs `IVStar` at `nextR rd`. -/
 abbrev recR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :=
   recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layR fin) (bdR rd wE final w).IVStar
 
-/-- What each part's circuit accepts, at the deployed outer `--zk` record and the coin server's record's reader. -/
+/-- What each part's circuit accepts, at the deployed outer `--zk` record and the challenger's live-coin part's record's reader. -/
 abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -330,7 +359,7 @@ abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ →
     (layR fin) Claims.Recursion.Form.Dense (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead)
 
 /-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` with `IVStar`'s last
-step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the coin server's record, V\*'s bound
+step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the challenger's live-coin part's record, V\*'s bound
 layout and the deployed outer `--zk` record, wherever every part's circuit accepts at a dense compiled statement,
 `IVStar` accepts or two of the parts' recorded calls collide. -/
 def RecKSDecompR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)

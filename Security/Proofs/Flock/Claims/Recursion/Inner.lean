@@ -1,6 +1,45 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.OuterKS
+public import Proofs.Flock.Claims.Recursion.KS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.CostExp
+import Proofs.Flock.Claims.Recursion.Transport
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The inner stage: its code facts and binding
@@ -123,10 +162,10 @@ def CallsLogColl (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Fl
     (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∨
       ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
 
-/-- **`CallsLogColl` over the calls a finder searches at a draw** (a code fact): wherever `E_O` gives witnesses `ws` on
+/-- **`CallsLogColl` over the calls a finder searches at a sample** (a code fact): wherever `E_O` gives witnesses `ws` on
 an accepted run at the coins `r`, the inner verifier's calls in the inner view's run are among `cl x r ws`, or two of
 those collide. `CallsLogColl` is it at the recorded calls; `CallsLogCollAt` at `Deploy.callsAt`, which searches the
-inner verifier's own calls at the draw's coins too. -/
+inner verifier's own calls at the sample's coins too. -/
 def CallsLogCollBy (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
@@ -397,7 +436,7 @@ section Forks
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **Two extractions open inner round `j` differently**: at a draw `(ω, r, d, c, c')` of `Be`'s fork at `j`, `E_O`
+/-- **Two extractions open inner round `j` differently**: at a sample `(ω, r, d, c, c')` of `Be`'s fork at `j`, `E_O`
 gives witnesses on both accepted runs, and the inner views read off them differ at message `j`. -/
 def OpensDiffer (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (j : ℕ)

@@ -1,13 +1,45 @@
 module
 
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+public import Definitions.NetworkCertifier.SampledCharge
 public import Proofs.NetworkCertifier.SampledCharge
-public import Proofs.Flock.Claims.Prob
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count
 
-On `RAcc δ` the faulty set is one of `faultySets d P δ` (`faulty_mem_faultySets`), and every observation sequence the
+On `RAcc δ` the incorrect set is one of `faultySets d P δ` (`faulty_mem_faultySets`), and every observation sequence the
 trace's transfer gates carry with every status complete is `Accepted` with advice held only at that set's committed
 gates and the trace's committed values as the inputs besides the ingress. With those inputs moved into `As`
 (`AdviceIn`), it is then among the sequences `AccSeqsSampled` counts, so
@@ -148,7 +180,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- **The leak bound under a sampled audit**, at any deployment `D` of the sampled verifier where `KS` holds, given
 `SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
 lists every trace within Flock's radius, and for each statement and values `ρ` inputs besides the ingress `As s ρ`, at
-most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible faulty set's committed
+most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible incorrect set's committed
 bits (`faultyBits`). On the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`, `KSAccepted`'s bound: except with that probability, every observation
