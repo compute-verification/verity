@@ -145,10 +145,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 - **The Lean.** Today it sits in Flock's soundness package, `Security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the sampling designs (`Law`, `Stratified`,
-  `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent sample (`RegDraw`), the older two-stage
-  audit (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
-  (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for Flock. The challenger's coins are
-  the named assumption `Assumptions.UniformRandomBytes`.
+  `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent sample (`RegDraw`), exfiltration (`Influence`,
+  `Harm`), the compiled layer (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for Flock.
+  The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`). The challenger's
+  coins are the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable sample** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
