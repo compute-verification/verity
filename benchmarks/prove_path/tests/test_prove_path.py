@@ -10,7 +10,8 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
   changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
   only inside plain's interim scope, one table under a stratified sample (`a5.plain_refusal`).
-* An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
+* An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile, and c only where the window's leak count
+  is within the charge, so a partial window, whose port from a template it lacks is free, states none (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
@@ -40,8 +41,8 @@ from typing import Any
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, registration as R
+from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits
+from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
@@ -428,17 +429,38 @@ def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_
     audit's profile, β_δ its `harm_bound` with each template's units weighing their committed bits (one weight, the most, where
     the sampling design's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
     stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
+    within = {"other_inputs": 169, "bound": "within the charge"}
     for law, bits in ((stratified, {"T": 40}), ({"law": "subset", "k": 4}, {"T": 40, "U": 24})):
         rec = _accepted(law)
         p = AU.profile(rec["registration"], rec["draw"], 0.5)
-        got = PP.charge_terms(rec, bits, 169, 0.5)
+        got = PP.charge_terms(rec, bits, 169, 0.5, within)
         weight = {"T": 40.0} if law is stratified else 40
-        assert got == {"advice_bits": 169, "delta": 0.5, "wrong_units": rec["wrong_units"], "template_bits": bits,
-                       "location_bits": location_bits(p), "harm_bound": p.harm_bound(weight),
-                       "exfiltration_bound": exfiltration_bound(p, weight)}, law
+        assert got == {"advice_bits": 169, "c": 169, "other_inputs": 169, "bound": "within the charge", "delta": 0.5,
+                       "wrong_units": rec["wrong_units"], "template_bits": bits, "location_bits": location_bits(p),
+                       "harm_bound": p.harm_bound(weight), "exfiltration_bound": exfiltration_bound(p, weight)}, law
         assert got["exfiltration_bound"] == got["harm_bound"] + got["location_bits"] and got["location_bits"] > 0
-    assert PP.charge_terms({**_accepted(stratified), "accepted": False}, {"T": 40}, 169, 0.5) is None
-    assert PP.charge_terms({}, {"T": 40}, 169, 0.5) is None
+    assert PP.charge_terms({**_accepted(stratified), "accepted": False}, {"T": 40}, 169, 0.5, within) is None
+    assert PP.charge_terms({}, {"T": 40}, 169, 0.5, within) is None
+
+
+def test_a_partial_windows_charge_states_no_c_its_port_from_a_template_it_lacks_counted_free():
+    """A partial window lacks a writer's template, so the wire from it is not made and its reader's port is free (as
+    `expert_rows.wire` leaves it). `records_audit.leak_count` counts the port among the window's free inputs, past the
+    advice's charge, and `charge_terms` then states no c: the leak bound c + λ_δ + β_δ + n·log2 D is stated only within
+    the charge. The whole window, its port wired, is within it."""
+    import records_audit as RA
+
+    writer = CS.Member("W", (("a", 4),), (("o0", 8),), 2)
+    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(("x", "o0", (0, 1)),))
+    advice = 16 * 2 * (4 + 2)
+    whole, partial = (RA.leak_count(w, (), advice) for w in ([writer, reader], [replace(reader, base=0, wired=())]))
+    assert (whole["other_inputs"], whole["bound"]) == (advice, "within the charge")
+    assert (partial["other_inputs"], partial["bound"]) == (16 * 2 * (8 + 2), "vacuous"), "x's rows, no longer wired, beside y's"
+    rec, bits = _accepted({"law": "subset", "k": 4}), {"W": 40, "R": 24}
+    full, part = (PP.charge_terms(rec, bits, advice, 0.5, n) for n in (whole, partial))
+    assert full["c"] == advice and (part["c"], part["bound"], part["other_inputs"]) == (None, "vacuous", partial["other_inputs"])
+    assert {k: v for k, v in part.items() if k not in ("c", "bound", "other_inputs")} == {
+        k: v for k, v in full.items() if k not in ("c", "bound", "other_inputs")}, "the sample's terms are the same"
 
 
 def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):
@@ -1477,7 +1499,7 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
         ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
     assert "ingress" not in doc
-    mine = IF.window_of_record(doc, DR.parse_law(LAYER0["law"]), IF.resolve)
+    mine = IF.window_of_record(doc, DR.parse_design(LAYER0["law"]), IF.resolve)
     inputs = 11 * 16 * 2 * 128
     assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
     assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,

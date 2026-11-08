@@ -55,7 +55,7 @@ namespace Properties.CertifierNetwork.Proofs
 
 open _root_.CertifierDevice
 open _root_.NetworkCertifier (Reason Status)
-open Properties.CertifierDevice (Packed horizon)
+open Properties.CertifierDevice (Packed gridTicks)
 open Properties.CertifierDevice.Proofs
 
 /-! ## The bucketer, faulted at most -/
@@ -310,13 +310,13 @@ theorem step_ingress {c : Config} {st : State} (hg : Good c st) {now backlog : N
 
 /-- A live egress tick leaves the bucketer faulted at most, at the same tick. -/
 theorem step_egress_bucketer {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
-    (ht : st.shaper.t < horizon c) : BuRel st.bucketer (step st (.tick .egress now backlog)).1.bucketer := by
+    (ht : st.shaper.t < gridTicks c) : BuRel st.bucketer (step st (.tick .egress now backlog)).1.bucketer := by
   rw [step_egress_fst hg ht]
   exact egressTick_bucketer _ _ _
 
 /-- **Any other step** leaves the bucketer faulted at most, at the same tick, and publishes nothing. -/
 theorem step_other {c : Config} {st : State} (hg : Good c st) (ev : Event)
-    (he : ¬ ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c)
+    (he : ¬ ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c)
     (hi : ¬ ∃ now backlog, ev = .tick .ingress now backlog ∧ st.bucketer.t < c.windows * c.ingress.buckets) :
     BuRel st.bucketer (step st ev).1.bucketer ∧ publishes (step st ev).2 = [] := by
   have none_ok : BuRel st.bucketer st.bucketer ∧ publishes (#[] : Array Action).toList = [] := ⟨BuRel.refl _, rfl⟩

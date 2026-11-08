@@ -5,6 +5,7 @@ family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``
 an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots)."""
 from __future__ import annotations
 
+import importlib
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -18,11 +19,17 @@ CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 #: G where its statics have none
 COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128},
           "ScaledMmFp8BlockSharedScale_v1": {"E": 1}}
+#: the ``COORDS`` families whose coordinates may also be c outputs wide (`coord_widths`): coordinate j of a row is then its
+#: Definition at N = c, reading ``w[:, jc:(j + 1)c, :]`` and their one scale row ``ws[:, jc // G, :]``, and returning output
+#: words [jc, (j + 1)c).  A wide coordinate reads its leading operands once for c outputs (the block-scaled FP8 GEMM's
+#: activation row and scales), so its block hashes fewer rows an output
+WIDE_COORDS = ("ScaledMmFp8BlockSharedScale_v1",)
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
-#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, and torch's multimem
-#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks)
-COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE"}
+#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, torch's multimem
+#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, and `b1.ResidualAdd`'s residual add)
+COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
+        "ResidualAdd_v1": "N"}
 #: the row Definitions that are batches along axes of their statics, which some parameters carry and the others don't: a row of
 #: extents a_0, a_1, .. along its axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) (row-major)
 #: reading element i_k along axis k of each parameter that carries it and the others whole, and returning the output's element
@@ -95,7 +102,7 @@ PACKED = frozenset((8, 16, 32, 64))
 class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
-    ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
+    ``COORDS`` family at N = 1 or a ``WIDE_COORDS`` one at a power of two N dividing its G, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
     family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, fused blocks, table
     reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``); else ``"row"``).
@@ -125,11 +132,12 @@ def template(t: str) -> Template:
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.commitments.gates import embedding  # noqa: F401  (registers EmbeddingRead_v1, a read's and a READ static's, which BB.load does not)
     from verity.ml.definitions import boolean as BB
     from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
+    importlib.import_module("verity.ml.commitments.gates.embedding")
     errors = BB.load()
     try:
         fn = specialization(spec_base(t), spec_statics(t))
@@ -155,7 +163,7 @@ def template(t: str) -> Template:
         view = types
     word = descriptor_id(w)
     sl = SLICES.get(spec_base(word))
-    layout = ("coord" if spec_base(word) in COORDS and int(spec_statics(word)["N"]) == 1 else "cols" if spec_base(word) in COLS
+    layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COLS
               else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
               else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
               else LAYOUTS.get(spec_base(word), "row"))
@@ -183,11 +191,12 @@ def cols_refused(word: str) -> str | None:
     if spec_base(word) != "AllReduceMultimem_v1":
         return None
     from verity.ml.definitions.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
     S = spec_statics(word)
     try:
         world = TA.ranks(S["WORLD"])
-        trees = TA.multimem_trees(S["TREES"], world)
+        trees = TN.multimem_trees(S["TREES"], world)
         TA.multimem_owners(world, int(S["SIZE"]))
     except (KeyError, TypeError, ValueError) as e:
         return f"{word}: {type(e).__name__}: {e}"
@@ -195,6 +204,31 @@ def cols_refused(word: str) -> str | None:
         return (f"{word}: its owners' TREES are {len(set(trees))} trees, and a column block's elements are reduced through "
                 f"other owners' trees than the row's")
     return None
+
+
+def coord_width(word: str) -> int:
+    """The outputs template ``word`` holds as a coordinate: 1 for a ``COORDS`` family at N = 1, and N for a ``WIDE_COORDS``
+    family at a power of two N > 1 dividing its G; else 0 (it is no coordinate)."""
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    base = spec_base(word)
+    if base not in COORDS:
+        return 0
+    S = {**COORDS[base], **spec_statics(word)}
+    c = int(S["N"])
+    if c == 1:
+        return 1
+    return c if base in WIDE_COORDS and c > 1 and c & (c - 1) == 0 and int(S["G"]) % c == 0 else 0
+
+
+def coord_widths(fam: str, statics: dict[str, Any]) -> list[int]:
+    """The widths c > 1 of a ``WIDE_COORDS`` family's coordinates on a row of ``statics``, coarse to fine: each power of two
+    below the row's N that divides its N and its G; none for any other family."""
+    if fam not in WIDE_COORDS:
+        return []
+    S = {**COORDS[fam], **statics}
+    N, G = int(S["N"]), int(S["G"])
+    return [1 << j for j in range(G.bit_length() - 1, 0, -1) if (1 << j) < N and N % (1 << j) == 0 and G % (1 << j) == 0]
 
 
 def part(word: str, spec: str) -> tuple | None:
@@ -216,9 +250,10 @@ _UNITS: dict[str, tuple[tuple[str, int], ...]] = {}
 def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     """The word Definitions a Program row's Definition (its word view's ``spec``) holds instances of, ``(descriptor id, instances)``:
     the row itself, then, for a ``CUT`` family, each Definition its body batches (a batch's members; Input batches are its
-    parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), for a ``COLS`` family,
+    parameters), for a ``COORDS`` family of N > 1, its coordinates (a ``WIDE_COORDS`` family's Definition at each width c of
+    `coord_widths`, N / c of them, coarse to fine, then every family's at N = 1, N of them), for a ``COLS`` family,
     its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
-    at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also at N = 1), for
+    at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also in coordinates), for
     a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), for a ``KCHUNKS`` row family, at
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a
     ``SPLITS`` row family in NS > 1 splits, its part at each split's key count k (`split_keys`; NH times the splits of k keys)
@@ -241,6 +276,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             hit += tuple((descriptor_id(n.fn), int(n.n) if n.form == "batch" else 1) for n in sp.body.nodes
                          if n.form in ("call", "batch") and not is_input(n.fn))
         n = int(spec_statics(spec).get("N", 1)) if spec_base(spec) in COORDS else 1
+        for w in coord_widths(spec_base(spec), spec_statics(spec)) if n > 1 else ():
+            if (c := _bind(spec, N=w)) is not None:
+                hit += ((descriptor_id(c), n // w),)
         if n > 1 and (c := _bind(spec, N=1)) is not None:
             hit += ((descriptor_id(c), n),)
         axes = SLICES.get(spec_base(spec), ((),))[0]
@@ -253,6 +291,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             if not own and (c := _bind(spec, fam, **over)) is not None:
                 hit += ((descriptor_id(c), 1),)
                 n = int(spec_statics(spec).get("N", 1)) if fam in COORDS else 1
+                for w in coord_widths(fam, {**spec_statics(spec), **over}) if n > 1 else ():
+                    if (c := _bind(spec, fam, **over, N=w)) is not None:
+                        hit += ((descriptor_id(c), n // w),)
                 if n > 1 and (c := _bind(spec, fam, **over, N=1)) is not None:
                     hit += ((descriptor_id(c), n),)
             if (axis := COLS.get(fam)) is not None:

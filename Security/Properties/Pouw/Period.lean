@@ -66,12 +66,12 @@ check doesn't discharge it:
 * `RegisteredBeforeDraw`: protocol structure. The check reads only that the service's answer cites the registration's
   digest (`Evidence.commitment`), not when the sampling coin was released against it, so it doesn't discharge it.
 * `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
-  for one session) with one-stage's acceptance (`Properties.SampledProofs.AcceptMeans`) and the check's
+  for one session) with one-stage's acceptance (`Properties.Spot.AcceptMeans`) and the check's
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
   leg: the window's staged statement, `stagedAt`).
-* `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`SampledProofs.Select.select`) read as
+* `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`Spot.Select.select`) read as
   the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
-  published sample `K′` distinct units below `N`; `Properties.Served.DrawMissesSubset` bounds its misses by the model's).
+  published sample `K′` distinct units below `N`; `Properties.Served.SampleMissesSubset` bounds its misses by the model's).
 * `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
   fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
   a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
@@ -190,14 +190,14 @@ def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 <
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop) :
-    DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V :=
+    SampledLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V :=
   Cd.periodLayer hr hK (checkedRun hK p ws opened rel right)
 
 /-- **The check's sample is the period's sampling coin**: on every path and every window the check accepts, the window's
 level has the population `N_p` and the sample size `K_d`, and the units it publishes as sampled (`Public.drawn`, the
 service's) are the units of the model's sample at the window's sampling coin (`drawOf`). It holds when the model's
 permutation coin is read as the service's `subset:K′` sample from the challenger's sampling coin
-(`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock: a
+(`Spot.Select.select`), at one work level for every window. A named assumption in the lock: a
 protocol-code fact to prove. -/
 def SampleIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
     (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
