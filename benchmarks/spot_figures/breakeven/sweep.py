@@ -56,6 +56,13 @@ POOL_WINDOW_ANDS = {"built walked": 3.05e11, "built memo": 2.95e11, "ragged walk
 #: window computed, by window seconds: the expectation over a uniformly random phase from the 128k trace's reuse
 #: distances, all 60-300 s and 189 s on average a saved FLOP, so 189 s / W of the 13.86% its hits save
 POOL_WINDOW_LOST = {600: 0.04367, 1200: 0.02184, 1800: 0.01456, 3600: 0.00728}
+#: the leverage factors priced (`Case.leverage`): how many times its charged bits every incorrect proof block tells a
+#: decoder about the weights, and the total share the largest one is solved at
+LEVERAGE = (1.0, 2.0, 4.0, 8.0, 16.0, 64.0)
+LEVERAGE_SHARE = 0.10
+#: quant K6144's cold session, 188.4 s at 2 and at 64 blocks with the process's start, less its warm fixed, 8.56 s: what
+#: a prover process pays on its first statement of the type, the cache hitting every later one
+COLD_6144 = 188.4 - 8.56
 #: GPU-seconds an AND under --zk on the H200: 1.0e12 ANDs take a tenth of a machine's window
 ZK_GPU_S_PER_AND = 0.10 * MACHINE_GPUS * WINDOW / 1.0e12
 TAX_ONE_STAGE = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("every_block",))["every_block"]["tax"]
@@ -96,6 +103,7 @@ class Case:
     k_gain: str = "measured"
     dense_k: int = 2
     verify_cut: bool = False
+    cold: float = 0.0
     column: str = "fast"
     tmpl: bool | str = False
     fused_busy: float | None = None
@@ -105,6 +113,7 @@ class Case:
     compile_core_h: float = 0.0
     budget_form: str = ""
     split: tuple[tuple[str, int], ...] = ()
+    leverage: tuple[float, ...] = ()
 
     def tax(self) -> float:
         """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
@@ -136,7 +145,8 @@ def build(case: Case):
                                           quant6144=case.quant6144, host=case.host, plain=case.plain,
                                           verify=case.verify, column=case.column, tmpl=case.tmpl,
                                           fused_busy=case.fused_busy, verify_other=case.verify_other,
-                                          k_gain=case.k_gain, dense_k=case.dense_k, verify_cut=case.verify_cut)
+                                          k_gain=case.k_gain, dense_k=case.dense_k, verify_cut=case.verify_cut,
+                                          cold=case.cold)
         elif per_type:
             strata = reprice.apply(strata, cache=case.cache, overlap=case.overlap, prover=case.prover,
                                    full=case.full, host=case.host, plain=case.plain, verify=case.verify,
@@ -213,7 +223,35 @@ def run_case(job):
         out["compile"] = {"sampled": sampled, "share": {str(h): sampled * h * 3600 / reprice.CORE_PER_GPU
                                                         / s.gpu_seconds for h in (*COMPILE_CORE_H, 14.0)}}
         out["pool"] = pool(L, case, pt["registration_sample"])
+        if case.leverage:
+            walked = {k: v for k, v in out["pool"]["every"].items() if k.endswith("walked")}
+            out["leverage"] = leverage(L, case, scope, WEIGHTS["FP4"] - advice, b4, walked)
     return out
+
+
+def leverage(L, case, scope: str, target: float, beta1: float, pools: dict) -> dict:
+    """FP4's break-even when every incorrect proof block's charged bits, its content and its location, are λ times
+    as many, at each λ of `case.leverage`: the bound λ times larger, so the target over λ, with its compiling at the
+    total's core-hours; and the largest λ at which the total (the serve tax, proving and verifying, compiling and the
+    pool) is LEVERAGE_SHARE, with each of `pools` and with none: the target over the bound at the beta that leaves."""
+    s = SCOPES[scope]
+    h = COMPILE_CORE_H[-1]
+
+    def compile_share(beta: float) -> float:
+        sampled = bound(L, beta, scope, case.scale, full=True)[1]["plan"]["replay_sample"]
+        return sampled * h * 3600 / reprice.CORE_PER_GPU / s.gpu_seconds
+
+    betas = {str(x): beta1 if x == 1 else solve(L, target / x, scope, case.scale) for x in case.leverage}
+    at = {}
+    for name, p in {"none": 0.0, **pools}.items():
+        left = beta = LEVERAGE_SHARE - case.tax() - p
+        for _ in range(3):
+            if beta <= 0:
+                break
+            beta = left - compile_share(beta)
+        at[name] = target / bound(L, beta, scope, case.scale) if beta > 0 else None
+    return {"share": LEVERAGE_SHARE, "compile_core_h": h, "beta": betas,
+            "compile": {x: None if b is None else compile_share(b) for x, b in betas.items()}, "at": at}
 
 
 def pool(L, case, windows_sampled: float) -> dict:
@@ -388,8 +426,9 @@ PROVER_GOAL = reprice.PROVE_MAIN / reprice.PROVE_TARGET
 def served_line() -> dict[str, Case]:
     """(A′) at 128k priced as the long-running proof server proves it (`N0`..`N5`): today's measured server prices,
     main's verifier and the quant card, then each lever in turn; the measured levers alone (`N5m`); the extras on `N5`,
-    the path from it (`P1`..`P5`), a pool per window's lost hits on `N5`, `P1` and `P5`, the per-window budget form on
-    `N5` and `P5`, and the advice charged two ways."""
+    the path from it (`P1`..`P5`), a pool per window's lost hits on `N5`, `P1` and `P5`, quant K6144's cold session
+    once a prover process a day and once a window on `P1`'s, the leverage factors on `P1`'s and `P5`'s, the
+    per-window budget form on `N5` and `P5`, and the advice charged two ways."""
     life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
     n0 = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K, fuse=True, fused=FUSED, server=True,
               verify=1.0, column="today", compile_core_h=1.0)
@@ -419,6 +458,10 @@ def served_line() -> dict[str, Case]:
         for w in POOL_WINDOW_LOST:
             if s == "P5" or w == 600:
                 out[f"{s}+poolwin{w}"] = Case(**(steps[s] | dict(pool_window_s=w, scale=1 + POOL_WINDOW_LOST[w])))
+    for life, t in (("day", 86400.0), ("window", float(WINDOW))):
+        out[f"P1+poolwin600+cold{life}"] = replace(out["P1+poolwin600"], cold=COLD_6144 / (t - COLD_6144))
+    for n in ("P1+poolwin600", "P5", "P5+poolwin600", "P5+poolwin3600"):
+        out[n] = replace(out[n], leverage=LEVERAGE)
     for s in ("N5", "P5"):
         out[f"{s}+zk"] = Case(**(steps[s] | dict(budget_form="zkstack")))
         out[f"{s}+zkmachine"] = Case(**(steps[s] | dict(budget_form="zkstack-machine")))

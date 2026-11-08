@@ -244,7 +244,7 @@ def server_price(x) -> tuple[float, float, float, int] | None:
 
 def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host=1.0, plain=False, verify=0.0,
                  column="fast", tmpl=False, fused_busy=None, verify_other=None, k_gain="measured", dense_k=2,
-                 verify_cut=False):
+                 verify_cut=False, cold=0.0):
     """The strata priced as the long-running proof server proves them, with the statement cache warm: the measured
     types at their server prices and full statements, the rest at the card with the cache's factor and MARGINAL's
     seconds a block (quant K6144 at `quant6144` when given); then a GPU prover `prover` times faster on proving
@@ -253,10 +253,10 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
     type's own under MPS with `"mps_types"` (K_MPS over the whole chain, the rest at K_MPS_FLOOR), or the busy-share
     model with `"model"`), the next session's
     front beside this one's device work (`front`), the dense types' host witness `host` times lower, Flock without
-    --zk, and the Lean verifier's core-seconds a statement from `column` times `verify`, cut by its family's measured
-    cut with `verify_cut` (VERIFY_CUT_MEASURED, VERIFY_CUT elsewhere, the MoE family's uncut; the templated check
-    where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at `verify_other`
-    when given)."""
+    --zk, every prover's proving `1 + cold` times longer (the share of its time a cold session takes), and the Lean
+    verifier's core-seconds a statement from `column` times `verify`, cut by its family's measured cut with
+    `verify_cut` (VERIFY_CUT_MEASURED, VERIFY_CUT elsewhere, the MoE family's uncut; the templated check where it is
+    cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at `verify_other` when given)."""
     table, floor = VERIFY_COLUMNS[column]
     out = []
     for x in strata:
@@ -298,6 +298,7 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
         if plain:
             p = 1 - share(PLAIN, x)
             fixed, marginal = fixed * p, marginal * p
+        fixed, marginal = fixed * (1 + cold), marginal * (1 + cold)
         if verify:
             v, how = verifier_seconds(x, table, floor)
             if tmpl:

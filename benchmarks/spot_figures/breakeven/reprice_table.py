@@ -175,11 +175,43 @@ def totals(rows, data, cases, every=(), pools=None):
                   + " | ".join(pct(t[s]) if s in t else "–" for s in ALL_SCOPES) + " |")
 
 
+def leverage(rows, data):
+    """Each case of PATH["leverage"] at every λ sweep.py priced it at, by scope: total FP4 with compiling at the λ's
+    break-even and each pool reading its entry names (`none`: no pool), and the largest λ at which that total is the
+    share sweep.py solved at (below 1: missed at λ = 1; – where the rest alone is over it)."""
+    lams = next((list(r["leverage"]["beta"]) for r in rows.values() if "leverage" in r), None)
+    if lams is None:
+        return
+    share = next(r["leverage"]["share"] for r in rows.values() if "leverage" in r)
+    print(f"\nThe faulted-use leverage λ: every incorrect proof block's charged bits λ times as many (total FP4 with "
+          f"compiling at {COMPILE[0]} core-h and the pool):\n| case | design | pool | scope | "
+          + " | ".join(f"λ = {float(x):g}" for x in lams) + f" | largest λ at {share:.0%} |\n|---|---|---|---|"
+          + "---:|" * (len(lams) + 1))
+    for x in PATH["leverage"]:
+        case = x["cases"]["two-stage"]
+        for load in x["pools"]:
+            key = f"{case} leverage, {load}"
+            data[key] = {"case": case, "label": x["label"], "pool": load, "status": x["status"],
+                         "owner": x["owner"], "note": x["note"], "cells": {}}
+            for s in ALL_SCOPES:
+                r = rows.get((case, s))
+                if r is None or "leverage" not in r:
+                    continue
+                lv, pool = r["leverage"], 0.0 if load == "none" else r["pool"]["every"][load]
+                t = {k: None if lv["beta"][k] is None else r["tax"] + lv["beta"][k] + lv["compile"][k] + pool
+                     for k in lams}
+                at = lv["at"][load]
+                data[key]["cells"][s] = {"totals": t, "largest_lambda": at}
+                print(f"| {case} | {x['label']} | {load} | {s} | " + " | ".join(pct(t[k]) for k in lams)
+                      + f" | {'–' if at is None else f'{at:.3g}'} |")
+
+
 def served(rows, data):
     """The served line's tables over all six scopes, as total FP4 compute, each row named by the theorem form that
     prices it: each step, the measured levers alone, what sits beside the line (compiling, the pool, #8086's delta) and
     the totals today, with the pool's two readings; the path from the last step and its total; a pool per window's lost
-    hits and their totals; the extras on the last step, the per-window budget form and the advice."""
+    hits and their totals; quant K6144's cold session and its totals; the faulted-use leverage; the extras on the last
+    step, the per-window budget form and the advice."""
     head = ("| case | lever | status | owner | form | " + " | ".join(ALL_SCOPES) + " |\n|---|---|---|---|---|"
             + "---:|" * len(ALL_SCOPES))
     last = PATH["served"][-1]["cases"]["two-stage"]
@@ -209,6 +241,10 @@ def served(rows, data):
             "compiling and the pool):")
     totals(rows, data, [x["cases"]["two-stage"] for x in PATH["pool_window"]],
            pools={x["cases"]["two-stage"]: x["pools"] for x in PATH["pool_window"]})
+    entries(rows, data, PATH["cold"], head, "Quant K6144's cold session (total FP4 before compiling and the pool):")
+    totals(rows, data, [x["cases"]["two-stage"] for x in PATH["cold"]],
+           pools={x["cases"]["two-stage"]: x["pools"] for x in PATH["cold"]})
+    leverage(rows, data)
     entries(rows, data, PATH["extras"], head, f"Extras on {last}, each alone (total FP4 before compiling and the pool):")
     entries(rows, data, PATH["zk"], head, "The per-window budget form, T windows of K_delta (total FP4):")
     print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)

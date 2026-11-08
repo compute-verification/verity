@@ -43,6 +43,16 @@
   {"label": "P5 with one pool per 1,800 s window", "status": "measured", "owner": "BREAKEVEN", "form": "v5", "cases": {"two-stage": "P5+poolwin1800"}, "pools": ["v5 walked"], "note": "+1.46%; v5's pool alone, as at 1,200 s"},
   {"label": "P5 with one pool per 3,600 s window", "status": "measured", "owner": "BREAKEVEN", "form": "v5", "cases": {"two-stage": "P5+poolwin3600"}, "pools": ["v5 walked"], "note": "+0.73%; a trace spans 25 minutes, so reuse further apart is unobserved; v5's pool alone, as at 1,200 s"}
  ],
+ "cold": [
+  {"label": "P1 with one pool per 600 s window, quant K6144's cold session once a prover process a day", "status": "sensitivity", "owner": "HASHCUT, STATIONARY", "form": "v5", "cases": {"two-stage": "P1+poolwin600+coldday"}, "pools": ["built walked"], "note": "the measured miss rate, one miss a type a process and hits at 1.0 after it: its 188.4 s cold session (the process's start included) less its 8.56 s warm, 179.8 s of each prover's day lost; a day's process is assumed"},
+  {"label": "P1 with one pool per 600 s window, quant K6144's cold session once a prover process a window", "status": "sensitivity", "owner": "HASHCUT, STATIONARY", "form": "v5", "cases": {"two-stage": "P1+poolwin600+coldwindow"}, "pools": ["built walked"], "note": "as the day's, each prover process restarted every 600 s window: 179.8 s of each 600 s lost"}
+ ],
+ "leverage": [
+  {"label": "as built: P1 with one pool per 600 s window", "status": "sensitivity", "owner": "LEVERAGE-T, LEVERAGE-E", "form": "v5", "cases": {"two-stage": "P1+poolwin600"}, "pools": ["built walked", "ragged walked", "v5 walked"], "note": "every incorrect proof block's charged bits, content (at most its class's bits) and location alike, λ times as many: the bound λ times larger, so FP4's break-even where it reaches the target over λ"},
+  {"label": "every goal: P5 with one pool per 600 s window", "status": "sensitivity", "owner": "LEVERAGE-T, LEVERAGE-E", "form": "v5", "cases": {"two-stage": "P5+poolwin600"}, "pools": ["built walked", "ragged walked", "v5 walked"], "note": "as P1's"},
+  {"label": "every goal: P5 with one pool per 3,600 s window", "status": "sensitivity", "owner": "LEVERAGE-T, LEVERAGE-E", "form": "v5", "cases": {"two-stage": "P5+poolwin3600"}, "pools": ["v5 walked"], "note": "as P1's"},
+  {"label": "every goal: P5 without a pool per window", "status": "sensitivity", "owner": "LEVERAGE-T, LEVERAGE-E", "form": "v5", "cases": {"two-stage": "P5"}, "pools": ["none"], "note": "as P1's, compiling included and no pool"}
+ ],
  "deltas": [
   {"label": "#8086's FP8 GEMM coordinate split, which replaces +hash4 (marked)", "status": "modeled", "owner": "HASHCUT", "form": "v5", "base": "HASHCUT's P1 before the MPS factors", "delta": {"world week": -0.001162, "world month": -0.001191, "world year": -0.001235, "datacenter week": -0.001002, "datacenter month": -0.001031, "datacenter year": -0.001079}, "note": "HASHCUT's delta on their P1, added to the totals as given: re-pricing it needs their hashing-record layouts; on their P5 it is -0.07 points at world scale and -0.06 at a datacenter's"}
  ],
