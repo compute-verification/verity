@@ -6667,3 +6667,32 @@ Records that move:
   - cpu-8's pool was full when I started, so the main runs went to cpu-9.
   - I'll mark #7976 when 6b29 passes.
 - **Note for after it lands:** `sidecars.py` is in `cache.version()`, so every circuit-check record reruns once.
+
+## 04:14Z from VERIFYFAST-A: FlashInfer K2048's verify falls from 1,807 to 638 s on vy-nebius-cpu-2 with five of my eleven commits; the final A/B at the head is due about 05:30Z
+
+- **FlashInfer K2048 (r20261108-024105-9815),** on the same five commits as MoE's below. Both sides ran on cpu-2 in one
+  run, and both accepted with the same partition digest.
+
+  | step | before | after |
+  |---|---|---|
+  | wall | 1,807 s | 638 s |
+  | user | 1,733 s | 611 s |
+  | inputs (read, hash, parse, scope checks) | 1,590 s | 418 s |
+  | setup | 40.1 s | 40.8 s |
+  | session | 215.5 s | 219.4 s |
+  | max RSS | 99.2 GB | 99.4 GB |
+
+- That is already under VERIFYCOST's estimate of about 1,000 s. **Where the after side's 638 s goes** (perf samples by
+  time window):
+  - `ProvedScope.portReadsB` on the unit, run twice: about 190 s. My twin reads the entries in place, 3.7× faster on my
+    bench.
+  - SHA-512, two passes over 24 GB (the file, then the class message): about 165 s. Two of the remaining commits cut a
+    third of it on my bench.
+  - The text: UTF-8 validation 30 s, splitting lines 45 s, and scanning row numbers and building the matrices 60 s. 26 s
+    of that is the old `pushLe32` loop, which a remaining commit removes.
+  - The session: 219 s, mostly `Sparse.foldRow` and its `F128` allocations.
+- **Quant K6144 (r20261108-024130-f515)** is still on its after side. I'll report it with the final run.
+- **The final A/B at the branch's head,** all eleven commits, on cpu-2: MoE r20261108-035726-3d38 (about 04:30Z),
+  FlashInfer r20261108-035750-e21e (about 05:20Z) and quant r20261108-035750-bf03 (about 05:40Z).
+- **The fixture:** `randomness_lean.json` is regenerated for `Hash.lean`. Only that file's input hash moved, and every
+  vector is unchanged. The suites and the Lean check rerun at the head next.

@@ -62,3 +62,14 @@ carrying their text. That is a format change, which my brief rules out.
 
 **What piece 4 can still gain after my fixes:** the nets' parse and the equality check, measured on FlashInfer K2048 in
 my A/B's after-profile, due about 04:00Z. I'll append the figure here.
+
+## 04:14Z from VERIFYFAST-A: what piece 4 can gain after my fixes
+
+- **It's an estimate from byte shares, not a measurement.** My perf records no call stacks, so the profile can't split
+  the nets' rows from the unit's.
+- **FlashInfer K2048:** the nets are about 75 MB of a 24.18 GB file, 0.3%. The steps that scale with the text take about
+  300 s of the after side's 638 s (two SHA-512 passes, UTF-8 validation, the line split, the row scan and the matrices).
+  So the nets' parse costs about 1 s, and comparing them to the pins is a pass over their arrays.
+- **MoE:** the file is 121.5 MB, so the nets are about 60% of its bytes, about 2 s of the 3.55 s inputs step. That's
+  about a fifth of its 10.8 s verify.
+- So piece 4 pays on small statements and is lost in the noise on FlashInfer.
