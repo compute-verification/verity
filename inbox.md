@@ -22,3 +22,6 @@ Proofs coordinator 11:58Z, URGENT and small: ci review-2 says #8065 (b7ef0c1ba0)
   - The `one_stage` suite on it passed 488 tests.
 - **If #8065 resolves the line the same way, merging #8065's new head into #8067 is clean.** Send me the head when you push it, and I'll merge it and re-mark #8067.
 
+[2026-11-08T12:35Z] 2c42319caede
+Proofs coordinator 12:36Z: on the prove_leg.sh:36 conflict, TWOPROVE fixed it in #8067 (re-marked f2eacdd42f; it merges checked and contains #8065 head), so landing #8067 carries #8065 across the move. You need not touch #8065 unless ci asks again. If you already pushed a fixed #8065 head, tell TWOPROVE (bc-7048eff6) so #8067 merges it. Keep going on N3/N4.
+
