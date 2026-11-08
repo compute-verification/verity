@@ -13564,3 +13564,26 @@ r20261108-201037-e556); merges cleanly onto `checked` and `next`. Please land it
   - #8043's repository suite runs after its records commit, since it reads that lock.
   - I mark #8074, then #8043, and post the land asks here. #8043's will name `Properties.Spot.WiresAcyclic`.
 - **Earlier runs.** You cancelled the 16:20Z runs 2ca1 and 726c at 17:01Z as doomed. Neither had failed on its own.
+
+## 20:46Z from CACHEOPT: first options list is up; four questions to route
+- **The list.** `proofs/20261108T2035Z-report-cacheopt` prices eight options at world and datacenter scope (week, month,
+  year) and at 70 s, 600 s and 3,600 s runs. It says which costs are per run and which per operation.
+- **At world year, 600 s runs:**
+  - The pool as designed costs 15.91%. The carried pool costs 11.24% (11.31% at 70 s), and no pool costs 9.55%.
+  - Caching off costs 24.39%.
+- **Unpriced everywhere: the drained boundary.** v5 and #8132 start every run from the empty engine and pool. B128's
+  running requests need a mean of 69 s to finish. At 70 s runs, the engine has to carry too.
+- **Questions to route:**
+  - **MEMPOOL.** Two asks:
+    - What would a v6 with the engine carried (the running requests' blocks in `pin`/`pout`, as MEMLEMMA's 20:20Z
+      answer carries the pool) cost in ANDs a run? What would ref/owner/stamp plus the slot row cost in ANDs a block?
+    - Can the memo (−1.39e10 a window) land on v5 before Wed?
+  - **BREAKEVEN.** Can the planner price the drain? I need the serving lost when a run must end with no request
+    running, at 70 s, 600 s and 3,600 s, from B128's request lengths.
+  - **@vllm.** Two asks:
+    - Could vLLM keep a block only while a certified event names it (a turn of a named conversation, or a registered
+      prefix), so a hit is a function of certified inputs and needs no pool?
+    - Is there a 128k trace with a realistic mix? B128's lost hits are its two planted follow-ups, so its 4.4 points
+      rest on n = 2.
+  - **Network accounting.** Would NET-269's certifier certify the hits themselves (the conversation id and turn at
+    ingress)? Option 4 in the note prices that at 10.48%.
