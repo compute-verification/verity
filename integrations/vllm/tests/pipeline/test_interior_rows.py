@@ -429,3 +429,27 @@ def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piec
         IR.interior([per[0], per[1][:1]], (12, 6), "aa" * 64, [0, 2], row=ROW)
     with pytest.raises(ValueError, match=r"2 templates and cells \[12\]"):
         IR.interior(per, 12, "aa" * 64, [0, 2], row=ROW)
+
+
+def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks_instances(tmp_path):
+    """A replay block inlining `TokenSelect_v4` holds one instance a served token, each its V / C chunks then its combine,
+    so the pieces are the templates its body calls in the order of their first call and a span of fewer tokens than its
+    class pads by its last token: the chunk cell repeats that token's V / C chunks, not its last chunk, and the interior is
+    the interior of the span padded to its class by its last row. Cells that aren't whole tokens are refused by name."""
+    t, rows = "TokenSelect_v4{V=128}", _select_rows(128)[5:]
+    s = _selects(tmp_path, 128)["b"]
+    chunks, comb = IR.pieces(s)
+    calls = SRW.template(t).fn.body.nodes
+    assert tuple({P.template_id(n.fn): None for n in calls}) == (chunks.member.template, comb.member.template)
+    assert (chunks.group, comb.group) == (2, 1)
+    pad = chunks.padded(14)["rows"]["in0"]
+    assert np.array_equal(pad[10:], np.tile(pad[8:10], (2, 1))) and not np.array_equal(pad[10], pad[11])
+    whole = np.concatenate([rows, rows[-1:], rows[-1:]])
+    fn = SRW.template(t).fn
+    SC.write(tmp_path / "whole", t, {"b": {"logits": whole, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in whole],
+                                          "steps": list(range(len(whole))), "program": "p" * 64}})
+    got, want = (IR.interior([IR.pieces(x)], (14, 7), "aa" * 64, [0], row=ROW, salt_key=SALT)
+                 for x in (s, IR.captured(tmp_path / "whole", "b")))
+    assert (got.record, got.leaf_layer) == (want.record, want.leaf_layer)
+    with pytest.raises(ValueError, match="in whole instances of 2 units"):
+        IR.interior([(chunks, comb)], (13, 7), "aa" * 64, [0], row=ROW)
