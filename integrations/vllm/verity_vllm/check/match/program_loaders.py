@@ -58,7 +58,7 @@ def check_rows(d: str) -> list[int]:
     the runtime never runs, so no fold holds them."""
     from verity_vllm.query.program_view import _read_instance_header
     path = os.path.join(d, "instances.json.gz")
-    return [int(a[0]) for a in (_read_instance_header(path).get("checks") or {}).get("at") or ()] if os.path.exists(path) else []
+    return [int(a[0]) for a in _read_instance_header(path).get("checks", {}).get("at", ())] if os.path.exists(path) else []
 
 
 def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:

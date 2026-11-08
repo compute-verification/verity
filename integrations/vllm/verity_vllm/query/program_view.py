@@ -667,7 +667,7 @@ def _instances_columns(params: tuple[InputView, ...], rows: Iterable[dict[str, A
 
 
 def _check_calls(header: dict[str, Any]) -> frozenset[int]:
-    return frozenset(int(a[0]) for a in (header.get("checks") or {}).get("at") or ())
+    return frozenset(int(a[0]) for a in header.get("checks", {}).get("at", ()))
 
 
 def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
