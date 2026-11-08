@@ -191,7 +191,7 @@ def _pipeline(E, geo: T.Geo, x, p, outs: dict):
         st, part = T.round_combine(E, pm, pl, pn, st, piv, p, Zh, early, S, r)
         if r < R - 1:
             piv = K.ladder(E, st["lo"], st["hi"])
-            outs[("step", S, r, nb - 1)] = [vals(T.pack_state(E, M, Zh, rZ, st, piv, early)), _words(part[1], part[2])]
+            outs[("step", S, r, nb - 1)] = [_words(part[1], part[2]), vals(T.pack_state(E, M, Zh, rZ, st, piv, early))]
         parts.append(part)
     plog, ties, stop, pre = T.mask_head(E, st, parts, Zh, M, p, early, S)
     outs[("step", S, R - 1, nb - 1)] = [vals(T.pack_scalars(E, M, Zh, rZ, plog, st, pre, stop, ties))]

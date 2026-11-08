@@ -128,6 +128,7 @@ def test_the_twin_s_keep_bits_are_topp_keep_s():
 def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V):
     units = T.plan(V)
     seen: dict[tuple, object] = {}
+    outputs: dict[tuple[object, str], set[int]] = {}
     for u in units:
         params = dict(u.defn.signature()[0])
         wired = {p for p, _k, _j in u.wires}
@@ -137,7 +138,10 @@ def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V
             _, ret = seen[k].signature()
             fs = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if isinstance(ret, Tuple) else [ret]
             assert fs[j] == params[p], (u.key, p, k, j)
+            outputs.setdefault((u.defn, p), set()).add(j)
         seen[u.key] = u.defn
+    # a serving window wires a template's parameter to one output port of its writers (`stage_rows.wire`)
+    assert all(len(js) == 1 for js in outputs.values()), {(d.id, p): js for (d, p), js in outputs.items() if len(js) > 1}
     assert len(seen) == len(units)
     assert sum(n for _d, n in T.cut(bind(SA.GumbelTopPTokenSelect, V=V))) == len(units)
     assert units[-1].defn.signature()[1] == bind(SA.GumbelTopPTokenSelect, V=V).signature()[1]

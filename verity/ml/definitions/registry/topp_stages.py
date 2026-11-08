@@ -417,7 +417,7 @@ def _step_sig(S):
         return tuple(ps), Array(CAW, F32)
     ps += [(f"ca{s}", Array(CAW, F32)) for s in geo.slices[:-1]] + [("top_p", F32)]
     if S.COMBINE < R - 1:
-        return tuple(ps), Tuple(Array(RSW, F32), Array(2 * F * S.S, F32))
+        return tuple(ps), Tuple(Array(2 * F * S.S, F32), Array(RSW, F32))
     ps += [(f"ph{r}", Array(2 * F * S.S, F32)) for r in range(R - 1)]
     return tuple(ps), Array(scw(S.S), F32)
 
@@ -446,7 +446,7 @@ def _step_body(B, S, pr, rw, *rest):
     pm, pl, pn = gather_parts(E, geo, cas)
     st, part = round_combine(E, pm, pl, pn, st, piv, p, Zh, early, S.S, S.COMBINE)
     if S.COMBINE < R - 1:
-        return _res(E, pack_state(E, M, Zh, rZ, st, K.ladder(E, st["lo"], st["hi"]), early), K.cat([part[1], _w(part[2], 32)]))
+        return _res(E, K.cat([part[1], _w(part[2], 32)]), pack_state(E, M, Zh, rZ, st, K.ladder(E, st["lo"], st["hi"]), early))
     parts = []
     for r in range(R - 1):
         ph = _words(E, rest.pop(0))
@@ -689,13 +689,13 @@ def _pipeline(geo: Geo) -> list[Unit]:
         rs = ("probs", S, 0) if r == 0 else ("step", S, r - 1, len(steps) - 1)
         for b, (s, t, lo, n) in enumerate(steps):
             comb = r if b == len(steps) - 1 else -1
-            w = [("pr", ("probs", S, b), 0), ("rw", rs, 1 if r == 0 else 0)]
+            w = [("pr", ("probs", S, b), 0), ("rw", rs, 1)]
             if t:
                 w.append(("ca", ("step", S, r, b - 1), 0))
             if comb >= 0:
                 w += [(f"ca{s2}", ("step", S, r, last_step[s2]), 0) for s2 in geo.slices[:-1]]
                 if r == R - 1:
-                    w += [(f"ph{r2}", ("step", S, r2, len(steps) - 1), 1) for r2 in range(R - 1)]
+                    w += [(f"ph{r2}", ("step", S, r2, len(steps) - 1), 0) for r2 in range(R - 1)]
             out.append(Unit(("step", S, r, b), bind(TopPStep, V=geo.V, S=S, N=n, FIRST=t == 0, COMBINE=comb), (lo, lo + n),
                             tuple(w)))
     return out
