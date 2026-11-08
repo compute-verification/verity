@@ -124,7 +124,8 @@ def staged(z: Path, K: int) -> dict[str, dict]:
         n = max([c for c in sts if c <= full // K] or [min(sts)])
         rec = json.loads((sts[n] / "stage.json").read_text())
         out[rec["unit"]] = {"c": n, "full": full, "dir": str(sts[n]), "pin": (sts[n] / "pin.txt").read_text().strip(),
-                            "k_log": rec["k_log"], "definition": rec["definition"]}
+                            "k_log": rec["k_log"], "definition": rec["definition"],
+                            "circuit_bytes": (sts[n] / "circuit.txt").stat().st_size}
     return out
 
 
@@ -152,16 +153,33 @@ def swrr(weights: dict[str, float], n: int, phase: int) -> list[str]:
     return out
 
 
-def streams(types: dict[str, dict], weights: dict[str, float], K: int, n: int, warm: int, seed: int):
-    """Each prover's sessions (type, drawn units) and each type's draws, in the order its verifier serves them."""
+def route_of(types: dict[str, dict], K: int) -> dict[str, int]:
+    """Each type's prover when types are routed: the largest circuits first, each to the prover holding the fewest bytes,
+    so the K provers hold every circuit once between them."""
+    held, out = [0] * K, {}
+    for t in sorted(types, key=lambda t: -types[t]["circuit_bytes"]):
+        out[t] = held.index(min(held))
+        held[out[t]] += types[t]["circuit_bytes"]
+    return out
+
+
+def streams(types: dict[str, dict], weights: dict[str, float], K: int, n: int, warm: int, seed: int,
+            route: dict[str, int] | None = None):
+    """Each prover's sessions (type, drawn units) and each type's draws, in the order its verifier serves them; routed,
+    a prover's sessions are its own types' in their mix ratio."""
     import numpy as np
     rng = np.random.default_rng(seed)
     order = sorted(types, key=lambda t: -weights[t])
     per, draws = [], {t: [] for t in types}
     for p in range(K):
-        warmup = (order * (warm // len(order) + 1))[:max(warm, len(order))]
+        own = [t for t in order if route is None or route[t] == p]
+        if not own:
+            per.append([])
+            continue
+        warmup = (own * (warm // len(own) + 1))[:max(warm, len(own))]
         seq = [(t, None) for t in warmup]
-        for t in swrr(weights, n, phase=p * max(1, n // K)):
+        mine = {t: weights[t] for t in own}
+        for t in swrr(mine, n, phase=0 if route else p * max(1, n // K)):
             c = types[t]["c"]
             remainder = c > 1 and rng.random() < 1.0 / max(1.0, types[t]["rb"])
             seq.append((t, int(rng.integers(1, c)) if remainder else None))
@@ -290,8 +308,11 @@ def run(a) -> int:
         v["rb"] = taken[t] / v["c"]
     weights = {t: v["rb"] for t, v in types.items()}
     ahead = int(os.environ.get("FC_VERIFY_AHEAD") or 0)
-    per, draws = streams(types, weights, K, a.sessions, a.warm, a.seed)
-    warm = len(per[0]) - a.sessions
+    route = route_of(types, K) if a.route and K > 1 else None
+    per, draws = streams(types, weights, K, a.sessions, a.warm, a.seed, route)
+    per = [seq for seq in per if seq]
+    K = len(per)
+    warms = [len(seq) - a.sessions for seq in per]
     zk = [] if a.plain else ["--zk"]
     env = {"FC_STMT_CACHE": "1", "FC_HOST_WITNESS": None, "FC_FIREWALL": "0", **({"FC_COINS": "tree"} if a.plain else {})}
     (out / "types.json").write_text(json.dumps(types, indent=1))
@@ -323,13 +344,13 @@ def run(a) -> int:
             time.sleep(0.2)
     busy, gpu = (None, None) if a.cpu else (Busy(), Gpu())
     peaks = [Peak() for _ in range(K)]
-    cmd = [a.bin, "prove", *zk, *([] if a.cpu else ["--gpu"]), "--warm", str(warm)]
+    cmd = [a.bin, "prove", *zk, *([] if a.cpu else ["--gpu"])]
     lives: list[dict] = []
     lock = threading.Lock()
     provers = []
     t_start = time.time()
     for i in range(K):
-        p = subprocess.Popen([*cmd, "--stream", str(out / f"stream-{i}.jsonl")], stdout=subprocess.PIPE,
+        p = subprocess.Popen([*cmd, "--warm", str(warms[i]), "--stream", str(out / f"stream-{i}.jsonl")], stdout=subprocess.PIPE,
                              stderr=open(out / f"prove{i}.err", "w"), text=True, env=environ({**env, "FC_VERIFY_AHEAD": str(ahead)}),
                              start_new_session=True)
         peaks[i].roots.append(p.pid)
@@ -384,8 +405,9 @@ def run(a) -> int:
                 s = json.loads(line.split("\t", 1)[1])
                 verdicts.append({"type": t, "verify_s": s.get("verify_s"), "accepted": s.get("accepted"),
                                  "stmt_cache": s.get("stmt_cache")})
-    rec = summarize(lives, samples, types, K, warm, a.sessions)
-    rec |= {"provers": K, "verify_ahead": ahead, "sessions": a.sessions, "warm": warm, "cpu": a.cpu, "plain": a.plain,
+    rec = summarize(lives, samples, types, K)
+    rec |= {"provers": K, "verify_ahead": ahead, "sessions": a.sessions, "warm": warms,
+            "route": route, "cpu": a.cpu, "plain": a.plain,
             "timed_out": timed_out, "rc": [p.returncode for p in provers], "wall_s": round(time.time() - t_start, 3),
             "host_limit": {"stopped_at_s": guard.hit and round(guard.hit - t_start, 1), "floor_gib": a.mem_floor,
                            "limit_gib": a.mem_limit or None, "min_free_gib": guard.low_gib and round(guard.low_gib, 1),
@@ -414,12 +436,13 @@ def by_type(pairs) -> dict[str, dict]:
     return {t: {"n": len(xs), "mean": round(sum(xs) / len(xs), 4), "max": round(max(xs), 4)} for t, xs in out.items()}
 
 
-def summarize(lives: list[dict], samples, types: dict, K: int, warm: int, n: int) -> dict:
+def summarize(lives: list[dict], samples, types: dict, K: int) -> dict:
     """The steady window's numbers: from the last prover's last warm verdict to the first prover's last."""
     ends = {i: sorted(x["t_end"] for x in lives if x["p"] == i) for i in range(K)}
-    if not all(len(e) > warm + 1 for e in ends.values()):
+    warm_end = {i: max([x["t_end"] for x in lives if x["p"] == i and x["warm"]] or [0.0]) for i in range(K)}
+    lo, hi = max(warm_end.values()), min((e[-1] if e else 0.0) for e in ends.values())
+    if hi <= lo or not all(sum(1 for t in e if t > lo) >= 2 for e in ends.values()):
         return {}
-    lo, hi = max(e[warm - 1] for e in ends.values()), min(e[-1] for e in ends.values())
     inside = [x for x in lives if lo < x["t_end"] <= hi and not x["warm"]]
     span = hi - lo
     # each session's span on its prover: from its previous record to its own, the device shared by K at once
@@ -430,6 +453,11 @@ def summarize(lives: list[dict], samples, types: dict, K: int, warm: int, n: int
             if lo < x["t_end"] <= hi and not x["warm"]:
                 gpu_s.append((x["label"], (x["t_end"] - prev["t_end"]) / K))
     rate = {t: round(sum(1 for x in inside if x["label"] == t) / span, 4) for t in types}
+    # the mix's throughput on one GPU: each measured type's GPU-seconds a statement, weighted by its statements a sampled
+    # replay block (rb), so the window's own type ratio (routing, stream ends) doesn't enter
+    g = by_type(gpu_s)
+    tot = sum(types[t]["rb"] for t in g)
+    per_stmt = sum(types[t]["rb"] / tot * g[t]["mean"] for t in g) if g else None
     blocks = {t: round(sum(x["instances"] or 0 for x in inside if x["label"] == t) / span, 2) for t in types}
     busy = [u for t, u, _ in samples if lo <= t <= hi]
     # each prover's statement-cache hit rate over consecutive windows of its timed sessions
@@ -452,7 +480,9 @@ def summarize(lives: list[dict], samples, types: dict, K: int, warm: int, n: int
     waits = [x["verdict_wait_s"] for x in inside if x.get("verdict_wait_s") is not None]
     return {"steady_s": round(span, 3), "statements_s": round(len(inside) / span, 4), "statements_s_by_type": rate,
             "blocks_s_by_type": blocks, "busy": round(sum(busy) / len(busy) / 100, 4) if busy else None,
-            "gpu_s_by_type": by_type(gpu_s), "hit_windows": windows,
+            "gpu_s_by_type": g, "hit_windows": windows,
+            "statements_s_at_mix": round(1 / per_stmt, 4) if per_stmt else None,
+            "statements_s_at_mix_by_type": {t: round(types[t]["rb"] / tot / per_stmt, 4) for t in g} if per_stmt else {},
             "flat": all(len(w) >= 2 and abs(w[-1] - w[-2]) < 0.01 for w in windows),
             "verdict_wait_s": round(sum(waits), 3), "verdict_wait_share": round(sum(waits) / (span * K), 4) if span else None,
             "e2e_s_by_type": by_type([(x["label"], x["e2e_s"]) for x in inside if x.get("e2e_s") is not None])}
@@ -501,8 +531,7 @@ def report(a) -> int:
         if (Path(d) / "live.jsonl").exists():
             samples = [(float(t), None if u == "None" else float(u), m)
                        for t, u, m in (x.split(",") for x in (Path(d) / "busy.csv").read_text().split())]
-            rec |= summarize(read_jsonl(Path(d) / "live.jsonl"), samples, rec["types"], rec["provers"], rec["warm"],
-                             rec["sessions"]) or {}
+            rec |= summarize(read_jsonl(Path(d) / "live.jsonl"), samples, rec["types"], rec["provers"]) or {}
         r = {"dir": d, "provers": rec["provers"], "statements_s": rec.get("statements_s"), "busy": rec.get("busy"),
              "beta": {w: S.solve(build(rec, 1.0), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()},
              "beta_prover4": {w: S.solve(build(rec, 0.25), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()}}
@@ -527,6 +556,8 @@ def main() -> int:
     ap.add_argument("--provers", type=int, default=1)
     ap.add_argument("--sessions", type=int, default=120, help="each prover's timed sessions")
     ap.add_argument("--warm", type=int, default=0, help="each prover's warm sessions (at least one a type)")
+    ap.add_argument("--route", action="store_true",
+                    help="each type to one prover, the K provers holding every circuit once between them (K > 1)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--deadline", type=float, default=3 * 3600, help="seconds before the provers are stopped")
     ap.add_argument("--mem-floor", type=float, default=8.0, help="GiB of free host memory under which the run is stopped")

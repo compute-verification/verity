@@ -28,6 +28,8 @@
 #      ST_ZK (a directory the staged statements stay in after the run, so a later run with it reuses each type staged there
 #      with the same spec and device check; unset: the run's scratch)
 #      ST_MEM_GIB (the host's memory where no cgroup shows it, a RunPod pod's memoryInGb: the server stops at 8 GiB free of it)
+#      ST_SERVER_TYPES=a,b (the server proves only these of the staged types the device prover takes)
+#      ST_ROUTE=1 (each type to one of the K provers, which hold every circuit once between them: proof_server.py --route)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -200,13 +202,26 @@ if [ -n "${ST_SERVER:-}" ]; then
 print(", ".join("%s at k_log %s (%s s)" % (r["n"], r["k_log"], r["seconds"]["total"])
                 for r in (json.load(open(f)) for f in sorted(glob.glob(sys.argv[1] + "/c*/stage/stage.json")))))' "$Z/$t")"
     d=$(ls -dv "$Z/$t"/c*/stage | head -1)
-    if [ -e "$Z/$t/device-ok" ] || "$BIN" statement --zk --gpu --instances "$d/pub.bin" --circuit "$d/circuit.txt" \
-        > "$Z/$t/device-check.log" 2>&1; then
-      TYPES+=("${e%|*}"); touch "$Z/$t/device-ok"
+    # the check loads the verifier's statement (circuit and public file) once: its seconds and peak RSS are a type's
+    # load cost, kept in load.json, which a later run with ST_ZK reuses
+    grep -q '"rc": 0' "$Z/$t/load.json" 2>/dev/null || taskset -c "$PC" "$PY" - "$Z/$t" "$BIN" statement --zk --gpu \
+      --instances "$d/pub.bin" --circuit "$d/circuit.txt" <<'EOF2'
+import json, os, resource, subprocess, sys, time
+z, cmd = sys.argv[1], sys.argv[2:]
+t0 = time.time()
+with open(z + "/device-check.log", "w") as f:
+    rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT).returncode
+json.dump({"rc": rc, "seconds": round(time.time() - t0, 1), "circuit_gib": round(os.path.getsize(cmd[-1]) / 2**30, 2),
+           "maxrss_gib": round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2**20, 2)}, open(z + "/load.json", "w"))
+EOF2
+    if grep -q '"rc": 0' "$Z/$t/load.json" 2>/dev/null; then
+      TYPES+=("${e%|*}"); log "${e%|*}: the device prover takes it; load $(cat "$Z/$t/load.json")"
     else
       log "${e%|*}: the device prover refuses it: $(tail -c 400 "$Z/$t/device-check.log")"
     fi
   done
+  # ST_SERVER_TYPES: only these of them, e.g. the ones whose statements fit the host's memory together
+  [ -n "${ST_SERVER_TYPES:-}" ] && TYPES=($(for x in "${TYPES[@]}"; do [[ ",$ST_SERVER_TYPES," == *",$x,"* ]] && echo "$x"; done))
   OK=$(IFS=,; echo "${TYPES[*]}")
   [ -n "$OK" ] || { log "server: no type to prove"; exit 1; }
   rc=0; KS=(${ST_SERVER//,/ }); n=${#KS[@]}
@@ -216,7 +231,8 @@ print(", ".join("%s at k_log %s (%s s)" % (r["n"], r["k_log"], r["seconds"]["tot
     [ "$left" -gt 300 ] || { log "server: K=$k not run: past the deadline"; rc=1; continue; }
     FC_VERIFY_AHEAD=${ST_VERIFY_AHEAD:-1} taskset -c "$PC" "$PY" benchmarks/one_stage/proof_server.py run --bin "$BIN" \
       --mix "${ST_MIX:?}" --staged "$Z" --types "$OK" --provers "$k" --sessions "${ST_SESSIONS:-120}" --warm "${ST_SERVER_WARM:-0}" \
-      --out "$O/server-k$k" --scratch "$W/server-k$k" --deadline "$left" --mem-limit "${ST_MEM_GIB:-0}" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
+      --out "$O/server-k$k" --scratch "$W/server-k$k" --deadline "$left" --mem-limit "${ST_MEM_GIB:-0}" \
+      $( [ "${ST_ROUTE:-0}" = 1 ] && echo --route) "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
       | grep SERVER | tee -a "$O/job.log"
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
     rm -rf "$W/server-k$k"
