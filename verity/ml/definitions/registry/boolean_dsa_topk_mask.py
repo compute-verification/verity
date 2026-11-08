@@ -10,6 +10,8 @@ circuit-check and integrations/vllm/tests/program/test_dsa_topk_mask.py hold equ
     DsaButterflyCtl_v1{T,KB,TWO}   (lo, hi: 1 + KB bits) -> (bit, 1 + KB bits[, 1 + KB bits]); traced, no word Definition
     DsaButterflySettings_v2{N,K}   (mask: N bits) -> butterfly_switches(N, K) bits; word view DsaButterflySettings_v1
     DsaButterflyRows_v2{N,K,W,E}   (sw: bits, rows: N x W x E bits) -> K x W x E bits; word view DsaButterflyRows_v1
+    DsaButterflyRowsPad_v2{T,N,K,W,E}  (sw: bits, rows: T x W x E bits, pad: (N - T) x W x E bits) -> K x W x E bits; word view
+                                   DsaButterflyRowsPad_v1
     DsaTopKRow_v2{N,TOPK}          (scores: N x 32 bits) -> TOPK x 32 bits; word view DsaTopKRow_v1
 
 `DsaTopKMask_v2` is an exact radix select over ext_j = (key_j, N - 1 - j) with no advice: the key's 32 bits most significant
@@ -215,6 +217,18 @@ DsaButterflyRowsV2 = EW.on_bits(
     _rows, M.DsaButterflyRows)
 
 
+def _rows_pad(B, S, sw, rows, pad):
+    """`DsaButterflyRowsPad_v1` on bits: `DsaButterflyRows_v2{N,K,W,E}` over the T rows and then the pad."""
+    return B.call(bind(DsaButterflyRowsV2, N=S.N, K=S.K, W=S.W, E=S.E), sw, Coll(Array(S.N, _row(S)), concat([rows.refs, pad.refs])))
+
+
+DsaButterflyRowsPadV2 = EW.on_bits(
+    "DsaButterflyRowsPad", 2, ["T", "N", "K", "W", "E"],
+    lambda S: ((("sw", Array(M.butterfly_switches(S.N, S.K), BIT)), ("rows", Array(S.T, _row(S))), ("pad", Array(S.N - S.T, _row(S)))),
+               Array(S.K, _row(S))),
+    _rows_pad, M.DsaButterflyRowsPad)
+
+
 def _row_check(B, S, scores):
     """`DsaTopKRow_v1` on bits: `DsaTopKMask_v2`, its `DsaButterflySettings_v2{N,K=TOPK}`, and `DsaButterflyRows_v2{N,TOPK,1,32}`
     over the indices' constant bits."""
@@ -230,4 +244,4 @@ DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores",
                           _row_check, M.DsaTopKRow)
 
 BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaTopKMaskV2, DsaButterflyTagBits, DsaButterflyCtl,
-                         DsaButterflySettingsV2, DsaButterflyRowsV2, DsaTopKRowV2]
+                         DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2, DsaTopKRowV2]

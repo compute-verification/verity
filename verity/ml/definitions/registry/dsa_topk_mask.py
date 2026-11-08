@@ -38,6 +38,8 @@ Registered functions:
   DsaButterflyRows{N,K,W,E}     (sw: butterfly_switches(N, K) bits, rows: N x W x E bits) -> K x W x E bits: the concentrator at
                                 sw, empty positions zero rows; at DsaButterflySettings of a mask of K members, slot s is the row of
                                 the s-th member
+  DsaButterflyRowsPad{T,N,K,W,E} (sw, rows: T x W x E bits, pad: (N - T) x W x E bits) -> K x W x E bits: DsaButterflyRows{N,K,W,E}
+                                over rows then pad, a row of T keys at its size class N with its history an argument of its own
   DsaTopKRow{N,TOPK}            (scores: N f32) -> TOPK i32: sorted(topk_set(scores, TOPK)), DsaTopKSlot per slot
   DsaTopKSlot{N}x{TOPK}         (scores: N f32, s: i32) -> i32: sorted(topk_set(scores, TOPK))[s]
   DsaTopKKey                    (s: f32) -> i32: topk_key(s)
@@ -385,4 +387,26 @@ def DsaButterflyRows(B, S, sw, rows_):
                 bind(DsaWaksmanPick, W=S.W, E=S.E))
 
 
-DSA_TOPK_MASK_COMPOSITES = [DsaTopKMask, DsaTopKRow, DsaMaskTagStep, DsaButterflyRoute, DsaButterflySettings, DsaButterflyRows]
+def _sig_rows_pad(S):
+    return ((("sw", Array(butterfly_switches(S.N, S.K), BIT)), ("rows", Array(S.T, _row(S))), ("pad", Array(S.N - S.T, _row(S)))),
+            Array(S.K, _row(S)))
+
+
+def _refuse_pad(b: dict) -> str | None:
+    T, N = b.get("T"), b.get("N")
+    if isinstance(T, int) and isinstance(N, int) and not 1 <= T < N:
+        return f"T rows of history and N - T >= 1 of pad (T={T}, N={N})"
+    return _refuse_net(b)
+
+
+@composite("DsaButterflyRowsPad", 1, ["T", "N", "K", "W", "E"], _sig_rows_pad, conformance="exact-model-tested", refuse=_refuse_pad)
+def DsaButterflyRowsPad(B, S, sw, rows_, pad):
+    """`DsaButterflyRows_v1{N,K,W,E}` over the T rows of ``rows`` and then the N - T of ``pad``: a row of T keys read at its size
+    class N. Its history is an argument of its own, a key sequence one row longer than the row before's, which the descriptor
+    writes as an alias to that one plus a part, and its pad another; ahead of the history in one argument, the pad left no
+    earlier argument to alias, and each row's history was written whole."""
+    return B.call(bind(DsaButterflyRows, N=S.N, K=S.K, W=S.W, E=S.E), sw, Coll(Array(S.N, _row(S)), concat([rows_.refs, pad.refs])))
+
+
+DSA_TOPK_MASK_COMPOSITES = [DsaTopKMask, DsaTopKRow, DsaMaskTagStep, DsaButterflyRoute, DsaButterflySettings, DsaButterflyRows,
+                            DsaButterflyRowsPad]
