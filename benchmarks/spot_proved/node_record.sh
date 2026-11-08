@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # What a GLM-5.3 replay's bits can depend on besides its inputs and the all-reduce tree (which the all-reduce probe reads), written
-# so that two nodes' records compare with `diff -r A B`: no serials, clocks or host names.
+# so that two nodes' records compare with `diff -r -x ids.txt A B`: no serials, clocks or host names outside ids.txt.
 #   VENV=DIR [CK=DIR PINS=FILE] bash node_record.sh OUTDIR
+# ids.txt        which machine this is, so a replay on it counts as cross-machine or same machine: each GPU's serial, UUID and PCI
+#                bus, the host name, machine id and boot id
 # gpu.txt        each GPU's name, compute capability and memory, the driver, VBIOS, ECC and MIG modes; SMs, torch, its CUDA, cuDNN
 #                and NCCL
 # cuda.txt       nvcc's version (FlashInfer's and DeepGEMM's JIT build with it)
@@ -17,6 +19,8 @@ O=${1:?usage: VENV=DIR bash node_record.sh OUTDIR}; mkdir -p "$O/caches"
 PY=${VENV:?VENV: the venv the engine runs}/bin/python
 nvidia-smi --query-gpu=index,name,compute_cap,memory.total,driver_version,vbios_version,ecc.mode.current,mig.mode.current \
   --format=csv > "$O/gpu.txt"
+{ nvidia-smi --query-gpu=index,serial,uuid,pci.bus_id --format=csv
+  echo "host=$(hostname) machine_id=$(cat /etc/machine-id 2>/dev/null) boot_id=$(cat /proc/sys/kernel/random/boot_id)"; } > "$O/ids.txt"
 "$PY" -c 'import torch; p = torch.cuda.get_device_properties(0)
 print(f"sms={p.multi_processor_count} torch={torch.__version__} cuda={torch.version.cuda} cudnn={torch.backends.cudnn.version()} nccl={torch.cuda.nccl.version()}")' >> "$O/gpu.txt"
 NVCC=${CUDA_HOME:-/usr/local/cuda-12.9}/bin/nvcc
