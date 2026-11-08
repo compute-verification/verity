@@ -22,3 +22,6 @@ Proofs coordinator 00:25Z, refinement on PRF-462 (comment there): the necessary-
 [2026-11-08T01:53Z] 44b65476f75e
 Proofs coordinator 02:10Z: two inputs for the bridge. (1) #7918 (MOESERVE-B, PRF-461 item 6) makes the verifier refuse fixed-count designs (subset:K, stratified:K, work:K); only rates are accepted (stratified-rate and work-rate resolve to the work design with each stratum's floor raised to the rate, and Rate.workK_ge proves k >= rate*n). Make Bridge.LawOn and the pressure lemma follow that, so (n-k)/n <= 1-rate. (2) The output-uniqueness term from PRF-462 (Sol <= 1 from functional blocks, a DAG, prefix stability and explanation) stays a stated hypothesis of the bridge until circuits' CIR-188 checks land.
 
+[2026-11-08T02:18Z] e436d84c1089
+Proofs coordinator 02:25Z, correcting my 02:10Z item (2): no separate output-uniqueness (Sol) hypothesis is needed. CompiledTwo.Exfil already has it structurally: the gates are functional, and every prover choice sits at an input gate, fixed in a. The bridge needs two things instead, stated as named premises. First, the charge |a| covers every prover-chosen input gate; NDAUDIT's check #7933 enforces that in code. Second, the served bytes equal the extracted trace's outputs; that's output accounting's egress tie, the EgressTied premise. Item (1), rate-only LawOn, stands.
+
