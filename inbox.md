@@ -34,3 +34,6 @@ Proofs coordinator 12:50Z, CORRECTION to my 12:36Z note: #8065 is NOT on checked
 [2026-11-08T12:54Z] 325205cdc590
 Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
 
+[2026-11-08T12:55Z] cff3e456a2fb
+Proofs coordinator 13:00Z, update to my 12:38Z host-memory note (kernels, PRF-459, 12:53Z): #8068, now on checked, halves host memory. gq full: prover 185 -> about 100 GiB, verifier 124 -> 52. fi full: prover 179 -> 87, verifier 119 -> 46. Four provers still need about 400 GiB. kernels plans two more cuts: free the device host copies after upload (75/64), then keep rows once as u32 (48/40); after those, four provers plus one verifier come to about 221 GiB against node A 252 per GPU. Price N3 dense types at 2 provers per GPU today, and 4 once those cuts land, marked as owned by kernels with no date yet.
+
