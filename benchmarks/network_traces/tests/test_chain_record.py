@@ -633,16 +633,79 @@ def _gemm_window(external: bool = True) -> dict:
     reg = I.Registered({"weights": 256}, reads=(I.Read(gid, "w", "weights", at=0, radix=(4,), base=0, step=(0,)),))
     c = I.Circuit("gemms", ((gemm, 4),), external=(f"{gid}/x",) if external else (), registered=reg,
                   wires=() if external else (I.Wire(gid, "x", gid, "o0", at=2, radix=(2,), base=0, step=(1,)),))
+    return _record(c)
+
+
+def _record(c) -> dict:
+    """``c``'s stated record as `chain_record` reads a window's ``circuit.json``: its description, external ports and
+    each template's input rows, a cut port's rows ``p#j``."""
+    from verity.ml.windows import interface as I
+
     return {**c.description(), "external": list(c.external),
-            "statements": {gid: {"in_rows": [list(r) for r in I.unit_rows(gemm)[0]]}}}
+            "statements": {tid: {"in_rows": [list(r) for r in I.unit_rows(fn, c.cuts.get(tid))[0]]}
+                           for (fn, _n), tid in zip(c.templates, c.ids)}}
+
+
+def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them():
+    """A wire into a port cut ``k`` ways fills one ``p#j`` row a reader index, its port's words over ``k``
+    (`SampledProofs.Wires`' ``wiredBits``), which `free_inputs` takes out as `interface.input_count` does: three
+    ``Gemm_v2{K=16, N=16}`` units reading their ``x`` cut in two from six ``N=8`` slices leave none of it free. Matching
+    a cut row's element ports ``x[r]`` against the wire's ``x`` took out none. An external cut port drops all its rows
+    once, and two wires filling one row are refused."""
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.windows import interface as I
+
+    gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
+    gid, g8id = descriptor_id(gemm), descriptor_id(g8)
+    wire = I.Wire(gid, "x", g8id, "o0", at=0, radix=(3, 2), base=0, step=(2, 1), cut=(0, 2))
+    c = I.Circuit("sliced", ((g8, 6), (gemm, 3)), wires=(wire,), cuts={gid: {"x": 2}})
+    doc = _record(c)
+    assert [r[0] for r in doc["statements"][gid]["in_rows"]][:2] == ["x#0", "x#1"]
+    terms, lean = cr.input_terms(doc), I.input_count(doc)
+    assert {k: terms[k] for k in ("inputs", "wired", "registered", "free")} == {
+        k: lean[k] for k in ("inputs", "wired", "registered", "free")}
+    assert terms["wired"] == 3 * 2 * 128 and terms["free"] == 6 * (256 + 2048) + 3 * 4096
+    ext = _record(I.Circuit("sliced", ((g8, 6), (gemm, 3)), cuts={gid: {"x": 2}}, external=(f"{gid}/x",)))
+    assert cr.input_terms(ext)["external"] == 3 * 256 and cr.free_inputs(ext) == terms["free"]
+    assert cr.input_terms({**ext, "wires": doc["wires"]})["external"] == 0
+    again = I.Wire(gid, "x", g8id, "o0", at=1, radix=(1,), base=0, step=(0,), cut=(1, 1))
+    with pytest.raises(ValueError, match="both fill rows of units from 1"):
+        cr.free_inputs({**doc, "wires": [*doc["wires"], again.doc()]})
+
+
+def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
+    """On the uncut window too, `input_terms` is `interface.input_count`, pinned or not."""
+    from verity.ml.windows import interface as I
+
+    for doc in (_gemm_window(external=False), _gemm_window()):
+        for pins in (None, PIN):
+            terms, lean = cr.input_terms(doc, pins, PIN), I.input_count(doc, pins=pins, roots=PIN)
+            assert (terms["wired"], terms["registered"]) == (lean["wired"], lean["registered"])
+            assert terms["free"] == lean["free"] - terms["external"]
+
+
+def test_the_faulty_sets_bits_are_the_powers_without_computing_it():
+    """`power_bits` is ``(m^f - 1).bit_length()``: computed on small cases, and read off the logarithm (forced with
+    ``exact_below=0``) it agrees with the power everywhere; at keep-591e's draw (``m`` 6,963,297, ``f`` 96,531,780) it
+    finishes, within one bit of ``f·log2 m``."""
+    for m in [*range(1, 40), 1 << 20, 6_963_297, 10 ** 9 + 7]:
+        for f in [*range(0, 12), 97, 1000, 4097]:
+            exact = (m ** f - 1).bit_length()
+            assert cr.power_bits(m, f) == exact == cr.power_bits(m, f, exact_below=0), (m, f)
+    m, f = 6_963_297, 96_531_780
+    assert 0 < cr.power_bits(m, f) - f * math.log2(m) <= 1
+    with pytest.raises(ValueError, match="m ≥ 1"):
+        cr.power_bits(0, 3)
 
 
 def test_free_inputs_leave_out_the_registered_reads_of_a_parameter_held_at_the_verifiers_pin():
     """`free_inputs` subtracts what `NetworkCheck.Circuit.countsOf` holds (`interface.input_count`'s ``registered``): the
     weights' registered reads leave the count where the verifier's pin of ``weights`` is the root the window's
     registration records, and stay free under no pins, another root, no root recorded, or a pin of another root; wires
-    and external ports drop their rows as before. A pin of the scan's state, and a held read of an external port, are
-    refused."""
+    and external ports drop their rows as before, a held read of an external port's rows taken out once. A pin of the
+    scan's state is refused."""
     ext, wired = _gemm_window(), _gemm_window(external=False)
     assert (cr.free_inputs(ext), cr.free_inputs(wired)) == (4 * 4096, 2 * 256 + 4 * 4096)
     assert (cr.free_inputs(ext, PIN, PIN), cr.free_inputs(wired, PIN, PIN)) == (0, 2 * 256)
@@ -653,8 +716,11 @@ def test_free_inputs_leave_out_the_registered_reads_of_a_parameter_held_at_the_v
     with pytest.raises(ValueError, match="scan's state is no value the verifier fixes"):
         cr.free_inputs(ext, {**PIN, cr.SCAN_STATE: "00" * 64}, PIN)
     gid = ext["templates"][0][0]
-    with pytest.raises(ValueError, match=r"external ports .*/w'\] are registered reads of a held parameter too"):
-        cr.free_inputs({**ext, "external": [f"{gid}/x", f"{gid}/w"]}, PIN, PIN)
+    both = {**ext, "external": [f"{gid}/x", f"{gid}/w"]}
+    assert {k: cr.input_terms(both, PIN, PIN)[k] for k in ("registered", "external", "free")} == {
+        "registered": 4 * 4096, "external": 4 * 256, "free": 0}
+    assert {k: cr.input_terms(both)[k] for k in ("registered", "external", "free")} == {
+        "registered": 0, "external": 4 * (256 + 4096), "free": 0}
     with pytest.raises(ValueError, match=r"\{param: root\}"):
         cr.free_inputs(ext, {"weights"}, PIN)
 
@@ -669,10 +735,11 @@ def test_an_audit_leaves_out_the_registered_rows_its_registration_records_at_the
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2},
                                                             "window": window}))
     held = cr.audit_of(tmp_path, PIN)
-    assert (held["free"], held["registered"], held["held"]) == (0, 4 * 4096, ["weights"])
+    assert (held["free"], held["inputs"]["registered"], held["held"]) == (0, 4 * 4096, ["weights"])
     for pins in (None, {"weights": "cd" * 64}):
         got = cr.audit_of(tmp_path, pins)
-        assert (got["free"], got["registered"], got["held"]) == (4 * 4096, 0, []) and got["drawn"] == held["drawn"]
+        assert (got["free"], got["inputs"]["registered"], got["held"]) == (4 * 4096, 0, [])
+        assert got["drawn"] == held["drawn"]
     network = {"advice": 8, "syncs": 0, "cells": 0}
     before, after = (cr.pooled_k([a], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
     assert before["K"] - after["K"] == 4 * 4096 and after["terms"]["free"] == 0
