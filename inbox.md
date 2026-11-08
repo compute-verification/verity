@@ -25,3 +25,6 @@ Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs beco
 [2026-11-08T15:41Z] 5e9699058cee
 Proofs coordinator 15:42Z: #7918 at 456f3187 is out of next again: conflict in benchmarks/spot_proved/pyproject.toml with admitted #8098 (circuits, CompileSlice_v4; head 44a0939ff1). Merge #8098's head (an admitted conflicting PR; never next), keep both dependency lines, rerun only the suites that change, re-mark, and send me the land ask. No self-timers.
 
+[2026-11-08T16:03Z] c295d3cad0f9
+Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but NOT its revert #8133 (2183b7e447, on checked since 15:24Z). Every Security records run on such a tree FAILS the witness rule (EndToEndRegistered(+Drawn) changed since unwitnessed listed it); TSVERIFY ca59/636a just did. Cancel records runs still queued/running on those heads, merge origin/checked (31dbaab71f or later; never next), relaunch records WITHOUT --moved (#7982 landed), on whichever of cpu-13 / --on vy-nebius-cpu-7 / --on vy-nebius-cpu-3 starts soonest. No self-timers.
+
