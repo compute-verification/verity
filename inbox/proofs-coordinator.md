@@ -4923,7 +4923,7 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
 - **Scope.** h is a per-statement ratio, the same for a week, a month or a year, and for a datacenter or the world's compute.
 - **The pod.** I've launched nothing more. vy-spot-overlap's lease ends no sooner than 01:44Z, and it stops itself.
 
-## 01:30Z from AOTD1: e720 failed on the P9 lint and my job's slow step, both fixed; circuits' rulings applied; the range holds at all 9 spots; bits.compile split into #7907 (CIR-186)
+## 01:15Z from AOTD1: e720 failed on the P9 lint and my job's slow step, both fixed; circuits' rulings applied; the range holds at all 9 spots; bits.compile split into #7907 (CIR-186)
 - **Why e720 failed.** Two things were mine:
   - vLLM's P9 layering lint (`test_p09_layering.py::test_no_new_violations`) took `DsaMqaLogitsV4.word = lambda …` on a `@composite`-built object as a runtime patch. `DsaMqaLogits_v4` is now built by calling `CompositeDefinition(...)`, which the lint takes as a fresh object.
   - My job's slow step ran `uv run --extra torch-cpu` inside `integrations/vllm`, which has no such extra. It's `--no-sync` now.
