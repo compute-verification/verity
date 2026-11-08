@@ -8,6 +8,7 @@ from circuit_check import structural as ST
 from verity.ml.circuits.boolean import forms as F
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops import prims as OP
+from verity.ml.circuits.ops.fp32 import F32Mul
 from verity.ml.circuits.ops.boolean import gemm as GB
 from verity.ml.circuits.ops.boolean import scalar as SB
 from verity.ml.circuits.refs import array_of
@@ -38,6 +39,16 @@ def test_calls_repeating_different_arguments_are_different_specializations():
     assert S.check(REPEATS)["mismatched_bits"] == 0
     _tm, lw, _top = S.lower(REPEATS)
     assert sum(k[0].startswith("BlackwellS8ImmaDot32") for k in lw.specs) == 2
+
+
+SQUARES = CompositeDefinition("StructLowerSquares", 1, (), lambda _S: ((("x", Array(2, Value(32))),), Array(2, Value(32))),
+                              lambda B, _S, x: B.batch(F32Mul, x, x, axes=(0, 0)), register=False)
+
+
+def test_a_batched_primitive_reading_one_word_twice_is_the_flat_lowering():
+    """Each member is a call of `F32Mul` whose two operands are one word: its pattern binds that word once, and whether
+    it reads a table is asked of the primitive on both operands."""
+    assert S.check(SQUARES)["mismatched_bits"] == 0
 
 
 def _constants(B, _S, x):

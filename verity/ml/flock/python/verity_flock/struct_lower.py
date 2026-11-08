@@ -232,7 +232,7 @@ class _Lowerer:
         shape = tuple(first.setdefault(a, len(first)) for a in fc.args)
         words = [wires[a] for a in first]
         order = partial(_column_order, C) if self.in_column_order else None
-        if fc.is_primitive and self.reads_table(fc.fn, words):
+        if fc.is_primitive and self.reads_table(fc.fn, [wires[a] for a in fc.args]):
             pat, label_vars = _operand_bits(C, words)
         else:
             pat, label_vars = _pattern(words, order=order)
