@@ -170,3 +170,6 @@ BINDTERM 12:10Z: #8015's records commit d07a440d93 is pushed on top of a28977b63
 - It merges cleanly with next.
 The quick suites wait for a slot, with 11 runs ahead on both cpu-11 and cpu-7. The mark follows them, ETA about 13:15Z; unless a suite fails, the marked head is d07a440d93. I'll send it when it's marked.
 
+[2026-11-08T12:54Z] 0b44c14c8e32
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
