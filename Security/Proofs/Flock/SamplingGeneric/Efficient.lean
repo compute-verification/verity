@@ -8,8 +8,9 @@ public import Proofs.Flock.SamplingGeneric.Bits
 /-!
 # The compiled extractor's costs
 
-`Compiled.Efficient`'s three bounds at a compiled sampled verifier that meets the contract (`Compiled.Sessions`), from
-the opening checks' count (`Compiled.OpenCallsLe`): `Compiled.E` extracts session by session at their first slots
+`Compiled.Efficient`'s three bounds at a compiled sampled verifier that meets the contract's facts its cost reads
+(`CostContract`: `RunsFixed`, `slots` and `keys`, which `Compiled.Sessions` and `CompiledTwo.Sessions` give), from the
+opening checks' count (`Compiled.OpenCallsLe`): `Compiled.E` extracts session by session at their first slots
 (`Compiled.runExt`), so it is the sampling extractor at the step `runExt` (`E_eq_Esamp`).
 
 * `Arg.reruns_le`, `Arg.rerunsExp_le`, `Arg.own_le`: every proof system's extractor is `E^rep` at waits, truncation
@@ -30,9 +31,10 @@ the opening checks' count (`Compiled.OpenCallsLe`): `Compiled.E` extracts sessio
   session's first, and nothing elsewhere (`slot_exp_le`): resampling its block's session's rounds keeps the sample
   (`fixed`, `Ex_resample`), so the session's coins and the block's coins are uniform beside one prover `P'`, where
   `A.rerunsExp_le` holds.
-* `slots_runs_le`, `slots_runs_exp`, `slots_own_le`: `Efficient`'s three bounds at `Esamp` of `slotStep`.
-* `compilerEfficient`: **`CompilerEfficient`**, the three bounds at `Compiled.E` through `E_eq_Esamp`, so
-  `compilerBits_of` gives `CompilerBits`.
+* `slots_runs_le`, `slots_runs_exp`, `slots_own_le`: `Efficient`'s three bounds at `Esamp` of `slotStep`, and
+  `efficient_of`, the three at `Compiled.E` through `E_eq_Esamp`.
+* `compilerEfficient`: **`CompilerEfficient`**, `efficient_of` at `Sessions.toCostContract`, so `compilerBits_of`
+  gives `CompilerBits`.
 -/
 
 @[expose] public section
@@ -528,11 +530,22 @@ noncomputable def slotStep (L : Compiled Coin A) : L.Step L.SlotY := fun x s c j
 bounds read. -/
 theorem E_eq_Esamp (L : Compiled Coin A) : L.E = L.Esamp L.SlotY L.slotStep := rfl
 
+/-- **The contract's facts the extractor's cost reads**: the sessions' runs on their fixed rounds (`RunsFixed`), and
+the sample's slots, at most `n_PU` (`slots`) holding at most `n_sess` keys (`keys`). Both contracts give them
+(`Sessions.toCostContract`, `CompiledTwo.Sessions.toCostContract`). -/
+structure CostContract (H : Msg → Msg) (L : Compiled Coin A) : Prop extends RunsFixed H L where
+  slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  keys : ∀ x r, ((Finset.range (L.checked x r).length).image (L.skey x (L.checked x r))).card ≤ L.nSess x
+
+omit [Nonempty Coin] in
+theorem Sessions.toCostContract {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) : L.CostContract H :=
+  { toRunsFixed := hS.toRunsFixed, slots := hS.slots, keys := hS.keys }
+
 variable {H : Msg → Msg} {L : Compiled Coin A}
 
 /-- **Strict reruns of a run's extractions**: a session's first slot reruns at most `ρ_s`, any other slot nothing, and
 a sample has at most `n_sess` first slots (`card_first_le`). -/
-theorem runExt_runs_le (hS : L.Sessions H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement)
+theorem runExt_runs_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 ≤ L.nSess x * L.ρs x := by
   unfold runExt
@@ -554,12 +567,12 @@ theorem runExt_runs_le (hS : L.Sessions H) {x : Msg} {Ω : Type} (P : Prover Ω)
       · rw [dite_eq_right hu]
         exact Nat.zero_le _
   · rw [← Finset.sum_filter, Finset.sum_const, smul_eq_mul]
-    exact Nat.mul_le_mul_right _ (card_first_le hS x r)
+    exact Nat.mul_le_mul_right _ (card_first_le hS.keys x r)
 
 /-- **Own calls of a run's extractions**: a session's first slot checks what its witness reveals at each of the
-session's blocks, so the sample's slots, at most `n_PU` (`sum_first_le`, `Sessions.slots`), each at most
+session's blocks, so the sample's slots, at most `n_PU` (`sum_first_le`, `CostContract.slots`), each at most
 `openCalls`. -/
-theorem runExt_own_le (hS : L.Sessions H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
+theorem runExt_own_le (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     (ownLog H (run H P L.V x ω) (L.runExt x s r (run H P L.V x ω r).seen c)).length ≤ L.nPU x * L.openCalls x := by
   unfold runExt
@@ -654,7 +667,7 @@ expected reruns is at most `e_s` where slot `i` is its session's first, and `0` 
 session's rounds keeps the sample (`fixed`), so slot `i` stays first, and on them the session's extraction is `A`'s
 extractor against one prover `P'` at uniform coins, which reruns at most `1 + m′·k` of the block's shape in
 expectation (`Arg.rerunsExp_le`). -/
-theorem slot_exp_le (hS : L.Sessions H) {x : Msg} (s : AuditStatement)
+theorem slot_exp_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) :
     Ex (fun d : Fin (L.V.k x) → Coin => (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
         Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) ≤
@@ -753,7 +766,7 @@ theorem Ex_slotStep (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Audit
 /-! ## `Efficient` at the slot-by-slot extractor -/
 
 /-- **Strict reruns**: at most `1 + K_out + k_out·(K_in + k_in·n_sess·ρ_s)`. -/
-theorem slots_runs_le (hS : L.Sessions H) :
+theorem slots_runs_le (hS : L.CostContract H) :
     ExtractRunsLe H (L.Esamp L.SlotY L.slotStep)
       (fun x => 1 + L.capOut x + L.kOut x * (L.capIn x + L.kIn x * (L.nSess x * L.ρs x))) :=
   Esamp_runs_le H L L.SlotY L.slotStep (fun x => L.nSess x * L.ρs x) fun _ s _ P ω _ _ _ _ r =>
@@ -761,7 +774,7 @@ theorem slots_runs_le (hS : L.Sessions H) :
 
 /-- **Expected reruns**: at most `1 + k_out + k_out·k_in·(1 + n_sess·e_s)`: a sample has at most `n_sess` first slots
 (`card_first_le`), each weighing at most `e_s` given acceptance (`slot_exp_le`). -/
-theorem slots_runs_exp (hS : L.Sessions H) :
+theorem slots_runs_exp (hS : L.CostContract H) :
     ExtractRunsExpLe H (L.Esamp L.SlotY L.slotStep)
       (fun x => 1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nSess x * L.es x)) := by
   intro x Ω P ω
@@ -784,26 +797,31 @@ theorem slots_runs_exp (hS : L.Sessions H) :
         rw [Ex_finsum]
     _ ≤ Ex (fun _ : Fin (L.V.k x) → Coin => (L.nSess x : ℝ) * L.es x) := Ex_mono fun d => by
         rw [← Finset.sum_filter, Finset.sum_const, nsmul_eq_mul]
-        exact mul_le_mul_of_nonneg_right (Nat.cast_le.2 (card_first_le hS x _)) he0
+        exact mul_le_mul_of_nonneg_right (Nat.cast_le.2 (card_first_le hS.keys x _)) he0
     _ = L.nSess x * L.es x := Ex_const _
 
 /-- **Own SHA-512 calls**: at most `k_out·k_in·n_PU·openCalls`. -/
-theorem slots_own_le (hS : L.Sessions H) (hopen : L.OpenCallsLe H) :
+theorem slots_own_le (hS : L.CostContract H) (hopen : L.OpenCallsLe H) :
     ExtractOwnLe H (L.Esamp L.SlotY L.slotStep) (fun x => L.kOut x * L.kIn x * L.nPU x * L.openCalls x) := by
   intro x Ω P ω r₀ c
   exact (Esamp_own_le H L L.SlotY L.slotStep (fun x => L.nPU x * L.openCalls x)
     (fun _ _ _ P ω hs c j l r => runExt_own_le hS hopen hs P ω r _) x Ω P ω r₀ c).trans_eq (by ring)
 
+/-- **`Efficient` at the contract's cost facts**: the compiled extractor's three bounds (`E_eq_Esamp`, then
+`slots_runs_le`, `slots_runs_exp`, `slots_own_le`). -/
+theorem efficient_of (hS : L.CostContract H) (hopen : L.OpenCallsLe H) : L.Efficient H := by
+  unfold Compiled.Efficient
+  rw [L.E_eq_Esamp]
+  exact ⟨slots_runs_le hS, slots_runs_exp hS, slots_own_le hS hopen⟩
+
 end Compiled
 
 /-! ## The compiler's efficiency -/
 
-/-- **`CompilerEfficient`**: the compiled extractor's three bounds (`Compiled.E_eq_Esamp`, then `slots_runs_le`,
-`slots_runs_exp`, `slots_own_le`). -/
+/-- **`CompilerEfficient`**: the compiled extractor's three bounds at the contract's cost facts
+(`Compiled.efficient_of`, `Compiled.Sessions.toCostContract`). -/
 theorem compilerEfficient : CompilerEfficient := by
   intro Coin _ _ _ A L H hS hopen
-  unfold Compiled.Efficient
-  rw [L.E_eq_Esamp]
-  exact ⟨Compiled.slots_runs_le hS, Compiled.slots_runs_exp hS, Compiled.slots_own_le hS hopen⟩
+  exact Compiled.efficient_of hS.toCostContract hopen
 
 end Claims.SamplingGeneric
