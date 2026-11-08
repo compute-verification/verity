@@ -307,6 +307,257 @@ def hash (msg : ByteArray) : Digest := Id.run do
   -- the state's eight words, big-endian: 64 bytes whatever the loops computed (`Sha512.hash_size`)
   return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
 
+/-- `compress` on the block whose sixteen words are `w0` to `w15` (`compress_eq_W`). -/
+def compressW (h : Array UInt64) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 : UInt64) : Array UInt64 :=
+  let w16 := sched w0 w1 w9 w14
+  let w17 := sched w1 w2 w10 w15
+  let w18 := sched w2 w3 w11 w16
+  let w19 := sched w3 w4 w12 w17
+  let w20 := sched w4 w5 w13 w18
+  let w21 := sched w5 w6 w14 w19
+  let w22 := sched w6 w7 w15 w20
+  let w23 := sched w7 w8 w16 w21
+  let w24 := sched w8 w9 w17 w22
+  let w25 := sched w9 w10 w18 w23
+  let w26 := sched w10 w11 w19 w24
+  let w27 := sched w11 w12 w20 w25
+  let w28 := sched w12 w13 w21 w26
+  let w29 := sched w13 w14 w22 w27
+  let w30 := sched w14 w15 w23 w28
+  let w31 := sched w15 w16 w24 w29
+  let w32 := sched w16 w17 w25 w30
+  let w33 := sched w17 w18 w26 w31
+  let w34 := sched w18 w19 w27 w32
+  let w35 := sched w19 w20 w28 w33
+  let w36 := sched w20 w21 w29 w34
+  let w37 := sched w21 w22 w30 w35
+  let w38 := sched w22 w23 w31 w36
+  let w39 := sched w23 w24 w32 w37
+  let w40 := sched w24 w25 w33 w38
+  let w41 := sched w25 w26 w34 w39
+  let w42 := sched w26 w27 w35 w40
+  let w43 := sched w27 w28 w36 w41
+  let w44 := sched w28 w29 w37 w42
+  let w45 := sched w29 w30 w38 w43
+  let w46 := sched w30 w31 w39 w44
+  let w47 := sched w31 w32 w40 w45
+  let w48 := sched w32 w33 w41 w46
+  let w49 := sched w33 w34 w42 w47
+  let w50 := sched w34 w35 w43 w48
+  let w51 := sched w35 w36 w44 w49
+  let w52 := sched w36 w37 w45 w50
+  let w53 := sched w37 w38 w46 w51
+  let w54 := sched w38 w39 w47 w52
+  let w55 := sched w39 w40 w48 w53
+  let w56 := sched w40 w41 w49 w54
+  let w57 := sched w41 w42 w50 w55
+  let w58 := sched w42 w43 w51 w56
+  let w59 := sched w43 w44 w52 w57
+  let w60 := sched w44 w45 w53 w58
+  let w61 := sched w45 w46 w54 w59
+  let w62 := sched w46 w47 w55 w60
+  let w63 := sched w47 w48 w56 w61
+  let w64 := sched w48 w49 w57 w62
+  let w65 := sched w49 w50 w58 w63
+  let w66 := sched w50 w51 w59 w64
+  let w67 := sched w51 w52 w60 w65
+  let w68 := sched w52 w53 w61 w66
+  let w69 := sched w53 w54 w62 w67
+  let w70 := sched w54 w55 w63 w68
+  let w71 := sched w55 w56 w64 w69
+  let w72 := sched w56 w57 w65 w70
+  let w73 := sched w57 w58 w66 w71
+  let w74 := sched w58 w59 w67 w72
+  let w75 := sched w59 w60 w68 w73
+  let w76 := sched w60 w61 w69 w74
+  let w77 := sched w61 w62 w70 w75
+  let w78 := sched w62 w63 w71 w76
+  let w79 := sched w63 w64 w72 w77
+  let s0 : Regs := (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!)
+  let s1 := round s0 0 w0
+  let s2 := round s1 1 w1
+  let s3 := round s2 2 w2
+  let s4 := round s3 3 w3
+  let s5 := round s4 4 w4
+  let s6 := round s5 5 w5
+  let s7 := round s6 6 w6
+  let s8 := round s7 7 w7
+  let s9 := round s8 8 w8
+  let s10 := round s9 9 w9
+  let s11 := round s10 10 w10
+  let s12 := round s11 11 w11
+  let s13 := round s12 12 w12
+  let s14 := round s13 13 w13
+  let s15 := round s14 14 w14
+  let s16 := round s15 15 w15
+  let s17 := round s16 16 w16
+  let s18 := round s17 17 w17
+  let s19 := round s18 18 w18
+  let s20 := round s19 19 w19
+  let s21 := round s20 20 w20
+  let s22 := round s21 21 w21
+  let s23 := round s22 22 w22
+  let s24 := round s23 23 w23
+  let s25 := round s24 24 w24
+  let s26 := round s25 25 w25
+  let s27 := round s26 26 w26
+  let s28 := round s27 27 w27
+  let s29 := round s28 28 w28
+  let s30 := round s29 29 w29
+  let s31 := round s30 30 w30
+  let s32 := round s31 31 w31
+  let s33 := round s32 32 w32
+  let s34 := round s33 33 w33
+  let s35 := round s34 34 w34
+  let s36 := round s35 35 w35
+  let s37 := round s36 36 w36
+  let s38 := round s37 37 w37
+  let s39 := round s38 38 w38
+  let s40 := round s39 39 w39
+  let s41 := round s40 40 w40
+  let s42 := round s41 41 w41
+  let s43 := round s42 42 w42
+  let s44 := round s43 43 w43
+  let s45 := round s44 44 w44
+  let s46 := round s45 45 w45
+  let s47 := round s46 46 w46
+  let s48 := round s47 47 w47
+  let s49 := round s48 48 w48
+  let s50 := round s49 49 w49
+  let s51 := round s50 50 w50
+  let s52 := round s51 51 w51
+  let s53 := round s52 52 w52
+  let s54 := round s53 53 w53
+  let s55 := round s54 54 w54
+  let s56 := round s55 55 w55
+  let s57 := round s56 56 w56
+  let s58 := round s57 57 w57
+  let s59 := round s58 58 w58
+  let s60 := round s59 59 w59
+  let s61 := round s60 60 w60
+  let s62 := round s61 61 w61
+  let s63 := round s62 62 w62
+  let s64 := round s63 63 w63
+  let s65 := round s64 64 w64
+  let s66 := round s65 65 w65
+  let s67 := round s66 66 w66
+  let s68 := round s67 67 w67
+  let s69 := round s68 68 w68
+  let s70 := round s69 69 w69
+  let s71 := round s70 70 w70
+  let s72 := round s71 71 w71
+  let s73 := round s72 72 w72
+  let s74 := round s73 73 w73
+  let s75 := round s74 74 w74
+  let s76 := round s75 75 w75
+  let s77 := round s76 76 w76
+  let s78 := round s77 77 w77
+  let s79 := round s78 78 w78
+  let s80 := round s79 79 w79
+  #[h[0]! + s80.1, h[1]! + s80.2.1, h[2]! + s80.2.2.1, h[3]! + s80.2.2.2.1, h[4]! + s80.2.2.2.2.1,
+    h[5]! + s80.2.2.2.2.2.1, h[6]! + s80.2.2.2.2.2.2.1, h[7]! + s80.2.2.2.2.2.2.2]
+
+set_option maxRecDepth 20000 in
+theorem compress_eq_W (h : Array UInt64) (data : ByteArray) (off : Nat) :
+    compress h data off = compressW h (word data (off + 8 * 0)) (word data (off + 8 * 1)) (word data (off + 8 * 2))
+      (word data (off + 8 * 3)) (word data (off + 8 * 4)) (word data (off + 8 * 5))
+      (word data (off + 8 * 6)) (word data (off + 8 * 7)) (word data (off + 8 * 8))
+      (word data (off + 8 * 9)) (word data (off + 8 * 10)) (word data (off + 8 * 11))
+      (word data (off + 8 * 12)) (word data (off + 8 * 13)) (word data (off + 8 * 14))
+      (word data (off + 8 * 15)) := by
+  unfold compress compressW
+  rfl
+
+theorem toNat_add_ofNat (o : USize) (j : Nat) (h : o.toNat + j < USize.size) :
+    (o + USize.ofNat j).toNat = o.toNat + j := by
+  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
+  rw [USize.toNat_add, USize.toNat_ofNat', Nat.mod_eq_of_lt (a := j) (by omega)]
+  exact Nat.mod_eq_of_lt (by omega)
+
+theorem uget_eq_get! (data : ByteArray) (i : USize) (n : Nat) (hi : i.toNat = n) (h : i.toNat < data.size) :
+    data.uget i h = data.get! n := by
+  obtain ⟨bs⟩ := data
+  subst hi
+  simp only [ByteArray.uget, ByteArray.get!]
+  rw [getElem!_pos bs i.toNat (show i.toNat < bs.size from h)]
+  rfl
+
+/-- Byte `j` of `data` from `o`, read with `uget`. -/
+@[inline] def byteU (data : ByteArray) (o : USize) (j : Nat) (h : o.toNat + j < data.size)
+    (hs : o.toNat + j < USize.size) : UInt64 :=
+  (data.uget (o + USize.ofNat j) (by rw [toNat_add_ofNat o j hs]; exact h)).toUInt64
+
+theorem byteU_eq (data : ByteArray) (o : USize) (j : Nat) (h : o.toNat + j < data.size)
+    (hs : o.toNat + j < USize.size) : byteU data o j h hs = (data.get! (o.toNat + j)).toUInt64 := by
+  unfold byteU
+  rw [uget_eq_get! data _ (o.toNat + j) (toNat_add_ofNat o j hs)]
+
+/-- `word` at `o + j`, its bytes read with `uget`. -/
+@[inline] def wordU (data : ByteArray) (o : USize) (j : Nat) (h : o.toNat + j + 8 ≤ data.size)
+    (hs : o.toNat + j + 8 ≤ USize.size) : UInt64 :=
+  let b := fun (m : Nat) (_ : m < 8) => byteU data o (j + m) (by omega) (by omega)
+  (((((((((0 : UInt64) <<< 8 ||| b 0 (by decide)) <<< 8 ||| b 1 (by decide)) <<< 8 ||| b 2 (by decide)) <<< 8 |||
+    b 3 (by decide)) <<< 8 ||| b 4 (by decide)) <<< 8 ||| b 5 (by decide)) <<< 8 ||| b 6 (by decide)) <<< 8 |||
+    b 7 (by decide))
+
+theorem wordU_eq (data : ByteArray) (o : USize) (j : Nat) (h : o.toNat + j + 8 ≤ data.size)
+    (hs : o.toNat + j + 8 ≤ USize.size) : wordU data o j h hs = word data (o.toNat + j) := by
+  unfold wordU word
+  simp only [byteU_eq, Nat.add_assoc]
+
+/-- `compress`, the block's words read with `uget` when it lies in `data` and its offsets fit a `USize`. -/
+def compressFast (h : Array UInt64) (data : ByteArray) (off : Nat) : Array UInt64 :=
+  let o := off.toUSize
+  if hb : o.toNat = off ∧ off + 128 ≤ data.size ∧ (off + 128).toUSize.toNat = off + 128 then
+    have := USize.toNat_lt_size (off + 128).toUSize
+    compressW h
+    (wordU data o (8 * 0) (by omega) (by omega))
+    (wordU data o (8 * 1) (by omega) (by omega))
+    (wordU data o (8 * 2) (by omega) (by omega))
+    (wordU data o (8 * 3) (by omega) (by omega))
+    (wordU data o (8 * 4) (by omega) (by omega))
+    (wordU data o (8 * 5) (by omega) (by omega))
+    (wordU data o (8 * 6) (by omega) (by omega))
+    (wordU data o (8 * 7) (by omega) (by omega))
+    (wordU data o (8 * 8) (by omega) (by omega))
+    (wordU data o (8 * 9) (by omega) (by omega))
+    (wordU data o (8 * 10) (by omega) (by omega))
+    (wordU data o (8 * 11) (by omega) (by omega))
+    (wordU data o (8 * 12) (by omega) (by omega))
+    (wordU data o (8 * 13) (by omega) (by omega))
+    (wordU data o (8 * 14) (by omega) (by omega))
+    (wordU data o (8 * 15) (by omega) (by omega))
+  else compress h data off
+
+/-- Compiled code runs `compressFast`; the kernel and every proof see `compress`. `@[csimp]` rewrites only code compiled
+after it, so `hash` is compiled again below it (`hash_eq_fast`). -/
+@[csimp] theorem compress_eq_fast : @compress = @compressFast := by
+  funext h data off
+  unfold compressFast
+  dsimp only
+  split
+  · rename_i hb
+    rw [compress_eq_W]
+    simp only [wordU_eq, hb.1]
+  · rfl
+
+/-- `hash`, compiled below `compress_eq_fast`. -/
+def hashFast (msg : ByteArray) : Digest := Id.run do
+  let len := msg.size
+  let mut data := msg.push 0x80
+  for _ in [0:(112 + 128 - data.size % 128) % 128] do data := data.push 0
+  let bits := len * 8
+  for i in [0:16] do
+    data := data.push ((bits >>> (8 * (15 - i))) % 256).toUInt8
+  let mut h := iv
+  for blk in [0:data.size / 128] do
+    h := compress h data (128 * blk)
+  -- the state's eight words, big-endian: 64 bytes whatever the loops computed (`Sha512.hash_size`)
+  return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
+
+/-- Compiled code runs `hashFast`, which runs `compressFast`; the kernel and every proof see `hash`. -/
+@[csimp] theorem hash_eq_fast : @hash = @hashFast := rfl
+
 end Sha512
 
 namespace Blake3
