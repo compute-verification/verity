@@ -155,7 +155,7 @@ theorem partitionsOk_sound {P : Partition} {C : Prog} (hP : partitionsOk P C = t
     | none => simp [hcl] at this
     | some w =>
       rw [hcl] at this
-      exact ⟨w, by simp [hcl], of_decide_eq_true this⟩
+      exact ⟨w, by simp, of_decide_eq_true this⟩
 
 theorem oneStageOk_sound {ns : List ℕ} {o : OneStage} (h : oneStageOk ns o = true) : o.WellFormed ns := by
   cases o <;> simp_all [oneStageOk, OneStage.WellFormed]
@@ -200,7 +200,7 @@ theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeplo
     obtain ⟨s, spec, sts⟩ := p
     simp only [hs, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hz
     obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := hz
-    exact ⟨s, spec, sts, by simp [hs], h1, h2, h3, fun st hst => by
+    exact ⟨s, spec, sts, by simp, h1, h2, h3, fun st hst => by
       obtain ⟨⟨⟨⟨a, b⟩, c⟩, d⟩, e⟩ := h4 st hst
       exact ⟨a, b, c, d, e⟩⟩
 
@@ -277,7 +277,7 @@ theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
       · rename_i hc
         cases hd
         rw [Bool.and_eq_true] at hc
-        exact ⟨l, ok_of_toOption hl, by simp [hr], rfl, hc.1, hc.2⟩
+        exact ⟨l, ok_of_toOption hl, by simp, rfl, hc.1, hc.2⟩
       · cases hd
 
 /-- **The statement round 2 checks is in scope**: it parses, its partition and design evaluate, and so the two-stage

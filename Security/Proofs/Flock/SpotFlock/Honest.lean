@@ -324,7 +324,8 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
     induction t with
     | zero =>
       intro _
-      refine ⟨[(m₀, b₀), (m₁, b₁), (m₂, [])], [m₀, m₁, m₂], ⟨[(m₀, .msg b₀), (m₁, .msg b₁), (m₂, .msg [])], [], [], .rej⟩,
+      refine ⟨[(m₀, b₀), (m₁, b₁), (m₂, [])], [m₀, m₁, m₂],
+        ⟨[(m₀, .msg b₀), (m₁, .msg b₁), (m₂, .msg [])], [], [], .rej⟩,
         rfl, rfl, rfl, fun s hs => absurd hs (Nat.not_lt_zero s), fun rest => ?_⟩
       rw [show off h 0 - 3 + rest = rest by rw [show off h 0 = 3 from rfl]; omega]
     | succ t ih =>
