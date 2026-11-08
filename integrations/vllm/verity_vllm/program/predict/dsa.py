@@ -10,9 +10,11 @@ A request after a history of C positions (`build.build_program`'s C: a prefix-ca
 reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
 which open its layers' logs (`_Model.open_with`) before its first call.
 The compiled execution is the target's compilation "breakable": vLLM serves `glm_moe_dsa` without torch.compile
-(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs, so every selection a launch
-reads is at the step's padded tokens (`targets.graph_tokens`) but the indexer's and the sparse MLA's, graph breaks that read the real
-batch (`_sparse_indexer_and_attn`), and the logits', computed outside the graphs.
+(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs: a uniform decode step's FULL
+graph, another step's PIECEWISE graphs (`targets.graph_launch`).  Both pad alike, so every selection a launch reads is at the step's
+padded tokens (`targets.graph_tokens`), and no all-reduce route, cuBLAS route or MoE tile reads the mode (d9105ea80's communicators
+choose by bytes alone), but the indexer's and the sparse MLA's: graph breaks on the real batch under PIECEWISE graphs, captured at the
+padded batch under a FULL graph, its padding rows without keys (`_Launch.keys`); and the logits', computed outside the graphs.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -24,11 +26,9 @@ the decode kernels; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNV
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
-select: `common.select_token`).  A row of more than INDEX_TOPK keys reads its top-k order as the `vllm_dsa` rule does: the
-Waksman settings that route it are a field of the Program's `run` input (`run_field`, read by `_Model.run`), DsaWaksmanOrder routes
-the row indices through them, DsaTopKLongRow's bit that the order is the logits' top-TOPK set in ascending index order (the one
-order the logits fix, which `VERITY_DSA_TOPK=canonical` serves) is one of the Program's checks
-(`_Model.checks`), and both kinds of layer read the TOPK rows DsaWaksmanRows routes at those settings.  A fact outside it raises
+select: `common.select_token`).  A row of more than INDEX_TOPK keys selects its top-k as the `vllm_dsa` rule does, in the circuit:
+DsaTopKMask marks the logits' top-TOPK set, DsaButterflySettings sets the concentrator for it, and both kinds of layer read the TOPK
+rows DsaButterflyRows routes at those settings, in ascending index order (the row `VERITY_DSA_TOPK=canonical` serves).  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -40,7 +40,7 @@ from typing import Mapping, Sequence
 
 from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
-from verity.ml.circuits.types import Array, Type, Value
+from verity.ml.circuits.types import Type, Value
 
 from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, graph_capture_sizes, kind,
                      select_token, served_class)
@@ -52,7 +52,9 @@ def _refuse(fact: str):
 
 
 def run_field(layer: int, pos: int) -> str:
-    """The `run` field of layer `layer`'s top-k settings for the row at position `pos` (`vllm_dsa`'s `<layer>/topk_switches[t=P]`)."""
+    """The `run` field `<layer>/topk_switches[t=P]` of layer `layer`'s Waksman settings for the row at position `pos`, as the
+    Commit's run values (`commit.committer.run_values`) and the replay (`check.replay`) name it.  No Program declares a `run` input:
+    a row past INDEX_TOPK computes its selection (`_Model.attention`)."""
     return f"model.layers.{layer}.self_attn.attn/topk_switches[t={pos}]"
 
 
@@ -60,8 +62,8 @@ _RUN_FIELD = re.compile(r"model\.layers\.(\d+)\.self_attn\.attn/topk_switches\[t
 
 
 def run_bits(layout: dict, orders: Mapping[tuple[int, int], Sequence[int]], topk: int, pos0: int = 0) -> list[int]:
-    """The leaves of a Program's `run` input (one bit each, in its record's field order) from what the served run did: `layout` is
-    the Program's `BuildResult.run`, and `orders[(layer, pos)]` the `topk` (INDEX_TOPK) key indices that layer `layer`'s indexer
+    """The leaves of a `run` input (one bit each, in its record's field order) from what the served run did: `layout` is its
+    `RunInputs.layout`, and `orders[(layer, pos)]` the `topk` (INDEX_TOPK) key indices that layer `layer`'s indexer
     wrote for the row at position `pos`, in the order it wrote them (its `topk_indices_buffer` row), each index one of the row's
     own keys, the wrapper's rows pos0..pos (a request's pos0 is 0). Each field is the Waksman settings that route those keys to
     that order (`dsa_topk.waksman_settings`)."""
@@ -117,7 +119,10 @@ class Net:
         if phi.execution == "compiled" and self.tp.compilation != "breakable":
             facts.append(f"a compiled execution by {self.tp.compilation!r} (vLLM serves glm_moe_dsa's eager kernels from breakable CUDA "
                          f"graphs, the target's compilation 'breakable')")
-        self.capture_sizes = graph_capture_sizes(phi)
+        self.capture_sizes, self.max_num_seqs = graph_capture_sizes(phi), (phi.engine or {}).get("max_num_seqs")
+        if self.capture_sizes and type(self.max_num_seqs) is not int:
+            facts.append(f"breakable CUDA graphs at engine arg max_num_seqs {self.max_num_seqs!r}, not a stated count (a uniform decode "
+                         f"step replays a FULL graph up to it)")
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
@@ -150,7 +155,7 @@ class Net:
         self.long_rows = None if env is None or all(env.get(k) == v for k, v in DSA_TOPK_ENV.items()) else (
             f"a row past INDEX_TOPK ({int(C['INDEX_TOPK'])}) keys under an engine whose environment sets "
             f"{', '.join(f'{k}={env.get(k)!r}' for k in DSA_TOPK_ENV)}, not {DSA_TOPK_ENV} (the kernels' own order past INDEX_TOPK, "
-            f"which DsaTopKLongRow refuses; serve it under the DSA top-k plugin's canonical row)")
+            f"not the ascending row DsaButterflyRows reads; serve it under the DSA top-k plugin's canonical row)")
         ff = FF.facts_for(hf)
         self.model_class, self.NL = served_class(ff["vllm_class"]), int(C["NL"])
         self.nodes_per_row_layer = 26 + int(C["NH"]) + 4 * int(C["TOPK"])
@@ -177,14 +182,20 @@ class Net:
     def leaves(self) -> list[tuple[str, Type]]:
         return [(name, t) for name, t, _ in self._leaves]
 
-    def reads_run(self, keys: int) -> bool:
-        """Whether a row of up to `keys` keys reads its top-k order from the `run` input: a row past INDEX_TOPK."""
+    def past_topk(self, keys: int) -> bool:
+        """Whether a row of up to `keys` keys selects its top-k from its logits: a row past INDEX_TOPK."""
         return int(keys) > int(self.C["INDEX_TOPK"])
 
     def peer_shapes(self, r: int) -> list[tuple[int, int]]:
         """A pass of r rows: the embedding's all-reduce, each layer's attention and MLP all-reduces, the sampled row's logits gather."""
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
+
+    def edge_groups(self, keys: int) -> tuple[str, ...]:
+        """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
+        carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
+        top-k selection keeps every key and reads no logit: `past_topk`)."""
+        return ("prefix", *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
 
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
@@ -201,16 +212,16 @@ class Net:
 class _Model:
     """The forward over one call's rows, emitted into `B`, each layer's latent and index-K histories carried across calls as
     `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`).
-    `run` is the Program's `run` input (`registration.RunInputs`) where the decoder reads one, `checks` the bits the Program
-    returns after its samples, and `topk` the last indexer layer's settings by position, which an IndexShare layer reads."""
+    `topk` is the last indexer layer's selection by position, which an IndexShare layer reads."""
 
     reads_launch = True
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
-        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch(capture_sizes=net.capture_sizes)
+        self.net, self.C, self.B, self.peers = net, net.C, B, peers
+        self.launch = _Launch(capture_sizes=net.capture_sizes, max_num_seqs=net.max_num_seqs or 0)
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
         self.logs: dict[int, dict[str, PartLog]] = {}
-        self.run, self.checks, self.topk = None, [], {}
+        self.topk: dict = {}
         self._kinds: dict[tuple, object] = {}
         C = self.C
         self.H, self.EPS, self.G = int(C["H"]), float(C["EPS"]), int(C["FP8_BLOCK"])
@@ -238,6 +249,16 @@ class _Model:
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
                 self.logs[L]["iks"].append(iks[n][j].refs)
+
+    def edge_rows(self, groups: tuple[str, ...]) -> list[Coll]:
+        """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
+        `Net.prefix_params` lays out a history of them: wires and no gates."""
+        E, net = len(self.logs[0]["latent"]), self.net
+        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
+        if any(len(log) != E for g in groups for log in logs[g]):
+            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
+        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in groups]
 
     def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
@@ -354,7 +375,6 @@ class _Model:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY
-        from verity.ml.definitions.registry.dsa_topk import waksman_switches
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -365,8 +385,6 @@ class _Model:
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
         logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
-        if keys[-1] > TOPK and self.run is None:
-            _refuse(f"a row of {keys[-1]} keys > TOPK {TOPK} without a `run` input to read its top-k order from")
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
         wkp = self.cublas(x, w("wk_w")) if indexer else None
@@ -403,12 +421,8 @@ class _Model:
                     continue
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)))
-                order = self.call(self.k("dsa_waksman_order", N=n, TOPK=TOPK), sw.refs)
-                self.checks.append((self.call(self.k("dsa_topk_long_row", N=n, TOPK=TOPK), logits.refs, order.refs),
-                                    f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "
-                                    f"settings route is the top-{TOPK} set of {n} logits in ascending index order (DsaTopKLongRow_v1)"))
-                self.topk[pos0 + i] = sw
+                mask = self.call(self.k("dsa_topk_mask", N=n, TOPK=TOPK), logits.refs)
+                self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=n, TOPK=TOPK), mask.refs)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
@@ -418,7 +432,7 @@ class _Model:
         for i, n in enumerate(keys):
             kv = logs["latent"].cut(n)
             if n > TOPK:
-                kv = self.call(self.k("dsa_waksman_rows", N=n, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
+                kv = self.call(self.k("dsa_butterfly_rows", N=n, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
@@ -443,7 +457,10 @@ class _Model:
         C, tp, M = self.C, self.net.tp, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
-        w = lambda f: self.w[(L, f)]  # noqa: E731
+
+        def w(f: str):
+            return self.w[(L, f)]
+
         if VH != D:
             _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
         if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):

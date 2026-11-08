@@ -63,7 +63,7 @@ then carries two more events on its coins:
   `ReceiptGame.CaseA`: every round's split is that of duo, fx1, li or duo and fx1 checkpoint units.
 * `ReceiptGame.CubeOperands R`: every round samples uniform cube bits after fixing its share and a degree-2 operand
   error, nonzero when the round is deficient (`luck_quad`'s rounds).
-* `ReceiptGame.WrongWords`: every round's share lies in `[0, 1]` and is positive only where a deficient word is wrong
+* `ReceiptGame.IncorrectWords`: every round's share lies in `[0, 1]` and is positive only where a deficient word is wrong
   (the keyed rounds' share).
 -/
 
@@ -330,9 +330,9 @@ def CubeOperands (R : Type) [CommRing R] {α V : Type} [Fintype V] [DecidableEq 
 /-- **A share of wrong words** (the keyed rounds' share): at every round, whatever the past, its share lies in `[0, 1]`
 and is positive only where some deficient word is wrong. For keyed rounds, a deficient word is a round whose state the
 run did not compute, and FOLD-OPT prices a right one at the round's work, so the share counts the wrong ones. -/
-def WrongWords : {n : ℕ} → ReceiptGame Ω n → Prop
+def IncorrectWords : {n : ℕ} → ReceiptGame Ω n → Prop
   | _, .done => True
-  | _, .round d _ right _ next => (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧ (∀ ω, 0 < d ω → ¬right ω) ∧ ∀ ω, (next ω).WrongWords
+  | _, .round d _ right _ next => (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧ (∀ ω, 0 < d ω → ¬right ω) ∧ ∀ ω, (next ω).IncorrectWords
 
 end ReceiptGame
 

@@ -1,7 +1,8 @@
-"""The SPOT post's Figures 1-3 for one model, from its cards: each figure's JSON (every plotted series beside every
+"""The SPOT post's Figures 1-4 for one model, from its cards: each figure's JSON (every plotted series beside every
 card it read) and its PNG and SVG into one directory, which `research data put --kind spot-figure/v1 --tree DIR`
 publishes for the console.  Figure 1 is the total-cost form (`total_cost.py`, `figure1.json`), its skipped-work figure
 beside it; the bounds against proof overhead (`figure1.py`, `figure1_overhead.json`) and their appendix come with it.
+Figure 4 (`figure4.py`) reads Figure 1's configurations and serve taxes.
 
     uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N] [--request workload]
         [--workers N] [--no-lean]
@@ -16,6 +17,7 @@ from pathlib import Path
 import figure1
 import figure2
 import figure3
+import figure4
 import total_cost
 from cards import MODELS
 
@@ -58,6 +60,9 @@ def main(argv=None) -> None:
     three = figure3.run(args.model)
     write(three, args.out / "figure3.json")
     figure3.render(three, args.out)
+    four = figure4.run(args.model, one)
+    write(four, args.out / "figure4.json")
+    figure4.render(four, args.out)
     print(args.out)
 
 

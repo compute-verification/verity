@@ -14,10 +14,10 @@ name, and audited with the proofs: no record pins it.
   proof soundness at `δ_ZK` and the Definitions' pinning, each relation on its path's coins, and E1(c) (`RightFixed`);
   `BindingOfFork`: binding's failure squared is at most its fork form's, two runs off one commitment opening it
   differently, so `δ_bind = √δ_fork`.
-* `DrawnRightOff`: a sampled window's sampled proof blocks are right at their committed values outside `S·(δ_bind + δ_ks)`, from
-  binding at every position's cut, joint proof soundness and pinning; `ProofsSoundOfDrawn`: (I8) at `n_π = 1`,
+* `SampledRightOff`: a sampled window's sampled proof blocks are right at their committed values outside `S·(δ_bind + δ_ks)`, from
+  binding at every position's cut, joint proof soundness and pinning; `ProofsSoundOfSampled`: (I8) at `n_π = 1`,
   `δ_ZK = δ_ks`, from it, the share covering every unit that isn't good (a unit whose late cone the run computed, sampled
-  at each unit's coin), and E1(c) per unit with its fold clause (`UnitFixed`); `DrawnBindingOfFork`: a round's binding
+  at each unit's coin), and E1(c) per unit with its fold clause (`UnitFixed`); `SampledBindingOfFork`: a round's binding
   failure squared is at most `|L|²` times the fork form at its positions' cuts, `L` the positions its units read, so
   `δ_bind = |L|·√δ_fork`.
 * `FloorCreditD3`: Corollary D3, the credit at the floor, with every term `≥ 0` and `T(H) = γ_♭·T_cred`.
@@ -133,34 +133,34 @@ def BindingOfFork : Prop :=
 
 /-- **A sampled window's sampled proof blocks are right, outside binding and soundness failures.** Over `S` rounds whose coins
 are `m` coins before the samples and the live sampling coin with the proofs' coins, the sample naming `s` units a round, each
-proved alone with its own noise's generation, its slots' values committed per position (`DrawnLayer`): if in every round
+proved alone with its own noise's generation, its slots' values committed per position (`SampledLayer`): if in every round
 binding fails with probability at most `δ_bind` (`BindingAt`; `MovedIn`: an accepted proof of a sampled proof block opens a slot
 to a value other than its position's committed value, bound before the coin that follows its commitment, so a value
 opened one way for the unit that wrote it and another way for a unit that reads it is a binding failure), the proofs
 are sound jointly over each round's samples at `δ_ks` (`JointSound`) and each unit's relation pins its rightness
 (`Pins`), then outside an event of probability at most `S·(δ_bind + δ_ks)` every sampled proof block whose proof is accepted is
 right at its committed values. It reads no play: what it gives is the sampled proof blocks' rightness, which the ideal game's
-check reads (`ProofsSoundOfDrawn`) and a composition's folded credit takes as its premise. -/
-def DrawnRightOff : Prop :=
+check reads (`ProofsSoundOfSampled`) and a composition's folded credit takes as its premise. -/
+def SampledRightOff : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)
-    (pf : DrawnLayer C B S m s J Q Pos V) (δbind δks : ℝ),
+    (pf : SampledLayer C B S m s J Q Pos V) (δbind δks : ℝ),
     pf.BindingAt δbind → pf.JointSound δks → pf.Pins →
     ∃ E : Paths (Paths C m × B) S → Prop, prob E ≤ S * (δbind + δks) ∧
       ∀ x, ¬ E x → ∀ w i, pf.accepted x w i → pf.right x w (pf.drawnAt x w i) (pf.view x w (pf.drawnAt x w i))
 
-/-- **(I8) for a sampled window, from its sampled proof blocks' proofs.** Over `DrawnRightOff`'s window whose positions' writers
+/-- **(I8) for a sampled window, from its sampled proof blocks' proofs.** Over `SampledRightOff`'s window whose positions' writers
 read them (`WriterReads`, checked for each layer), with a play that is its sampled proof blocks' proofs' (`Of`: accepted only if
 every sampled proof block's proof is, and accepted by the ideal game when every sampled proof block is right at its committed values),
 unit weights `wt` summing to the window's words `S·N_w`, the run's modes `mode` and folded words `folded`, a share
 that counts every unit that isn't good (`Covers`: good is the run having computed the unit's late cone; a property of
 the share's definition, proved for each game; a share charging each unit the run didn't pay for its late cone's weight
 `coneWt` has it) and E1(c) per unit with its fold clause (`UnitFixed`): if binding, joint soundness and pinning hold as
-in `DrawnRightOff`, then (I8) `ProofsSound` holds at `n_π = 1`, `δ_ZK = δ_ks`, `S·(δ_bind + δ_ks)`. Its event is
-`DrawnRightOff`'s, so an unsampled unit's values enter only through the ideal game and the share. -/
-def ProofsSoundOfDrawn : Prop :=
+in `SampledRightOff`, then (I8) `ProofsSound` holds at `n_π = 1`, `δ_ZK = δ_ks`, `S·(δ_bind + δ_ks)`. Its event is
+`SampledRightOff`'s, so an unsampled unit's values enter only through the ideal game and the share. -/
+def ProofsSoundOfSampled : Prop :=
   ∀ {K T L U J Q Pos V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype J] [Nonempty V]
     (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ) (P : Play (Paths C m × B) S K T L U)
-    (pf : DrawnLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
+    (pf : SampledLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
     (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) (Nw δbind δks : ℝ),
     0 < S → ∑ w, ∑ j, wt w j = S * Nw → pf.WriterReads → pf.Of P → pf.BindingAt δbind →
     pf.JointSound δks → pf.Pins → pf.Covers P mode wt Nw → UnitFixed P pf mode wt folded →
@@ -175,9 +175,9 @@ Each opening is an accepted proof's, and a proof exists only for a sampled proof
 `δ_bind = |L|·√δ_fork`; `δ_fork` itself is two steps a finder that runs the window twice from the cut takes: extracting
 both proofs' openings with Flock's knowledge extractor, at `ε_ks` a proof, and then two openings of one committed
 frame-v3-sha512 root at one position to different hm96 rows, a SHA-512 collision along their paths (`cr/sha-512`). -/
-def DrawnBindingOfFork : Prop :=
+def SampledBindingOfFork : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)
-    (pf : DrawnLayer C B S m s J Q Pos V) (w : Fin S) (L : Finset Pos), (∀ j k, pf.pos w j k ∈ L) →
+    (pf : SampledLayer C B S m s J Q Pos V) (w : Fin S) (L : Finset Pos), (∀ j k, pf.pos w j k ∈ L) →
     prob (fun x => pf.MovedIn x w) ^ 2 ≤
       (L.card : ℝ) ^ 2 *
         prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2)

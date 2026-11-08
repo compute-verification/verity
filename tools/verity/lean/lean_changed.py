@@ -61,8 +61,10 @@ reports under `requirer-<path>/` beside PKG's. Of the facts documents, only PKG'
 (`check_argv`: `check.py --facts named`, which `trusted_size.py --run` reads); its provers' and the requirers' are not
 kept. A change to what another package's pinned guarantees read
 (`Security/Properties`' when `Security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
-failure is a record difference (`settles`) is audited again with `--update` (and `--moved`), so one run regenerates every
-lock the change moved; one failing for any other reason fails. The exit status is the first failure's. A slot tree
+failure is a record difference (`settles`) is audited again with `--update`, so one run regenerates every lock the change
+moved; one failing for any other reason fails. With `--moved` too, each requirer's first audit takes `--update --moved`
+(`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
+failures are judged. The exit status is the first failure's. A slot tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
 dependencies there drops the rest first.
 
@@ -133,6 +135,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -759,9 +762,19 @@ def blob_reader(blobs: dict[str, str], repo: Path | None = None):
     return lambda f: data.get(blobs[f]) if f in blobs else None
 
 
-def matching(name: str, pkgs: list[str]) -> list[str]:
-    """The packages of ``pkgs`` that ``name`` names: the one it is, else each it is a part of."""
-    return [p for p in pkgs if p == name.rstrip("/")] or [p for p in pkgs if name in p]
+def lake_name(pkg: Path) -> str | None:
+    """The Lake package name ``pkg``'s `lakefile.toml` declares (its top-level ``name``), or None without one."""
+    f = pkg / "lakefile.toml"
+    return tomllib.loads(f.read_text()).get("name") if f.is_file() else None
+
+
+def matching(name: str, pkgs: list[str], root: Path | None = None) -> list[str]:
+    """The packages of ``pkgs`` that ``name`` names: the one it is, else (with ``root``, the checkout they are in) the one
+    whose Lake package is named ``name``, else each it is a part of."""
+    name = name.rstrip("/")
+    return ([p for p in pkgs if p == name]
+            or ([p for p in pkgs if lake_name(root / p) == name] if root is not None else [])
+            or [p for p in pkgs if name in p])
 
 
 def keys_at(names: list[str], commit: str = "HEAD", repo: Path | None = None) -> dict[str, str]:
@@ -1084,7 +1097,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     if files is None:
         return refused("the tree's files cannot be listed")
     pkgs = LA.packages(files)
-    match = matching(name, pkgs)
+    match = matching(name, pkgs, ROOT)
     if len(match) != 1:
         return refused(f"{name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
     pkg = match[0]
@@ -1141,10 +1154,10 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                 write_links(tree, links)
                 mark(tree, package=p, phase="check")
-                mine_out, up, since = reports(out, pkg, p), update and p == pkg, time.time()
+                mine_out, up, since = reports(out, pkg, p), first_update(p, pkg, update, moved, log), time.time()
                 got = subprocess.run(check_argv(tree / p, mine_out, up, moved, p == pkg, artifacts=artifacts.store), cwd=tree,
                                      env=env, pass_fds=fds).returncode
-                if again := regenerates(p, pkg, got, update, mine_out, tree / p, log):
+                if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
                     up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, p == pkg, artifacts=artifacts.store),
                                                    cwd=tree, env=env, pass_fds=fds).returncode
                 if AUDIT.killed(got):
@@ -1207,9 +1220,9 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     rc, ok, passes = 0, [], {}
     for p in todo:
         t0 = time.monotonic()
-        mine_out, up = reports(out, pkg, p), update and p == pkg
+        mine_out, up = reports(out, pkg, p), first_update(p, pkg, update, moved, log)
         got = subprocess.run(check_argv(ROOT / p, mine_out, up, moved, p == pkg, dev=True), cwd=ROOT).returncode
-        if again := regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
+        if again := not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
             up, got = True, subprocess.run(check_argv(ROOT / p, mine_out, True, moved, p == pkg, dev=True), cwd=ROOT).returncode
         label(mine_out)
         log(f"lean-records: {p}: check.py --dev-cache{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s "
@@ -1483,6 +1496,19 @@ def settles(out: Path, at: Path) -> bool:
     return len(bad) == 1 and bool(bad[0].get("regenerated")) and Path(str(bad[0].get("package"))).resolve() == at.resolve()
 
 
+def first_update(p: str, pkg: str, update: bool, moved: Path | None, log=print) -> bool:
+    """Whether check.py's first audit of ``p`` takes `--update`: PKG's in an `--update` run, and with ``moved`` a requirer's
+    too, so that it takes `--moved`, which check.py reads only with `--update`. A rename that a requirer's records read (a
+    statement, or the hash an `unwitnessed` entry holds) fails its audit without `--moved` on a code no record difference
+    settles (`witnesses.unwitnessed-changed`), so the requirer would fail on that first audit and never reach
+    `regenerates`."""
+    if p == pkg or not update or moved is None:
+        return update and p == pkg
+    log(f"lean-records: {p} requires {pkg}: check.py --update --moved on it from its first audit, so the moves resolve "
+        f"the names its records read before its failures are judged")
+    return True
+
+
 def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, log=print) -> bool:
     """Whether requirer ``p``, which check.py just audited at ``at`` (exit ``got``, its reports under ``out``), is audited again
     with `--update`: in an `--update` run, when it failed only because what its guarantees read changed (`settles`), so one
@@ -1606,7 +1632,8 @@ def main(argv: list[str]) -> int:
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL}, "
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
     ap.add_argument("--update", action="store_true", help="with --records: check.py --update")
-    ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --moved FILE")
+    ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --update --moved FILE on PKG "
+                    "and, from their first audit, on its requirers")
     ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
     ap.add_argument("--dev-cache", action="store_true", help="with --records: take the check.py --dev-cache path even where "
                     "a build slot is granted (its tree's dependencies are fetched cold, say)")

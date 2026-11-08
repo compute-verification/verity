@@ -5,6 +5,7 @@ family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``
 an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots)."""
 from __future__ import annotations
 
+import importlib
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -20,9 +21,10 @@ COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8L
           "ScaledMmFp8BlockSharedScale_v1": {"E": 1}}
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
-#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, and torch's multimem
-#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks)
-COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE"}
+#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, torch's multimem
+#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, and `b1.ResidualAdd`'s residual add)
+COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
+        "ResidualAdd_v1": "N"}
 #: the row Definitions that are batches along axes of their statics, which some parameters carry and the others don't: a row of
 #: extents a_0, a_1, .. along its axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) (row-major)
 #: reading element i_k along axis k of each parameter that carries it and the others whole, and returning the output's element
@@ -74,6 +76,10 @@ SPLIT_OF = {f: row for row, fs in SPLITS.items() for f in fs}
 #: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
 #: id of the token's router row cut into slots (``SLOTS``)
 EXPERTS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8BlockGemm_v3", "MoeExpertFp8GemmW_v1": "MoeExpertFp8BlockGemmW_v3"}
+#: the fused blocks of the per-expert cut, by the row family: a block GEMM whose body reads its block's rows from the expert's
+#: table itself (`boolean_fp8_moe.MoeExpertFp8ReadGemm(W)_v1`, its ``READ`` the read of a block's rows), so a block's rows are
+#: never a member's output; its G-block's scale row is still a read of its own
+FUSED = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8ReadGemm_v1", "MoeExpertFp8GemmW_v1": "MoeExpertFp8ReadGemmW_v1"}
 #: the router row Definitions cut into slots for the per-expert cut, by the row family: the same words, one output a slot's weight
 #: or id (`moe.MoeRouterSigmoidBiasSlots`)
 SLOTS = {"MoeRouterSigmoidBias_v1": "MoeRouterSigmoidBiasSlots_v1"}
@@ -81,7 +87,8 @@ SLOTS = {"MoeRouterSigmoidBias_v1": "MoeRouterSigmoidBiasSlots_v1"}
 READ = "EmbeddingRead_v1"
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8", READ: "read",
-           **dict.fromkeys(EXPERTS.values(), "expert"), **dict.fromkeys(SLOTS.values(), "slots")}
+           **dict.fromkeys(EXPERTS.values(), "expert"), **dict.fromkeys(FUSED.values(), "fused"),
+           **dict.fromkeys(SLOTS.values(), "slots")}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
 PACKED = frozenset((8, 16, 32, 64))
 
@@ -92,11 +99,12 @@ class Template:
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
-    family, ``"expert"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, table reads and router slots
-    (``EXPERTS``, ``READ``, ``SLOTS``); else ``"row"``).
+    family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, fused blocks, table
+    reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``); else ``"row"``).
     ``packed``: a row, coordinate, slice, part, K-chunk, split, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
-    bytes. A read's ports are bits (its key, digests, salt and path), committed as Flock's bit rows."""
+    bytes. A read's and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
+    committed as Flock's bit rows."""
     id: str
     fn: Any
     word: str
@@ -123,6 +131,8 @@ def template(t: str) -> Template:
     from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
+    importlib.import_module("verity.ml.commitments.gates.embedding")
     errors = BB.load()
     try:
         fn = specialization(spec_base(t), spec_statics(t))
@@ -153,7 +163,7 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
               else LAYOUTS.get(spec_base(word), "row"))
     packed = None
-    if widths != {16} and layout not in ("s8", "read"):
+    if widths != {16} and layout not in ("s8", "read", "fused"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
         if layout not in ("row", "coord", "slice", "part", "kchunk", "split", "expert", "slots") or any(
@@ -176,11 +186,12 @@ def cols_refused(word: str) -> str | None:
     if spec_base(word) != "AllReduceMultimem_v1":
         return None
     from verity.ml.definitions.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
     S = spec_statics(word)
     try:
         world = TA.ranks(S["WORLD"])
-        trees = TA.multimem_trees(S["TREES"], world)
+        trees = TN.multimem_trees(S["TREES"], world)
         TA.multimem_owners(world, int(S["SIZE"]))
     except (KeyError, TypeError, ValueError) as e:
         return f"{word}: {type(e).__name__}: {e}"
@@ -216,9 +227,10 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a
     ``SPLITS`` row family in NS > 1 splits, its part at each split's key count k (`split_keys`; NH times the splits of k keys)
     and its combine over the non-empty splits (NH), for an ``EXPERTS`` row family, at each block of n rows (`block_rows`), its
-    block family at N = n and the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}`` (N / n of each), and the read of
-    a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of them), and for a ``SLOTS`` row family, its slots
-    family at its statics (one).  None when the spec does not bind to exactly its own descriptor id."""
+    block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
+    them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of
+    them), and for a ``SLOTS`` row family, its slots family at its statics (one).  None when the spec does not bind to exactly
+    its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -277,11 +289,31 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             for n in block_rows(N, G):
                 if (c := _bind(spec, fam, N=n)) is not None:
                     hit += ((descriptor_id(c), N // n), (descriptor_id(read(E, n * K // 2)), N // n))
+                if (c := fused_block(spec, n)) is not None:
+                    hit += ((descriptor_id(c), N // n),)
             hit += ((descriptor_id(read(E, 2 * K // G)), -(-N // G)),)
         if (fam := SLOTS.get(spec_base(spec))) is not None and (c := _bind(spec, fam)) is not None:
             hit += ((descriptor_id(c), 1),)
     _UNITS[spec] = hit
     return hit
+
+
+def fused_block(spec: str, n: int) -> Any:
+    """The ``FUSED`` block of an ``EXPERTS`` row ``spec`` over n of its rows: its family at the row's statics, N = n, its ``READ``
+    the read of a block's rows (``EmbeddingRead_v1{V=E, H=n K / 2}``) and its ``DOT`` the Boolean version of the row's.  None when
+    it does not bind."""
+    from verity.ml.circuits.codec import lookup_primitive
+    from verity.ml.circuits.defs import REGISTRY
+    from verity.ml.commitments.gates.embedding import read
+    from verity.ml.definitions import boolean as BB
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    S = spec_statics(spec)
+    try:
+        dot = BB.boolean_version(lookup_primitive(REGISTRY, S["DOT"]))
+    except (KeyError, TypeError, BB.NoBooleanVersion):
+        return None
+    return _bind(spec, FUSED[spec_base(spec)], READ=read(int(S["E"]), n * int(S["K"]) // 2), N=n, DOT=dot)
 
 
 def block_rows(N: int, G: int) -> list[int]:

@@ -58,8 +58,8 @@ recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 on the challenger's keyed coin tree (`--coins tree`, or `--zk`): it reads coins only from a challenger's log. Every other version it sets up and checks, so the
 agreement corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once
 every check has passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session
-on seed coins (without `--coins tree`) is refused the same way. A typed version, or one before hm96
-rows, is refused earlier, for its form (`ProvedScope.check`).
+on seed coins (without `--coins tree`) is refused the same way. A typed version, or one before hiding
+commitments, is refused earlier, for its form (`ProvedScope.check`).
 
 ## Guarantees and premises
 
@@ -72,10 +72,11 @@ rows, is refused earlier, for its form (`ProvedScope.check`).
   entries of `Security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
   `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `Security/Proofs/Flock/`.
-- The named premises: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`UniformRandomBytes`, `HmRowComputes`),
-  `Assumptions/Custody.lean` (`RecordCustodyExec`, `RecordCustodyExecH`), and the rest of the lock's `assumptions` list
-  (`Model.Statement.LinkLayout`, `SHA512CRStrict`, the `Zk.RecordCustodyZK*` family); what each means:
-  `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
+- The named assumptions, the lock's `assumptions`: `Security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
+  `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other assumptions, the lock's `open` and
+  `domain` entries: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`HmRowComputes`), `Assumptions/Custody.lean`
+  (`RecordCustodyExec`, `RecordCustodyExecH`) and `Assumptions/Zk.lean` (the `Zk.RecordCustodyZK*` family). What each
+  means: `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
 - The trusted code: the running binary also trusts the toolchain's compiler and runtime and the C compiler and library
   under them, and no declaration swaps a definition for code no proof reads (`verity/core/service/flock/README.md`,
   enforced by `verity/ml/flock/tests/test_lean_verifier.py`). The agreement corpus's coverage rule is
@@ -89,7 +90,8 @@ rows, is refused earlier, for its form (`ProvedScope.check`).
 ~~~text
 cd verity/core/service/flock && lake build    # .lake/build/bin/flock-verify and the other executables
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
-    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR...
+    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] --session DIR...
+flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
 ~~~
@@ -104,8 +106,9 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
 - `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
   and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
   passed; no other value is taken. A `--zk` session's coins are always its coin tree.
-- A plain proof file is taken in one form: by default the deployed prover's, with the `zk_level0 = None` byte after the
-  pair; `--upstream-plain` takes upstream's builds' form.
+- `verify` takes a plain proof file in one form, the deployed prover's, with the `zk_level0 = None` byte after the pair.
+  Under `--upstream-plain`, upstream's builds' form, which no soundness theorem covers, it refuses every session before
+  it reads a file; only `agree` reads that form (Agreement with upstream, below).
 
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
@@ -124,7 +127,7 @@ part read one set of the other shared inputs, in the compiled verifier's form, a
 compiled verifier's parts).
 
 It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the challenger's interactive-run record
-(`verity/rec-run/v1`, written by `sampled_proofs.challenger.RunRecord`). The record stages the rows file and `rec_shared`
+(`verity/rec-run/v1`, written by `spot.challenger.RunRecord`). The record stages the rows file and `rec_shared`
 before any session, logs every session the challenger opened for the run's parts (a retry's too) and is closed after the
 last; it holds no coin, since each part's coins are flipped fresh at its own Hello and never committed before the run. The
 live challenger writes it: its operator stages it before any session and closes it after the last, and Flock's
@@ -147,13 +150,14 @@ sessions a part, it doesn't compose the statement.
 
 `ID` names a statement version (`Flock.Tags`): `verity/flock-circuit`, the default, whose rows are `hm96-sha512/row/v1`
 leaves and whose outputs are all hidden rows; `verity/flock-circuit/types`, the typed statement;
-`verity/flock-circuit/tmpl`, the templated statement, parsed and refused; `verity/flock-circuit+plain-leaves`, a recursive
+`verity/flock-circuit/tmpl`, the templated statement, taken at one `--zk` table in the form `ProvedScope.scopeOkT` checks
+on its template; `verity/flock-circuit+plain-leaves`, a recursive
 session's inner statement, checked without `--zk`; `+seed-injection` on any of them, as the prover's selftest build pins
 it, which `verify` checks and then refuses. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to `verity/flock-netlist/v1`) are still
 parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form. Those with
 keyed-BLAKE3 row leaves and SHA-256 trees (`@19c7269a`, `@fd02e847`, `@631567f7` and `verity/flock-netlist/v1`) need
 `--comp`, the BLAKE3 compression circuit, and the verifier and `hash-test` carry BLAKE3 for them alone. The pure-block,
-IR-frame (v2 and v3), IR-sampling, IR-block and vllm-block statements are legacy: their checks evaluate part of the
+The `IR-frame` (v2 and v3), `IR-sampling`, `IR-block` and `vllm-block` statements are legacy: their checks evaluate part of the
 computation and make intermediate values public, so the Lean verifier sets none of them up and refuses every session of
 one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.legacyWhy`). `Flock.Test.Legacy` pins
 that, and that every statement before hm96-sha512 rows is refused once every check has passed.
@@ -173,7 +177,11 @@ partition and program checks); `net-check`, `region-words`, `typed-expand`, `typ
 (`flock-verifier-vectors/v1`) that has an upstream binary (`upstream.json`, built by `upstream-build.sh` from
 `ci-bundle.sh`'s bundle, run by `ci-pod.sh`), it fetches the set's inputs from the store, regenerates its proof mutants
 (`redigest.py`), retained-bytes sessions and seeded fuzz cases (`fuzz.py`), adds its forgeries, and runs `agree.py`, which
-compares the Lean verifier's verdict with upstream's (`Server::from_record`, then `finish`) on every session:
+compares the Lean verifier with upstream (`Server::from_record`, then `finish`) on every session. Upstream's builds write
+upstream's plain files, which `verify` refuses, so there the Lean side is `flock-verify agree`, after upstream: it runs
+`verify`'s checks and refusals and prints one `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}` line a
+session, whether the checks pass exactly when upstream accepted, and never an acceptance. `--zk` and live sessions are
+the deployed form, and `verify`'s verdicts:
 
 ~~~text
 research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean flock-verify \
@@ -182,7 +190,8 @@ python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --
     [--expect mutants.json]... [--jobs J] --out DIR --sessions DIR...
 ~~~
 
-`agree.py` writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict,
+`agree.py` writes `agreement.tsv`, `upstream-verdicts.json` (`agree`'s `F`) and `result.json`, whose `accepted` counts
+only `verify`'s acceptances, and exits 1 if the verifiers disagree, or miss an expected verdict,
 on any session. `--jobs J` deals each public file's sessions into chunks run by `J` process pairs, with the same
 output. A disagreement is resolved against the paper and the Lean, never by copying upstream. Each version's
 vectors patch (`netlist-vectors.patch`, `circuit-vectors*.patch`) applies to the prover commit it names and adds
@@ -193,7 +202,8 @@ patches applied (`cargo build --release -p flock-live --bin <binary>`). The stat
 
 The Lean verifier is deliberately stricter than upstream in these places, each refused by Lean and accepted by upstream.
 A set marked `lean_refuses`, `lean_refuses_drawn` or `lean_refuses_drawless` compares a session refused for its form,
-sampling design or missing sample alone as accepted.
+sampling design or missing sample alone as accepted, and every set so compares a session of upstream's plain files that
+`agree` refuses for that form alone (`UPSTREAM_PLAIN`).
 
 | id | Lean refuses |
 |---|---|
@@ -207,7 +217,7 @@ sampling design or missing sample alone as accepted.
 | D8, D9 | no unit in a VU; no VU in a block, or a count that isn't a power of two |
 | D10 | an `identifier` other than the verifier's own `--identifier F` |
 | D11 | an output group past its slot |
-| D12 | a statement form, sampling design or session the soundness proof doesn't cover (`Flock.ProvedScope`), and a `--zk` mask slot below 2^13 bits or met by Δ or a region |
+| D12 | a statement form, sampling design or session the soundness proof doesn't cover (`Flock.ProvedScope`), upstream's plain proof files (`--upstream-plain`), and a `--zk` mask slot below 2^13 bits or met by Δ or a region |
 | D13 | a `rec-open` unit whose name, bits, rows or net aren't the verifier's |
 | D14 | a sample that doesn't take in full each unit reading a round's commitment |
 | D15 | an inner statement's registered description that isn't the registration |
@@ -217,7 +227,7 @@ sampling design or missing sample alone as accepted.
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on NCI's mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `NciCheck`'s mistyped descriptors |
 
 Where the paper is silent, the verifier follows upstream:
 

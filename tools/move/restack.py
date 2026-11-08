@@ -40,6 +40,8 @@ every branch is clean or up to date, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -67,6 +69,9 @@ LOCK = "lean-audit.json"
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
+#: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
+#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
+WORKTREES_LOCK = "research-worktrees.lock"
 
 
 class ScriptFailed(Exception):
@@ -80,10 +85,26 @@ def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tupl
     return p
 
 
+@contextlib.contextmanager
+def worktrees_locked(cwd: str | None):
+    """Hold the clone's worktree lock alone. `git worktree add` writes a placeholder HEAD before the real one, and a fetch in
+    the same clone reads every worktree's HEAD: one that read the placeholder fails (`bad object worktrees/restack-…/HEAD`)."""
+    with open(os.path.join(cwd or ".", out("rev-parse", "--git-common-dir", cwd=cwd), WORKTREES_LOCK), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def add_worktree(wt: str, commit: str, cwd: str | None) -> None:
+    """Check ``commit`` out at ``wt`` as a scratch worktree: registered under the clone's worktree lock with no checkout, so
+    its HEAD is the real one before the lock goes, and filled after."""
+    with worktrees_locked(cwd):
+        git("worktree", "add", "--no-checkout", "--detach", "--quiet", wt, commit, cwd=cwd)
+    git("reset", "--hard", "--quiet", cwd=wt)
+
+
 def drop_worktree(wt: str, cwd: str | None) -> None:
-    """Remove scratch worktree ``wt`` and have the clone forget it. Its result is already read, so nothing here fails a
-    restack: what `git worktree remove` can't delete (a file the script's tools still write, a read-only one) goes after it."""
-    git("worktree", "remove", "--force", "--force", wt, cwd=cwd, ok=tuple(range(256)))
+    """Delete scratch worktree ``wt``, then have the clone forget it under its worktree lock. Its result is already read, so
+    nothing here fails a restack: a file the script's tools left read-only goes too."""
 
     def writable(func, path, _exc):
         # Only the worktree's own directories change mode: a file in it may be a symlink or a hard link to one outside,
@@ -100,7 +121,8 @@ def drop_worktree(wt: str, cwd: str | None) -> None:
 
     if os.path.lexists(wt):
         shutil.rmtree(wt, **({"onexc": writable} if sys.version_info >= (3, 12) else {"onerror": writable}))
-    git("worktree", "prune", cwd=cwd, ok=tuple(range(256)))
+    with worktrees_locked(cwd):
+        git("worktree", "prune", cwd=cwd, ok=tuple(range(256)))
 
 
 def out(*args: str, cwd: str | None = None) -> str:
@@ -196,7 +218,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
     with tempfile.TemporaryDirectory(prefix="restack-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
-        git("worktree", "add", "--detach", "--quiet", wt, merged, cwd=cwd)
+        add_worktree(wt, merged, cwd)
         try:
             if restored:
                 # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
@@ -225,7 +247,7 @@ def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, l
         return None, [], True
     with tempfile.TemporaryDirectory(prefix="restack-pins-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))
-        git("worktree", "add", "--detach", "--quiet", wt, result, cwd=cwd)
+        add_worktree(wt, result, cwd)
         try:
             p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]

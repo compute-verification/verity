@@ -62,17 +62,13 @@
 #     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
-#     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
-#     tree has it and this node holds the memory challenger's key (~/.ssh/vy-auditor2-pous). That piece runs the bandwidth
-#     session over the store it holds and writes its answer where the bandwidth piece's goes, which BANDWIDTH_CMD collects:
-#     by default, once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window
-#     "$2" --out "$3"'; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the tree has
-#     it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its registered store (BW_STORE's
-#     setup.json). Set empty, a command is MISSING.
+#     own `gpu-lease`, the serve's being over. Under PRODUCT=onsite, WIPE_CMD's, POUS_CMD's and BANDWIDTH_CMD's defaults
+#     come from `onsite_piece_commands` in the file ONSITE_PIECES names (a path from TREE, or absolute), sourced before
+#     the preflight, each kept where its variable is set; with ONSITE_PIECES unset there are none, and a file that isn't
+#     there is refused. The file also gives `served_composite.sh` onsite's own cases. Set empty, a command is MISSING.
 #     A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's
 #     further arguments, and its piece reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with
-#     WIPE_CMD set (by default 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it;
-#     empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT
+#     WIPE_CMD set (empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT
 #     (default 20m), with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and says its last
 #     line as WIPE. The record reads its pieces/wipe/answer.json and composes the wipe only when that answer accepts and
 #     pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or failed
@@ -185,8 +181,9 @@
 # `served_verdicts.sh defer WHY`, in TREE with D, K and OUT, makes step 6's deferral alone.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
-# The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
-# public records and every log, each in its public form.
+# The serve dir D (row dirs, advice, the window circuits' records) stays on the node, under KEEP_CMD where it is set (run as
+# `bash -c KEEP_CMD _ ROOT` in TREE, before anything is built: the node's retention of ROOT, SERVE_ROOT's default
+# /workspace/research/vllm-served-verdicts); $OUT keeps the public records and every log, each in its public form.
 set -uo pipefail
 if [ -n "${SETTINGS:-}" ]; then
   [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
@@ -227,22 +224,14 @@ H1_GATE=${H1_GATE-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@
 if [ -n "$H1_GATE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
-if [ "$PRODUCT" = onsite ]; then
-  # shellcheck disable=SC2016
-  [ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] \
-    && WIPE_CMD=${WIPE_CMD-'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'}
-  # shellcheck disable=SC2016
-  [ -f "$TREE/benchmarks/pous/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
-    && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
-  # shellcheck disable=SC2016
-  if [ -n "${POUS_CMD:-}" ]; then
-    BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'}
-  elif [ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
-    && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ]; then
-    BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
-  fi
+if [ -n "${ONSITE_PIECES:-}" ]; then
+  case $ONSITE_PIECES in /*) ;; *) ONSITE_PIECES=$TREE/$ONSITE_PIECES ;; esac
+  [ -f "$ONSITE_PIECES" ] || { echo "PREFLIGHT: ONSITE_PIECES=$ONSITE_PIECES is not a file" >&2; exit 3; }
+  # shellcheck source=/dev/null
+  . "$ONSITE_PIECES"
+  [ "$PRODUCT" != onsite ] || onsite_piece_commands
 fi
-export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT
+export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT ONSITE_PIECES
 PRED=${PRED:-$D/predicted}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
@@ -320,7 +309,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
 tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registration as REG
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
@@ -656,8 +645,9 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
     say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
         "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
-  local help f
-  help=$(cd "$TREE" && "$PY" benchmarks/network_traces/certifier_piece.py front --help 2>&1) \
+  local help f script
+  script=$(grep -oE "[^[:space:]\"']*certifier_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
+  help=$(cd "$TREE" && "$PY" "${script% front}" front --help 2>&1) \
     || { say "PREFLIGHT: this tree's certifier front doesn't start: $(echo "$help" | tail -1 | cut -c1-300)"; return 3; }
   for f in $(grep -oE -- '--[a-z][a-z0-9-]*' <<< "$CERTIFIER_FRONT" | sort -u); do
     grep -qE "(^|[^a-z0-9-])$f([^a-z0-9-]|$)" <<< "$help" \
@@ -804,9 +794,7 @@ if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, b
 fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
 (umask 077; mkdir -p "$D/private")
-KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
-{ "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
-  || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
+[ -z "${KEEP_CMD:-}" ] || (cd "$TREE" && bash -c "$KEEP_CMD" _ "$ROOT") 2>&1 | tail -2
 # H1's every window open runs its Lean verifier of record; without lake each is refused and serving goes on uncredited
 if [ -z "$FOLLOW" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
@@ -820,7 +808,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
+  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6

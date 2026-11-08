@@ -88,7 +88,7 @@ theorem TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono := b
 (`Accounting.Guarantees.TileUnpredictablePearlCOfTTOut`). -/
 theorem TileUnpredictablePearlCOfTTOut : Accounting.Guarantees.TileUnpredictablePearlCOfTTOut := by
   classical
-  intro Q R S _ _ _ _ dv salt P credit D γ₀ ε hc hTT U hU T hT q hq A hA u hu
+  intro Q R S _ _ _ _ dv salt P credit D g₀ ε hc hTT U hU T hT q hq A hA u hu
   refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT U hU T hT q hq A hA)
   have hcorrect : ∀ v ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2), ∃ c : Pouw.PearlC.Commit,
       Pouw.PearlC.actOf (A.transcript U x.1 x.2) v = c.act ∧ Pouw.PearlC.Correct P U x.1 x.2 v c := by

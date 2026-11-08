@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": [
   "Proofs.Core",
   "Proofs.Core.Rec",
@@ -11,7 +12,7 @@
   "Proofs.Hash",
   "Proofs.Accounting",
   "Proofs.Accounting.Bandwidth",
-  "Proofs.SampledProofs",
+  "Proofs.Spot",
   "Proofs.WeightSecurity",
   "Proofs.Properties.Pouw",
   "Proofs.Properties.Pouw.Check",
@@ -38,13 +39,13 @@
   "Proofs.Properties.NetworkCertifier.Records",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkScan",
-  "Proofs.Properties.SampledProofs",
-  "Proofs.Properties.SampledProofs.Halt",
-  "Proofs.Properties.SampledProofs.Bits",
-  "Proofs.Properties.SampledProofs.Interval",
-  "Proofs.Properties.SampledProofs.FactorUpper",
-  "Proofs.Properties.SampledProofs.TwoStageCheck",
-  "Proofs.Properties.SampledProofs.PlanCheck",
+  "Proofs.Properties.Spot",
+  "Proofs.Properties.Spot.Halt",
+  "Proofs.Properties.Spot.Bits",
+  "Proofs.Properties.Spot.Interval",
+  "Proofs.Properties.Spot.FactorUpper",
+  "Proofs.Properties.Spot.TwoStageCheck",
+  "Proofs.Properties.Spot.PlanCheck",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",
@@ -139,7 +140,8 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Verity.Subprotocols",
-  "Proofs.Properties.Verity.Coupling"
+  "Proofs.Properties.Verity.Coupling",
+  "Proofs.Properties.Flock.Nets"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -161,6 +163,21 @@
     "{out}"
    ]
   }
+ },
+ "escapes": {
+  "Fwd.closeSide": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.constTainted": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.ctorVal?": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.decideCond": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.discharge": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.evalVal": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.exprTainted": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.rewriteIn": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.ruleAt": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.step": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.summarize": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
  },
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {
@@ -190,6 +207,10 @@
   "Proofs.Flock.Claims.ZK.FinishLigEnd": {
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "51a8fe6abc030463b04e7e518d95090f7f763ed3fcd7b43bb3d6a7a021ee89eb"
+  },
+  "Proofs.Flock.SessionLoop.Concrete.Fwd": {
+   "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given, in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
+   "digest": "e26b6b3ab8e52fcec443b72aa1820736fa41235402acc124ae30ab5fc7dacd1b"
   },
   "Proofs.Flock.Soundness.Refine.OkLe": {
    "why": "ok_le_walk, the tactic (an elab, over okLeStep) that walks two runs of one executable at once by their heads, closing each step with the module's okLe_bind/ite/dite/let/jp/forIn/throw lemmas (Refine/Lookups.lean's proofs that more lookup tables change nothing). It reads no files and does no IO, and the kernel replays every proof it builds.",
@@ -416,6 +437,6 @@
   "mathlib": "4b2e37339cdaa30627ba7f4ee6e6e866f14180ea06b549d7e9a386ea89e52601",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
-  "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+  "toolchain": "991c674713bc156a098a0d0d60c59c4cb2300eea3d5091e2df56b14c94adc716"
  }
 }

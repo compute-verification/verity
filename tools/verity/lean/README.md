@@ -17,10 +17,9 @@ the same way, a `module`'s from the private part holding its proofs. The only pa
 after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
 allows one; a test's data generator is the repository's code and runs outside it.
 
-A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too), and only those read
-back from the store (`check.py --facts`): a check run keeps each audit's and its provers' (`status_export.py --facts`), a
-records run only PKG's own (`trusted_size.py --run`). `Facts.lean` writes its document in a temporary directory outside the
-run's files.
+A run keeps the facts only gzipped (`facts.json.gz`), and only those read back from the store (`check.py --facts`): a
+check run keeps each audit's and its provers' (`status_export.py --facts`), a records run only PKG's own
+(`trusted_size.py --run`). `Facts.lean` writes its document in a temporary directory outside the run's files.
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
@@ -90,6 +89,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   definitions or properties tree imports one;
 - every `Prop` a guarantee takes is named, another listed guarantee's statement or a plain range (`inline_failures`;
   `shape.inline`, which only shrinks, excepts some, and its size is the `AUDIT` line's inline debt);
+- each deployed guarantee's gap is its `trust_gap` entry (`trust`, below);
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -159,11 +159,10 @@ unchecked), and imports the rest. By induction over the import DAG every declara
 the kernel, with its imports present, under a key that covers them: cold, the whole closure goes through the kernel in
 one process, `leanchecker --fresh`'s check of every root at once; warm, nothing outside the package does, and a change to
 an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
-`Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
-`Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
-that two modules each declare (an equation lemma realized in both) once per module, taking a reused module's public
-part's axiom copy as Lean's import does (`subsumesInfo`), and requires the quotient's constants to be the ones the
-kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+`Security` reuses the Mathlib modules `Security/Proofs` checked. So that a module's verdict is a function of its key,
+`Replay.lean` pins what the kernel loads: no constant from outside the module's imports, an equation lemma two modules
+realize checked once each, a reused public part's axiom copy taken as Lean's import does (`subsumesInfo`), and the
+quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
@@ -243,6 +242,10 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   record's, else that of it and every definition it reads in `meaning` and this repository's modules
   (`assumption_reads`). So a change to a premise or to what it reads fails under its own name,
   and the landing DM shows it; one no guarantee reads fails.
+- `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
+  {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
+  `trust_gap`: {deployed guarantee: its premises outside its trust} (`trust_gaps`), which only a person adds to and
+  `--update` drops from (`trust_failures`); the report prints each gap.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
@@ -316,15 +319,13 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
   in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
-  `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
-  under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
-  ending its line, else the `--` comments just above), and the build time of its module in the audit's own build.
+  `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats`, printed under its `AUDIT` line):
+  its file and line, its value, its reason (a `--` comment ending its line, else those just above), and its module's
+  build time in the audit's build.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). Each text holds the matchers and proofs Lean shares across a module in place, not by name, so
-  neither a file split nor a module-system port changes a hash. Records written with
-  `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its review saying "rehashed" where
-  the 32-bit hash still matches, which the landing DM leaves out.
+  neither a file split nor a module-system port changes a hash.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
 the replay pass it: only the records see it, and only a person can judge it. `--update` records the change and prints
@@ -333,11 +334,9 @@ reads, with the guarantees that read it and its source now (also in `review.txt`
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions,
 premises or type hash, a `reads` group, a premise's digest: what merging two PRs on `next`, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
-`regenerated` names that file; a missing record or name, an owner or any other failure writes none. Which failures those
-are is decided by code, not by text: every failure carries one (`check.py`'s `Failure`, such as `guarantees.signature` or
-`orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
-(`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
-`RECORD_DIFFERENCE`, so rewording a message changes nothing drive commits. The Lean check of a commit of `next` runs with
+`regenerated` names that file; a missing record or name, an owner or any other failure writes none. Code decides which
+failures those are, not text: each failure's code (`check.py`'s `Failure`) is in `report.json`'s `failure_codes`
+(`settled_codes`: what `--regenerate` settled), and the record differences are `RECORD_DIFFERENCE`'s. The Lean check of a commit of `next` runs with
 `--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
 drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
 
@@ -348,7 +347,7 @@ writes:
   listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
   none, which its warning asks the next PR for), due seven days from the run;
 - a guarantee the witnesses rule now holds to witnesses it lacks is listed under `unwitnessed` at its current hashes;
-- a stale entry is dropped, and a missing owner is set to the guarantees' owner, else the lock's `default_owner`.
+- a stale entry (a `trust_gap` premise too) is dropped, and a missing owner is set to the guarantees' owner, else the lock's `default_owner`.
 
 The run then judges the policy's checks again on that lock, so whatever else fails still fails: the build, the replay,
 an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass and a malformed lock. `lean_audit.py` also

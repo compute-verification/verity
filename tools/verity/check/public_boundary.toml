@@ -18,14 +18,16 @@ when_closed = ["tests"]
 spot = [
     "Security/Definitions/Claims/SamplingGeneric.lean",
     "Security/Proofs/Flock/SamplingGeneric*",
-    "verity/core/protocols/sampled_proofs",
-    "verity/core/service/sampled_proofs",
+    "verity/core/protocols/spot",
+    "verity/core/service/spot",
 ]
 # C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
 flock = [
     "verity/ml/flock",
     "verity/core/service/flock",
+    "Security/Proofs/Properties/Flock{,.lean}",
     "Security/*/Flock{,.lean}",
+    "Security/Definitions/Assumptions/Flock.lean",
 ]
 ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
@@ -34,6 +36,7 @@ pouw = [
     "verity/ml/protocols/pouw",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
+    "Security/Definitions/Assumptions/Pouw.lean",
 ]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [
@@ -50,11 +53,16 @@ shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/core/difftest",
     "tools/config",
-    "Security/Properties/SampledProofs/{Draw,Bits}.lean",
+    # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
+    # Accounting's B200 sheet, so it stays private)
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,tests/test_cards.py}",
+    # the vLLM endpoint's load generator, which the served run's requests come from
+    "examples/vllm/serve_load.py",
+    "Security/Properties/Spot/{Draw,Bits}.lean",
     "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
-    "Security/Properties/SampledProofs/Second.lean",
+    "Security/Properties/Spot/Second.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
@@ -68,6 +76,14 @@ benchmarks = [
 ]
 
 [private]
+# PoUW's tests and difftest vectors that run the clear audit (`benchmarks/pouw/clear`, a reference tool), H1's lanes
+# (`benchmarks/pouw/h1_lanes`) or the network certifier
+pouw_tests = [
+    "verity/core/protocols/pouw/tests/test_pouw_{audit,epoch_coins,pearl_c,pearl_c4,pearl_c_sm120,pearl_c_work,pearl_kw}.py",
+    "verity/core/protocols/pouw/tests/{epoch_coins_vectors,test_pouw_salt}.py",
+    "verity/core/protocols/pouw/lean/commit/tests/{difftest_vectors,test_pouw_commit_lean_difftest}.py",
+    "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
+]
 protocols = [
     "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
     "verity/ml/protocols/{pous,certifier}",
@@ -75,9 +91,33 @@ protocols = [
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
+    # vLLM's PoUB session tests run PoUB's verifier side in process
+    "integrations/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # vLLM's PoUS option test runs the memory challenger's party in process
+    "integrations/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
+    # PoUB's opening unit's test, which holds it to PoUB's Python verifier
+    "verity/ml/commitments/tests/test_block_check.py",
+]
+# vLLM's tests that read a private protocol (the network certifier, NCI, the bandwidth audit, PoUS)
+protocol_tests = [
+    "integrations/vllm/tests/pipeline/test_{advice,advice_commit,advice_windows,serve_advice,window_advice,memory_map}.py",
+    "integrations/vllm/tests/program/predict/test_{batch,block_counts,node_registration}.py",
+    "integrations/vllm/tests/program/test_io_shell.py",
+    "integrations/vllm/tests/commit/test_memory_map.py",
+    "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
+]
+# vLLM's adapter of PoUS, which `verity_vllm.protocols.adapter` loads by name and refuses as not on this tree where it
+# is absent
+adapters = [
+    "integrations/vllm/verity_vllm/protocols/pous.py",
+]
+# vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
+checks = [
+    "integrations/vllm/tools/migrate/superseded_quarantine.py",
+    "integrations/vllm/tests/{migrate/test_superseded_quarantine,program/test_superseded_kept}.py",
 ]
 team = [
     "infra",
@@ -117,7 +157,7 @@ from = "*"
 
 [[needed]]
 why = "the challenger and service code SPOT needs"
-paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{SampledProofs,Challenger}{,.lean}"]
+paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}"]
 from = ["spot"]
 
 [[needed]]
@@ -132,8 +172,8 @@ from = ["pouw"]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
 paths = [
-    "verity/core/protocols/{sampled_proofs,pouw}",
-    "verity/core/service/sampled_proofs",
+    "verity/core/protocols/{spot,pouw}",
+    "verity/core/service/spot",
     "Security/*/Pouw",
     "Security/Proofs/Properties/Pouw",
     "integrations/vllm",

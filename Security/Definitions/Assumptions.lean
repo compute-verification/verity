@@ -1,20 +1,24 @@
 module
 
+public import Definitions.Assumptions.Flock
 public import Definitions.Hash
 public import Definitions.Core
 public import Definitions.Accounting
 public import Definitions.Nci.Cut
 public import Definitions.Nci.Formalism
+public import Definitions.Assumptions.Pouw
 
 /-!
 # The named assumptions
 
-The one module a named assumption is declared in (`assumptions_module` in `lean-audit.json`): the few `Prop`s the
-guarantees take without proof because they are real assumptions (a hash's collision resistance, the auditor's devices),
-each taken as a hypothesis, never an `axiom`. Every other premise a guarantee takes is a domain hypothesis, part of what
-the guarantee says, which the lock lists under `domain` with a one-line `why`, or open: the lock lists it under `open`
-with the issue that discharges it and its due date. An area moves an assumption of its own here once it is one of the
-real ones.
+The module a named assumption is declared in, with the modules under it (`assumptions_module` in `lean-audit.json`): the
+few `Prop`s the guarantees take without proof because they are real assumptions (a hash's collision resistance, the
+auditor's devices), each taken as a hypothesis, never an `axiom`. Every other premise a guarantee takes is a domain
+hypothesis, part of what the guarantee says, which the lock lists under `domain` with a one-line `why`, or open: the
+lock lists it under `open` with the issue that discharges it and its due date. An area moves an assumption of its own
+here once it is one of the real ones, into a module under this one that reads nothing private when the area's readers
+mustn't import the rest, since this one reads Nci: Flock's are `Definitions.Assumptions.Flock` and PoUW's hashless cost
+models `Definitions.Assumptions.Pouw`, both of which this module re-exports.
 -/
 
 @[expose] public section
@@ -128,18 +132,3 @@ def EfficiencyFloor (methods : Set Run) (M : Verity.Decoder (List Bool)) (c : �
     ENNReal.ofReal p * honestCost methods ℓ ℓstar ≤ (r.d.D.computed.card : ℝ≥0∞)
 
 end Nci.Formalism.Assumptions
-
-/-!
-## PoUW's hashless cost models
-
-A PoUW guarantee bounds its event together with no SHA-512 collision among the inputs the run hashed (`Pouw.Breaks`).
-A model whose programs hash nothing never breaks, and the guarantees that drop the break from their event take it.
--/
-
-namespace Pouw
-
-/-- The model's programs hash nothing, so no run breaks. -/
-def CostModel.Hashless {Q R S : Type} (CM : CostModel Q R S) : Prop :=
-  ∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), CM.hashed prog H U act σ s = []
-
-end Pouw

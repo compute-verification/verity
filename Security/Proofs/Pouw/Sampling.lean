@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
+public import Definitions.Pouw.Assumptions.GameStatements
 public import Proofs.Pouw.Prob
 public import Mathlib.Data.Fintype.BigOperators
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset

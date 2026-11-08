@@ -18,4 +18,8 @@ def _cuda_rmsnorm_roots() -> list[Any]:
         bind(C.RMSNormFusedCudaVector8, N=6144, EPS=1e-5, BLOCK=256),
         bind(C.RMSNormFusedCudaVector8, N=7168, EPS=1e-6, BLOCK=1024),
         bind(C.RMSNormFusedCudaVector8, N=7168, EPS=1e-6, BLOCK=256),
+        bind(C.RMSNormFusedCudaVector8V3, N=6144, EPS=1e-5, BLOCK=1024),
+        bind(C.RMSNormFusedCudaVector8V3, N=6144, EPS=1e-5, BLOCK=256),
+        bind(C.RMSNormFusedCudaVector8V3, N=7168, EPS=1e-6, BLOCK=1024),
+        bind(C.RMSNormFusedCudaVector8V3, N=7168, EPS=1e-6, BLOCK=256),
     ]

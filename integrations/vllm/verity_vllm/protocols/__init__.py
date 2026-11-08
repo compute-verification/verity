@@ -5,7 +5,7 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
-protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), never this package's.
+protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.spot`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:
@@ -65,7 +65,7 @@ __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Inst
            "traced_as"]
 
 #: protocol -> its adapter module in this package
-ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
+ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
@@ -222,7 +222,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             executors.setdefault(site, entry)
         if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
+                       f"SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")

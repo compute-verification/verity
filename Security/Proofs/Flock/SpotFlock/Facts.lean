@@ -4,7 +4,7 @@ public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
-# SPOT-Flock's deployed code: the facts its order gives
+# SPOT[Flock]'s two-stage code: the facts its order gives
 
 * `stepWith_fst_take`, `run_fst_take`: a run's prover messages through round `m` read only its coins before round `m`;
   the verifier's answer at round `m` may read round `m`'s coin, the prover's message there doesn't.
@@ -19,7 +19,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
   the design evaluates only where the replay layout's slots are its cells.
 * `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and the reference statement's
-  shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), where the reference statement is in scope.
+  shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statement is in scope (`Held.xS₀_ok`).
 -/
 
 @[expose] public section
@@ -27,7 +27,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
-open Properties.SampledProofs (slotPartition slotDesign)
+open Properties.Spot (slotPartition slotDesign)
 
 /-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
@@ -99,7 +99,7 @@ theorem iroots_fst (x : Msg) (v : Seen) (ρ : ℕ) :
   | [_] => rfl
   | _ :: _ :: _ => rfl
 
-/-- **Interior fixed** at SPOT-Flock's code (`Code.InteriorFixed`): fresh second-stage coins keep the interior roots a
+/-- **Interior fixed** at SPOT[Flock]'s code (`Code.InteriorFixed`): fresh second-stage coins keep the interior roots a
 run shows, since the prover states them at round 1, reading only round 0's coin. -/
 theorem interiorFixed (h : Held) (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
@@ -166,34 +166,18 @@ theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk
   exact ⟨topoOk_sound htopo, partitionsOk_sound hpart, of_decide_eq_true hnd, fun v hv => hrep v hv,
     ⟨hlen, fun p hp => oneStageOk_sound (hrules p hp)⟩, hklen, fun k hk' => of_decide_eq_true (hk k hk')⟩
 
-theorem stratumIdx_le : ∀ (ns : List ℕ) (v : ℕ), stratumIdx ns v ≤ ns.length
-  | [], _ => by simp [stratumIdx]
-  | n :: ns, v => by
-    unfold stratumIdx
-    split
-    · omega
-    · have := stratumIdx_le ns (v - n)
-      simp only [List.length_cons]
-      omega
-
-/-- Past the strata, a cell is empty. -/
-theorem cell_eq_empty {Pt Pρ : Partition} {ρ t : ℕ} (ht : Pt.strata.length < t) : cell Pt Pρ ρ t = ∅ := by
-  refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
-  have hvt := (mem_filter.1 hv).2.2
-  have := stratumIdx_le (Pt.strata.map List.length) v
-  rw [List.length_map] at this
-  unfold Partition.stratumOf at hvt
-  omega
-
-theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : SampledProofs.Slots.Layout} {d : Design.Two}
-    (hc : cellsOk g Pt l d = true) : ∀ ρ b, l.blocks[ρ]? = some b →
-      (b.unit = some ρ ∧ Set.InjOn (g.blockOf ρ) (Set.Iio g.n) ∧ ∃ t₀ < Pt.strata.length, d.k.getD t₀ 0 = g.k ∧
-          ∀ t, cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅) ∨
-        (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
-  intro ρ b hb
-  have hρ : ρ < l.blocks.size := (Array.getElem?_eq_some_iff.1 hb).1
+theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : Spot.Slots.Layout} {d : Design.Two}
+    (hc : cellsOk g Pt l d = true) : g.ns.size = Pt.strata.length ∧
+      (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧ ∀ ρ b, l.blocks[ρ]? = some b →
+        (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+            cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
+          (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
   unfold cellsOk at hc
+  rw [Bool.and_eq_true, Bool.and_eq_true, beq_iff_eq, List.all_eq_true] at hc
+  obtain ⟨⟨hT, hk⟩, hc⟩ := hc
   rw [List.all_eq_true] at hc
+  refine ⟨hT, fun t ht => by simpa using hk t (List.mem_range.2 ht), fun ρ b hb => ?_⟩
+  have hρ : ρ < l.blocks.size := (Array.getElem?_eq_some_iff.1 hb).1
   have h1 := hc ρ (List.mem_range.2 hρ)
   simp only [hb] at h1
   cases hu : b.unit with
@@ -205,16 +189,10 @@ theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : SampledProofs.Slots.Lay
     · exact absurd hvρ hn
     · exact ha
   | some u =>
-    simp only [hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.any_eq_true, List.all_eq_true,
-      List.mem_range] at h1
-    obtain ⟨⟨rfl, hnd⟩, t₀, ht₀, hk, hcell⟩ := h1
-    refine Or.inl ⟨by simp [hu], ?_, t₀, ht₀, hk, fun t => ?_⟩
-    · intro a ha a' ha' he
-      exact List.inj_on_of_nodup_map hnd (List.mem_range.2 ha) (List.mem_range.2 ha') he
-    · rcases Nat.lt_or_ge t (Pt.strata.length + 1) with ht | ht
-      · exact hcell t ht
-      · rw [if_neg (by omega)]
-        exact cell_eq_empty (by omega)
+    simp only [hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] at h1
+    obtain ⟨rfl, hcells⟩ := h1
+    refine Or.inl ⟨by simp [hu], fun t ht => ⟨fun a ha a' ha' he => ?_, (hcells t ht).2⟩⟩
+    exact List.inj_on_of_nodup_map (hcells t ht).1 (List.mem_range.2 ha) (List.mem_range.2 ha') he
 
 theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧
     0 < sts.size ∧ sts.size ≤ 200 ∧ spec.points ≤ 2 ∧
@@ -285,9 +263,9 @@ theorem parse_prog {x : Msg} {s : AuditStatement} (hs : parse h x = some s) : s.
   | some st => rw [hd] at hs; cases hs; rfl
 
 theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s = some Pt) :
-    ∃ lb, SampledProofs.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ Pt = slotPartition lb := by
+    ∃ lb, Spot.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ Pt = slotPartition lb := by
   unfold partition at hP
-  cases hlb : (SampledProofs.Slots.layout h.reg.first.program h.blockQuery).toOption with
+  cases hlb : (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
   | none => simp [hlb] at hP
   | some lb =>
     rw [hlb] at hP
@@ -295,15 +273,15 @@ theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s =
     exact ⟨lb, ok_of_toOption hlb, rfl⟩
 
 theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    ∃ l lb, SampledProofs.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧
-      SampledProofs.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ replayDesign h = some d.replay ∧
+    ∃ l lb, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧
+      Spot.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ replayDesign h = some d.replay ∧
       d = ⟨slotPartition l, d.replay, h.k⟩ ∧ scopeOk h.prog (slotPartition lb) d = true ∧
       cellsOk h.reg (slotPartition lb) l d = true := by
   unfold two at hd
-  cases hl : (SampledProofs.Slots.layout h.reg.first.program h.reg.first.query).toOption with
+  cases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with
   | none => simp [hl] at hd
   | some l =>
-    cases hlb : (SampledProofs.Slots.layout h.reg.first.program h.blockQuery).toOption with
+    cases hlb : (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
     | none => simp [hl, hlb] at hd
     | some lb =>
       cases hr : replayDesign h with
@@ -335,7 +313,7 @@ theorem stmtOk_scope {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stm
     cases hlb'
     exact ⟨s, _, d, by simp [hs], hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
 
-/-- **Refuses at two stages** at SPOT-Flock's code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
+/-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
 (`stmtOk`) puts its statement in the two-stage scope. -/
 theorem refusesTwo (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P (code h).V x ω r).out = .acc →
@@ -352,16 +330,17 @@ theorem refusesTwo (H : Msg → Msg) :
     simp [OC.eval, hok] at hne
   | true => exact stmtOk_scope h hok
 
-/-- **The registration is the statement's two-stage design** at SPOT-Flock's code (`RegMatchesTwo`): the design
+/-- **The registration is the statement's two-stage design** at SPOT[Flock]'s code (`RegMatchesTwo`): the design
 evaluates only where the replay layout's slots are its cells. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
-      ∃ g l, reg h x = some g ∧ SampledProofs.Slots.layout g.first.program g.first.query = .ok l ∧
+      ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
         d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
+        g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
         ∀ ρ b, l.blocks[ρ]? = some b →
-          (b.unit = some ρ ∧ Set.InjOn (g.blockOf ρ) (Set.Iio g.n) ∧ ∃ t₀ < Pt.strata.length, d.k.getD t₀ 0 = g.k ∧
-            ∀ t, cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅) ∨
-          (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
+          (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+              cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
+            (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
   intro x s Pt d hx hP hd _
   have hx' : parse h x = some s := hx
   have hP' : partition h s = some Pt := hP
@@ -380,10 +359,10 @@ theorem regMatchesTwo :
 
 /-! ## The sessions are in scope -/
 
-/-- **Every session is in Flock's masked scope** at SPOT-Flock's code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
-unfolded): with at most the code's tables and the reference statement's shapes, where the reference statement is in
-scope. -/
-theorem sessionsIn (h₀ : zkOk h.xS₀ = true) :
+/-- **Every session is in Flock's masked scope** at SPOT[Flock]'s code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
+unfolded): with at most the code's tables and the reference statement's shapes, the reference statement being in
+scope (`Held.xS₀_ok`). -/
+theorem sessionsIn :
     ∀ x u v xS vS, (code h).session x u v = some (xS, vS) →
       (∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧ 0 < sts.size ∧ sts.size ≤ 200 ∧
         spec.points ≤ 2 ∧
@@ -398,11 +377,11 @@ theorem sessionsIn (h₀ : zkOk h.xS₀ = true) :
       · rename_i hs
         cases hv
         simp only [sessionOk, Bool.and_eq_true, beq_iff_eq] at hs
-        exact hs
+        exact hs.1.1
       · cases hv
-        exact ⟨h₀, rfl⟩
+        exact ⟨h.xS₀_ok, rfl⟩
     · cases hv
-      exact ⟨h₀, rfl⟩
+      exact ⟨h.xS₀_ok, rfl⟩
   obtain ⟨s, spec, sts, hset, h1, h2, h3, h4⟩ := zkOk_sound hok.1
   refine ⟨⟨s, spec, sts, hset, h1, h2, h3, h4, ?_⟩, hok.2⟩
   change sts.size ≤ (shapeOf h.xS₀).length

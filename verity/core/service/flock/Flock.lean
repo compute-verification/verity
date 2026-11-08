@@ -16,6 +16,7 @@ public import Flock.Hm96
 public import Flock.Ligerito
 public import Flock.Comp
 public import Flock.Tags
+public import Flock.Scan
 public import Flock.Net
 public import Flock.SplitNL
 public import Flock.Lookup
@@ -42,6 +43,7 @@ public import Flock.With.Log
 public import Flock.With.VerifyE
 public import Flock.Partition
 public import Flock.HmNets
+public import Flock.ReadNet.Frame
 public import Flock.RecOpen
 public import Flock.RecSparse
 public import Flock.RecSparseCmd
@@ -49,6 +51,11 @@ public import Flock.RecAlgebra
 public import Flock.RecResiduals
 public import Flock.RecOpening
 public import Flock.HmRow
+public import Flock.ReadNet.Sha
+public import Flock.ReadNet.RowSeg
+public import Flock.ReadNet.Leaf
+public import Flock.ReadNet.Select
+public import Flock.ReadNet.Template
 public import Flock.Desc
 public import Flock.RecVStar
 public import Flock.ProvedScope
@@ -60,7 +67,6 @@ public import Flock.RegKnown
 public import Flock.KnownRead
 public import Flock.JsonKeys
 public import Flock.RecordText
-public import Flock.Keccak
 public import Flock.RecCoins
 public import Flock.RecSetup
 public import Flock.RecBudget
@@ -109,6 +115,7 @@ public import Flock.With.SetupEq
 public import Flock.With.SimSetup
 public import Flock.RecOpeningCmd
 public import Flock.RecLinksCmd
+public import Flock.ReadTmplCmd
 public import Flock.RecRecord
 
 @[expose] public section

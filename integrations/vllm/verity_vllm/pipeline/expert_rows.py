@@ -1,6 +1,7 @@
-"""A MoE layer's expert GEMMs cut per expert in a served window (`serving_templates.EXPERTS`, ``SLOTS`` and ``READ``): a (token,
-slot) pair's GEMM over its expert's rows alone, a block of n rows at a time, each block's rows and its G-block's scale row read at
-the pair's expert from a table registered one expert a row, so no proof block holds another expert's weights.  Three layouts:
+"""A MoE layer's expert GEMMs cut per expert in a served window (`serving_templates.EXPERTS`, ``FUSED``, ``SLOTS`` and ``READ``):
+a (token, slot) pair's GEMM over its expert's rows alone, a block of n rows at a time, each block's rows and its G-block's scale
+row read at the pair's expert from a table registered one expert a row, so no proof block holds another expert's weights.  Four
+layouts:
 
 * ``slots``: a router row cut into slots (`moe.MoeRouterSigmoidBiasSlots`), a unit a token: ``in0`` its logits and ``in1`` its
   bias -> ``o<k>`` slot k's weight and ``o<TOPK + k>`` its expert id, the row's committed members;
@@ -8,7 +9,11 @@ the pair's expert from a table registered one expert a row, so no proof block ho
   read's key), ``in1`` and ``in2`` the table's root and domain id, ``in3``, ``in4`` and ``in5`` the table's row at the expert, its
   salt and its path -> ``o0`` the row and ``o1`` its verdict;
 * ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
-  ``ws``, the block's rows of the pair's expert and their G-block's scale row -> ``o0`` the pair's output words of those rows.
+  ``ws``, the block's rows of the pair's expert and their G-block's scale row -> ``o0`` the pair's output words of those rows;
+* ``fused``: a block GEMM that reads its block's rows itself (`boolean_fp8_moe.MoeExpertFp8ReadGemm(W)_v1`), a unit a block of a
+  pair: a read's six ports (``in0`` .. ``in5``), then ``xq``, ``sx``, (``g``,) and ``ws`` -> ``o0`` the pair's output words of
+  the block's rows and ``o1`` the read's verdict.  It stands for a block GEMM and the read of its block's rows; a pair row's
+  blocks are fused or apart, never both.
 
 A table is one block of a pair row's weight stack, one row an expert (`table_words`): row e of block b is expert e's rows
 [b n, b n + n) as their e4m3 bytes in u16 words (a read of rows, ``H = n K / 2``), or its scale row b's f32 words (a read of scale
@@ -25,9 +30,10 @@ table-major, ((l B + b) TOPK + k) T + t, so a table's declarations are three and
 GEMM's slot-major, ((l TOPK + k) T + t) B + b, so a pair's blocks are consecutive and a member's routed weight reads one router
 slot.  A member holds one table's units of one slot (a read) or one layer's of one slot (a block GEMM), at most its chunk cap
 (`cut`).  The wires (`wire`): a read's ``in0`` is its token's router unit's ``o<TOPK + k>``, a block GEMM's ``g`` its ``o<k>``,
-its ``w`` the ``o0`` of the read of its block's rows and its ``ws`` that of the read of its G-block's scale row.  A wire whose
-writer's template is not in the window is not made, so its port is free.  A block GEMM's output is held to the served words by
-the twin of the pair row (`fp8_moe_rows.moe_expert_fp8_block_row`)."""
+its ``w`` the ``o0`` of the read of its block's rows and its ``ws`` that of the read of its G-block's scale row.  A fused block's
+units go as a read's and are cut as a read's; it is wired as a read (its key) and as a block GEMM (``g`` and ``ws``), and it
+declares its table as a read does.  A wire whose writer's template is not in the window is not made, so its port is free.  A
+block GEMM's output is held to the served words by the twin of the pair row (`fp8_moe_rows.moe_expert_fp8_block_row`)."""
 from __future__ import annotations
 
 import bisect
@@ -51,9 +57,11 @@ from verity_vllm.records import expert_tables as XT
 Row = tuple[str, Any, dict, dict]
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 #: the per-expert cut's layouts (`serving_templates.template`)
-LAYOUTS = ("slots", "read", "expert")
+LAYOUTS = ("slots", "read", "expert", "fused")
 #: a pair row family's arguments: its expert id, its routed weight (None: unweighted), its weight stack and its scale stack
 ARGS = {"MoeExpertFp8Gemm_v1": (2, None, 3, 4), "MoeExpertFp8GemmW_v1": (2, 3, 4, 5)}
+#: the parts of the cut that read a table of a block's rows, the rest of a read's of scale rows
+ROWS = ("w", "fused")
 
 
 def table_param(label: str, words: int, block: int) -> str:
@@ -77,7 +85,8 @@ def table_words(stack: np.ndarray, what: str, E: int, N: int, K: int, G: int, n:
 
 def kind(t: str, statics: Mapping[str, Any]) -> tuple[str, int]:
     """Template ``t``'s part of the cut on a pair row of ``statics``: ``("slots", 1)``, ``("gemm", n)`` a block GEMM of n rows,
-    ``("w", n)`` the read of a block of n rows, or ``("ws", G)`` the read of a G-block's scale row."""
+    ``("fused", n)`` a fused block of n rows, ``("w", n)`` the read of a block of n rows, or ``("ws", G)`` the read of a
+    G-block's scale row."""
     from verity_vllm.query.program_view import spec_statics
 
     tp = template(t)
@@ -86,8 +95,8 @@ def kind(t: str, statics: Mapping[str, Any]) -> tuple[str, int]:
     if tp.layout == "slots":
         return "slots", 1
     S = spec_statics(tp.word)
-    if tp.layout == "expert":
-        return "gemm", int(S["N"])
+    if tp.layout in ("expert", "fused"):
+        return "gemm" if tp.layout == "expert" else "fused", int(S["N"])
     K, G, H = int(statics["K"]), int(statics["G"]), int(S["H"])
     if H == 2 * K // G:
         return "ws", G
@@ -179,6 +188,10 @@ class Plan:
                 if key not in self.pair:
                     op, k, j = _route(x)
                     self.pair[key] = (self.layers.setdefault(op, len(self.layers)), k, (req[x[0]], j))
+        for (key, what), t in held.items():
+            if what == "fused" and (other := held.get((key, "gemm")) or held.get((key, "w"))):
+                raise ValueError(f"row {key[1]} of request {key[0]} is cut both fused ({t}) and apart ({other}): a pair row's blocks "
+                                 "are fused blocks, or block GEMMs and the reads of their rows, never both")
         self.units: dict[str, list[tuple[int, int]]] = {}
         self.runs: dict[str, list[int]] = {}
         self.at: dict[str, dict[tuple[tuple[str, int], int], int]] = {}
@@ -206,20 +219,21 @@ class Plan:
         return x[0], int(x[2]["i"])
 
     def reads(self, t: str) -> tuple[str | None, str | None]:
-        """Block GEMM ``t``'s read templates in the window, of its blocks' rows and of their scale rows (None where absent)."""
+        """Block GEMM ``t``'s read templates in the window, of its blocks' rows and of their scale rows (None where absent); a
+        fused block reads only the latter."""
         n, fam = self.what[t][1], self.family[t]
         got = {w: [s for s, (what, m) in self.what.items() if self.family[s] == fam and what == w and (w == "ws" or m == n)]
                for w in ("w", "ws")}
         return got["w"][0] if got["w"] else None, got["ws"][0] if got["ws"] else None
 
     def tables(self, t: str) -> list[tuple[int, int, int, str, int]]:
-        """Read template ``t``'s tables in its units' order, each ``(first unit, units, block, parameter, leaves)``: one a layer
-        and block of its rows, its units every slot's and token's."""
+        """Read or fused template ``t``'s tables in its units' order, each ``(first unit, units, block, parameter, leaves)``: one
+        a layer and block of its rows, its units every slot's and token's."""
         rs, (what, n) = self.of[t], self.what[t]
         S = rs[0][3]["statics"]
         K, G, E = int(S["K"]), int(S["G"]), int(S["E"])
-        H = n * K // 2 if what == "w" else 2 * K // G
-        arg = ARGS[self.family[t]][2 if what == "w" else 3]
+        H = n * K // 2 if what in ROWS else 2 * K // G
+        arg = ARGS[self.family[t]][2 if what in ROWS else 3]
         labels: dict[int, str] = {}
         out: list[tuple[int, int, int, str, int]] = []
         for u, (p, b) in enumerate(self.units[t]):
@@ -265,8 +279,8 @@ def _port(t: str, name: str) -> str:
 
 def wire(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
     """``ms`` (`cut`'s) with each read's key wired to its token's router unit's slot id, and each block GEMM's routed weight to its
-    slot weight and its ``w`` and ``ws`` to the reads of its block's rows and scale row (module docstring); a wire whose writer's
-    template is not in the window is not made."""
+    slot weight and its ``w`` and ``ws`` to the reads of its block's rows and scale row; a fused block's key, routed weight and
+    ``ws`` as theirs (module docstring).  A wire whose writer's template is not in the window is not made."""
     from verity_vllm.query.program_view import spec_statics
 
     base = _bases(ms)
@@ -286,23 +300,23 @@ def wire(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
                 raise ValueError(f"{t}: row {gone[0][1]} of request {gone[0][0]} is routed by a row outside {plan.slots}'s units: "
                                  "a window cuts a token's router row and its pair rows together")
             routers = tuple(base[plan.slots] + plan.router[(key[0], plan.pair[key][2][1])] for key in keys)
-            if what in ("w", "ws"):
+            if what in ("w", "ws", "fused"):
                 wired.append(("in0", f"o{topk + k}", routers))
-            elif ARGS[plan.family[t]][1] is not None:
+            if what in ("gemm", "fused") and ARGS[plan.family[t]][1] is not None:
                 wired.append((_port(t, "g"), f"o{k}", routers))
-        if what == "gemm":
+        if what in ("gemm", "fused"):
             G = int(plan.of[t][0][3]["statics"]["G"])
             bs = [b for _p, b in plan.units[t][lo:lo + m.n]]
             for port, src, at in zip(("w", "ws"), plan.reads(t), (bs, [b * n // G for b in bs]), strict=True):
-                if src is not None:
+                if src is not None and (what == "gemm" or port == "ws"):
                     wired.append((_port(t, port), "o0", tuple(base[src] + plan.at[src][(key, a)] for key, a in zip(keys, at, strict=True))))
         out.append(replace(m, wired=tuple(wired)))
     return out
 
 
 def declarations(plan: Plan) -> IF.Registered | None:
-    """The window's tables, table reads and openings (a listed record's ``registered``, `interface.listed_reads`): each read
-    template's tables, each with its root and domain id read into ``in1`` and ``in2`` and its row, salt and path (``in3``,
+    """The window's tables, table reads and openings (a listed record's ``registered``, `interface.listed_reads`): each read or
+    fused template's tables, each with its root and domain id read into ``in1`` and ``in2`` and its row, salt and path (``in3``,
     ``in4``, ``in5``) opened at the key ``in0`` by the verdict ``o1``, over its units.  None where the window reads none."""
     params: dict[str, int] = {}
     tables, roots, openings = [], [], []
@@ -329,7 +343,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
     out: dict[str, Any] = {}
@@ -337,18 +351,18 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     for t, (what, n) in plan.what.items():
         if what == "gemm":
             continue
-        rs = plan.of[t]
+        rs, of = plan.of[t], "w" if what in ROWS else "ws"
         S = rs[0][3]["statics"]
         E, N, K, G_ = (int(S[x]) for x in ("E", "N", "K", "G"))
-        arg, held = ARGS[plan.family[t]][2 if what == "w" else 3], None
+        arg, held = ARGS[plan.family[t]][2 if of == "w" else 3], None
         for at, _n, b, param, _leaves in plan.tables(t):
             if param not in nonces:
                 raise ValueError(f"{param}: the committer's registration names no nonce for the table (records.expert_tables)")
             x = rs[plan.units[t][at][0]]
             g = json.dumps(x[2]["args"][arg])
             if held is None or held[0] != g:
-                held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if what == "w" else 32))
-            out[param] = H1R.commit(committer["program"], param, table_words(held[1], what, E, N, K, G_, n, b), key,
+                held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if of == "w" else 32))
+            out[param] = H1R.commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), key,
                                     int(nonces[param]), keep_rows=True, schema=G.SCHEMA_SEG)
     return out
 
@@ -417,9 +431,9 @@ class Reader:
             raise ValueError(f"row {x[2]['i']} ({x[3]['op_path']}): routed expert {e} is not one of its {E}")
         return e
 
-    def pair(self, x: Row, t: str) -> dict[str, Any]:
-        """Pair row ``x``'s operands for block GEMM ``t``: its activation, scales, routed weight, expert, that expert's weight and
-        scale rows and the row's served words, which the twin of the row on them must be."""
+    def pair(self, x: Row) -> dict[str, Any]:
+        """Pair row ``x``'s operands: its activation, scales, routed weight, expert, that expert's weight and scale rows and the
+        row's served words, which the twin of the row on them must be."""
         from verity.ml.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
         from verity_vllm.query.program_view import spec_statics
 
@@ -427,7 +441,7 @@ class Reader:
         if (rid, int(r["i"])) in self.pairs:
             return self.pairs[(rid, int(r["i"]))]
         arrive, what = int(self.arrivals.get(rid, 0)), f"row {r['i']} ({d['op_path']})"
-        S, T = d["statics"], spec_statics(template(t).word)
+        S, T = d["statics"], spec_statics(r["spec"])
         E, N, K, G = (int(S[k]) for k in ("E", "N", "K", "G"))
         _e, ig, iw, iws = ARGS[_base(r["spec"])]
         e = self.expert(x)
@@ -444,15 +458,16 @@ class Reader:
                                                     dot=TWIN_DOT_OF[str(T["DOT"])])
         if y.size != N or not np.array_equal(twin, y):
             raise ValueError(f"{what}: the twin of the row on its expert {e}'s rows is not the row's served {member} words")
-        self.pairs = {(rid, int(r["i"])): {"xq": xq, "sx": sx, "g": g, "w": W[e], "ws": WS[e], "y": y, "arrive": arrive,
+        self.pairs = {(rid, int(r["i"])): {"xq": xq, "sx": sx, "g": g, "e": e, "w": W[e], "ws": WS[e], "y": y, "arrive": arrive,
                                             "member": str(member)}}
         return self.pairs[(rid, int(r["i"]))]
 
     def read(self, ms: Sequence[CS.Member]) -> list[tuple[dict[str, Any], list[list[Any]]]]:
         """Members ``ms``, every member of one template of the cut, each its words (every port its elements' bytes in u16 words)
-        and index entries: a router row's and a pair's units one entry each, a read's unit its own.  A read's opening is of its
-        table among ``tables``, and its root and domain id the table's, which `weight_rows.by_reference` gives by reference;
-        refused for a read whose table is missing."""
+        and index entries: a router row's and a pair's units one entry each, a read's or a fused block's unit its own.  A read's
+        or a fused block's opening is of its table among ``tables``, and its root and domain id the table's, which
+        `weight_rows.by_reference` gives by reference; refused for a read whose table is missing, and for a fused block whose
+        table's row at the expert is not its pair row's block of rows."""
         from verity_vllm.query.program_view import spec_statics
 
         t, plan = ms[0].template, self.plan
@@ -491,7 +506,7 @@ class Reader:
             G = int(rs[0][3]["statics"]["G"])
             routed = ARGS[plan.family[t]][1] is not None
             for u, (p, b) in enumerate(plan.units[t]):
-                got = self.pair(rs[p], t)
+                got = self.pair(rs[p])
                 if b == 0:
                     entries.append(_entry(b0 + u, b0 + u + B, rs[p], got["arrive"], got["member"]))
                 put(u, [got["xq"].view("<u2"), got["sx"].astype("<u4").view("<u2"),
@@ -500,20 +515,38 @@ class Reader:
                         np.ascontiguousarray(got["ws"][b * nb // G]).astype("<u4").view("<u2"), got["y"][b * nb:(b + 1) * nb]],
                     f"unit {u}")
         else:
+            (what, nb), G = plan.what[t], int(rs[0][3]["statics"]["G"])
+            routed = ARGS[plan.family[t]][1] is not None
             starts = {at: param for at, _n, _b, param, _l in plan.tables(t)}
-            table = None
-            for u, (p, _b) in enumerate(plan.units[t]):
+            table, layer, pairs = None, None, {}
+            for u, (p, b) in enumerate(plan.units[t]):
                 if u in starts:
                     table = self.tables.get(starts[u])
                     if table is None:
                         raise ValueError(f"{t}: its table {starts[u]} is not among the committer's tables (commit_tables)")
                     root, dom = _digest_words(table.root), _digest_words(table.domain.domain_id)
                 x = rs[p]
-                e = self.expert(x)
-                row = table.rows.at([e])[0]
+                if what != "fused":
+                    e = self.expert(x)
+                    row = table.rows.at([e])[0]
+                    put(u, [np.array([e], dtype="<u4").view("<u2"), root, dom, row, _digest_words(table.salts[e]),
+                            _digest_words(table.path(e)), row, np.ones(1, dtype=np.uint16)], f"unit {u}")
+                    entries.append(_entry(b0 + u, b0 + u + 1, x, int(self.arrivals.get(x[0], 0)), str(x[3]["members"][0][0])))
+                    continue
+                if plan.pair[plan.key(t, u)][0] != layer:     # a layer's pairs at a time: a pair's blocks are a table apart
+                    layer, pairs = plan.pair[plan.key(t, u)][0], {}
+                got = pairs.get(p)
+                if got is None:
+                    got = pairs[p] = self.pair(x)
+                e, row = got["e"], table.rows.at([got["e"]])[0]
+                if not np.array_equal(row, np.ascontiguousarray(got["w"][b * nb:(b + 1) * nb]).reshape(-1).view("<u2")):
+                    raise ValueError(f"{t} unit {u}: its table's row at expert {e} is not row {x[2]['i']}'s block {b} of rows")
                 put(u, [np.array([e], dtype="<u4").view("<u2"), root, dom, row, _digest_words(table.salts[e]),
-                        _digest_words(table.path(e)), row, np.ones(1, dtype=np.uint16)], f"unit {u}")
-                entries.append(_entry(b0 + u, b0 + u + 1, x, int(self.arrivals.get(x[0], 0)), str(x[3]["members"][0][0])))
+                        _digest_words(table.path(e)), got["xq"].view("<u2"), got["sx"].astype("<u4").view("<u2"),
+                        *([np.array([got["g"]], dtype="<u4").view("<u2")] if routed else []),
+                        np.ascontiguousarray(got["ws"][b * nb // G]).astype("<u4").view("<u2"), got["y"][b * nb:(b + 1) * nb],
+                        np.ones(1, dtype=np.uint16)], f"unit {u}")
+                entries.append(_entry(b0 + u, b0 + u + 1, x, got["arrive"], got["member"]))
         ends = [e[1] for e in entries]
         res = []
         for m in ms:

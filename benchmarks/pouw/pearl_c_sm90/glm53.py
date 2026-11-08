@@ -1,6 +1,6 @@
 """GLM-5.3 (zai-org/GLM-5.3 at aca966e4e02791568aa6a4ced368624b3d897f42) under Pearl-C on the H200
-(``pearl-c-h100-v1-h3``): its linears as one TP8 rank serves them, each with the sm_90a kernels' domain verdict, and γ
-at the H100 record.
+(``pearl-c-h100-v1-h3``): its linears as one TP8 rank serves them, each with the sm_90a kernels' domain verdict, and the
+gap at the H100 record.
 
 The linears are the pinned vLLM's (integrations/vllm's ``manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json``: each tap's
 output shape and program), from the checkpoint's config (`CONFIG`).  Every FP8 linear is a 128 x 128 block-scaled weight, served
@@ -12,10 +12,10 @@ linears Pearl-C computes.
 At decode a rank sees the whole batch (TP shards weights, not rows): M is the batch, and an expert's M about M·K/E (K of E
 experts a row).  At prefill M is the step's tokens (``max_num_batched_tokens``).
 
-γ (`gamma`) is one unit's: 1 − (1 − ρ)²·credit/W_ref, rev1's (`PearlC.credit_of`, `PearlC.wref`; Lean's `creditDevRev1` and
-`wrefDevRev1K` with the cast offset c per activation element), which every Lean price twin's γ is
-(`Proofs/Pouw/PearlC/DeviceSm120KernelGamma.lean`: v1 under rev1, 8192³, FADD 8, the honest cast at 32, 173561/22302500).
-Every term is linear in m, so γ is a function of (n, k).  No Lean twin states γ at the H100 record on GLM-5.3's shapes;
+The gap g (`gamma`; an adversary's advantage ε = g/(1 − g)) is one unit's: 1 − (1 − ρ)²·credit/W_ref, rev1's (`PearlC.credit_of`, `PearlC.wref`; Lean's `creditDevRev1` and
+`wrefDevRev1K` with the cast offset c per activation element), which every Lean price twin's gap is
+(`Proofs/Pouw/PearlC/DeviceSm120KernelGap.lean`: v1 under rev1, 8192³, FADD 8, the honest cast at 32, 173561/22302500).
+Every term is linear in m, so the gap is a function of (n, k).  No Lean twin states the gap at the H100 record on GLM-5.3's shapes;
 these are its values, not pins.  The FP32 add's price is read two ways (`FADD_READINGS`): the record's 32 (H100_PRICES:
 4,096 dense FP8 MACs to 128 FP32 lanes a SM a clock), and the data sheet's rates, 1,979 dense FP8 TFLOPS to 67 FP32
 TFLOPS (an FMA two flops), 1979/67, the two clocked differently.
@@ -98,7 +98,7 @@ def scheme(fadd: Fraction | None = None, name: str = SCHEME):
 
 
 def gamma(s, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
-    """One unit's γ at scheme `s` (module docstring), W_ref with `cast` more per activation element (the kernel's cast over
+    """One unit's gap at scheme `s` (module docstring), W_ref with `cast` more per activation element (the kernel's cast over
     the credited one)."""
     from verity.core.protocols.pouw.protocol import Shape
 
@@ -109,7 +109,7 @@ def gamma(s, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
 
 def table(name: str = SCHEME, ep: bool = False) -> list[dict]:
     """Every linear (`linears`) with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the
-    record's) and, in the domain, γ at each FADD reading."""
+    record's) and, in the domain, the gap at each FADD reading."""
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     rows = []
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for r in rows:
         verdict = "refused: " + "; ".join(r["refused"]) if r["refused"] else \
-            "γ " + ", ".join(f"{k} {100 * v:.4f}%" for k, v in r["gamma"].items())
+            "ε " + ", ".join(f"{k} {100 * v / (1 - v):.4f}%" for k, v in r["gamma"].items())
         print(f"{r['name']:38s} n {r['n']:5d} k {r['k']:5d} {r['layers']:8s} {r['stock']:26s} {verdict}")
     return 0
 

@@ -30,7 +30,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import IO, Any
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registration as REG
 from verity_vllm.protocols.pouw.h1 import commit as CT
 
 #: the deployment's registration log under the serve dir's ``h1/``: one line a record, W at its writing and R once bound

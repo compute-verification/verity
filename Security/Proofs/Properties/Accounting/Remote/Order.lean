@@ -8,11 +8,11 @@ public import Proofs.Properties.Accounting.Remote.Frozen
 
 `liveUnder`: on coins that agree below `W + t`, and events that the release order (`ReleaseOrder`) fixes up to window
 `t`'s draw, two sessions draw window `t` at the same event, from states that differ only in their coins
-(`OpeningsUnreadUntilDrawn`), and that event is `close t`, which keeps the window's record and the appends
-(`draw_keeps`). After it, `RecordKeptAfterDraw` keeps the record and the openable receipts on each side.
+(`OpeningsUnreadUntilSampled`), and that event is `close t`, which keeps the window's record and the appends
+(`sample_keeps`). After it, `RecordKeptAfterSample` keeps the record and the openable receipts on each side.
 
 The first event that draws window `t` on the first coins (`exists_first`) is the same on the second (`take_agree`, by
-induction with `ReleaseOrder`), and the second draws it there too: were it unsampled, `OpeningsUnreadUntilDrawn` back
+induction with `ReleaseOrder`), and the second draws it there too: were it unsampled, `OpeningsUnreadUntilSampled` back
 from the second coins would leave it unsampled on the first. Nor does the second draw it earlier, by the same lemma
 from the first coins. Runs are taken over lists (`runL`), split by `runL_append`.
 -/
@@ -100,9 +100,9 @@ theorem runL_prefix {s s' : State} {l : List Event} {rs : Array Result} (h : run
   obtain ⟨rs₁, s₁, -, h₁, -⟩ := runL_append h
   exact ⟨rs₁, s₁, h₁⟩
 
-theorem runL_drawn {s s' : State} {l : List Event} {rs : Array Result} (h : runL s l = .ok (rs, s')) {t : Nat}
-    {d : Array (Nat × Nat)} (hd : drawnOf s t = some d) : drawnOf s' t = some d :=
-  fold_inv (fun x => drawnOf x t = some d) (fun _ _ _ _ hs he => (adv_step he).2.1 t d hs) l (#[], s) (rs, s') hd h
+theorem runL_sampled {s s' : State} {l : List Event} {rs : Array Result} (h : runL s l = .ok (rs, s')) {t : Nat}
+    {d : Array (Nat × Nat)} (hd : sampledOf s t = some d) : sampledOf s' t = some d :=
+  fold_inv (fun x => sampledOf x t = some d) (fun _ _ _ _ hs he => (adv_step he).2.1 t d hs) l (#[], s) (rs, s') hd h
 
 theorem extract_toList (a : Array Event) (k : Nat) : (a.extract 0 k).toList = a.toList.take k := by
   simp [Array.toList_extract]
@@ -115,7 +115,7 @@ theorem run_toArray (s : State) (l : List Event) : run s l.toArray = runL s l :=
 
 /-! ## The step that draws a window -/
 
-theorem no_draw {ws ws' : Array Win} {t : Nat} (k : Keep ws ws') (h0 : dr ws t = none) (h1 : (dr ws' t).isSome) :
+theorem no_sample {ws ws' : Array Win} {t : Nat} (k : Keep ws ws') (h0 : dr ws t = none) (h1 : (dr ws' t).isSome) :
     False := by
   rcases k.2 t with e | ⟨-, e⟩ <;> rw [e] at h1
   · rw [h0] at h1; cases h1
@@ -152,12 +152,12 @@ theorem close_keeps {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : Stat
   all_goals cases he
   all_goals try
     (exfalso
-     refine no_draw ?_ h0 h1
+     refine no_sample ?_ h0 h1
      first
       | exact keep_refl _
       | (apply keep_trans _ (keep_fail _ _ _ _); refine keep_modify _ _ _ ?_; intro; rfl))
   all_goals
-    have _ := ‹draws _ _ _ _ _ = some _›
+    have _ := ‹receiptSample _ _ _ _ _ = some _›
     refine ⟨record_of (s := s) ?_ ?_ t, rfl⟩
     · rfl
     · intro v
@@ -166,17 +166,17 @@ theorem close_keeps {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : Stat
         (sameW_modify _ _ _ (by intro; exact ⟨rfl, rfl, rfl, rfl⟩) v)
 
 /-- The event that draws window `t` is `close t`, so it keeps the window's record and the appends. -/
-theorem draw_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : step s e = .ok (r, s₁)) {t : Nat}
-    (h0 : drawnOf s t = none) (h1 : (drawnOf s₁ t).isSome) :
+theorem sample_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : step s e = .ok (r, s₁)) {t : Nat}
+    (h0 : sampledOf s t = none) (h1 : (sampledOf s₁ t).isSome) :
     s₁.record t = s.record t ∧ s₁.appends = s.appends := by
   cases e with
-  | start now => injection he with he; exact (no_draw (keep_start he) h0 h1).elim
-  | boundary now => injection he with he; exact (no_draw (keep_boundary he) h0 h1).elim
-  | append root count => exact (no_draw (keep_append he) h0 h1).elim
-  | release runs withdrawn => injection he with he; exact (no_draw (keep_release he) h0 h1).elim
-  | receive t₁ i root runs change st now => injection he with he; exact (no_draw (keep_receive he) h0 h1).elim
+  | start now => injection he with he; exact (no_sample (keep_start he) h0 h1).elim
+  | boundary now => injection he with he; exact (no_sample (keep_boundary he) h0 h1).elim
+  | append root count => exact (no_sample (keep_append he) h0 h1).elim
+  | release runs withdrawn => injection he with he; exact (no_sample (keep_release he) h0 h1).elim
+  | receive t₁ i root runs change st now => injection he with he; exact (no_sample (keep_receive he) h0 h1).elim
   | close t' now => exact close_keeps he h0 h1
-  | verify t' openings => injection he with he; exact (no_draw (keep_verify he) h0 h1).elim
+  | verify t' openings => injection he with he; exact (no_sample (keep_verify he) h0 h1).elim
 
 /-! ## Two sessions up to the draw -/
 
@@ -211,7 +211,7 @@ theorem take_agree (params : Params) (reg : Registration) (appendCoins : Array B
     {coins coins' : Array ByteArray} {t : Nat} (hag : ∀ j, j < params.windows + t → coins'[j]! = coins[j]!) :
     ∀ (k : Nat) (rs : Array Result) (s : State),
       runL (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
-      drawnOf s t = none → (D coins').toList.take k = (D coins).toList.take k := by
+      sampledOf s t = none → (D coins').toList.take k = (D coins).toList.take k := by
   intro k
   induction k with
   | zero => intros; simp
@@ -219,10 +219,10 @@ theorem take_agree (params : Params) (reg : Registration) (appendCoins : Array B
     intro rs s h hnd
     rw [List.take_add_one] at h
     obtain ⟨rs₁, s₁, rs₂, h₁, h₂⟩ := runL_append h
-    have hnd₁ : drawnOf s₁ t = none := by
-      cases hx : drawnOf s₁ t with
+    have hnd₁ : sampledOf s₁ t = none := by
+      cases hx : sampledOf s₁ t with
       | none => rfl
-      | some d => rw [runL_drawn h₂ hx] at hnd; cases hnd
+      | some d => rw [runL_sampled h₂ hx] at hnd; cases hnd
     have e₂ := hD coins coins' t k rs₁ s₁ hag (by rw [run_extract]; exact h₁) hnd₁
     rw [List.take_add_one, List.take_add_one, ih rs₁ s₁ h₁ hnd₁, Array.getElem?_toList, Array.getElem?_toList,
       e₂]
@@ -233,24 +233,24 @@ theorem liveUnder (params : Params) (reg : Registration) (appendCoins : Array By
   intro coins coins' t k₁ k₂ rs₁ rs₂ s₁ s₂ hag h₁ h₂ hd₁ hd₂
   rw [run_extract] at h₁ h₂
   have hag' : ∀ j, j < params.windows + t → coins[j]! = coins'[j]! := fun j hj => (hag j hj).symm
-  have T2 := openingsUnreadUntilDrawn
-  have T3 := recordKeptAfterDraw
+  have T2 := openingsUnreadUntilSampled
+  have T3 := recordKeptAfterSample
   obtain ⟨m, hk₁, ⟨rsA, sA, hA, hdA⟩, hmin'⟩ := exists_first (Q := fun k => ∃ rs s,
       runL (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) ∧
-        (drawnOf s t).isSome)
+        (sampledOf s t).isSome)
     (by
       rintro ⟨rs0, s0, h0, hd0⟩
       rw [List.take_zero] at h0
       have e := runL_det h0 rfl
       injection e with _ e
       subst e
-      simp [drawnOf, State.init] at hd0)
+      simp [sampledOf, State.init] at hd0)
     k₁ ⟨k₁, Nat.le_refl _, rs₁, s₁, h₁, hd₁⟩
   have hmin : ∀ k, k ≤ m → ∀ rs s,
       runL (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
-      drawnOf s t = none := by
+      sampledOf s t = none := by
     intro k hk rs s h
-    cases hx : drawnOf s t with
+    cases hx : sampledOf s t with
     | none => rfl
     | some d => exact (hmin' k hk ⟨rs, s, h, by rw [hx]; rfl⟩).elim
   have hmL : m < (D coins).toList.length := by
@@ -265,7 +265,7 @@ theorem liveUnder (params : Params) (reg : Registration) (appendCoins : Array By
   have htake : (D coins).toList.take (m + 1) = (D coins).toList.take m ++ [e] := by rw [List.take_add_one, he]; rfl
   rw [htake] at hA
   obtain ⟨rsm, sm, r, hsm, hstep⟩ := runL_snoc hA
-  have hndm : drawnOf sm t = none := hmin m (Nat.le_refl _) _ _ hsm
+  have hndm : sampledOf sm t = none := hmin m (Nat.le_refl _) _ _ hsm
   have hL'm := take_agree params reg appendCoins notBeforeNs D hD hag m rsm sm hsm hndm
   have hL'e : (D coins').toList[m]? = (D coins).toList[m]? := by
     rw [Array.getElem?_toList, Array.getElem?_toList]
@@ -290,7 +290,7 @@ theorem liveUnder (params : Params) (reg : Registration) (appendCoins : Array By
     have e := runL_det h₂ (hT2 k₂ hle rsk sk hsk)
     injection e with _ e
     rw [e] at hd₂
-    rw [show drawnOf { sk with coins := coins' } t = drawnOf sk t from rfl, hndk] at hd₂
+    rw [show sampledOf { sk with coins := coins' } t = sampledOf sk t from rfl, hndk] at hd₂
     cases hd₂
   rw [take_split _ hk₂, htake'] at h₂
   obtain ⟨rsB, sB, rsB₂, hB, hB₂⟩ := runL_append h₂
@@ -298,8 +298,8 @@ theorem liveUnder (params : Params) (reg : Registration) (appendCoins : Array By
   have hy' := runL_det hy (hT2 m (Nat.le_refl _) rsm sm hsm)
   injection hy' with _ hy'
   subst hy'
-  have hdB : (drawnOf sB t).isSome := by
-    cases hx : drawnOf sB t with
+  have hdB : (sampledOf sB t).isSome := by
+    cases hx : sampledOf sB t with
     | some d => rfl
     | none =>
       exfalso
@@ -308,10 +308,10 @@ theorem liveUnder (params : Params) (reg : Registration) (appendCoins : Array By
       rw [run_toArray] at this
       have e := runL_det hA this
       injection e with _ e
-      rw [e, show drawnOf { sB with coins := coins } t = drawnOf sB t from rfl, hx] at hdA
+      rw [e, show sampledOf { sB with coins := coins } t = sampledOf sB t from rfl, hx] at hdA
       cases hdA
-  obtain ⟨hrA, haA⟩ := draw_keeps hstep hndm hdA
-  obtain ⟨hrB, haB⟩ := draw_keeps hstep' (s := { sm with coins := coins' }) hndm hdB
+  obtain ⟨hrA, haA⟩ := sample_keeps hstep hndm hdA
+  obtain ⟨hrB, haB⟩ := sample_keeps hstep' (s := { sm with coins := coins' }) hndm hdB
   rw [take_split _ hk₁, htake] at h₁
   obtain ⟨rsA', sA', rsA₂, hA', hA₂⟩ := runL_append h₁
   have eA := runL_det hA' hA
