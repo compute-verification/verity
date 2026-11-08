@@ -426,8 +426,8 @@ def test_compile_steps_passes_its_own_rule():
     salt = bytes(range(64))
     for b1 in ({**greedy, "max_tokens": 2}, {**topp, "top_p": 1.0}, topp):
         adv, ing = session(b1)
-        c = steps.compile_steps(reg, adv, ing, seed_salt=salt)
-        check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, seed_salt=salt))
+        c = steps.compile_steps(reg, adv, ing, salt=salt)
+        check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, salt=salt))
         if b1["temperature"]:
             assert c.requests[1].policy == {"kind": "stochastic", "temperature": 0.8, "top_p": b1["top_p"], "top_k": 0, "seeded": True,
                                             "splits": registered_splits(RTX["num_sms"])}

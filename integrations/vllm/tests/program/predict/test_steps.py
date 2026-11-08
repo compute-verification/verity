@@ -180,23 +180,23 @@ def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_win
     or draws: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
     read), an unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
     unseeded = {**STOCH, "seed": None}
-    assert policy_of(0, unseeded, 188, request_id="q1", seed_salt=SALT) == (STOCH_POLICY, derived(SALT, "q1"))
+    assert policy_of(0, unseeded, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, derived(SALT, "q1"))
     assert derived(SALT, "q1") != derived(SALT, "q2") and derived(SALT, "q1") != derived(SALT[::-1], "q1")
-    assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", seed_salt=SALT) == (STOCH_POLICY, 5)
+    assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, 5)
     with pytest.raises(Unexpressible, match=r"request 0 \('q1'\): stochastic with no seed in its certified body, and the compile has "
                                             r"no window seed salt to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\) "
                                             r"or draws"):
         policy_of(0, unseeded, 188, request_id="q1")
     with pytest.raises(Unexpressible, match="request 0 \\('a'\\): stochastic with no seed in its certified body, and the window carries "
                                             "it in, so its seed derives from its admitting window's seed salt"):
-        plan_steps(_registered(), A_IN, {"a": {**unseeded, "max_tokens": 4, "prompt": [1, 2, 3]}}, seed_salt=SALT)
+        plan_steps(_registered(), A_IN, {"a": {**unseeded, "max_tokens": 4, "prompt": [1, 2, 3]}}, salt=SALT)
     reg, (advice, ingress) = _registered(), _mixed()
     ingress = {**ingress, "q1": {**ingress["q1"], "seed": None}}
     with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): stochastic with no seed in its certified body"):
         compile_steps(reg, advice, ingress)
-    assert compile_steps(reg, advice, ingress, seed_salt=SALT).requests[1].seed == derived(SALT, "q1")
+    assert compile_steps(reg, advice, ingress, salt=SALT).requests[1].seed == derived(SALT, "q1")
     with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): .* the window's seed salt isn't non-empty bytes \(bytes b''\)"):
-        compile_steps(reg, advice, ingress, seed_salt=b"")
+        compile_steps(reg, advice, ingress, salt=b"")
 
 
 @pytest.mark.parametrize("sampling,fact", [

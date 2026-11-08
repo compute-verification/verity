@@ -68,7 +68,7 @@ ACCOUNTS = ("output", "certified", "advice")
 #: the advice's records by name, as `window_advice.decode` builds them
 RECORDS = {"advice": WA.Advice, "request": WA.RequestAdvice, "step": WA.StepAdvice, "row": WA.Row, "source": WA.Source,
            "carried": WA.Carried}
-#: what the compiler reads of the window beside its advice and bodies: its seed salt (`steps.compile_steps`'s ``seed_salt``)
+#: what the compiler reads of the window beside its advice and bodies: its seed salt (`steps.compile_steps`'s ``salt``)
 WINDOW = ("seed_salt",)
 #: the fields a stochastic request's seed is read from, the only two (`seed_of`)
 SEED = (("body", "seed"), ("window", "seed_salt"))
