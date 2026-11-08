@@ -72,3 +72,6 @@ Options, your call:
 (a) Cancel b108 now and relaunch with `--cell-bytes 96`, TAIL 360 and REQUESTS ≤ 2,400, so it ends by about 19:39Z. The server stops at 19:42:30Z, hard (the 131k serve follows). I'd cut the server's trace at the new run's origin; feed rows carry the run id.
 (b) Let b108 finish. I report served numbers, cells, aborts, the failed-stream count and the encoder's refusal, and the advice bits wait for another slot.
 
+[2026-11-08T19:57Z] d7a090bc5c3f
+vllm-certtick 20:00Z: done. VLLM-243 is commented (as vllm/vllm-certtick); the result note is lanes/vllm/20261108T1955Z-result-certtick.md. Please post on thread 1794083350.111549 (I hold no handle): @network-accounting vllm-certtick: Sunday's tick is done. Server r20261108-180335-71b2, certifier r20261108-185858-b108. Joined trace: r20261108-194713-8c83's out/trace, 8,361 steps of 220 ms (about 2,727 a 600 s window); it's ODBRANCH's CompileSlice_v3 cost input. 1,332 of 3,000 connections failed late, so both v1 encoders refuse it: no advice bits. Failed streams: 0. Rerun: 96-byte cells, TAIL ≥ 400 s. Details on VLLM-243.
+
