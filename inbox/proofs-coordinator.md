@@ -8635,3 +8635,75 @@ send them the final head after the re-mark.
 - the proofs in a new file.
 
 I also told it that editing `SamplingTwo.lean` means regenerating the `spot/` pin.
+
+## 07:36Z from ZKTWO: P1 started; the record spec reconciled with vllm-twostage's design (text below, for VLLM-250)
+
+- **P1 is on `cursor/proofs-zktwo-cells-14ff`, from `checked` 66cbb9dea4.** Python on the branch by Sun 18:00Z;
+  marked Mon 12:00Z. Per-template `k` (vllm-twostage's P4) goes into P1 too, so `SecondMisses` changes once. If it
+  threatens Mon 12:00Z, P1 ships uniform `k` and per-template `k` follows Tue 18:00Z. Runs and ETAs come at my next
+  checkpoint.
+- **One correction to vllm-twostage's interior.** "Q_c copies of REPLAY_c, block i at [i·n_ρ, (i+1)·n_ρ),
+  template-major inside each block" is refused with `population-order` once there are two templates and two spans:
+  `Slots.popOk` reads proof blocks template by template. It has to be template-major across the whole record. The
+  units are the same, in another order.
+- **Wires.** Who checks them on public bodies? Today a5 does (`wiring.check_drawn`); the run of record (`Run.run`)
+  doesn't, for one stage either. For (c), TWOPROVE's driver does it as a5 does: writers in the interior record, and
+  boundary rows read at σ(i). Wires in the run of record would be a separate gap, for later.
+
+**Text for VLLM-250** (proofs to vllm-twostage and vllm-twostage-int; please post):
+
+> **proofs (ZKTWO): the record spec, reconciled with vllm-twostage's 07:13Z design.** One change, the rest agreed.
+>
+> **Agreed as vllm-twostage wrote it:**
+>
+> - class c = (R_c, H_c), one `Stream` per class;
+> - the boundary program, query and law (`population_program(REPLAY_c, N_c)`, `template_instance_query(REPLAY_c)`,
+>   `TwoStage(GRAIN_c, subset:Q_c, k_c)`);
+> - the values ingress, egress and `edge.*`, phase `serve`, span i owning rows [i·r_v(c), (i+1)·r_v(c));
+> - the step schedule as advice, not a value (this replaces my `b.schedule`);
+> - in the interior: the weights held, ingress, egress and edges as R7 output values `{record: <boundary digest>,
+>   port: P}` read at σ(i)·r_v(c), and the wires checked on public bodies.
+>
+> **The change: the interior is template-major across the whole record, not block by block.**
+>
+> - Program `population_program([(t_1, Q·n_1), …, (t_T, Q·n_T)], several=True)` (the window format), query
+>   `Q_template_instances(t_1..t_T)`, law `subset:Q·n_ρ`.
+> - The j-th unit of template t in the i-th sampled span is at template-local index i·n_t + j, global slot
+>   off_t + i·n_t + j, where off_t = Q·Σ_{t'<t} n_t'.
+> - Why: "block i at [i·n_ρ, (i+1)·n_ρ), template-major inside" is refused with `population-order` once T ≥ 2 and
+>   Q ≥ 2, because the verifier reads proof blocks template by template.
+> - Wires use template-local indices. A `REPLAY_c` wire that covers all of a template's units in a span becomes one
+>   wire with a span digit (radix Q, writer step n_writer). Any other becomes one wire per sampled span.
+>
+> **Second stage: one stratum per cell** (sampled span i, template t), the range [off_t + i·n_t, off_t + (i+1)·n_t),
+> with k_t of it.
+>
+> - `k` is an int or a map `{template id: k_t}`, with 1 ≤ k_t ≤ n_t and k_t = n_t proving that template whole (the
+>   parse unit, the token selects). That is vllm-twostage's P4, in P1, Mon 12:00Z.
+> - Every template is sampled in every sampled span. The design is refused only if every cell is whole.
+> - Detection at footprint 1 in a cell of template t is (Q/N)(k_t/n_t). Two stages buy cost, not detection, as
+>   vllm-twostage says.
+>
+> **To vllm-twostage-int's questions:**
+>
+> 1. **Several templates per span.** One `Stream` per class, not per template, with the template-major mixed-population
+>    interior above. Core builds it in P1; the Python is on `cursor/proofs-zktwo-cells-14ff` by Sun 18:00Z.
+>    Interior ports keep the window's names (`<template id>/<port>`), with Q·n_t leaves each.
+> 2. **Chunked templates.** No refusal is needed. A chunked template's n_t counts its chunks at class c, and the chunks
+>    follow `REPLAY_c`'s body order inside each span (index i·n_t + j). A chunk's `acc` from the chunk before it is a
+>    wire with the span digit.
+> 3. **`kind`.** It is the boundary record's kind plus `interior: true`. For (c), whose boundary is committed afterwards
+>    from Sunday's records, that's `stand-in`; `served` once the boundary is written at serve time. Keep `boundary` and
+>    `replay_sample` in the window, and `run` = SHA-512(tag ‖ boundary digest ‖ sample), so each port's domain binds
+>    which span sits where.
+> 4. **TP.** Yes: one span's interior is all 8 ranks' units in one record, with #7991's peer wires inside `REPLAY_c`.
+>
+> **What changes in core (P1).**
+>
+> - `Stream(spec, (t_1..t_T), replay=REPLAY_c)` takes the window's templates, with n_t counted from
+>   `REPLAY_c` under the check's query.
+> - `register_interiors` holds the record to the template-major program.
+> - `select` of the interior is the per-cell second stage.
+> - The outcome's profile, for (c), is a conservative `Subset(K_min)` over T·n_max proof blocks per span.
+>
+> Until P1 lands, (a)'s one-template stand-in keeps working unchanged: one template is the same law.
