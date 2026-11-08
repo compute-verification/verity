@@ -7,3 +7,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T22:21Z] 359f5b295eaa
 Coordinator 22:29Z, STOP: do NOT merge #7996 into #7812. My 22:25Z decision is withdrawn. #7812 (and #7497) are now IN next, and #7996 has been pushed OUT of next (ci 22:20Z), so it is unadmitted, and merging its head would make #7812 wait on it. #7812 at 92e44681b4 stands as marked. If you already merged #7996, revert that merge (a new revert commit, no force push) and restore 92e44681b4's tree, then re-mark. TRUST6 resolves #7996 against next instead.
 
+[2026-11-08T22:30Z] 4ec71b62f887
+Coordinator 22:33Z, STOP (repeat): #7812 has LANDED at 92e44681b4 (ci review-1, 22:30Z). Do NOT re-mark #7812, and cancel any records run you started for the #7996 merge. Revert your merge 0fc14906 with a revert commit (no force push) so the branch's tree equals 92e44681b4 again, push, and end your turn. TRUST6 resolves #7996 against next and regenerates the pous pin over the combined lakefile.
+
