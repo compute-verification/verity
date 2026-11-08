@@ -3840,8 +3840,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
     // buffers for its copies (`SALT_BUFS`), not inside its timed phases (FC_SALTS_AHEAD=0: each tree's where the device builds
-    // it); not under the ZK server, whose Lean draws them
-    let salts_ahead = (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
+    // it; FC_SALTS_AFTER=1: from when every table's witness is built, beside the device's phases only); not under the ZK
+    // server, whose Lean draws them
+    let after = std::env::var("FC_SALTS_AFTER").as_deref() == Ok("1");
+    let start_ahead = || (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
         && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0"))
     .then(|| {
         let tables: Vec<_> = salts_t.iter().map(|s| {
@@ -3867,6 +3869,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             (tables, held, reuse, reused, threads, t0.elapsed().as_secs_f64())
         })
     });
+    let mut salts_ahead = if after { None } else { start_ahead() };
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
@@ -3908,6 +3911,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         };
         witness_s += tw0 + tw1;
         wits.push((w0, Some(wt0), wt1));
+    }
+    if after {
+        salts_ahead = start_ahead();
     }
     let tj = Instant::now();
     let mut zk_pre = match zk_pre.map(|h| h.join()) {
