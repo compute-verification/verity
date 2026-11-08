@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # neutrality_tier.sh TIER OUT: `verity-vllm neutrality --tier TIER` from this tree on a node with no vLLM of its own, its report and
-# each row's logs and build summary in OUT (`tools/verity/check/post_train.py` runs the fast tier after each landing).
+# each row's logs and build summary in OUT (`post_train.py` runs the fast tier after each landing).
 #
-#   cd integrations/vllm && bash verity_vllm/ops/neutrality_tier.sh fast "$out/neutrality"
+#   bash tools/verity/check/neutrality_tier.sh fast "$out/neutrality"
 #
-# Made once a node, under a lock, in $NEUTRALITY_WORK (default /workspace/tmp/neutrality-vllm): the pinned vLLM's venv
+# Made once a node, under a lock, in /workspace/tmp/neutrality-vllm: the pinned vLLM's venv
 # (`pod_bootstrap.sh --cpu --cases ''`), each of the tier's rows' checkpoint metadata (a hub snapshot of every file but the
 # safetensors shards: the derive runs on the meta device), and, on a node with no driver, libcuda.so.1 out of the driver package
 # (vLLM's CUDA platform loads it at import; neutrality hides every device).  Each row's stored workload is fetched first.  The
 # Builds go to a temporary directory (under $TMPDIR) and are removed.  Exit: neutrality's (0 when every pin is reproduced, 1 when a
 # row moved or didn't build), 3 when the setup failed (OUT/setup.fail says which step).
 set -uo pipefail
-TIER=${1:?TIER}; OUT=${2:?OUT}; DRIVER_PKG=${DRIVER_PKG:-libnvidia-compute-595-server}
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); TREE=$(cd "$ROOT/../.." && pwd -P)
+TIER=${1:?TIER}; OUT=${2:?OUT}; DRIVER_PKG=libnvidia-compute-595-server
+TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P); ROOT=$TREE/integrations/vllm
 cd "$ROOT" || exit 3
 mkdir -p "$OUT" && OUT=$(cd "$OUT" && pwd -P) || exit 3
-export WORK=${NEUTRALITY_WORK:-/workspace/tmp/neutrality-vllm}
+export WORK=/workspace/tmp/neutrality-vllm
 export VENV=$WORK/venv312 HF_HOME=$WORK/hf
 export PYTHONPATH=$ROOT:$TREE:$TREE/tools/research/src
 PY=$VENV/bin/python DRV=$WORK/cuda-driver

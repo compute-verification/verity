@@ -178,6 +178,7 @@ PREV = "r20261003-120000-0001"
 LLAMA = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 QWEN = "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 NEUTRAL = {LLAMA: True, QWEN: True}
+THREAD = "1790000000.000001"
 
 
 def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None, r39="fail", rows=NEUTRAL):
@@ -227,6 +228,7 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
     monkeypatch.setattr(PT, "git", lambda *a, **k: SHA if a[0] == "rev-parse" else "")
     monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, **_k: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
     monkeypatch.setattr(PT, "untouched", lambda tree, rev: untouched and rev == f"{SHA}^1")
+    monkeypatch.setattr(PT, "merge_thread", lambda: THREAD)
     import research.runs
     monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
     return calls, sleeps
@@ -272,14 +274,12 @@ def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral
     """A landing that moves a fast row of record's Program without re-pinning it is labelled with the row, and @vllm, which owns
     the rows of record, is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
     reproduced its pins passes and rings no one."""
-    from research.monitors import MERGE_THREAD
-
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows={LLAMA: False, QWEN: True})
     assert PT.main([]) == 1
     rid = _launched(calls)
     assert ("data", "label", "r20261003-145201-e806", "note", f"regression fail:{LLAMA}", "--by", "regression", "--ref", rid) in calls
     (ring,) = [c for c in calls if c[0] == "msg"]
-    assert ring[:-1] == ("msg", "send", "--as", "ci", "--thread", MERGE_THREAD, "--to", "@vllm", "--quiet", "--report", "--text")
+    assert ring[:-1] == ("msg", "send", "--as", "ci", "--thread", THREAD, "--to", "@vllm", "--quiet", "--report", "--text")
     assert ring[-1].startswith(f"@vllm post-train: the fast neutrality tier at landing {SHA[:12]} (check r20261003-145201-e806) "
                                f"moved {LLAMA}. Run {rid}:") and QWEN not in ring[-1]
     calls, _ = _fake_landing(tmp_path / "neutral", monkeypatch, "r20261003-145201-e806", r39="pass")
@@ -461,7 +461,8 @@ def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     assert "nice -n 19 ../../.venv/bin/python -m pytest" in free
     assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
     assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned
-    tier = 'bash verity_vllm/ops/neutrality_tier.sh fast "$out/neutrality"'
+    tier = 'bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality"'
     assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
     assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
+    assert (ROOT / "integrations" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from integrations/vllm"
     assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"

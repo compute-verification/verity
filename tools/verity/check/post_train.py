@@ -8,7 +8,7 @@ about an hour of CPU in one process) run here instead, once per landing.  `resea
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
 After the rebuilds the same run rebuilds the fast rows of record's Programs and compares them with their pins (`verity-vllm
-neutrality --tier fast`, by `integrations/vllm/verity_vllm/ops/neutrality_tier.sh`, minutes a row), so a landing that moves a
+neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
 fast row's Program without re-pinning it is a red: each row that moved or didn't build is named in the label beside the
 rebuilds' rows (`regression fail:<row>`), and @vllm, which owns the rows of record, is rung at once in the merge thread, as ci,
 with the run to read.  A carried verdict rings no one: the run it carries from rang.
@@ -98,7 +98,7 @@ VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_R
   --junitxml "$out/junit.xml" > "$out/pytest.log" 2>&1
 rc=$?
 tail -n 40 "$out/pytest.log"
-{pin}bash verity_vllm/ops/neutrality_tier.sh fast "$out/neutrality" > "$out/neutrality.log" 2>&1
+{pin}bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality" > "$out/neutrality.log" 2>&1
 n=$?
 tail -n 20 "$out/neutrality.log"
 [ $rc -ne 0 ] || rc=$n
@@ -185,11 +185,10 @@ def _order(row: str) -> tuple[int, int, str]:
 
 def moved(report: Path) -> list[str] | None:
     """The rows of record the neutrality tier's ``report`` names not neutral (a pinned Program digest not reproduced, or a Build
-    that didn't finish); None when there is no report to read."""
-    try:
-        return sorted(r for r, e in json.loads(report.read_text())["rows"].items() if not e["neutral"])
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    that didn't finish); None when there is no report."""
+    if not report.is_file():
         return None
+    return sorted(r for r, e in json.loads(report.read_text())["rows"].items() if not e["neutral"])
 
 
 def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: Path | None = None) -> str:
@@ -220,8 +219,6 @@ def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: 
 def ring(sha: str, attempt: str | None, rid: str, rows: list[str] | None, dry_run: bool = False) -> None:
     """Ring OWNER at once in the merge thread, as SENDER, when the run's neutrality tier moved ``rows`` or left no report (None):
     the rows of record are OWNER's, and a landing that moved one is re-pinned or fixed forward long before the daily sweep."""
-    from research.monitors import MERGE_THREAD
-
     what = f"moved {', '.join(rows)}" if rows else "ran and left no report, so it compared nothing (out/neutrality/setup.fail)"
     text = (f"{OWNER} post-train: the fast neutrality tier at landing {sha[:12]} (check {attempt}) {what}. Run {rid}: "
             f"`research fetch {rid} --all`; out/neutrality/neutrality.json names each Program's pinned and built digests. A row "
@@ -229,9 +226,15 @@ def ring(sha: str, attempt: str | None, rid: str, rows: list[str] | None, dry_ru
     if dry_run:
         print(f"post-train: --dry-run, so {OWNER} is not rung: {text}")
         return
-    p = research("msg", "send", "--as", SENDER, "--thread", MERGE_THREAD, "--to", OWNER, "--quiet", "--report", "--text", text)
+    p = research("msg", "send", "--as", SENDER, "--thread", merge_thread(), "--to", OWNER, "--quiet", "--report", "--text", text)
     if p.returncode:
         print(f"post-train: ringing {OWNER} failed: {(p.stderr or p.stdout).strip()[-300:]}", file=sys.stderr)
+
+
+def merge_thread() -> str:
+    from research.monitors import MERGE_THREAD
+
+    return MERGE_THREAD
 
 
 def research(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess:
