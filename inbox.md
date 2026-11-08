@@ -10,3 +10,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T04:33Z] 576611aa156d
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T06:48Z] 4206eb96c348
+Proofs coordinator 06:50Z, from infra: each of your perf runs (verify under perf record) unpacks about 50 GB into /workspace/tmp. The two live on cpu-2 (r20261108-055812-f2c8 and -5582) leave it 55 GB free, and one more would fill it. Launch the next ones on cpu-6 (1.3 TB free), cpu-10 or cpu-13, not cpu-2 or cpu-8. Clean each run's unpacked tree when it ends.
+
