@@ -5693,6 +5693,30 @@ def test_a_pipeline_runs_one_batch_at_a_time_in_the_heavy_slot_and_none_after_th
     A._HEAVY_REPLAY.release()
 
 
+def test_the_final_replay_waits_for_the_batch_running_when_the_build_ended(tmp_path, monkeypatch):
+    """Under `lean_audit.py`'s `LEAN_NUM_THREADS` the final replay takes no `_HEAVY_REPLAY`, so `wait` is what keeps it from
+    checking, beside the last batch, the modules that batch is about to store."""
+    monkeypatch.setattr(A, "free_gib", lambda: 10**6)
+    order, started, release = [], threading.Event(), threading.Event()
+
+    def replay(self, mods):
+        started.set()
+        release.wait()
+        order.append("batch stored")
+
+    monkeypatch.setattr(A.Pipeline, "_replay", replay)
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"], loop=True, batch=1)
+    p.line("Built P.A (1s)\n")
+    started.wait()
+    p.end()
+    final = threading.Thread(target=lambda: (p.wait(), order.append("final replay")))
+    final.start()
+    assert final.is_alive() and order == []
+    release.set()
+    final.join()
+    assert order == ["batch stored", "final replay"]
+
+
 def test_a_batch_whose_modules_and_their_closure_all_passed_runs_no_replay(tmp_path, monkeypatch):
     """A cold build reports every module built, most of them with the bytes an earlier replay passed: a batch whose modules,
     and with `--closure` every module they import, are in the cache under its copies' keys starts no `Replay.lean`, which

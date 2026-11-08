@@ -4679,7 +4679,7 @@ class Pipeline:
 
     def end(self, stop: bool = False) -> None:
         """The build has ended: no batch starts. One already running goes on, and the final replay waits for it
-        (`_HEAVY_REPLAY`); with ``stop`` (the build failed, so there is no final replay) it is killed."""
+        (`wait`); with ``stop`` (the build failed, so there is no final replay) it is killed."""
         with self.cond:
             self.ended = True
             self.cond.notify()
@@ -4688,6 +4688,12 @@ class Pipeline:
                     os.kill(int(self.pid.read_text()), signal.SIGKILL)
                 except (OSError, ValueError) as e:             # not started yet, or already gone: nothing to kill
                     self.log(f"lean: the running batch's replay was already gone when the build failed ({type(e).__name__})")
+
+    def wait(self) -> None:
+        """Until the batch running when the build ended (`end`) has stored what the kernel accepted, so the final replay
+        reuses those modules rather than checking them beside it. `_HEAVY_REPLAY` doesn't order the two: the final replay
+        takes it only when `replay_threads` caps its threads, which it never does under `lean_audit.py`."""
+        self.thread.join()
 
     def _go(self) -> bool:
         if self.ended:
@@ -5157,6 +5163,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return passed
 
     replayed = scanned = digested = unread = None
+
+    def final_replay(*args):
+        if pipe:
+            pipe.wait()
+        return replay_step(*args)
     try:
         facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none", sealed=sealed)
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
@@ -5164,7 +5175,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 pkg.resolve().relative_to(ROOT).as_posix() in UNREAD_FACTS:
             unread = background.submit(timed, unread_facts, pkg, facts["modules"], work, sealed)
         if early:
-            replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
+            replayed = background.submit(timed, final_replay, pkg, policy, facts, rep["toolchain"], work, replay_cache,
                                          closure, search, dig, store) if replay else None
             scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy, sealed)
             digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"], sealed)
@@ -5182,7 +5193,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
     rep["seconds"]["audit"] = round(time.monotonic() - s - sum(waited), 1)
     if replay and not lifts and not early:
-        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure,
+        replayed = background.submit(timed, final_replay, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure,
                                      search, dig, store)
     if lifts:
         try:
