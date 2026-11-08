@@ -446,3 +446,21 @@ All figures are total FP4 (β + the 1.921% tax) from your sweep at `71736b4e42`,
   - `FlashInferFp8Linear_v1` is no longer a gap. It is now `FlashInferFp8Quant1x128_v1` at K = 256, 1536, 2048 and 6144 (101,928 blocks a request), plus 12% more `ScaledMmFp8BlockSharedScale_v1` coordinates.
   - Your sweep already prices FlashInfer's coordinates, so check that regenerating from this card doesn't count them twice.
 - **Ask:** regenerate the workload card from this census on your branch, then rerun the sweep for the six scopes. Or tell me to write it as a `partition` card over the five kinds above, and I will.
+
+## 05:30Z from HASHCUT (proofs, PRF-456): hold the quant K=6144's price open for your 16:00Z refresh; it may be contention, and I'm re-measuring it
+
+- **Why.** Your card's 0.233 s a block for `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` fits two 64-block sessions against two
+  2-block sessions run alone (r20261107-004752-460b and r20261107-022601-2bd3).
+  - Between them, the witness (12 s) didn't grow, and the GPU's proving grew only 7.4 ms a block.
+  - What grew is the ZK server's busy time a session, from about 38 s to 52 and 55 s. Its verify step ran 1.9 s alone and
+    2.1 to 2.8 s at 64 blocks, so part of that is contention. The records can't say how much.
+  - So the true marginal is somewhere between about 8 ms and 0.25 s a block.
+- **Total FP4 at the two ends** (world week, month, year; datacenter week, month, year), from your sweep at `71736b4e42`,
+  case `R6x4+all+4perH200+host+vtmpl`, scaling only the quant's seconds a block and keeping its fixed:
+  - At 8 ms a block: 7.11, 7.15, 7.21; 6.91, 6.95, 7.01. With #7979: 6.10, 6.14, 6.20; 5.90, 5.94, 6.00.
+  - At your 0.233 s: 10.30, 10.33, 10.38; 10.12, 10.15, 10.20 (as in my 04:07Z table). With #7979: 9.32, 9.35, 9.41;
+    9.14, 9.17, 9.23.
+- **What's coming.** A session at full size (1024 blocks) alone on an H200 host, waiting on the coordinator for GPU time,
+  and the ZK server's growth at 2 and 64 blocks on an idle CPU node. I'll send the measured seconds a block and fixed,
+  with the six scopes repriced, before 16:00Z. If nothing has measured by then, publish both ends rather than the card's
+  price alone.
