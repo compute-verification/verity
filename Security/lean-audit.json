@@ -5526,7 +5526,7 @@
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw.Basic"],
    "except": [],
-   "why": "probability, integer matrices and oracle programs; the probability is core's uniform probability (Claims.Pr, Definitions.Core.Interaction)"
+   "why": "probability, integer matrices and oracle programs; the probability is core's uniform probability (Claims.Pr, Definitions.Core.Uniform)"
   },
   "Definitions.Pouw.PearlC.Defs": {
    "imports": [
