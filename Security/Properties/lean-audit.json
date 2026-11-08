@@ -23852,7 +23852,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "f77732357880d4a8ec4443cac30f877bffe80a0384241c7fe65c164382d5711f",
+   "digest": "446ac89d557d5b0159fe675f51a9d1d15e283230f5bb8d704770d36c979b7009",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -23886,7 +23886,7 @@
     "Spot.OneStage.coinsWhy": "d2348a8b48bdc5bde91263fc72b80320eb9d3048ff53317b5d2a985f9d71e700",
     "Spot.OneStage.commitmentOf": "545bdd6dcd795cb086ecfe46bb7a34720a759c018d2082b6593bad74ac6be5b6",
     "Spot.OneStage.coveredDesign": "747cd2e2ad73ebf176471b7984c746e0f1ab862eb8a96a128370af38365eaa32",
-    "Spot.OneStage.design": "6f4623e016287ea7b289e4b5dc8b3623e5a6221d5313aa58a4c4093807df4956",
+    "Spot.OneStage.design": "ae6dc3cfe51dd3509c97a3ec788fca569bdccb8097b227c4a85876d77f2f9ca8",
     "Spot.OneStage.drawnFrom": "5f173518c14bc380f20113c0b99c3d5a869c6b883ad400ca05dcec0c1946f254",
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "b41893c95a243f5b9929c68df678f3483f8fa40523b96850745107b669388aad",
@@ -24079,10 +24079,12 @@
    }
   },
   "Spot.Rate": {
-   "digest": "6440f50ad9e9ed47054b3b7c5e5dbbf4b13c049b39a24e48556b3d4bc227e64b",
+   "digest": "142053e320ecadab260d8d99336cfe8bf1314404c65562a12e164d4294d7ca91",
    "definitions": {
     "Spot.Rate.count": "cfa90464ebe2462e14980815cc01ea2e0a9160c8ae7db3feff08cd8372677541",
-    "Spot.Rate.floor": "5315cb9b9f43964f7207f192dc136fa908ce5fd576ea12002c3376a0254e94f2"
+    "Spot.Rate.floor": "5315cb9b9f43964f7207f192dc136fa908ce5fd576ea12002c3376a0254e94f2",
+    "Spot.Rate.need": "58140f39f35c5bc5e0dabf7dd3690f5c49270ad921c52d356033f7a5c19d4542",
+    "Spot.Rate.stratK": "fee35af0212dae447096c6ec3fe450001c867ed29dbba8f202daa48e79ea02f1"
    }
   },
   "Spot.Record": {
@@ -24203,7 +24205,7 @@
    }
   },
   "Spot.Select": {
-   "digest": "8bcc51c7c1a9a542a884f8573be469275a3a57592e1f341cafd2640689bb45f0",
+   "digest": "90bf38825e4c5f7236715bf41f704e543cae139071d8240afd189f5856b61a53",
    "definitions": {
     "Spot.Select.Counts": "2e33b2798b55b40b4b75a8ad1872035306d6a5171c82830a7982e4286890d3ed",
     "Spot.Select.Counts.each": "6662fd5b99a8dce5d39f1b90444f95bf2e5609777cda116202bcd6fb3a15a84f",
@@ -24214,9 +24216,9 @@
     "Spot.Select.Rule.ctorIdx": "85e38848e6358e5467ed7af567160f0e9d25c49e17b5a29da9b103cf32f51562",
     "Spot.Select.Rule.law": "af04f464c89da336f50a1b744e513d2c1eaedc7947fd94c55d1c2bb0b0ca46de",
     "Spot.Select.Rule.lawOver": "410bc0a1ac100752e20b034c7dd241c36527244f630e2e01e08726f5b8863d35",
-    "Spot.Select.Rule.over": "0fff7979881924d1d84208e6f8b7ff7c9404779f9d1fc756a4b56cec16831659",
+    "Spot.Select.Rule.over": "5c68cd6852f0d08b9f99b94988bbb4dacf40b90e3b52d2b43dfc6a37ce6f73e1",
     "Spot.Select.Rule.rec": "dd02fb0216952bff99e435447b8ef31bd58db23b403211317503e5ff5e82138d",
-    "Spot.Select.Rule.tableOver": "1ad0b6f5b9da250cb6c9bb1fd9d76e252cedb0038025bd420958165198ce28f1",
+    "Spot.Select.Rule.tableOver": "d9fd0ec66dc476a738529f93cf15591c9f54ca6e15d97607c1825625c1c641f4",
     "Spot.Select.Rule.twoStage": "b78da5379058d42cc74963db9a8c2be18efef9cdefcdfa8804577ff68965500e",
     "Spot.Select.cellObj": "f922afb9208d9e88ab81d3e10af1654a79c8240978f67ba9a4afecbbced92d1c",
     "Spot.Select.parseDesign": "86dc56daf98efc47d02553adcdbac8ecafe0cc30160f0075121df9193d95e097",
@@ -24226,7 +24228,8 @@
     "Spot.Select.secondProblem": "0cd1beb3f8acc5d9de6bdd996650b81a6f2a340863f384b34efa62cb2c605ba7",
     "Spot.Select.select": "37c079d53f5b0fcd128e1b82bdb0e6736c1c4947aba564936134c951c5738c21",
     "Spot.Select.selectSecond": "efec5299579f880c15dbf965e4a6c9d55910b06ed47b26f56358fc1b0ee8639b",
-    "Spot.Select.textOver": "f50c8ad6eaac319209bd7f50bcae15719e907c16fc103c80ce7276c0bde57f40",
+    "Spot.Select.strataSizes": "1f268bbd851d388888435eb61dea2c816a13059dfce51a0ae5b9f79ed17a0702",
+    "Spot.Select.textOver": "b247eab471f6e1357ab5fbaa359d256dafff9ea7ff8055f566cf8a3086ab3ab9",
     "_private.Spot.Select.0.Spot.Select.digits": "87c7fd438f54182c0bfd410dfa239a6895f4b1277de9965eeadc010b2e051d8f",
     "_private.Spot.Select.0.Spot.Select.inRange": "3e8302bc5b8fbb76dd7598526ed2b694ba338d5ff9c22327ee43c8a0fc13c05d",
     "_private.Spot.Select.0.Spot.Select.split1": "93d235224ab77c221cd0d830d327962ca2647f734f774bce82e1ac16b4639df7"
