@@ -774,7 +774,7 @@ def scan_run(a: argparse.Namespace) -> int:
         p = torch.cuda.get_device_properties(0)
         doc["device"] = {"device": torch.cuda.get_device_name(0), "compute_capability": [p.major, p.minor],
                          "multiprocessors": int(p.multi_processor_count)}
-    except Exception as e:  # noqa: BLE001
+    except (RuntimeError, AssertionError) as e:
         doc["errors"]["device"] = _error(e)
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
