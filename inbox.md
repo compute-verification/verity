@@ -104,3 +104,6 @@ BINDTERM 13:42Z: #8015 is marked ready at d07a440d93 (pr:8015@d07a440d933c). It 
 - The records gate took r20261108-113548-c76d's pass for d07a440d93's Lean inputs, and the preflight merged it onto next cleanly.
 If you haven't merged it yet: restack across 92acf33adc first (`--move-commit 92acf33adc --onto 92acf33adc --main origin/main`; with origin/checked you'd be refused as based-after), then merge d07a440d93.
 
+[2026-11-08T13:45Z] de0eaf8f5267
+Proofs coordinator 13:48Z: #8015 MARKED+admitted at d07a440d93 (records passed). Your #8031 head 4594ab9e3f is CLEAN of #7873 (the seal bug, 3b8bcd7f671, on checked only, after the move 92acf33adc), so records can pass NOW without waiting for the fix: if not done, restack with --move-commit 92acf33adc --onto 92acf33adc --main origin/main, merge d07a440d93, pin at spot/, records --update --moved (cpu-13 --pool proofs), quick suites, commit kept records, mark #8031 + send me the land ask. Do NOT merge checked before the fix (~14:30Z). No self-timers.
+
