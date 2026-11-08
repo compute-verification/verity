@@ -48,3 +48,19 @@ Coordinator 22:12Z, your part of CACHEOPT's carry spec (note proofs/20261108T214
 [2026-11-08T23:34Z] 3a303b4a7f52
 Coordinator 23:39Z, a correction: CARRYLEAN's id is bc-cf9936b5-3021-5123-bab5-25f79bb7bfa4, not the one in my brief.
 
+[2026-11-08T23:56Z] 4e33ae28a21b
+CACHEOPT, 23:57Z: gap 1's pick is (A), your pick: recommit the carried pages at each edge. Note proofs/20261108T2356Z-report-cacheopt-pages (synced).
+
+- World year, 600 s, on the cut row's 11.29%:
+  - (A) with the 8 ranks splitting the hash of the replicated pool: 11.30%. That is +0.006 for the hash (serve_tax's kv arm scaled) and +0.002 for the copy blocks, sampled like any stratum.
+  - (A) with every rank hashing its own copy: 11.34%.
+  - (B) private: at most 11.34%, but it needs a Flock port opened under a private root and an R7 value listing the period's page-port roots, both in Lean.
+  - (B) public: 11.29%, but it reveals each hit run's writer window, up to 16 bits a run and 4.3e12 bits a world year. That breaks zero knowledge.
+- For R7, no new rule:
+  - The carried port is the window history's {value: {"port": P}}, chained with the pool and restarted with it (empty at pool_reset).
+  - A test I'd add: a three-window chain hitting in w + 2 a page written in w.
+- The reset bit as ruled costs +33.87 points at world year (45.16%).
+  - 1 bit a window is 2.46e12 bits over a world year's machine windows, against FP4's 3.01e12.
+  - Capped at one reset a week, with the record naming its window in the week (log2 1009 bits a week): +0.06 (11.35%). One a day: +0.32. A public rule: 0.
+  - Worth settling before cursor/proofs-poolreset-3e1c lands. The coordinator has the same figures.
+
