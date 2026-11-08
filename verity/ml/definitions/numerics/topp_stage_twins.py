@@ -15,7 +15,7 @@ from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import sampling_rows as SR
 from verity.ml.definitions.registry import topp_keep_builder as K
 from verity.ml.definitions.registry import topp_stages as T
-from verity.ml.definitions.registry.topp_word_gates import CW, GATES, SIG, WIDTH
+from verity.ml.definitions.registry.topp_word_gates import GATES, SIG, WIDTH
 
 _M32 = np.uint64(0xFFFFFFFF)
 
