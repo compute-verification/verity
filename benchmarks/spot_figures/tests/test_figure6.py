@@ -7,13 +7,14 @@ ADVICE = {"machine_windows": {f1.PRIMARY: 2.0e12, f1.SECONDARY: 6.0e8},
                    {"label": "With the tick", "tick": True, "bits": 0}]}
 
 
-def _point(load, rate, tick, ttft):
-    return {"point": load, "load": load, "rate": rate, "tick": tick, "ttft_p50_s": ttft, "ttft_p99_s": 2 * ttft,
+def _point(name, load, rate, tick, ttft):
+    return {"point": name, "load": load, "rate": rate, "tick": tick, "ttft_p50_s": ttft, "ttft_p99_s": 2 * ttft,
             "itl_p50_s": .03, "output_tok_per_s": 1000.0, "goodput_ttft_req_per_s": rate}
 
 
-POINTS = [_point("p60", 1.0, None, .4), _point("p60", 1.0, {"sat_ms": 180, "free_ms": 220}, .7),
-          _point("p60", 1.0, {"sat_ms": 90, "free_ms": 110}, .5), _point("p100", 1.67, None, .6)]
+POINTS = [_point("B60", "p60", 1.0, None, .4), _point("T60", "p60", 1.0, {"sat_ms": 180, "free_ms": 220}, .7),
+          _point("T60f", "p60", 1.0, {"sat_ms": 90, "free_ms": 110}, .5),
+          _point("B100", "p100", 1.67, None, .6) | {"preemptions": 65}]
 
 
 @pytest.fixture(scope="module")
@@ -32,6 +33,22 @@ def test_the_sweep_groups_by_load_with_its_no_tick_point_and_ticks_by_period(out
     p100, p60 = out["sweep"]
     assert p100["load"] == "p100" and not p100["tick"]
     assert p60["none"]["ttft_p50_s"] == .4 and [r["free_ms"] for r in p60["tick"]] == [110, 220]
+
+
+def test_an_old_rule_point_is_off_its_line_and_the_caption_says_why_its_queue_grew(tmp_path):
+    old = _point("T60s", "p60", 1.0, {"sat_ms": 60, "free_ms": 70}, 20.0) | {"busy_cycle": {"mean_us": 75_000}}
+    out = f.run("GLM-5.3", ADVICE, POINTS + [old], ("T60s",))
+    assert [(r["point"], r["old_rule"]) for r in out["sweep"][1]["tick"]] == [("T60s", True), ("T60f", False),
+                                                                               ("T60", False)]
+    text = f.caption(out)
+    assert "τ_sat / τ_free 90 / 110 ms, 180 / 220 ms. " in text
+    assert "throughput is 1.00–1.00x the no-tick rate" in text and "τ_free 220 ms, ITL p50 1x and TTFT p50 1.75x" in text
+    assert "p100's no-tick point preempted 65 requests" in text
+    assert ("T60s took τ_sat from the no-tick step at its load, the old rule: 60 ms against the tick arm's own 75 ms "
+            "step, so its queue grew (TTFT p50 50x)") in text
+    assert [p.name for p in f.render(out, tmp_path)] == ["figure6.png", "figure6.svg"]
+    with pytest.raises(ValueError, match="no tick point"):
+        f.run("GLM-5.3", ADVICE, POINTS, ("B60",))
 
 
 def test_with_the_tick_a_request_joins_the_first_tick_after_its_bucket_closes():

@@ -12,7 +12,7 @@ uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # F
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P]  # Figure 5, from break-even surfaces
-uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] --out DIR  # Figure 6, the tick
+uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -162,7 +162,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;
   - (b) latency and throughput against the tick period, beside each load's no-tick point, from the sweep's
-    `point.json` files, pending without them;
+    `point.json` files, pending without them; a tick point named by `--old-rule` took τ_sat from the no-tick step at
+    its own load and is drawn hollow, off its load's line, with its queue growth in the caption;
   - (c) the advice's term, a machine window's bits times the scope's windows, with and without the tick, against the
     FP4 weights. It reads an advice file (`machine_windows`, and `arms` of `label`, `tick` and `bits`, with a
     `pending` reason where the arm's figure isn't a result yet, drawn hatched).

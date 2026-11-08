@@ -3,14 +3,16 @@ admission, with the network certifier stamping each arrival's release bucket as 
 throughput against the tick period, beside the no-tick point at each load; (c) the scheduler advice's term in the
 exfiltration bound, with and without the tick, over the headline and secondary scopes, against the model's FP4 weights.
 
-(b) reads the sweep's points (`point.json`: `load`, `rate`, `tick` with `sat_ms` and `free_ms`, or null without the
-tick, `ttft_p50_s`, `ttft_p99_s`, `itl_p50_s`, `output_tok_per_s`, `goodput_ttft_req_per_s`) and is pending without
-them. (c) reads an advice file: `machine_windows` by scope and `arms`, each a `label`, `tick` (true or false) and
-`bits`, the advice a machine window is charged, so its term is that times the scope's windows, and a `pending` reason
-where the arm's figure isn't a result yet, drawn hatched.
+(b) reads the sweep's points (`point.json`: `point`, `load`, `rate`, `tick` with `sat_ms` and `free_ms`, or null
+without the tick, `ttft_p50_s`, `ttft_p99_s`, `itl_p50_s`, `output_tok_per_s`, `goodput_ttft_req_per_s`, and
+`busy_cycle.mean_us` and `preemptions` where measured) and is pending without them. A tick point named by
+`--old-rule` took τ_sat from the no-tick step at its own load, the old rule, and is drawn hollow, off its load's line.
+(c) reads an advice file: `machine_windows` by scope and `arms`, each a `label`, `tick` (true or false) and `bits`, the
+advice a machine window is charged, so its term is that times the scope's windows, and a `pending` reason where the
+arm's figure isn't a result yet, drawn hatched.
 
     uv run python benchmarks/spot_figures/figure6.py --model GLM-5.3 --advice ADVICE.json [--points POINT.json...]
-        [--out DIR]
+        [--old-rule POINT...] [--out DIR]
 """
 from __future__ import annotations
 
@@ -52,15 +54,22 @@ def schematic() -> dict:
             "requests": rows}
 
 
-def sweep(points: list[dict]) -> list[dict]:
-    """The points by load, each load's no-tick point first and its tick points by period."""
+def sweep(points: list[dict], old_rule: tuple[str, ...] = ()) -> list[dict]:
+    """The points by load, each load's no-tick point first and its tick points by period, those in `old_rule` marked."""
+    unknown = set(old_rule) - {p.get("point") for p in points if p.get("tick")}
+    if unknown:
+        raise ValueError(f"--old-rule names no tick point of the sweep: {sorted(unknown)}")
     loads: dict[str, dict] = {}
     for p in points:
         g = loads.setdefault(p["load"], {"load": p["load"], "rate": p["rate"], "none": None, "tick": []})
+        step = (p.get("busy_cycle") or {}).get("mean_us")
         row = {m: p.get(m) for m, _ in METRICS} | {"goodput_ttft_req_per_s": p.get("goodput_ttft_req_per_s"),
-                                                     "point": p.get("point"), "run": p.get("run_id")}
+                                                     "point": p.get("point"), "run": p.get("run_id"),
+                                                     "step_ms": step / 1e3 if step is not None else None,
+                                                     "preemptions": p.get("preemptions")}
         if p.get("tick"):
-            g["tick"].append(row | {"sat_ms": p["tick"]["sat_ms"], "free_ms": p["tick"]["free_ms"]})
+            g["tick"].append(row | {"sat_ms": p["tick"]["sat_ms"], "free_ms": p["tick"]["free_ms"],
+                                    "old_rule": p.get("point") in old_rule})
         else:
             g["none"] = row
     for g in loads.values():
@@ -68,7 +77,7 @@ def sweep(points: list[dict]) -> list[dict]:
     return sorted(loads.values(), key=lambda g: -g["rate"])
 
 
-def run(model: str, advice: dict, points: list[dict]) -> dict:
+def run(model: str, advice: dict, points: list[dict], old_rule: tuple[str, ...] = ()) -> dict:
     prefix = TARGET.format(model=model)
     target = next(line for card in f1.slot_cards(model).get("references", []) for line in card["value"]["lines"]
                   if line["label"].startswith(prefix))
@@ -77,7 +86,7 @@ def run(model: str, advice: dict, points: list[dict]) -> dict:
     arms = [a | {"by_scope": {s: a["bits"] * windows[s] for s in scopes}} for a in advice["arms"]]
     return {"schema": SCHEMA, "model": model, "primary": f1.PRIMARY, "secondary": f1.SECONDARY,
             "target": {"label": target["label"], "bits": target["value"]}, "windows": {s: windows[s] for s in scopes},
-            "arms": arms, "schematic": schematic(), "sweep": sweep(points)}
+            "arms": arms, "schematic": schematic(), "sweep": sweep(points, old_rule)}
 
 
 def _bytes(bits: float) -> str:
@@ -91,18 +100,42 @@ def _times(ratio: float) -> str:
     return f"{ratio:,.0f}x" if ratio >= 100 else f"{ratio:.3g}x" if ratio >= 1 else f"{ratio:.2g}x"
 
 
+def _sweep_caption(out: dict) -> str:
+    sw = out["sweep"]
+    loads = ", ".join(f"{g['load']} ({g['rate']:g} req/s)" for g in sw)
+    taus = sorted({(r["sat_ms"], r["free_ms"]) for g in sw for r in g["tick"] if not r["old_rule"]})
+    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the production "
+            "scheduler beside the tick at each period, τ_sat / τ_free "
+            + ", ".join(f"{a:.0f} / {f:.0f} ms" for a, f in taus) + ". ")
+    pairs = [(g, r) for g in sw if g["none"] for r in g["tick"]]
+
+    def ratio(g, r, m):
+        return r[m] / g["none"][m] if r[m] is not None and g["none"][m] else None
+
+    rates = [x for g, r in pairs if (x := ratio(g, r, "output_tok_per_s")) is not None]
+    if rates:
+        text += f"The tick's throughput is {min(rates):.2f}–{max(rates):.2f}x the no-tick rate at the same load"
+        costs = [f"at {g['load']} and τ_free {r['free_ms']:.0f} ms, ITL p50 {_times(i)} and TTFT p50 {_times(f)}"
+                 for g, r in pairs if not r["old_rule"]
+                 and (i := ratio(g, r, "itl_p50_s")) is not None and (f := ratio(g, r, "ttft_p50_s")) is not None]
+        text += ("; the cost is latency: " + "; ".join(costs) if costs else "") + ". "
+    text += "".join(f"{g['load']}'s no-tick point preempted {g['none']['preemptions']:,.0f} requests: that load is "
+                    "past this configuration's capacity. " for g in sw if g["none"] and g["none"].get("preemptions"))
+    for g, r in pairs:
+        if r["old_rule"] and r["step_ms"] is not None and (f := ratio(g, r, "ttft_p50_s")) is not None:
+            text += (f"{r['point']} took τ_sat from the no-tick step at its load, the old rule: {r['sat_ms']:.0f} ms "
+                     f"against the tick arm's own {r['step_ms']:.0f} ms step, so its queue grew (TTFT p50 {_times(f)}); "
+                     "it is drawn hollow, off its load's line. ")
+    return text
+
+
 def caption(out: dict) -> str:
     p, s, t = out["primary"], out["secondary"], out["target"]
     a = ("(a) Continuously, a request joins the next step after it arrives, so which step it joins is set by its exact "
          "arrival and is advice the scheduler sends. With the certified tick, steps start only at tick boundaries and a "
          "request joins the first one after its release bucket closes, in release order: the batch is then a function "
          "of what the network certifier, the auditor's device, stamped. ")
-    if out["sweep"]:
-        loads = ", ".join(f"{g['load']} ({g['rate']:g} req/s)" for g in out["sweep"])
-        b = (f"(b) {out['model']} served at each load ({loads}), the no-tick point on the production scheduler beside "
-             f"the tick at each period τ_free (τ_sat is 0.9/1.1 of it). ")
-    else:
-        b = "(b) Pending: the sweep of the tick's periods and loads. "
+    b = _sweep_caption(out) if out["sweep"] else "(b) Pending: the sweep of the tick's periods and loads. "
     rows = []
     for arm in out["arms"]:
         v, w = arm["by_scope"][p], arm["by_scope"][s]
@@ -169,7 +202,7 @@ def _timeline(ax, sc: dict) -> None:
 
 
 def _sweep(axes, sw: list[dict]) -> None:
-    from matplotlib.ticker import FixedLocator, NullLocator
+    from matplotlib.ticker import FixedLocator, FuncFormatter, LogLocator, NullLocator
 
     taus = sorted({r["free_ms"] for g in sw for r in g["tick"]})
     none_x = taus[0] / 2.2 if taus else 1.0
@@ -186,14 +219,26 @@ def _sweep(axes, sw: list[dict]) -> None:
         scale = 1e3 if metric == "itl_p50_s" else 1.0
         for k, g in enumerate(sw):
             color = COLORS[k % len(COLORS)]
-            xs = [r["free_ms"] for r in g["tick"] if r[metric] is not None]
-            ys = [r[metric] * scale for r in g["tick"] if r[metric] is not None]
-            ax.plot(xs, ys, color=color, marker="o", ms=8, lw=2, label=f"{g['load']}, {g['rate']:g} req/s")
+            on = [r for r in g["tick"] if r[metric] is not None and not r["old_rule"]]
+            ax.plot([r["free_ms"] for r in on], [r[metric] * scale for r in on], color=color, marker="o", ms=8, lw=2,
+                    label=f"{g['load']}, {g['rate']:g} req/s")
+            for r in g["tick"]:
+                if r["old_rule"] and r[metric] is not None:
+                    ax.plot([r["free_ms"]], [r[metric] * scale], color=color, marker="o", ms=9, mfc="white", mew=2,
+                            ls="none")
+                    ax.annotate(r["point"] or "", (r["free_ms"], r[metric] * scale), (6, 4),
+                                textcoords="offset points", fontsize=11, color=color)
             if g["none"] and g["none"][metric] is not None:
                 y0 = g["none"][metric] * scale
                 ax.plot([none_x], [y0], color=color, marker="D", ms=9, mfc="white", mew=2)
                 ax.axhline(y0, color=color, lw=.8, ls=(0, (2, 3)), zorder=0)
         ax.set_xscale("log")
+        ys = [r[metric] for g in sw for r in g["tick"] + [g["none"] or {metric: None}] if r[metric]]
+        if ys and max(ys) > 20 * min(ys):
+            ax.set_yscale("log")
+            ax.yaxis.set_major_locator(LogLocator(subs=(1, 2, 5)))
+            ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+            ax.yaxis.set_minor_locator(NullLocator())
         ax.xaxis.set_major_locator(FixedLocator([none_x] + taus))
         ax.xaxis.set_minor_locator(NullLocator())
         ax.set_xticklabels(["no\ntick"] + [f"{t:.0f}" for t in taus], fontsize=12)
@@ -201,7 +246,13 @@ def _sweep(axes, sw: list[dict]) -> None:
         ax.set_xlabel("τ_free (ms)", fontsize=13)
         ax.grid(which="major", axis="y", color="#E2E2E2", lw=.45)
     if sw:
-        axes[0].legend(loc="upper left", frameon=False, fontsize=12)
+        from matplotlib.lines import Line2D
+
+        handles, _ = axes[0].get_legend_handles_labels()
+        if any(r["old_rule"] for g in sw for r in g["tick"]):
+            handles.append(Line2D([], [], color="#555555", marker="o", ms=9, mfc="white", mew=2, ls="none",
+                                  label="old τ rule"))
+        axes[-1].legend(handles=handles, loc="center", frameon=False, fontsize=12)
 
 
 def _advice(ax, out: dict) -> None:
@@ -254,10 +305,10 @@ def render(out: dict, outdir: Path) -> list[Path]:
                          "mathtext.fontset": "stix", "font.size": 16, "axes.labelsize": 15, "xtick.labelsize": 12,
                          "ytick.labelsize": 12, "savefig.facecolor": "white", "figure.facecolor": "white"})
     fig = plt.figure(figsize=(18, 22))
-    grid = fig.add_gridspec(3, 4, height_ratios=(1.25, 1, 1.1), hspace=.42, wspace=.32, left=.26, right=.97,
-                            top=.94, bottom=.2)
+    rows = {"height_ratios": (1.25, 1, 1.1), "hspace": .42, "wspace": .32, "right": .97, "top": .94, "bottom": .2}
+    grid, sweep_grid = fig.add_gridspec(3, 4, left=.26, **rows), fig.add_gridspec(3, 4, left=.09, **rows)
     _timeline(fig.add_subplot(grid[0, :]), out["schematic"])
-    _sweep([fig.add_subplot(grid[1, k]) for k in range(4)], out["sweep"])
+    _sweep([fig.add_subplot(sweep_grid[1, k]) for k in range(4)], out["sweep"])
     _advice(fig.add_subplot(grid[2, :]), out)
     for y, tag in ((.935, "(a)"), (.655, "(b)"), (.43, "(c)")):
         fig.text(.03, y, tag, fontsize=20, weight="bold")
@@ -272,9 +323,12 @@ def main(argv=None) -> None:
     ap.add_argument("--model", default="GLM-5.3")
     ap.add_argument("--advice", type=Path, required=True, help="the advice file: machine windows and arms")
     ap.add_argument("--points", type=Path, nargs="*", default=[], help="the sweep's point.json files")
+    ap.add_argument("--old-rule", nargs="*", default=[], metavar="POINT",
+                    help="tick points whose τ_sat came from the no-tick step at their own load")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
-    out = run(args.model, json.loads(args.advice.read_text()), [json.loads(p.read_text()) for p in args.points])
+    out = run(args.model, json.loads(args.advice.read_text()), [json.loads(p.read_text()) for p in args.points],
+              tuple(args.old_rule))
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "figure6.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
     print(*render(out, args.out), sep="\n")
