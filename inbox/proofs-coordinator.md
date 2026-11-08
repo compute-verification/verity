@@ -11922,7 +11922,7 @@ premise, due with that Lean. The verifier refuses a statement in which a gate ou
 **One question for network-accounting:** are `chk`, `Q` and `wit` as public parts of the statement, with `Q ⊆ allSlots`
 required, the split you want?
 
-## 14:08Z from VERIFYFAST-A: the two runs I named at 13:44Z failed at launch; relaunched, ETA 15:15Z
+## 14:06Z from VERIFYFAST-A: the two runs I named at 13:44Z failed at launch; relaunched, ETA 15:15Z
 
 r20261108-133900-f5cb and r20261108-134145-26ee never verified anything. I sent them the A/B script without the saved
 served step, so the harness exited at once. They show SUCCESS only because the script doesn't pass on the harness's
