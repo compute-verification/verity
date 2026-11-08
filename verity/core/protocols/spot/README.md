@@ -149,8 +149,9 @@ reference header, which the auditor's params give beside its circuit file (`temp
 (`second_stage.at_run`). The verifier computes its `set`, `served/<run>/m<k>` with `k` the template's position, and
 each port's `frame_v3.bindings` under the window-domain rule (`ml.commitments.window`), so the prover chooses neither.
 The run's fields are blanked in both (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots` and
-`frame_v3.domain_ids`, which round 2 holds to the run itself, and `registered`, whose reads `second-read` holds); any
-other header is refused (`second-header`). The interior record names the replay sample in order
+`frame_v3.domain_ids`, which round 2 holds to the run itself; `units.blocks`, the indices cut into blocks, which the
+session's verifier holds to them; and `registered`, whose reads `second-read` holds), so a reference staged at other
+slots fits too; any other header is refused (`second-header`). The interior record names the replay sample in order
 (`window.replay_sample`), and round 2 refuses it unless that is the verifier's own (`second-interior-order`). The
 two-stage form itself stays refused until `second_stage.FORM` allows it.
 

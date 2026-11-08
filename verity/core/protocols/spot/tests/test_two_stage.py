@@ -265,7 +265,8 @@ def _frame(key: str, f):
     (_frame("bindings", lambda b: {"x": b["x"]}), ["second-header"]),
     (_frame("schemas", lambda s: {**s, "out": "hm96-sha512/row/v1"}), ["second-header"]),
     (_header(registered={"x": {"value": BX, "positions": [0], "paths": [[0]]}}), ["two-stage-form"]),
-    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), ["second-header"]),
+    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), ["two-stage-form"]),
+    (_restated(header=lambda h: {**h, "units": {**h["units"], "units_per_vu": 2}}), ["second-header"]),
     (_restated(header=lambda h: {**h, "frame_v3": {**h["frame_v3"], "owner": "other"}}), ["second-header"]),
     (_frame("roots", lambda r: {**r, "out": "00" * 64}), ["second-roots"]),
     (_frame("roots", lambda r: {k: v for k, v in r.items() if k != "out"}), ["second-roots"]),
@@ -288,7 +289,7 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     when its session's reads are reported, since no statement makes them), one whose header has a key its template's
     reference header lacks, at the top or in an object, or holds otherwise, or names another input set than the run's
     for its position or another binding than the run's for a port (`second-header`; the `registered` it names is the
-    reads' business, not the header's), and one that isn't the
+    reads' business and its `units.blocks` the session verifier's, not the header's), and one that isn't the
     run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
     or a port of it it neither roots nor reads (`second-roots`), another sample (`second-sample`), or a read of another
     cell's replay block, another slot's rows, a boundary port by a port no link names, another port's own, or a linked
@@ -322,9 +323,10 @@ FV = REFERENCE["frame_v3"]
     ({**REFERENCE, "instances": 7, "units": {**REFERENCE["units"], "indices": [9]},
       "frame_v3": {**FV, "roots": {"x": "00" * 64}, "domain_ids": {}}, "registered": {"x": {"value": "w"}}},
      ["two-stage-form"]),
+    (FC.reference_header(TEMPLATE, 9, 9 + Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA)), ["two-stage-form"]),
     ({**REFERENCE, "set": "served/other/m0", "frame_v3": {**FV, "bindings": {"x": "11" * 64}}}, ["two-stage-form"]),
     ({**REFERENCE, "scheme": "frame-v3-sha512/other"}, ["second-header"]),
-    ({**REFERENCE, "units": {**REFERENCE["units"], "blocks": [[0]]}}, ["second-header"]),
+    ({**REFERENCE, "units": {**REFERENCE["units"], "units_per_vu": 2}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "out": "hm96-sha512/row/v1"}}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {k: v for k, v in FV.items() if k != "schemas"}}, ["second-header"]),
@@ -335,12 +337,12 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     """`second-header`, by both verifiers: each statement's header is the reference header the auditor's params give its
     template (`template_circuits`) placed in the run (`second_stage.at_run`: its `set` the run's `served/<run>/m<k>`,
     its `frame_v3.bindings` each `frame_v3.schemas` port's binding in the run, both the verifier's), the two the same
-    with the run's fields blanked (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots`,
-    `frame_v3.domain_ids` and `registered`). The honest run passes unchanged, refused only on the form, under a
-    reference fixed before the run that names none of the run's fields or names them otherwise, or names another set
-    and bindings, which the verifier replaces; a reference with another scheme, other `units`, another schema, a port
-    the interior record lacks or none of the ports, or a key the header lacks, is refused by name, and so is the
-    statement when the params give no reference."""
+    with the run's fields blanked (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `units.blocks`,
+    `frame_v3.roots`, `frame_v3.domain_ids` and `registered`). The honest run passes unchanged, refused only on the form,
+    under a reference fixed before the run that names none of the run's fields or names them otherwise, or was staged at
+    other slots, or names another set and bindings, which the verifier replaces; a reference with another scheme, another
+    `units.units_per_vu`, another schema, a port the interior record lacks or none of the ports, or a key the header
+    lacks, is refused by name, and so is the statement when the params give no reference."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
     checks = stream.records[0]["audit"]["checks"]

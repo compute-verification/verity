@@ -3583,14 +3583,16 @@ def _inner_record(**fields):
 
 def _restated(ss, x: int):
     """The `x`-th change to a two-stage run's second-stage statements `ss`: its statement twice, of another template,
-    without a field or with one more, or its header's slots, instances, scheme, a root or the domains, its set (another
-    part's) or its ports' bindings, its read paths named (`registered`, which round 2 blanks), its sample's units or
+    without a field or with one more, or its header's slots, their blocks (which round 2 blanks), instances, scheme, a
+    root or the domains, its set (another part's) or its ports' bindings, its read paths named (`registered`, which
+    round 2 blanks), its sample's units or
     population, or its registered reads (a boundary port's, read by a port of no interior root or by one of the
     interior's; the interior's `x`, each slot a row `x` on; or not an object) changed."""
     if not (isinstance(ss, list) and ss and isinstance(ss[0], dict)):
         return ss
     s = ss[0]
     h = s["header"] if isinstance(s.get("header"), dict) else {}
+    units = h["units"] if isinstance(h.get("units"), dict) else {}
     fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
     roots = fv["roots"] if isinstance(fv.get("roots"), dict) else {}
     domains = fv["domain_ids"] if isinstance(fv.get("domain_ids"), dict) else {}
@@ -3601,7 +3603,8 @@ def _restated(ss, x: int):
            "reads": [(u + x) % 6 for u in range(6)]}
     changed = [
         [s, s], [{**s, "template": "Other_v0"}], [{k: v for k, v in s.items() if k != "draw"}], [{**s, "more": 1}],
-        [{**s, "header": {**h, "units": {"indices": list(range(1, 7))}}}], [{**s, "header": {**h, "instances": 5}}],
+        [{**s, "header": {**h, "units": {"indices": list(range(1, 7))}}}],
+        [{**s, "header": {**h, "units": {**units, "blocks": [[x % 6]]}}}], [{**s, "header": {**h, "instances": 5}}],
         [{**s, "header": {**h, "scheme": "frame-v3-sha512/other"}}],
         [{**s, "header": {**h, "frame_v3": {**fv, "roots": {**roots, "x": "00" * 64}}}}],
         [{**s, "header": {**h, "frame_v3": {**fv, "domain_ids": {}}}}],
@@ -3847,7 +3850,8 @@ def _referenced(c: dict, x: int) -> dict:
     units = ref["units"] if isinstance(ref.get("units"), dict) else {}
     fv = ref["frame_v3"] if isinstance(ref.get("frame_v3"), dict) else {}
     schemas = fv["schemas"] if isinstance(fv.get("schemas"), dict) else {}
-    ran = {**ref, "instances": 4, "units": {**units, "indices": [1]}, "frame_v3": {**fv, "roots": {}, "domain_ids": {}}}
+    ran = {**ref, "instances": 4, "units": {**units, "indices": [1], "blocks": [[1]]},
+           "frame_v3": {**fv, "roots": {}, "domain_ids": {}}}
     changed = [{**ref, "scheme": "s"}, {**ref, "set": "served/r/m0"}, {**ref, "units": {**units, "more": [0]}},
                {**ref, "frame_v3": {**fv, "schemas": {**schemas, "y": SECOND_SCHEMAS["x"]}}},
                {**ref, "frame_v3": {**fv, "schemas": dict.fromkeys(schemas, SECOND_SCHEMAS["out"])}}, ran]
@@ -5020,8 +5024,9 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     report (`second-reported`); links none derived, or one for a template of no part, are refused (`second-links`);
     a header that isn't its template's reference header placed in the run (`second_stage.at_run`: its set
     `served/<run>/m<k>` at its template's position, its ports' bindings the window rule's) but for the run's fields
-    (`second_stage.RUN_FIELDS`, `registered` among them), or of a template with none, is refused (`second-header`), and
-    one only the run's fields differ in passes it, as does a reference staged in another set; an interior record whose
+    (`second_stage.RUN_FIELDS`, `units.blocks` and `registered` among them), or of a template with none, is refused
+    (`second-header`), and one only the run's fields differ in passes it, as does a reference staged in another set or
+    at other slots; an interior record whose
     replay sample isn't the verifier's own in order, `True` for 1 included, is refused before any statement
     (`second-interior-order`); and a replay sample of three, which TRIPLE's four slots aren't a multiple of, makes no
     parts (`second-cells`)."""
@@ -5034,6 +5039,8 @@ def test_round_two_holds_each_session_to_its_part(pieces):
 
     def placed(c: dict, **w) -> dict:
         return {**c, "interior": {**c["interior"], "window": {**c["interior"]["window"], **w}}}
+    elsewhere = _second_reference(triple, 0, h1["instances"], ("out", "x"))
+    assert elsewhere != honest["refs"][triple] and SS.blank_run(elsewhere) == SS.blank_run(honest["refs"][triple])
     assert h0["set"] == "served/r-test/m0" and h1["set"] == "served/r-test/m1" and sorted(b0) == ["out", "x"]
     assert b0["x"] == SS.port_binding(honest["interior"], f"{pair}/x", SECOND_SCHEMAS["x"], "r-test")
     linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
@@ -5073,6 +5080,9 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         ({**honest, "refs": {**honest["refs"], pair: {**honest["refs"][pair], "scheme": "frame-v3-sha512/other"}}},
          ["second-header"]),
         (_second_with(honest, 0, header={**h0, "range": [0, 7]}), ["second-header"]),
+        (_second_with(honest, 0, header={**h0, "units": {**h0["units"], "blocks": [[0]]}}), []),
+        (_second_with(honest, 0, header={**h0, "units": {**h0["units"], "units_per_vu": 2}}), ["second-header"]),
+        ({**honest, "refs": {**honest["refs"], triple: elsewhere}}, []),
         (_second_with(honest, 0, header={**h0, "set": h1["set"]}), ["second-header"]),
         (_second_with(honest, 1, header={**h1, "set": "served/r-other/m1"}), ["second-header"]),
         (_second_with(honest, 0, header={**h0, "frame_v3": {**h0["frame_v3"], "bindings": {

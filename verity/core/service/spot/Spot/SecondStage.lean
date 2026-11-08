@@ -18,7 +18,8 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-header`: its header is not the reference header the auditor's params give its template (`Own.refs`, the
     registered reference statement's, fixed before the run) placed in the run (`atRun`), both with the run's fields
     blanked (`RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`, which the next two
-    checks hold to the run, and `registered`, whose reads `second-read` holds), or the params give its template none.
+    checks hold to the run; `units.blocks`, the indices cut into blocks, which the session's verifier holds to them;
+    and `registered`, whose reads `second-read` holds), or the params give its template none.
     Placed in the run, the reference's `set` is the session's input set, `served/<run>/m<k>` (`setName`: `<run>` the
     interior record's `window.run`, `k` its template's position among the parts, `posOf`), and its
     `frame_v3.bindings` are each of its `frame_v3.schemas` ports' bindings in the run (`portBinding`: the window-domain
@@ -296,10 +297,14 @@ def linkOf (own : Own) (t port : String) : Option Link :=
 
 /-- **The run's fields** of a statement's header, each a path of keys: the only ones a header may differ from its
 template's reference placed in the run in, which other checks hold instead: `instances` and `units.indices`
-(`second-population`), `frame_v3.roots` and `frame_v3.domain_ids` (`second-roots`), and `registered`, the reads'
-values, positions and paths (`second-read`, which holds each read to its root, domain and rows). -/
+(`second-population`), `units.blocks`, the indices cut into blocks of `vus_per_block` (the session's verifier, which
+refuses a header whose `units` aren't `Flock.HmRow.unitsEntry` of its indices), `frame_v3.roots` and
+`frame_v3.domain_ids` (`second-roots`), and `registered`, the reads' values, positions and paths (`second-read`, which
+holds each read to its root, domain and rows). A reference staged at other slots differs from the header only in the
+indices and their blocks. -/
 def RUN_FIELDS : List (List String) :=
-  [["instances"], ["units", "indices"], ["frame_v3", "roots"], ["frame_v3", "domain_ids"], ["registered"]]
+  [["instances"], ["units", "indices"], ["units", "blocks"], ["frame_v3", "roots"], ["frame_v3", "domain_ids"],
+    ["registered"]]
 
 /-- Object `j` with key `k` set to `v`; anything else unchanged. -/
 def setKey (j : Json) (k : String) (v : Json) : Json :=
@@ -849,7 +854,9 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (check tru
   #["second-interior-order", "second-statements"]
 #guard (check true { exOwn with interior := exInterior (exWindow .null), links := none } none).codes ==
   #["second-interior-order", "second-links"]
-#guard exCodes exOwn (exIn "units" "blocks" (natsJson #[0])) == #["second-header"]
+#guard (exCodes exOwn (exIn "units" "blocks" (natsJson #[0]))).isEmpty
+#guard (exCodes { exOwn with refs := #[("Pair_v0", exIn "units" "blocks" (natsJson #[9]) exRef)] } id).isEmpty
+#guard exCodes exOwn (exIn "units" "units_per_vu" (Lean.toJson (2 : Nat))) == #["second-header"]
 #guard exCodes exOwn (exIn "frame_v3" "owner" (.str "other")) == #["second-header"]
 #guard exCodes exOwn (·.setObjVal! "scheme" (.str "frame-v3-sha512/other")) == #["second-header", "second-roots"]
 #guard exCodes exOwn (·.setObjVal! "instances" (Lean.toJson (7 : Nat))) == #["second-population"]

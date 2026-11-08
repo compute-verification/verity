@@ -18,8 +18,9 @@ record's ``window.run`` and ``k`` its template's position among the parts, its m
 ``frame_v3.bindings`` each of its ``frame_v3.schemas`` ports' bindings in the run (`port_binding`, the window-domain rule
 over the interior record's program, partition and that port's leaves), both of which the verifier computes, so the
 prover chooses neither. The two are the same with the run's fields blanked (`blank_run`, `RUN_FIELDS`): ``instances``
-and ``units.indices``, which ``second-population`` holds, ``frame_v3.roots`` and ``frame_v3.domain_ids``, which
-``second-roots`` holds, and ``registered``, whose reads ``second-read`` holds (``second-header``).
+and ``units.indices``, which ``second-population`` holds, ``units.blocks``, the indices cut into blocks, which the
+session's verifier holds to them, ``frame_v3.roots`` and ``frame_v3.domain_ids``, which ``second-roots`` holds, and
+``registered``, whose reads ``second-read`` holds (``second-header``).
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
@@ -56,10 +57,13 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
-#: reference placed in the run in, which other checks hold instead: ``second-population`` the first two,
-#: ``second-roots`` the next two, and ``second-read`` ``registered``, each read's root, domain and rows
-#: (`SecondStage.RUN_FIELDS`).
-RUN_FIELDS = (("instances",), ("units", "indices"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"), ("registered",))
+#: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
+#: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
+#: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
+#: read's root, domain and rows (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header
+#: only in the indices and their blocks.
+RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
+              ("registered",))
 
 
 @dataclass(frozen=True)
