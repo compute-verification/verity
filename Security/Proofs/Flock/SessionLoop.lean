@@ -77,6 +77,9 @@ public import Proofs.Flock.SessionLoop.LiveInnerOwn
 public import Proofs.Flock.SessionLoop.LiveOwn
 public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.ZkAny
+public import Proofs.Flock.SessionLoop.SampledAudit
+public import Proofs.Flock.SessionLoop.SampledRelay
+public import Proofs.Flock.SessionLoop.AnyErrBound
 public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.SwCausalExe
