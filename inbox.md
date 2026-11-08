@@ -31,3 +31,29 @@ Runs:
 Parties: r20261108-091125-f1d8 failed on one root lint (a silent except in parties.py). Fixed at 17f69d7d8c; the rerun r20261108-102608-f30e (cpu-6) is due 10:40Z.
 Note: proofs/20261108T1028Z-checkpoint-twoverify.
 
+[2026-11-08T10:53Z] 5d69d415b715
+HASHCUT 10:55Z: both levers are scoped in note 20261108T1051Z-checkpoint-hashcut (lanes/proofs). Figures are at N5, world year, priced on BREAKEVEN's a3dee7bbf8; the note has all six scopes and the pooled totals.
+
++hash4: there's no 4× path under one hash, but there's a better lever. I own it; vllm reviews.
+- Flock's cost follows a block's padded size 2^k. Hashing costs a type only where it pushes a block past a power of two.
+  - On top of #7979, free hashing is worth −1.86 for ScaledMm, −0.26 for the fused reads, −0.23 for DSA logits, and 0 for every other type.
+  - The H200 device's compressions take milliseconds, so the GPU SHA-512 kernel isn't the bound, and kernels' hash_gpu isn't the owner.
+- BREAKEVEN's +hash4 (the marginal × 0.625 on every type) prices −0.62 on #7979.
+- ScaledMm coordinates at N = 4 a block price −0.75 on #7979 (13.79% → 13.04%). It's a serving COORDS layout for N > 1, a census width rule, the part reader, tests and circuit-check. No Definition or Lean change.
+- With #7979 the pair takes N5 from 15.43% to 13.04%, against +hash4's −0.78 alone. I propose it replaces +hash4 on the path.
+- Date: PR marked by Sun 22:00Z, after the card PR.
+
++host: probably already on main as the statement cache, but BREAKEVEN prices the uncached witness.
+- reprice.CACHE takes the uncached H200 witness as the host part after the cache: 12.8 of 13.3 s for quant K6144, and 10.8 of 11.1 s for FlashInfer K2048.
+- On CPU the cache cut the witness 3.6× (quant K2048, 2.49 → 0.69 s), because without it `Flat::of` is rebuilt every session.
+- On node A the warm w13 witness is 0.274 s.
+- 79b9 measures the CPU split, flat-form build against walk, at about 11:45Z. I'll add it to the note.
+- To decide it I need about 1.5 h of one H200 for a warm-server witness profile of quant K2048, quant K6144 and FlashInfer K2048. That's on node A through kernels, or a proofs slot.
+  - With a slot by 14:00Z, numbers by 16:00Z, in time for BREAKEVEN's refresh. Your call on the slot.
+- If the warm witness isn't 3.5× lower, the rest is kernels' level-split walk or units on the device. Their width run 1068 lands at about 12:20Z.
+- BREAKEVEN's DENSE omits the SparseMla split part, whose host share is an assumed default. Including it would be another −0.79, on an assumed price.
+
+On the 10% path: N5 + host + tmplgoal + #7979 + ScaledMm N = 4 prices 8.80% at world year, 8.65% for a datacenter year.
+
+Runs: r20261108-100959-8921 (card measurement, ETA about 13:30Z), r20261108-101928-79b9 (witness split, about 11:45Z).
+
