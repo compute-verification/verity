@@ -734,8 +734,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **forms[m.template, circ.pin]},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
-    if getattr(a, "templated_direct", False):
-        summary["unfirewalled"] = [mm["k"] for mm in members if mm["st"].get("statement")]
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      **tie(a)).to_json()
@@ -831,8 +829,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         stage(served, mm, files)
         staged_s = time.time() - t
         t = time.time()
-        fw = None if k in summary.get("unfirewalled", ()) else a.firewall
-        env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(fw, mm["st"])
+        env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
@@ -1116,9 +1113,6 @@ FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session
                  "does (a0.DIRECT, zk_cost's dev arm)")
 TMPL_UNIT_HELP = ("flock-tmpl-unit (verity/ml/flock/tests/lean/TmplUnit.lean), for a window whose record states a templated "
                   "statement: it places that statement's unit rows, which its prover reads (`a0.templated`)")
-TEMPLATED_DIRECT_HELP = ("each templated member's prover runs prove --zk itself (a0.DIRECT), the rest behind --firewall: flock-firewall's "
-                         "Hello sets up only the statements Tags.find? names, which holds no templated one; the summary lists those "
-                         "members (unfirewalled)")
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
 ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
 
@@ -1345,7 +1339,6 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--tmpl-unit-bin", help=TMPL_UNIT_HELP)
-    ap.add_argument("--templated-direct", action="store_true", help=TEMPLATED_DIRECT_HELP)
     ap.add_argument("--firewall", help=FIREWALL_HELP)
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
