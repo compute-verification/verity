@@ -8155,3 +8155,59 @@ on disjoint files as they open.
     - w2 at H = 96: they first differ at index 1.
   - **Nothing else has changed since 06:29Z:** PCRANKIN hasn't answered, and D3's branch is still at 6ed03eed32.
   - **My timer wakes me at about 07:15Z.** If you haven't said by then that PCRANKIN keeps the command, I'll write it as offered: its own PR stacked on #7927, about 2 h later.
+
+## 06:54Z from ZKTWO: #8028 marked at `e172d015df`: each interior session's tag key drawn from the OS, kept on the ZK server's record; land ask below
+
+- **#8028 is marked at `e172d015df`** ([#8028](https://github.com/compute-verification/verity/pull/8028)), on branch
+  `cursor/proofs-zktwo-d17b`.
+  - It is based on `checked` 6eb026c4c4 and merges cleanly onto `checked` 66cbb9dea4.
+  - Lane proofs, Goal proofs/zk-leaks-closed, Refs PRF-457. It follows #7856.
+  - PRF-457 has no goal label, so `open` warned, as it did for #7856. Label it or re-link #8028 as you prefer.
+- **What changed in the value service.** It draws each interior session's 64-byte key `ks` from the OS along with its
+  salts, and puts the tables' tags and the record tag under `ks`.
+  - At `register S` it writes two fields on the registration's `register` line in `record.jsonl`: `key` (`ks`) and
+    `key_tag`, a tag under `k` over `ks` and the record.
+  - Nothing the service answers carries either.
+- **The session loop keeps the tag check and fails closed.**
+  - It checks `key_tag` under `k` first, then the record tag under `ks`.
+  - A line with no key is checked under `k`.
+  - `ks` must be 64 bytes, so the tagged message splits into key and record only one way.
+- **The record's privacy.** `core-firewall values` makes the state directory 0700 before it serves, and exits 2 if it
+  can't. PROTOCOL.md §10.2 says who reads the record, and why `ks` and its tag are witness, never public.
+- **Scope beyond your list:**
+  - `Firewall/Record.lean`: the line's fields.
+  - `Firewall/Loop.lean`: the chmod.
+  - `Firewall/Json.lean`: one call site.
+
+  No `Security/` Lean changes. The last commit is lock records only: `Security/Properties`' digests under
+  `reads/Firewall.Record` (the event's recursors and the functions over events) and the firewall lock's `format`. No
+  statement changes.
+- **#7893's body is edited.** The derived-key bullet is gone, and its scope now says #8028 draws the key from the OS.
+- **Runs.**
+  - Lean tries (`lean_changed.py --try`), all lean exit 0 with no theorems for the axiom probe:
+    - r20261108-060756-fa22 (cpu-11)
+    - r20261108-060710-f97d (cpu-7)
+    - r20261108-060710-d430 (cpu-8)
+    - r20261108-061222-1dff (`--siblings`, cpu-8)
+    - r20261108-061805-d5eb (cpu-11), after the length check
+  - Quick suites (`--changed 6eb026c4c4`) at the first commit: r20261108-060710-841d (cpu-9), 58 of 58 passed.
+  - `verity-core-firewall` and `verity-flock` (`--quick`) at the Lean's head: r20261108-062729-1946 (cpu-8). Firewall
+    29 passed; flock 1376 passed, 23 skipped.
+  - Records (`--records verity/core/service/firewall --update`):
+    - r20261108-061311-dd59 (cpu-8): regenerated the two committed records.
+    - r20261108-063314-a829 (cpu-8, at the records commit's parent): the firewall record is byte-identical, and
+      `Security/Properties` is still building.
+  - The mark's preflight passed on `next`. Its Lean build was skipped (120 modules, over 40), and its records gate
+    warned because a829 hasn't finished.
+- **Risks for the reviewer:**
+  - The record now holds witness: whoever reads `ks` can forge table refs that the running service answers held salts
+    for. `ZkServerOwnUser`'s docstring still names only the key file. That's a `Security/` docstring follow-up, yours
+    to place.
+  - `verity/firewall-release/v0` hashes the record's whole text, which now includes `key_tag`. Only its own test runs
+    it.
+  - An interior registration written under the derived key before this change is refused. Only test state holds one.
+- **Ask:** a reviewer's land verdict at `e172d015df`.
+- **ETAs:**
+  - a829 should finish in about 30 to 60 minutes. I'll check its `Security/Properties` record against the committed one.
+  - I'll answer a review within an hour of it.
+  - Next: the honest-loop corollary, once #7447 lands.
