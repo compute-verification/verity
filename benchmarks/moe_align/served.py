@@ -354,7 +354,6 @@ def main() -> None:
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.pipeline.tp import phases as PH
     from verity_vllm.pipeline.tp import target as TT
-    from verity_vllm.pipeline.tp import trace as TRACE
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
@@ -438,12 +437,10 @@ def main() -> None:
             for pair in range(a.pairs):
                 for k, op in enumerate(("canonical", "vllm") if pair % 2 == 0 else ("vllm", "canonical")):
                     llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": op == "canonical"})
-                    cpu0 = llm.collective_rpc(TRACE.thread_cpu, timeout=rpc)
                     r = run_workload(eng, reqs[b], sampling)
-                    cpu = TRACE.cpu_delta(cpu0, llm.collective_rpc(TRACE.thread_cpu, timeout=rpc))
                     row = {"batch": b, "pair": pair, "order_in_pair": k, "op": op, "wall_s": r["wall_s"],
                            "phases": phases(r["step_wall_s"], r["step_tokens_out"], b), "tokens": digest(r["tokens"]),
-                           "thread_cpu_s_rank0": cpu.get(0), "step_wall_s": r["step_wall_s"]}
+                           "step_wall_s": r["step_wall_s"]}
                     rows.append(row)
                     f.write(json.dumps(row) + "\n")
                     f.flush()
