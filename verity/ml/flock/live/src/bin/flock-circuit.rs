@@ -6422,7 +6422,9 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 
 /// The prove loop: one session per seed, each on its own connection to the verifier at `addr`, the first `warm` of them warm
 /// (`addr` a comma-separated list: session k's verifier is the (k mod n)th, so n verifier processes take turns).
-/// The next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
+/// A one-table device prover outside the ZK server runs each session's front beside the previous session's reps and awaits
+/// each verdict on the session's own thread, warm sessions included ([`prove_jobs`]; FC_FRONT_AHEAD=0: what follows). Otherwise
+/// the next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
 /// witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts). Up to
 /// `verify_ahead` proved sessions send their proofs and wait for their verdicts on their own threads while the next session
 /// proves (0: each verdict before the next session starts); every warm verdict comes before the first timed session starts.
