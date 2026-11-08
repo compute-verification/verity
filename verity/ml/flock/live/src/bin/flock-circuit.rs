@@ -1096,7 +1096,16 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
                 if times {
                     eprintln!("WITNESS\t{}", Value::Object(parts));
                 }
-                return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
+                let s = t.elapsed().as_secs_f64();
+                // the slots and inputs the pack copied are freed beside the session, off its critical path (WITNESSFREE: how long)
+                flock_live::spawn(move || {
+                    let t = Instant::now();
+                    drop((host, hm, ins));
+                    if times {
+                        eprintln!("WITNESSFREE\t{}", json!({"s": t.elapsed().as_secs_f64()}));
+                    }
+                });
+                return (WitData::Dev(rows, packed, Vec::new()), s);
             }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             lap("units", &mut tl, &mut parts);
