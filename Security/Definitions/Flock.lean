@@ -15,6 +15,7 @@ public import Definitions.Flock.Audit.Law
 public import Definitions.Flock.Defs
 public import Definitions.Flock.Extract
 public import Definitions.Flock.Audit.Harm
+public import Definitions.Flock.Audit.Partitioning
 public import Definitions.Flock.Recursive.Holo
 public import Definitions.Flock.Lowering
 public import Definitions.Flock.Rewinding

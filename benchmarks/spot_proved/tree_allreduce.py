@@ -40,15 +40,32 @@ def leaves(t: Tree) -> list[int]:
     return [t] if isinstance(t, int) else leaves(t[0]) + leaves(t[1])
 
 
-def reduce_gathered(gathered: Any, world: int, t: Tree) -> Any:
+def buffers(t: Tree) -> int:
+    """The f32 rows `reduce_gathered` sums ``t`` in: one, and one more for each nesting of a right subtree that isn't a rank."""
+    if isinstance(t, int):
+        return 1
+    return max(buffers(t[0]), 1 + buffers(t[1]) if isinstance(t[1], tuple) else 1)
+
+
+def reduce_gathered(gathered: Any, world: int, t: Tree, out: Any = None, f32: Any = None) -> Any:
     """A rank-major all-gather of a bf16 tensor (``world * n`` words) reduced in ``t``, a node its two subtrees' f32 sum, then
-    rounded once to bf16."""
+    rounded once to bf16, into ``out`` when given.  The sums are in place in ``f32``'s rows (`buffers` of at least ``n`` words; an
+    f32 ``add_`` of a bf16 row adds its exact f32 value), so with ``out`` and ``f32`` given a call allocates nothing, which a
+    CUDA graph's capture needs: its allocations come from the graph's own pool, past what the serve's KV cache leaves."""
     import torch
     rows = gathered.view(world, -1)
+    n = rows.shape[1]
+    if f32 is None:
+        f32 = torch.empty(buffers(t), n, dtype=torch.float32, device=gathered.device)
 
-    def go(x: Tree) -> Any:
-        return rows[x].to(torch.float32) if isinstance(x, int) else go(x[0]) + go(x[1])
-    return go(t).to(torch.bfloat16)
+    def go(x: Tree, k: int) -> Any:
+        acc = f32[k, :n]
+        if isinstance(x, int):
+            return acc.copy_(rows[x])
+        go(x[0], k)
+        return acc.add_(rows[x[1]] if isinstance(x[1], int) else go(x[1], k + 1))
+    r = go(t, 0)
+    return r.to(torch.bfloat16) if out is None else out.copy_(r)
 
 
 def config(d: Path | None = None) -> dict | None:
@@ -72,7 +89,7 @@ def register() -> None:
           file=sys.stderr, flush=True)
 
 
-CHUNK = 1 << 22  # words a rank gathers at once: elementwise, so only the transient memory depends on it
+CHUNK = 1 << 22  # words a rank gathers at once: elementwise, so only the workspace's size depends on it
 UNMEASURED = ("qr_comm", "fi_pcie_ipc_ar_comm", "aiter_ar_comm")
 
 
@@ -96,15 +113,20 @@ def wrap(orig: Any, t: Tree) -> Any:
             raise RuntimeError(f"tree-allreduce: tree {t} is not over the group's {self.world_size} ranks")
         nc, w = self.pynccl_comm, self.world_size
         flat = input_.contiguous().view(-1)
+        if getattr(self, "_tree_ws", None) is None:
+            # vLLM's profiling forward is eager and precedes every graph capture, so this is allocated outside the graphs' pools
+            self._tree_ws = (torch.empty(w * CHUNK, dtype=flat.dtype, device=flat.device),
+                             torch.empty(buffers(t), CHUNK, dtype=torch.float32, device=flat.device))
+        gws, f32 = self._tree_ws
         out = torch.empty_like(flat)
         for i in range(0, flat.numel(), CHUNK):
             x = flat[i:i + CHUNK]
-            g = torch.empty(w * x.numel(), dtype=x.dtype, device=x.device)
+            g = gws[:w * x.numel()]
             if nc is not None and not nc.disabled:
                 nc.all_gather(g, x)
             else:
                 torch.distributed.all_gather_into_tensor(g, x, group=self.device_group)
-            out[i:i + x.numel()] = reduce_gathered(g, w, t)
+            reduce_gathered(g, w, t, out[i:i + x.numel()], f32)
         return out.view(input_.shape)
     all_reduce.__wrapped__ = orig
     return all_reduce

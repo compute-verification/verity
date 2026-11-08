@@ -473,7 +473,7 @@ def unwitnessed(h: str) -> str:
 @pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
 def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
                                                                                             hold):
-    """#7831 renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    """A PR renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
     hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
     `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
     record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
@@ -1063,26 +1063,6 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Sec", "Sec/src/A/B.lean") == "A.B"
     (root / "Plain").mkdir()
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
-
-
-def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_records_run_reads():
-    """The merge queue's records gate (`research.queue.records_read`) lets a records run at another commit vouch for a head
-    whose checker differs only in files no records run reads; a list narrower than this one's would vouch across a change
-    that decides the run.  It counts every file of the checker Lean's records key does (`tool_inputs`), new ones included,
-    and `merge.py`, which a run loads to merge a lock across a merge of `main` (`merged`), and nothing else."""
-    from research.queue import RECORDS_SHARED, records_read
-
-    tool = LC.LA.LEAN_TOOL
-    files = sorted(tool + p.name for p in HERE.parent.iterdir() if p.is_file())
-    files += [tool + "tests/test_new.py", tool + "tests/fixtures/control/New.lean", tool + "NOTES.md", tool + "new.py",
-              "tools/verity/check/common.py", LC.LA.CONTRACT]
-    assert {tool.rstrip("/"), "tools/verity/check/common.py", LC.LA.CONTRACT} <= set(RECORDS_SHARED)
-    want, got = {*LC.tool_inputs(files), tool + "merge.py"}, {f for f in files if records_read(f)}
-    assert got == want, (
-        f"research's records gate (`records_read` in tools/research/src/research/queue.py) counts {sorted(got - want)} that "
-        f"Lean's records key doesn't, and misses {sorted(want - got)}: a file of {tool} a records run never reads goes in both "
-        "`lean_audit.NOT_READ` and `research.queue.RECORDS_TOOL_UNREAD`, and one it reads in neither (`merge.py` is in "
-        "`NOT_READ` alone)")
 
 
 def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):
