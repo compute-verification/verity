@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Install the chunk-statement prover (verity/ml/flock/cuda/prove_chunk.cuh) into a Flock b684b12 checkout.
 
+The NTT's shared-memory chunks (ntt_f128.cuh) run on ntt_tile.cuh's kernel, up to 8 layers a pass.
+
 Run from the flock checkout after `git apply` of flock-link-b684b12.patch and flock-gpu-link-b684b12.patch and after
 copying verity/ml/flock/live to crates/flock-live. It applies the CUDA half of cuda_live_patch.py (the live hook in
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
@@ -141,6 +143,36 @@ if "reduce_zerocheck_gf8_wide" not in s:
         s = s.replace(a, new)
     zc.write_text(s)
     print("zerocheck_round1_cpustyle.cuh: round 1's products on clmad (sm_90)")
+
+# The NTT's shared-memory chunks run ntt_tile.cuh's kernel (FC_NTT_REGS=0: the tile kernel), up to 8 layers a pass
+# (FC_NTT_KMAX lowers it); the register kernels' chunks (4, 2 and 1 layers) and ntt_can_fuse_source are unchanged.
+shutil.copy(here / "cuda" / "ntt_tile.cuh", "cuda-ghash/ntt_tile.cuh")
+nt = pathlib.Path("cuda-ghash/ntt_f128.cuh")
+s = nt.read_text()
+if '#include "ntt_tile.cuh"' not in s:
+    for a, new in [
+        ("// Launch one K-layer smem-fused chunk at `layer`, lane-tiling so per-block smem",
+         '#include "ntt_tile.cuh"\n\n// Launch one K-layer smem-fused chunk at `layer`, lane-tiling so per-block smem'),
+        ("    cudaFuncSetAttribute(additive_ntt_shared_memory_tile<K>,",
+         "    if (ntt_tile_regs_on()) {\n"
+         "        launch_ntt_tile_regs<K>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, src ? src : d_data, smask);\n"
+         "        return;\n"
+         "    }\n"
+         "    cudaFuncSetAttribute(additive_ntt_shared_memory_tile<K>,"),
+        ("template <int MaxFusedLayers = 7, size_t SharedMemoryBytes = 32 * 1024>",
+         "template <int MaxFusedLayers = 8, size_t SharedMemoryBytes = 32 * 1024>"),
+        ("    static_assert(MaxFusedLayers >= 1 && MaxFusedLayers <= 7);",
+         "    static_assert(MaxFusedLayers >= 1 && MaxFusedLayers <= 8);"),
+        ("    int npass = (total + MaxFusedLayers - 1) / MaxFusedLayers;",
+         "    const int kmax = ntt_tile_kmax(MaxFusedLayers);\n    int npass = (total + kmax - 1) / kmax;"),
+        ("            case 7: launch_ntt_shared_memory_chunk<7, SharedMemoryBytes>",
+         "            case 8: launch_ntt_shared_memory_chunk<8, SharedMemoryBytes>(d_data, d_tw, layer, log_d, num_ntts, tpb, src, smask); break;\n"
+         "            case 7: launch_ntt_shared_memory_chunk<7, SharedMemoryBytes>"),
+    ]:
+        assert s.count(a) == 1, f"{nt}: {a!r} occurs {s.count(a)} times, expected 1"
+        s = s.replace(a, new)
+    nt.write_text(s)
+    print("ntt_f128.cuh: shared-memory chunks on ntt_tile.cuh's kernel, up to 8 layers a pass")
 
 sm = os.environ.get("SM", "90")
 cuda = os.environ.get("CUDA", "/usr/local/cuda-13.3")
