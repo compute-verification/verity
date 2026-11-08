@@ -376,22 +376,16 @@ theorem honest_C (θ : W) : honest C θ = honest C (0, 0) := rfl
 /-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
 theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
     Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 := by
-  classical
-  unfold Claims.Pr
-  rw [card_W]
-  have h1 : (univ.filter fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)).card ≤ 1 := by
-    refine card_le_one.2 fun a ha b hb => ?_
-    obtain ⟨a1, ⟨⟩⟩ := a
-    obtain ⟨b1, ⟨⟩⟩ := b
-    replace ha := (mem_filter.1 ha).2
-    replace hb := (mem_filter.1 hb).2
-    simp only [Stolen, gen, id] at ha hb
-    rw [honest_C] at ha hb
-    rw [← ha, ← hb]
-  have : ((univ.filter fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)).card : ℝ) ≤ 1 := by
-    exact_mod_cast h1
-  rw [Nat.cast_ofNat]
-  exact div_le_div_of_nonneg_right this (by norm_num)
+  calc Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2))
+      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest C (0, 0)) 2) := Pouw.pr_mono fun z h => by
+        obtain ⟨θ, ⟨⟩⟩ := z
+        have h' : P.model () (honest C θ) 2 = θ := h
+        rw [honest_C] at h'
+        exact h'.symm
+    _ = 1 / 256 := by
+        rw [Pouw.pr_eq_card _ {(P.model () (honest C (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff], card_singleton,
+          card_W]
+        norm_num
 
 end ToyServed
 
