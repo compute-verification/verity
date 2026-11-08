@@ -557,6 +557,10 @@ def report(a) -> int:
              "statements_s_at_mix_by_type": rec.get("statements_s_at_mix_by_type"), "gpu_s_by_type": gs,
              "statement_blocks": {t: rec["types"][t]["c"] for t in gs},
              "covered": round(sum(share.get(t, 0.0) for t in gs), 4),
+             # the measured types' proving GPUs over all GPUs at the line's sampling rate: a ratio, the same for any
+             # monitoring period and scope
+             "prover_gpu_share": round(sum(mixrec["replay_blocks_s"] * rec["types"][t]["rb"] * gs[t]["mean"] for t in gs)
+                                       / mixrec["gpus"], 6),
              "beta": {w: S.solve(build(rec, 1.0), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()},
              "beta_prover4": {w: S.solve(build(rec, 0.25), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()}}
         out["runs"].append(r)
