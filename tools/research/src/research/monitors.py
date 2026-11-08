@@ -680,6 +680,28 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     return found
 
 
+def redirected_base(url: str, key: str) -> str:
+    """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
+    anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
+    import urllib.error
+    import urllib.request
+
+    class Stay(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    try:
+        urllib.request.build_opener(Stay).open(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        loc = (e.headers.get("Location") or "").split("?")[0]
+        if e.code in (301, 302, 303, 307, 308) and loc.endswith(f"/{key}"):
+            return loc[: -len(key) - 1]
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        pass
+    return url
+
+
 def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     """The ids in `arts` whose manifest the public export at `url` doesn't hold. The export writes a manifest after its blobs, so
     a manifest there means the fixture is whole."""
@@ -689,9 +711,10 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     from .store.local import manifest_key
     from .store.remote import HttpRemote
 
-    pub = HttpRemote(url)
+    keys = [manifest_key(ids.hex_of(a)) for a in arts]
+    pub = HttpRemote(redirected_base(url, keys[0]) if keys else url)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        held = list(ex.map(lambda a: pub.head(manifest_key(ids.hex_of(a))) is not None, arts))
+        held = list(ex.map(lambda k: pub.head(k) is not None, keys))
     return [a for a, h in zip(arts, held) if not h]
 
 
