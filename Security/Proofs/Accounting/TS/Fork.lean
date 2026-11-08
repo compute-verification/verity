@@ -157,7 +157,7 @@ theorem moved_le_forked [Fintype Ω] (w : Fin S) :
   have hcM : (Finset.univ.filter fun x => pf.Moved x w).card = M := by rw [Finset.card_filter]
   have hcF : (Finset.univ.filter fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2).card = Fk := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
-  unfold prob
+  unfold prob Claims.Pr
   rw [hcM, hcF, Fintype.card_prod, ← hC]
   rcases Nat.eq_zero_or_pos C with h0 | hpos
   · simp [h0]

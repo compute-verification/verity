@@ -371,7 +371,7 @@ theorem not_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} [Nonempty 
     (w : Fin S) (i : Fin nπ) (h : ∀ x, pf.Unsound x w i) {ε : ℝ} (hε : ε < 1) : ¬ pf.SoundAt ε := by
   intro hs
   have z : Pouw.RelativeSecurity.prob (fun x => ¬ pf.Unsound x w i) = 0 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Pouw.RelativeSecurity.prob Claims.Pr
     simp [h]
   have e := Pouw.RelativeSecurity.prob_add_not (fun x => pf.Unsound x w i)
   linarith [hs w i]

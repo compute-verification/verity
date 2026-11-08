@@ -114,12 +114,12 @@ theorem honestService_accepts (Ω : Type) [Fintype Ω] (lam : ℕ) (h : Fintype.
     (∀ σ, (honestService Ω lam h).verify () σ true = true) ∧ ∃ σ, (honestService Ω lam h).verify () σ false = false :=
   ⟨fun _ => rfl, ⟨Classical.arbitrary _, rfl⟩⟩
 
-theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  simp [prob]
+theorem prob_false {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
+  simp [prob, Claims.Pr]
 
-theorem prob_eq_one_of_forall {Ω : Type*} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p = 1 := by
+theorem prob_eq_one_of_forall {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p = 1 := by
   classical
-  unfold prob
+  unfold prob Claims.Pr
   rw [Finset.filter_true_of_mem fun ω _ => h ω, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 

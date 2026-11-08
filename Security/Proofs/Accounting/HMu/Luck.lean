@@ -24,7 +24,7 @@ variable {Ω : Type} [Fintype Ω]
 
 theorem prob_eq_card (p : Ω → Prop) [DecidablePred p] :
     prob p = ((univ.filter p).card : ℝ) / Fintype.card Ω := by
-  unfold prob
+  unfold prob Claims.Pr
   congr
 
 theorem prob_nonneg (p : Ω → Prop) : 0 ≤ prob p := by

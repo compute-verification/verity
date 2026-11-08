@@ -227,18 +227,18 @@ open Accounting.Compose.PeriodBinding
 
 theorem oneProb_zero {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   classical
-  unfold prob
+  unfold prob Claims.Pr
   rw [Finset.filter_false_of_mem fun ω _ => h ω, Finset.card_empty, Nat.cast_zero, zero_div]
 
 theorem oneProb_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p = 1 := by
   classical
-  unfold prob
+  unfold prob Claims.Pr
   rw [Finset.filter_true_of_mem fun ω _ => h ω, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
 theorem oneProb_pos {Ω : Type} [Fintype Ω] {p : Ω → Prop} (ω : Ω) (h : p ω) : 0 < prob p := by
   classical
-  unfold prob
+  unfold prob Claims.Pr
   exact div_pos (Nat.cast_pos.mpr (Finset.card_pos.mpr ⟨ω, Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩⟩))
     (Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨ω⟩))
 
