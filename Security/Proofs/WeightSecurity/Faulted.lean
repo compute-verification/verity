@@ -81,8 +81,7 @@ theorem runOf_faultsOf (f : P.Fns V) (σ : S → V) : P.RunOf f σ (P.faultsOf f
     rfl
   · unfold faultsOf at hu
     split_ifs at hu with hc
-    · exact hc
-    · cases hu
+    exact hc
 
 open Classical in
 /-- The units a fault pattern names. -/
@@ -92,7 +91,10 @@ noncomputable def faultSet [Fintype U] (φ : (u : U) → Option (P.writes u → 
 /-- **An assignment's fault pattern names exactly its incorrect units.** -/
 theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.wrong f σ := by
   ext u
-  by_cases hc : P.Correct f σ u <;> simp [faultSet, wrong, faultsOf, hc]
+  have key : (P.faultsOf f σ u).isSome = true ↔ ¬ P.Correct f σ u := by
+    simp only [faultsOf]
+    split_ifs with hc <;> simp [hc]
+  simpa [faultSet, wrong] using key
 
 /-- **A checked population's faulted function**: the values on the slots `eg` of its run at the inputs `a` with the
 fault pattern `φ`. -/
@@ -221,6 +223,14 @@ theorem card_faultChannel (size : F → ℕ) (T M K : ℕ) :
         Fintype.card_congr' rfl
     _ = _ := Fintype.card_prod _ _
 
+/-- The fault channel's query at a history of length `n < T` carries its string's `n`-th pattern. -/
+theorem faultChannel_ask_snd (size : F → ℕ) (T M K : ℕ) (s : (faultChannel R Q Adv O V Tick F size T M K).S) (r : R)
+    (hist : List (((Q × Adv) × F) × Option ((O → V) × Tick))) (x : (Q × Adv) × F) :
+    ((faultChannel R Q Adv O V Tick F size T M K).ask s r hist x).2 =
+      if hn : hist.length < T then s.1.val ⟨hist.length, hn⟩ else x.2 := by
+  simp only [faultChannel]
+  split_ifs <;> rfl
+
 /-- **The outsider with a fault channel string written in sets at most `M` faults**: its `n`-th query carries the
 string's `n`-th pattern, and their sizes sum to at most `M`. -/
 theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') {size : F → ℕ} (φ₀ : F)
@@ -230,9 +240,10 @@ theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V
   have hq : ∀ h, (((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M K) s).query r h).2 =
       if hn : h.length < T then s.1.val ⟨h.length, hn⟩ else φ₀ := by
     intro h
-    simp only [Outsider.withString, faultChannel, Outsider.rebuild_length]
-    split_ifs <;> rfl
-  have key : ∀ n, (((((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M K) s).view r resp
+    simp only [Outsider.withString]
+    rw [faultChannel_ask_snd, Outsider.rebuild_length]
+    rfl
+  have key : ∀ n, ((((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M K) s).view r resp
       n).map fun e => size e.1.2).sum = ∑ i ∈ range n, if hi : i < T then size (s.1.val ⟨i, hi⟩) else 0 := by
     intro n
     induction n with
@@ -348,8 +359,9 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
   by_cases hnc : V.length < count L l
   · have hw : l[V.length]? = some l[V.length] := List.getElem?_eq_getElem (lt_of_lt_of_le hnc hcl)
     rw [if_pos hnc, dif_pos ⟨lt_min hnc hn, hn⟩, dif_pos hn]
-    simp only [hw, Option.map, Option.getD]
+    simp only [hw, Option.map, Option.getD_some]
     refine congrArg some (Prod.ext (funext fun o => ?_) rfl)
+    dsimp only
     by_cases ha : V.length < accLen l
     · have hno : tailOverwrite L l T (⟨V.length, hn⟩, o) = none :=
         if_neg fun h => absurd h.1 (not_le.2 ha)
