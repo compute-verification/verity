@@ -199,3 +199,63 @@
   - Each fused block's staged count is exactly its GEMM's plus its read's: w13 is 9,144,187 against the card's 7,171,028, and w2 is 10,680,491 against 8,328,537.
   - Seconds are measured, so nothing above moves. But any figure priced per AND from the card's read counts is low by about 1.4×.
 - **Per monitoring period:** these are ratios, so they read the same for a week, a month or a year, and for one datacenter or the world.
+
+## 00:53Z from STATIONARY: the plain arm and the fused per-expert block on one H200
+
+**Plain arm: on the prover's session, `--zk` costs 35% of pe-w2 and 28% of pe-w13.** So **w2 clears the 30% threshold and w13 doesn't.** The fused blocks that replace them are below it: 21% for fr-w13 and 23.5% for fr-w2.
+
+- **The run.**
+  - r20261108-000152-53c3 on vy-spot-overlap (1x H200), evidence art:f68065a805491863634a7a8a711b46cd9ba3505aa3ee287404dce87f9978af41.
+  - Every session was accepted.
+- **The comparison.** It is `dev` against `plaindev`:
+  - Both run `prove --gpu` on the device's witness, at one prover, with the statement cache on and no verify-ahead.
+  - `plaindev` drops `--zk` and runs on the challenger's coin tree (`FC_COINS=tree`), the tree `--zk` also draws from. So only `--zk` differs. HILLCLIMB's CPU pair (`nofw` against `plain`) differs in its coins too.
+- **Noise.** The numbers are medians of 4 timed sessions after a warm one. Each arm's sessions agree within about ±3%, so 28% reads as 26-31%.
+
+  | type | blocks | session s, zk → plain | `--zk` share of the session | GPU prove phase s, zk → plain | share | verifier s, zk → plain |
+  |---|---:|---|---:|---|---:|---|
+  | pe-w13 | 2048 | 3.09 → 2.21 | **28%** | 2.23 → 1.41 | 37% | 3.48 → 0.17 |
+  | pe-w2 | 2048 | 2.98 → 1.95 | **35%** | 2.45 → 1.48 | 40% | 3.52 → 0.17 |
+  | read (EmbeddingRead_v1 H3072, registered) | 1024 | 3.15 → 2.37 | 25% | 2.30 → 1.52 | 34% | 4.19 → 0.30 |
+  | fr-w13 (fused, #7852) | 1024 | 3.65 → 2.89 | **21%** | 2.47 → 1.61 | 35% | 4.27 → 0.51 |
+  | fr-w2 (fused, #7852) | 1024 | 3.73 → 2.85 | **23.5%** | 2.46 → 1.59 | 36% | 4.25 → 0.52 |
+
+- **What the share depends on:**
+  - **The GPU proving phase alone.** There `--zk` is 34-40% for every type. The rest of the session doesn't change with `--zk`: the witness (0.2-0.8 s), the wire and the setup.
+  - **The verifier.** Zero-knowledge verification takes 3.5-4.3 s a statement, against 0.17-0.52 s plain.
+    - At one prover without verify-ahead the prover waits for each verdict. So `--zk` is 55-66% of a cycle: 6.7-8.6 s against 2.3-3.8 s.
+    - Here the verifier shares the prover's 20 CPUs. In SPOT it runs on the verifier's machine, so the session share is the proof server's price.
+  - **Not measured: plain at K > 1.** With verify-ahead at K = 4, `dev`'s cycle (3.3 s) is longer than its session (2.3 s), and the zero-knowledge verifier (2.7 s a statement under that load) is the likely limit. So plain's overlapped gain may be larger than its session share.
+- **Scope.** The shares and h below are per-statement ratios. They read the same for a week, a month or a year, and for a datacenter or the world's compute.
+
+**Fused per-expert block: measured on the H200, so this price replaces the modeled one.**
+
+- **The blocks.** Both have the statement cache on and run the `dev` arm. Each block is k_log 25, so a full statement is 1024 blocks.
+  - fr-w13 is `MoeExpertFp8ReadGemm_v1{READ = EmbeddingRead_v1{V=256, H=3072}, K=6144, N=1, G=KB=128}` on the MmaV2 tile: 9.14 M ANDs a block.
+  - fr-w2 is `MoeExpertFp8ReadGemmW_v1{READ H=4096, K=256, N=32, SWAP}` on the Qgmma tile: 10.68 M ANDs a block.
+
+  | measure | fr-w13 | fr-w2 |
+  |---|---|---|
+  | full statement at one prover, session | 3.65 s = 3.57 ms a block, h 5.7e8 | 3.73 s = 3.64 ms a block, h 4.4e8 |
+  | one-prover fit (1024 and 512 blocks), cache on | fixed 0.74 s + marginal 2.85 ms a block (h 4.6e8) | fixed 0.68 s + marginal 2.98 ms a block (h 3.6e8) |
+  | best overlapped, cache and verify-ahead | 309 blocks/s at K = 4 on 256 blocks (h 5.2e8); 283 over the provers' whole span | 288 blocks/s at K = 4 on 256 blocks (h 4.2e8); 242 over the whole span |
+  | one prover, cycle including the verdict | 120 blocks/s | 119 blocks/s |
+
+- **The fixed cost.** It is measured with the cache on, so don't apply the cache's factor to it again.
+- **w13 against the unfused pair it replaces, on the same run and basis.**
+  - Per expert row, pe-w13 (1.51 ms a block) plus read H3072 (3.08 ms a block) is 4.58 ms, and fused is 3.57 ms: 0.78x.
+  - The marginals: fused is 2.85 ms a block, against the modeled sum of 1.10 + 2.39 = 3.49 ms from the main overlap run's one-prover fits: 0.82x.
+  - At each one's best overlapped throughput: the unfused pair proves 191 rows/s (pe-w13 at 897 and read at 243, in series), and fused proves 309: 1.6x.
+- **w2.** Read at H = 4096 isn't measured, so there's no pair comparison yet. fr-w2 costs 3.64 ms a block.
+- **Overlap gains less on fused blocks.** At one prover the session basis is already 280 and 275 blocks/s, and the best overlapped throughput is 309 and 288. Most of overlap's gain here is hiding the zero-knowledge verdict: the one-prover cycle gives 120 blocks/s.
+- **This run's K = 8 isn't valid.**
+  - The eight provers' warm sessions ended up to 15 s apart, and 4 timed sessions of about 3 s each never all overlapped. So the nominal 330 and 323 blocks/s overstate throughput.
+  - A rerun with 12 timed sessions at K = 4 and 8 is r20261108-005139-36f3, due about 01:12Z. I'll append it.
+
+**Housekeeping.**
+
+- The main overlap run's evidence (art:886d9c2a…) now carries `source = cursor/proofs-stationary-9ca7@5f5c8e8616`, pushed. The store's vocabulary has no `commit` key.
+- The code is on `cursor/proofs-stationary-9ca7` at 011d76a931:
+  - the `zk_cost.py` arm `plaindev`;
+  - the `stage.py` types fr-w13 and fr-w2, with #7852 merged;
+  - the runner's `ST_ARMS1` and `ST_VERIFY_AHEAD`.
