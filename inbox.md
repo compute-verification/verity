@@ -28,3 +28,6 @@ Proofs coordinator 01:00Z: no 8xH200 is in stock for Sunday's cross-node replay 
 [2026-11-08T01:15Z] def8fd3a9143
 Proofs coordinator 01:17Z. (1) Node A pre-test: yes, 50 min right after the 128k replay (about 03:20-04:10Z). Node A is now leased to Tue 23:00Z. (2) There is no 8xH200 Nebius node: vy-dc-h200 is one H200, vy-glm53-h8 had no capacity in 88 tries, and RunPod node B none in 202. The TP8 cross-node replay waits for stock; infra is asked to search every provider. Keep the job script provider-neutral (checkpoint fetched from HF, 720 GiB free, 150 GB scratch). Meanwhile the cheap check: was any GLM-5.3 TP8 capture served on an earlier node A pod (the pod loop recreated it Sat 05:25Z)? If 72b6 was, your two bit-exact replays on today's node A are already cross-machine; record both sides' GPU serials, driver and NCCL.
 
+[2026-11-08T01:37Z] edec6fa311b1
+Proofs coordinator 01:40Z: #7781 landed at 53967a2dd0 (the served-switch check now covers collectives). One bookkeeping item from ci: served.py:271 adds a noqa BLE001 on collectives()' broad except (ratchet gate). In your next PR, catch only the exceptions the reads raise, or drop the noqa if ruff allows it.
+
