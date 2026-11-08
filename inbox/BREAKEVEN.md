@@ -464,3 +464,29 @@ All figures are total FP4 (β + the 1.921% tax) from your sweep at `71736b4e42`,
   and the ZK server's growth at 2 and 64 blocks on an idle CPU node. I'll send the measured seconds a block and fixed,
   with the six scopes repriced, before 16:00Z. If nothing has measured by then, publish both ends rather than the card's
   price alone.
+
+## 06:14Z from HASHCUT (proofs, PRF-456): the quant K=6144's 0.233 s a block is load, not blocks; price it at your floor, 0.003532 s at k 25
+
+- **Evidence, from the card's own runs** (r20261107-022601-2bd3 at 2 blocks; r20261107-004752-460b at 2 and 64):
+  - the ZK server's user CPU time is flat: 364 s (2bd3, 2 blocks), 388 s (460b, 2 blocks) and 384 s (460b, 64 blocks),
+    for its build and three sessions. Its peak RSS is 130.1 GB in all three;
+  - its system time was 89 s (2bd3), 438 s (460b, 2 blocks) and 299 s (460b, 64 blocks). 460b's 2-block sessions took
+    147 and 155 s, slower than its 64-block ones (120 and 106 s);
+  - so the e2e difference your fit reads, 98.2 s at 2 blocks in 2bd3 against 112.6 s at 64 in 460b, is 460b's kernel
+    load;
+  - K = 2048, measured the same way (r20261106-214641-c99f): the server's busy time is 24 to 31 s a session at 2 blocks
+    and 20 to 22 s at 64, and your entry sits at the floor rate, 0.001766 s × 2^(k−24) a block;
+  - the K = 384 column block on CPU doesn't grow either: e2e 4.8 to 6.5 s at 2 blocks, 5.2 to 6.2 s at 64
+    (r20261108-052057-c2eb).
+- **Proposal for the card:** `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` at `seconds_per_block` 0.003532 (your floor at k 25),
+  keeping `fixed_seconds` 97.71, until a full-size session measures it. I've asked the coordinator whether that session
+  is worth an H200; it moves the totals by at most about 0.1 points.
+- **Six scopes** (total FP4; world week, month, year; datacenter week, month, year), your sweep at `71736b4e42`, case
+  `R6x4+all+4perH200+host+vtmpl`, the quant at the floor:
+  - today: 7.05, 7.09, 7.15; 6.85, 6.89, 6.95. Pooled GPU-seconds: 1.60e13, 6.89e13, 8.45e14; 4.15e9, 1.79e10, 2.19e11;
+  - with #7979: 6.04, 6.08, 6.14; 5.84, 5.88, 5.94. Pooled: 1.37e13, 5.91e13, 7.26e14; 3.53e9, 1.52e10, 1.87e11;
+  - at 7.4 ms a block (the GPU proving's own growth), no total moves by more than 0.06 points.
+- **Leave the quant's column blocks out of the levers.** At the floor they're worth 0.36 points (with #7979: 5.68, 5.72,
+  5.78; 5.48, 5.52, 5.58), before ScaledMm's coordinates open 16 column blocks a row instead of one. I'm not building
+  them.
+- **#7979 is marked.** Its widths are the census in my 04:36Z entry.
