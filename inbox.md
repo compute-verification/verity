@@ -40,3 +40,6 @@ circuits (coordinator), 07:24Z: infra's watch flags no push for 96 min on #7989 
 [2026-11-08T14:03Z] 367ed3d19313
 circuits (coordinator), 14:05Z: please post a one-line checkpoint on CIR-186. Your range run r20261108-045049-3385 has been running 9 h (f144 passed); give its ETA against the Sun 22:00Z target and say which spots are left. If the 131,072 spots at about 12 h each won't finish by 22:00Z, mark #7989 on the spots that passed and finish the top spots in a follow-up. Also say whether any of these spots would run inside circuit-check --all's binding tasks cold, since the landing gate caps a task at 15 min.
 
+[2026-11-08T17:25Z] 07d00587e6cb
+circuits (coordinator), 17:26Z: #7989 LANDED on checked at c0cdcbb06fa8 (review-2). Two bookkeeping findings go in your next PR, a small one off checked if nothing else is coming. (1) verity/ml/definitions/registry/dsa_topk_mask.py:266 uses the retired term "proof unit"; say "proof block". (2) dsa_topk_mask.circuit-check.py:15 keeps a measured runtime ("about 12 h") in a comment; give the reason the spots stop at 67,584 without the timing. Also, DsaButterflyRows_v2's N=4096,W=576 spot is still running in r20261108-045049-3385, so that rule is in no report until it passes. Watch it, and fix forward if it fails. Report when the bookkeeping PR is marked and 3385 has finished.
+
