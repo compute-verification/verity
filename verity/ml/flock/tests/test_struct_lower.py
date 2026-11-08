@@ -2,11 +2,17 @@
 computes."""
 from __future__ import annotations
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
+import numpy as np
+import pytest
+from circuit_check import structural as ST
+from verity.ml.circuits.boolean import forms as F
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.ops import prims as OP
 from verity.ml.circuits.ops.boolean import gemm as GB
 from verity.ml.circuits.ops.boolean import scalar as SB
 from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.types import Array, Value
+from verity_flock import ir_lower as IL
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
@@ -86,3 +92,56 @@ def test_a_definition_two_calls_read_different_columns_of_is_evaluated_for_each(
     want = [[S.evaluate(flat, [int(x) for x in lanes[:, w]], 4)[c] for w in range(2)] for c in (256, 257)]
     assert np.array_equal(T.evaluate(t, lanes), np.array(want, np.uint64))
     assert want[0][0] == int(lanes[0, 0] & lanes[1, 0]) and want[1][0] == int(lanes[2, 0] ^ lanes[3, 0])
+
+
+#: a library table of 256 bytes whose bit 6 is always 0 and bit 7 always 1, so a read folds both into the constant
+TOY_TABLE = "struct-lower-toy"
+TOY_WORDS = (np.random.default_rng(7).integers(0, 1 << 6, 256) | 0x80).astype(np.uint32)
+B8 = Value(8)
+TOY_READ = PrimitiveDefinition("StructLowerToyRead", 1, (("x", B8),), B8, lambda x: int(TOY_WORDS[x]), register=False)
+TOY_MIX = PrimitiveDefinition("StructLowerToyMix", 1, (("x", B8), ("y", B8)), B8, lambda x, y: x ^ y, register=False)
+
+
+def _toy_reads(B, _S, x, y):
+    a = B.call(TOY_READ, x)
+    return array_of([a, B.call(TOY_READ, B.call(TOY_MIX, x, y)), B.call(TOY_READ, B.call(OP.const(8, 0x5A))),
+                     B.call(TOY_READ, a)])
+
+
+#: a read of an input, of a caller's XOR form, of a constant (folded, no read) and of a read's value (two constant bits)
+TOY_READS = bind(CompositeDefinition("StructLowerToyReads", 1, (), lambda _S: ((("x", B8), ("y", B8)), Array(4, B8)),
+                                     _toy_reads, register=False))
+
+
+@pytest.fixture
+def toy_reads(monkeypatch):
+    """TOY_READ's piece a read of TOY_TABLE, a library table; TOY_MIX's an XOR of its operands."""
+    monkeypatch.setitem(F.TABLES, TOY_TABLE, lambda: TOY_WORDS)
+    monkeypatch.setitem(F._TABLE_WORDS, TOY_TABLE, TOY_WORDS)
+    monkeypatch.setattr(IL, "_library_table", lambda name: name == TOY_TABLE)
+    monkeypatch.setitem(IL.PIECES, TOY_READ.id, lambda C, x: C.lookup(TOY_TABLE, list(x), 8))
+    monkeypatch.setitem(IL.PIECES, TOY_MIX.id, lambda C, x, y: [a ^ b for a, b in zip(x, y)])
+    return TOY_READS
+
+
+def test_a_table_read_is_the_flat_layouts_rows_once_per_primitive(toy_reads):
+    """The three reads that are not of a constant share one specialization, which lays its read out once, as
+    `ir_lower._Read` does: its constant bits are constant returns, and the template computes the flat lowering's outputs,
+    gate for gate (`circuit_check.structural`'s syntactic verdict, the read's rows compared as gates)."""
+    assert S.check(toy_reads)["mismatched_bits"] == 0
+    tm, lw, top = S.lower(toy_reads)
+    assert T.ordered(tm)["ok"]
+    (read,) = [sp for k, sp in lw.specs.items() if k[0] == TOY_READ.id]
+    assert read.reads == 1 and lw.total(top.key)["reads"] == 3
+    assert (read.rets[6], read.rets[7]) == (("c", 0), ("c", 1))
+    r = ST.check(toy_reads, tm)
+    assert (r["structural"]["verdict"], r["structural"]["lowering"]["reads"], r["failures"]) == ("syntactic", 3, [])
+
+
+def test_an_assertion_is_refused_with_its_reason(monkeypatch):
+    prim = PrimitiveDefinition("StructLowerToyAssert", 1, (("x", B8),), B8, lambda x: x, register=False)
+    monkeypatch.setitem(IL.PIECES, prim.id, lambda C, x: (C.assert_zero("x0x1", C.AND(x[0], x[1])), list(x))[1])
+    toy = CompositeDefinition("StructLowerToyAsserts", 1, (), lambda _S: ((("x", B8),), B8), lambda B, _S, x: B.call(prim, x),
+                              register=False)
+    with pytest.raises(NotImplementedError, match="an assertion is not laid out: its row reads its own column"):
+        S.lower(toy)
