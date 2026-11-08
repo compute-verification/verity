@@ -170,7 +170,7 @@ theorem half_ok {pt : FoldPt} {rho : Bool} {lo n : ℕ} {st st' : SplitSt} {T : 
     · subst he
       simp at hT
       exact hT.symm
-    · rw [if_neg (by simpa using he)] at hT
+    · rw [ite_eq_right (by simpa using he)] at hT
       exact hq key T (by rwa [HashMap.get?_eq_getElem?])
 
 end FlockSoundness.TmplFold

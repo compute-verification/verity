@@ -277,18 +277,18 @@ theorem flush_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ
     tabExp pt s L H iv (Tab.flush false o cx cy w acc) =
       tabExp pt s L H iv o + of w * of (acc.getD s 0) * (hiE pt L H cx * hiG pt L H cy) := by
   unfold Tab.flush tabExp
-  rw [if_neg Bool.false_ne_true]
+  rw [ite_eq_right Bool.false_ne_true]
   dsimp only
   rw [foldl_val (fun (m : HashMap (ℕ × ℕ × ℕ) F128) =>
       hsum m fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0) _
       (fun s' => if s' = s then of w * of (acc.getD s' 0) * (hiE pt L H cx * hiG pt L H cy) else 0)
       (fun m s' => ?_), list_range_sum, Finset.sum_ite_eq' (Finset.range 64) s,
-    if_pos (Finset.mem_range.2 hs)]
+    ite_eq_left (Finset.mem_range.2 hs)]
   · ring
   · by_cases h1 : (acc.getD s' 0).isZero = true
-    · rw [if_pos h1, isZero_eq h1, of_zero']
+    · rw [ite_eq_left h1, isZero_eq h1, of_zero']
       split_ifs <;> ring
-    · rw [if_neg h1, hsum_bump, of_mul]
+    · rw [ite_eq_right h1, hsum_bump, of_mul]
       dsimp only
       split_ifs <;> ring
 
@@ -298,12 +298,12 @@ theorem flush_tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF1
     tabSum pt L H gl gc iv (Tab.flush true o cx cy w acc) =
       tabSum pt L H gl gc iv o + gl * (of w * of (acc.getD 0 0) * (hiE pt L H cx * hiG pt L H cy)) := by
   unfold Tab.flush
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
   dsimp only
   by_cases h : (acc.getD 0 0).isZero = true
-  · rw [if_pos h, isZero_eq h, of_zero']
+  · rw [ite_eq_left h, isZero_eq h, of_zero']
     ring
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     unfold tabSum
     dsimp only
     rw [hsum_bump, of_mul]
@@ -368,10 +368,10 @@ theorem refStep_sum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL
     simp only [Tab.refStep, pendS, refS, hv, ↓reduceIte]
     by_cases hc : pos v / A = cy
     · simp only [hc, beq_self_eq_true, ↓reduceIte]
-      rw [getD_modify _ _ hi, if_pos rfl, of_add]
+      rw [getD_modify _ _ hi, ite_eq_left rfl, of_add]
       ring
     · simp only [beq_eq_false_iff_ne.2 hc, Bool.false_eq_true, ↓reduceIte]
-      rw [flush_tabSum, getD_modify _ _ hi0, if_pos rfl, getD_replicate, of_add, of_zero']
+      rw [flush_tabSum, getD_modify _ _ hi0, ite_eq_left rfl, getD_replicate, of_add, of_zero']
       ring
   · simp only [Tab.refStep, pendS, hv, ↓reduceIte]
     rw [ref_tabSum]
@@ -476,7 +476,7 @@ theorem sum_modify_add (acc : Array F128) {i n : ℕ} (hi : i < acc.size) (hin :
     rw [getD_modify _ _ hi]
     split_ifs <;> simp only [of_add, add_mul, add_zero]
   rw [Finset.sum_congr rfl (fun t _ => h t), Finset.sum_add_distrib, Finset.sum_ite_eq (Finset.range n) i,
-    if_pos (Finset.mem_range.2 hin)]
+    ite_eq_left (Finset.mem_range.2 hin)]
 
 theorem sum_modify_add' (acc : Array F128) {i n : ℕ} (hi : i < acc.size) (hin : i < n) (g : F128) (c : ℕ → GF128) :
     ∑ t ∈ Finset.range n, of ((acc.modify i (g + ·)).getD t 0) * c t =
@@ -490,7 +490,7 @@ theorem sum_modify_add' (acc : Array F128) {i n : ℕ} (hi : i < acc.size) (hin 
       ring
     · simp only [add_zero]
   rw [Finset.sum_congr rfl (fun t _ => h t), Finset.sum_add_distrib, Finset.sum_ite_eq (Finset.range n) i,
-    if_pos (Finset.mem_range.2 hin)]
+    ite_eq_left (Finset.mem_range.2 hin)]
 
 /-- **A run's sums, added at every copy** (explicit). -/
 theorem flushK_tabExp (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) (as : Array ℕ) (nk : ℕ) (o : Tab) (cx cy : ℕ)
@@ -505,9 +505,9 @@ theorem flushK_tabExp (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) (
       (fun m t => ?_), list_range_sum, Finset.sum_comm (s := Finset.range 64)]
   · ring
   · by_cases h1 : (acc.getD t 0).isZero = true
-    · rw [if_pos h1, isZero_eq h1, of_zero']
+    · rw [ite_eq_left h1, isZero_eq h1, of_zero']
       simp
-    · rw [if_neg h1, foldl_val (fun (m : HashMap (ℕ × ℕ × ℕ) F128) =>
+    · rw [ite_eq_right h1, foldl_val (fun (m : HashMap (ℕ × ℕ × ℕ) F128) =>
           hsum m fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0) _
           (fun k => of (acc.getD t 0) * slotK pt as s L H cx cy ws k t) (fun m k => ?_), list_range_sum]
       rw [hsum_bump, of_mul]
@@ -632,12 +632,12 @@ theorem flushP_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : �
       hsum m fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0) _
       (fun s' => if s' = s then of (pd.getD s' 0) * (hiE pt L H cx * hiG pt L H cy) else 0)
       (fun m s' => ?_), list_range_sum, Finset.sum_ite_eq' (Finset.range 64) s,
-    if_pos (Finset.mem_range.2 hs)]
+    ite_eq_left (Finset.mem_range.2 hs)]
   · ring
   · by_cases h1 : (pd.getD s' 0).isZero = true
-    · rw [if_pos h1, isZero_eq h1, of_zero']
+    · rw [ite_eq_left h1, isZero_eq h1, of_zero']
       split_ifs <;> ring
-    · rw [if_neg h1, hsum_bump]
+    · rw [ite_eq_right h1, hsum_bump]
       dsimp only
       split_ifs <;> ring
 
@@ -1064,7 +1064,7 @@ theorem slots_pick (W : Array F128) {s : ℕ} (hs : s < 64) (X : ℕ → GF128) 
   rw [sum_filter_range, Finset.sum_eq_single s (fun b _ hb => by simp [hb]) (fun h => absurd (Finset.mem_range.2 hs) h)]
   by_cases hz : (W.getD s 0).isZero = true
   · simp [hz, hX s (isZero_eq hz)]
-  · rw [if_pos (by simpa using hz), if_pos rfl]
+  · rw [ite_eq_left (by simpa using hz), ite_eq_left rfl]
 
 /-- **A run of lanes spread over the slots**: the child's summed entries at slot `s` by `W[s]`, the constant's at `qc`'s
 slot by `EL`, each re-keyed. -/
@@ -1196,12 +1196,12 @@ theorem stOk_insert {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} {st : 
   dsimp only at hg
   rw [HashMap.get?_eq_getElem?, HashMap.getElem?_insert] at hg
   by_cases hk : (e, β', as') = (e2, b2, a2)
-  · rw [if_pos (by simpa using hk)] at hg
+  · rw [ite_eq_left (by simpa using hk)] at hg
     simp only [Prod.mk.injEq] at hk
     obtain ⟨rfl, rfl, rfl⟩ := hk
     cases hg
     exact hT f hf
-  · rw [if_neg (by simpa using hk)] at hg
+  · rw [ite_eq_right (by simpa using hk)] at hg
     exact hst.2 e2 b2 a2 T2 (by rwa [HashMap.get?_eq_getElem?]) hp f hf
 
 theorem cachedTab_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ}

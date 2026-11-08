@@ -217,7 +217,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   have hbd : ∀ j, (((t.defs.getD d default).calls.getD i default).bound id j).length =
       (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins := fun j => hlay.bound d i j hi
   have hlan := hlay.lanes d i hi
-  have hnk : nkOf β as = as.size := if_neg h6
+  have hnk : nkOf β as = as.size := ite_eq_right h6
   unfold walkCall at h
   simp only [h6, decide_false, Bool.false_and, Bool.false_eq_true, ↓reduceIte] at h
   unfold callVal
@@ -371,7 +371,7 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   have hbd : ∀ j, (((t.defs.getD d default).calls.getD i default).bound id j).length =
       (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins := fun j => hlay.bound d i j hi
   have hlan := hlay.lanes d i hi
-  have hnk : nkOf β as = 1 := if_pos h6
+  have hnk : nkOf β as = 1 := ite_eq_left h6
   unfold walkCall at h
   simp only [h6, decide_true, Bool.true_and, ↓reduceIte] at h
   unfold callVal
@@ -480,17 +480,17 @@ theorem tabled_posTab {t : Tmpl} {lays : Array Lay} (hpos : ∀ d < t.defs.size,
     rw [← fillMap_writes] at htree
     simp only [TreeAt] at htree
     unfold tabled posTab
-    rw [if_neg h0]
+    rw [ite_eq_right h0]
     by_cases hy : y < (fillMap t lays (t.defs.size + 1) d 0 off 1 (Array.replicate m 0)).size
-    · rw [if_pos hy]
+    · rw [ite_eq_left hy]
       have hy' : y < (t.defs.getD d default).cols := by
         rw [fillMap_writes, setAll_size, Array.size_replicate] at hy
         omega
       have := htree.1 y hy'
       rw [Nat.zero_add, Nat.one_mul] at this
       exact this
-    · rw [if_neg hy]
-  · exact absurd (hm'.trans (by simp [Array.getD, hd] <;> rfl)) h0
+    · rw [ite_eq_right hy]
+  · exact absurd (hm'.trans (by simp [Array.getD, hd]; rfl)) h0
 
 /-- **A walk's step**: every class's walk at depth `F + 1` means its class's, from every walk's at `F`. -/
 theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
@@ -509,7 +509,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
   obtain ⟨rfl, hH2, ht2⟩ := half_ok hG hH1
   have hst2 : StOk t lays pt s st2 := ⟨hH2, by rw [ht2, ht1]; exact hst.2⟩
   by_cases h6 : 6 ≤ β
-  · simp only [h6, decide_true, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true, if_true] at h
+  · simp only [h6, decide_true, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true] at h
     obtain ⟨hq, hv⟩ := foldlM_sumF
       (fun (x : {x : ℕ × ℕ × List ℕ // x.2.1 < 2 ^ β}) (o : Tab) => of (eLow pt β x.1.2.1) *
         tabSum pt (β + al - 6) x.1.1 (gLow pt s β x.1.2.1) (Gs pt s pt.qc) (fun t' => Gs pt s (x.1.2.2.getD t' pt.qc)) o)
@@ -519,7 +519,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
         obtain ⟨q1, q2, q3⟩ := walkCall_sum hT hR hlay hcall ih hr hq.1 hq.2 hd (List.mem_range.1 hi) h6
           ⟨h6a, hL1, hL2, has⟩
         exact ⟨⟨q1, q2⟩, fun x => q3 x.1.1 x.1.2.1 x.2 x.1.2.2⟩
-    refine ⟨hq.1, by rw [show nkOf β as = 1 from if_pos h6]; exact hq.2, fun h6' => absurd h6 h6',
+    refine ⟨hq.1, by rw [show nkOf β as = 1 from ite_eq_left h6]; exact hq.2, fun h6' => absurd h6 h6',
       fun _ H a ha ip => ?_⟩
     have hv' := hv ⟨(H, a, ip), ha⟩
     dsimp only at hv'
@@ -555,7 +555,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
       simp only [of_mul, ← one_eq]
       rw [← hP]
       ring
-  · simp only [h6, decide_false, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true, if_true] at h
+  · simp only [h6, decide_false, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true] at h
     obtain ⟨hq, hv⟩ := foldlM_sumF
       (fun (x : ℕ × (ℕ → List ℕ)) (o : Tab) =>
         tabExp pt s (β + al - 6) x.1 (fun t' k => Gs pt s ((x.2 k).getD t' pt.qc)) o)
@@ -566,7 +566,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
         obtain ⟨q1, q2, q3⟩ := walkCall_exp hs hT hR hlay hcall ih hr hq.1 hq.2 hd (List.mem_range.1 hi) h6
           ⟨h6a, hL1, hL2, has⟩
         exact ⟨⟨q1, q2⟩, fun x => q3 x.1 x.2⟩
-    refine ⟨hq.1, by rw [show nkOf β as = as.size from if_neg h6]; exact hq.2, fun _ H ip => ?_,
+    refine ⟨hq.1, by rw [show nkOf β as = as.size from ite_eq_right h6]; exact hq.2, fun _ H ip => ?_,
       fun h6' => absurd h6' h6⟩
     have hv' := hv (H, ip)
     dsimp only at hv'
