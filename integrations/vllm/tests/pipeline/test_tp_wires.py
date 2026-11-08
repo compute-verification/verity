@@ -1,23 +1,28 @@
-"""verity_vllm.pipeline.tp.wires: a tensor-parallel window's collective sites at node grain, each rank's combine parts cut W
-ways and row p wired from rank p's producer output row.
+"""verity_vllm.pipeline.tp.wires: a tensor-parallel window's collective sites at their producers' grain, each combine unit's
+parts cut W ways and row p wired from rank p's producer unit, and each read of a combine's output wired from the units that
+compute it.
 
-The toy at TP2 (`test_steps`' TINY, `_mixed`'s first request: 45 collectives, each per row) is the compiled request. Each
-unit's values are random words, a combine's parts rows its producers' outputs: the wiring check reads the committed strings
-alone, never a unit's arithmetic."""
+The toy at TP2 (`test_steps`' TINY, `_mixed`'s first request: 45 collectives, each per row) is the compiled request: its
+GEMM and embedding partials are coordinate units, so its all-reduces are coordinate combines, and its logits' all-gather
+has none, the sampler reading every rank's LM-head coordinates. Each unit's values are random words, each wired row its
+writer's output row: the wiring check reads the committed strings alone, never a unit's arithmetic."""
 from __future__ import annotations
 
+import bisect
 import json
 
 import numpy as np
 import pytest
 
 from tests.program.predict.test_steps import _mixed, _registered
-from tests.program.test_tp_binding import N, rank_body
+from tests.program.test_tp_binding import N, ROWS, rank_body
 from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.tp_steps import compile_tp
 
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import bind
+from verity.ml.definitions.registry import moe
 from verity.ml.windows import interface as I, wiring as WI
 
 RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
@@ -37,37 +42,90 @@ def _count(sites: TW.Sites) -> dict[str, int]:
     return I.input_count(I.descriptor_record(sites.circuit, CAP), _fns(sites).__getitem__)
 
 
-def _values(tp: TW.Sites) -> dict[tuple, tuple[list[np.ndarray], list[np.ndarray]]]:
-    """Each unit's input and output rows as u16 words, by unit key: random, a combine's parts its sites' producers' outputs in
-    rank order (the toy's producers have one output row each)."""
-    rng, fns, out = np.random.default_rng(0), _fns(tp), {}
-    for key, (tid, _) in tp.units.items():
+def _bits(sites: TW.Sites, wires=None) -> int:
+    """The bits ``wires`` (every wire of ``sites``) fill, as `input_count` counts them."""
+    cuts = sites.circuit.cuts
+    return sum(w.units * 16 * dict(I.layout(_fns(sites)[w.reader]).rows)[w.port] // cuts.get(w.reader, {}).get(w.port, 1)
+               for w in (sites.circuit.wires if wires is None else wires))
+
+
+def _stage(sites: TW.Sites, stage: str) -> set[str]:
+    return {tid for (_i, _j, s, _r), rs in sites.units.items() if s == stage for tid, _a, _n in rs}
+
+
+def peer_bits(sites: TW.Sites) -> int:
+    """The bits of the wires from producer units: every rank's partial into each combine unit's parts, or into a gather's
+    readers."""
+    return _bits(sites, [w for w in sites.circuit.wires if w.writer in _stage(sites, TW.PRODUCER)])
+
+
+def in_order(sites: TW.Sites, wires: tuple[I.Wire, ...] | None = None) -> None:
+    """Every wire of ``sites`` (or ``wires``) runs forward in ``sites.order``, as proofs' order check reads an order of unit
+    ranges: the ranges tile each template's units, and for every range a wire's reader units meet, every range meeting the
+    bounds on the writers it reads there (digit by digit, the fastest first) ranks below it. Refused (AssertionError) naming
+    the wire."""
+    ranges: dict[str, list[tuple[int, int, int]]] = {}
+    for k, (tid, at, n) in enumerate(sites.order):
+        ranges.setdefault(tid, []).append((at, n, k))
+    for tid, n in sites.circuit.units.items():
+        got = sorted(ranges[tid])
+        assert [a for a, _, _ in got] == [0, *np.cumsum([m for _, m, _ in got])[:-1].tolist()] and sum(m for _, m, _ in got) == n
+        ranges[tid] = got
+
+    def box(w: I.Wire, lo: int, hi: int) -> tuple[int, int]:
+        a = b = w.base
+        for k in range(len(w.radix) - 1, -1, -1):
+            r, s = w.radix[k], w.step[k]
+            if lo // r == hi // r:
+                q, rest = lo // r, 0
+                for j in range(k - 1, -1, -1):
+                    rest += q % w.radix[j] * w.step[j]
+                    q //= w.radix[j]
+                return a + min(lo % r * s, hi % r * s) + rest, b + max(lo % r * s, hi % r * s) + rest
+            a, b, lo, hi = a + min(0, s * (r - 1)), b + max(0, s * (r - 1)), lo // r, hi // r
+        return a, b
+
+    def meeting(tid: str, lo: int, hi: int) -> list[tuple[int, int, int]]:
+        got = ranges[tid]
+        k = bisect.bisect_right([a for a, _, _ in got], lo) - 1
+        out = []
+        while k < len(got) and got[k][0] <= hi:
+            out.append(got[k])
+            k += 1
+        return out
+
+    for x, w in enumerate(sites.circuit.wires if wires is None else wires):
+        C = w.cut[1]
+        for at, n, k in meeting(w.reader, w.at, w.at + w.reader_units - 1):
+            lo, hi = (max(at, w.at) - w.at) * C, (min(at + n, w.at + w.reader_units) - w.at) * C - 1
+            a, b = box(w, lo, hi)
+            late = [kk for _a, _n, kk in meeting(w.writer, a, b) if kk >= k]
+            assert not late, f"wire {x} {w.doc()}: its reader range {k} reads writer ranges {late}, not below it"
+
+
+def _values(sites: TW.Sites, seed: int = 0) -> dict[str, tuple[dict, dict]]:
+    """Every unit's input and output rows as u16 words, by template (by port, by output): random, each wired row its writer's
+    output row."""
+    rng, fns, out = np.random.default_rng(seed), _fns(sites), {}
+    for tid, n in sites.circuit.units.items():
         lay = I.layout(fns[tid])
-        rows = [rng.integers(0, 1 << 16, size=w, dtype=np.uint16) for _, w in lay.rows + lay.outs]
-        out[key] = (rows[:len(lay.rows)], rows[len(lay.rows):])
-    for (i, j, r, role) in tp.units:
-        if role == TW.COMBINE:
-            out[i, j, r, role][0][0] = np.concatenate([out[i, j, p, TW.PRODUCER][1][0] for p in range(W)])
+        out[tid] = ({p: rng.integers(0, 1 << 16, (n, w), dtype=np.uint16) for p, w in lay.rows},
+                    {o: rng.integers(0, 1 << 16, (n, w), dtype=np.uint16) for o, w in lay.outs})
+    for w in sites.circuit.wires:
+        dst, k = out[w.reader][0][w.port], sites.circuit.cuts.get(w.reader, {}).get(w.port, 1)
+        i = np.arange(w.units)
+        dst.reshape(len(dst), k, -1)[w.at + i // w.cut[1], w.cut[0] + i % w.cut[1]] = out[w.writer][1][w.out][w.source(i)]
     return out
 
 
-def _window(sites: TW.Sites, values: dict, by_reference: bool) -> I.Window:
-    """``sites``' window with every unit's ``values`` recorded, each combine's parts by reference (committed as its writers'
-    rows: every row of them wired) with ``by_reference``, else as given."""
-    fns, win = _fns(sites), I.Window(sites.circuit, RUN, LAW, CAP)
-    order = {tid: [None] * n for tid, n in sites.circuit.units.items()}
-    for key, (tid, u) in sites.units.items():
-        order[tid][u] = key
-    for tid, keys in order.items():
-        lay = I.layout(fns[tid])
-
-        def port(q: int, side: int, at: int, keys=keys, lay=lay) -> np.ndarray:
-            w = lay.widths[q]
-            return np.stack([values[k][side][at] for k in keys]).view(f"<u{w // 8}")
-
-        combine = keys[0][3] == TW.COMBINE
-        ins = [None if by_reference and combine and q == 0 else port(q, 0, q) for q in range(len(lay.rows))]
-        win.record(fns[tid], ins, [port(len(lay.rows) + q, 1, q) for q in range(len(lay.outs))])
+def _window(sites: TW.Sites, values: dict) -> I.Window:
+    """``sites``' window with every unit's ``values`` recorded."""
+    win = I.Window(sites.circuit, RUN, LAW, CAP)
+    for tid, fn in _fns(sites).items():
+        lay, (ins, outs) = I.layout(fn), values[tid]
+        view = [f"<u{b // 8}" for b in lay.widths]
+        win.record(fn, [ins[p].view(view[q]) for q, (p, _) in enumerate(lay.rows)],
+                   [outs[o].view(view[len(lay.rows) + q]) for q, (o, _) in enumerate(lay.outs)])
     return win
 
 
@@ -82,78 +140,131 @@ def _row(ms, publics: dict, tid: str, unit: int, row: str) -> tuple[object, int,
     return m, base + unit, slice(at, at + WI.BC_BYTES)
 
 
-def test_every_peer_row_of_a_tp_window_is_wired_from_its_producers_output_row(toy):
-    """The TP window holds both ranks' producers and combines, each combine's parts cut in two, and wires every parts row from
-    its rank's producer: one wire covers a site's two reader ranks and two cuts (writer steps 0 and 1) where both ranks'
-    producers share a template, one a cut where they don't (the embedding's shards). `input_count` counts every parts row
-    wired; rank 0's and rank 1's windows alone wire only their own rows, each peer row free. The verifier derives the same
-    members from the record."""
+def test_every_peer_row_of_a_tp_window_is_wired_from_its_producer_units_output_row(toy):
+    """The TP window holds both ranks' producer units, coordinate combines and the calls reading them. Every combine unit's
+    parts are cut in two, each row its rank's producer unit's output word; every read of a combine's output (the norms' x
+    and residual, the sampler's logits from both ranks' LM-head coordinates) is wired, its port cut a word a row, and none is
+    left free. `input_count` counts every peer bit wired; rank 0's and rank 1's windows alone wire only their own rows, each
+    peer row free. Every wire runs forward in the window's public order, and the verifier derives the same members from
+    the record."""
     tp = TW.sites_circuit(toy, "tp")
-    combines = {tid for (*_, role), (tid, _) in tp.units.items() if role == TW.COMBINE}
-    assert tp.circuit.cuts == {tid: {"parts": W} for tid in combines}
-    docs = [w.doc() for w in tp.circuit.wires]
-    assert any(d["writer"].startswith("Gemm_v2") and d["radix"][-2:] == [W, W] and d["step"][-2:] == [0, 1] for d in docs)
-    assert {(d["writer"].split("START=")[1], tuple(d.get("cut", (0, 1)))) for d in docs if "Embedding" in d["writer"]} == {
-        ("0}", (0, 1)), ("128}", (1, 1))}
+    combines, fns = _stage(tp, TW.COMBINE), _fns(tp)
+    assert tp.unwired == () and {fns[t].id for t in combines} == {"AllReduce2_v1{N=1}"}
+    assert {t: tp.circuit.cuts[t] for t in combines} == {t: {"parts": W} for t in combines}
+    assert {fns[t].id: c for t, c in tp.circuit.cuts.items() if t not in combines} == {
+        "RMSNormTriton_v5{N=64,EPS=1e-05}": {"x": 64}, "RMSNormFusedCuda_v2{N=64,EPS=1e-05}": {"x": 64, "res": 64},
+        "TokenSelect_v4{V=256}": {"logits": 256}}
     parts = sum(W * W * (s.hi - s.lo) * 16 for s in toy[0].sites)
-    count, ranks = _count(tp), [_count(TW.sites_circuit(toy, f"rank{r}", ranks=[r])) for r in range(W)]
-    assert count["wired"] == parts == 200704 and all(c["wired"] == parts // (W * W) for c in ranks)
-    assert sum(c["free"] for c in ranks) - count["free"] == parts * (W - 1) // W
+    count, ranks = _count(tp), [TW.sites_circuit(toy, f"rank{r}", ranks=[r]) for r in range(W)]
+    assert peer_bits(tp) == parts == 200704 and all(peer_bits(x) == parts // (W * W) for x in ranks)
+    assert _bits(tp, [w for w in tp.circuit.wires if w.reader in combines]) == sum(
+        tp.circuit.units[t] * 16 * W for t in combines)
+    assert count["wired"] == _bits(tp) and sum(_count(x)["free"] for x in ranks) - count["free"] == parts * (W - 1) // W
+    in_order(tp)
     rec = I.descriptor_record(tp.circuit, CAP)
-    assert I.window_of_record({**rec, "run": RUN, "context": ""}, LAW, _fns(tp).__getitem__).members == I.members(tp.circuit, CAP)
+    assert I.window_of_record({**rec, "run": RUN, "context": ""}, LAW, fns.__getitem__).members == I.members(tp.circuit, CAP)
 
 
 def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_wiring_check(toy):
-    """The headline: a prover commits, as rank 0's peer row of an attention all-reduce, rank 1's partial with one bit flipped.
-    In rank 0's window alone (today's per-rank form) the row is a free input: the window closes and its wiring check passes.
-    In the TP window the honest prover refuses to commit it, and the same committed string in the TP window's public body is
-    caught by the verifier's wiring check, and by `check_drawn` when the sample draws that combine, only then."""
+    """The headline: a prover commits, as rank 0's peer row of one coordinate of an attention all-reduce, rank 1's partial
+    there with one bit flipped. In rank 0's window alone (today's per-rank form) the row is a free input: the window closes
+    and its wiring check passes. In the TP window the honest prover refuses to commit it, and the same committed string in
+    the TP window's public body is caught by the verifier's wiring check, and by `check_drawn` when the sample draws that
+    combine unit, only then."""
     tp = TW.sites_circuit(toy, "tp")
     values = _values(tp)
-    win = _window(tp, values, by_reference=True)
+    win = _window(tp, values)
     got = win.close(salt_key=bytes(32))
     ms = win.window.members
     publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
     assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(sum(m.n for m in ms))) == {}
 
     j = next(j for j, s in enumerate(toy[0].sites) if toy[0].fns[1][s.own[1][0][0]].id.startswith("Gemm_v2{K=32"))
-    site = toy[0].sites[j]
-    forged = dict(values)
-    parts = values[0, j, 0, TW.COMBINE][0][0].copy()
-    parts[site.hi - site.lo] ^= 1
-    forged[0, j, 0, TW.COMBINE] = ([parts, *values[0, j, 0, TW.COMBINE][0][1:]], values[0, j, 0, TW.COMBINE][1])
-    with pytest.raises(ValueError, match=r"a parts#1 row is not the o0 row of the Gemm_v2\{K=32,.* unit that wrote it"):
-        _window(tp, forged, by_reference=False).close(salt_key=bytes(32))
+    site, q = toy[0].sites[j], 5
+    (tid, at, _), = tp.units[0, j, TW.COMBINE, 0]
+    forged = {t: ({p: a.copy() for p, a in ins.items()}, outs) for t, (ins, outs) in values.items()}
+    forged[tid][0]["parts"][at + q, 1] ^= 1
+    with pytest.raises(ValueError, match=r"a parts#1 row is not the o0 row of the Gemm_v2\{K=32,N=1,.* unit that wrote it"):
+        _window(tp, forged).close(salt_key=bytes(32))
 
     rank0 = TW.sites_circuit(toy, "rank0", ranks=[0])
-    alone = _window(rank0, forged, by_reference=False)
-    mine = alone.close(salt_key=bytes(32))
+    mine = _values(rank0)
+    (tid0, at0, _), = rank0.units[0, j, TW.COMBINE, 0]
+    mine[tid0][0]["parts"][at0 + q, 1] = forged[tid][0]["parts"][at + q, 1]
+    alone = _window(rank0, mine)
+    closed = alone.close(salt_key=bytes(32))
     ms0 = alone.window.members
-    publics0 = {m.key: mine.public_body(k) for k, m in enumerate(ms0)}
+    publics0 = {m.key: closed.public_body(k) for k, m in enumerate(ms0)}
     assert WI.check(ms0, publics0) == {}
 
-    tid, u = tp.units[0, j, 0, TW.COMBINE]
-    m, g, at = _row(ms, publics, tid, u, "parts#1")
-    m0, _, at0 = _row(ms0, publics0, *rank0.units[0, j, 0, TW.COMBINE], "parts#1")
+    m, g, cell = _row(ms, publics, tid, at + q, "parts#1")
+    m0, _, cell0 = _row(ms0, publics0, tid0, at0 + q, "parts#1")
     body = bytearray(publics[m.key])
-    body[at] = publics0[m0.key][at0]
-    assert bytes(body[at]) != publics[m.key][at]
+    body[cell] = publics0[m0.key][cell0]
+    assert bytes(body[cell]) != publics[m.key][cell]
     bad = {**publics, m.key: bytes(body)}
     caught, drawn = WI.check(ms, bad), WI.check_drawn(ms, bad, [g])
     assert list(caught) == list(drawn) == [m.key] and "parts#1 strings are not the o0 strings" in caught[m.key]
-    others = [x for x in range(sum(q.n for q in ms)) if not m.base <= x < m.base + m.n]
+    others = [x for x in range(sum(m.n for m in ms)) if not m.base <= x < m.base + m.n]
     assert WI.check_drawn(ms, bad, others) == {}
-    print(json.dumps({"site": [site.k, site.lo, site.hi], "row": "rank 0's parts#1 (rank 1's partial, one bit flipped)",
+    print(json.dumps({"site": [site.k, site.lo, site.hi], "coordinate": q,
+                      "row": "rank 0's parts#1 (rank 1's partial at the coordinate, one bit flipped)",
                       "rank0_window": WI.check(ms0, publics0), "tp_window_check": caught, "tp_window_check_drawn": drawn,
                       "drawn_without_it": WI.check_drawn(ms, bad, others)}))
 
 
-def test_a_collective_over_several_rows_is_refused_by_name():
-    """A route all-reduce over both of a rank's rows (`_Peers.whole`, three ranks) binds, its own segment two producers' rows,
-    and its window is refused by name: no one unit writes a rank's segment; the per-row collectives' window builds."""
+def test_a_collective_over_several_rows_is_a_coordinate_combine_a_word():
+    """A route all-reduce over both of a rank's rows (`_Peers.whole`, three ranks), its own segment two producers' rows, is
+    one coordinate combine a word of the two rows: every parts row of it and of the per-row collectives is wired, from the
+    Gemm coordinate of the rank and row it names, and every wire runs forward."""
     b = TB.derive([rank_body(3, r, whole=True) for r in range(3)])
-    with pytest.raises(ValueError, match=r"w3: request 0's collective 1 \[0, 32\): rank 0's partial is 2 nodes' rows \[4, 5\], a "
-                                         "collective over several rows, whose segment per rank no one unit writes at node grain"):
+    sites = TW.sites_circuit([b], "w3")
+    assert [len(s.own[0]) for s in b.sites] == [1, 1, 2] and sites.unwired == ()
+    assert {(_fns(sites)[t].id, n) for (_i, j, s, _r), rs in sites.units.items() if s == TW.COMBINE and j == 2
+            for t, _a, n in rs} == {("AllReduce_v2{WORLD=3,N=1}", ROWS * N)}
+    assert peer_bits(sites) == _count(sites)["wired"] == sum(3 * 3 * (s.hi - s.lo) * 16 for s in b.sites) == 9 * 2 * ROWS * N * 16
+    in_order(sites)
+
+
+def test_a_combine_of_no_grain_is_refused_by_name():
+    """A collective combined by a Definition that isn't an all-reduce or a gather (a top-k sum) has no combine units, and is
+    refused by name."""
+    b = TB.derive([rank_body(3, r, combine=bind(moe.MoeSum, TOPK=3, H=N)) for r in range(3)])
+    with pytest.raises(ValueError, match=r"w3: request 0's collective 0 \[0, 16\): MoeSum_v1\{TOPK=3,H=16\} has no coordinate "
+                                         r"combine units: MoeSum_v1: not one of tp_allreduce's all-reduces"):
         TW.sites_circuit([b], "w3")
-    one = TW.sites_circuit([TB.derive([rank_body(3, r) for r in range(3)])], "w3")
-    assert _count(one)["wired"] == 2 * 9 * N * 16 and len(one.circuit.wires) == 1
+
+
+def test_the_order_check_refuses_a_wire_running_backward(toy):
+    """The order check is not vacuous: a wire from a combine unit back into its own producer's input runs backward in the
+    window's order and is refused, naming it."""
+    tp = TW.sites_circuit(toy, "tp")
+    j = next(j for j, s in enumerate(toy[0].sites) if toy[0].fns[1][s.own[1][0][0]].id.startswith("Gemm_v2{K=32"))
+    (pt, pu, _), = tp.units[0, j, TW.PRODUCER, 0]
+    (ct, cu, _), = tp.units[0, j, TW.COMBINE, 0]
+    back = I.Wire(pt, "x", ct, "o0", at=pu, radix=(1,), base=cu, step=(0,))
+    in_order(tp)
+    with pytest.raises(AssertionError, match=rf"wire {len(tp.circuit.wires)} .* not below it"):
+        in_order(tp, (*tp.circuit.wires, back))
+
+
+def test_each_ranks_sent_partial_is_its_own_segment_at_the_sites_slice(toy):
+    """The binding pairs rank r's segment p with rank p's own partial at the site's key, so it relies on each rank sending
+    its partial laid out as `_Peers` reads it: row i of a collective at leaves [i·n, (i+1)·n) of what the rank sends."""
+    assert all(sent_at_own_slices(b) for b in toy)
+
+
+def sent_at_own_slices(b: TB.RequestBinding) -> bool:
+    """Each collective's sites, in slice order, are disjoint whole rows of one width from leaf 0 (rows a dead-free compile
+    dropped leave gaps), each rank's own segment exactly its slice's leaves and its producers in slice order: rank p's
+    partial at a site is the row of what it sends that every other rank reads there."""
+    by: dict[int, list[TB.Site]] = {}
+    for s in b.sites:
+        by.setdefault(s.k, []).append(s)
+    for ss in by.values():
+        n = min(s.hi - s.lo for s in ss)
+        if (any(s.lo % n or (s.hi - s.lo) % n for s in ss) or any(a.hi > c.lo for a, c in zip(ss, ss[1:]))
+                or any(sum(hi - lo for _, lo, hi in o) != s.hi - s.lo for s in ss for o in s.own)
+                or any([s.own[p][0][0] for s in ss] != sorted({s.own[p][0][0] for s in ss}) for p in range(b.world))):
+            return False
+    return True
