@@ -148,6 +148,7 @@ class _Driver:
         self.alloc: dict[str, Any] | None = None
         self.reqs: dict[int, Any] = {}
         self.hashes: Any = None
+        self.returned: dict[int, set[int]] = {}     # the blocks each request's last preemption returned to the free queue
 
     # the unit's calls
 
@@ -183,8 +184,9 @@ class _Driver:
         self.counts["clock"] = out.pool.clock
         return out
 
-    def lookup(self, kv, r, wh: int, ev: int, take: bool) -> None:
-        S = self.S
+    def lookup(self, kv, r, hit: Sequence[int], queued: set[int], take: bool) -> None:
+        """Request r's lookup, its `hit` the blocks it hits and `queued` those of them free before its allocation."""
+        S, wh, ev = self.S, len(hit), len(queued)
         cap = (r.num_tokens - 1) // S.U
         never = next((k for k, h in enumerate(r.block_hashes[:cap]) if h not in self.ever), min(cap, len(r.block_hashes)))
         op = C2.CallInputs(slot=self._slot(r.i) if take else self._free_slot(), r=r.i, admit=True, take=take, K=r.num_tokens,
@@ -203,6 +205,12 @@ class _Driver:
             self.counts["hits stopped a token short with the next block cached"] += 1
         if any(len(kv.by_hash[h]) > 1 for h in r.block_hashes[:wh]):
             self.counts["hits on a hash two blocks hold"] += 1
+        own = [b for b in hit if b in self.returned.get(r.i, ())]
+        if own:
+            self.counts["resumes hitting the blocks their preemption returned"] += 1
+            self.counts["resumes taking the blocks their preemption returned"] += take
+            if take:
+                self.counts["returned blocks a resume took from the free queue"] += sum(b in queued for b in own)
         self._call(kv, "take" if take else "lookup", op, 0, r.num_tokens, refused)
 
     def _free_slot(self) -> int:
@@ -327,13 +335,13 @@ def _tapped(drv: _Driver):
             return orig["allocate_slots"](self, r, n, hit, **kw)
         drv.reqs[r.i] = r
         look = r.status != RP.RUNNING and r.num_computed == 0
-        ev = sum(1 for b in hit if self.ref[b] == 0)
+        queued = {b for b in hit if self.ref[b] == 0}
         drv.alloc = {"new": 0, "evicted": Counter(), "cache": None, "popping": False}
         ok = orig["allocate_slots"](self, r, n, hit, **kw)
         a, drv.alloc = drv.alloc, None
         drv.counts["allocations a full pool refuses"] += not ok
         if look:
-            drv.lookup(self, r, len(hit), ev, ok)
+            drv.lookup(self, r, hit, queued, ok)
         if ok:
             done, full = a["cache"] or (self.num_cached.get(r.i, 0),) * 2
             drv.compute(self, r, a["new"], done, full, a["evicted"])
@@ -358,6 +366,8 @@ def _tapped(drv: _Driver):
             return orig["free_request"](self, r)
         bs = self.req_blocks.get(r.i, [])
         held, ret = len(bs), sum(1 for b in bs if self.ref[b] == 1)
+        if r.status == RP.RUNNING:
+            drv.returned[r.i] = {b for b in bs if self.ref[b] == 1}
         orig["free_request"](self, r)
         drv.free(self, r, held, ret, preempted=r.status == RP.RUNNING)
         drv.check(self)

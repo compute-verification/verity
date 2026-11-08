@@ -1,10 +1,10 @@
 """CacheStep_v2's specification (`verity.ml.protocols.certifier.cache_step_v2.reference`) against vLLM's block pool as
 the advice decoder and the replay model it (`verity_vllm.pipeline.advice_code.pool.BlockPool`), through
 `cache_pool_vectors.drive`: over whole traces, sync and async, and over a small pool built to reach every edge (a full
-pool, evictions of blocks one free queued together and of part of one free's blocks, a preempted request's returns,
-hits after eviction began and hits stopped a token short), the unit's pool after every pool operation, the refused
-witnesses beside each call, the N = NB − 1 bound, and the certifier's difftest vectors as `cache_pool_vectors` makes
-them now. Both sides are this suite's inputs, so a change to either reruns it."""
+pool, evictions of blocks one free queued together and of part of one free's blocks, a preempted request's returns and
+its resume's hit on them, hits after eviction began and hits stopped a token short), the unit's pool after every pool
+operation, the refused witnesses beside each call, the N = NB − 1 bound, and the certifier's difftest vectors as
+`cache_pool_vectors` makes them now. Both sides are this suite's inputs, so a change to either reruns it."""
 from __future__ import annotations
 
 import gzip
@@ -56,6 +56,7 @@ def test_the_pool_is_vllm_s_over_a_whole_trace(name) -> None:
 
 
 EDGES = ("allocations a full pool refuses", "preempted frees keeping shared blocks",
+         "returned blocks a resume took from the free queue",
          "evictions of blocks one free queued together", "evictions splitting one free's blocks",
          "hits past the first eviction", "hits shortened by eviction",
          "hits stopped a token short with the next block cached", "hits on a hash two blocks hold")
@@ -84,6 +85,7 @@ def test_the_pool_is_vllm_s_at_its_edges(asy) -> None:
     """On a pool far too small for its work, every edge where the unit and `BlockPool` could part is reached, and
     every call there is accepted, with its neighbours refused, and leaves the two pools equal: an allocation the full
     pool refuses (and the preemption it forces), a preempted request returning only the blocks no other request holds,
+    and on its resume hitting and taking back blocks its preemption returned to the free queue (under a new slot),
     an eviction taking blocks one free queued together and one splitting a free's blocks at the threshold, a hit after
     eviction began and one eviction shortened, a hit the num_tokens − 1 cap stops with its next block cached (a repeated
     prompt, whose last block is computed again), and a hit on a hash two blocks hold, which takes the older."""
@@ -98,8 +100,9 @@ def test_the_pool_is_vllm_s_at_its_edges(asy) -> None:
 def test_the_pool_is_vllm_s_on_a_served_sync_trace(tmp_path, arrivals) -> None:
     """The trace-corpus fixture (served sync, 100 KV blocks of 16 tokens, prefix caching, preemptions), each step's rows
     in Model Runner V2's batch order (sorted stably by n) as served traces keep them: the unit holds `BlockPool` over
-    every operation at R = its 256 sequences, through hundreds of evicting computes, with requests arriving at their
-    recorded steps and as the advice encoder replays them."""
+    every operation at R = its 256 sequences, through hundreds of evicting computes and preempted requests resuming on
+    blocks their preemption returned, with requests arriving at their recorded steps and as the advice encoder replays
+    them."""
     src = V.FIXTURES / "corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp_path / f)
@@ -112,6 +115,7 @@ def test_the_pool_is_vllm_s_on_a_served_sync_trace(tmp_path, arrivals) -> None:
     assert not inp.engine.async_scheduling and inp.engine.num_gpu_blocks == 100
     c = V.drive(inp, V.statics_for(inp, R=inp.engine.max_num_seqs, D=4), arrivals=arrivals).counts
     assert c["steps"] == len(inp.rows) and c["preempted frees"] >= 2
+    assert c["resumes taking the blocks their preemption returned"] >= 1
     assert c["evicting computes"] >= 200 and c["allocations a full pool refuses"] >= 100
     assert c["hits past the first eviction"] >= 100 and c["evictions splitting one free's blocks"] >= 100
     assert c["refused the hit of a cache that never evicts"] == c["hits shortened by eviction"] >= 100
