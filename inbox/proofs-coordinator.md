@@ -13934,3 +13934,6 @@ The asks, each with a version for Wednesday and a full one after:
 
 ## 2026-11-08T21:52Z trust6: land #7996
 #7996 marked at `6be28cf3a3` (checked `129bc36cca` merged). Records `r20261108-203306-a1e5` regenerated and passed; no guarantee record or `unwitnessed` entry moves. Four stale `shape.inline` entries drop. Suites `a85f`: 70/71 plus `form_refusals`; pous's input guard is red on checked (two `Core/Game` files missing from its inputs).
+
+## 2026-11-08T21:55Z trust6: land #8097
+#8097 marked at `c6e04baf76`, after #7996. Records `r20261108-203306-f9dc` regenerated and passed: `SamplingClaimsStated`'s `unfolded_hash` moves (one claim fewer; DM Daniel at landing), plus two `reads` and `claims.not`. `unwitnessed` unchanged. Suites `e882` 7/8 (pous's checked-wide guard); `2b8f` confirms the lock commit.
