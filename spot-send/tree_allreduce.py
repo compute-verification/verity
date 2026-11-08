@@ -148,6 +148,13 @@ def mnnvl_add_rmsnorm(ar: Any, residual: Any, gamma: Any, eps: float, weight_bia
     return out.to(torch.bfloat16), h
 
 
+def device_sms(device: Any) -> int:
+    """The multiprocessors FlashInfer's `GetCudaMultiProcessorCount` sizes the launch by; the serving GPU's, as this node has the
+    same (H200: 132)."""
+    import torch
+    return torch.cuda.get_device_properties(device).multi_processor_count
+
+
 _SCALE: Any = None
 
 
@@ -186,6 +193,8 @@ def install_fused(t: Tree, device: Any) -> None:
     """Wrap ``flashinfer.comm.allreduce_fusion``, which vLLM's fused all-reduce + RMSNorm op looks up at each call, and compile
     the scale kernel now: this runs in vLLM's eager profiling forward, before any CUDA graph is captured."""
     import torch
+    if device.type != "cuda":
+        return
     try:
         import flashinfer.comm as fc
     except ImportError:
@@ -201,7 +210,6 @@ def fused_from_mnnvl(orig: Any, t: Tree) -> Any:
     then clears a -0), and `mnnvl_add_rmsnorm` with the strategy ``mnnvl``'s AUTO picks for the shape. Any other pattern on such
     a workspace is refused."""
     def allreduce_fusion(*args, **kw):
-        import torch
         ws = kw.get("workspace")
         if args or ws is None or getattr(ws, "backend", None) == SERVED_FI_BACKEND:
             return orig(*args, **kw)
@@ -225,8 +233,8 @@ def fused_from_mnnvl(orig: Any, t: Tree) -> Any:
         oneshot = S.select_strategy(comm.world_size, x.shape[0], x.shape[1], x.dtype) == S.ONESHOT
         if not oneshot:
             ar = ar + 0.0
-        sms = torch.cuda.get_device_properties(x.device).multi_processor_count
-        normed, h = mnnvl_add_rmsnorm(ar, res, gamma, eps, kw.get("weight_bias") or 0.0, oneshot, sms, mufu_scale())
+        normed, h = mnnvl_add_rmsnorm(ar, res, gamma, eps, kw.get("weight_bias") or 0.0, oneshot, device_sms(x.device),
+                                      mufu_scale())
         res_out.copy_(h)
         norm_out.copy_(normed)
         return norm_out
