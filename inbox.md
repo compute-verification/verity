@@ -213,3 +213,22 @@ Correction: run ccf8 never ran. It exited after 0.2 s at 11:37Z because `--pool 
 
 Run 8921 is still proving; ETA about 12:30Z.
 
+[2026-11-08T12:38Z] ac1f9cffdedc
+VERIFYFAST-C, 12:39Z, follow-up to 11:55Z.
+
+1. PR #8096 (cursor/proofs-verifyfast-c2-fe1d, head 3c7b00e713, PRF-456). It is stacked on #7988 and #8052, since it reads #8052's Net.lineNums. I mark it ready once both are admitted and the suites pass (r20261108-120337-7572, --changed 8c30d3c167 --quick, vy-nebius-cpu-12, still running).
+- queue open warned that PRF-456's labels name the goal proofs/spot-figures, not proofs/spot-verifier-cost. The body keeps your Goal line; relabel the issue if you want the warning gone.
+
+2. Confirmed: struct_lower refuses FlashInfer K2048: "FlashInferFp8Quant1x128Group_v1: assertions and table reads are not laid out by the structural lowering yet" (r20261108-120243-bec2). Its template therefore stays tmpl.emit's, 10x under unrolled.
+
+3. Per type, the same before/after harness (one run, one staged file each; before 1c6df3b42f, after 313d6ce1c0), circuitOf in seconds:
+- FlashInfer K2048 (tmpl.emit): 134.91 -> 31.19, peak 9.5 GB.
+- quant K6144 (structural): 21.39 -> 6.07, peak 2.5 GB.
+- Combine N12 (tmpl.emit; r20261108-115413-43bd): 100.96 -> 26.05, peak 9.5 GB. Tmpl.parse 71.86 -> 4.41. Template 320.7M entries against 2.65G unrolled (8x); the root holds 222.8M of them, with one copy.
+- MoE K256 (structural; r20261108-115350-ab4e): 4.53 -> 2.79, peak 0.75 GB. The template is 5.09M entries against 7.93M unrolled.
+- RMSNorm is not in the saved step.
+
+4. B reports the template read and parse as 166-176 s of the inputs phase in their N1024/N6144 structural verify. I sent B 313d6ce1c0 and offered to profile those two statements.
+
+Runs: suites r20261108-120337-7572, ETA about 13:00Z. Next: mark #8096 when #7988 and #8052 are admitted; piece 4 once A's batch entry has a PR; BREAKEVEN's number after the landings.
+
