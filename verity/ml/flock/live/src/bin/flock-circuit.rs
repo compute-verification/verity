@@ -5,6 +5,7 @@
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
+//!   flock-circuit prove    --stream FILE [--gpu] [--warm W]   (a long-lived prover over a stream of statements, `prove_stream`)
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
@@ -494,6 +495,8 @@ enum Side { Fresh, Verifier, Prover }
 
 type StmtKey = (Side, [u8; 64], String, usize);
 static STMT_MEMO: Mutex<Option<HashMap<StmtKey, Arc<Stmt>>>> = Mutex::new(None);
+/// `side_stmt`'s lookups under `FC_STMT_CACHE`, by side: (hits, misses)
+static STMT_LOOKUPS: Mutex<[(usize, usize); 3]> = Mutex::new([(0, 0); 3]);
 
 /// `Stmt::new(st.c, n, id)`, which reads only those: under `FC_STMT_CACHE`, built once per side, registered statement,
 /// identity and drawn count, and reused by every later session that draws as many units.
@@ -502,12 +505,28 @@ fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, St
         return Stmt::new(st.c.clone(), n, id).map(Arc::new);
     }
     let key = (side, st.digest, id.to_string(), n);
-    if let Some(s) = STMT_MEMO.lock().unwrap_or_else(PoisonError::into_inner).get_or_insert_with(HashMap::new).get(&key) {
-        return Ok(s.clone());
+    let hit = STMT_MEMO.lock().unwrap_or_else(PoisonError::into_inner).get_or_insert_with(HashMap::new).get(&key).cloned();
+    let mut lookups = STMT_LOOKUPS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(s) = hit {
+        lookups[side as usize].0 += 1;
+        return Ok(s);
     }
+    lookups[side as usize].1 += 1;
+    drop(lookups);
     let s = Arc::new(Stmt::new(st.c.clone(), n, id)?);
     STMT_MEMO.lock().unwrap_or_else(PoisonError::into_inner).get_or_insert_with(HashMap::new).insert(key, s.clone());
     Ok(s)
+}
+
+/// The statement cache as one side has used it so far (null without `FC_STMT_CACHE`): its hits, its misses (each a drawn
+/// statement built) and the drawn statements it holds.
+fn stmt_cache_seen(side: Side) -> Value {
+    if std::env::var_os("FC_STMT_CACHE").is_none() {
+        return Value::Null;
+    }
+    let (hits, misses) = STMT_LOOKUPS.lock().unwrap_or_else(PoisonError::into_inner)[side as usize];
+    let held = STMT_MEMO.lock().unwrap_or_else(PoisonError::into_inner).as_ref().map_or(0, |m| m.keys().filter(|k| k.0 == side).count());
+    json!({"hits": hits, "misses": misses, "held": held})
 }
 
 fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
@@ -855,10 +874,12 @@ fn server_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server 
     server_of(&serving(st, inst, count), st, inst, count)
 }
 
-/// What every session of a server serves: the verifier's own sample (`--draw-file`) or its sampling design (`--draw`, `--draw-law`), and
+/// What every session of a server serves: the verifier's own samples (`--draw-file`) or its sampling design (`--draw`, `--draw-law`), and
 /// without either the population's tables. Built once, when the server starts.
 struct Serving {
-    given: Option<Value>,
+    /// `--draw-file`'s samples, one sample or `{"draws": [...]}`: the server's jth session serves the (j mod n)th
+    given: Vec<Value>,
+    next: std::sync::atomic::AtomicUsize,
     law: Option<flock_live::unit_draw::Law>,
     tabs: Tables,
     /// `serve --tree-from`: the challenger every session's coin tree is sampled by
@@ -917,11 +938,20 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     }
     // the verifier's own sample, made outside this server: served at Register as it is (checked there, U2, and against the
     // registered population when the sampled statement is built)
-    let given = (!file.is_empty()).then(|| {
-        let draw = read("--draw-file", &file);
-        flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
-        draw
-    });
+    let given: Vec<Value> = if file.is_empty() {
+        Vec::new()
+    } else {
+        let v = read("--draw-file", &file);
+        let draws = match v.get("draws") {
+            Some(Value::Array(a)) if !a.is_empty() => a.clone(),
+            Some(_) => refuse("--draw-file: draws, a non-empty list of samples".into()),
+            None => vec![v],
+        };
+        for d in &draws {
+            flock_live::unit_draw::check(d).unwrap_or_else(|e| refuse(e));
+        }
+        draws
+    };
     // `--draw-law`: a sampling design object, a stratified one the verifier's own expansion over its program and query, sampled afresh at
     // each session's Register over this registered population
     let law = if !law_file.is_empty() {
@@ -938,7 +968,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     // several tables are refused here, before any session, for a sample they cannot split or whose tables `--zk` cannot prove. A
     // subset or stratified sampling design's table shapes depend on its counts alone, so a sample of the first units stands for every sample.
     if count > 1 {
-        let probe = match (&given, &law) {
+        let probe = match (given.first(), &law) {
             (Some(d), _) => Some(d.clone()),
             (None, Some(Law::Bernoulli { .. })) => refuse(TABLES_LAW.into()),
             (None, Some(l)) => l.first(inst.n as u64),
@@ -948,13 +978,13 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
             session_tables(st, inst, Some(&d), count).unwrap_or_else(|e| refuse(e));
         }
     }
-    let tabs = if count > 1 && given.is_none() && law.is_none() {
+    let tabs = if count > 1 && given.is_empty() && law.is_none() {
         session_tables(st, inst, None, count).unwrap_or_else(|e| refuse(e))
     } else {
         Tables::one(st, inst)
     };
     let tree_from = tree_from_arg(&tabs);
-    Serving { given, law, tabs, tree_from }
+    Serving { given, next: std::sync::atomic::AtomicUsize::new(0), law, tabs, tree_from }
 }
 
 /// One session's server.
@@ -964,7 +994,8 @@ fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) 
         Some(TreeFrom(c)) => s.with_tree_from(c.clone()),
         None => s,
     };
-    if let Some(draw) = &sv.given {
+    if !sv.given.is_empty() {
+        let draw = &sv.given[sv.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % sv.given.len()];
         let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
         s.cfg.draw_given = Some(draw.clone());
@@ -6171,7 +6202,28 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 #[allow(clippy::too_many_arguments)]
 fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[ProverSeed], warm: usize, addr: &str, verify_ahead: usize,
                   fw: Option<&ReleaseArgs>, emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
+    let addrs: Vec<&str> = addr.split(',').collect();
+    let jobs: Vec<Job> = (0..seeds.len())
+        .map(|run| Job { st: st.clone(), inst: inst.clone(), addr: addrs[run % addrs.len()].to_string(), label: None })
+        .collect();
+    prove_jobs(&jobs, base, seeds, warm, verify_ahead, fw, emit)
+}
+
+/// A session of the prove loop: its statement, its population, its verifier's address, and the name a stream gives it.
+struct Job {
+    st: Arc<Stmt>,
+    inst: Arc<Instances>,
+    addr: String,
+    label: Option<String>,
+}
+
+/// [`prove_sessions`]'s loop over one [`Job`] a seed: session `run` proves `jobs[run]`'s statement against its verifier, so
+/// the witness pipeline and verify-ahead run across statements of different circuits (`prove --stream`). Each record
+/// carries the job's label and the prover's statement cache so far ([`stmt_cache_seen`]).
+fn prove_jobs(jobs: &[Job], base: &Plan, seeds: &[ProverSeed], warm: usize, verify_ahead: usize, fw: Option<&ReleaseArgs>,
+              emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
     let n = seeds.len();
+    assert_eq!(jobs.len(), n, "one job a seed");
     let pipeline = base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
     let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
     // FC_HOST_PREPIN=1: the first session's witness is built before any other's and pins `depth` more buffers of its mapped
@@ -6189,11 +6241,22 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
         v["open_rtt_ms"] = json!(rtt);
         v["open_rtt_min_ms"] = json!(rtt_min);
         v["open_rtt_n"] = json!(rtt_n);
+        if let Some(label) = &jobs[run].label {
+            v["label"] = json!(label);
+        }
+        v["stmt_cache"] = stmt_cache_seen(Side::Prover);
         emit(run, v, proofs);
     };
     let join = |h: Verdict| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
-    let addrs: Vec<&str> = addr.split(',').collect();
+    // a session's verdict joined past verify-ahead's queue: the loop's wait for it, which the next session doesn't overlap
+    let waited = |h: Verdict| {
+        let t = Instant::now();
+        let (mut v, proofs) = join(h);
+        v["verdict_wait_s"] = json!(t.elapsed().as_secs_f64());
+        (v, proofs)
+    };
     for run in 0..n {
+        let (st, inst) = (&jobs[run].st, &jobs[run].inst);
         let mut plan = base.clone();
         if pipeline {
             if run == 0 && prepin {
@@ -6212,7 +6275,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
             }
             let from = ahead.back().map_or(run + 1, |(r, _)| r + 1);
             for r in from..(run + 1 + depth).min(n) {
-                ahead.push_back((r, prebuild(st, inst, base, seeds[r])));
+                ahead.push_back((r, prebuild(&jobs[r].st, &jobs[r].inst, base, seeds[r])));
             }
         }
         if run == warm {
@@ -6220,7 +6283,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 emit_one(r, join(h), rtt);
             }
         }
-        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()], fw).unwrap_or_else(|e| refuse(e));
+        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &jobs[run].addr, fw).unwrap_or_else(|e| refuse(e));
         plan.lean_session = frames.is_some();
         plan.lean_frames = frames;
         let addr = addr.as_str();
@@ -6250,11 +6313,11 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
         verdicts.push_back((run, rtt, flock_live::spawn(finish)));
         while verdicts.len() > verify_ahead {
             let (r, rtt, h) = verdicts.pop_front().expect("a session awaiting its verdict");
-            emit_one(r, join(h), rtt);
+            emit_one(r, waited(h), rtt);
         }
     }
     while let Some((r, rtt, h)) = verdicts.pop_front() {
-        emit_one(r, join(h), rtt);
+        emit_one(r, waited(h), rtt);
     }
 }
 
@@ -6384,7 +6447,8 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             "listen": listen}).to_string()).unwrap();
         let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
                           "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"], "require_link": rec["config"]["require_link"],
-                          "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"]});
+                          "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"],
+                          "stmt_cache": stmt_cache_seen(Side::Verifier)});
         let _whole_lines = index.lock().unwrap_or_else(PoisonError::into_inner);
         let mut idx = std::fs::OpenOptions::new().create(true).append(true).open(out.join("index.jsonl")).unwrap();
         // one write per line: servers sharing `out` append to the same index
@@ -6549,6 +6613,92 @@ fn stacked() {
     println!("STACKED\t{out}");
 }
 
+/// The prover's refusals of a statement it can't prove: on the device (`--gpu`) at most 12 slot types, the device's nnz
+/// bound and no table-direct reads; under `--zk` the ZK shape.
+fn statement_checks(st: &Stmt) {
+    // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
+    if flag("--gpu") && st.circuit.types.len() > 12 {
+        refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
+    if flag("--gpu") {
+        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
+    }
+    // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
+    if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
+        refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
+    }
+    if zk_mode() {
+        zk_shape_ok(st).unwrap_or_else(|e| refuse(e));
+    }
+}
+
+/// The `statement ...` line of a statement built since `tb`, and with FC_PHASE_TIMES its layout.
+fn statement_built(st: &Stmt, tb: Instant) {
+    eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
+              st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
+    // FC_PHASE_TIMES: the block's layout beside the witness's laps (WITNESSCPU, CONVERGE) and the CPU prover's (CPUPHASE)
+    if std::env::var_os("FC_PHASE_TIMES").is_some() {
+        eprintln!("LAYOUT\t{}", json!({"layout": st.c.layout(), "blocks": st.blocks(), "blocks_real": st.blocks_real, "m": st.m}));
+    }
+}
+
+/// FC_ZK_SELF_CHECK=skip: a negative control's prover, which sends its inner proofs when the witness fails
+fn zk_self_check() -> zkv::SelfCheck {
+    match std::env::var("FC_ZK_SELF_CHECK").as_deref() {
+        Err(_) | Ok("stop") => zkv::SelfCheck::Stop,
+        Ok("skip") => zkv::SelfCheck::Skip,
+        Ok(v) => refuse(format!("FC_ZK_SELF_CHECK={v}: stop or skip")),
+    }
+}
+
+/// `prove --stream FILE [--gpu] [--warm W]`: a long-lived proof server's loop over a stream of statements of any circuits.
+/// FILE holds one session a line, `{"circuit": FILE, "instances": INST, "verifier": ADDR, "label": NAME}`. Each distinct
+/// circuit and instance file is loaded and its statement built once, at its first session; the sessions run in FILE's
+/// order through one prove loop ([`prove_jobs`]), so the witness pipeline and `FC_VERIFY_AHEAD` span statements and
+/// `FC_STMT_CACHE` keeps each drawn statement for the process. The first W sessions are warm. Each session's `LIVE` record
+/// carries its label and the prover's statement cache so far. No ZK server (`FC_FIREWALL=1`), salt refs or session tables.
+fn prove_stream(path: &str) {
+    if tables_arg() > 1 || !arg("--salt-refs", "").is_empty() || !arg("--firewall-state", "").is_empty() {
+        refuse("--stream: one table a session, no --salt-refs and no --firewall-state".into());
+    }
+    sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| refuse(format!("--stream {path}: {e}")));
+    let mut loaded: HashMap<(String, String), (Arc<Stmt>, Arc<Instances>)> = HashMap::new();
+    let mut jobs = Vec::new();
+    for (i, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+        let j: Value = serde_json::from_str(line).unwrap_or_else(|e| refuse(format!("--stream {path}, session {i}: {e}")));
+        let field = |k: &str| j[k].as_str().map(str::to_string).unwrap_or_else(|| refuse(format!("--stream {path}, session {i}: no {k:?}")));
+        let key = (field("circuit"), field("instances"));
+        if !loaded.contains_key(&key) {
+            let tb = Instant::now();
+            let c = load_composite(&key.0);
+            let inst = Instances::load(&key.1, &c).unwrap_or_else(|e| refuse(format!("{}: {e}", key.1)));
+            check_public(&c, &inst).unwrap_or_else(|e| refuse(e));
+            if zk_mode() && c.plain_leaves() {
+                refuse(format!("--zk: {}'s trees have plain SHA-512 leaves, a ZK-off statement", key.0));
+            }
+            let id = identity(&c);
+            let st = Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e));
+            statement_checks(&st);
+            if firewall_on(&st) {
+                refuse("--stream: no ZK server path (FC_FIREWALL=1)".into());
+            }
+            statement_built(&st, tb);
+            loaded.insert(key.clone(), (Arc::new(st), Arc::new(inst)));
+        }
+        let (st, inst) = loaded[&key].clone();
+        jobs.push(Job { st, inst, addr: field("verifier"), label: j["label"].as_str().map(str::to_string) });
+    }
+    if jobs.is_empty() {
+        refuse(format!("--stream {path}: no session"));
+    }
+    let warm: usize = arg("--warm", "0").parse().unwrap_or_else(|_| refuse("--warm W".into()));
+    let base = Plan { gpu: flag("--gpu"), tables: 1, zk_self_check: zk_self_check(), ..Plan::default() };
+    let seeds: Vec<ProverSeed> = jobs.iter().map(|_| ProverSeed::from_os()).collect();
+    let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    prove_jobs(&jobs, &base, &seeds, warm.min(jobs.len()), verify_ahead, None, &mut |_, v, _| println!("LIVE\t{v}"));
+}
+
 fn main() {
     flock_live::huge_pages::set(!flag("--gpu"));
     flock_live::init_threads();
@@ -6563,6 +6713,9 @@ fn main() {
     }
     if cmd == "stacked" {
         return stacked();
+    }
+    if cmd == "prove" && !arg("--stream", "").is_empty() {
+        return prove_stream(&arg("--stream", ""));
     }
     let tb = Instant::now();
     let c = load_composite(&arg("--circuit", "circuit.txt"));
@@ -6612,31 +6765,13 @@ fn main() {
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
-    // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
-    if flag("--gpu") && st.circuit.types.len() > 12 {
-        refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
-    }
-    if flag("--gpu") {
-        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
-    }
-    // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
-    if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
-        refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
-    }
-    if zk_mode() {
-        zk_shape_ok(&st).unwrap_or_else(|e| refuse(e));
-    }
+    statement_checks(&st);
     let tables = tables_arg();
     if tables > 1 && flag("--gpu") {
         refuse("--session-tables above 1: the CPU prover (the device prover proves one table per session)".into());
     }
     sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
-    eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
-              st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
-    // FC_PHASE_TIMES: the block's layout beside the witness's laps (WITNESSCPU, CONVERGE) and the CPU prover's (CPUPHASE)
-    if std::env::var_os("FC_PHASE_TIMES").is_some() {
-        eprintln!("LAYOUT\t{}", json!({"layout": st.c.layout(), "blocks": st.blocks(), "blocks_real": st.blocks_real, "m": st.m}));
-    }
+    statement_built(&st, tb);
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
         "statement" => println!("STATEMENT\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "instances": st.n,
@@ -6661,13 +6796,7 @@ fn main() {
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
             let split = (tables > 1).then(|| session_tables(&st, &inst, None, tables).ok()).flatten();
-            // FC_ZK_SELF_CHECK=skip: a negative control's prover, which sends its inner proofs when the witness fails
-            let zk_self_check = match std::env::var("FC_ZK_SELF_CHECK").as_deref() {
-                Err(_) | Ok("stop") => zkv::SelfCheck::Stop,
-                Ok("skip") => zkv::SelfCheck::Skip,
-                Ok(v) => refuse(format!("FC_ZK_SELF_CHECK={v}: stop or skip")),
-            };
-            let base = Plan { gpu: flag("--gpu"), tables, split, zk_self_check, ..Plan::default() };
+            let base = Plan { gpu: flag("--gpu"), tables, split, zk_self_check: zk_self_check(), ..Plan::default() };
             let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
             let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
             let fw = release_args(&st, warm + runs);
