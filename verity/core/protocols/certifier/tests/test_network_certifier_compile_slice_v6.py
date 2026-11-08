@@ -88,7 +88,8 @@ def test_the_free_inputs(request, which):
     """Every input row is classified. The compile slice's free input is its advice, CompileSlice_v5's DA + PW = 8 bits,
     and it reads no coin; the pool window's is its checked rows at their widths until their lemma, the left row and the
     stream's witness: its coins are the verifier's 384 bits, the roots and the calls are registered and the row under
-    the input root is opened against it. Each unit's output is 16 bits."""
+    the input root is opened against it. The results and the stream's witness are CompileSlice_v5's witness at the
+    class. Each unit's output is 16 bits."""
     x = request.getfixturevalue(which)
     for unit, rows in ((V6.compile_unit, V6.COMPILE_ROWS), (V6.pool_unit, V6.POOL_ROWS)):
         params, ret = unit(**x.st).signature()
@@ -100,7 +101,7 @@ def test_the_free_inputs(request, which):
     assert V6.free_width(x.S, {r: bits[r] for r in V6.COMPILE_ROWS}) == bits["adv"] == 8
     assert V6.free_width(x.S, {r: bits[r] for r in V6.POOL_ROWS}) == bits["nrow"] + bits["chk"] and bits["coin"] == 384
     assert bits["pin"] == bits["pout"] == 512 and bits["prow"] == bits["nrow"] == V6.data_bits(x.S)["prow"]
-    assert V6.data_bits(x.S)["res"] + V6.data_bits(x.S)["chk"] > V5.data_bits(x.S)["chk"]
+    assert V6.data_bits(x.S)["res"] + V6.data_bits(x.S)["chk"] == V5.data_bits(x.S)["chk"]
     assert (V6.COMPILE_ACCEPT, V6.POOL_ACCEPT) == (0x3F, 0xF)
 
 
@@ -294,13 +295,17 @@ def test_random_chains(request, which):
 
 def test_size(synth, asynth):
     """What each unit costs at the demos' classes (`compile_slice_v6.size`). The compile slice is CompileWindow and the
-    calls row's check. The pool window is CompileSlice_v5's stream, bus and ragged keys (3,857,177 at the synchronous
-    demo's class with NM = 8) with 8 more M entries, the arrivals' counts, the two rows' digests (four compressions each
-    at 2,641 bits), their ten keys' prints, five open and five close steps and 16 copy steps."""
-    common = {"adv_bits": 8, "ing_bits": 27, "pin_bits": 512, "pout_bits": 512, "coin_bits": 384, "prow_bits": 2641,
-              "nrow_bits": 2641, "compile_free_bits": 8}
-    assert V6.size(**synth.st) == {**common, "compile_ands": 0, "pool_ands": 0}
-    assert V6.size(**asynth.st) == {**common, "compile_ands": 0, "pool_ands": 0}
+    calls row's check, 13,241 and 14,333 ANDs. The pool window, 4,539,123 and 3,656,807, is CompileSlice_v5's stream, bus
+    and ragged keys (3,857,177 at the synchronous demo's class with NM = 8) with 8 more M entries, the arrivals' counts,
+    the two rows' digests (four compressions each at 2,641 bits), their ten keys' prints, five open and five close steps
+    and 16 copy steps. Its free input is the left row and the stream's witness."""
+    common = {"adv_bits": 8, "ing_bits": 27, "req_bits": 160, "srv_bits": 160, "res_bits": 208, "pin_bits": 512,
+              "pout_bits": 512, "coin_bits": 384, "prow_bits": 2641, "nrow_bits": 2641, "compile_free_bits": 8}
+    assert V6.size(**synth.st) == {**common, "compile_ands": 13241, "pool_ands": 4539123, "cout_bits": 160,
+                                   "calls_bits": 1984, "chk_bits": 34684, "pool_free_bits": 37325}
+    assert V6.size(**asynth.st) == {**common, "compile_ands": 14333, "pool_ands": 3656807, "cout_bits": 176,
+                                    "calls_bits": 2208, "chk_bits": 25084, "pool_free_bits": 27725}
+    assert ands(V6.chain_unit(**synth.st)) == 2 * (13241 + 4539123)
 
 
 def test_the_parts_price_the_units(synth, asynth):
