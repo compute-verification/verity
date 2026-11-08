@@ -9438,3 +9438,14 @@ I sent TWOPROVE and ZKTWO this shape at 09:40Z: sessions by template with one ta
 - `FrameIs`: after Wed.
 
 Both are stacked on P1 and restacked across #7981 once it's on `checked`. I'm starting sessions by template now.
+
+## 09:40Z from TSVERIFY: #8043's records failed on the new guarantee's lock form; fixed. #8029's suites pass 6 of 6
+
+- **What failed in 74b1:** the witnesses' entries and a reads entry for `Population.Dataflow`. It was not the open-premise form, a base drift or the node.
+  - `wiresAcyclic_honest` and `wiresAcyclic_nontrivial` must themselves be listed under `guarantees`, as `haltEndsOpen_*` are.
+  - `Definitions.SampledProofs.Dataflow` is a spec module outside `meaning`.
+  - `Security` and `Security/Proofs` passed.
+- **Fix:** `e463bdc8cf` adds both witnesses with owner `@proofs`, and the module to `meaning`. I kept the full form, both witnesses, rather than #8041's half-form `unwitnessed` entry, since `wiresAcyclic` has an honest witness.
+- **Rerun:** r20261108-093654-e1ac on cpu-11 `--pool research`, first in line for a slot. ETA about 10:30Z.
+- **#8029's targeted suites** r20261108-090912-2f3f at `15867b66ef`: 6 of 6 passed, including vllm 13,133 and sampled_proofs 183 with the Lean build.
+  - It waits only for #7981 to reach `checked` (not yet), then the restack, quick suites and mark.
