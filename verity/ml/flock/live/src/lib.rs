@@ -109,10 +109,19 @@ pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f:
 
 /// `parts` back to back, copied in parallel a chunk at a time (many short parts or a few long ones)
 pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
-    use rayon::prelude::*;
     let n = parts.iter().map(|p| p.as_ref().len()).sum();
     let mut out: Vec<F128> = Vec::with_capacity(n);
-    let mut rest = &mut out.spare_capacity_mut()[..n];
+    concat_into(parts, &mut out.spare_capacity_mut()[..n]);
+    // SAFETY: concat_into wrote all n words
+    unsafe { out.set_len(n) };
+    out
+}
+
+/// [`concat`] into `out`, which is exactly as long as the parts: every word of it written
+pub fn concat_into<P: AsRef<[F128]>>(parts: &[P], out: &mut [std::mem::MaybeUninit<F128>]) {
+    use rayon::prelude::*;
+    assert_eq!(out.len(), parts.iter().map(|p| p.as_ref().len()).sum::<usize>(), "concat_into: a destination as long as the parts");
+    let mut rest = out;
     let mut pairs = Vec::new();
     for s in parts.iter().flat_map(|p| p.as_ref().chunks(1 << 15)) {
         let (a, b) = std::mem::take(&mut rest).split_at_mut(s.len());
@@ -124,9 +133,6 @@ pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
             d.write(x);
         }
     });
-    // SAFETY: the chunks cover the first n words, and each was written above
-    unsafe { out.set_len(n) };
-    out
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -2751,5 +2757,15 @@ mod concat_tests {
         assert!(concat(&slices) == parts.concat());
         assert!(concat(&parts) == parts.concat());
         assert!(concat::<Vec<F128>>(&[]).is_empty());
+        let mut out = vec![std::mem::MaybeUninit::new(F128::new(7, 7)); parts.iter().map(Vec::len).sum()];
+        concat_into(&parts, &mut out);
+        assert!(out.iter().map(|x| unsafe { x.assume_init_read() }).collect::<Vec<_>>() == parts.concat());
+    }
+
+    #[test]
+    #[should_panic(expected = "a destination as long as the parts")]
+    fn concat_into_takes_only_its_length() {
+        let mut out = vec![std::mem::MaybeUninit::<F128>::uninit(); 3];
+        concat_into(&[vec![F128::new(1, 2); 2]], &mut out);
     }
 }

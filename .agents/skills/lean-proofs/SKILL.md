@@ -47,7 +47,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
-  check, `check.py PKG`, is the train's; run it by hand only on a machine of your own.
+  check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
 - **The fast path is for the lock and the mark**, once `verity lean try` passes: it regenerates PKG's records and its
   requirers', with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s
   docstring).

@@ -10,6 +10,8 @@ public import Proofs.Core.Game.Basic
 public import Proofs.Core.Game.Interleave
 public import Proofs.Core.Game.Union
 public import Proofs.Core.Game.Prob
+public import Proofs.Core.Prob
+public import Proofs.Core.Coins
 public import Proofs.Core.Game.Poly
 public import Proofs.Core.Game.Expect
 public import Proofs.Core.Game.Runs

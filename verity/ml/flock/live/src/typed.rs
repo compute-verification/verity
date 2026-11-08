@@ -17,7 +17,7 @@
 //! - Every other input row of a part is bound to its form over the unit's columns ([`Instance::bind`]), the block's Δ.
 //! - The unit's own rows read its parts' output columns directly: in the block those entries cross slots.
 //! - A table read (attention's MUFU reads) is a part too, placed in the range of a generated layout: its rows are
-//!   `table/v2`'s (`LookupNet::build_v2`, the verifier's `Lookup.buildV2`) over the held table, its index inputs are always
+//!   `table/v2`'s (`LookupNet::read_v2`, the verifier's `Lookup.buildV2`) over the held table, its index inputs are always
 //!   bound, and its product rows' B side is the table's, folded from it ([`TableSide`]) and listed empty.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{ir_block::IrUnitNet, lookup::LookupNet};
+use crate::{ir_block::{IrUnitNet, RowRead}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit/types";
 pub const STATEMENT: &str = "verity/flock-circuit/types";
@@ -578,30 +578,27 @@ fn held(dir: Option<&str>, sha: &str, n: usize) -> Result<&'static [u32], String
     Ok(w)
 }
 
-/// A generated read's slot, `LookupNet::build_v2` over its held table: its rows with the product rows' B side left to the
+/// A generated read's slot, `LookupNet::read_v2` over its held table: its rows with the product rows' B side left to the
 /// table (as `verity_flock.derive.gen_read` lists them, with the `READ` record), the slot's net for the block (the same
 /// rows), its fast witness, and its AND rows (every row with an entry, outside its words and constant).
 fn gen_rows(name: &str, sha: &str, words: &'static [u32], n: usize, lo: usize, bits: usize) -> Result<(Rows, IrUnitNet, LookupNet, usize), String> {
-    // once per process and shape: `build_v2` holds the table's side as explicit rows until they're cleared here
+    // once per process and shape
     type Slot = (Rows, IrUnitNet, LookupNet, usize);
     static BUILT: std::sync::OnceLock<std::sync::Mutex<BTreeMap<(String, usize, usize, usize), Slot>>> = std::sync::OnceLock::new();
     let key = (sha.to_string(), n, lo, bits);
     if let Some(x) = BUILT.get_or_init(Default::default).lock().unwrap().get(&key) {
         return Ok(x.clone());
     }
-    let (mut net, ln) = LookupNet::build_v2(name, sha, words, n, lo, bits)?;
-    for r in ln.prod0()..ln.prod0() + (ln.k << (n - lo)) {
-        net.b[r] = Vec::new();
-    }
+    let (net, ln) = LookupNet::read_v2(name, sha, words, n, lo, bits)?;
     let group = |g: &crate::ir_block::Group| (g.col, g.words, g.bits.clone());
     let out0 = net.out_groups[0].col * WORD;
     let rows = Rows {
-        rows: net.a.iter().cloned().zip(net.b.iter().cloned()).collect(), konst: net.const_pos,
+        rows: (0..net.a.n_rows().min(net.b.n_rows())).map(|r| (net.a.row_cols(r).collect(), net.b.row_cols(r).collect())).collect(), konst: net.const_pos,
         in_groups: net.in_groups.iter().map(group).collect(), out_groups: net.out_groups.iter().map(group).collect(),
         in_cols: (0..n).collect(), out_cols: (out0..out0 + bits).collect(), read: Some((sha.to_string(), n, lo, ln.k, ln.prod0(), ln.lo_top())),
     };
     let word = |r: usize| r < WORD || (out0..out0 + WORD).contains(&r);
-    let ands = (0..net.useful).filter(|&r| r != net.const_pos && !word(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count();
+    let ands = (0..net.useful).filter(|&r| r != net.const_pos && !word(r) && !(net.a.row_len(r) == 0 && net.b.row_len(r) == 0)).count();
     let slot = (rows, net, ln, ands);
     BUILT.get_or_init(Default::default).lock().unwrap().insert(key, slot.clone());
     Ok(slot)

@@ -244,7 +244,7 @@ namespace Gates
 /-- `And<n>_v1` on bits is the conjunction of its operands. -/
 def AndBits : Prop := ∀ xs : Array Bool, Evaluate.andBits (xs.map Bool.toNat) = (xs.all id).toNat
 
-/-- `Xor<n>_v1` on bits is the XOR of its operands, as `FlockSoundness.Audit.xorSum` folds it. -/
+/-- `Xor<n>_v1` on bits is the XOR of its operands, as `Verity.Boolean.xorSum` folds it. -/
 def XorBits : Prop := ∀ xs : Array Bool, Evaluate.xorBits (xs.map Bool.toNat) = (xs.toList.foldr Bool.xor false).toNat
 
 /-- `Not_v1` on a bit is its negation. -/
