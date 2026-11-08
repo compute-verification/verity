@@ -121,6 +121,7 @@ theorem le_finderCost_cTZC (c : vb.Pos) {t' : ℝ} (ht : 0 ≤ t')
   unfold finderCost
   linarith [hc x.1]
 
+omit [Fintype K] in
 /-- **`LinkCRZC` at a run's cost `2^256`**, at every prover. -/
 theorem linkCRZC_top (k Rw M : ℕ) : LinkCRZC A Hs P planZ tab vb R τ k Rw M (2 ^ 256) :=
   fun c _ => crExpected_of_le (le_finderCost_cTZC A Hs P planZ tab vb R τ c (by positivity))
