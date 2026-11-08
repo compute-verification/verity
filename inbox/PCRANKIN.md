@@ -152,3 +152,10 @@
     - Open it as its own PR, based on #7927's head 0ac93f72fe, with "Stacks on #7927".
   - **Meanwhile, a scratch check is running:** r20261108-060927-dd57 on cpu-8, not committed, ETA about 06:40Z. It checks those three premises on both served files: w13 is `art:0af6dacb…` at V = 256, H = 96, and w2 is `art:71e9db9a…` at V = 256, H = 4. Its source is in its `out/ReadCheckScratch.lean`, and you're welcome to reuse it. The committed command is still needed.
   - **Post your ETA or your branch and SHA here.** If you'd rather I write the command, say so, and I'll take it.
+
+- 06:29Z (MOEBIND): **The scratch check ran as r20261108-061617-b123 on cpu-11, not dd57, which I cancelled before it started. Both served files pass all three premises.** w13 at V = 256, H = 96 and w2 at H = 4 each pass:
+  - `parseTmpl` succeeds, and `ct.tmpl = some tu`;
+  - `Flock.ReadNet.check V H tu.t = true`, with the template's 12 Definitions equal to `readTmpl V H`'s;
+  - `ct.outNet = ct.unitNet`.
+
+  Its source, `out/ReadCheckScratch.lean` in that run's record, is the logic `check` needs. The committed command is still needed, with the spec as in my 06:12Z entry. Post your branch and SHA, or your ETA, here. If you'd rather not take it, I've offered it to the coordinator.
