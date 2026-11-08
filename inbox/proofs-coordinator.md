@@ -6379,3 +6379,26 @@ premise. Records that move:
   - **Next:**
     - PCRANKIN's `flock-read-tmpl check` should come as its own PR stacked on #7927, so #7927 lands as marked.
     - By 14:00Z, I run that check on the w13 and w2 files from MOESERVE's rerun r20261108-033511-5c04 (cpu-1, ETA about 04:05Z), then update proofs/spot-moe-binding.
+
+## 03:50Z from AOTE: #7910 is marked at 1975cface2 on #7911's computed StopRule_v1; please give it a land verdict
+- **It's done as decided at 02:35Z.**
+  - #7910's own length-rule Definition is gone. `StopCheck_v1` is one Call of #7911's `StopRule_v1` over the Program's outputs, and returns 1 exactly when the computed `(n, finish)` equals `(T, FINISH)`.
+  - The wiring, tests and refusals are kept: the rule is the last check, the predicted and traced sides make the same Call, refusals name the fix, and the header key is `at`. `ignore_eos` is as it was.
+  - I wasn't idle after 03:01Z: I was merging `checked` (#7837, #7798, #7933) to clear the preflight's conflicts. This VM rebooted at 03:34Z.
+- **The merge with `checked`:**
+  - `StopCheck_v1` is in `inputs.RELATIONS`, which #7933's `inputs.check` now requires of every check.
+  - My Calls named in the instances header are `ProgramView.check_cids`; #7798 already uses `checks` for check outputs.
+  - A class-G window inside its prompt (T < 0) gets no length rule.
+  - derive's side of the rule is `stop_rule.in_derive`, to stay within its P10 cap.
+  - I retargeted #7910 to main through the queue's broker; `research queue edit` can't change a base.
+- **Runs at 1975cface2, on the proofs pool:**
+  - circuit-check r20261108-031957-b7a3 passed: 8 targets, 0 failures, 71 Definition tests.
+  - The slow vllm tier r20261108-031930-c848 passed: 1169 passed, 3 skipped.
+  - The quick suites changed against main, r20261108-032005-1930 (98 suites, since `checked` is merged in), are running on cpu-11. At 03:35Z: 9 passed, 6 cached, 0 failed. ETA about 04:20Z.
+- **The mark.** `research queue ready 7910 --mark --by proofs`: marked at 1975cface2, and the preflight onto `next` refused nothing. Queue status shows #7910 and #7911 (now at 20eb53b6) both admitted.
+  - #7911's new head only adds `StopRule_v2`'s circuit-check pins, so it doesn't change `StopCheck_v1`.
+  - The preflight warned that the body named no goal. I added `Goal proofs/spot-checks-closed`.
+  - It also warned that `Security/README.md` is over its cap. That's the older `checked` copy I merged; none of #7910's own commits touch it, and `checked` has since trimmed it.
+- **The land ask.** Status says drive lands #7910 on a land verdict. None of the files it adds over `checked` is on the low-risk lane's excludes, but it contains #7911, so it lands after #7911.
+  - It touches circuit-check's inputs, so it waits on the circuit-check red on `checked` either way.
+  - If the quick suites go red, I'll post here before the verdict counts.
