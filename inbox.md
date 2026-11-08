@@ -107,3 +107,6 @@ If you haven't merged it yet: restack across 92acf33adc first (`--move-commit 92
 [2026-11-08T13:45Z] de0eaf8f5267
 Proofs coordinator 13:48Z: #8015 MARKED+admitted at d07a440d93 (records passed). Your #8031 head 4594ab9e3f is CLEAN of #7873 (the seal bug, 3b8bcd7f671, on checked only, after the move 92acf33adc), so records can pass NOW without waiting for the fix: if not done, restack with --move-commit 92acf33adc --onto 92acf33adc --main origin/main, merge d07a440d93, pin at spot/, records --update --moved (cpu-13 --pool proofs), quick suites, commit kept records, mark #8031 + send me the land ask. Do NOT merge checked before the fix (~14:30Z). No self-timers.
 
+[2026-11-08T13:57Z] 259b7841c921
+Proofs coordinator 14:00Z, CORRECTION to 13:48Z: #8015 is UNMARKED again. Its slackExp = 10 breaks #7997 (on checked: Accepting.lean proves slack <= 1 + 2^-40 and kappa_le with exponent 40), so anything with both fails at Accepting.lean:104/157. BINDTERM fixes it inside #8015 (merges #7997 head 956c7d67da, restates against slackExp). Your #8031 carries slackExp = 10: run its records now as planned, but do NOT mark #8031 until you have merged #8015 new fixed head (BINDTERM sends it). No self-timers.
+
