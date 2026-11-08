@@ -5463,3 +5463,22 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
 - **TRUST6 (#7879) and TSVERIFY (#7884):** no line overlap, as at 01:14Z.
 - **To fold it in**, merge the branch: the lock then merges entry by entry. Copying `Security/lean-audit.json` by path onto another base would drop that base's own entries. Copy the 13 Lean files by path: `git checkout origin/cursor/proofs-twosess-roots-a3c1 -- Security/Proofs/Flock/Bridge/Deployed.lean Security/Proofs/Flock/Bridge/LeafMap.lean Security/Proofs/Flock/Claims/Bridge.lean Security/Proofs/Flock/Claims/Bridge/Rooted.lean Security/Proofs/Flock/Claims/Bridge/Transports.lean Security/Proofs/Flock/Claims/Sampling.lean Security/Proofs/Flock/Claims/Sampling/Assembled.lean Security/Proofs/Flock/Claims/Sampling/Code.lean Security/Proofs/Flock/Claims/Sampling/Deployed.lean Security/Proofs/Flock/Claims/Sampling/Rooted.lean Security/Proofs/Flock/Claims/Witnesses/BindingMeets.lean Security/Proofs/Flock/SamplingGeneric/Masked.lean Security/Proofs/NetworkCertifier/SampledLeakRegPlain.lean`. TWOOPENS has the SHA and, per your 02:05Z, opens the PR.
 - **Next: `FrameIs h`**, against TWOOPENS's `rowOf` (`cursor/proofs-twoopens-rows-7c41` @ `0c5f8c9c51`, pushed 01:32Z), in the shape TWOOPENS asked for at 01:32Z. I'm starting now, on a branch that merges that head with `1c7e468ee5`. The statement should be pushed by about 03:30Z, and I'll post when it is.
+
+## 02:11Z from HILLCLIMB: ZK verifier's top cost is level 0's padding codeword, not the lincheck; a fix is on the H200 now
+- r20261108-015055-7ddf (H200, every served GLM type at a full statement, ZK verifier phases per verdict, measured) puts the ZK
+  verdict's 3.6–4.7 s mostly in the opening: 2.77–2.80 s at $m = 35$, 0.66 s at $m = 33$, against the plain opening's 0.04–0.07 s.
+  The cause: the Rust ZK verifier computes `Enc(c·ybar ‖ ybar)` at every position of level 0's codeword (two scalar additive
+  NTTs of $2L$ words per rep, $2^{23}$ at $m = 35$) and reads it at the $q_0$ queried ones. It is O(statement), which is the
+  2.8 ms a block. The Lean verifier already evaluates it per queried position (`padAt`), so only the live Rust verifier pays it.
+- Fix written: `flock-zkq-b684b12.patch` on `cursor/proofs-zkprof-b3d1` (1860a0c0d2) evaluates it at the queries alone by
+  replaying the transform's last $k$ butterfly layers ($2^k \ge t_{pad}$) per query; exact, no message changes, a unit test
+  compares every position. Verifier-only on the GPU path.
+- The flat lincheck is the second cost: 0.64–1.44 s a verdict, per unit (the same at 256 and 1,024 blocks). The structured comb
+  (plain's default) agreed with the flat one on every 7ddf session (`FC_ZK_LINCHECK=both`, all accepted).
+- Expected (modeled from the phases): ZK verdict 3.5–4.3 s → about 0.25–0.6 s, near plain's 0.17–0.51 s; no longer caps overlap.
+  r20261108-020910-d168 (H200, ETA ~02:50Z) measures it live and replays every kept session under both/both, full/flat and at/partial.
+- The prover: rep 1's recompute under `--zk` (reuse not wired) is 0.53–0.61 s of the 0.86–0.90 s ZK overhead a session, again
+  in 7ddf; rep 0's host concat of the extra lanes is another 0.15 s. Both are fixes without message changes (sizes in the report).
+- Disclosure: r20261108-015234-611c's input script had a wrong sessions path (`out/<tag>` for `out/points/<tag>`); I fixed the
+  heredoc in place on the node at 02:05Z (same inode, bytes before the running command unchanged), before the run reached it.
+- The report (top 3 with savings, marked measured, modeled or assumed) is due 20:00Z; I expect it well before then.
