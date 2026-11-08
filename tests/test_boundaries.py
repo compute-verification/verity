@@ -242,28 +242,15 @@ BENCHMARKS_IMPORTERS = {
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
-    # Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
+    # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py", "verity/ml/flock/pod/rec_inner.py",
-        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
-        "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
+        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py",
+        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
         "verity/ml/flock/python/verity_flock/register.py",
-        "verity/ml/flock/tests/plain_hidden.py",
-        "verity/ml/flock/tests/test_backend.py", "verity/ml/flock/tests/test_circuit.py",
-        "verity/ml/flock/tests/test_class_statement.py", "verity/ml/flock/tests/test_derive.py",
-        "verity/ml/flock/tests/test_flock_rows.py", "verity/ml/flock/tests/test_gemm_hill.py",
-        "verity/ml/flock/tests/test_inner_registered.py", "verity/ml/flock/tests/test_ir_lowering.py",
-        "verity/ml/flock/tests/test_ir_sampling.py", "verity/ml/flock/tests/test_lean_hidden_outputs.py",
-        "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
-        "verity/ml/flock/tests/test_lean_registered_bit_rows.py", "verity/ml/flock/tests/test_lean_registered_reads.py",
-        "verity/ml/flock/tests/test_lean_served_registered.py", "verity/ml/flock/tests/test_lean_session_tables.py",
-        "verity/ml/flock/tests/test_lean_typed_statement.py", "verity/ml/flock/tests/test_lean_verifier.py",
-        "verity/ml/flock/tests/test_stage_typed.py", "verity/ml/flock/tests/test_typed_statement.py",
-        "verity/ml/flock/tests/tmpl_statement.py",
-    ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s templates, generator, input sets and lowerings"),
-    "tools/verity/circuit_check/src/circuit_check/checks.py":
-        "circuits: `verity_numerical.bench` (`benchmarks/numerical`)'s lowerings, as circuit-check targets",
+        "verity/ml/flock/tests/test_backend_bench.py", "verity/ml/flock/tests/test_class_statement.py",
+        "verity/ml/flock/tests/test_gemm_hill.py", "verity/ml/flock/tests/test_ir_lowering_bench.py",
+    ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
