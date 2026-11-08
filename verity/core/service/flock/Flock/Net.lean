@@ -100,6 +100,34 @@ def checkOrder (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat
       if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
       if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
 
+private def num (h : Array String) (i : Nat) : V Nat :=
+  match h[i]?.bind String.toNat? with
+  | some n => pure n
+  | none => throw s!"flock-ir-unit/v2: header field {i} is not a number"
+
+private def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
+  let count ← num h at0
+  let mut at_ := at0 + 1
+  let mut out := #[]
+  for _ in [0:count] do
+    let col ← num h at_
+    let words ← num h (at_ + 1)
+    let np ← num h (at_ + 2)
+    let mut bits := #[]
+    for i in [0:np] do bits := bits.push (← num h (at_ + 3 + i))
+    if !(isPow2 words && col % words == 0) then throw "flock-ir-unit/v2: a port group is not an aligned power of two of words"
+    out := out.push ⟨col, words, bits⟩
+    at_ := at_ + 3 + np
+  return (out, at_)
+
+/-- A net's input groups ascend and are disjoint, and each input port bit's row is a self row, `[c]·[c]`: only the padding
+past a group's ports may be empty. So each port bit is its own column, which one copy pair of Δ fills. -/
+def inputsOk (inGroups : Array Group) (ra rb : Array (Array Nat)) : Bool :=
+  (List.range (inGroups.size - 1)).all (fun i => (inGroups.getD i default).col + (inGroups.getD i default).words ≤
+      (inGroups.getD (i + 1) default).col) &&
+    inGroups.all fun g => (List.range (g.bits.foldl (· + ·) 0)).all fun j =>
+      ra.getD (g.col * WORD + j) #[] == #[g.col * WORD + j] && rb.getD (g.col * WORD + j) #[] == #[g.col * WORD + j]
+
 theorem forIn_append_yield {α : Type} (xs ys : List α) (f : α → PUnit → V (ForInStep PUnit))
     (hf : ∀ a u, f a u ≠ .ok (.done u)) :
     forIn (xs ++ ys) PUnit.unit f = (do forIn xs PUnit.unit f; forIn ys PUnit.unit f) := by
@@ -151,34 +179,6 @@ compiled after it, so it stays above `ofRows`. -/
     split
     · simp [pure, Except.pure]
     · split <;> split <;> simp [throw, throwThe, MonadExceptOf.throw, pure, Except.pure, bind, Except.bind]
-
-private def num (h : Array String) (i : Nat) : V Nat :=
-  match h[i]?.bind String.toNat? with
-  | some n => pure n
-  | none => throw s!"flock-ir-unit/v2: header field {i} is not a number"
-
-private def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
-  let count ← num h at0
-  let mut at_ := at0 + 1
-  let mut out := #[]
-  for _ in [0:count] do
-    let col ← num h at_
-    let words ← num h (at_ + 1)
-    let np ← num h (at_ + 2)
-    let mut bits := #[]
-    for i in [0:np] do bits := bits.push (← num h (at_ + 3 + i))
-    if !(isPow2 words && col % words == 0) then throw "flock-ir-unit/v2: a port group is not an aligned power of two of words"
-    out := out.push ⟨col, words, bits⟩
-    at_ := at_ + 3 + np
-  return (out, at_)
-
-/-- A net's input groups ascend and are disjoint, and each input port bit's row is a self row, `[c]·[c]`: only the padding
-past a group's ports may be empty. So each port bit is its own column, which one copy pair of Δ fills. -/
-def inputsOk (inGroups : Array Group) (ra rb : Array (Array Nat)) : Bool :=
-  (List.range (inGroups.size - 1)).all (fun i => (inGroups.getD i default).col + (inGroups.getD i default).words ≤
-      (inGroups.getD (i + 1) default).col) &&
-    inGroups.all fun g => (List.range (g.bits.foldl (· + ·) 0)).all fun j =>
-      ra.getD (g.col * WORD + j) #[] == #[g.col * WORD + j] && rb.getD (g.col * WORD + j) #[] == #[g.col * WORD + j]
 
 /-- An expanded circuit from its parts, as `parse` reads them from text or `Flock.Typed` has them from `derive`: its
 useful rows' count, its constant, its port groups, and each useful row's A and B columns. -/
