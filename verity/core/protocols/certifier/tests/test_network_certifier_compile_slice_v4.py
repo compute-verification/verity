@@ -1,8 +1,8 @@
 """The compile slice over the memory-checked pool (`compile_slice_v4.CompileSlice_v4`): CompileSlice_v3's load and steps,
 each pool call a record on a bus to CacheStep_v3's stream of memory-checked slots, which runs in the unit from the empty
-pool with RK's keys the arrivals' BlockKey_v1 chains printed under δ. Its free input is still only the advice, DA + PW
-bits; the hits, evictable counts and returns the steps read are checked witness the bus carries, and so are the stream's
-slots and touched list. The circuit accepts exactly where `compile_slice_v4.reference` compiles, and its served rows and
+pool with RK's keys the arrivals' BlockKey_v1 chains printed under δ. The hits, evictable counts and returns the steps
+read are checked witness the bus carries, and so are the stream's slots and touched list; its free input is the advice,
+DA + PW bits, and that checked witness at its width until its lemma. The circuit accepts exactly where `compile_slice_v4.reference` compiles, and its served rows and
 last state and window rows are CompileSlice_v3's, on both demonstration slices, on every advice of their arrivals and on
 random windows under eviction. A registered row one bit off is refused by its own verdict bit, a checked witness one bit
 off by the cache or pool bit, and a witness made under one print coin by the pool bit under another."""
@@ -55,17 +55,18 @@ def _as_v3(x, sl: CS.Slice, ref) -> None:
 
 
 @pytest.mark.parametrize("which", ["synth", "asynth"])
-def test_the_free_input_is_the_advice(request, which):
-    """Every input row is classified, and the unit's input gates of no class but advice are DA decision bits and the PW = 3
-    bits of the step count, 8 at the demo's class: the coins (α, γ, δ) are the verifier's 384 bits and the checked
-    witness is computed, not free. Its one output is 16 bits."""
+def test_the_free_input_is_the_advice_and_the_checked_witness(request, which):
+    """Every input row is classified, and the unit's free input is the advice, DA decision bits and the PW = 3 bits of the
+    step count (8 at the demo's class), and the checked witness at its width until its lemma: the coins (α, γ, δ) are the
+    verifier's 384 bits. Its one output is 16 bits."""
     x = request.getfixturevalue(which)
     Z = RC.widths(CS.chain(x.S))
     params, ret = V4.unit(**x.st).signature()
     widths = {name: sum(BL.elements(t)) for name, t in params}
     assert set(widths) == set(V4.CLASSES) and Z.PW == 3 and sum(BL.elements(ret)) == 16
-    assert V4.free_width(x.S, widths) == widths["adv"] == x.S.DA + Z.PW == 8
+    assert widths["adv"] == x.S.DA + Z.PW == 8
     assert widths["coin"] == 384 and widths["chk"] == V4.data_bits(x.S)["chk"]
+    assert V4.free_width(x.S, widths) == widths["adv"] + widths["chk"]
     assert widths["ing"] == x.S.K * (1 + x.S.IW + Z.LW)
     assert all(widths[r] % CS.WORD == 0 for r in V4.PADDED)
     with pytest.raises(ValueError, match="at most D"):
@@ -222,6 +223,6 @@ def test_size(synth, asynth):
     keys of 62,240 (`block_key.BlockKey`); the steps' 90 and 100 bus records folded in at 2,322; and the load and steps
     themselves, 10,130 and 10,759, where CompileSlice_v3 computes the pool in 76,554 and 83,287."""
     assert V4.size(**synth.st) == {"ands": 4117521, "adv_bits": 8, "ing_bits": 27, "req_bits": 208, "srv_bits": 160,
-                                   "cout_bits": 160, "coin_bits": 384, "chk_bits": 35744, "free_bits": 8}
+                                   "cout_bits": 160, "coin_bits": 384, "chk_bits": 35744, "free_bits": 35752}
     assert V4.size(**asynth.st) == {"ands": 3235834, "adv_bits": 8, "ing_bits": 27, "req_bits": 224, "srv_bits": 160,
-                                    "cout_bits": 176, "coin_bits": 384, "chk_bits": 26144, "free_bits": 8}
+                                    "cout_bits": 176, "coin_bits": 384, "chk_bits": 26144, "free_bits": 26152}

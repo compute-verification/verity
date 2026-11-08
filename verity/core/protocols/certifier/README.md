@@ -109,8 +109,9 @@ A spec-level reference for network accounting's timing channel:
 - the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4`, `CompileSlice_v3` with its
   pool calls records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys
   the arrivals' `BlockKey_v1` chains printed under a live coin. The hits, evictable counts and returns the steps read,
-  and the stream's slots and touched list, are checked witness, unique and bound by live coins, so its free input is
-  still the advice; a window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
+  and the stream's slots and touched list, are checked witness, unique and bound by live coins. Until a Lean lemma
+  shows that uniqueness (CIR-190's checked-witness class), the witness counts as free input at its width, so the free
+  input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
   `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the replay's `_KV`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,

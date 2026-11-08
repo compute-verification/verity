@@ -9,7 +9,9 @@ charges a window, what binds the charge's inputs, and a served window at its eng
 counts' stand-in; its charge is this one. `CompileSlice_v3` (`compile_slice_v3`) is v2 computing its schedule rather
 than checking it, with no ChargeLink, the served rows and last rows registered reads it holds to the computed ones: its
 advice input is exactly ℓ_w gates wide, so the charge is ℓ_w. `CompileSlice_v4` (`compile_slice_v4`) is v3 with its
-pool calls answered by `CacheStep_v3`'s memory-checked stream; its checked witness is not advice, so its charge is v3's.
+pool calls answered by `CacheStep_v3`'s memory-checked stream. Until a Lean lemma shows its checked witness unique
+(CIR-190's checked-witness class), that witness counts as free input at its width, so its charge is ℓ_w plus the
+witness's width (`free_width`).
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):
 - Its inputs:

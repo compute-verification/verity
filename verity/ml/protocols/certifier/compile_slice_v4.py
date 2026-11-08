@@ -20,9 +20,10 @@ its accesses, whatever the pool's size.
   each placed slot's returns), and the stream's witness: its NS slots (start, kind, r, a, b, the read's v and t) and
   its touched list's final values and times.
 A registered row is padded to whole words (`compile_slice.WORD`); its padding must be zero. `CLASSES` names each input's
-class. The checked witness is a computed check, not advice: the valid witness is unique, its coins are drawn after it
-is committed, and a wrong one passes only with the fingerprints' collision probability, which enters the soundness
-error. `free_width` counts the inputs of no class but advice.
+class. The checked witness is a computed check: the valid witness is unique, its coins are drawn after it is committed,
+and a wrong one passes only with the fingerprints' collision probability, which enters the soundness error. It still
+counts as free input at its width until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's
+nondeterminism rule; CIR-190's checked-witness class), so `free_width` counts the advice and the checked witness.
 
 **The output**: ``verdict``, 16 bits: CompileSlice_v3's ``load``, ``steps``, ``cache`` (here the step side's bounds on its
 calls), ``served`` and ``carry``, and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its
@@ -90,7 +91,8 @@ FLAGS = ("load", "steps", "cache", "served", "carry", "pool")
 ACCEPT = (1 << len(FLAGS)) - 1
 ROWS = ("adv", "ing", "req", "srv", "cout", "coin", "chk")
 #: each input row's class: the advice is free; ingress and registered gates aren't counted in the window's c, the coins
-#: are the verifier's, and the checked witness is a computed check (the module's docstring)
+#: are the verifier's, and the checked witness is a computed check, free at its width until its lemma (the module's
+#: docstring)
 CLASSES = {"adv": "advice", "ing": "ingress", "req": "registered", "srv": "registered", "cout": "registered",
            "coin": "coin", "chk": "checked"}
 #: the rows padded to whole words (`compile_slice.WORD`)
@@ -172,12 +174,12 @@ def row_bits(S) -> dict[str, int]:
 
 
 def free_width(S, widths: dict[str, int] | None = None) -> int:
-    """The unit's input bits of no class but advice (`CLASSES`); `widths`, each input row's bits (default the
-    signature's)."""
+    """The unit's free input bits: the advice and the checked witness (`CLASSES`; the module's docstring); `widths`, each
+    input row's bits (default the signature's)."""
     widths = row_bits(S) if widths is None else widths
     if set(widths) != set(CLASSES):
         raise ValueError(f"inputs {sorted(widths)} aren't the classified rows {sorted(CLASSES)}")
-    return sum(b for r, b in widths.items() if CLASSES[r] == "advice")
+    return sum(b for r, b in widths.items() if CLASSES[r] in ("advice", "checked"))
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------------
