@@ -4,7 +4,8 @@ sparse MLA reads the rows `DsaButterflyRows` routes at those settings, in ascend
 under `VERITY_DSA_TOPK=canonical` serves).  The Program has no `run` input and no checks.
 
 GLM-5.3's checkpoint is cut to its first 4 layers (three full indexers, then one that shares the third's top-k) and its
-INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the served one."""
+INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the served one; one test keeps the served INDEX_TOPK and
+reads its rows' history as an Input."""
 
 from __future__ import annotations
 
@@ -131,6 +132,34 @@ def test_no_row_past_index_topk_calls_the_mask_form(phi):
     params, ret = r.program.fn.signature()
     assert ret == Array(1, I32) and r.checks is None and [n for n, _ in params][-1] == "weights"
     assert [_families(r.program.fn.body.nodes)[f] for f in LONG] == [0, 0, 0]
+
+
+@pytest.fixture
+def served(tmp_path) -> Phi:
+    p = _first_layers(_row_phi(GLM53, "GLM53", tmp_path), 4)
+    assert p.hf_config["index_topk"] == 2048
+    return Phi.from_json({**p.to_json(), "engine": _canonical(p.engine)})
+
+
+@pytest.mark.parametrize("C", [2047, 2049, 32767])
+def test_a_decode_row_at_the_served_index_topk_selects_its_top_k_at_its_own_keys(served, C):
+    """At the served INDEX_TOPK (2,048), a request a Commit window carries in at decode C reads its C positions as an Input and
+    its decode row has C + 1 keys: 2,048 stay within INDEX_TOPK, and 2,050 or 32,768 select the top 2,048 of the row's own
+    logits in the mask form at N = C + 1.  Every layer's sparse MLA reads 2,048 rows."""
+    r = build_program(served, "request", LP=C, T=1, C=C, with_desc=False)
+    n, nodes = C + 1, r.program.fn.body.nodes
+    fam = _families(nodes)
+    assert "run" not in [x for x, _ in r.program.fn.signature()[0]] and r.checks is None
+    assert [m.fn.bindings["T"] for m in nodes if m.fn.id.startswith("SparseMlaSplit_v1{")] == [2048] * 4
+    if n <= 2048:
+        assert [fam[f] for f in LONG] == [0, 0, 0] and fam["DsaTopKShortRow_v1"] == 3
+        return
+    assert [fam[f] for f in LONG] == [3, 3, 4] and fam["DsaTopKShortRow_v1"] == 0
+    assert {m.fn.id for f in LONG for _, m in _calls(r, f)} == {
+        f"DsaTopKMask_v1{{N={n},TOPK=2048}}", f"DsaButterflySettings_v1{{N={n},K=2048}}", f"DsaButterflyRows_v1{{N={n},K=2048,W=576,E=16}}"}
+    for _, m in _calls(r, "DsaTopKMask_v1"):
+        (lg,) = _reads(m, 0)
+        assert nodes[lg].fn.id.startswith("DsaMqaLogits_") and nodes[lg].fn.bindings["N"] == n
 
 
 def test_run_bits_route_each_served_order():
