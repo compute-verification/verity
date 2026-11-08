@@ -97,7 +97,8 @@
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
   "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
-  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with",
+  "FlockReadTmpl": "the flock-read-tmpl executable's entry point: it prints Flock.ReadNet.render (Flock.ReadNet.readTmpl V H) after reading the text back with Flock.Tmpl.parse and checking it with Flock.ReadNet.check, all audited under Flock"
  },
  "assumptions": {},
  "open": {
@@ -137,6 +138,8 @@
    "Flock.MerkleScheme.sha512",
    "Flock.Pinned.rowKey",
    "Flock.Pinned.tableSha",
+   "Flock.ReadNet.cvWords",
+   "Flock.ReadNet.midstate",
    "Flock.RecOpen.ivW"
   ],
   "hash": "Flock.Sha512",
