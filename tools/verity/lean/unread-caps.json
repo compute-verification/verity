@@ -10,16 +10,16 @@
    "declarations": 121
   },
   "Proofs/Accounting": {
-   "modules": 1,
-   "declarations": 7
+   "modules": 3,
+   "declarations": 50
   },
   "Proofs/Core": {
    "modules": 4,
    "declarations": 54
   },
   "Proofs/Flock": {
-   "modules": 237,
-   "declarations": 1782
+   "modules": 241,
+   "declarations": 1843
   },
   "Proofs/Nci": {
    "modules": 1,
@@ -29,10 +29,6 @@
    "modules": 3,
    "declarations": 33
   },
-  "Proofs/Population": {
-   "modules": 7,
-   "declarations": 89
-  },
   "Proofs/Pous": {
    "modules": 1,
    "declarations": 3
@@ -40,6 +36,10 @@
   "Proofs/Pouw": {
    "modules": 49,
    "declarations": 412
+  },
+  "Proofs/SampledProofs": {
+   "modules": 7,
+   "declarations": 89
   }
  }
 }

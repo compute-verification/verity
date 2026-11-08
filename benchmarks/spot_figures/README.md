@@ -3,11 +3,13 @@
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
-plotted series.
+plotted series. Lean checks every one-stage and request-level design the figures plot (`plancheck`, which builds
+`sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point plots what Lean certifies,
+and a design Lean refuses is an error. The two-stage designs are the planner's alone.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
-                                                       # [--request workload] [--workers N] [--points N]
+                                                       # [--request workload] [--workers N] [--points N] [--no-lean]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
@@ -40,7 +42,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   figures show the share in no proof block and the share modeled. Its `params`, the model's total parameters, scale
   the references that go as the model's size.
 
-  A `serve_tax` card gives each server configuration's serve tax, what its change to the production server costs on
+  A `serve_tax` card gives each server configuration's serve tax, what its change to the serving engine costs on
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
@@ -88,7 +90,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
     the sets' form. Each is never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`,
     `card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) is in
-    `consumers.exfiltration_bound`'s form, at most the served bits by the same count. The caption names the lines
+    `consumers.exfiltration_bound`'s form, its count the bits Lean certifies, at most the served bits
+    (`audit_exfiltration_delivered`). The caption names the lines
     that at β = 1% are bounded only by everything the scope serves, the trivial bound, so that value isn't read as a
     result.
   - The break-even (`breakeven`, `breakeven.txt` and `figure1.json`'s `breakeven`): for each patterns'-form line and
@@ -113,6 +116,14 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     bound at the budget (`optimize.two_stage_design`).
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
+  - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
+    are SPOT[Flock]'s three roles: the inference server serves and commits its values; the proof server replays each
+    sampled replay block and proves it with `flock-circuit prove --zk`, with no ZK server and no recursion (the
+    `proof_overhead` card's `dev` arm); and the verifier draws on the challenger's live coins and decides with the Lean
+    verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
+    its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
+    an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
+    layer (`verity/core/protocols/sampled_proofs/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public

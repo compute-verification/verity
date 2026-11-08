@@ -1,6 +1,6 @@
 # Prove path
 
-Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
+Network certification under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
 units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
@@ -63,13 +63,13 @@ commitments and never published.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law samples every unit of theirs beside
+   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` sampling design samples every unit of theirs beside
    K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a registration sampling them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
-- the sample: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
+- the sample: the service's rule, the partition file's sampling design, on live coins read after the receipt, with ε surfaced at δ by the
   outcome;
 - the per-member `--zk` sessions behind the ZK server;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
@@ -235,7 +235,10 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
   (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
-  (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
+  (`run_root`), a registration naming another Commit (`commit`), and a carried request that doesn't follow from the close of
+  the window before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that window's
+  close, opened under its registration, naming the request and what doesn't follow: its order, a request dropped with outputs
+  still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds

@@ -641,6 +641,34 @@ def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_to
     assert len(rings()) == 3, "a held member waits on its owner, not on a reviewer"
 
 
+def test_the_bottom_ring_goes_only_to_drive_tomls_bottom_ring_after_its_bottom_wait_min(world, monkeypatch):
+    """drive.toml's `bottom_ring` names every handle `_bottom` rings, and `bottom_wait_min` the minutes before each ring: with
+    ci's reviewer pool reviewing `next`'s bottom, drive.toml rings ci alone, and top hears nothing."""
+    h = Review(world, monkeypatch)
+    h.d.bottom_ring, h.d.bottom_wait_min = ("@ci",), 45
+    rung: list[tuple[str, tuple[str, ...]]] = []
+    h.d.post = lambda text, to=(): rung.append((text, to)) or True
+
+    def rings() -> list[tuple[str, tuple[str, ...]]]:
+        return [(text, to) for text, to in rung if "lowest member" in text]
+
+    def wait(s: float) -> str:
+        h.clock += s
+        return h.tick()
+
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert wait(45 * 60 - 60).startswith("nothing reviewed lands: #1") and rings() == [], "it waits 45 min, not the default's 30"
+    wait(60)
+    ((text, to),) = rings()
+    assert to == ("@ci",) and text.startswith("@ci queue: #1 (owner lane-1)") and "@top" not in text, text
+    assert "has waited 45 min with no land verdict" in text, text
+    wait(45 * 60 - 60)
+    assert len(rings()) == 1, "at most once per head per 45 min"
+    wait(60)
+    assert [to for _, to in rings()] == [("@ci",), ("@ci",)] and "has waited 90 min" in rings()[-1][0]
+
+
 def test_a_lean_change_lands_on_its_verdict_and_the_after_landing_lean_audit_takes_no_regenerated_record(world, monkeypatch):
     """A PR that changes a guarantee's statement, or a definition it reads, without its lock lands on its verdict as any PR
     does, with no Lean check before it; the after-landing lean-audit fails on the record it leaves stale (`--no-regenerate`)
@@ -664,7 +692,7 @@ FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
 
 
 def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_title(world, monkeypatch):
-    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Models.lean` and
+    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and
     `Security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `Security/`,
     in a package with a lock: Flock's verifier) are Lean changes (`queue.lean_change`) in a two-demos PR too, which a lock
     run follows on `checked`: with no regenerated lock commit after them, they leave a record stale for the after-landing
@@ -676,7 +704,7 @@ def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_tit
                  2: {"Security/Definitions/X.lean": "def x := 1\n"},
                  3: {"pkg/lean-audit.json": "{}"},
                  4: {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
-                 5: {"Security/Models.lean": "import Definitions.X\n"},
+                 5: {"Security/Definitions.lean": "import Definitions.X\n"},
                  6: {"Security/lakefile.toml": "name = \"security\"\n"},
                  7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
                  8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
@@ -1767,7 +1795,7 @@ def test_the_notice_names_the_older_head_a_pr_carries_never_a_merge_base_on_main
 
 
 def _detached(h: Review, tmp_path, locks: bool = False, post: bool = False) -> list[str]:
-    """``h``'s lock runs (``locks``) and post-landing runs (``post``) launched as train.sh is: detached, the launch returning at
+    """``h``'s lock runs (``locks``) and after-landing runs (``post``) launched as train.sh is: detached, the launch returning at
     once with no run ids (`drive.detach`'s record), each launch's commit in the list returned.  `h.printed[launch["dir"]]` is
     what its train.sh has printed (`drive.launched`): unset while it runs, its run ids, or [] once it exited without them."""
     starts, h.printed = [], {}

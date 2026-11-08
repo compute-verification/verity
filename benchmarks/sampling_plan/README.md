@@ -10,9 +10,9 @@ B is the budget model's unit, GPU-seconds of overhead per plain GPU-second over 
 total (everything is committed at serve time): every
 scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the measured s8 A-operand floor alone;
 `h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of
-PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
-the commitment of every unit's outputs, replay of the requests the draw meets (serving keeps only the requests' tokens and
-the weights, so each is re-run whole from its prompt to build its drawn units' witnesses), and the zero-work subcircuits at
+PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the sampled proof blocks,
+the commitment of every unit's outputs, replay of the requests the sample meets (serving keeps only the requests' tokens and
+the weights, so each is re-run whole from its prompt to build its sampled proof blocks' witnesses), and the zero-work subcircuits at
 their floor.
 
 - `inputs.py`: the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows a token a layer, with their leaf
@@ -47,28 +47,28 @@ their floor.
   certified incorrect ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
-  20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
-  `IntegrityPeriod` sampling block a subcircuit (`subset:k`, its cap and K0), or the block as one sampling block under the `work:1` law.
-  Its tests are this directory's suite.
+  20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one execution
+  phase (`IntegrityPeriod`) a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the
+  `work:1` sampling design. Its tests are this directory's suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
-  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session drawing
+  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` execution phase, one `--zk` session sampling
   `subset:k` over the tables `_cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
-  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
-  units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
+  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and sampled
+  proof blocks, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
-  sampling block length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
+  execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
   6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
   Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
-  per sampling block. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
+  per execution phase. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
   weighted at each budget by the least bound that budget certifies for it alone;
-  each point reports `certify`'s `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the tile stratum's ε
-  (`eps_at`), and the knee. The plan of record is proving within 1% of the sampling block's GPU time, for sampling
-  blocks of one server block, the least that affords a plan, a week, a month and a year, with its draw a subcircuit
-  and the commits beside it; then M3's uniform 8-unit draw against the block's GPU time, and each Definition's share
+  each point reports `certify`'s `free_compute` and `leak` from its one sample at δ = 1% and 1e-6, the tile stratum's ε
+  (`eps_at`), and the knee. The plan of record is proving within 1% of the execution phase's GPU time, for execution
+  phases of one server block, the least that affords a plan, a week, a month and a year, with its sample a subcircuit
+  and the commits beside it; then M3's uniform 8-unit sample against the block's GPU time, and each Definition's share
   of the ANDs against the step's GPU time.
 
 - `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
@@ -77,8 +77,8 @@ their floor.
   and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
   under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
-  each total with the replay of the requests the draw meets, each re-run from its prompt at the stock step's share;
-  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
+  each total with the replay of the requests the sample meets, each re-run from its prompt at the stock step's share;
+  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when Flock's block holds each of its proof blocks (`inputs.cap`). Its
   inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
 
@@ -101,9 +101,9 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
 uv run python benchmarks/sampling_plan/glm53.py [--requests N]
 ```
 
-- `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S and proved ANDs), prices each template's statements (up to 8 drawn units each) from measured
-  firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
+- `cpu_budget.py`: the block's sample sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
+  templates, their n, S and proved ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
+  ZK-served Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).
 
@@ -112,7 +112,7 @@ uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17
 ```
 
 - `recursion.py`: one recursive session's cost per monitoring period. It reads a `benchmarks/recursion_e2e` result's
-  measured parts (the inner run, V*'s staging, V*'s firewalled releases and the Lean step), with the same units'
+  measured parts (the inner run, V*'s staging, V*'s ZK-served releases and the Lean step), with the same units'
   non-recursive `--zk` session beside them, and scales them to every machine-window of the census's datacenter
   (`dc-12500-machines-600s`) and of the world (`benchmarks/rho`'s `world-h200` fleet, in the datacenter's windows,
   assumed) over a week, a month and a year: sessions, node-hours and nodes kept busy, prover's and auditor's

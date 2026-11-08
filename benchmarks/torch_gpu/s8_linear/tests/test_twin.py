@@ -42,7 +42,7 @@ def _codes(rng: np.random.Generator, rows: int, k: int, structured: dict[int, st
 
 @pytest.mark.parametrize("step", STEPS)
 @pytest.mark.parametrize("k", [32, 64, 256])
-def test_the_twin_is_the_definition_on_the_gates_inputs(k, step):
+def test_the_twin_is_the_definition_on_the_gates_inputs(k: int, step: str) -> None:
     rng = np.random.default_rng(k)
     m = FX.FIRST_SPECIAL + len(FX.SPECIAL_SA) + 4
     n = FX.FIRST_SPECIAL + len(FX.SPECIAL_SW) + 4
@@ -54,7 +54,7 @@ def test_the_twin_is_the_definition_on_the_gates_inputs(k, step):
     assert np.array_equal(got, want), np.argwhere(got != want)[:8].tolist()
 
 
-def test_every_special_scale_meets_every_other_at_every_structured_sum():
+def test_every_special_scale_meets_every_other_at_every_structured_sum() -> None:
     """Each structured row against each structured column (z = 0, +-16384 K, -16256 K, 16129 K ...) and a small random
     one, under every (s_a, s_w) pair of the special words and two spread ones."""
     k = 32
@@ -73,7 +73,7 @@ def test_every_special_scale_meets_every_other_at_every_structured_sum():
 
 
 @pytest.mark.parametrize("step", STEPS)
-def test_the_s32_edge(step):
+def test_the_s32_edge(step: str) -> None:
     """K = 131040 with every code -128: z = 2,146,959,360, the largest s8 sum the Definitions take, and its negative
     neighbour; S32ToF32Rn rounds it (0x4EFFF000) before the scales."""
     k = FX.EDGE_K
@@ -91,12 +91,12 @@ def test_the_s32_edge(step):
             assert got[i, j] == want, (i, j, hex(got[i, j]), hex(want))
 
 
-def test_the_twin_refuses_a_sum_past_its_k():
+def test_the_twin_refuses_a_sum_past_its_k() -> None:
     with pytest.raises(ValueError):
         FX.sums(np.zeros((1, 2**17), dtype=np.int8), np.zeros((1, 2**17), dtype=np.int8))
 
 
-def test_a_flushing_epilogue_would_differ():
+def test_a_flushing_epilogue_would_differ() -> None:
     """The specials catch a flush: the same words with each multiply's subnormal results flushed differ somewhere."""
     m = FX.FIRST_SPECIAL + len(FX.SPECIAL_SA)
     n = FX.FIRST_SPECIAL + len(FX.SPECIAL_SW)
@@ -105,7 +105,7 @@ def test_a_flushing_epilogue_would_differ():
     sa, sw = FX.scales(m, n, seed=3)
     exact = FX.epilogue(z, sa, sw)
 
-    def ftz(a):
+    def ftz(a: np.ndarray) -> np.ndarray:
         a = a.copy()
         a[np.abs(a) < np.float32(2.0**-126)] = 0
         return a
@@ -116,7 +116,7 @@ def test_a_flushing_epilogue_would_differ():
     assert (flushed != exact).sum() > 0
 
 
-def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_differently():
+def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_differently() -> None:
     """Scales searched so that s_w first (CUTLASS c2x's order) or s_a * s_w first rounds to another bf16 word: the twin is
     the Definition there and both other orders differ from it, so a gate through the twin fails a reordered epilogue.
     Random scales rarely tell the orders apart."""
@@ -129,7 +129,7 @@ def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_diffe
     ca = np.exp2(rng.uniform(-24, 2, (r, 1 << 16))).astype(np.float32)
     cw = np.exp2(rng.uniform(-20, -2, (r, 1 << 16))).astype(np.float32)
 
-    def bf(t):
+    def bf(t: np.ndarray) -> np.ndarray:
         return f2fp_bf16_batch(t.view(np.uint32))[0].reshape(t.shape)
 
     with np.errstate(all="ignore"):
@@ -148,7 +148,7 @@ def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_diffe
         assert (got != want).all(), order
 
 
-def test_the_shapes():
+def test_the_shapes() -> None:
     """The models' shapes: the H200's (the default; o is q's shape) and the RTX PRO 6000's two."""
     h200 = {name: (n, k) for name, n, k in FX.shapes()}
     assert h200 == {"mqa16k52:q": (16384, 16384), "mqa16k52:kv": (128, 16384), "mqa16k52:up": (65536, 16384),
@@ -166,7 +166,7 @@ def test_the_shapes():
     assert abs(FX.MODELS["mha8k"].weight_bytes / 2**30 - 52.5) < 0.05
 
 
-def test_the_committed_bytes_a_token_row():
+def test_the_committed_bytes_a_token_row() -> None:
     """One layer's committed bytes a token row (codes, without the kernels' 4-byte words): mha8k's fused set is 256 KiB
     against the estimate's 254 KB, every op 360 KiB against its 365 KB (its scores at the mean context)."""
     per = {s: sum(k for _, k, _ in FX.tables(FX.MODELS["mha8k"], s)) for s in FX.TABLE_SETS}

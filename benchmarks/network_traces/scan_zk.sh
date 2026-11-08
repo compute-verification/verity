@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
-# job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the
+# job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
 #   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
@@ -11,7 +11,7 @@
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
 #      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
-#      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on
+#      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean sample --stratified K on
 #      the verifier's coins)
 #      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
 #      --challenger`, pinned on main's first-parent history fetched from the clone's origin, or on MAIN_SHA's when set,

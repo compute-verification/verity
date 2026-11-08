@@ -14,8 +14,8 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
-`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
-committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
+`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
+committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
@@ -35,7 +35,7 @@ cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s
 **Modes.**  `CostModel.commit_weight` is the weight w on serving's commitments in a plan's total: at 1 they count as spent,
 and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest law costs
 `c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it: `n · b(s) · h`
-for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is drawn or not.
+for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is sampled or not.
 `grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
 cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
 form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
@@ -66,7 +66,7 @@ from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
     """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):
-    the AND rows C-Flock proves, the copies that keep a form short (`forms.commit`) among them."""
+    the AND rows Flock proves, the copies that keep a form short (`forms.commit`) among them."""
     from verity.ml.commitments import gates
 
     pins = json.loads(Path(gates.__file__).with_name(f"{sidecar}.circuit-check.json").read_text())
@@ -74,9 +74,9 @@ def pinned_ands(definition: str, sidecar: str = "lms") -> int:
 
 
 #: ANDs of one SHA-512 compression in hm96 PROTOCOL §5's ripple-carry model, no copies: a gate count to compare hashes
-#: by, not what C-Flock proves
+#: by, not what Flock proves
 SHA512_ANDS = 58_120
-#: the AND rows C-Flock proves for one SHA-512 compression, `Sha512Compress_v1`'s pin: `compress_gadget`'s ANDs and the
+#: the AND rows Flock proves for one SHA-512 compression, `Sha512Compress_v1`'s pin: `compress_gadget`'s ANDs and the
 #: copies it commits
 SHA512_ROWS = pinned_ands("Sha512Compress_v1")
 #: the hiding part of an hm96-sha512 row in circuit: two private compressions (hm96 PROTOCOL §5)
@@ -98,7 +98,7 @@ class Candidate:
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
     (m = k_log + nbl <= 35); `n_rho` proof blocks of it lie in each replay block of replay grain `grain`; and `kind` is its
-    weight class for the draw's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
+    weight class for the sample's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
 
     op: str
     template: str
@@ -137,7 +137,7 @@ class Candidate:
 @dataclass(frozen=True)
 class TemplateCost:
     """One subcircuit's measured costs under one proof-system version, in the caller's currency: `statement_fixed` (a0) and
-    `statement_per_unit` (a1, per staged proof block) per touched statement, `unit` (b) per proved proof block, `replay` per drawn proof block,
+    `statement_per_unit` (a1, per staged proof block) per touched statement, `unit` (b) per proved proof block, `replay` per sampled proof block,
     and `sigma`, their relative uncertainty.  A field left None is derived from the model's rates."""
 
     statement_fixed: float | None = None
@@ -167,7 +167,7 @@ class ReplayGrain:
 
 @dataclass(frozen=True)
 class Commitment:
-    """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
+    """One tensor committed at serve time by one scale, whatever the sample: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
     scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
@@ -193,8 +193,8 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
-    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its drawn proof blocks (`IntegrityPeriod`'s
-    hidden window: one session, its k drawn proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityPeriod`'s
+    hidden window: one session, its k sampled proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay grains that build
     witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id.  A plan's total weighs
@@ -261,7 +261,7 @@ class CostModel:
 @dataclass(frozen=True)
 class Objective:
     """The harm an incorrect proof block does: `work` times its credited work and influence plus `bits` times its output bits.  No
-    target: targets and budgets are queries on the frontier.  Every subcircuit draws at least `floor` proof blocks."""
+    target: targets and budgets are queries on the frontier.  Every subcircuit samples at least `floor` proof blocks."""
 
     delta: float
     work: float = 1.0
@@ -293,7 +293,7 @@ class PlanBounds:
 
 @dataclass(frozen=True)
 class Plan:
-    """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per subcircuit, the subcircuits
+    """A cut per op type (`choice`: op -> its alternative), a statement size and a sample size per subcircuit, the subcircuits
     held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
     `total` everything, `commit` and `serve` at the model's `commit_weight`), each weight class's weight on the density (1
     when absent), and the certificate once certified."""
@@ -330,7 +330,7 @@ def _miss(n: int, m: int, k: int) -> float:
 
 
 def _hit(n: int, m: int, k: int) -> float:
-    """1 - `_miss`, its digits kept when the draw is sparse."""
+    """1 - `_miss`, its digits kept when the sample is sparse."""
     return -expm1(_log_miss(n, m, k))
 
 
@@ -354,7 +354,7 @@ def _statement_sizes(cap: int, units: int) -> list[int]:
 
 
 def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, dict[str, float]]:
-    """Drawing k of the candidate's proof blocks: its expected proving cost at the cheapest statement size, that size (the larger
+    """Sampling k of the candidate's proof blocks: its expected proving cost at the cheapest statement size, that size (the larger
     one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay grains are the plan's."""
     a0, a1 = costs.statement(c)
     units = k * (costs.unit(c) + costs.of(c).replay)
@@ -371,8 +371,8 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
 
 
 def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: CostModel) -> float:
-    """The expected cost of building the drawn proof blocks' witnesses, by replaying each replay block the draw meets: a
-    replay grain's replay block is missed when every subcircuit's draw misses its share of it, independently across strata."""
+    """The expected cost of building the sampled proof blocks' witnesses, by replaying each replay block the sample meets: a
+    replay grain's replay block is missed when every subcircuit's sample misses its share of it, independently across strata."""
     total = 0.0
     for name in sorted({c.grain for c in chosen if c.grain}):
         if name not in costs.replay:
@@ -427,7 +427,7 @@ def ln_upper(delta: Fraction | float) -> Fraction:
 
 
 def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Fraction) -> float | Fraction:
-    """The fractional knapsack's value at a risk budget: a stratum of n proof blocks with k drawn and harm h per proof block counts
+    """The fractional knapsack's value at a risk budget: a stratum of n proof blocks with k sampled and harm h per proof block counts
     whole when k = 0 and not at all when k = n; the rest go in decreasing harm per proof block of risk h n / k, each whole
     (n - k proof blocks at risk k / n each) until the budget runs out, the last one fractionally.  Exact on Fractions, where
     Lean's `SampledProofs.Bound.fill` is its definition."""
@@ -449,7 +449,7 @@ def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Frac
 
 
 def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
-    """The most harm an incorrect set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k drawn
+    """The most harm an incorrect set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k sampled
     and harm h per proof block, holding x of the set, is accepted with probability at most (1 - x/n)^k <= exp(-k x / n), and never once
     x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value (`fill`).  In
     floats, the budget and the value raised by `HARM_MARGIN` (the budget also by 2^-60, for delta near 1), so it is at
@@ -807,10 +807,10 @@ def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Obj
 
 def weigh(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *, by: str = "harm",
           factors: Sequence[float] = (0.25, 0.5, 2.0, 4.0), rounds: int = 3, exact: bool = True, **kw) -> Plan | None:
-    """The cheapest plan certifying at most `target` when each weight class (`Candidate.block`) is drawn at its own weight
+    """The cheapest plan certifying at most `target` when each weight class (`Candidate.block`) is sampled at its own weight
     on the density: from equal weights, a coordinate search, each kind of the current plan in turn (costliest first) taking
     the factor of `factors` on its weight that makes `for_target` cheapest, for at most `rounds` passes.  The certificate
-    is the same stratified one over every subcircuit, so the weights are parameters of the draw, chosen at the target, and
+    is the same stratified one over every subcircuit, so the weights are parameters of the sample, chosen at the target, and
     never of the guarantee; the plan carries them, and registers by its sizes (`work_law`) as any plan does."""
     def at(weights: Mapping[str, float]) -> Plan | None:
         return for_target(candidates, costs, objective, target, by=by, exact=exact, weights=weights, **kw)
@@ -870,7 +870,7 @@ def structure(p: Plan) -> tuple:
 def perturb(costs: CostModel, what: str, factor: float, candidates: Sequence[Candidate] = ()) -> CostModel:
     """The model with one group of costs scaled by `factor`: "prove" (per proved proof block), "statement" (per touched
     statement), "commit" (serving's, the proof blocks' and the fixed serve-time commitments'), "replay" (the domains' and per
-    drawn proof block), or one subcircuit's (its derived costs pinned from `candidates` first)."""
+    sampled proof block), or one subcircuit's (its derived costs pinned from `candidates` first)."""
     t = dict(costs.templates)
     if what == "prove":
         t = {k: replace(v, unit=None if v.unit is None else v.unit * factor) for k, v in t.items()}
@@ -939,7 +939,7 @@ def needs_benchmark(candidates: Sequence[Candidate], costs: CostModel, objective
 
 def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     """The plan as the rule the verifier registers today: `work:1` over a work table carrying the credited work and
-    floors equal to the plan's sizes, which `one_stage.draw.work_k` draws exactly (the ceiling is at most 1 since
+    floors equal to the plan's sizes, which `one_stage.draw.work_k` samples exactly (the ceiling is at most 1 since
     w n <= W)."""
     chosen = [c for c in candidates if c.template in plan.sizes]
     if not any(c.work for c in chosen):
@@ -954,8 +954,8 @@ PROVING_ONLY = 0.0
 @dataclass(frozen=True)
 class Grain:
     """One uniform partition of a window, as `Partitioning.Model` states one: `units` proof blocks (n) of `work` each (s),
-    each `out_bits` wide (b, what an incorrect one exports), committing `commit_bytes` at serve time whether drawn or not (b(s),
-    its share of every byte the window commits under this partition), and costing `prove` when drawn (c(s), its
+    each `out_bits` wide (b, what an incorrect one exports), committing `commit_bytes` at serve time whether sampled or not (b(s),
+    its share of every byte the window commits under this partition), and costing `prove` when sampled (c(s), its
     statement's share included)."""
 
     name: str
@@ -1000,13 +1000,13 @@ def leak_count(g: Grain, ell: float) -> int:
 
 
 def work_draws(g: Grain, target: float, delta: float) -> float:
-    """`Achievability`'s law on equal proof blocks for the free-compute target C: each drawn with probability
-    min(1, Λ s / C), so (ns/C) Λ draws, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
+    """`Achievability`'s law on equal proof blocks for the free-compute target C: each sampled with probability
+    min(1, Λ s / C), so (ns/C) Λ samples, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
     return g.units * min(1.0, log(1 / delta) * g.work / target)
 
 
 def leak_draws(g: Grain, ell: float, delta: float) -> float:
-    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) draws, at most n, and none once
+    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) samples, at most n, and none once
     every proof block may be incorrect."""
     k = leak_count(g, ell)
     return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
@@ -1015,8 +1015,8 @@ def leak_draws(g: Grain, ell: float, delta: float) -> float:
 def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
                 leak: float | None = None, replay: ReplayGrain | None = None) -> list[dict]:
     """Each partition's expected one-stage cost at one target, the free-compute target `work` (C) or the exfiltration
-    target `leak` (bits), at `delta`, in the grains' order: `prove`, c(s) times the target's draws; `commit`, n b(s) h,
-    paid on every proof block; `replay`, with a replay grain, the replay blocks the draws meet (`met_replay`); and
+    target `leak` (bits), at `delta`, in the grains' order: `prove`, c(s) times the target's samples; `commit`, n b(s) h,
+    paid on every proof block; `replay`, with a replay grain, the replay blocks the samples meet (`met_replay`); and
     `total`, proving and replay plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's
     model).  A two-stage design is `two_stage_design`'s."""
     if (work is None) == (leak is None):
@@ -1158,6 +1158,12 @@ def _capped(g: tuple[float, ...], lw: float) -> tuple[float, float]:
 
 def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
                     served: float | None = None, union: bool = False, tol: float = 1e-6) -> float:
+    """`two_stage_rankin`'s bits."""
+    return two_stage_rankin(cells, k, replay_blocks, q, delta, served, union, tol)[0]
+
+
+def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
+                     served: float | None = None, union: bool = False, tol: float = 1e-6) -> tuple[float, float]:
     """At least log2 of `CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, over `replay_blocks` replay blocks
     (R) of the cells each, the first stage sampling each replay block with probability q and the second `k[t]` of
     stratum t's n_t proof blocks in a sampled one.
@@ -1171,7 +1177,8 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
     G − 1 <= Σ_j e^{−θ a_j}(∏_v (1 + 2^{b_v} e^{−θ s_j r_v}) − 1) + e^{−θ h(Y_J)}(∏_{r_v<∞} (1 + 2^{b_v}) − 1)
     + e^{−θ h(∞)} ∏_{r_v<∞} (1 + 2^{b_v}) (∏_{r_v=∞} (1 + 2^{b_v}) − 1), each product over a replay block's proof
     blocks, a T meeting a stratum proved whole at h(∞).  The bound takes the θ minimizing it, by golden section on ln θ
-    to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted.
+    to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted
+    (θ = 0).  It returns the bits and that θ.
 
     `served`, S, caps each replay block's charge at the bits it serves (a cap lemma in progress).  The sets' form
     counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
@@ -1231,7 +1238,7 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
         full = min(full, (fsum(groups.values()) + served) * _LN2F)
     every = replay_blocks * full / _LN2F
     if q == 0 or full == 0:
-        return every
+        return every, 0.0
     lam = log(1 / delta)
 
     def h_at(y: float) -> float:
@@ -1275,7 +1282,8 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
             lo, c, fc = c, d, fd
             d = lo + gold * (hi - lo)
             fd = f(d)
-    return min(min(fc, fd) / _LN2F, every)
+    best, u = min((fc, c), (fd, d))
+    return (best / _LN2F, exp(u)) if best / _LN2F < every else (every, 0.0)
 
 
 def registration_cap(sampled: float, span: float) -> int:
@@ -1382,8 +1390,9 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  Its row:
     `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (Q, the
     replay blocks a registration samples), `registration_cap` (K0), `shared` and `padding` (their shares of proving),
-    `bound` (bits), `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`, `boundary`, `interior`, `commit`
-    (their sum), `total` and `fill` (proving over its marginal); None when the boundary alone is over the budget."""
+    `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
+    `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
+    alone is over the budget."""
     cells = list(cells)
     if not cells or not budget >= boundary:
         return None
@@ -1428,7 +1437,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                          "fill": prove / marginal if marginal > 0 else 1.0})
     best = min(rows, key=lambda r: (r["bound"], r["total"]))
     split = best.pop("split")
-    return best | {"bound": two_stage_exfil(split, best["k"], replay_blocks, best["q"], delta, served, union)}
+    bound, theta = two_stage_rankin(split, best["k"], replay_blocks, best["q"], delta, served, union)
+    return best | {"bound": bound, "theta": theta}
 
 
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
@@ -1439,5 +1449,5 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
            "registration_cap", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
-           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_statements", "weigh",
+           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
            "work_draws", "work_law"]

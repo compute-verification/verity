@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.FrameParse
 
 `Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-firewall-os-src`), holds at every statement and witness for
 some source: the one that hands each rep stream its table's packed witness at the tape's mask words and the tape's
-level-0 draws, written in `Level0.ofDraws`'s layout.
+level-0 samples, written in `Level0.ofDraws`'s layout.
 
 * `Level0.inBytes`: a `Link.In`'s extra lanes, lane paddings and salts at level `lv` with `t_pad` paddings, as `ofDraws`
   reads them: each extra lane's `2^cols` words, each of the `2^lanes + 4` lanes' `t_pad` words, every word `lo ‖ hi`
@@ -30,7 +30,7 @@ open Claims.ZKServer (get!_list size_list u64OfLE_of_get)
 def wordByte (a : F128) (b : Nat) : UInt8 :=
   if b < 8 then (a.lo >>> (8 * b).toUInt64).toUInt8 else (a.hi >>> (8 * (b - 8)).toUInt64).toUInt8
 
-/-- Byte `p` of `i`'s level-0 draws at level `lv` with `t_pad` paddings, in `ofDraws`'s layout: the four extra lanes'
+/-- Byte `p` of `i`'s level-0 samples at level `lv` with `t_pad` paddings, in `ofDraws`'s layout: the four extra lanes'
 `2^cols` words, every lane's `t_pad` padding words, then a `192`-byte salt per tree position. -/
 def inByte (lv : Level) (tPad : Nat) (i : Link.In) (p : Nat) : UInt8 :=
   if p < 16 * Zk.EXTRA_LANES * 2 ^ lv.cols then
@@ -42,20 +42,20 @@ def inByte (lv : Level) (tPad : Nat) (i : Link.In) (p : Nat) : UInt8 :=
     (i.salt ((p - (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad)) / 192)).get!
       ((p - (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad)) % 192)
 
-/-- **`i`'s level-0 draws** at level `lv` with `t_pad` paddings: `drawSize lv tPad` bytes in `ofDraws`'s layout. -/
+/-- **`i`'s level-0 samples** at level `lv` with `t_pad` paddings: `drawSize lv tPad` bytes in `ofDraws`'s layout. -/
 def inBytes (lv : Level) (tPad : Nat) (i : Link.In) : ByteArray :=
   ByteArray.mk ((List.range (drawSize lv tPad)).map (inByte lv tPad i)).toArray
 
-/-- The extra lanes `ofDraws` reads from the draws `d` at level `lv`. -/
+/-- The extra lanes `ofDraws` reads from the samples `d` at level `lv`. -/
 def drawnExtra (lv : Level) (d : ByteArray) : Array (Array F128) :=
   (Array.range Zk.EXTRA_LANES).map fun e => Link.wordsAt d (16 * 2 ^ lv.cols * e) (2 ^ lv.cols)
 
-/-- The lane paddings `ofDraws` reads from the draws `d` at level `lv` with `t_pad` paddings. -/
+/-- The lane paddings `ofDraws` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
 def drawnPads (lv : Level) (tPad : Nat) (d : ByteArray) : Array (Array F128) :=
   (Array.range (2 ^ lv.lanes + Zk.EXTRA_LANES)).map fun l =>
     Link.wordsAt d (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * tPad * l) tPad
 
-/-- The salts `ofDraws` reads from the draws `d` at level `lv` with `t_pad` paddings. -/
+/-- The salts `ofDraws` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
 def drawnSalts (lv : Level) (tPad : Nat) (d : ByteArray) : ByteArray :=
   d.extract (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad) d.size
 
@@ -263,7 +263,7 @@ open _root_.Flock (V F128)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **A level-0 source that draws the tape's level 0**: at rep stream `k`, of table `k / 2`, the table's packed witness at
+/-- **A level-0 source that samples the tape's level 0**: at rep stream `k`, of table `k / 2`, the table's packed witness at
 the tape's mask words (`Masked.linkIn`'s) and the tape's extra lanes, lane paddings and level-0 salts at level 0's sizes,
 in `Level0.ofDraws`'s layout (`Level0.inBytes`); no salts for levels ≥ 1. -/
 noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
@@ -276,7 +276,7 @@ noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 1000000 in
 /-- **`Loop.Level0Src` is satisfiable**: at every statement `x` and witness `w`, the source `Loop.tapeSrc` meets it, so
-at every table, nonce, tape and rep the level 0 the loop draws has `Masked.linkIn`'s inputs. -/
+at every table, nonce, tape and rep the level 0 the loop samples has `Masked.linkIn`'s inputs. -/
 theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.tapeSrc x w := by
   intro ν t j r
   have hk : (2 * j.val + r.val) / 2 = j.val := by omega

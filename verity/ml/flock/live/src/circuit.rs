@@ -36,7 +36,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{
-        OnceLock,
+        Arc, Mutex, OnceLock, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -1677,13 +1677,13 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
-    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its sample's, which no file holds, so this is no file's hash.
+    /// (`b || c`, refs): what Σ binds. A sampled statement's header is its sample's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
     /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
-    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
+    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A sampled statement
     /// keeps its population's.
     pub public_file_sha512: [u8; 64],
-    /// the registered population's `b || c` (a drawn statement: the frame-v3 roots are over them); `None`: the statement's own
+    /// the registered population's `b || c` (a sampled statement: the frame-v3 roots are over them); `None`: the statement's own
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
     pub tables: Option<RowTables>,
@@ -1858,7 +1858,7 @@ impl Instances {
         let pw = c.public_words();
         let public: Vec<u16> = units.iter().flat_map(|&u| self.public[u * pw..(u + 1) * pw].to_vec()).collect();
         if let Some(t) = &self.tables {
-            // the tables stay the population's; the drawn instances keep their refs into them
+            // the tables stay the population's; the sampled instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512,
                                   public_file_sha512, population, tables: Some(RowTables { refs, ..t.clone() }), public });
@@ -2171,7 +2171,7 @@ pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Res
 }
 
 /// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the
-/// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
+/// registered population (a sampled statement's instances are some of its units), a shared-row file's row trees over its tables.
 pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
     let fv = &inst.header["frame_v3"];
     let dom_of = |k: &str| -> Result<Vec<u8>, String> { hexb(fv["domain_ids"][k].as_str().ok_or(format!("frame_v3.domain_ids.{k} missing"))?) };
@@ -2672,6 +2672,49 @@ pub fn unit_profile() -> bool {
 
 fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
+}
+
+/// Whether a session's side reuses the drawn statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
+/// builds its own.
+pub fn stmt_cache_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_STMT_CACHE").as_deref() != Ok("0"))
+}
+
+/// One side's drawn statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all public
+/// (no value, coin or drawn unit), so a statement built again from the same three is the same statement. The key binds all
+/// three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the drawn count and the
+/// canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
+pub struct StmtCache(Mutex<BTreeMap<([u8; 64], usize, String), Arc<Stmt>>>);
+
+impl Default for StmtCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StmtCache {
+    pub const fn new() -> Self {
+        Self(Mutex::new(BTreeMap::new()))
+    }
+
+    /// `Stmt::new(base.c, n, identity)`, built at the first call with this key and the same statement after it.
+    pub fn drawn(&self, base: &Stmt, n: usize, identity: Value) -> Result<Arc<Stmt>, String> {
+        let key = (base.digest, n, sorted(&identity).to_string());
+        if let Some(s) = self.0.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+            return Ok(s.clone());
+        }
+        let s = Arc::new(Stmt::new(base.c.clone(), n, identity)?);
+        Ok(self.0.lock().unwrap_or_else(PoisonError::into_inner).entry(key).or_insert(s).clone())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl Stmt {
@@ -3438,7 +3481,7 @@ mod tests {
     }
 
     /// The verifier's public file, written as `public_file` writes it, is the file whose SHA-512 the prover's record
-    /// carries (`public_file_sha512`), and a drawn statement keeps its population's; Σ's public digest is neither.
+    /// carries (`public_file_sha512`), and a sampled statement keeps its population's; Σ's public digest is neither.
     #[test]
     fn the_public_file_digest_is_the_files_own() {
         let c = Composite::parse(&typed_statement(), None).unwrap();
@@ -3463,7 +3506,7 @@ mod tests {
     }
 
     /// A prover's file with its salts set elsewhere (the ZK server's: `flock-circuit --salt-refs`) is written as `load` reads
-    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a drawn
+    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a sampled
     /// statement are refused.
     #[test]
     fn salts_set_on_a_prover_file_round_trip() {
@@ -3765,6 +3808,82 @@ mod tests {
         }
         assert_eq!(seen.len(), st.circuit.types.len());
         assert!(c.ranges.iter().any(|r| r.kind == Kind::Mask) && c.nets.iter().any(|n| n.1.a.iter().filter(|x| !x.is_empty()).count() > 1));
+    }
+
+    /// Everything a session reads of a statement, as bytes: its digests and shape, its regions, its ranges and tables, each
+    /// slot type's circuit folded at fixed random points, and its R1CS.
+    fn stmt_bytes(st: &Stmt) -> Vec<u8> {
+        use flock_core::lincheck::LincheckCircuit;
+        let mut out = format!("{:?} {:?} {} {} {} {} {} {}|", st.digest, st.flock_digest, st.n, st.blocks_real, st.nbl, st.m,
+                              st.m_pts, st.pin).into_bytes();
+        for r in &st.regions {
+            out.extend(format!("{:?} {:?} {} {}|", r.region, r.free, r.mask, r.fixed).bytes());
+        }
+        let b = &st.circuit;
+        out.extend(format!("{} {} {:?} {:?} {:?}|", b.k_log, b.pin, b.ranges, b.da, b.db).bytes());
+        for t in &b.tables {
+            out.extend(format!("{:?}|", t.as_ref().map(|t| (t.table, t.lo, t.nh, t.k, t.prod0, t.lo_top))).bytes());
+        }
+        let mut s = 7u64;
+        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+        for (log, circ) in &b.types {
+            let alpha = rnd();
+            let eq: Vec<F128> = (0..1usize << log).map(|_| rnd()).collect();
+            out.extend(format!("{log} {} {:?}|", circ.n_cols(), circ.fold_alpha_batched(alpha, &eq)).bytes());
+        }
+        let r = &st.r1cs;
+        out.extend(format!("{} {} {} {} {:?} {:?} {:?} {:?} {:?}", r.m, r.k_log, r.k_skip, r.useful_bits, r.a_0, r.b_0, r.c_0,
+                           r.layout, r.const_pin).bytes());
+        out
+    }
+
+    fn test_circuits() -> Vec<(&'static str, Composite)> {
+        [("typed", typed_statement()), ("flat tail", flat_tail_statement()), ("pinned", pinned_statement(&|_| {}))]
+            .into_iter().map(|(name, text)| (name, Composite::parse(&text, None).unwrap_or_else(|e| panic!("{name}: {e}")))).collect()
+    }
+
+    /// A cached drawn statement is the one `Stmt::new` builds afresh from the same circuit, count and identity, byte for byte,
+    /// for each test circuit at counts on both sides of a block-count step and under two identities; a second call with the
+    /// same key returns that statement, and an identity's key is its canonical form.
+    #[test]
+    fn cached_statements_are_fresh_builds() {
+        for (name, c) in test_circuits() {
+            let base = Stmt::new(c.clone(), 2, json!({})).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let cache = StmtCache::new();
+            for n in [1, 2, 3, 8, 9] {
+                for id in [json!({}), json!({"zk": true, "reps": 2, "leaf": "hm96-sha512/v1"})] {
+                    let cached = cache.drawn(&base, n, id.clone()).unwrap_or_else(|e| panic!("{name} n={n}: {e}"));
+                    let fresh = Stmt::new(base.c.clone(), n, id.clone()).unwrap();
+                    assert!(stmt_bytes(&cached) == stmt_bytes(&fresh), "{name} n={n} {id}: the cached statement is not the fresh one");
+                    assert!(Arc::ptr_eq(&cached, &cache.drawn(&base, n, id).unwrap()), "{name} n={n}: rebuilt under the same key");
+                }
+            }
+            assert_eq!(cache.len(), 10, "{name}");
+            let a = cache.drawn(&base, 2, json!({"a": 1, "b": [1, 2]})).unwrap();
+            let b = cache.drawn(&base, 2, serde_json::from_str(r#"{"b": [1, 2], "a": 1}"#).unwrap()).unwrap();
+            assert!(Arc::ptr_eq(&a, &b), "{name}: one identity under two key orders");
+        }
+    }
+
+    /// A key that differs in its circuit, its count or its identity rebuilds: a statement of its own, which is the fresh build
+    /// for that key, never the cached statement of another.
+    #[test]
+    fn cache_key_mismatch_rebuilds() {
+        let cs = test_circuits();
+        let bases: Vec<Stmt> = cs.iter().map(|(_, c)| Stmt::new(c.clone(), 2, json!({})).unwrap()).collect();
+        let cache = StmtCache::new();
+        let first = cache.drawn(&bases[0], 2, json!({})).unwrap();
+        let others = [(&bases[1], 2, json!({}), "another circuit"), (&bases[2], 2, json!({}), "a third circuit"),
+                      (&bases[0], 3, json!({}), "another count"), (&bases[0], 9, json!({}), "a count past a block-count step"),
+                      (&bases[0], 2, json!({"zk": true}), "another identity")];
+        for (k, (base, n, id, what)) in others.into_iter().enumerate() {
+            let got = cache.drawn(base, n, id.clone()).unwrap();
+            assert!(!Arc::ptr_eq(&first, &got), "{what}: the cached statement of another key");
+            assert!(got.digest != first.digest, "{what}: the same statement digest");
+            assert!(stmt_bytes(&got) == stmt_bytes(&Stmt::new(base.c.clone(), n, id).unwrap()), "{what}: not the fresh build");
+            assert_eq!(cache.len(), k + 2, "{what}: not built");
+        }
+        assert!(Arc::ptr_eq(&first, &cache.drawn(&bases[0], 2, json!({})).unwrap()), "the first key's statement was dropped");
     }
 
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.

@@ -158,7 +158,7 @@ def DampenerThreaded_nontrivial : Prop :=
     ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
     ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
     ¬ (efficiency 1 1 2 0 ≤
-        unmonitoredShare 2 0 +
+        unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
 
@@ -184,7 +184,7 @@ def DampenerThreadedSlots_nontrivial : Prop :=
     ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
     ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
     ¬ (efficiency 1 1 2 0 ≤
-        unmonitoredShare 2 0 +
+        unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
 
@@ -281,8 +281,8 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
 /-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
-over the outcomes `Bool` drawn uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
-of it certified (`W = 2`), no faulty proof block, so that every detection holds at `q = 1` and the residual is `0`, and
+over the outcomes `Bool` sampled uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
+of it certified (`W = 2`), no incorrect proof block, so that every detection holds at `q = 1` and the residual is `0`, and
 one counted multiplication, the declared one. -/
 def DampenerRemote_honest : Prop :=
   Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
@@ -320,12 +320,12 @@ def DampenerRemote_nontrivial : Prop :=
     ((0 : ℕ) : ℝ) ≤ 2 * 0 * (2 + 0) / 2 ∧
     ¬ (1 - (0 / (1 / 2) + ((∅ : Finset Unit).card : ℝ) * ((1 - 1) / 1 * 0) / (1 / 4 * 2)) ≤
       prob (PMF.uniformOfFintype Bool) (fun _ => efficiency 2 2 2 0 ≤
-          unmonitoredShare 2 0 +
-              (1 - unmonitoredShare 2 0) *
+          unregisteredShare 2 0 +
+              (1 - unregisteredShare 2 0) *
                 (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
             declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0 ∧
-        remoteDampener 1 (unmonitoredShare 2 0)
-            ((1 - unmonitoredShare 2 0) *
+        remoteDampener 1 (unregisteredShare 2 0)
+            ((1 - unregisteredShare 2 0) *
                 (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
               declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) ≤
           hardwareMultiple 1 2 2 2 0))
