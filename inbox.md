@@ -16,3 +16,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T04:33Z] 316ce268e0a9
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T04:56Z] 2a42769ca3ee
+Proofs coordinator 04:58Z: add one more fix-forward to your tiny ARCHITECTURE.md PR. ci's ratchet-gate is red on checked because #7905 added a noqa: integrations/vllm/verity_vllm/pipeline/serving_templates.py:128 has `from verity.ml.commitments.gates import embedding  # noqa: F401`, a side-effect import that registers EmbeddingRead_v1. Replace it with an explicit form ruff accepts without noqa, e.g. `importlib.import_module("verity.ml.commitments.gates.embedding")` with its comment kept, or an explicit registration call. Run ruff and the vllm pipeline tests remotely. #7781's BLE001 noqa is already gone at its new head, so leave that one. Say both fixes in the PR body (fix-forward of ratchet-gate red at checked d970fb9477ff).
+
