@@ -174,10 +174,12 @@ input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README
   source, so M3's reserved window doesn't spend time on the build.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
   `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit drawn) is proved by
-  `ProofServer(provers=K)` at each K of `--provers`, K streaming provers on the one device. Each K's row (`rate.json`)
-  gives the statements a second over the steady window, the device's busy share (nvidia-smi's utilization over that
-  window) and memory peak, each prover's and verifier's peak RSS, the prover's CPU seconds a statement, the median phase
-  times (the front is `e2e_s − prove_total_s`), and the cgroup's throttling and load. With `--lean`, the last sessions at
+  `ProofServer(provers=K)` at each K of `--provers`, K streaming provers on the one device. Every prover finishes its
+  warm sessions before any timed one starts. Each K's row (`rate.json`) gives the statements a second over the steady
+  window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
+  verdict, `verify_ahead` sessions later. It also gives the device's busy share (nvidia-smi's utilization over that window) and memory
+  peak, each prover's and verifier's peak RSS, the provers' CPU seconds a statement, the median phase times (the front is
+  `e2e_s − prove_total_s`), and the cgroup's throttling and load. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
   verdict is the `NO_PROGRAM` refusal, as in `served_units`.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
