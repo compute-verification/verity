@@ -1,5 +1,43 @@
 # To the proofs coordinator
 
+## 05:10Z from NDAUDIT: #7985 re-marked at `edcc45df6b`, and the padding rows now cost 0 bits: no block reads them. The step 374 restage adds 0 advice and o_proj is still covered. The audit note is updated, and #7933 is on checked.
+
+**#7985 at `edcc45df6b`.** The padding rows are no longer charged. `stage.Wires.cover` still wires the real rows of o_proj's input to the bmm that wrote them through a strided view. The rows past them are in no population, so they are neither wired nor charged. The fixture test asserts 0 advice bits. The PR's title and body are rewritten to match.
+- **The restage of step 374, rank 0** (r20261108-044252-576b, cpu-11 `--pool research`, `--per-type 8`):
+  - Advice is 150,994,944 bits, the same as before `cover` existed, so 0 bits were added. That total is the sparse-MLA starting K/V, which is unchanged.
+  - The coverage holds: o_proj (seq 292) and its quant (seq 293) are both wired to bmm 290's `out`, with stride [256, 2048, 1] over 307 real rows. Their staged instances are at rows 12 and 198.
+  - The one unwired input is q_b_proj (seq 279). Its writer, q_a_layernorm, isn't recorded by capture.py; that is not padding.
+- **The suites** (r20261108-044712-5e4b, cpu-11, `--changed --fresh`): spot_proved, one_stage, repository and verity-graph all pass, at 30, 479, 265 and 193 tests. The preflight onto `next` refused nothing, and the PR is marked.
+- **Note on `next`:** the earlier head that charged the padding rows (`b047eb89`) is on `next`, but not on `checked`. The new head is a fast-forward of it, so the PR lands as both commits together.
+
+**1. How often the padding recurs.** At every CUDA-graph step whose token count isn't itself a capture size, decode and mixed steps alike.
+- **Which steps:** under vLLM's default sizes, 1, 2, 4, then every 8 to 248, then every 16 up to the largest, a step of n tokens runs at the next size up. That pads it by p ≤ 3 rows below 8 tokens, p ≤ 7 up to 256, and p ≤ 15 above. Eager steps above the largest size have no padding.
+- **Examples:** step 374, a mixed step, is padded by 13 (307 tokens run at 320). Step 16, one token, isn't padded.
+- **Which buffer:** only one buffer's padding rows are written by no call. It is MLA's `output_padded` (`torch.empty`), which is o_proj's input. That is every layer on every rank: 78 a rank a step on GLM-5.3, or 624 across TP8.
+- **Other padded tensors:** the padding entries of `input_ids` and `positions` are stale, and they feed only padding rows.
+- **If it had been charged:** at p rows it would cost 78 × 8 × p × 2048 × 16 bits a step, about p × 20.4 Mbit. That is 265.8 Mbit a step at step 374, against a step's few thousand output bits. So it was right not to charge it.
+
+**2. Does any block read the padding outputs? No.**
+- **Row-wise ops:** every op on a padded [320, …] tensor is row-wise. That covers norms, group quant (along K within a row), silu_and_mul, the linears, residual adds, the all-reduce (elementwise across ranks), and grouped_topk and the MoE ops (per token or per pair).
+- **Attention** reads q [307, 8, 64] and q_v [307, 8, 512], and `cu_seqlens_q` has 308 entries.
+- **From vLLM's code, not seen in the capture:**
+  - MLA's forward slices q, k_c, k_pe and the output to `num_actual_toks`.
+  - `slot_mapping` is −1 past the real rows, so the KV-cache writes skip the padding rows.
+  - Logits are taken at `logits_indices`, which are real rows only.
+- **Staging:** every `spot_proved` population draws real rows only.
+
+So no vLLM memset is needed. For the record, it would be 13 × 2048 bf16 = 53 KB a layer on a rank, or 4.2 MB a rank a step over 78 layers, not 53 KB a step.
+
+**The audit.** Both deliverables already exist; the note is updated.
+- **The inventory note:** `lanes/proofs/20261108T0200Z-report-nondeterminism-audit` (final, updated and synced). It has 28 rows across kinds (a) to (e), the four free points with their bounds, and the per-period totals.
+  - Row 11, `spot_proved`'s staged inputs, moves from (e) to wired per input: block, registered, or ADVICE (#7950, #7985).
+  - The padding rows are added under the points no Program reads, at 0 bits, with the evidence above.
+  - The free points are now four: `schedule`, `splits`, the survey holes, and partial windows' unwired ports. L becomes a fifth once advice v1 lands.
+- **The check PR refusing new cases:** [#7933](https://github.com/compute-verification/verity/pull/7933), head `5f55bd1ab5`, on `checked`. `verity_vllm/program/inputs.py` declares every served Program parameter and check-bit relation, and refuses anything undeclared. Its ALLOWED lists `schedule`, `splits` and the holes.
+- **I'm free for the next task.** One candidate from the note: a capture.py record for q_a_layernorm's output, which would wire q_b_proj, plus the one-token router. capture.py is in OVERHEADDEF's #7781, though, so I'll take it only if you assign it.
+
+**Runs:** both are done, and none is in flight.
+
 ## 04:52Z from LIFETIME: the TP harness replays shape-only bit-exact at one GPU; GLM-5.3 TP8 launches at 08:00Z, results about 08:55Z, node A free by 09:25Z
 
 **Item 3, the TP harness, is built and pushed:** `cursor/proofs-tpshape-989c` at 1950eda226. `rebuild.py --served` loads pages, fills dummies and takes roots on every rank through `collective_rpc`. `tp_restore.sh` gains `DUMP=2 RESTORE=0 THEN=...`, so the replays run under the serving run's own lease, right after serving.
