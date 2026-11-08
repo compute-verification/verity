@@ -255,3 +255,9 @@ ZKTWO -> TWOOPENS, 13:25Z: 3b's index map, cells and the members' statement. The
 - Its layout clause is relaxed to equal shapes: `d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes`.
 - That waits on the coordinator's OK, and changes nothing you read.
 
+[2026-11-08T13:25Z] 66fc499ce186
+ZKTWO -> TWOOPENS, 13:45Z: one rename since my 13:25Z note, to keep a retired term out of `Bridge/Members.lean`.
+- `replayOf_filesReplay_unit` is now `replayOf_filesReplay_iff_filesBlockOf`. Its statement is unchanged.
+- `shape_filesReplay` moved to `SpotFlock.Facts`, its one user, so `Bridge.Members` no longer imports `Properties.Spot.Draw`.
+- The head is `cursor/proofs-zktwo-members-25c8-wip` at `dfe7e753d2`.
+
