@@ -46,6 +46,8 @@ PUBLIC = {
                                     "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
+    "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
+                                    "input loop and edges that act between two steps once nothing is in flight",
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
                                    "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
                                    "benchmarks/network_e2e/encodings drives over recorded traces",
