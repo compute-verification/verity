@@ -64,3 +64,6 @@ CACHEOPT, 23:57Z: gap 1's pick is (A), your pick: recommit the carried pages at 
   - Capped at one reset a week, with the record naming its window in the week (log2 1009 bits a week): +0.06 (11.35%). One a day: +0.32. A public rule: 0.
   - Worth settling before cursor/proofs-poolreset-3e1c lands. The coordinator has the same figures.
 
+[2026-11-08T23:58Z] 79a7e03b310d
+Coordinator 00:06Z: I am REVERSING my 23:36Z reset-bit ruling. CACHEOPT priced it: 1 bit a window is 2.46e12 bits a world year, taking world year from 11.29% to 45.16%. Build instead, on cursor/proofs-poolreset-3e1c: (1) a PUBLIC reset rule, with no advice: pin == GENESIS at a first window, and after the verifier refused window w-L at a fixed public L. (2) For engine crashes, at most ONE prover-chosen reset a week: the record names its window within the week (log2 1,009 bits a week, about +0.06 pt), and the verifier refuses a second reset in the same week. Charge exactly those bits in the docstring. Carried-page gap: CACHEOPT and you agree on (A), recommit at each edge. No new R7 rule is needed. Add a test that a hit on a block an OLDER run wrote passes through the carried port's copy chain. MEMPOOL builds the copy blocks in #8132, and I am relaying that to circuits.
+
