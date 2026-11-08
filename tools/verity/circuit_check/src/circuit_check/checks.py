@@ -1088,24 +1088,23 @@ def _callees(fn: Any) -> list[Any]:
     return list({n.fn.id: n.fn for n in fn.body.nodes}.values())
 
 
+def _decided_call(fn: Any) -> bool:
+    from .targets import Undecided, family, is_call
+
+    try:
+        return is_call(family(fn))
+    except Undecided:
+        return False
+
+
 def callees_are_calls(fn: Any, opts: Options = DEFAULTS, seen: dict[str, bool] | None = None) -> bool:
     """Whether every Definition composite ``fn``'s body calls is a Call (`targets.is_call`; one it can't decide without the
     catalog is not), and every callee's of each composite callee `uncut` itself: so `by_callees` partitions a Call of ``fn``."""
-    from .targets import Undecided, family, is_call
-
     seen = {} if seen is None else seen
     if fn.id not in seen:
         seen[fn.id] = False
-        ok = True
-        for c in _callees(fn):
-            try:
-                ok = is_call(family(c)) and (uncut(c, opts) is None or not isinstance(c, PrimitiveDefinition)
-                                             and callees_are_calls(c, opts, seen))
-            except Undecided:
-                ok = False
-            if not ok:
-                break
-        seen[fn.id] = ok
+        seen[fn.id] = all(_decided_call(c) and (uncut(c, opts) is None or not isinstance(c, PrimitiveDefinition)
+                                                and callees_are_calls(c, opts, seen)) for c in _callees(fn))
     return seen[fn.id]
 
 
