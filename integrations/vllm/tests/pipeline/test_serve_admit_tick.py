@@ -465,6 +465,44 @@ def test_tick_feed_refuses_a_stochastic_request_without_a_seed(tmp_path, monkeyp
     assert app.bodies == [*passing, b"{}"]
 
 
+def test_tick_feed_serves_only_its_allow_list_under_any_root_path(tmp_path, monkeypatch):
+    for k, v in config(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    app = BodyApp()
+    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
+    numbered = {"x-verity-release": "0", "x-verity-release-run": "ab"}
+    responses = asgi(feed, scope_of("/v1/responses", numbered), [b'{"input": "hi", "temperature": 0}'])
+    assert responses[0]["status"] == 400 and b"not '/v1/responses'" in responses[1]["body"]
+    assert read() == [{"run": "ab", "n": 0, "passed": True}]
+    for path in ("/v1/completions/render", "/v1/audio/transcriptions", "/pooling", "/invocations", "/v1/completions/",
+                 "//v1/completions", "/"):
+        assert asgi(feed, scope_of(path, {}), [GREEDY])[0]["status"] == 400, path
+    assert app.bodies == []
+
+    health = asgi(feed, {**scope_of("/health", {}), "method": "GET"}, [b""])
+    assert health[0]["status"] == 200 and app.bodies == [b""]
+    mounted = {"root_path": "/api"}
+    assert tp.route_of({"path": "/api/v1/completions", **mounted}) == "/v1/completions"
+    assert tp.route_of({"path": "/apiv1/completions", **mounted}) == "/apiv1/completions"
+    assert tp.route_of({"path": "/v1/completions", "root_path": "/api/"}) == "/v1/completions"
+    unseeded = asgi(feed, {**scope_of("/api/v1/completions", {}), **mounted}, [b'{"temperature": 0.8}'])
+    assert unseeded[0]["status"] == 400 and b"needs an integer seed" in unseeded[1]["body"]
+    assert asgi(feed, {**scope_of("/api/v1/responses", {}), **mounted}, [GREEDY])[0]["status"] == 400
+    assert asgi(feed, {**scope_of("/api/v1/chat/completions", {}), **mounted}, [GREEDY])[0]["status"] == 200
+    assert app.bodies == [b"", GREEDY]
+
+    sent: list[dict] = []
+
+    async def connect() -> dict:
+        return {"type": "websocket.connect"}
+
+    async def send(m: dict) -> None:
+        sent.append(m)
+
+    asyncio.run(feed({"type": "websocket", "path": "/v1/realtime", "headers": []}, connect, send))
+    assert sent == [{"type": "websocket.close", "code": 1008}] and len(app.seen) == 2
+
+
 def test_without_its_variable_the_feed_passes_everything(monkeypatch):
     monkeypatch.delenv(tp.TICK_ENV, raising=False)
     app = App()
