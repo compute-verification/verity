@@ -847,7 +847,6 @@ theorem rowT_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL 
   obtain ⟨x, ra, rb⟩ := r
   obtain ⟨h1, h2⟩ := key (alpha * rowLow 0 (pos x)) ra.toList st hst
   obtain ⟨h3, h4⟩ := key (rowLow 0 (pos x)) rb.toList _ h1
-  dsimp only at h2 h4
   simp only [Tab.rowT, ← Array.foldl_toList]
   refine ⟨h3, ?_⟩
   rw [hW, h4, h2]
@@ -880,7 +879,7 @@ theorem colsP_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
       · obtain ⟨h1, h2⟩ := refDK_exp D pt hs L H A B as gL pos fac iv hB has1 hfac cx #[W.getD v 0] st hst v
         refine ⟨h1, ?_⟩
         rw [h2, Finset.sum_range_one]
-        first | rfl | simp
+        rfl
     obtain ⟨h1, h2⟩ := hstep
     obtain ⟨h3, h4⟩ := colsP_exp D pt hs L H A B as gL pos fac iv hB has hfac cx W n (v + 1) _ h1
     simp only [Tab.colsP]
