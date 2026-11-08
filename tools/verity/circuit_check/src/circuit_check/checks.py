@@ -8,7 +8,8 @@
                      none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
                      template's evaluated target where it is another Definition, and
                      the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
+                     proof blocks otherwise) and, under ``Options.struct_max_gates`` or its family's struct budget
+                     (`struct_budget`), the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
@@ -93,7 +94,8 @@ _LIMB = (1 << 64) - 1
 class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
-    query; Definitions over ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
+    query; the word view draws 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
+    ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
     a composite of at most ``struct_max_gates`` gates is realized by its structural lowering too (`struct_lowering`; 0, the
@@ -348,7 +350,8 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
 def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.ndarray] | None, list]:
     """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
     Definition reads a registered table (probed, `_probed_correspondence`) or an operand over the input budget (read lazily,
-    `_wide_correspondence`), or has a parameter over the input budget that is neither (a failure)."""
+    `_wide_correspondence`), or has a parameter over the input budget that is neither: a failure, but for a Boolean composite
+    with a word view a warning (``correspondence/unchecked``), as its reference is its gates and `word_view` compares them."""
     from .targets import table_probe
 
     params, _ret = signature_of(t)
@@ -360,8 +363,17 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         why = _unread_operand(t, params, wide)
         if why is None:
             return _wide_correspondence(t, params, wide, opts, F)
-        F.fail("correspondence", "unprobed-table", t.id, why)
-        return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
+        word = _word_or_none(t)
+        if word is None:
+            F.fail("correspondence", "unprobed-table", t.id, why)
+            return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
+        names = [n for n, _ in resolve(t).signature()[0]]
+        over = [names[j] for j in wide]
+        why = (f"operand {', '.join(f'{names[j]!r} ({params[j].leaves} leaves)' for j in wide)} over the input budget "
+               f"({opts.input_budget}): a Boolean Definition's reference is its gates, total on every input, and its word view "
+               f"compares them with {word.id}")
+        F.warn("correspondence", "unchecked", t.id, 1, why, operands=over)
+        return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": [], "unchecked": why}, None, []
     n = _n_vectors(t, opts)
     arrays = vectors(params, n, opts.seed)
     ref, raised = reference_outputs(t, params, arrays)
@@ -521,22 +533,45 @@ def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], a
     return out
 
 
-def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
-    the definition: on the word Definition's edge and random vectors, the word Definition must equal the Boolean gates through the
-    word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
+def _word_or_none(t: Any) -> Any:
+    """The word Definition a Boolean composite names (`verity.ml.circuits.boolean.trace.word_of`), or None."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.evaluation.bits import evaluate_words
     from verity.ml.circuits.boolean.trace import word_of
 
     try:
-        word = word_of(t)
+        return word_of(t)
     except KeyError:
         return None
+
+
+#: the word view compares a Boolean Definition with its word Definition on at least this many random vectors, whatever it costs
+WORD_RANDOM_FLOOR = 2
+
+
+def _word_vectors(word: Any, pw: Sequence, opts: Options) -> tuple[int, int]:
+    """``(vectors, all-edge vectors)`` of the word view: ``16 * opts.vectors``, the all-edge ones first, while the word
+    reference's work on them is within ``16 * opts.reference_budget`` gate evaluations; past it, as many as that pays for and at
+    least ``opts.min_vectors``, at most half of them all-edge; and at least `WORD_RANDOM_FLOOR` of them random either way, so a
+    Definition too large for the full count is still compared on random vectors."""
+    full = 16 * opts.vectors
+    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(word))))
+    return n, min(edge_count(pw), n if n == full else n // 2, n - WORD_RANDOM_FLOOR)
+
+
+def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
+    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
+    the definition: on the word Definition's edge and random vectors (`_word_vectors`), the word Definition must equal the Boolean
+    gates through the word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
+    word = _word_or_none(t)
+    if word is None:
+        return None
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation.bits import evaluate_words
+
     pw, rw = signature_of(word)
-    arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
+    n, edge = _word_vectors(word, pw, opts)
+    arrays = vectors(pw, n, opts.seed + 2, edge)
     n = arrays[0].shape[0] if arrays else 1
     pb, rb = signature_of(t)
     single_bits = [BL.word_type(p) for p in (*pb, rb)] != [*pw, rw] and [BL.bit_type(p) for p in (*pw, rw)] == [*pb, rb]
@@ -556,7 +591,7 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         F.fail("correspondence", "word-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word:{word.id}",
                examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
                           "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word:{word.id}", "compared": n, "mismatches": len(bad)}
+    return {"via": f"word:{word.id}", "compared": n, "edge_vectors": min(n, edge), "mismatches": len(bad)}
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -838,6 +873,20 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
 
 
 STRUCT_VIA = "c-flock:struct_lower"
+#: a family's struct budget is its key under this kind in its module's sidecar pins (``{"struct_max_gates": {family: gates}}``)
+STRUCT_PINS = "struct_max_gates"
+
+
+def struct_budget(t: Any, opts: Options, pins: Any) -> tuple[int, int | None]:
+    """``(gates, declared)``: a composite of at most ``gates`` gates is realized by its structural lowering, the larger of
+    ``opts.struct_max_gates`` and its family's struct budget, ``declared``, the ``struct_max_gates`` entry of its module's
+    sidecar pins (None when there is none).  Read as a pin, so every run checks a family the same way and a target's cached
+    result holds the entry by its value, or its absence."""
+    from .targets import family
+
+    budgets = pins.get(STRUCT_PINS)
+    declared = None if budgets is None else budgets.get(family(t))
+    return max(opts.struct_max_gates, int(declared or 0)), None if declared is None else int(declared)
 
 
 def struct_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
@@ -1129,14 +1178,20 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         if arrays is None:
             low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
                    "registered table lazily" if "table" in corr else "a lowering takes every input leaf, and this Definition's "
-                   "correspondence reads an operand over the input budget lazily" if "wide" in corr else "no vectors"}
+                   "correspondence reads an operand over the input budget lazily" if "wide" in corr else "a lowering takes every "
+                   "input leaf, and this Definition has an operand over the input budget" if "unchecked" in corr else "no vectors"}
         elif lower_whole or kind != "composite":
             low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
         else:
             low = {"lowered": False, "reason": "lowered as its template's units"}
         corr["realizations"].append({"via": "c-flock:ir_lower", **low})
-        if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
+        budget, declared = struct_budget(t, opts, pins)
+        if kind == "composite" and arrays is not None and t.gates <= budget:
             corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
+        elif kind == "composite" and declared is not None:
+            corr["realizations"].append({"via": STRUCT_VIA, "lowered": False, "reason": (
+                f"{t.gates} gates: over its family's struct budget, {declared} (its sidecar's {STRUCT_PINS!r})"
+                if t.gates > budget else "no vectors to compare it on")})
     with spent("word-view"):
         wv = word_view(t, opts, F)
     if wv is not None:
