@@ -118,7 +118,7 @@ def tileCheck8 (ops : RowOps) (p : Pipeline)
   anchorsOK H s U u act := Noise8OK (noise H s U u act)
   rowsOf U u c := fun g => BitVec.ofNat _
     (rows8 p (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k (tileSide (U.layout.shape u).m)
-      (tileSide (U.layout.shape u).n) c.act (U.weight (U.layout.wid u)) c.ticket c.useful g.val)
+      (tileSide (U.layout.shape u).n) c.act (U.fixed (U.layout.fixedId u)) c.ticket c.useful g.val)
   Collides _ _ _ _ _ _ := False
 
 end Pouw.PearlC.WholeCircuit

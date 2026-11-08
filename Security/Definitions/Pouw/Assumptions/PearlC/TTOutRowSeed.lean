@@ -9,7 +9,7 @@ P2 seeds A's noise per row: row `i` of unit `u` samples E_A from the oracle inpu
 unit ("Row additivity for P2: it reduces to the per-unit TT_OUT").
 So the row-seeded game on a workload `U` is the per-unit game on its **split workload**, where every row is its own
 unit, and rev1's TT_OUT on the split workload bounds it (`ttOutRowSeed_of_ttOut`, and per audit tile
-`ttOutTileRowSeed_of_ttOutTile`, in `RowSeedGamma.lean`). Row additivity is then a theorem, and no new assumption is
+`ttOutTileRowSeed_of_ttOutTile`, in `RowSeedGap.lean`). Row additivity is then a theorem, and no new assumption is
 added. The error runs over the `R = Σ_u m_u` declared rows: `(q + R)/2^128`.
 
 The reduction reads four conditions, all definitions here, each for the statement reviewer:
@@ -21,7 +21,7 @@ The reduction reads four conditions, all definitions here, each for the statemen
   with the cap checked for every row (every credited row, per tile). An aggregate cap doesn't transfer: a row over its
   own cap is excluded in the split game but would be credited in the row-seeded one. The per-row cap implies the
   aggregate one. At a census k the served check caps each row at `ρr = 4ρ` and the tile at `ρ`
-  (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGamma.lean`).
+  (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGap.lean`).
 - **(C3) `CostModel.SplitClosed CM`:** regrouping rows into units doesn't change what a program costs or queries.
   `CostModel` is abstract, so this is a hypothesis on `CM`, a property of W1 (which charges instructions, not which rows
   form a unit), and no cryptographic assumption.
@@ -77,10 +77,10 @@ def rowOfRow (L : Layout) (v : ℕ) : ℕ := v - rowOffset L (unitOfRow L v)
 def splitLayout (L : Layout) : Layout where
   N := rowsOf L
   shape v := ⟨1, (L.shape (unitOfRow L v)).n, (L.shape (unitOfRow L v)).k⟩
-  wid v := L.wid (unitOfRow L v)
+  fixedId v := L.fixedId (unitOfRow L v)
 
 /-- The split workload: the split layout, with the same weights. -/
-def splitWorkload (U : Workload) : Workload := ⟨splitLayout U.layout, U.weight⟩
+def splitWorkload (U : Workload) : Workload := ⟨splitLayout U.layout, U.fixed⟩
 
 /-- Row `i` of a matrix of codes, as a one-row matrix. -/
 def rowCodes (M : Codes) (i : ℕ) : Codes := fun _ l => M i l
@@ -182,27 +182,27 @@ def CostModel.SplitClosed (CM : CostModel Q R S) : Prop :=
 /-! ## The row-seeded statements (target forms) -/
 
 /-- **The row-seeded TT_OUT** (a target form, proved from rev1's TT_OUT, not assumed): `TTOut` with the error read at
-the row count, `εPearlC q R = (q + R)/2^128` for the `R = rowsOf U.layout ≤ 2^64` declared rows. -/
+the row count, `δPearlC q R = (q + R)/2^128` for the `R = rowsOf U.layout ≤ 2^64` declared rows. -/
 def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (D : Layout → Prop) (g₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - γ₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
+        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
           P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
-        ≤ εPearlC q (rowsOf U.layout)
+        ≤ δPearlC q (rowsOf U.layout)
 
 /-- **The row-seeded TT_OUT per audit tile** (a target form): `TTOutTile` with the error read at the row count. -/
 def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : Layout → Prop) (g₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - γ₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
+        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
           TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
-        ≤ εPearlC q (rowsOf U.layout)
+        ≤ δPearlC q (rowsOf U.layout)
 
 /-! ## The code-form seed (`-h3`) -/
 

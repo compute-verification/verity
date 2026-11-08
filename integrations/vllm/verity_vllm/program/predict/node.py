@@ -33,6 +33,7 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity_vllm.program.inputs import check_params
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
 from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows, reads_run, wrapper_keys
@@ -210,7 +211,7 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     for r, ls in enumerate(leaves):
         weights_at.append(len(params))
         params += [(f"rank{r}.weights[{i}]", t) for i, (_, t) in enumerate(ls)]
-    return NodeParameters(phis, nets, tuple(params), words, sched_at, leaves, weights_at)
+    return NodeParameters(phis, nets, check_params(params), words, sched_at, leaves, weights_at)
 
 
 def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
