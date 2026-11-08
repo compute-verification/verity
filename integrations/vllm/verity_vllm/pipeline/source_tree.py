@@ -1,8 +1,7 @@
-"""Source identity of the packages a job imports -- the generic half (stdlib only; project-independent).
+"""Where each package a job imports resolves from, the source tree it lives in and that tree's commit (stdlib only).
 
-[R18 infra, F-r17-tp-06 / COORD M-1848 (2)] A Commit under --gpu-tree without the tree variable (now VERITY_TREE) imported `verity_ir` from the pod's DEFAULT tree
-while `verity_vllm` ran the release and versions.json named the release commit (tp M-1830).  The fix by construction has three parts and
-this module is the evidence half: for every important imported package record
+A job must run the tree it names: a package resolved from another tree on `sys.path` runs one release's code under another's
+record.  For every package it is asked about, this module records
 
     resolved_path   the file/directory Python actually resolves the name to (importlib.util.find_spec, NOT an import -- nothing runs)
     repo_root       the source tree that file lives in (the nearest ancestor holding EXPORT.json or .git, else the ancestor holding
@@ -13,7 +12,7 @@ this module is the evidence half: for every important imported package record
 plus `sys_path0` = sys.path[0] of the resolving interpreter, and `check(...)` compares every repo_root with the REQUESTED tree: a
 mismatch is `PRECHECK_FAIL_SOURCE_IDENTITY` (the failure class the classifier reads from the precheck record), raised BEFORE any inference.
 
-The project half (which names, which root markers, the CLI) lives with the project (Verity: verity_vllm/pipeline/source_identity.py).
+`source_identity` names the packages and root markers, and runs the precheck and its CLI on top of this module.
 """
 from __future__ import annotations
 

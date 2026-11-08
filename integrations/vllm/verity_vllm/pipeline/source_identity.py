@@ -9,17 +9,18 @@ The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git ar
 module IS the tree that must run.  `--tree` accepts the repo root or the integration root (`integrations/vllm`, what row_pod.sh passes) and
 normalises to the repo root.  `VERITY_TREE`, when set, must name the same tree (either form) -- a caller that exports another tree is the
 mixed-tree case and is refused by name.  `--out` writes the manifest record (schema research-infra/source-identity/v1); the same record goes
-into versions.json (commit_delta) and the attempt's job.json (tele init --source-identity).
+into versions.json (the Commit's) and the attempt's job.json (tele init --source-identity).
 
 A shipped tree has no .git and no EXPORT.json, so its sha comes from `--sha` or, failing that, from $RESEARCH_SOURCE_SHA (set by the
 `research` runner from request.json's tree_sha; see research.result.ENV_SOURCE_SHA).  Packages that resolve from the requested tree but
 whose tree carries no sha of its own are recorded with that sha (git_sha_source names where it came from).
 
-In-process: `precheck(stage)` is called by the Commit (commit_delta.main, before the engine is built -> before any inference).  It
-raises research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
+In-process: `precheck(stage)` is called by the Commit (commit.main, before the engine is built -> before any inference).  It
+raises `source_tree.SourceIdentityError`, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY; where a package resolves from,
+and the record's schema, are `source_tree`'s.
 
-Import layout: the generic half is `research.telemetry.source_identity` and must be importable as such -- on a pod row_pod.sh exports
-PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
+Import layout: `research.pythonpath`, which names the directories core ships from, must be importable as such -- on a pod row_pod.sh
+exports PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
 cannot be imported is a broken environment and is reported as one, not repaired silently (that repair is how mixed trees happen).
 """
 from __future__ import annotations
@@ -34,10 +35,10 @@ from typing import Any
 
 from verity_vllm.config import ROOT as INTEGRATION
 from verity_vllm.config import option
+from verity_vllm.pipeline import source_tree as _sid
 
 try:
     from research.pythonpath import package_dirs as _package_dirs
-    from research.telemetry import source_identity as _sid
 except ImportError as _e:  # pragma: no cover - environment defect, reported by name
     raise ImportError("verity_vllm.pipeline.source_identity needs the `research` package of the tree of record on sys.path "
                       "(PYTHONPATH must include <repo>/tools/research/src; verity-vllm row exports it); nothing is appended here on purpose: "

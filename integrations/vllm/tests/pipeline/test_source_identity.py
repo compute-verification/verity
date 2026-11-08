@@ -24,11 +24,11 @@ from pathlib import Path
 import pytest
 
 from research import pythonpath as rpp
-from research.telemetry import source_identity as gsid
 from verity_vllm import config as vconfig, settings as vsettings
 from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
+from verity_vllm.pipeline import source_tree as gsid
 
 INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/integrations/vllm
 REPO = INTEGRATION.parents[1]  # <repo>
@@ -173,7 +173,7 @@ def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "VERITY_TREE" in r.stderr, r.stderr
 
 
-def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
+def test_research_must_import_from_the_path_not_be_repaired(tmp_path):
     """No sys.path hack for `research`: without tools/research/src on the path the import fails with a message naming the fix."""
     r = subprocess.run([PY, "-c", "import verity_vllm.pipeline.source_identity"], cwd=INTEGRATION,
                        env=_env(PYTHONPATH=os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])), capture_output=True, text=True)
@@ -237,20 +237,19 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
 
 def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers and the workspace declaration (every member's
-    pyproject.toml), stub packages at Verity's locations, and the REAL source_identity modules (generic + project, with the verity_vllm.config
+    pyproject.toml), stub packages at Verity's locations, and the REAL source_tree and source_identity modules (with the verity_vllm.config
     it locates the tree through and the typed records that reads, the research.pythonpath that names core's directories, and the CLI with the
     settings it reads) so the precheck under test runs from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in (*research_tools.CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
-                "tools/research/src/research/telemetry"):
+                "tools/research/src/research"):
         (t / rel).mkdir(parents=True)
         (t / rel / "__init__.py").write_text("")
-    (t / "tools" / "research" / "src" / "research" / "__init__.py").write_text("")
     for member in ["", *rpp.import_roots_dir(REPO)["members"]]:
         (t / member).mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / member / "pyproject.toml", t / member / "pyproject.toml")
     (t / "uv.lock").write_text("")
-    shutil.copy(gsid.__file__, t / "tools" / "research" / "src" / "research" / "telemetry" / "source_identity.py")
+    shutil.copy(gsid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_tree.py")
     shutil.copy(rpp.__file__, t / "tools" / "research" / "src" / "research" / "pythonpath.py")
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")

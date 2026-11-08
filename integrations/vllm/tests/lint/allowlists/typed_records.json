@@ -122,6 +122,7 @@
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "schema-literal", "symbol": "SingleRow.prepare", "detail": "verity-sweep/executing-tree/v1"},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-window/v1"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/serving-rows/partition/v1"},
+    {"file": "verity_vllm/pipeline/source_tree.py", "kind": "schema-literal", "symbol": "<module>", "detail": "research-infra/source-identity/v1"},
     {"file": "verity_vllm/pipeline/telemetry", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 11},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/admission/v1"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/admission-plan/v1"},
