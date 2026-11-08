@@ -12,7 +12,8 @@ SCOPES = ("world year", "datacenter year")
 MAIN = [
     ("R0", "(A′) the per-expert cut as Figure 1 prices it, at 128k over vLLM's 128k plan, 600 s replay blocks",
      "measured cards; 128k modeled", "proofs"),
-    ("R1", "+ each expert's table read fused into its GEMM (#7852)", "modeled until its price lands", "@circuits"),
+    ("R1", "+ each expert's table read fused into its GEMM, staged at k_log 25",
+     "the pair's H200 prices × the end-to-end ratio measured on CPU at 16 blocks (0.75 w13, 0.59 w2)", "@circuits"),
     ("R2", "+ the statement cache (#7875)",
      "measured on H200 (experts), priced from H200 splits (5 types) and CPU shares (2); the rest assumed ×0.1",
      "HILLCLIMB, STATIONARY"),
@@ -23,25 +24,39 @@ MAIN = [
     ("R5", "R4 + lifetime replay at 458 GPU-s a sample, no edge pause, pages committed when written",
      "modeled from the 128k serve's trace", "LIFETIME"),
     ("R5x4", "R4x4 + lifetime replay", "modeled", "LIFETIME"),
+    ("R6", "R5 + the Lean verifier's CPU a statement, at 81.8 core-seconds a GPU-second (Nebius list prices)",
+     "measured on 9 types, scaled within families, the median (681 s) elsewhere", "VERIFYCOST"),
+    ("R6x4", "R5x4 + the Lean verifier's CPU", "as R6", "VERIFYCOST"),
+]
+#: named lines no case prices yet
+UNPRICED = [
+    ("compile-slice proving", "every window's CompileSlice_v3 proved, never sampled", "unmeasured",
+     "@network-accounting"),
 ]
 EXTRAS = [
     ("all", "4 provers on every type, the experts' factor beyond the cache", "assumed", "STATIONARY"),
-    ("arena", "the prover frees its arena between sessions: full statements under 4 provers", "assumed",
-     "@kernels (scoping)"),
+    ("4perH200", "four provers per H200 at full statements: each prover's peak about 33 GiB", "assumed",
+     "@kernels (four-provers-per-h200)"),
     ("host", "the dense types' host witness 3.5× lower", "assumed (CPU's 2–4×)", "HILLCLIMB"),
     ("hash4", "in-proof hashing 4× (half the marginal)", "assumed", "no owner"),
     ("plain", "Flock without --zk at the CPU shares", "measured on CPU; H200 pending", "HILLCLIMB, STATIONARY"),
-    ("all+arena", "all + arena", "assumed", ""),
-    ("all+arena+host", "all + arena + host", "assumed", ""),
-    ("all+arena+host+plain", "all + arena + host + plain", "assumed", ""),
-    ("all+arena+host+hash4", "all + arena + host + hash4", "assumed", ""),
+    ("all+4perH200", "all + four provers per H200 (the closing pair)", "assumed", ""),
+    ("all+4perH200+host", "all + four provers per H200 + host", "assumed", ""),
+    ("all+4perH200+host+plain", "all + four provers per H200 + host + plain", "assumed", ""),
+    ("all+4perH200+host+hash4", "all + four provers per H200 + host + hash4", "assumed", ""),
 ]
 SIDE = [
-    ("R1-1s", "one-stage design on R1's blocks, (C)'s hashing tax"),
-    ("R5x4-1s", "one-stage design on R5x4's blocks, (C)'s hashing tax"),
-    ("R0-census", "R0 on the census request (4,500 tokens, the figure's replay)"),
-    ("R4x4-census", "R4x4 on the census request"),
-    ("R5x4-served", "R5x4 on the 128k plan as served (seven longest rows aborted)"),
+    ("R6x4+vflat", "R6x4 with the verifier's flat fixes (0.4 of today's)", "estimate", "VERIFYCOST"),
+    ("R6x4+vmedian", "R6x4 with the expert and fused types' verifier at the median (681 s), not the MoE GEMM's 15 s",
+     "assumed", ""),
+    ("R6x4+vfloor", "R6x4 with the types the median prices at the verifier's 10 s floor instead", "a lower bound",
+     ""),
+    ("R6x4+all+4perH200+vflat", "the closing pair with the verifier's flat fixes", "estimate", ""),
+    ("R6x4+all+4perH200+vmedian", "the closing pair with the expert types' verifier at the median", "assumed", ""),
+    ("R6x4+all+4perH200+vfloor", "the closing pair with the median's types at the 10 s floor", "a lower bound", ""),
+    ("R1-1s", "one-stage design on R1's blocks, (C)'s hashing tax", "", ""),
+    ("R6x4-1s", "one-stage design on R6x4's blocks, (C)'s hashing tax", "", ""),
+    ("R6x4-served", "R6x4 on the 128k plan as served (seven longest rows aborted)", "", ""),
 ]
 
 
@@ -85,18 +100,21 @@ def main(argv=None):
         c, d = cells(rows, case)
         data[case] = d | {"lever": lever, "priced": label, "owner": owner}
         print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
-    for base in ("R5", "R5x4"):
+    for name, lever, label, owner in UNPRICED:
+        data[name] = {"lever": lever, "priced": label, "owner": owner}
+        print(f"| {name} | {lever} | {label} | {owner} | – | – | – | – |")
+    for base in ("R6", "R6x4"):
         print(f"\nExtras on {base}:\n" + head)
         for e, lever, label, owner in EXTRAS:
             case = f"{base}+{e}"
             c, d = cells(rows, case)
             data[case] = d | {"lever": lever, "priced": label, "owner": owner}
             print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
-    print("\nColumns and comparisons:\n| case | what | world year β | total | datacenter year β | total |\n|---|---|---:|---:|---:|---:|")
-    for case, what in SIDE:
+    print("\nSensitivities, columns and comparisons:\n" + head)
+    for case, what, label, owner in SIDE:
         c, d = cells(rows, case)
-        data[case] = d | {"lever": what}
-        print(f"| {case} | {what} | " + " | ".join(c) + " |")
+        data[case] = d | {"lever": what, "priced": label, "owner": owner}
+        print(f"| {case} | {what} | {label} | {owner} | " + " | ".join(c) + " |")
     if out_json:
         out_json.write_text(json.dumps(data, indent=1) + "\n")
 
