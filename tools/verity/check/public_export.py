@@ -19,9 +19,9 @@ copy.
 The report gives:
 
 * what the export copied, rewrote, and cut;
-* per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: `art:` ids, and
-  the lane-text lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids,
-  lane handles, dates, names);
+* per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
+  lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
+  ids, lane handles, dates, names) and agents' branches;
 * the known residue (`public_boundary.toml`'s `[[residue]]`), each entry's sites, and the change that removes it;
 * the third-party code DEST pins: the Lean packages its manifests pin, the Python distributions its lock resolves, and the
   Rust upstream Flock patches;
@@ -59,9 +59,8 @@ def _load(name: str, path: Path):
 
 PB = _load("public_export_boundary", HERE / "public_boundary.py")
 LANE_TEXT = _load("public_export_lane_text", PB.ROOT / "tests" / "lint" / "test_repo_lane_text.py")
-#: what the lane-text lint doesn't look for: data ids (`fixtures/artifacts.json`'s), and agents' branches
-EXTRA = (("art", re.compile(r"(?<![\w-])art:[0-9A-Za-z][\w.:/-]*")),
-         ("branch", re.compile(r"(?<![\w/-])cursor/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{4}\b")))
+#: what the lane-text lint doesn't look for: agents' branches
+EXTRA = (("branch", re.compile(r"(?<![\w/-])cursor/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{4}\b")),)
 SCRUB_MAX_BYTES = 4 << 20
 #: a build step's limit, so one stuck step leaves the rest a report
 STEP_SECONDS = 4 * 3600
