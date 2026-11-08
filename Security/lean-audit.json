@@ -3359,11 +3359,7 @@
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
   ],
-  "Flock.SecurityProofs.SampledKSLiveV3": [
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-   "FlockSoundness.Built",
-   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
-  ],
+  "Flock.SecurityProofs.SampledKSLiveV3": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
   "Flock.SecurityProofs.SampledKSLiveV5": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw", "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"],
   "Flock.SecurityProofs.SessionLoopZKDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
@@ -4997,7 +4993,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV3": {
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
-   "unfolded_hash": "efc4e98bf4082e88a395254b33ae1a520f107ed14a276746c33d4002ab17287a"
+   "unfolded_hash": "71b463eb7e33489b832e89c9270918f2c6f463791a3a7329d3e9277be8617884"
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
@@ -15158,15 +15154,11 @@
      "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
     "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
-    ],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
-   "unfolded_hash": "efc4e98bf4082e88a395254b33ae1a520f107ed14a276746c33d4002ab17287a"
+   "unfolded_hash": "71b463eb7e33489b832e89c9270918f2c6f463791a3a7329d3e9277be8617884"
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "owner": "@proofs",
@@ -25530,7 +25522,7 @@
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; that the deployed play's cut fixes the roots is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the statement, the files and the draw, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/ScopeGate.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots; Flock.KsScope.check: an untyped statement in scopeOkH, the --zk tags, a draw the tables divide) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
@@ -40108,12 +40100,13 @@
    }
   },
   "Flock.KsScope": {
-   "digest": "dae830d8bd56251f1c7e1ef681ce31c737f61ad9ecc21a0487aacf9b595ba6ee",
+   "digest": "cc04ed4922c8fa4eb2e9e6cbc181a045f80a7da5fc629086ee9de78012dfefbe",
    "definitions": {
     "Flock.KsScope.ROOTS_WHY": "856122f76860449b1a6c7504a4ecf832f3c95daaabfa94f7812092d433ee5c64",
     "Flock.KsScope.SCOPE_WHY": "dd0e53f27f892c737ac8ffd6097ac7a8412479c7e79053f6fda35dc725ada0c0",
     "Flock.KsScope.TABLES_WHY": "09402a61bb542aa4c0887e6cf8dbcafe20c58a7975c87d0c5edadc53e3fbdaad",
     "Flock.KsScope.TMPL_WHY": "aaa2ba436768854ac4dfc47242758383063f4c35646cf6852811a7ad0aaa9771",
+    "Flock.KsScope.check": "98de35be0ebbf86b7d0acfab0d7c936f53624812bda256da2c05c348fb4d644d",
     "Flock.KsScope.checkOf": "6be630c05de52e27f378c42885fc58b4225079532c110a56cbc2d20b8b242345",
     "Flock.KsScope.collidesT": "d64b1507c7afd599e8161438c8ea995b72b9f89b67f3f3552c4cf8848a99d6a0",
     "Flock.KsScope.drawWhy": "31490eabd56ff3e8894152ecbe4e94d5669e623c79d6f763cc1121f716063779",
@@ -44896,11 +44889,10 @@
    }
   },
   "Proofs.Flock.Bridge.Refused": {
-   "digest": "2aa4248b4142106a135a2772699be6812b80efe6a645d78ab840a4e129c5d505",
+   "digest": "38c5e15307728ff239b14228ec1154a4d0431dca4f76af8813ab90798bc5818b",
    "definitions": {
     "Flock.Bridge.LiveAcceptsKS": "ff1729b1b2b29a48f0e3c4f42af32de19e8d6788d41de2e6974ce1ca0f50394a",
-    "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10",
-    "Flock.Guarantees.SampledKSLiveV3": "2257c82ca50b98636fc8505bb393ce62b43c0c494a9e36c15f90e44351d15e58"
+    "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10"
    }
   },
   "Proofs.Flock.Bridge.RightRegZc": {
@@ -44908,6 +44900,14 @@
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.RightRegZc": "79c5624417d002617cd89e78dc1ca9987e489e4b0f4e19a773336d3f981753d1",
     "FlockSoundness.Discharge.ZkLink.wrongRegZc": "f8e0d67b6fbd0e862780a5313cb825b00629f6b45da6e8011ebf79e7b58f753b"
+   }
+  },
+  "Proofs.Flock.Bridge.ScopeGate": {
+   "digest": "fa9f31a33786495ef96d1eee4baae09aee4fa864b3c68bf53f087af0e26650f4",
+   "definitions": {
+    "Flock.Bridge.KsScoped": "074ba0ee5c488cef95ca553617ceaff8a9b1ddb57243bd560341a5cf98e48de0",
+    "Flock.Bridge.LiveAcceptsScoped": "a531747d4fbb38fbba1265d4d0912c31c1eadb7a7acda28169286cee6c300ce0",
+    "Flock.Guarantees.SampledKSLiveV3": "ceb4ac09b7be1016ce4427987299af83b07afe24b5579fc153700aee703d1697"
    }
   },
   "Proofs.Flock.Bridge.Statement": {

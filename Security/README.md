@@ -24,16 +24,16 @@ incorrect set of the trace the extractor recovers.
    with a binding commitment, at every δ ≥ 0, Pr[accept ∧ F ∉ M_δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ_δ − δ + √(γ·Pr[B])
    from Π's errors at the sampled proof blocks' sessions and ε_bind = Pr[B_ext]; `CompilerZK` carries Π's zero
    knowledge to SPOT[Π]. Their premises (`Arg.KS`, the binding, the scope, the contract) are their domain. At Flock,
-   `Flock.Guarantees.SampledKSLiveV3` (stated in `Proofs/Flock/Bridge/Refused.lean`, proved in
+   `Flock.Guarantees.SampledKSLiveV3` (stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in
    `Proofs/Flock/Bridge/KSLive.lean`) proves the bound at the deployed sessions:
    Pr[`verify --zk` accepts ∧ the run's population is the registration's ∧ F ∉ M_δ] ≤ δ + ε̄_ks + ε_link, at
    δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
    and ε_link the link's term:
-   - Domain: the circuit and public files parse, the statement is in scope, and k ≤ n splits evenly over the tables.
+   - Domain: the circuit and public files parse, with no shared rows, and k ≤ n; `verify --zk` checks the scope, the
+     tags and k's split over the tables (`Flock.KsScope.check`).
    - Real: SHA-512 collision resistance (`TableCRZAt` and `LinkCRZCAt` unfold to it) and `UniformRandomBytes` (the
      verifier's bytes, exactly uniform).
    - Folds into: `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
-   - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
    ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
@@ -527,7 +527,7 @@ conditions it places on its inputs and setup are left out (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
+| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |

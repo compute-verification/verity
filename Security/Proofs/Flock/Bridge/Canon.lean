@@ -63,8 +63,8 @@ targets read them:
   population of the game's `n` units in order (`Bridge.PopMatches`);
 * `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
 
-`SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
-them.
+`Bridge.SampledKSLiveRoots` (`Refused`) and `SampledKSLiveV3` (`ScopeGate`) read V2's file preconditions off the
+verifiers' acceptance, which refuses files that fail them.
 -/
 
 @[expose] public section
