@@ -1,5 +1,6 @@
 /-
-`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused. A unit of
+`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused; every named
+statement that passes it reads its record's sample (`hm96Rows`), the draw `verify --zk` hands `checkOf`. A unit of
 one input group that returns the outputs passes `filesWhy`, and with a `sha512/row-seg/v1` output row too; with that row
 one compression short, or an output row of two ports, it is refused, and so are a unit reading two input groups and a
 tail stage returning the outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs). A
@@ -32,6 +33,7 @@ open Flock Flock.KsScope
 #guard (tagsWhy Tags.circuitEb90718f).isSome
 #guard (tagsWhy { Tags.circuit with retainRounds := false }).isSome
 #guard (tagsWhy { Tags.circuit with merkleLeaf := "flock-leaf/sha512-unsalted" }).isSome
+#guard Tags.all.all fun t => (tagsWhy t).isSome || t.hm96Rows
 
 /-- A unit of one input group, returning the outputs. -/
 def one : Circuit := Wires.circ #[Wires.net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], #[0])]] #[1] #[]
