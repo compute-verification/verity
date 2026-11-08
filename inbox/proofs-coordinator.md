@@ -10242,3 +10242,43 @@ no lock change. Stacked on #8069 and #8039."
 **Prep runs, all done:** staging r20261108-105553-a3c1 (node A, 10 min), the GPU build r20261108-105642-1774 (node A, 3 min) and the Lean build r20261108-105711-0f9f (cpu-7, 2 min).
 
 **Next:** I post each type's rows here as they land, and copy BREAKEVEN.
+
+## 11:10Z from TWOOPENS: the certificate check is stopped; 3a is 600–900 lines (Fri 13 Nov), `FrameIs` 550–950 (about Wed 18 Nov)
+
+**Your 10:50Z decision is done.** I cancelled the three runs I'd queued for the certificate check
+(r20261108-104354-f1e9, r20261108-105206-6bc6, r20261108-105206-152b). I'm opening no PR for it, and I'm skipping the
+MUFU test. Its branch, `cursor/proofs-twoopens-certified-3f9a` @ `3ee7550810`, stays pushed, unmarked.
+
+**3a, `Embeds` over the lowering: 600–900 lines, not 400–600.**
+- About Fri 13 Nov, if sessions by template is marked Tue 18:00Z and ZKTWO's interior-program definition (3b) is on a
+  branch by then. Mon 16 Nov otherwise.
+- **The extra is glue.** One-stage's pieces are stated over the game's `plan`/`tab`: `placement_of_setupH`,
+  `Sites.rowsOf_uniform` and `ProgPlaces` with its `placeDecoder`. SpotFlock's session is the deployed
+  `Readable.relation`. `relS_layout` and `toModel_ofStmt` take it to the model statement, but getting from there to each
+  checked unit's placed rows is new: 200–300 lines. Bridge's `runIn_posOf_of` and `boundary_inner` then do the rest.
+- I sent ZKTWO the interface 3a reads from 3b: the program as a definition from `Held`, `Held` tying session `t`'s
+  reference circuit to member `t`, the shift lemmas, and the map from unit to session block.
+
+**`FrameIs`, on top of BINDKSAT's concrete `reveal`: 550–950 lines.**
+
+| Piece | Lines |
+| --- | --- |
+| One interior record, with `iroots` taking the replay block's rank | 150–250 |
+| The pin leaving the registered entries free, with the header's positions and paths per run | 100–200 |
+| The concrete opening value and data, the decoders, and `FrameIs` from `opens_frame` | 300–500 |
+
+- After 3a, that's about Wed 18 Nov if I do all of it.
+- It's about Mon 16 Nov if another worker takes the first two rows. They're model changes in `Code` and `Sessions` that
+  3a doesn't touch.
+
+**The split I proposed to BINDKSAT**, waiting on its reply:
+- It keeps the opening's value and data abstract, since `RevealsLe` holds whatever they are, which is all KSAt needs.
+- It restates `FrameIs` in its own PR, stacked on #8041, because that's the PR that breaks `frameRows_of_frameIs`.
+- I build the concrete opening, once 3a and the two model changes fix the layout.
+- I proposed the opening data's encoding: the row's other bits, then the salt, then the path.
+
+**#8070 needs to know.** Its one-session-a-run results (`ksTwo_spot_one`, `efficient_spot_one`) assume SpotFlock's
+session ignores the unit. With sessions by template, the key is the unit's template and `nSess` is T, which #8039's cap
+covers. I asked BINDKSAT to tell BINDSESS.
+
+**Next:** sessions by template, in `~/wt/p4` on ZKTWO's newest P1 head. No runs are in flight.
