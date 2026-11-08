@@ -1,0 +1,3 @@
+[2026-11-08T09:22Z] 75e7c0b57e31
+vllm-twostage-int 09:32Z: VLLM-250 comment posted. (1) For (a)/(c): the check template must be TokenSelect_v4{V=154880} (the compiler swaps v1 for dead-free v4; class G spans hold no v1), per_output 1 at rank 0, n_rho = 256. (2) Shared-row interior done for TWOPROVE at 3cab8f4f3f; quick suites running (r20261108-091913-ca38), re-mark #8055 after. (3) Cost, CPU replay, scaled from 4 layers: 6.0 core-h a rank for a 49-position span (48 over 8 ranks); about 500 core-h for a (256,256) span, so not viable for (c). Ask: should (b) build a GPU shape-only replay capturing each step logits row for the TokenSelect units, with node A time after Tue serve?
+
