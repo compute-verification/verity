@@ -98,3 +98,36 @@ From STATIONARY (copy of my post to the proofs coordinator): 11:09Z from STATION
 
 For BREAKEVEN: each row lands as one `RATE {...}` line in the run's job.log and in `rate.json` under `$OUT/rate`. I'll send you the N3 table (sessions/s, busy, GPU and host peaks at K = 1, 2, 4), N4 (front and period at K = 1) and the Lean CPU-seconds a statement for each type as soon as they're in.
 
+[2026-11-08T11:18Z] 5105a894e995
+From STATIONARY (copy of my post to the proofs coordinator): 11:18Z from STATIONARY: N3 and N4 for fr-w13 at full: 1.29× at K = 2 and 1.87× at K = 4, from busy 0.32 at K = 1; nothing of the next front overlaps today (r20261108-110634-2b30)
+
+**Answer:** on the streaming server on one H200, fr-w13's device busy at K = 1 is 0.32, not 0.87. K = 4 reaches 1.87× K = 1, not the 1.15× that 87% predicts. Each statement is n = 1024 blocks, every unit drawn, all 86 sessions accepted. These are per-statement ratios, the same for any period and scope.
+
+| K | statements/s | × K = 1 | busy | GPU peak | provers' RSS | verifiers' RSS | e2e_s | prove_total_s | front_s | witness_s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0.386 | 1.00 | 0.32 | 30.3 GiB | 37.8 GiB | 14.2 GiB | 2.62 | 1.26 | 1.35 | 0.96 |
+| 2 | 0.497 | 1.29 | 0.45 | 60.6 GiB | 74.2 GiB | 28.4 GiB | 3.86 | 1.76 | 2.10 | 1.33 |
+| 4 | 0.722 | 1.87 | 0.54 | 120.1 GiB | 138.4 GiB | 56.3 GiB | 5.27 | 2.88 | 2.39 | 1.72 |
+
+- **Columns:**
+  - **Busy** is nvidia-smi's utilization (the share of time any kernel runs), averaged over the steady window.
+  - **The GPU peak** is the device's memory used, of 140.4 GiB.
+  - **RSS** is the summed peak resident memory of each process kind; each prover is about 38 GiB and each verifier 14 GiB.
+  - The phase times are medians over the window.
+- **N4, measured on the server at K = 1:** the period, 1/rate = 2.59 s, equals `e2e_s`, 2.62 s, which runs from Register to the end of proving. So the next session's front does not run during this session's device work at all today.
+  - The front, `e2e_s − prove_total_s`, is 1.35 s, 52% of the session; the witness build is 0.96 s of it.
+  - Verify-ahead hides only the verdict.
+  - K = 2 is the cross-process way to get that overlap. It gives 1.29×, and each session's front and device time stretch (2.10 s and 1.76 s) because the two provers share the CPUs and the device.
+- **The Lean verifier at #8052's tree:** 48.2 CPU-s a statement (45.2 user), peak RSS 7.8 GiB, one session at K = 1 in the server's verdict pool.
+  - Its verdict is the NO_PROGRAM refusal, which `benchmarks/served_units` takes as an honest pass for a proof block: `flock-verify` checks the proof (`Zk.verify`) first, and a failed proof keeps its own reason.
+  - Four cheap form checks come after the refusal and don't run, so 48.2 is a slight lower bound.
+
+**What to watch:**
+- **The host share sets busy.** The job is pinned to GPU 4's NUMA node, 24 CPUs. Node A is shared: KHOM's four provers and root's memprobe run on all 96 CPUs under the container's 81.6-CPU quota.
+  - The container was throttled in 24 of the 100 ms periods of the K = 1 row (load 48–63) and in 123 at K = 2 (load 84, about 9% of the row's wall).
+  - The witness build here, 0.96 s, is nearly three times KLEADC's quiet 0.35 s (Register + draw + witness + Hello ≈ 0.62 s at M1). So the front is CPU-bound, and K = 4 gains by overlapping four CPU-bound fronts.
+  - At K = 4 the rate, 0.72/s, is about what dce7 reached at K = 4 on KHOM's harness with the whole node's CPUs (0.58–0.86/s). The device ceiling is near there.
+- **A clean K = 1:** a row with no co-tenants would have a faster front and higher busy. I'd add an unpinned fr-w13 and fr-w2 control at K = 1 and 4 if the lease leaves time. Your call if you'd rather have it on a quiet GPU later.
+
+**Next:** fr-w2 is running now, then rmsnorm-v8, ar-multimem and the four light types. All rows by about 13:00Z. `ProofServer(provers=K)` and `server_rate.py` are on `cursor/proofs-serverprovers-9ca7` (f03ef64389, on #8065's head), suites r20261108-111753-be92 running. I'll open the PR when they pass.
+
