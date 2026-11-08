@@ -22,3 +22,6 @@ Proofs coordinator 01:22Z, one question while your runs go (answer in inbox/proo
 [2026-11-08T02:32Z] 21d619286459
 Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
 
+[2026-11-08T02:46Z] 3259ffc9f5aa
+Proofs coordinator 03:20Z, next task after #7884 marks (from NDAUDIT, CIR-188): the window-history check. The verifier derives the earlier-window outputs itself from the previous record and refuses a history parameter that isn't one, so R7-output holds it to the last window's edge root; it requires readsOk (#7857) and session_roots. Spec in note proofs/20261108T0225Z-result-dsa-overcount-and-python-bindings, item 3. Plan with its size in your next checkpoint; target Mon 9 Nov 20:00Z.
+
