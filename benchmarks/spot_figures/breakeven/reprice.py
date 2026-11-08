@@ -83,6 +83,8 @@ VERIFY_FAMILY = ((("Fp8GroupQuantUe8m0_v1",), "Fp8GroupQuantUe8m0_v1{K=2048,", "
                  (("MoeExpertFp8", "Fused["), "MoeExpertFp8GemmW_v1{", None, None))
 #: any other type: the measured types' median (assumed)
 VERIFY_DEFAULT = statistics.median(VERIFY.values())
+#: the templated, served verifier's estimate on quant K6144 (125 s) over today's, taken for every type (assumed)
+VERIFY_TEMPLATED = 125.0 / 2100.0
 #: core-seconds that cost one GPU-second, from Nebius AI Cloud's on-demand list prices
 #: (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa
 #: core, two vCPUs at $0.015 a vCPU-hour, with its 8 GiB at $0.0045 a GiB-hour

@@ -291,6 +291,7 @@ def repriced() -> dict[str, Case]:
             out[f"{s}+{e}"] = Case(**(base | steps[s] | kw))
     for s in ("R6x4", "R6x4+all+4perH200"):
         out[f"{s}+vflat"] = replace(out[s], verify=0.4)
+        out[f"{s}+vtmpl"] = replace(out[s], verify=reprice.VERIFY_TEMPLATED)
         out[f"{s}+vmedian"] = replace(out[s], verify_expert=reprice.VERIFY_DEFAULT)
         out[f"{s}+vfloor"] = replace(out[s], verify_other=reprice.VERIFY_FIXED)
     for s in ("R1", "R6x4"):

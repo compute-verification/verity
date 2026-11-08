@@ -49,11 +49,14 @@ EXTRAS = [
 ]
 SIDE = [
     ("R6x4+vflat", "R6x4 with the verifier's flat fixes (0.4 of today's)", "estimate", "VERIFYCOST"),
+    ("R6x4+vtmpl", "R6x4 with the templated, served verifier: quant K6144's estimate (125 s, 0.06 of today's) for "
+     "every type", "assumed", "VERIFYCOST"),
     ("R6x4+vmedian", "R6x4 with the expert and fused types' verifier at the median (681 s), not the MoE GEMM's 15 s",
      "assumed", ""),
     ("R6x4+vfloor", "R6x4 with the types the median prices at the verifier's 10 s floor instead", "a lower bound",
      ""),
     ("R6x4+all+4perH200+vflat", "the closing pair with the verifier's flat fixes", "estimate", ""),
+    ("R6x4+all+4perH200+vtmpl", "the closing pair with the templated verifier for every type", "assumed", ""),
     ("R6x4+all+4perH200+vmedian", "the closing pair with the expert types' verifier at the median", "assumed", ""),
     ("R6x4+all+4perH200+vfloor", "the closing pair with the median's types at the 10 s floor", "a lower bound", ""),
     ("R1-cpuratio", "R1 with the fused blocks at the CPU ratio (0.75 w13, 0.59 w2) on the pair's prices", "CPU", ""),
