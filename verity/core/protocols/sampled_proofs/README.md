@@ -29,6 +29,12 @@ SPOT[Flock] on its own has three roles (`parties.SPOT_PROTOCOL`):
   It sends the verifier the proofs and gets back the coins and the sample, nothing else;
 - the **verifier**: the challenger's live coins and signed log, and the Lean verifier.
 
+The replay inputs are every value the sampled proof blocks read, with the salts that open their commitments. Each value
+is a proof block's output, a certified input (the network certifier's stamp among them), a registered value (weights,
+configs, Definitions) or advice charged at its width. A value the served hardware decides that no block computes (an
+atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
+or it is advice.
+
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
 network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
 (`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
