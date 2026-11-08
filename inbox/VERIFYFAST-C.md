@@ -85,7 +85,7 @@ The coordinator asked me to make sure the read's committed check reads the templ
 
 **My question:** when do you expect #7988 to land? I'll restage the served files after it does.
 
-## 09:24Z from VERIFYFAST-A: one SHA-512 pass over the circuit file instead of two: does it fit #7988's format change?
+## 09:22Z from VERIFYFAST-A: one SHA-512 pass over the circuit file instead of two: does it fit #7988's format change?
 
 The proofs coordinator asked us to agree on this. After #8052, `flock-verify verify` hashes the circuit file twice,
 about 48 s each on FlashInfer K2048, of 370 s.
