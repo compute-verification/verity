@@ -119,7 +119,6 @@ def judged(tmp_path: Path):
     ("verity/pub/Pub.lean", "lean import", "tools/priv/Priv.lean"),
     ("verity/pub/imports.py", "python import", "tools/priv/privpkg/__init__.py"),
     ("verity/pub/pyproject.toml", "python dependency", "tools/priv/pyproject.toml"),
-    ("verity/pub/pyproject.toml", "python import", "tools/priv/privpkg/__init__.py"),
     ("verity/pub/reads.py", "path", "tools/priv/data.json"),
     ("verity/pub/runs.py", "command", "tools/priv/pyproject.toml"),
     ("verity/pub/run.sh", "command", "tools/priv/pyproject.toml"),
@@ -141,12 +140,13 @@ def test_a_from_import_names_its_module_only_past_an_open_package(judged) -> Non
 
 
 def test_what_the_exports_rewrite_drops_is_cut_not_open(judged) -> None:
-    """A path `require` and an extra's entry are edges the export drops from the manifest, so they count as closed by it;
-    a target the file also needs another way stays open."""
+    """A path `require`, an extra's entry and a console script are edges the export drops from the manifest, so they count
+    as closed by it; a target the file also needs another way stays open."""
     _, _, j = judged
     assert {(e.source, e.kind, e.target) for e in j.cut} == {
         ("verity/pub/lakefile.toml", "lake require", "tools/priv/lakefile.toml"),
-        ("verity/pub/pyproject.toml", "python extra", "tools/privbench/pyproject.toml")}
+        ("verity/pub/pyproject.toml", "python extra", "tools/privbench/pyproject.toml"),
+        ("verity/pub/pyproject.toml", "python script", "tools/priv/privpkg/__init__.py")}
     assert not [e for e in j.edges if e.kind in PB.EXPORT_CUTS]
     assert ("verity/pub/pyproject.toml", "python dependency", "tools/priv/pyproject.toml") in {
         (e.source, e.kind, e.target) for e in j.edges}
@@ -454,9 +454,11 @@ def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_facto
     assert git("rev-list", "--count", "HEAD") == ["1"]
     assert got["rewrites"] == {"verity/pub/lakefile.toml": ["require priv"],
                                "verity/pub/pyproject.toml": ["optional-dependencies.bench privtool",
-                                                             "optional-dependencies.bench privbench"]}
-    assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["lake require priv -> tools/priv/lakefile.toml",
-                                                               "python extra privbench -> tools/privbench/pyproject.toml"]
+                                                             "optional-dependencies.bench privbench", "script pub-run"]}
+    assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == [
+        "lake require priv -> tools/priv/lakefile.toml", "python extra privbench -> tools/privbench/pyproject.toml",
+        "python script pub-run = privpkg:main -> tools/priv/privpkg/__init__.py"]
+    assert "pub-run" not in (dest / "verity/pub/pyproject.toml").read_text(encoding="utf-8")
     assert got["lean_targets"]["verity/pub"]["modules"] == ["Pub"]
     assert "priv" not in (dest / "verity/pub/lakefile.toml").read_text(encoding="utf-8")
 

@@ -119,7 +119,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ("bottom_wait_min = 0.5", "bottom_wait_min = 0.5: a whole number of minutes"),
                       ('bottom_wait_min = "30"', "bottom_wait_min = '30': a whole number of minutes"),
                       ('land = "fast"', "land = 'fast': one of review"),
-                      ('land = "check"', "land = 'check': train landing was deleted with its code (#5070): drive lands on "
+                      ('land = "check"', "land = 'check': train landing was deleted with its code: drive lands on "
                                          "review only"),
                       ('land_into = "next"', "land_into = 'next': \"checked\" (main follows it to fully checked commits) or "
                                              "\"main\""),
@@ -259,6 +259,28 @@ def test_the_command_line_overrides_only_the_keys_drive_toml_lets_it(world, driv
     assert drive(world, "--on", "m9") == 1 and "set only nothing (its `command_line`)" in capsys.readouterr().err
 
 
+def test_without_marked_after_in_drive_toml_the_tick_takes_the_rules_cutoff(world, monkeypatch):
+    """The ready-mark cutoff is set once, in the rules at `main` (queue.toml), which every VM's queue reads: a drive.toml that
+    sets none leaves drive's tick that cutoff."""
+    cutoffs: list[str | None] = []
+
+    class Driver:
+        def __init__(self, q, **kw):
+            cutoffs.append(q.before_cutoff.__self__.since)
+
+        def tick(self, dry_run=False):
+            return ""
+
+    monkeypatch.setattr(D, "Driver", Driver)
+    sha = world.change({DRIVE_FLAGS: FLAGS.replace('marked_after = "2026-10-12T06:00:00Z"\n', ""),
+                        "gates/g.py": "import sys\nsys.exit(0)\n",
+                        "ci/queue.toml": 'hold_label = "hold"\nmarked_after = "2026-10-20T06:00:00Z"\n'})
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/main")
+    monkeypatch.chdir(world.dev)
+    assert drive(world) == 0
+    assert cutoffs == ["2026-10-20T06:00:00Z"]
+
+
 def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on(world, driven, monkeypatch, capsys):
     rules = world.tmp / "rules.toml"
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
@@ -348,7 +370,7 @@ def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven
     assert "ignored" not in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10", "--train-size", "4") == 0
     assert driven[-1] == plain
-    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted (#5070); drop them from "
+    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted; drop them from "
             "drive's args") in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10") == 0
     assert driven[-1] == plain and "drive: --max-running ignored: " in capsys.readouterr().out

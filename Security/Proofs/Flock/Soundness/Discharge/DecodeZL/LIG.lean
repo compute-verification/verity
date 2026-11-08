@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# Ligerito's rounds carry its messages (R11b)
+# Ligerito's rounds carry its messages (`DecodesOn`'s message half)
 
 `lig_carries`: Ligerito's frames `ligFrames`, read by `wLIG`, are `ligMsgs`, cut at `ligShape`'s coins. `Carries` reads
 the spine only through its coin pattern, so the rounds are proved at a pattern (`CarriesP`) and glued with

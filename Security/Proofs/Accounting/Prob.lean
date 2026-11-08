@@ -28,7 +28,7 @@ open Pouw
 variable {X O : Type} [Fintype X] [Fintype O]
 
 theorem pr_eq_toReal (P : X → Prop) : pr P = (Pous.pr P).toReal := by
-  unfold Pouw.pr Pous.pr
+  unfold Pouw.pr Claims.Pr Pous.pr
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem pr_short_le [Nonempty X] [Nonempty O] (acc : X → O → Prop) (m : X → O → ℕ) (c ε : ℝ)

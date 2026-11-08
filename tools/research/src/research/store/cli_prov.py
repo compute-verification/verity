@@ -5,7 +5,7 @@
     research data attempt publish RUN_DIR|RUN_ID [--tool SPEC] [--force] | --all [--runs-dir D]
     research data custody RUN_DIR|RUN_ID [--publish [--force [--runner-gone]]] | --triage [--verify] [--older-min N] [--runs-dir D ...]   run custody on the remote (store.custody)
 
-`research.store.cli` (lane store-core) owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
+`research.store.cli` owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
 same dispatch for tests and for `python -m research.store.cli_prov`.
 """
 from __future__ import annotations

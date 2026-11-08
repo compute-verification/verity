@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.Claims.Sampling.Select.Misses
 public import Proofs.Flock.Claims.Sampling.Session
-public import Properties.SampledProofs.Draw
+public import Properties.Spot.Draw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -57,12 +57,12 @@ import VCVio.Prelude.Core
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 open Lean (Json)
 
 namespace Claims.Sampling
 
-open Claims Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Claims Finset Properties.Spot Properties.Spot.SecurityProofs
 
 /-! ## `P_a(∅)` on a well-formed design -/
 

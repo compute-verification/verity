@@ -156,7 +156,7 @@ deriving BEq, Repr
 
 /-- `Session.close`'s draws: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
 its openings coin, in order. -/
-def draws (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat) :
+def receiptSample (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat) :
     Option (Array (Nat × Nat)) := do
   let ends := (lengths.foldl (fun (acc : Array Nat × Nat) n => (acc.1.push (acc.2 + n), acc.2 + n)) (#[], 0)).1
   let total := ends.back?.getD 0
@@ -229,7 +229,7 @@ the draw runs past its doubled reads, which it does with probability below 2^-25
 def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (openingsCoin : ByteArray)
     (samples : Nat) (openings : Array Opening) : Option Verdict := do
   let digest := reg.digest
-  let drawn ← draws digest w.index openingsCoin samples (w.passes.map (·.plan.length))
+  let drawn ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
   pure (checkWindow reg digest appends w drawn openings)
 
 end RemoteAudit

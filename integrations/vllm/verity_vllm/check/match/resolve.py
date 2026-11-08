@@ -133,7 +133,7 @@ class DescriptorCorrespondence:
         self.rows: list[dict] = list(inst.get("rows") or [])
         self.by_i: dict[int, dict] = {int(r["i"]): r for r in self.rows}
         self._split = MF.split_name
-        self.segs = MF.segment_steps(self.rows)
+        self.segs = MF.segment_steps(self.rows, inst.get("checks"))
         self._attention_paths = tuple(attention_paths)
         if table is None and RC._document_of(inst) is not None:                    # the record travels on the doc itself
             table = RC.load_correspondence(inst)
