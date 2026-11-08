@@ -5045,3 +5045,25 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - `step_geometry` imported from outside the step trace's `__all__`, which now lists it.
   The second run, r20261108-010405-cb76 at 38c36f4ab1, passed all 21 suites the change touches.
 - 01:35Z (LIFETIME) It is marked at 38c36f4ab1 and admitted, and waits for a land verdict. Pod `vy-spot-lifetime` stopped itself at 01:29Z with nothing queued. I'm waiting for Daniel's answers to the three questions.
+
+## 01:35Z from TWOOPENS: the rows module builds; the rows and parse facts have sources and a plan; composition after
+
+- **#7892 and #7909** are admitted and wait on a sync, like the rest of the queue.
+- **The decoder at a table's bit** (`cursor/proofs-twoopens-rows-7c41` @ `0c5f8c9c51`, stacked on #7909) builds clean. Try `r20261108-012830-f42a` ends with Lean exit 0, and its 10 theorems use only the three standard axioms. Records and suites are running; I'll open the PR on #7909 and mark it when they pass. It adds:
+  - `Layout.rowOf`, where the session reads each committed value's row: table, template instance in the unit's block, port.
+  - `hidAt J kLog j β y`, the hidden value at table `j`'s column `y` in block `β`.
+  - `decOf_hid`: the decoder at a table's bit is that hidden value.
+  - `parse_setupOf`: the claims' parser reads the setup's own tables.
+  - TWOSESS states `FrameIs h` against this vocabulary (agreed 01:14Z, sent 01:32Z).
+- **What `Reveals` still needs, and who does it.** Both facts below have one-table versions in `Claims/Recursion`, at row/v1:
+  - **Parse (mine, mechanical):** the row's `b ‖ c` in a table's `hm96` slot is the statement's public digest of that row, the leaf `opens_of_stmtOk` (#7909) opens. That's `RecDeploy.bc_setupOneAny`, which I'm moving into `Soundness/Discharge/HiddenExec`, with `bc_setupOne`, `bc_setupOne_full`, `bcChunk_in`, `setupH_full` and `blockBit_zOf`, plus `Readable.layout_of_check` into `Claims/Scope/Fit.lean`. `Claims/Recursion` imports them back, so nothing is duplicated.
+  - **Rows (mine):** that `b ‖ c` is the commit string of the row's own bytes (`Hidden.Any.rowMsg`, so row/v2) and its salt, at hidden values. This is the v2 twin of `RecDeploy.table_rows`, through `Hidden.Any.sat_flatF` and `Hidden.Any.row_bc_tgtS`, which already cover row/v1, row/v2 and row-seg.
+    - It takes two named premises on `h`: every table's circuit has `RowsFitS` and `0 < upv`. The session's circuit file is pinned to `xS₀`'s.
+    - I'll try to read them off the scope check instead (the one-stage `rowsOk_of_scopeOkH`). Failing that, they stay premises on `h`, which PRF-460's item 1 allows.
+  - **Composition (mine):** `Reveals h (decOf L)` from `FrameIs h L`, the two facts, #7909's reads and TWOSESS's `opens_atPorts` at `ownAt`.
+- **ETA:**
+  - Both facts on a branch by about 06:00Z, each PR marked when it passes.
+  - The composition by Sun 14:00Z.
+  - Sun 20:00Z holds for `Reveals` from `FrameIs` and the premises on `h` above, not unconditionally. `FrameIs` itself is TWOSESS's.
+- **Blocker to watch:** TWOSESS's `ownAt` branch (`cursor/proofs-twosess-roots-a3c1`) changes 13 files, including the one-stage bridge's statements, so it's a lock change. The composition stacks on it. I've asked TWOSESS whether they open its PR or I do.
+- **Still open from earlier:** a helper for the parse move if one frees up; item 1 (c); prover cost; PRF-460's goal label.
