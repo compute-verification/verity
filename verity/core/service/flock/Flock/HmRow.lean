@@ -27,6 +27,7 @@ public import Flock.SplitNL
 public import Flock.Norm
 public import Flock.LinkUnits
 public import Flock.FV3
+public import Flock.HmOutCols
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -1909,77 +1910,14 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
           d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
   return (da ++ d ++ pinPairs c, db ++ d ++ pinPairs c)
 
-/-- `outCol`'s tables. `outCol` compiles at three arguments, so `let col := outCol c` rebuilds them at every column it
-reads, an array of the circuit's output words each time; `outColOf` reads them made once. -/
-structure OutColTab where
-  ret : Array (Nat × Nat)
-  unitCols : Array (Nat × Nat)
-  tailCols : Array (Nat × Nat)
-
-def outColTab (c : Circuit) : OutColTab where
-  ret := (List.range c.upv).foldl (fun r u =>
-    ((c.leavesOut.getD u #[]).foldl (fun (r, q) o => (r.set! o (u, q), q + 1)) (r, 0)).1) (Array.replicate c.outWords (0, 0))
-  unitCols := portCols #[c.unit.outGroups.getD 0 default]
-  tailCols := portCols (c.nets.getD c.outNet default).2.outGroups
-
-/-- `outCol` on its tables. -/
-def outColOf (c : Circuit) (t : OutColTab) (g o : Nat) : Nat :=
-  if c.typed.isSome then c.slotCol c.unitNet g 0 + (c.unit.outGroups.getD 0 default).col * WORD + 16 * o
-  else if c.outNet != c.unitNet then
-    c.slotCol c.outNet g ((c.outNetSlots.getD #[]).getD o 0) + (t.tailCols.getD (c.outNetPorts.getD o 0) default).1
-  else
-    let (u, q) := t.ret.getD o (0, 0)
-    c.slotCol c.unitNet g u + (t.unitCols.getD q default).1
-
-theorem outCol_eq_of (c : Circuit) : outCol c = outColOf c (outColTab c) := rfl
-
-/-- `pinPairs` on `outCol`'s tables. -/
-def pinPairsWith (c : Circuit) (tab : OutColTab) : Array (Nat × Nat) := Id.run do
-  let forcedZero := c.unitRange.slot 0 + c.unit.useful
-  let col := outColOf c tab
-  let w0 := pinnedFrom c
-  let mut d : Array (Nat × Nat) := #[]
-  for g in [0:c.g] do
-    for o in [0:pinnedWords c] do
-      for t in [0:16] do
-        d := d.push (col g (w0 + o) + t, col g (w0 + o) + t) |>.push (col g (w0 + o) + t, forcedZero)
-  return d
-
-theorem pinPairs_eq_with (c : Circuit) : pinPairs c = pinPairsWith c (outColTab c) := by
-  simp only [pinPairs, pinPairsWith, outCol_eq_of]
-
-/-- `delta` with `outCol`'s tables made once, and the pinned outputs' pairs once. -/
-def deltaFast (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) := Id.run do
-  let tab := outColTab c
-  let (da, db) := HmRow.delta c pin
-  let (_, where_) := rowSlots c.ports
-  let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
-  let hin := portCols (c.nets.getD c.hmNet default).2.inGroups
-  let msgCol := fun (g p byte t : Nat) =>
-    let (k, o) := byteAt (c.ports.getD p default) byte
-    if k < where_[p]!.size then
-      let (slot, sub) := where_[p]![k]!
-      c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
-    else c.slotCol c.hmNet g p + hin[1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
-  let forcedZero := c.unitRange.slot 0 + c.unit.useful
-  let col := outColOf c tab
-  let k0 := nIn c
-  let mut d : Array (Nat × Nat) := #[]
-  for g in [0:c.g] do
-    for j in [0:c.outRowPorts.size] do
-      let (_, _, at_, w) := outGroup c j
-      for k in [0:(c.ports.getD (k0 + j) default).words] do
-        for t in [0:16] do
-          let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
-          d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
-  let pins := pinPairsWith c tab
-  return (da ++ d ++ pins, db ++ d ++ pins)
+/-- `delta` on `outCol`'s tables made once (`deltaWith`, `Flock/HmOutCols.lean`). -/
+def deltaFast (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :=
+  deltaWith c (outColTab c) (HmRow.delta c pin) (rowSlots c.ports) byteAt (nIn c) (outGroup c) (pinnedFrom c) (pinnedWords c)
 
 /-- Compiled code runs `deltaFast`; the kernel and every proof see `delta`. `@[csimp]` rewrites only code compiled after
 it, so it stays above `delta`'s first caller, `HmIn.delta`. -/
 @[csimp] theorem delta_eq_fast : @delta = @deltaFast := by
-  funext c pin
-  simp only [delta, deltaFast, outCol_eq_of, pinPairs_eq_with]
+  funext c pin; simp only [delta, deltaFast, deltaWith, pinPairs, pinPairsWith, show outCol c = outColOf c (outColTab c) from rfl]
 
 /-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
 def regions (c : Circuit) (pub : Public) : V (Array Region) := do
