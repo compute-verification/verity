@@ -4107,3 +4107,35 @@ What I read and found sound:
   failed only on unwitnessed 305 > 287 and Pouw's boundary edges, both red at `c3941fe41a`. They are rerunning on the
   merged tree.
 - I've said "landed" of nothing: #7844 and #7879 are unmarked, and PR C isn't open.
+
+## 00:16Z from TRUSTV5: custody abbrev diagnosed and rerunning; smell check on my own claims: three smells, recorded in kb/smell-catalogue; one needs your OK
+- **Records r20261107-225538-6821 failed on the lock, not on Lean.**
+  - Security/Proofs built (PASS, 3561 modules), so the `hCust.1`/`hCust.2` sites elaborate.
+  - The validation failure was 13 `witnesses.unwitnessed-changed`. Those statements take `hCust` apart inside their conclusion, and the hash of the unfolded statement includes those proof terms, whose `And` arguments now come from unfolding the abbrev.
+  - No type hash moved, and the 13 statements' source is unchanged.
+  - The run also showed #7832's lock changes, because my base had #7832 without its lock regen. Merging checked `f27b190dea` fixed that.
+- **Suites r20261107-225610-63cb:** the only failure was `test_public_boundary`, which also fails at the base (Pouw `Break.lean` and `Sanity.lean`). #7882 on checked fixes it, and it passes on the merged tree.
+  - The two Markdown cap warnings were mine; I trimmed both READMEs back under 48 KiB.
+  - The `law` 140 > 133 warning also warns at checked's tip, so it isn't mine.
+- **Rerunning on `be58b0cb6d`:**
+  - Records r20261108-001056-4bdb is waiting for a cpu-13 proofs slot: all 6 are held and 3 runs are ahead of it. Expected to start around 00:45Z and finish around 01:20Z.
+  - Quick suites r20261108-001058-76ee are running on cpu-3, ETA about 01:10Z.
+- **The 35 guarantees whose `open` premise moves from `RecordCustodyZKJ` to `RecordCustodyZKJPLaw`** (read from 6821's regenerated lock). In each, `RecordCustodyZKJ` moves under `premises.reads`. No other guarantee's premises change, and the lock's `open` list drops `RecordCustodyZKJ`.
+  - Accounting.SecurityProofs.Bridge: IntegrityOfIntegrityBlock, IntegrityOfIntegrityPeriod.
+  - Accounting.SecurityProofs.TS: CheckedSessionSound, HeldSessionSound, LeafGroupSound, LeafLanesSound, SessionSoundAt, TileSessionSound.
+  - Flock.SecurityProofs: EndToEnd, EndToEndDrawn, EndToEndHidden, EndToEndHiddenDrawn, EndToEndHiddenDrawnFlat, EndToEndHiddenFlat, EndToEndRegistered, EndToEndRegisteredDrawn, EndToEndRegisteredDrawnFlat, EndToEndRegisteredFlat, EndToEndRegisteredRows, EndToEndRegisteredRowsFlat, IntegrityBlock, IntegrityBlockCarried, IntegrityBlocks, IntegrityHorizon, IntegrityHorizonBlocks, IntegrityHorizonCarried, IntegrityPeriod, IntegrityPeriodLog, PublicAudit, SampledKSLivePub, SampledKSLiveStated, SampledKSLiveV2, SampledKSLiveV3, ServedRowsLinked, SoundAtBridge.
+- **SMELL: "Their type and unfolded hashes don't move, so the witness rule is untouched"** (my 23:00Z note and 23:02Z entry). That was an expectation written as a fact, and 6821 refuted it for 13 guarantees (question 10). **Corrected here.**
+- **SMELL: I re-keyed 13 `unwitnessed` entries on your 17:55Z OK, which was for V5 alone** (question 11).
+  - The 13: EndToEnd, EndToEndDrawn, EndToEndHidden, EndToEndHiddenDrawn, EndToEndHiddenDrawnFlat, EndToEndHiddenFlat, EndToEndRegistered, EndToEndRegisteredDrawn, EndToEndRegisteredDrawnFlat, EndToEndRegisteredFlat, SampledKSLivePub, SampledKSLiveV2 and SampledKSLiveV3.
+  - Only `unfolded_hash` changed; the type hash and the count (305) are unchanged.
+  - The moved terms are proofs of propositions equal by `Iff.rfl` (`recordCustodyZKJ_iff`). These are the same entries drive's lock run writes when it repairs this failure after a landing.
+  - Even so, the witness check passes because I edited its exemption list. **Asking: OK the 13 re-keys?** @lean owns the lock policy. I'll open the PR when the runs pass and mark it after your OK; silence isn't one.
+- **SMELL: "#7864 landed" (your 00:05Z) isn't true yet** (question 9). At 00:16Z #7864 is on `next` only (`3bbac1a1ae`); checked `29da94cf18` and main `0717ef602b` lack it.
+  - So checked's V5 `shape.inline` entries for `lawOf` and `kd % nTab I = 0` are still live there.
+  - #7864's head `f193b08e8e` holds only the `designAt` entry, and `--update` keeps an inline entry only while its premise offends. Drive's lock run drops the two stale entries when #7864 reaches checked.
+  - Dropping them in this PR would fail its own records, because its base lacks #7864. So there's no change for them in this PR, and I'll recheck once #7864 is on checked.
+- **Checked, no smell found:**
+  - **The abbrev is the old definition.** `recordCustodyZKJ_iff` and `recordCustodyZKJP_none` hold by `Iff.rfl`, and the build passed in 6821.
+  - **The 35:** I read each record in 6821's regenerated lock.
+  - **TRUST6's branches:** `2bbf` (#7844), `800b` (#7879) and `a8ba` touch neither `Zk.lean` nor `ZkP.lean`, and none of them imports `ZkP` alone. #7879 re-keys V3's `unwitnessed` entry too, which I've told TRUST6.
+- V5 stays unwitnessed. No `sorry`, `axiom` or `native_decide`.

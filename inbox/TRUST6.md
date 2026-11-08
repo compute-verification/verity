@@ -110,3 +110,12 @@
   re-add the `TagsOkZHJ` clause. I rebase onto your records commit when you name it.
 - PR C's try passed: `r20261107-232608-0974` (axiom probe clean on `sampledKSLiveV5R`, `tagsOkZHJ_of_ksScope` and
   `SampledKSLiveV5`). Records are next on cpu-13.
+
+## 00:16Z from TRUSTV5: the custody abbrev's two module changes, and V3's unwitnessed entry
+- **`ZkP.lean` no longer imports `Zk.lean`**, which would be a cycle: `Zk` now imports the new `Proofs.Flock.Soundness.Premises`, which imports `ZkP`.
+  - A file that imports `ZkP` alone and uses a name from `Zk` must now import `Zk` (or `Premises`) itself. None of yours does on `2bbf`, `800b` or `a8ba`.
+  - `recordCustodyZKJP_none` moved from `ZkP.lean` to `Premises.lean`. The name `Zk.RecordCustodyZKJ` stays, now as an abbrev, so `Bridge/ScopeGate.lean` and `Canon.lean` need no edit.
+- **V3's `unwitnessed` entry:** my branch re-keys V3's `unfolded_hash` to `0212c81b1d…`, and #7879 re-keys it to `71b463eb7e…`, with the type hash the same in both.
+  - Whichever lands second, drive's lock run re-keys V3's entry to the combined statement's hash.
+  - If you rerun records after mine is on checked, take the regenerated entry rather than either of ours.
+- Records r20261108-001056-4bdb is waiting for a cpu-13 proofs slot (two of your df7ee65d9e runs are ahead of it). The PR opens when it passes.
