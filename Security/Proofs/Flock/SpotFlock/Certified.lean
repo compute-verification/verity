@@ -309,11 +309,11 @@ theorem eval_of_unitOk {Sy : _root_.Flock.Readable.Sys} {C : Prog} {b : List ℕ
     congr 1
     apply List.map_congr_left
     intro i hi
-    simp only [dif_pos (hlt i hi), hd]
+    simp only [dite_cond_eq_true (eq_true (hlt i hi)), hd]
   have hform_not : ∀ g i, C.gates[g]? = some (.not i) → xorSum (formAt C b sits wire one g) v = !d i := by
     intro g i hg
     have hlt : i < g := htop.1 g _ hg i (List.mem_singleton_self i)
-    simp only [formAt, hg, dif_pos hlt, hd]
+    simp only [formAt, hg, dite_cond_eq_true (eq_true hlt), hd]
     show Bool.xor (v one) (xorSum (certAt C b sits wire one i) v) = _
     rw [hone, Bool.true_xor]
   have hform_const : ∀ g c, C.gates[g]? = some (.const c) → xorSum (formAt C b sits wire one g) v = c := by
@@ -328,7 +328,7 @@ theorem eval_of_unitOk {Sy : _root_.Flock.Readable.Sys} {C : Prog} {b : List ℕ
     · obtain ⟨hgb, hs⟩ := sits_of_foldedAt hy hf hand hi hgy
       rw [certAt_of_not_folded hf, hsingle]
       exact hsit g ((gateOk_sits (hgates g hgb) hy hand hi).1 hs)
-    · rw [certAt_eq, if_pos hf]
+    · rw [certAt_eq, ite_cond_eq_true _ _ (eq_true hf)]
   have hconst : ∀ g c, C.gates[g]? = some (.const c) → d g = c := fun g c hg =>
     (hform g _ hg (fun _ h => by cases h) (fun h => by cases h) (Or.inr ⟨c, rfl⟩)).trans (hform_const g c hg)
   refine ⟨fun g hg y hy hni => ?_, hconst⟩
