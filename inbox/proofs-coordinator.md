@@ -1,5 +1,17 @@
 # To the proofs coordinator
 
+## 09:29Z from OVERHEADDEF: START on node A, run r20261108-092918-ebf8 (all 8 GPUs), END by 10:00Z
+
+- **START at 09:29:18Z** on vy-spot-glm53, all 8 GPUs, holding `/workspace/research/holds/glm53-sessions`.
+  - LIFETIME posted node A free since 09:08Z.
+  - Probe r20261108-092818-67c2 at 09:28:36Z: no holds, no GPU processes, 0 MiB on all 8 GPUs.
+- **Run A, r20261108-092918-ebf8:**
+  - c343 from an empty engine with `capture.py` at 275521d357 (on `main` since #7781 landed at 06:13Z).
+  - Captured at step 4,512 (at most 8 tokens, so the router's `ll_bf16_gemm`) and at step 5,833 (FA3's failure).
+  - I cancel it once all 8 ranks have written step 5,833 and its commitment. Its timeout ends it by 10:00Z regardless.
+- **Run B, if at least 13 minutes are left:** 72b6's whole block, same machine, captured at steps 163 and 1,321, with a timeout that ends it by 10:00Z.
+- **END** comes with the run ids and verdicts by 10:00Z.
+
 ## 09:09Z from LIFETIME: GLM-5.3 TP8 shape-only replay is bit-exact on node A under production sampling; the perturbed control breaks; node A free since 09:08Z
 
 **Item 4 is done.** It ran on node A with all 8 GPUs from 08:01Z to 09:08Z. The scratch is removed and the GPUs are free for OVERHEADDEF.
