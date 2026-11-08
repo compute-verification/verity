@@ -161,7 +161,8 @@ def test_gp01_composes_rank_programs_that_read_run_and_holds_it_to_its_request(p
 def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_path):
     """Class G (about 15 s): a prompt of 10 tokens prefilled in two chunks beside a short request, then decoded, its rows past
     INDEX_TOPK from position 4. The step compiler builds each request's Program at its launch context (R1, R2 and R3 hold), the
-    long one reading `run` and returning its checks, and that Program is `build_program`'s at the unit's launch batch and chunks.
+    long one reading `run` and returning its checks, each one its length rule last, and that Program is `build_program`'s at the
+    unit's launch batch, chunks and stop.
     The fast tests build each Program alone; this one holds the batch rules to a Program that reads `run`."""
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     from verity_vllm.program.predict.steps import Registered, compile_steps
@@ -173,9 +174,10 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     long, short = c.requests
     assert (long.LP, long.T, long.chunks, short.LP, short.chunks) == (10, 2, (6, 4), 3, ())
     sigs = sorted(("run" in [n for n, _ in ps], str(ret)) for ps, ret in (p.fn.signature() for p in c.programs.values()))
-    assert sigs == [(False, str(Array(2, I32))), (True, str(TupleT(Array(3, I32), Array(24, BIT))))]
+    assert sigs == [(False, str(TupleT(Array(2, I32), Array(1, BIT)))), (True, str(TupleT(Array(3, I32), Array(24 + 1, BIT))))], \
+        "the long one's checks of rows 4..11 at each indexer layer, then each Program's length rule last"
     alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
-                          batch=long.batch(), chunks=long.chunks)
+                          batch=long.batch(), chunks=long.chunks, stop=long.stop)
     assert alone.digest in c.programs
 
 
@@ -189,12 +191,13 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
     whole in one window are, call for call, their Programs across three: the first leaves A at position 6 and B at 3, the second
     runs B's last row with A carried through it idle, and the third runs A's last. A's rows read the indexer's keys and scales
-    past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples and its checks (rows 4 and 5),
-    then every layer's latent rows, index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`,
-    while B's index-K history stays its own unread Inputs; the idle window passes A's fields through to its own edge, and the
-    third reads them as A's history, `edge.ik` and `edge.iks` one field each. Each window's `run` holds the orders of the rows it
-    computes, and the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them. What
-    no cheaper test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
+    past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples and its checks (rows 4 and 5,
+    then its length rule), then every layer's latent rows, index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`,
+    `edge.iks` and `edge.last`, while B's index-K history stays its own unread Inputs; the idle window passes A's fields through
+    to its own edge, and the third reads them as A's history, `edge.ik` and `edge.iks` one field each. Each window's `run` holds
+    the orders of the rows it computes, and the advice's side (`pipeline.edge.fields`) holds each port's members as each window's
+    Program returns them. What no cheaper test can: that a window's edges carry a request past INDEX_TOPK whole, through a window
+    it idles in."""
     from verity.ml.circuits.types import field_types
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
@@ -217,14 +220,18 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
           for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, idle, into)]
     assert all(c.batch_rule is None for c in cs) and cs[2].idle == (0,)
     prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
+    def calls(p) -> list[str]:
+        ids = [n.fn.id for n in p.fn.body.nodes]
+        assert ids[-1].startswith("StopCheck_v1"), "each window's Program ends in its own length rule"
+        return ids[:-1]
     for r in (0, 1):
-        assert [n.fn.id for n in prog[0][r].fn.body.nodes] == [n.fn.id for p in prog[1:] if r in p for n in p[r].fn.body.nodes]
+        assert calls(prog[0][r]) == [i for p in prog[1:] if r in p for i in calls(p[r])]
     assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
     ret = field_types(prog[1][0].fn.signature()[1])
-    assert ret[1] == Array(3 * 2, BIT) and ret[2:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
-                                                       Array(3, Array(6, Value(32))))
+    assert ret[1] == Array(3 * 2 + 1, BIT), "rows 4 and 5's checks, then the length rule"
+    assert ret[2:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))), Array(3, Array(6, Value(32))))
     wls = [c.workload for c in cs]
-    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(Array(4, I32), Array(6, BIT))
+    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(*ret[:2])
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
         ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
