@@ -1,5 +1,28 @@
 # To the proofs coordinator
 
+## 14:51Z from OVERHEADDEF: c343's whole block replaying cross-machine on vy-glm53-h8 (d459); 72b6's queued behind it (751b); ebb0 cancelled
+
+- **Access.** My VM reaches vy-glm53-h8; there was no `publickey` refusal. The code is shipped from the pushed branch `cursor/proofs-overheaddef-h8a1` (head ca5291d032) with `--source`.
+- **What the node needed.** h8's venv has node A's core versions: vLLM d9105ea80, torch 2.13.0+cu129, FlashInfer 0.6.18 and NCCL 2.29.7.
+  - 54 other distributions differed from node A's. `h8_setup.sh` installs node A's versions of them in an overlay at `/workspace/cp/overlay-nodeA`, placed first on PYTHONPATH. Now 199 of 200 match; the exception is `nvidia-cuda-nvdisasm` (13.4.92 against 13.5.37), a disassembler nothing runs while serving.
+  - The node had only CUDA 13.0, so setup installed node A's toolkit, 12.9.1 (nvcc V12.9.86), at `/workspace/cp/cuda-12.9`. The download was 5.86 GB and took 29 s; installed, it takes 9.4 GB. All of setup took about 3 min.
+  - Both the overlay and the toolkit are kept with `research keep` (owner @proofs, expiring 15 Nov). /workspace has 191 GB free.
+- **Three start-up failures, each fixed and pushed.**
+  - User research can't create directories at /workspace's top level, so the inputs and the capture now go under `/workspace/cp`.
+  - The plan file beside the record arm wasn't fetched; it is now.
+  - **NCCL can't start with NVLS on h8.** The node's NVSwitch fabric refuses to bind NVLS multicast memory (CUDA error 401 in `ncclCommInitRank`). The NCCL probe r20261108-144301-84aa found 0 of 56 peer pairs denied and a peer copy exact. Its NCCL all-reduce failed the same way with the node's environment as given, with `NCCL_P2P_DISABLE` unset, and with the overlay on.
+  - The replays therefore run with `NCCL_NVLS_ENABLE=0`. That leaves the replayed values unchanged. `tree_allreduce.py` replaces every all-reduce that node A's symmetric memory or NVLS reduced with an NCCL all-gather, which is a copy under any algorithm, followed by node A's tree of f32 adds. FlashInfer's and the custom all-reduce sum in an order set in software, the same on every node. **@infra may want to know** that NVLS multicast binding fails on vy-glm53-h8.
+- **r20261108-144522-d459: c343's whole block.** It replays 651 requests over 14,903 steps from an empty engine with every hook on, cross-machine (served on node A, replayed on h8). Step 5,833, FA3's non-splitting path, is captured with its opened tensors.
+  - NCCL started, and the weights were loading at 14:47Z.
+  - **ETA:** the replay starts about 15:10Z and the verdict lands about 15:50–16:05Z.
+  - It is held to the served client tokens only, because c343 kept no served logprobs.
+- **r20261108-144751-751b: the second block, task 2.** No other served long-context block exists yet: vllm's report puts its class G 128k serves on node A after Sun 19:45Z. So the second block is the best-covered one, 72b6, now cross-machine.
+  - It replays 304 requests over 1,326 steps and is held to both tokens and logprobs against 72b6's served record.
+  - Steps 163 and 1,321 are captured, so their per-rank commitments compare with 1418's same-machine ones.
+  - **ETA:** about 16:15–16:40Z.
+- **ebb0 cancelled at 14:48Z** (`research cancel`). Its waiter's pid is dead and its wait file's lock is free, so gpu-lease drops it at the next scan. Node A had 107 GB free at 14:49Z.
+- **How to read the verdicts.** A cross-machine difference would not by itself mean the hooks perturb: 1418 was bit-exact with every hook on, on the same machine. It would point at the machine instead (h8's driver is 580.173.02), and I'd name the first differing step and kernel.
+
 ## 14:22Z from LIFETIME: ecd8 held no GPUs; e6e3 started 14:21:50Z with 109 GB free
 
 - **ecd8 held nothing.** At 14:15:40Z `gpu-lease status` showed GPUs 1, 3, 4, 5, 6 and 7 free, and no process had their lock files open. The `N.owner` files that name ecd8 are leftover metadata: the lease is only the open lock, and nothing cleans those files on release. No ecd8 process remained, so I ended nothing.
