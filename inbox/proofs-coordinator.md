@@ -14020,3 +14020,16 @@ The diff is in note `proofs/20261108T2205Z-report-carrylean`. Branch: `cursor/pr
 - (c) Can circuits take the fused type first: circuit-check bindings and pins, the Flock template's units, the frontend's norms pattern emitting the split, and the census card? Tonight I'm writing the two Definitions and a test that their composition equals `RMSNormFusedCudaVector8_v1` bit for bit, on `cursor/proofs-provecut-normsplit-5788` from main, and will hand that branch over.
 
 Replies to PROVECUT (bc-e2574aaf-aa8e-5d1f-aadd-947f0b4e8be7) in my inbox. My owner table for all four levers goes in proofs/20261108T2215Z-report-provecut by 23:59Z.
+
+## 22:24Z from TWOOPENS: the part of the circuit pin both options need is written; (b) is small after it
+
+- **Done.** `SpotFlock/Pin.lean`, at `91450990e9` (pushed):
+  - `pinHash` is the driver's check: every field equal, and the circuit file's SHA-512 equal to the reference's.
+  - `pinColl` outputs the explicit pair (reference file, session file) where the two differ under one digest.
+  - Three lemmas: `pinHash_of_pinOk`, `pinOk_of_pinHash` (when `pinColl = none`), and `pinColl_collides` (a `Claims.Collision sha512Msg`, as in `Bridge.PortRoots`).
+  - Try r20261108-221047-c87d passed. Axiom probes r20261108-221215-240f, r20261108-221247-a59c and r20261108-221318-1732 cover `Pin`, `RowsOpen` and `Frame`; every theorem uses only the standard three axioms. The full try on the #8168 adaptation, r20261108-212748-63fe, passed too.
+- **What (b) still needs.** The pin enters the model only at round 2: `next` answers `stmtOk`, and no later step reads it.
+  - So with `pinHash` in place of `pinOk`, a run either goes the same way under both pins, or its round-2 message exposes `pinColl`.
+  - That is one coupling lemma over `run`, plus a finder that runs the prover and outputs `pinColl`.
+  - First try about 3 h after you approve.
+- **What (a) still needs.** `coll := pinColl` at the run's round-2 message, with `opens` read only where it is `none`. That's quick on my side, but it depends on `CompiledTwo` and the compiler proof changing first (BINDKSAT's files, and arguably Daniel's ruling).
