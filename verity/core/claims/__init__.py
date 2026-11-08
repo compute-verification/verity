@@ -162,11 +162,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "whose ops are charged to accounts other than the compute account", "Rate device"),
     # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
     # they encode and the rest of the word, in less than that of the compute account's units, by any schedule. At k = 2
-    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits (r20261012-163319-2804), and fplll, the
-    # best of five reducers, costs 12.3x the claim at 512 bits (r20261012-164518-ccba); the 1.2x at the reduction's
-    # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
-    # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
-    # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
+    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits, and fplll, the best of five reducers,
+    # costs more than the claim at 512 bits, as does the reduction's operation-count floor, an estimate from operation
+    # counts, unmeasured. At k = 1 with the payload known, F27 is such a completion, at a floor of half a GMP extended
+    # GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
     # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
@@ -267,10 +266,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's modelled floor
-    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
-    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
-    # stated device falsifies it
+    # the timing red team's modelled floor and the 8-core cooperation run; a faster squaring on the stated device
+    # falsifies it
     Entry("pous-ring-speed", "assumption",
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
           "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "

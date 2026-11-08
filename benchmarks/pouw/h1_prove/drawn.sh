@@ -21,7 +21,7 @@
 # Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
 # an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
 # default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
-# at 65.4 GiB resident in the server and 61.3 GiB in the prover, 238 s to prove at 8 threads (r20261102-160857-5d19):
+# at 65.4 GiB resident in the server and 61.3 GiB in the prover:
 # each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
 # the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
 # and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
