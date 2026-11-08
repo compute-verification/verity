@@ -19,11 +19,11 @@ from math import exp, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from levers import (MACHINE_GPUS, WEIGHTS, bound, floor_bits, fuse_reads, make_line, priced_strata,  # noqa: E402
+from levers import (MACHINE_GPUS, WEIGHTS, bound, floor_bits, fuse_reads, make_line, priced_strata,
                     scale_proving, tb)
 
-from common import SCOPES, c, sc, tc  # noqa: E402
-import reprice  # noqa: E402
+from common import SCOPES, c, sc, tc
+import reprice
 
 REPORT = (0.01, 0.05, 0.10)
 #: each cut's prover busy time against its end-to-end reading on the same sessions, (marginal, fixed a statement): the
@@ -38,7 +38,7 @@ WINDOW = c["window"].value
 REPLAY_FACTOR = c["replay_factor"].value
 COMMIT_WRITE = reprice.COMMIT_WRITE
 #: how the main line prices the fused per-expert blocks (`reprice.price_fused`)
-FUSED = "cpu"
+FUSED = "h200"
 TAX_ONE_STAGE = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("every_block",))["every_block"]["tax"]
 
 
@@ -295,6 +295,7 @@ def repriced() -> dict[str, Case]:
         out[f"{s}+vfloor"] = replace(out[s], verify_other=reprice.VERIFY_FIXED)
     for s in ("R1", "R6x4"):
         out[f"{s}-1s"] = replace(out[s], form="one-stage")
+        out[f"{s}-cpuratio"] = replace(out[s], fused="cpu")
     out["R6x4-served"] = replace(out["R6x4"], ctx="c343-served")
     return out
 

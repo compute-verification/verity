@@ -39,10 +39,10 @@ PROVERS = 4
 #: four provers with the cache and verify-ahead against the cache alone at one, on w13, taken for every other type
 #: (assumed): fixed a statement, seconds a block
 OVERLAP_OTHER = {"fixed": 0.25 / 0.56, "marginal": 0.58}
-#: Flock without --zk: the share of a session --zk costs on CPU, by prefix; the fused blocks' from their parts (the
-#: read 11%, w2 18%, w13 0%); every other type none
+#: Flock without --zk: the share of a session --zk costs, by prefix: the fused blocks' measured on one H200 at 1024
+#: blocks, the rest on CPU; every other type none
 PLAIN = {"AllReduceMultimem_v1{": 0.35, "AllReduceResidualMnnvl": 0.35, "AllReduceMnnvl": 0.35, "RmsNormMnnvl": 0.35,
-         "Fused[EmbeddingRead_v1{V=256,H=4096}": 0.15, "Fused[EmbeddingRead_v1{V=256,H=3072}": 0.05,
+         "Fused[EmbeddingRead_v1{V=256,H=4096}": 0.235, "Fused[EmbeddingRead_v1{V=256,H=3072}": 0.208,
          "Fp8GroupQuantUe8m0_v1{K=1536,": 0.11, "Fp8GroupQuantUe8m0_v1{K=2048,": 0.08, "SparseMlaCombine_v1{": 0.08}
 #: the dense types whose host witness dominates their fixed cost after the cache
 DENSE = ("Fp8GroupQuantUe8m0_v1", "FlashInferFp8Linear_v1")
@@ -58,6 +58,11 @@ FUSED_K_LOG = 25
 #: their end-to-end seconds over the unfused pair's (the GEMM block and the read block of one row), measured on CPU
 #: at 16 blocks a statement with the cache on; taken for the fixed and the marginal parts alike
 FUSED_CPU = {"w13": 0.75, "w2": 0.59}
+#: their prices measured on one H200 with the statement cache, (fixed seconds a statement, seconds a block): one
+#: prover end to end at 512 and 1024 blocks a statement, and four provers at 128 and 256 blocks, a prover's cycle
+#: over four (the GPU's share)
+FUSED_H200 = {"w13": {"one": (0.7374, 2.8488e-3), "four": (0.4289, 1.5430e-3)},
+              "w2": {"one": (0.6792, 2.9751e-3), "four": (0.4147, 1.8594e-3)}}
 
 #: the Lean verifier (`verify --zk --partition --program`), one core, one statement, setup included: seconds by block
 #: prefix, measured on today's flat statement
@@ -127,18 +132,25 @@ def verifier_seconds(x) -> tuple[float, str]:
     return VERIFY_DEFAULT, "assumed"
 
 
-def price_fused(strata, how="cpu"):
+def price_fused(strata, how="h200"):
     """The fused per-expert blocks at their staged k_log, priced from the unfused pair's summed fixed and marginal
-    seconds (`levers.fuse_reads(fixed="sum")`) times the end-to-end ratio measured on CPU."""
-    assert how == "cpu", how
+    seconds (`levers.fuse_reads(fixed="sum")`) times the end-to-end ratio measured on CPU (`"cpu"`), or at their
+    H200 prices (`"h200"`): one prover's with the cache, its fixed seconds over the cache's factor before it, and four
+    provers' kept for the overlap (`"four"`)."""
+    assert how in ("cpu", "h200"), how
     out = []
     for x in strata:
         e = expert(x) if x.get("kind") == "fused" else None
         if e:
-            r = FUSED_CPU[e]
-            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG),
-                     "fixed_seconds": x["fixed_seconds"] * r, "seconds_per_block": x["seconds_per_block"] * r,
-                     "priced": "CPU ratio"}
+            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG)}
+            if how == "cpu":
+                r = FUSED_CPU[e]
+                x |= {"fixed_seconds": x["fixed_seconds"] * r, "seconds_per_block": x["seconds_per_block"] * r,
+                      "priced": "CPU ratio"}
+            else:
+                (f, m), four = FUSED_H200[e]["one"], FUSED_H200[e]["four"]
+                x |= {"fixed_seconds": f / EXPERT[e]["cache"], "seconds_per_block": m, "four": four,
+                      "priced": "measured (H200)"}
         out.append(x)
     return out
 
@@ -165,7 +177,9 @@ def apply(strata, cache=False, overlap="", prover=1.0, full=False, host=1.0, pla
                 fixed *= f
                 host_s = hs * fixed
         if overlap and (e or overlap == "all"):
-            if e:
+            if e and "four" in x:
+                fixed, marginal = x["four"]
+            elif e:
                 fixed, marginal = x["fixed_seconds"] * EXPERT[e]["fixed"], marginal * EXPERT[e]["marginal"]
             else:
                 fixed, host_s = fixed * OVERLAP_OTHER["fixed"], host_s * OVERLAP_OTHER["fixed"]
