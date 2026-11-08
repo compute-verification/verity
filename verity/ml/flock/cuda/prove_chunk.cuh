@@ -693,10 +693,12 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     // the zerocheck's second fold pair (d_amn, d_bmn) holds at most a quarter of round 2's tables, which the tail's first lookahead
     // writes there, or half when the lookahead loop doesn't run and the fold after it writes there
     const long long zc_out = 1LL << (m - 6), zc_next = (m - 7 >= 3 && zc_out / 16 > ZT_FINISH_OP) ? zc_out / 4 : zc_out / 2;
-    // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each), less what the second fold pair
-    // doesn't take beside a copy of the first
-    const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes - 2 * (size_t)(zc_out - zc_next) * sizeof(F128) +
-                               ((size_t)12 << k_log) * sizeof(F128) + (64ull << 20);
+    // the arena's peak: 6.5 witness sizes (z, a and b, the lincheck's transpose, level 0's codeword and tree, all of which a kept
+    // rep 0 also holds through the lincheck) beside the larger of the zerocheck's two fold pairs and the lincheck's seven K-length
+    // vectors (2^k_log words each, which dominate at small m); half a witness size and 64 MiB over that hold the small buffers
+    // beside them
+    const size_t arena_bytes = packed_witness_bytes / 2 * 14 +
+                               std::max(2 * (size_t)(zc_out + zc_next), (size_t)7 << k_log) * sizeof(F128) + (64ull << 20);
     CK(device_arena.begin(arena_bytes));
     // ================= witness: host-given compression inputs ================
     F128 *df, *d_a, *d_b; uint8_t* d_zlin;
