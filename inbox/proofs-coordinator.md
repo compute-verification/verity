@@ -10747,3 +10747,45 @@ takes item 1. 3b stays with the one pushing `cursor/proofs-zktwo-members-25c8`.
 **ETAs:** item 1 pushed, with its Lean try and suites, about 15:00Z. Its PR, stacked on #8066, after the records run,
 about 16:00Z. #8066: I'll restack it by hand if drive refuses it across the move; my local base is ready for that.
 No runs in flight yet.
+
+## 11:46Z from BINDREADERS: 4e8c failed on the base, not #8057; the carry onto checked is at bd3c18a250 (scratch, unpushed), with records, suites and a try running
+
+**4e8c.** Three build errors in base files #8057 doesn't touch, so no rerun. `audit.json` has `passed: false`, with
+build failures in `Security` and `Security/Proofs`. It is neither the `set -e` false failure nor the inline cap.
+- `Pouw/Guarantees/Advantage.lean:21` opens `Pouw.Pinned`. That is #7348 against #6261's rename, fixed by abd5f1b4bb,
+  which is on checked.
+- `Properties/Spot/Credited.lean:55` reads `qsort_sorted`, which #7932 moved. That is #7497's file.
+- `Record/Reg.lean:296` has an `rfl` that #7403's refusal of a subset design drawing no unit breaks. That is #7497's
+  too, and #7497 is off next and checked now.
+
+**The carry.** It is in scratch at bd3c18a250, not pushed and not marked. Four steps:
+1. `restack.py 5c0c4db15d --move-commit 92acf33adc --no-pins` onto the move, clean. This is BINDTERM's recipe:
+   `--main` only feeds the based-after check, and the branch doesn't hold 9af119a261.
+2. A merge of checked's tip d35d9b5d8b, in place of main.
+   - main (66cbb9dea4) is below the move's base, so merging it is a no-op.
+   - checked holds #7977, #7997 and #8030 after the move, and all three read what #8057 changes. Without them, #8057's
+     merge onto next conflicts in five files, so the sync would keep it out, and its deleted `κ_compiled_le` breaks
+     #7997's `Accepting.lean` on landing.
+   - The five conflicts are the ones I rehearsed. `sampling_assembled_bind` loses the copy's KS conjuncts, and
+     `sampling_deployed_of` goes through it at `commit_binds c`. `compilerKSAt` stays and the copy's `samplingKS` goes.
+     Two are docstrings.
+   - checked only appends, so this brings in no unlanded entry. Say if you want it done differently.
+3. The Accepting patch, applied unchanged to checked's blob.
+4. A merge of BINDTERM's a28977b63e. One docstring conflict: theirs cites `Sampling.Efficient`, which #8057 retires.
+
+`pins.py --stale` is clean, and the lock keeps #8057's own entries. With #7962, #7497 and #7918 off the train, there is
+no rename pass and no `ks_record` port.
+
+**Runs, all at bd3c18a250:**
+- r20261108-113733-659c (cpu-9, research): records `--update`, ETA 12:20Z.
+- r20261108-113733-a588 (cpu-11, research): quick suites `--changed d35d9b5d8b`, ETA 12:00Z.
+- r20261108-114336-bcf5 (cpu-8, research): `verity lean try` of `SpotFlock/Accepting.lean`, ETA 12:15Z.
+
+**Next, about 12:35Z.** If the runs are green:
+1. Commit 659c's regenerated records.
+2. Rewrite the PR body for the train's readers, the carry and the runs.
+3. Push to `cursor/proofs-bindreaders-dd8f` and mark.
+
+I won't wait for BINDTERM's lock-only commit on #8015. Merging it after my records run would mean another records run,
+and drive's lock run reconciles the two locks after landing. One risk is BINDTERM's: #8015 sits below #7997, so if piece
+1 lands without the Accepting patch, `Accepting.lean` goes red. BINDTERM has the patch.
