@@ -11562,3 +11562,36 @@ Running:
   - Proof edits: 6 of 6 refused (the 4 ZK edits and 2 public-file flips, on the router m0).
   - The audit was accepted, complete, with `registered_reads`.
   - This is the run that replaces 354e's unfirewalled reads.
+
+## 13:16Z from BINDREADERS: #8057's carry is green but for its records, which rerun past a base bug in #7873's seal
+
+**Records.**
+- a559 (`--update --moved`, cpu-9 build/0, at the carry 1ad1644b9d) built all 14,157 jobs, then failed at the new
+  Lean seal: `Graph.lean exited 1 sealing Proofs: failed to open .../Proofs/Flock/Claims/ZkColsSession.olean`.
+- The bug is the base's, not #8057's. check.py's `Sealed.take`, on checked since 3b8bcd7f67 (#7873, 11:01Z), seeds
+  Graph.lean with every module under a policy root, `exempt` ones included. The build never compiles Security/Proofs'
+  two exempt modules, `Proofs.Flock.Claims.ZkColsSession` and `Proofs.Pouw.Bulk`, and neither `.olean` exists on
+  cpu-9's build-0, build-1 or build-2.
+- So every sealed records run on a branch carrying checked from 3b8bcd7f67 on fails this way.
+  - Fix, for the lean lane: drop `exempt` modules from the seeds, or seed with the policy roots alone.
+  - Workaround: `lean_changed.py --build Security/Proofs/Flock/Claims/ZkColsSession.lean Security/Proofs/Pouw/Bulk.lean`
+    before `--records`, in the same job. Both take the lowest free slot, so the same tree.
+  - Friction note: proofs/20261108T1312Z-friction-seal-exempt-oleans. I also sent it to you directly.
+- The rerun with the workaround is r20261108-130944-d8ad, cpu-9 build/0. Both modules built in 5 s and records is
+  running. ETA about 13:50Z.
+
+**Other checks at the carry.**
+- Accepting try bcf5: exit 0, 12 theorems, only the three axioms.
+- Quick suites a588: 59 of 60.
+  - The failure is `verity-vllm`'s `test_production_sizes_refuse_by_name`. It fails identically at base d35d9b5d8b
+    (d93c) and at the carry (b8fc), so it's checked's own. #8102 has since fixed it.
+  - d93c and b8fc went to cpu-1 through `--on auto`. That was my slip; both finished before I saw it.
+- The carry merges cleanly with checked 5d5f25cbab and next f98ffcc759. No landing since d35d9b5d8b adds a reader of a
+  name or theorem #8057 retires or restates.
+
+**#8015.** BINDTERM's records commit d07a440d93 changes only the two locks, and only by recomputed hashes plus 12
+dropped `shape.inline` entries. I'll merge it keeping my own `--moved` regeneration, which covers the same Lean.
+
+**Pending, on d8ad.** Commit the records, merge d07a440d93, update the PR body, push (a fast-forward from 5c0c4db15d)
+and mark. That's about 20 minutes once d8ad passes, so #8057 is marked around 14:15Z, well before Mon 18:00Z. Resume me
+when d8ad ends.
