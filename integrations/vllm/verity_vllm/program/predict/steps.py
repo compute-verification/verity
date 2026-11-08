@@ -55,6 +55,8 @@
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
+- Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
+  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
@@ -67,8 +69,9 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   validity, its types, ranges, order and the schedule's position rules);
 - a target without batch invariance outside class G, and in class G a step over the registered `max_num_batched_tokens` or
   `max_num_seqs`, or a request's row over its `long_prefill_token_threshold`;
-- a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
-  whose `output_len` and `finish` its `max_tokens` contradicts;
+- a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary,
+  whose `output_len` and `finish` its `max_tokens` contradicts, whose stop fields its length rule doesn't read
+  (`stop_rule.body_refusal`), or that finished on a stop id with none;
 - a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
   request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
   the hit (a resume's run of its own KV is I1's replay's to hold);
@@ -108,6 +111,7 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
@@ -194,10 +198,12 @@ class RequestUnit:
     launch: tuple[tuple[tuple[int, int], ...], ...] | None = None  # class G: per Program step, every row its forward ran, (n, start)
     chunks: tuple[int, ...] = ()  # class G: the prefill's rows per launch, where it ran in more than one
     edge: tuple[str, ...] = ()    # class G, carried out: the history groups its Program returns (`segment.edge_groups`)
+    stop: dict | None = None    # its length rule over its outputs (`frontend.stop_rule.spec`, `stop_of`); None: it has none
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
-                           *([{"launch": self.launch}] if self.launch is not None else []), *([edge_config(self.edge)] if self.edge else [])],
+                           *([{"launch": self.launch}] if self.launch is not None else []), *([edge_config(self.edge)] if self.edge else []),
+                           *([{"stop": self.stop}] if self.stop else [])],
                           sort_keys=True)
 
     def events(self) -> int:
@@ -245,7 +251,8 @@ class Compiled:
                 "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
                                                      "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
                                                      "parse": u.parse and u.parse.id, **({"launch": u.batch()} if u.launch else {}),
-                                                     **({"chunks": list(u.chunks)} if u.chunks else {}), **edge_config(u.edge)}
+                                                     **({"chunks": list(u.chunks)} if u.chunks else {}), **edge_config(u.edge),
+                                                     **({"stop": u.stop} if u.stop else {})}
                              for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
@@ -339,9 +346,22 @@ def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
         raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs the cap in the body, a positive integer)")
     if q.output_len > m or (q.finish == "length" and q.output_len != m) or (q.finish == "abort" and q.output_len == m):
         raise Unexpressible(f"request {i}: {q.output_len} kept outputs, finished on {q.finish}, against its max_tokens {m}")
+    if why := SR.body_refusal(params):
+        raise Unexpressible(f"request {i}: {why}")
     if q.finish == "eos" and params.get("ignore_eos") is True:
-        raise Unexpressible(f"request {i}: finished on a stop token with ignore_eos set")
+        raise Unexpressible(f"request {i}: finished on a stop token with ignore_eos set (and no stop_token_ids, its only stop ids)")
     return tuple(prompt), params
+
+
+def stop_of(i: int, q: I1.RequestAdvice, T: int, ids: tuple[int, ...], max_tokens: int, max_model_len: int) -> dict | None:
+    """Request `i`'s length rule over its Program's outputs, the last at index T (`frontend.stop_rule.of`), under stop ids `ids`;
+    None where it has none (T < 0: a class-G window leaves it inside its prompt)."""
+    if T < 0:
+        return None
+    try:
+        return SR.of(q.finish, q.output_len, T, ids, max_tokens=max_tokens, prompt_len=q.prompt_len, max_model_len=max_model_len)
+    except ValueError as e:
+        raise Unexpressible(f"request {i}: {e}") from None
 
 
 def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -> None:
@@ -492,13 +512,13 @@ class Plan:
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
-    (`dead_free`) at any world; `named`: with its trace's names (`naming.named_program`, which names no class-G decoder)."""
+    (`dead_free`) at any world, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
-        return named_program(phi, unit.LP, unit.T, unit.C)
+        return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
     return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
-                         edge=unit.edge)
+                         edge=unit.edge, stop=unit.stop)
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
@@ -627,6 +647,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                 except Unexpressible as e:
                     refuse(row.request, str(e))
     bs = int((phi0.engine or {}).get("block_size") or PP.DEFAULT_BLOCK_SIZE)
+    stops, mml = SR.stop_ids(phi0.hf_config), min(max_pos, int((phi0.engine or {}).get("max_model_len") or max_pos))
     units: list[RequestUnit | None] = []
     placed: dict[tuple[int, int], Placed] = {}
     spent: set[int] = set()
@@ -661,12 +682,13 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                                         f"on: its Program's prefix is bound to the requests that computed it, in the window that "
                                         f"admitted it, which v0 doesn't carry")
                 producers = producers_of(i, s0, rows[i][0][2], bs) if C and carry is None else ()
+                stop = stop_of(i, q, T, () if params[i].get("ignore_eos") is True else stops, params[i]["max_tokens"], mml)
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=V) if i in wired else None
                 units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse, carry is not None, i in left,
-                                         launch, chunks if len(chunks) > 1 else (), edge))
+                                         launch, chunks if len(chunks) > 1 else (), edge, stop))
                 placed.update(own)
                 continue
         units.append(None)
@@ -699,35 +721,6 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
     return Plan(units, steps, discarded, dict(sorted(refused.items())), idle)
 
 
-def dead_gates_of(compiled: Compiled) -> dict:
-    """Each compiled Program's dead gates as circuit-check counts them (`liveness.dead_gates`, transitive: gates no output depends
-    on), with the unread inputs apart, and the dead gates under each of the root's nodes by definition (its id up to `{`)."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.intervals import full, total
-    from verity.ml.circuits.liveness import Liveness, dead_gates
-    out = {}
-    for digest, program in sorted(compiled.programs.items()):
-        rep = dead_gates(program, limit=0, transitive=True)
-        root, lv = program.root, Liveness(transitive=True)
-        res = lv.analyse(root, full(root.body.ret_type.leaves))
-        by: dict[str, int] = {}
-        for node, live in zip(root.body.nodes, res.node_live):
-            if node.form == "call":
-                n = lv.analyse(node.fn, live).dead
-            elif node.form == "primitive" or isinstance(node.fn, PrimitiveDefinition):
-                n = (node.n if node.form == "batch" else 1) - total(live)
-            else:
-                n = 0
-            if n:
-                name = node.fn.id.split("{", 1)[0]
-                by[name] = by.get(name, 0) + n
-        if rest := res.dead - sum(by.values()):
-            by["(batch or scan at the root)"] = rest
-        out[digest] = {"dead_computed": rep.computed, "unread_inputs": rep.input, "approximate": rep.approximate,
-                       "by_definition": dict(sorted(by.items(), key=lambda kv: -kv[1]))}
-    return {"programs": out, "dead_computed": sum(p["dead_computed"] for p in out.values())}
-
-
 # ------------------------------------------------------------------------------------------------------------- the traced side
 
 
@@ -740,11 +733,13 @@ NO_EDGE_TRACE = "no trace: the Build's request wrapper returns its samples alone
 
 def trace_dir(u: RequestUnit | dict) -> str:
     """The derive dir name of a request Program's trace: `build_request_<prefix_plan.shape_name>_<policy>`, in class G then `_l` and
-    the first 12 hex digits of the SHA-256 of its launch context's compact JSON (with its chunks, `{"batch": …, "chunks": …}`)."""
-    LP, T, C, policy, launch, chunks = ((u.LP, u.T, u.C, u.policy, u.batch(), list(u.chunks)) if isinstance(u, RequestUnit) else
-                                        (u["LP"], u["T"], u.get("C") or 0, u["policy"], u.get("launch"), u.get("chunks")))
+    the first 12 hex digits of the SHA-256 of its launch context's compact JSON (with its chunks, `{"batch": …, "chunks": …}`), and
+    with a length rule `_s` and the first 12 of its config's (`RequestUnit.stop`)."""
+    LP, T, C, policy, launch, chunks, stop = ((u.LP, u.T, u.C, u.policy, u.batch(), list(u.chunks), u.stop) if isinstance(u, RequestUnit) else
+                                              (u["LP"], u["T"], u.get("C") or 0, u["policy"], u.get("launch"), u.get("chunks"), u.get("stop")))
     ctx = {"batch": launch, "chunks": chunks} if chunks else launch
     tail = f"_l{hashlib.sha256(json.dumps(ctx, separators=(',', ':')).encode()).hexdigest()[:12]}" if launch else ""
+    tail += f"_s{hashlib.sha256(json.dumps(stop, sort_keys=True, separators=(',', ':')).encode()).hexdigest()[:12]}" if stop else ""
     return f"build_request_{PP.shape_name(PP.shape(LP, T, C))}_{_label(policy)}{tail}"
 
 
@@ -754,8 +749,8 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
     (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
     prefill chunks there when it has them (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper,
-    `vllm_meta.ChunkedGreedyRequest`). A Program with a window's edge rows has none (`NO_EDGE_TRACE`), so `compare` counts it
-    `no_trace`."""
+    `vllm_meta.ChunkedGreedyRequest`); its length rule `--stop`. A Program with a window's edge rows has none (`NO_EDGE_TRACE`),
+    so `compare` counts it `no_trace`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
@@ -772,6 +767,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
                      *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
+                     *(["--stop", json.dumps(u["stop"], sort_keys=True, separators=(",", ":"))] if u.get("stop") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
                      "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp])
