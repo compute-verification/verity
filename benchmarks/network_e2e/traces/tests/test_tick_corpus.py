@@ -74,6 +74,15 @@ def test_stand_in_speaks_the_servers_tick_feed(tmp_path, monkeypatch, mod):
     assert module == tp.__name__ and getattr(tp, name) is tp.TickFeed
 
 
+def test_every_sampling_passes_the_tick_feeds_seed_rule(mod):
+    corpus = mod("corpus")
+    _, tp = corpus.tick_modules()
+    r = {"prompt_ids": [1, 2], "max_tokens": 4}
+    for sampling in corpus.SAMPLING:
+        body = corpus.request_body("m", r, corpus.request_id(3), sampling)
+        assert tp.unseeded(json.dumps(body).encode()) is None, sampling
+
+
 # A runs from 0.0 and is freed inside its last step's update (0.2999), before that step's output stamp (0.30); the engine
 # idles until B arrives at 1.0, whose outputs are back at 1.10 and 1.25
 STEPS = [{"total_num_scheduled_tokens": n, "t_output": t} for n, t in ((8, 0.10), (1, 0.22), (1, 0.30), (0, None),
