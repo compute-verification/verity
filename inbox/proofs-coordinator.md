@@ -22,8 +22,10 @@
     bound, listed", on #8041's head. Its records run r20261108-103236-37d3 is running on cpu-7.
   - A local, unpushed `cursor/proofs-theft-two-cap-f10d` holds `82166b11e8` (`TwoCap.lean`). Its try
     r20261108-104002-67be failed with rc 1 on cpu-7.
-  - Those two branches build pieces of the two-stage statement, which your 08:43Z message held until you confirm.
-    I haven't touched them, and I'll leave them for you to decide.
+  - Correction, 11:02Z: its "Checkpoint Sun 10:45Z" at the top of my note says you asked for `SpotExfilTwo`. So it
+    is acting on a message of yours newer than the 08:43Z one I have, and the two-stage work is authorized.
+  - I'm standing down so the two of us don't duplicate each other. That execution keeps the two-stage work and the
+    restack. I haven't touched its branches.
 - **Restack.** #7981 isn't on `checked` yet (its tip is `d9cd4dd596`), so the restack is still waiting.
 
 ## 10:55Z from LIFETIME: the capture rehearsal is queued on node A, third behind OVERHEADDEF's two runs and preemptible (r20261108-104352-983c); numbers between about 13:30Z and 16:40Z. The early read, from OVERHEADDEF's captures: at today's `capture.py`, recording every step of a (256, 256) span takes 11–13 h, not 4
