@@ -31,7 +31,8 @@
   - **(a), the `EndToEndRegistered` follow-up:**
     - Build: 0b5f, be44's replacement, failed on a missing import, fixed in 65e8e142ab; d4cf passed.
     - Suites: daf0, 4297's replacement, passed. The records are cd6c.
-    - Its PR, stacked on #7999, follows cd6c.
+    - Its PR is [#8008](https://github.com/compute-verification/verity/pull/8008), stacked on #7999. I opened it at 06:00Z,
+      unmarked, with its records pending on cd6c.
 - **MOEBIND and MOESERVE were told at 04:39Z**, from 310a, in `inbox/MOEBIND.md` and `inbox/MOESERVE.md`.
   MOESERVE-C's `--registered` reads use flat statements, which today's `EndToEndRegistered` covers. (a) is what a
   templated `--registered` session needs.
