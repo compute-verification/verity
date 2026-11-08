@@ -30,7 +30,7 @@ from verity_vllm.errors import Refused
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 GLM53 = ("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42")
-CLASS_G_ARGS = {"tensor_parallel_size": 8, "max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256,
+CLASS_G_ARGS = {"tensor_parallel_size": 8, "max_num_batched_tokens": 2048, "max_model_len": 131072, "long_prefill_token_threshold": 256,
                 "enable_prefix_caching": False, "moe_backend": "triton"}
 
 
@@ -236,7 +236,7 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
 
 def test_an_engine_class_fills_its_settings():
     assert L.class_options({"engine_class": "G"}) == {"engine_class": "G", "execution": "eager", "max_num_seqs": 256, **CLASS_G_ARGS}
-    assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 2048}) == {
+    assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072}) == {
         "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, **CLASS_G_ARGS}
     assert L.class_options({"seed": 3}) == {"seed": 3}
     assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
@@ -332,10 +332,10 @@ def test_class_g_refuses_a_prompt_over_its_limit(built_g):
     sched = handle.scheduler(llm)
     sched.add_request(SimpleNamespace(request_id="long", num_prompt_tokens=257))
     sched.requests.clear()
-    with pytest.raises(Refused, match="request r0: a prompt of 2049 tokens, over the 2048 a class-G window admits"):
-        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=2049))
+    with pytest.raises(Refused, match="request r0: a prompt of 131073 tokens, over the 131072 a class-G window admits"):
+        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=131073))
     assert sched.requests == {}
-    with pytest.raises(Refused, match="a prompt of 2049 tokens"):
+    with pytest.raises(Refused, match="a prompt of 131073 tokens"):
         llm.close_window()
 
 
