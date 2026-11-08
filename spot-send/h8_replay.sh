@@ -20,7 +20,8 @@ esac
 echo "replay: $BLOCK on $(hostname) $(date -u +%FT%TZ) CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 for f in serve_logprobs.patch replay_aborts.patch dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh \
     gpu-lease sitecustomize.py long_rows.py spot_canonical.sh tree_allreduce.py node_record.sh; do cp "$HERE/$f" "$IN/" || exit 2; done
-X=/workspace/spot-inputs/$BLOCK
+# user research can't create directories at /workspace's top level here, so the inputs and the capture go under /workspace/cp
+X=/workspace/cp/spot-inputs/$BLOCK; export CAP_ROOT=/workspace/cp/spot-capture
 if [ ! -f "$X/$ARMDIR/meta.json" ]; then
   research data fetch "$ART" --to "$X" --path "$ARMDIR/**" --path "$EEF" --path out/topk-serve.json \
     --path "out/served/**" --path out/served.json >/dev/null || { echo "replay: fetching $ART failed"; exit 3; }

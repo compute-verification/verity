@@ -46,7 +46,7 @@ CK=${CHECKPOINT:-$CK}
 [ -d "$CK" ] || { echo "spot: no checkpoint at $CK"; exit 2; }
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "spot: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
-CAP=${CAPTURE:-/workspace/spot-capture/$(basename "$D")}; mkdir -p "$CAP/site"
+CAP=${CAPTURE:-${CAP_ROOT:-/workspace/spot-capture}/$(basename "$D")}; mkdir -p "$CAP/site"
 restage=0; [ -n "${CAPTURE:-}" ] && { restage=1; : "${STEPS:?STEPS: the captured steps to stage again}"; }
 free=$(df -BG --output=avail "$CAP" | tail -1 | tr -dc 0-9)
 [ "${free:-0}" -ge "${MIN_FREE_G:-40}" ] || { echo "spot: ${free}G free under $CAP, want ${MIN_FREE_G:-40}G"; exit 2; }
