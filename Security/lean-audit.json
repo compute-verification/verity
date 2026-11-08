@@ -3070,7 +3070,7 @@
   },
   "SamplingDeploy.RegMatchesTwo": {
    "owner": "@proofs",
-   "digest": "000a4a83fdc6f3a295afbefed986ae2d2d4836644572b58d611b37959d608d9d",
+   "digest": "e91597bd895f89ea4ab405893eddbb7cd1ef7c0c476e6d7d23ad3498ec4739bd",
    "issue": "LEAN-186",
    "due": "2026-11-08"
   },
@@ -4943,7 +4943,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "0703084001aa7b82799a0ef362416061f85e44ea073af25e1c57a88eaada9f17"
+   "unfolded_hash": "276c6759819f5e6178807405787a0752ad78048116a8b1d3df8b36180dc91fbf"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
@@ -46925,7 +46925,7 @@
    }
   },
   "Proofs.Flock.Claims.Sampling.Reg": {
-   "digest": "646e6eb5fdefa2015bcde35845f258834e67710fac493434f7320345d0c3dc51",
+   "digest": "897c9a9c01dd36364b26a1aa331a5121f5fecca65951cb164fcd19f8ea7beec8",
    "definitions": {
     "SamplingDeploy.Code.atOrder": "83991fc45819a14f1280e61d57bd87a425140123a5644eb6de7b80893a373c84",
     "SamplingDeploy.Order": "e792cfd93feb1130e3e08748fdee92779db92ee177866cbfe3128777efc8f4f5",
@@ -46944,7 +46944,7 @@
     "SamplingDeploy.RegTwo.always": "e6184e76f4335ad9d9bba57c9e6d38b85f7405d0df7d6f29341924534f209919",
     "SamplingDeploy.RegTwo.blockAt": "a36a785d9980a632f5fd113e5f1c269dc49fb05bdf53e70d73594b1a4170ec90",
     "SamplingDeploy.RegTwo.blockOf": "e3a8e506fc6dad3a670a8355dce9e0eab5bc951fb5be6356cdc2e44205eb4947",
-    "SamplingDeploy.RegTwo.checked": "42f0ffe31df621f849608c9c43899d6d0cca925db6af74e15f4f11531d4ce0d7",
+    "SamplingDeploy.RegTwo.checked": "1b96f7445465bda81b0ef98890fcd645c463a34b5a0e911ddfe85a0cce80bc27",
     "SamplingDeploy.RegTwo.first": "c1589be3c4addc4811ff93c9ab82d7840c81c6c249cb75ba5e17190eeae455db",
     "SamplingDeploy.RegTwo.ks": "01575c526ed6305243da7e8a4cbc44cde9f8dbf559ae0997ed330d852ae488cb",
     "SamplingDeploy.RegTwo.ns": "a4666cba86127ce9281665318084a608d65efee2499306e02e50c8911b4e937b",
@@ -46952,7 +46952,7 @@
     "SamplingDeploy.RegTwo.templateAt": "79c156b02cb038fa0963212b77ba32b601afaa94d5491a9732c879cc0904db0a",
     "SamplingDeploy.bytesFirst": "b22325e952197d5678dbdbbf62643a152fbded6e789826f85ed7c67a9754f41f",
     "SamplingDeploy.bytesSecond": "1b0c62bbc8f6089a2e7a2a684d4714931ccaa9cb0e4407919b47c9861fd62c50",
-    "SamplingDeploy.codeTwo": "b5163a646ee9308b2b496f6be2bdcf4523c075445a3006d38636b5e3db8c9b91",
+    "SamplingDeploy.codeTwo": "eb7e4c09f790cd6e1e4b0da5543d637e494c43d049223f5e6aedac7fef313b60",
     "SamplingDeploy.codeTwoAt": "671fc8cf8cef54b6e7c78239c41874db7bab6edfa7fbbfc44d09bfd118be03e0",
     "SamplingDeploy.replayTwo": "e97056cbf61eca5b206aa8415c4c8fccef2a4b49c3d99c9cef58028feedf4750"
    }
@@ -49267,9 +49267,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoCode": {
-   "digest": "cf493ffff1dec8ff025a2624e5d88f3c7ac045e724b29c702c2a99676a74c504",
+   "digest": "e61e669fdfacc6b6ad3e836a0432fbb7a6da4e5f3dba551f266015a03530c606",
    "definitions": {
-    "SamplingDeploy.RegMatchesTwo": "000a4a83fdc6f3a295afbefed986ae2d2d4836644572b58d611b37959d608d9d"
+    "SamplingDeploy.RegMatchesTwo": "e91597bd895f89ea4ab405893eddbb7cd1ef7c0c476e6d7d23ad3498ec4739bd"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
