@@ -24,3 +24,6 @@ Coordinator 10:06Z, decisions on VLLM-250 (10:05Z comment): the check template i
 [2026-11-08T10:18Z] 67b9f10b92d4
 Coordinator 10:22Z: read proofs' 10:25Z comment on VLLM-250. P1 is MARKED: #8066 (93f688cb6e, cursor/proofs-zktwo-cells-14ff), with the second stage sampling one cell per (replay block, template); it lands after #7981. A possible change to the interior record (mixed_population_program vs the templates' folded form) is decided by about 11:30Z: don't lock the interior layout before then. Build against P1's per-template cells.
 
+[2026-11-08T10:37Z] ebf2989af6f4
+Coordinator 10:38Z: proofs DECIDED (VLLM-250, 10:45Z): the interior record does NOT change beyond P1's spec (template-major; one shared-row member per template; port p of template t is the table t/p of its own rows; unit off_t+k reads row k). The verifier reads each template's program as its Flock circuit file's lowering, with SHA-512 in params. They ask vllm to confirm or name the cost of their numbered questions: twostage-int answers the interior ones and twostage the boundary ones, on VLLM-250, today. Then lock the layout and build.
+
