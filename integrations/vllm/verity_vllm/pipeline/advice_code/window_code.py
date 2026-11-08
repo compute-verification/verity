@@ -42,6 +42,9 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
   the bits read past it decide nothing in an accepted string.
 - Delimiting costs the termination's 2 bits per window that codes anything (`Encoded.lens`). A window whose message is
   the only one possible costs nothing.
+- A window may carry a tail after its segment: plain fixed-width fields whose widths the reader knows before it reads
+  them (`encode`'s ``tails``, `decode_tailed`), charged to the window. Every value of a width is a distinct string of
+  it, so the string stays prefix-free; a window with no tail codes as before, bit for bit.
 
 **The registered codebook.** `Book` holds the caps and every model, and is fit on historical traces, never on the
 run: a codebook fit to the run would be advice. Its digest (`Book.digest`, SHA-512 of its canonical JSON) is
@@ -60,8 +63,8 @@ from typing import Any, NamedTuple
 from verity.ml.protocols.certifier.window_charge import Window
 from verity_vllm.pipeline.advice_code import arith as C
 
-__all__ = ["Book", "Caps", "code_window", "CoderState", "context_key", "decode", "Decoder", "DEFAULT_CAPS", "encode",
-    "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
+__all__ = ["Book", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "Decoder", "DEFAULT_CAPS",
+    "encode", "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
 
 
 @dataclass(frozen=True)
@@ -211,6 +214,14 @@ class Encoder:
         self.kt.update(key, b)
         return b
 
+    def raw(self, v: int, width: int) -> None:
+        """`width` plain bits of v, most significant first, after the open window's segment, charged to that window."""
+        self._close()
+        if not self.lens:
+            raise ValueError("a plain field outside any window: call window() first")
+        self.w.uint(v, width)
+        self.lens[-1] += width
+
     def finish(self) -> Encoded:
         self._close()
         return Encoded(self.w.to_bytes(), len(self.w), tuple(self.lens))
@@ -261,6 +272,14 @@ class Decoder:
         seg.consume(f0 if b else 0, f1 if b else f0, f0 + f1)
         self.kt.update(key, b)
         return b
+
+    def raw(self, width: int) -> int:
+        self._close()
+        if not self.lens:
+            raise ValueError("a plain field outside any window: call window() first")
+        v = self.r.uint(width)
+        self.lens[-1] += width
+        return v
 
     def finish(self) -> None:
         self._close()
@@ -322,21 +341,32 @@ def code_window(c: Any, win: Window | None, st: CoderState) -> Window:
 # ------------------------------------------------------------------------------------------------------------ API
 
 
-def encode(windows: Sequence[Window], book: Book) -> Encoded:
-    """The run's residual, window by window; `lens[w]` is window w's charge."""
+def encode(windows: Sequence[Window], book: Book, tails: Sequence[Sequence[tuple[int, int]]] | None = None) -> Encoded:
+    """The run's residual, window by window; `lens[w]` is window w's charge. `tails[w]`, (value, width) pairs, follow
+    window w's segment as plain fixed-width fields (`Encoder.raw`), charged to it."""
     e, st = Encoder(book), CoderState()
-    for win in windows:
+    for w, win in enumerate(windows):
         e.window()
         code_window(e, win, st)
+        for v, n in tails[w] if tails else ():
+            e.raw(v, n)
     return e.finish()
 
 
 def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
     """The windows back, refusing (ValueError) any string `encode` wouldn't produce."""
+    return decode_tailed(bits, nbits, book, [()] * n_windows)[0]
+
+
+def decode_tailed(bits: bytes, nbits: int, book: Book,
+                  widths: Sequence[Sequence[int]]) -> tuple[list[Window], list[list[int]]]:
+    """`decode` of a string `encode` wrote with tails of these widths, one list a window: the windows and the tails'
+    values."""
     d, st = Decoder(bits, nbits, book), CoderState()
-    out = []
-    for _ in range(n_windows):
+    out, tails = [], []
+    for ws in widths:
         d.window()
         out.append(code_window(d, None, st))
+        tails.append([d.raw(n) for n in ws])
     d.finish()
-    return out
+    return out, tails

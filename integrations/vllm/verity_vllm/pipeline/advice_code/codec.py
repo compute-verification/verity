@@ -48,6 +48,9 @@ The resumes and the order of new requests that `derived.walk_steps` would otherw
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
 derived hits with it.
 
+**Sent, the lengths** (`Registered.send_lengths`, `lengths`): while no proof holds the length rule, each request's
+output_len and finish, as the plain tail of the window its body lands in, held to the certified ids and the stop rule.
+
 **Under the certified tick** (`Registered.tick`, an engine served with ``--admit tick``), the engine adds each request
 once a logical clock has passed its release bucket's close, in release order, and the replay runs that rule from the
 record's `end`s and the registered τ (`replay.replay`'s ``tick``). It asks nothing, so there are no decisions, and v1
@@ -67,7 +70,8 @@ replay reads them in, and the decoder replays them straight through.
 **The string**, MSB first, then zero bits to a whole byte: `window_code.encode(the windows, the registered Book)`, with W the
 record's windows (`windows`: its last bucket's, plus one). `window_code` codes each window's counts before its values and
 terminates each window's segment, so the code finds every window's end itself, with no length prefix. A window's charge
-is its segment's bits (`window_code.Encoded.lens`; `bits_by_window`), a function of the string alone, never of the record.
+is its segment's bits (`window_code.Encoded.lens`; `bits_by_window`), a function of the string alone, and its length
+terms', whose widths the record's `max_tokens` fix.
 The strings are prefix-free for every W, so a string
 charged c bits in all is one of at most 2^c (Kraft; the sampled leak bound's `hAs`). The codebook (`Registered.book`,
 `window_code.Book`) is fit on other runs, never this one, and its digest is registered before the first window. `decode`
@@ -87,13 +91,15 @@ from typing import Any, NamedTuple, TypeVar
 from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline.advice_code import arith as C
 from verity_vllm.pipeline.advice_code import derived as D
+from verity_vllm.pipeline.advice_code import lengths as LN
 from verity_vllm.pipeline.advice_code import pool as P
 from verity_vllm.pipeline.advice_code import replay as R
 from verity_vllm.pipeline.advice_code import schedule as S
 from verity_vllm.pipeline.advice_code import window_code as CV
 
 __all__ = ["advice_of_replay", "AdviceCodeError", "arrival_order", "bits_by_window", "book_of", "CAPS", "charged",
-    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "Lookup", "Record",
+    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "length_widths", "lengths",
+    "Lookup", "Record",
     "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS", "streams", "string_of", "TICK_CAPS",
     "windows"]
 
@@ -281,8 +287,14 @@ class Registered:
     """What v1 reads besides the string and the record, fixed before the run: the engine's scheduler config, its KV pool
     `num_gpu_blocks` included (public, never in the advice: a prover that set it could buy derived hits with a bigger
     pool), the stop ids, the runner's row order, the window T in buckets, the advice code's codebook (`window_code.Book`,
-    whose digest the registration holds; None for the uniform book), ℓ, and the certified tick the engine admits by
-    (`replay.Tick`, its τ the engine class's; None for an engine that admits on arrival)."""
+    whose digest the registration holds; None for the uniform book), ℓ, the certified tick the engine admits by
+    (`replay.Tick`, its τ the engine class's; None for an engine that admits on arrival), and whether the string sends
+    and charges each request's output_len and finish (the module's "Sent, the lengths").
+
+    `send_lengths` is on, in every registration (class G's included), until a proof holds both halves of the length
+    rule on main: the stop ids, a stop-id rule in each request Program, and the `max_tokens` cap. Until then the
+    certified record's output_len is the prover's choice and v1 charges it; a registration that turns it off names
+    the proof of each half."""
 
     engine: Any  # replay.Engine
     stop_ids: tuple[int, ...]
@@ -291,12 +303,15 @@ class Registered:
     book: Any = None
     cap_bits: int = 1 << 23
     tick: Any = None  # replay.Tick
+    send_lengths: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "stop_ids", tuple(self.stop_ids))
         e = self.engine
         if not self.stop_ids or self.row_order not in ROW_ORDERS or self.T < 1:
             raise AdviceCodeError(f"a registration has stop ids, a row order of {ROW_ORDERS} and T ≥ 1")
+        if type(self.send_lengths) is not bool:
+            raise AdviceCodeError(f"a registration's send_lengths is a bool, not {self.send_lengths!r}")
         if self.book is not None and type(self.book) is not CV.Book:
             raise AdviceCodeError(f"a registration's book is a window_code.Book, not a {type(self.book).__name__}")
         if self.tick is not None:
@@ -496,6 +511,9 @@ def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int]
     def at(k: int) -> int:
         return earliest[k] if k < len(earliest) else W - 1
 
+    if reg.send_lengths:
+        LN.check_admitted(record.requests, order, rp.admitted, at, reg.T, AdviceCodeError)
+
     arrived: list[list[bool]] = [[] for _ in range(W)]
     hits: list[list[int]] = [[] for _ in range(W)]
     ranks: list[list[tuple[int, tuple[int]]]] = [[] for _ in range(W)]
@@ -531,40 +549,57 @@ def book_of(reg: Registered) -> Any:
     return reg.book
 
 
-def string_of(wins: Sequence[Any], reg: Registered) -> tuple[list[int], list[int]]:
-    """The string's bits, unpadded, and each window's charge: its segment's bits."""
-    enc = CV.encode(wins, book_of(reg))
+def lengths(record: Record, reg: Registered) -> list[list[int]]:
+    """Each window's length terms (`lengths.terms`); none in any window when the registration sends no lengths."""
+    if not reg.send_lengths:
+        return [[] for _ in range(windows(record, reg.T))]
+    return LN.terms(record.requests, release_order(record), reg.T, windows(record, reg.T))
+
+
+def length_widths(record: Record, reg: Registered) -> list[list[int]]:
+    return LN.widths(record.requests, lengths(record, reg))
+
+
+def string_of(wins: Sequence[Any], reg: Registered,
+              tails: Sequence[Sequence[tuple[int, int]]] | None = None) -> tuple[list[int], list[int]]:
+    """The string's bits, unpadded, and each window's charge: its segment's bits and its tail's (the length terms)."""
+    enc = CV.encode(wins, book_of(reg), tails)
     return enc.bitlist(), list(enc.lens)
 
 
-def _frames(bits: Sequence[int], reg: Registered, W: int, *, padded: bool) -> list[Any]:
-    """The windows `bits` codes, refusing any bits but the code's own and, when `padded`, fewer than 8 zero bits after
-    them. The code is prefix-free, so at most one padding decodes."""
+def _frames(bits: Sequence[int], reg: Registered, widths: Sequence[Sequence[int]], *,
+            padded: bool) -> tuple[list[Any], list[list[int]]]:
+    """The windows `bits` codes and their tails of `widths`, refusing any bits but the code's own and, when `padded`,
+    fewer than 8 zero bits after them. The code is prefix-free, so at most one padding decodes."""
     err: Exception | None = None
     for pad in range(8 if padded else 1):
         if pad > len(bits) or any(bits[len(bits) - pad:]):
             break
         data, n = CV.pack(list(bits[:len(bits) - pad]))
         try:
-            return CV.decode(data, n, book_of(reg), W)
+            return CV.decode_tailed(data, n, book_of(reg), widths)
         except ValueError as e:
             err = err or e
-    raise AdviceCodeError(f"no {W} windows end the string: {err}")
+    raise AdviceCodeError(f"no {len(widths)} windows end the string: {err}")
 
 
-def _parse(data: Any, reg: Registered, W: int) -> list[Any]:
-    """A byte string's windows; refuses all but those and their padding."""
+def _parse(data: Any, reg: Registered, record: Record) -> tuple[list[Any], list[list[int]]]:
+    """A byte string's windows and tails; refuses all but those and their padding."""
     if not isinstance(data, (bytes, bytearray)):
         raise AdviceCodeError(f"v1 decodes bytes, not a {type(data).__name__}")
     if 8 * len(data) > reg.cap_bits:
         raise AdviceCodeError(f"{8 * len(data)} bits, over the cap ℓ = {reg.cap_bits}")
-    return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, W, padded=True)
+    return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, length_widths(record, reg), padded=True)
 
 
 def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, int]:
-    """Each window's charge: its segment's bits, a function of the string alone. They sum to the string's bits less
-    padding."""
-    return _total(lambda: dict(enumerate(string_of(_parse(data, reg, windows(record, reg.T)), reg)[1])))
+    """Each window's charge: its segment's bits, a function of the string alone, and its length terms'. They sum to the
+    string's bits less padding."""
+    def run() -> dict[int, int]:
+        wins, tails = _parse(data, reg, record)
+        widths = length_widths(record, reg)
+        return dict(enumerate(string_of(wins, reg, [list(zip(t, n)) for t, n in zip(tails, widths)])[1]))
+    return _total(run)
 
 
 # --- I1 from the replay ------------------------------------------------------------------------------------------------
@@ -669,7 +704,7 @@ def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = 
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
     ones). `check` decodes the string back and holds it to the advice."""
     wins, rp, order = _residual_of(advice, record, reg)
-    data = CV.pack(string_of(wins, reg)[0])[0]
+    data = CV.pack(string_of(wins, reg, LN.tails(record.requests, lengths(record, reg), reg.config(reg.engine)))[0])[0]
     if check:
         index = {record.requests[k].id: e for e, k in enumerate(order)}
         theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]
@@ -694,7 +729,7 @@ def decode(data: bytes, record: Record, reg: Registered) -> I1.Advice:
 
 def decode_full(data: bytes, record: Record, reg: Registered) -> Decoded:
     """`decode`, with the order the string sends (`Decoded`)."""
-    return _total(lambda: _decode(_parse(data, reg, windows(record, reg.T)), record, reg))
+    return _total(lambda: _decode(*_parse(data, reg, record), record, reg))
 
 
 def decode_bits(bits: Sequence[int], record: Record, reg: Registered) -> I1.Advice:
@@ -704,7 +739,7 @@ def decode_bits(bits: Sequence[int], record: Record, reg: Registered) -> I1.Advi
             raise AdviceCodeError(f"{len(bits)} bits, over the cap ℓ = {reg.cap_bits}")
         if any(b not in (0, 1) for b in bits):
             raise AdviceCodeError("a bit string holds 0s and 1s")
-        return _decode(_frames(list(bits), reg, windows(record, reg.T), padded=False), record, reg).advice
+        return _decode(*_frames(list(bits), reg, length_widths(record, reg), padded=False), record, reg).advice
     return _total(run)
 
 
@@ -717,9 +752,10 @@ def _total(run: Callable[[], T]) -> T:
         raise AdviceCodeError(str(e)) from None
 
 
-def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
+def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], record: Record, reg: Registered) -> Decoded:
     engine = reg.engine
     cfg = check_record(record, reg, engine)
+    LN.check(tails, record.requests, lengths(record, reg), cfg, AdviceCodeError)
     if any(w.resumes or w.lag for w in wins):
         raise AdviceCodeError("a window sends resumes or lag bits, which v1 replays or derives")
     if reg.tick is not None and any(w.arrived or w.order for w in wins):
