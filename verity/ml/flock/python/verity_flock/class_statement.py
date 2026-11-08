@@ -1206,6 +1206,18 @@ class UnitStager:
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 
 
+def member_stager(definition, member, bind: dict | None, circuit: Path | None = None) -> UnitStager:
+    """A window member's template as its sessions prove it and an auditor's params name it: the flat statement, a
+    `UnitStager` named ``unit/<definition id>``, over each of ``member``'s input rows (its Definition's input of that name)
+    and each of its output rows, ``(row, words)`` in ``member.rows`` and ``member.outs``, at ``member.schema(row)`` and 16
+    bits a word, bound to ``bind`` (``{"partition", "program"}``). Its file, and so its SHA-512 (``pin``), is a function of
+    those alone and of the leaf scheme, so FLOCK_PLAIN_LEAVES=1, which makes another file, is refused."""
+    if PLAIN_LEAVES:
+        raise ValueError(f"{definition.id}: FLOCK_PLAIN_LEAVES=1 makes another file than the one a member's sessions prove")
+    return UnitStager(definition, f"unit/{definition.id}", [(r, member.schema(r), w * 16, [r]) for r, w in member.rows],
+                      [(member.schema(r), (j,)) for j, (r, _w) in enumerate(member.outs)], circuit=circuit, bind=bind)
+
+
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
                rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
                public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None,

@@ -4,8 +4,9 @@ values `_stage_unit_at_base` does (`stage_unit`'s code before the stager, less i
 nothing) on `test_pouw_rows`' statements and a Boolean unit; a stager's rounds share its pin and are each the statement of
 their own rows; a lowering output that is not the reference's is refused, naming the first such instance, on both of the
 check's paths (bit-sliced for a Boolean Definition, the reference for the rest); and the stager's circuit renders the unit's
-netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; and under
-FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme."""
+netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; under
+FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows, which
+refuses FLOCK_PLAIN_LEAVES=1."""
 from __future__ import annotations
 
 import hashlib
@@ -188,6 +189,21 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
         plain.stage(rows, tmp_path / "plain", b"k" * 32, indices=range(5))
     with pytest.raises(ValueError, match="exactly partition and program"):
         CS.UnitStager(*args, bind={"partition": bind["partition"]})
+
+
+@pytest.mark.slow
+def test_a_members_stager_is_the_unit_stager_of_its_rows_and_refuses_plain_leaves(monkeypatch):
+    """`member_stager` of a member laying its template out a row per input and per output is the `UnitStager` over those
+    rows at 16 bits a word, named by the template's id: its pin that stager's, bound as given; under FLOCK_PLAIN_LEAVES=1,
+    which makes another file, it refuses. x's row spans SHA-512 blocks, as a composed circuit needs one row to."""
+    toy = bind(definition("MemberStagerToy", 1, lambda C, x, y: [C.AND(x[i], x[1024 + i]) ^ y[i] for i in range(16)],
+                          (("x", Array(2048, BIT)), ("y", Array(16, BIT))), Array(16, BIT), register=False))
+    member = SimpleNamespace(rows=(("x", 128), ("y", 1)), outs=(("o", 1),), schema=lambda port: V2)
+    st = CS.member_stager(toy, member, None)
+    assert st.pin == CS.UnitStager(toy, f"unit/{toy.id}", [("x", V2, 2048, ["x"]), ("y", V2, 16, ["y"])], [(V2, (0,))]).pin
+    monkeypatch.setattr(CS, "PLAIN_LEAVES", True)
+    with pytest.raises(ValueError, match="FLOCK_PLAIN_LEAVES"):
+        CS.member_stager(toy, member, None)
 
 
 @pytest.mark.slow
