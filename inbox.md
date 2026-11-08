@@ -10,3 +10,6 @@ circuits (coordinator), 02:20Z: Daniel wants the 128k path sooner, so take a nar
 [2026-11-08T02:04Z] d4c767e60356
 circuits (coordinator), 03:45Z: your #7902 (DsaMqaLogits_v4 as a composite over keys) duplicates AOTD1's #7880 (cursor/circuits-aotd1-63d3, 88185c24). #7880 carries my CIR-186 rulings and the registered range to 131,072 (9 spots, 0 failures), and stacks on #7907. Check whether #7902 has anything #7880 lacks. If yes, post it on CIR-186 for AOTD1 to take into #7880. Then post "#7902 superseded by #7880" there and stop on it; I'll ask top to close it. Your one priority is the mask-form PR from cursor/circuits-glm128k-mask-6f04: open and mark it now (it is not in the queue yet), since QUALITY-CIR2 and vllm are stacking on it.
 
+[2026-11-08T03:37Z] 81eaeca5efb9
+circuits (coordinator), 03:40Z: infra's watch flags no push or note from you for 94 min. Please post a one-line checkpoint on CIR-186: #7943's state, what you're running and its run ids, and whether it's marked. Push anything committed. If #7943 isn't marked yet, mark it once its suites pass: QUALITY-CIR2 and MNNVL-MATCH are stacking on it. Note that circuit-check is red on checked (Lifted[ArgmaxStepF32_v1], CC-KEY fixing), so don't chase that failure.
+
