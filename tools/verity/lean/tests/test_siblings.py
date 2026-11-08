@@ -63,6 +63,22 @@ def test_the_stub_imports_the_built_modules_that_import_file_neither_directly_no
     assert argv == ["--setup", str(work / f"{S.STUB}.json"), str(work / f"{S.STUB}.lean")]
 
 
+def test_the_stub_leaves_out_the_other_executables_roots(tmp_path):
+    """`P.Main` and `P.Tool` are executables' roots under the library's directory: each declares `main`, so a stub
+    importing both would refuse it whatever FILE is. Neither is a sibling of a library module, and an executable's root
+    as FILE has the library's modules for siblings and not the other root."""
+    pkg = tmp_path / "p"
+    write(pkg, {"lakefile.toml": 'name = "p"\n\n[[lean_lib]]\nname = "P"\n\n[[lean_exe]]\nname = "p-main"\nroot = "P.Main"\n'
+                                 '\n[[lean_exe]]\nname = "P.Tool"\n',
+                "P/A.lean": "module\n", "P/D.lean": "module\n", "P/Main.lean": "module\nimport P.A\n",
+                "P/Tool.lean": "module\n"})
+    built(pkg, "P.A", "P.Main", "P.Tool")
+    assert S.executables(pkg) == {"P.Main", "P.Tool"}
+    assert S.plan(pkg, "P/D.lean") == S.Plan("P.D", True, ["P.A"], [])
+    assert S.plan(pkg, "P/Main.lean") == S.Plan("P.Main", True, ["P.A"], ["P.D"])
+    assert S.plan(pkg, "P/Tool.lean") == S.Plan("P.Tool", True, ["P.A"], ["P.D"])
+
+
 def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_path):
     """Security/Proofs' layout: `srcDir = ".."`, so its library `Proofs` is the package's own directory, beside the outer
     package's `Defs`. A sibling that isn't a `module` can't be imported by one, so the stub is a plain file."""
