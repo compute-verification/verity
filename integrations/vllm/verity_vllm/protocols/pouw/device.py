@@ -40,7 +40,7 @@ CFLAGS = ("-O2", "-std=c++17", "-ffp-contract=off", "-fno-fast-math", "-fno-exce
 CUDA_SOURCES = (SHA512_SOURCE, "ncp2.cuh", "ncp2_kernels.cu")
 FUSED_SOURCES = (SHA512_SOURCE, "ncp2.cuh", "ncp2_fast.cuh", "ncp2_fused.cu")
 #: `ncp2_fused`'s flags: hash (1), time the tile kernel (2), cache Y's leaves per weight (4), the tiles' low-byte leaf variant (8;
-#: its γ is unproved, so it is timed only and never a result)
+#: its gap is unproved, so it is timed only and never a result)
 HASH, TIME_TILES, CACHE_Y, LOWBYTE = 1, 2, 4, 8
 #: the low-byte variant's TurboSHAKE128 domain byte, and its layout: 128 low bytes (8 rows of 16) per 168-byte block
 LOWBYTE_DS, LOWBYTE_BLOCK, TS128_RATE = 0x0B, 128, 168
@@ -175,7 +175,7 @@ def _lib(on: str) -> ctypes.CDLL:
 
 
 def lowbyte_leaf(words: np.ndarray) -> bytes:
-    """The low-byte variant's leaf (its γ is unproved: timed only, never a result) over a tile's checkpoints (a tile unit's outputs, in order): TurboSHAKE128 with domain byte
+    """The low-byte variant's leaf (its gap is unproved: timed only, never a result) over a tile's checkpoints (a tile unit's outputs, in order): TurboSHAKE128 with domain byte
     `LOWBYTE_DS` over each word's low byte, `LOWBYTE_BLOCK` bytes then zeros to the rate per block, the last block unpadded."""
     low = (np.asarray(words, np.uint32) & 0xFF).astype(np.uint8).tobytes()
     blocks = [low[i:i + LOWBYTE_BLOCK] for i in range(0, len(low), LOWBYTE_BLOCK)]
@@ -320,7 +320,7 @@ def lowbyte_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
 def first_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
     """None when ``got`` commits what ``ref`` does: its weight side's Y unit leaves, inputs' digest and root, its inputs'
     digest, every unit's leaf, the root and the served y. Otherwise the first difference: the first wrong Y unit, the first
-    wrong unit in the partition's numbering (its role and place, and for a dequantization unit its arguments and both
+    incorrect proof block in the partition's numbering (its role and place, and for a dequantization unit its arguments and both
     values), or the first wrong served entry."""
     if got.shape != ref.shape:
         return f"shape {got.shape} is not {ref.shape}"

@@ -67,7 +67,7 @@ open Claims.Bridge.Live
 /-! ## A masked rep's caps at `capRound` -/
 
 /-- A masked rep's coins to its level-`ℓ + 1` cap, with four lanes after level 0: the zerocheck's, the lincheck's, the
-opening's of its `2 · regions + 2` claims, level 0's two first coins and `e` extra draws, then `capRound`. -/
+opening's of its `2 · regions + 2` claims, level 0's two first coins and `e` extra samples, then `capRound`. -/
 def zkCapDist {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (T : TabZK F mPts) (ℓ : ℕ) : ℕ :=
   capRound T.sch.k0 (ℓ + 1) + T.e + (2 * T.S.regions.length + 2 + 1) + (T.S.kLog - 6 + 3) + (T.S.m - 6 + 3)
 
@@ -116,7 +116,7 @@ theorem schedOf_lanes {s : Flock.Schedule} (hd : Refine.DimSeam s) :
   simp only [Refine.schedOf, List.getElem_tail, List.getElem_map, Array.getElem_toList, Refine.levelOf]
   exact h4
 
-/-- **A deployed table's numbers**: its extra draws, its statement's `m`, `kLog` and regions, its schedule's `k0`, and
+/-- **A deployed table's numbers**: its extra samples, its statement's `m`, `kLog` and regions, its schedule's `k0`, and
 four lanes after level 0. -/
 theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])

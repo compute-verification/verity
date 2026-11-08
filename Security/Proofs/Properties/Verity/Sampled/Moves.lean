@@ -11,7 +11,7 @@ import all Init.Data.Repr
 /-!
 # Sampled proofs' coupling: the live audit's typed moves, from what v2 reads
 
-The logged coupling reads a play of the period's game as a play of C-Flock's live audit (`Live.game`): the prover sends
+The logged coupling reads a play of the period's game as a play of Flock's live audit (`Live.game`): the prover sends
 its registration, the tables' roots `rootB`, a submission (`SubmitJ`) for each round of a rep stream, and the proof
 files. In the period's game those moves are only in the evidence, and the messages piece (`Reading`) fixes each one at
 its cut. This module reads them back, from what v2 reads of the evidence and from the messages the evidence reveals,
@@ -104,7 +104,7 @@ UTF-8 (`SampledProofs.OneStageZk.step`). -/
 def sessionRecord (e : _root_.SampledProofs.OneStageZk.Evidence) (bs : _root_.Core.Blobs) : Option String :=
   e.sessions[0]?.bind fun s => (bs.get s.record s!"session {s.name}'s record").toOption.bind String.fromUTF8?
 
-/-- **The session's proof files as v2 reads them** on the blobs `bs`: at the session v2 sets up at its record's draw
+/-- **The session's proof files as v2 reads them** on the blobs `bs`: at the session v2 sets up at its record's sample
 (`SampledProofs.OneStageZk.setupAt`) on the parameters' statement, circuit and public files and registered reads, the
 blob the session names for each rep stream (`SampledProofs.OneStageZk.filesOf`), as `SampledProofs.OneStageZk.run`
 hands them to `Flock.Zk.verify`. -/
@@ -292,7 +292,7 @@ theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Floc
   exact ⟨proofs, spec, tabs, rest, hf, hst, hv⟩
 
 /-- **One session's `step` after a run that accepted so far, where every session accepted**: its record is a blob,
-UTF-8, set up at its own draw, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
+UTF-8, set up at its own sample, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
 theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
@@ -402,7 +402,7 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
 
 /-- **What v2's check verified of the evidence `e` on the blobs `bs`**: its one session `rs`, the statement's tags, the
 parameters' circuit and public files and registered reads, the session's record `record` (`sessionRecord`), the session
-`(spec, tabs)` v2 sets up at its draw, and its proof files `proofs`, which `Flock.Zk.verify` accepts. -/
+`(spec, tabs)` v2 sets up at its sample, and its proof files `proofs`, which `Flock.Zk.verify` accepts. -/
 def V2Verified (p : _root_.SampledProofs.OneStageZk.Params) (e : _root_.SampledProofs.OneStageZk.Evidence)
     (bs : _root_.Core.Blobs) (record : String) (spec : SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
     (proofs : Array ByteArray) : Prop :=
@@ -605,8 +605,8 @@ theorem eq_viewZP {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteA
   funext j r
   exact hR j r
 
-/-- **The session's writer keeps an accepted transcript's view**: what `A.wr` writes, at a draw `S` and a registration
-`R`, for the view of a transcript `AcceptsZKP A.I A.own` accepts whose record carries the draw `A.dj S`, is accepted.
+/-- **The session's writer keeps an accepted transcript's view**: what `A.wr` writes, at a sample `S` and a registration
+`R`, for the view of a transcript `AcceptsZKP A.I A.own` accepts whose record carries the sample `A.dj S`, is accepted.
 `wrZP` does (`writesView_wrZP`); the writer the period's record names is to. -/
 def WritesView (A : Live) : Prop :=
   ∀ (S : Finset (Fin A.n)) (R : A.Reg) (t : FlockSoundness.Discharge.Exec.Transcript), AcceptsZKP A.I A.own t →

@@ -11,9 +11,9 @@ public import Flock.With.SetupEq
 /-!
 # `SampledKSLiveV5`'s file preconditions, read off acceptance (`SampledKSLiveV5Accepted`)
 
-`SampledKSLiveV5` takes four things of the files and the registration as hypotheses: `Bridge.RowsOk`,
-`Registered.dupName = none`, `RootFixesDomainL` at the public file's leaf map, and `Bridge.PopMatches`. The verifiers of
-record refuse every file and registration that fails them: `verify --zk` runs `Flock.PortRoots.checkOf` and then
+`SampledKSLiveV5R`, V5's bound under the roots guard, takes four things of the files and the registration as
+hypotheses: `Bridge.RowsOk`, `Registered.dupName = none`, `RootFixesDomainL` at the public file's leaf map, and
+`Bridge.PopMatches`. The verifiers refuse every file and registration that fails them: `verify --zk` runs `Flock.PortRoots.checkOf` and then
 `Flock.KsScope.checkOf` last in its verdict (`Main.verifyCmd`), and the sampled-proofs run refuses the registration
 (`SampledProofs.Run.run`, `population-order`, `SampledProofs.Slots.popOk`).
 
@@ -24,13 +24,13 @@ checks are V5's.
 
 * `loadPublic_core`: what a load returns of the population, its `b ‖ c` and its tables, as functions of the file and the
   circuit's ports; `loadPublic_agree`, `loadPublic_inOut`: two loads at one circuit's ports agree on them.
-* `v5Files_of_checks`: `PortRoots.check` and `KsScope.check` passing give V5's `dupName = none` and `RootFixesDomainL`
+* `v5Files_of_checks`: `PortRoots.check` and `KsScope.check` passing give `dupName = none` and `RootFixesDomainL`
   (at a file without shared rows, at the public file's population: `pub.n = n`).
-* `SampledKSLiveV5Accepted`: `SampledKSLiveV5` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
-  and without the four hypotheses, under the law the verifier draws under from the registration (`Bridge.DrawsUnder`),
-  no Bernoulli law, and at `δ` the law's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
-  `SampledKSLiveV5` as `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's
-  simulator is V5's: its draw files decode to `kd` units whatever the population (`Bridge.lawSized_drawsUnder`,
+* `SampledKSLiveV5Accepted`: `SampledKSLiveV5R` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
+  and without the four hypotheses, under the sampling design the verifier samples under from the registration (`Bridge.DrawsUnder`),
+  no Bernoulli law, and at `δ` the sampling design's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
+  `SampledKSLiveV5R` as `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's
+  simulator is V5's: its sample files decode to `kd` units whatever the population (`Bridge.lawSized_drawsUnder`,
   `Bridge.lawSized_size`), so it reads no population check.
 -/
 
@@ -241,16 +241,17 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **`SampledKSLiveV5` with its file preconditions read off acceptance**: `SampledKSLiveV5`'s bound on the event that
+/-- **`SampledKSLiveV5R` with its file preconditions read off acceptance**: its bound on the event that
 `verify --zk` at `own` accepts the transcript and the files (`LiveAcceptsKSP`: their ports row/v1, row/v2 or row-seg/v1
 rows of distinct names, no two registered roots one root under different domains, and the form, shared rows included,
 `KsScope` admits), the sampled-proofs run passes the registration's population (`RunPopOk`: the descriptor `desc` and
-the query `qr` give the game's `n` units in order), and the claims relation fails, under the law the verifier draws
-under from the registration (`Bridge.DrawsUnder`), no Bernoulli law (`Bridge.NotBernoulli`), at `δ` that law's own miss
-of `B`, as in `SampledKSLiveV5`. It has none of V5's hypotheses `RowsOk`, `dupName = none`, `RootFixesDomainL` and
+the query `qr` give the game's `n` units in order), and the claims relation fails, under the sampling design the verifier samples
+under from the registration (`Bridge.DrawsUnder`), no Bernoulli law (`Bridge.NotBernoulli`), at `δ` that sampling design's own miss
+of `B`, as in `SampledKSLiveV5`. It has none of `SampledKSLiveV5R`'s hypotheses `RowsOk`, `dupName = none`, `RootFixesDomainL` and
 `PopMatches`; the game's `n` is the public file's population (`pub.n = n`). It reads the circuit file flat
-(`Flock.Desc.parse`), as `PortRoots` does, and V5 at it through `Flock.Desc.parseStmt_of_parse`. `SampledKSLiveV5`
-implies it (`sampledKSLiveV5Accepted_of`). -/
+(`Flock.Desc.parse`), as `PortRoots` does, and `SampledKSLiveV5R` at it through `Flock.Desc.parseStmt_of_parse`, which
+implies it (`sampledKSLiveV5Accepted_of`). Since acceptance gives the roots guard, its bound has no `ecr/sha-512` term
+at the roots finder, which V5's has. -/
 def SampledKSLiveV5Accepted : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -262,7 +263,7 @@ def SampledKSLiveV5Accepted : Prop :=
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
     (desc : Claims.Msg) (qr : Lean.Json)
-    -- the registration's law object and work table, the law the verifier draws under from them, drawing kd proof
+    -- the registration's law object and work table, the sampling design the verifier samples under from them, sampling kd proof
     -- blocks, and that it is no Bernoulli law
     (lj : Lean.Json) (tb : Option Lean.Json) (law : Flock.Draw.Law) (kd : ℕ)
     (hlaw : Bridge.DrawsUnder desc qr lj tb n law kd) (hb : Bridge.NotBernoulli law) (hdiv : kd % nTab I = 0)
@@ -274,7 +275,7 @@ def SampledKSLiveV5Accepted : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and live-verifier at `own` and the law
+    -- the verify command's tags, and live-verifier at `own` and the sampling design
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
       fun _ => law)
@@ -306,7 +307,7 @@ def SampledKSLiveV5Accepted : Prop :=
     let Cd := Bridge.commitDepL Cc rows D.unroll Lm roots
     -- the circuit's constants and every proof block's public input bits, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
-    -- the law's design, the registration's strata, and the law's own miss of `B`
+    -- the sampling design's design, the registration's strata, and the sampling design's own miss of `B`
     let r := Properties.SampledProofs.oneStageOf law
     let ns := Bridge.nsOf desc qr
     let δ : ℝ := (Bridge.designOf r).Pa (Bridge.partOf P κ ns) B
@@ -325,10 +326,10 @@ def SampledKSLiveV5Accepted : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- **`SampledKSLiveV5` gives `SampledKSLiveV5Accepted`**: at files and a registration that pass the verifiers' checks
-they give V5's hypotheses (`rowsOk_of_scopeOkH`, `v5Files_of_checks` at `pub.n = n`, `popMatches_of_popOk`), and the
-accepted event is inside V5's; at files that fail, it is empty. -/
-theorem sampledKSLiveV5Accepted_of (h : Flock.Guarantees.SampledKSLiveV5) : SampledKSLiveV5Accepted := by
+/-- **V5's bound under the roots guard gives `SampledKSLiveV5Accepted`**: at files and a registration that pass the
+verifiers' checks they give `SampledKSLiveV5R`'s hypotheses (`rowsOk_of_scopeOkH`, `v5Files_of_checks` at `pub.n = n`,
+`popMatches_of_popOk`), and the accepted event is inside its; at files that fail, it is empty. -/
+theorem sampledKSLiveV5Accepted_of (h : SampledKSLiveV5R) : SampledKSLiveV5Accepted := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope hn desc qr lj tb law kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
     src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hT hL
   by_cases hc : (Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
@@ -346,6 +347,6 @@ theorem sampledKSLiveV5Accepted_of (h : Flock.Guarantees.SampledKSLiveV5) : Samp
 /-- **The sampled audit's knowledge soundness at public inputs, on the event that the verifiers accept the files**:
 no hypothesis on the files' rows, names or roots, or on the registration's population order. -/
 theorem sampledKSLiveV5Accepted : SampledKSLiveV5Accepted :=
-  sampledKSLiveV5Accepted_of Flock.SecurityProofs.SampledKSLiveV5
+  sampledKSLiveV5Accepted_of sampledKSLiveV5R
 
 end Flock.Bridge

@@ -3,15 +3,15 @@ module
 public import Flock.With.Setup
 
 /-!
-# What the setup's parse, load and draw return, in any hash
+# What the setup's parse, load and sample return, in any hash
 
 `Stmt.setupHiddenWith`'s hash calls depend on the parsed circuit's ports, the loaded public file's shared-row counts
-and the drawn population (`SetupCount.setupHidden_cost`). Each is a function of the files alone, whatever the hash:
+and the sampled population (`SetupCount.setupHidden_cost`). Each is a function of the files alone, whatever the hash:
 
 * `hmOutParse_ports`: an untyped circuit's ports are `HmRow.rowPorts` of its META line (`metaOf`).
 * `loadPublic_counts`: a public file's shared-row counts are `HmRow.sharedRows` of its header (`headerOf`) at the
   circuit's ports (`sharedRows_ports`), and the header the load keeps is that header.
-* `drawn_facts`: a draw keeps the counts, and its population is its JSON's (`Draw.UnitDraw.ofJson`).
+* `drawn_facts`: a sample keeps the counts, and its population is its JSON's (`Draw.UnitDraw.ofJson`).
 
 So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `drawn_pop`), where the
 verifier's own checks bound them.
@@ -396,7 +396,7 @@ theorem counts_le {pop pop' : Public} {B : Nat} (he : pop.tables.map (·.counts)
     have he' : t.counts = t'.counts := Option.some.inj he
     exact hb t' ht' r (he' ▸ hr)
 
-/-- **A draw's population is its JSON's**, and it keeps the shared-row counts, at any hash. -/
+/-- **A sample's population is its JSON's**, and it keeps the shared-row counts, at any hash. -/
 theorem drawn_pop (h : ByteArray → ByteArray) {c : Circuit} {pi : HmIn.Ports} {pop pub : Public} {d : Json}
     (hp : HmIn.drawnWith (M := V) (Hashes.ofSha512 h) c pi pop d = .ok pub) :
     ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 = D.population ∧

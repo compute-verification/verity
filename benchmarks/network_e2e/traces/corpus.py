@@ -45,7 +45,7 @@ core, which the OpenAI server does not have: Model Runner V2 and, but for GLM-5.
 (``VLLM_BATCH_INVARIANT=1``, the ``bi-eager`` execution, `verity_vllm.engine.served`). A corpus's
 `VARIANTS` entry sets its sampling and whether async scheduling is on (the profile has it off). Seeded sampling seeds each
 request by `request_seed` from its id, which is the same in every trace, as `engine.served_seed` fixes a public seed at
-``add_request``. Model Runner V2 draws a sampled token's Gumbel noise from Philox keyed by that seed and the token's
+``add_request``. Model Runner V2 samples a sampled token's Gumbel noise from Philox keyed by that seed and the token's
 position. `MODELS`:
 
 * ``llama32_1b``: unsloth/Llama-3.2-1B in bf16, vLLM's own attention.
@@ -427,7 +427,9 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
 
     conn = aiohttp.TCPConnector(limit=0)
     timeout = aiohttp.ClientTimeout(total=None, sock_read=None, sock_connect=60)
-    async with aiohttp.ClientSession(connector=conn, timeout=timeout) as session:
+    # The first streamed line carries the prompt's token ids (return_token_ids); aiohttp refuses a line over twice
+    # read_bufsize (LineTooLong), which its default 256 KiB puts at about 115k prompt tokens.
+    async with aiohttp.ClientSession(connector=conn, timeout=timeout, read_bufsize=2 ** 22) as session:
         mark = asyncio.create_task(watermark(session)) if cert is not None else None
         tasks = [asyncio.create_task(one(session, r, at, rid)) for r, at, rid in zip(requests, arrivals, ids)]
         done, pending = await asyncio.wait(tasks, timeout=max(arrivals) + drain_s)

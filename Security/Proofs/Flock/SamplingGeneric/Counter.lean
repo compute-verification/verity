@@ -111,10 +111,10 @@ namespace Counter
 /-- A verifier of one round that accepts whatever the prover sends. -/
 def V₁ : Verifier Unit := ⟨fun _ => 1, fun _ _ _ => .ret .acc⟩
 
-/-- A program of one input gate and no outputs, drawn `all`. -/
+/-- A program of one input gate and no outputs, sampled `all`. -/
 def s₀ : AuditStatement := ⟨[], ⟨[.input], []⟩, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
-/-- One class of one stratum of one proof unit: the input gate. -/
+/-- One class of one stratum of one proof block: the input gate. -/
 def P₀ : Partition := ⟨[[[[0]]]]⟩
 
 /-- A commitment whose check of an opening is one SHA-512 call, and passes. -/
@@ -169,8 +169,8 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
 /-! ## It meets the contract -/
 
 theorem unitClass₀ : unitClass s₀.prog [0] = some 16 := by
-  obtain ⟨t, ht⟩ : ∃ t, unitClasses = 16 :: t := by
-    rw [unitClasses, List.range_succ_eq_map, List.map_cons]
+  obtain ⟨t, ht⟩ : ∃ t, sizeClasses = 16 :: t := by
+    rw [sizeClasses, List.range_succ_eq_map, List.map_cons]
     exact ⟨_, rfl⟩
   rw [unitClass, ht]
   rfl

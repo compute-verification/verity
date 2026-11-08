@@ -6,7 +6,7 @@ running-sum salts, the level's `pub.bin` and `registered.json` as staging record
 earlier recording's level 3, proved before the OS masks as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements
 up only as `verity/flock-circuit`, so that outer session is refused at the record's first check (S2/R7) once every V*
 check has passed at setup. The honest level, restaged under SHA-512's salts (`rec_residuals.salt_of`), is the recorded
-one but for its own rows' fresh salts, and passes setup at the honest inner session and the coin server's transcript of
+one but for its own rows' fresh salts, and passes setup at the honest inner session and the challenger's live-coin part's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
 the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the challenger's
 format (`RecSetup.checkReads`), and where V* registered its
@@ -240,7 +240,7 @@ def test_the_recorded_level_is_refused_for_its_unregistered_rows(forged, shape, 
     """The recorded level was staged before a level registered its opened rows: its reads file names no `row`, so it is
     refused at setup by `Registered.checkComplete`, before any V* check. Restaged from the fixture, the level registers
     every port (`rec_outer.stage`, `inner_registered`) and its public file differs (the prover's own `row` and `aux` rows'
-    salts are drawn afresh), and it passes setup (`test_the_honest_level_passes_setup_at_the_honest_inner_session`)."""
+    salts are sampled afresh), and it passes setup (`test_the_honest_level_passes_setup_at_the_honest_inner_session`)."""
     assert (SET / "L3" / "pub.bin").read_bytes() != (restaged / "pub.bin").read_bytes()
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
@@ -254,8 +254,8 @@ def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tm
 
 
 def test_the_honest_level_is_refused_without_the_inner_transcript(forged, shape, tmp_path, restaged):
-    """`RecVStar.checkTopRows`: level 3's `out` reads `rec-top-L3`, the tops its openings climb to, which only the coin
-    server's record of the inner session fixes, so without it the honest level is refused at setup."""
+    """`RecVStar.checkTopRows`: level 3's `out` reads `rec-top-L3`, the tops its openings climb to, which only the challenger's
+    live-coin part's record of the inner session fixes, so without it the honest level is refused at setup."""
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "rows.json", restaged), transcript=False)
     assert v["why"] == (f"setup: rec-tops: {UNIT}: the verifier holds no inner transcript (--rec-inner-transcript with "
@@ -267,7 +267,7 @@ def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forg
     """`RecVStar.checkTopRows` at a real level: the honest level 3 against an inner transcript whose rep `rep` level-3 top
     (its third salted top, 32 nodes, after level 0's `root_B` and one salted top a level, `rec_vstar.tops`; `rec-top-L3`
     is rep 0's, then rep 1's) has node 0's `b ‖ c` one bit off is refused at the table row that reads the node: the
-    prover's registered top is not the one the coin server committed before the level's query coins. `root_B`, which only
+    prover's registered top is not the one the challenger's live-coin part committed before the level's query coins. `root_B`, which only
     level 0 reads, is tested in `test_lean_registered_reads` and `Flock.Test.InnerLink`."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     r = sorted((r for r in t["rounds"] if r["stream"] == f"circuit/rep{rep}" and r["tops"]), key=lambda r: r["k"])[LEVEL - 1]
@@ -320,7 +320,7 @@ def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
 
 
 def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path, restaged):
-    """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose draw is a well
+    """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose sample is a well
     formed sample of the 64 units is refused before its record is read."""
     inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
@@ -330,7 +330,7 @@ def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, 
 
 
 def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path, restaged):
-    """`RecCoins.drawnSpec`: a record whose draw is every unit is decoded against the drawn statement's spec, whose
+    """`RecCoins.drawnSpec`: a record whose sample is every unit is decoded against the sampled statement's spec, whose
     header carries the sample. The honest session ran without one, so its record is refused there, at its parameters."""
     inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
@@ -1001,7 +1001,7 @@ def test_the_inner_statement_is_set_up_as_its_files_set_it_up(built, tmp_path):
 
 
 def test_the_inner_statements_setup_flags_go_with_its_statement(built, tmp_path):
-    """`RecCoins.formInput`: the inner statement's tables and draw go with `--rec-inner-statement`."""
+    """`RecCoins.formInput`: the inner statement's tables and sample go with `--rec-inner-statement`."""
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     base = [str(BIN), "statement", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),

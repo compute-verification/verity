@@ -13,7 +13,9 @@
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
-    "workload": "benchmarks/stacked_share/job.sh"
+    "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
+    "workload": "benchmarks/stacked_share/job.sh",
+    "topp-pin-check": "integrations/vllm/tools/topp_pin_gpu.sh"
   },
   "entries": [
     {"file": "verity_vllm/acquire/served.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "served"},

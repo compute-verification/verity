@@ -3,7 +3,7 @@ module
 public import Batteries.Data.List.Basic
 public import Std.Data.TreeMap.Raw.WF
 public import Proofs.Properties.Pouw.LiveSalt.Canon
-public import Proofs.Properties.RemoteAudit.Sort
+public import Proofs.Properties.Accounting.Remote.Sort
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Core.QSort
 import all Init.Data.Repr

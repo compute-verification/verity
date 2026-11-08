@@ -9,14 +9,14 @@ The proof is the one-stage audit with a randomized extractor (`Audit.extraction_
 sampling design's alone, at the analysis the extractor defines (`Extractor.analysis`):
 
 * `Extractor.analysis`: the committed transcript is the registration and the committed trace, "wrong" is the
-  incorrect set, and the link term is the extractor's at the committed registration (`⊤` at any other, which no
+  incorrect set, and the binding error is the extractor's at the committed registration (`⊤` at any other, which no
   committed transcript reaches);
 * `Extractor.knowledgeSound_analysis`: the knowledge term at the proof block a rule picks is at most the largest over
   the sample (`Extractor.ksAvg`);
 * `Trials.errOf_plur_le`: at the plurality, a trial's binding error is at most its finder's collision term,
   `2·E[cost]/2^256 + 1/(eM)` (`LinkFinder.link_mass_le`, with the finder's output from two openings,
   `LinkFinder.outOf_spec`);
-* `Trials.link_le_bindErr`: so the link term at the committed trace is at most `ε_bind` (`Trials.Transfers`);
+* `Trials.link_le_bindErr`: so the binding error at the committed trace is at most `ε_bind` (`Trials.Transfers`);
 * `GenericSampledKS`, `GenericSampledKSPa`, `GenericSampledKSEscape`, `GenericSampledKSCount`.
 -/
 
@@ -42,7 +42,7 @@ variable (Ex : Extractor PS B) (Correct : Reg → B.Trace → Fin n → Prop)
 
 open Classical in
 /-- **The extraction analysis of the compiled audit**: the committed transcript is the registration and the committed
-trace, "wrong" is the incorrect set at the registration, and the link term is the extractor's at the committed
+trace, "wrong" is the incorrect set at the registration, and the binding error is the extractor's at the committed
 registration and `⊤` at any other. -/
 noncomputable def analysis (h : Ex.Covers Correct) : ExtractionAnalysis L Reg PS.session where
   Tr := Reg × B.Trace
@@ -70,7 +70,7 @@ theorem knowledgeSound_analysis (h : Ex.Covers Correct) :
 theorem linkSound_analysis (h : Ex.Covers Correct) (δ : (R : Reg) → Cont L Reg PS.session R → ℝ≥0∞)
     (hδ : ∀ R τ (tgt : L.Ω → Option (Fin n)),
       avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => Ex.link (L.draw ω) R (τ ω) u (Xc R τ)) ≤ δ R τ) :
-    (Ex.analysis Correct Xc h).LinkSound δ := by
+    (Ex.analysis Correct Xc h).BindSound δ := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_)) (hδ R τ tgt)
   simp only [analysis, ↓reduceIte]
@@ -97,7 +97,7 @@ theorem errOf_plur_le {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (
   · simp only [mul_zero, zero_div, zero_add]
     positivity
 
-/-- **The link term at the committed trace is at most `ε_bind`**, at a prover whose link finders satisfy ecr/sha-512. -/
+/-- **The binding error at the committed trace is at most `ε_bind`**, at a prover whose link finders satisfy ecr/sha-512. -/
 theorem link_le_bindErr {Ex : Extractor PS B} (hT : Tr.Transfers Ex)
     {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (hX : Tr.Plurality Xc) (hwf : Tr.WellFormed)
     (hop : Tr.Opens) {M : ℕ} (hM : 1 ≤ M) (R : Reg) (τ : Cont L Reg PS.session R) (hCR : Tr.CR R τ M)
@@ -116,7 +116,7 @@ end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
 /-- **The sampled audit's knowledge soundness, generic in the proof system** (`Flock.Guarantees.GenericSampledKS`):
-`Audit.extraction_audit_le` at `Extractor.analysis`, with the knowledge term `Extractor.ksAvg` and the link term
+`Audit.extraction_audit_le` at `Extractor.analysis`, with the knowledge term `Extractor.ksAvg` and the binding error
 `ε_bind` at every prover whose link finders satisfy ecr/sha-512 (`⊤` at any other). -/
 theorem Flock.SecurityProofs.GenericSampledKS : Flock.Guarantees.GenericSampledKS := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ E hCR

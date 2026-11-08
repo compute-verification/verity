@@ -56,20 +56,20 @@ hidden-output tag, `--zk`, and under `--zk` whether the session has one table) a
 claim the `FailClosed` headlines make there:
 
 - without `--zk`, public outputs: `SoundExec` (`flock_headline_exec_dec`); hidden outputs: `SoundExecH`
-  (`flock_headline_exec_hidden_design_dec`, at a draw design: the stratified law or the live subset draw), and with
+  (`flock_headline_exec_hidden_design_dec`, at a sample design: the stratified sampling design or the live subset sample), and with
   `--registered F`, at a public file with or without shared rows, `SoundExecHR` (`flock_headline_exec_hiddenR`, and the
-  registered reads checked), at a draw design too. The check refuses more than one table without `--zk`, and a subset
-  draw without `--zk` at public outputs.
+  registered reads checked), at a sample design too. The check refuses more than one table without `--zk`, and a subset
+  sample without `--zk` at public outputs.
 - `--plain-tables` (no `--zk`), at every number of tables up to `Tags.MAX_TABLES`, over `VerifiesP` (its check `ScopeP`,
   `ProvedScope.checkP`), whose circuit's META binds the verifier's own program (`ProgramOfCircuit`), the live subset
-  draw: at public outputs `SoundExecJ` (`PlainJ.plain_session_soundJ`), at hidden outputs with `hm96-sha512/v1` leaves
+  sample: at public outputs `SoundExecJ` (`PlainJ.plain_session_soundJ`), at hidden outputs with `hm96-sha512/v1` leaves
   `SoundExecHJ` (`PlainHJ.plain_session_soundHJ`, and `plain_session_soundHJI` where the wires feed). It is the
   theorem's third conjunct, since the flag is not in `Inputs`.
-- `--zk`, public outputs: at one table `SoundZ` (`zk_session_sound`, the stratified law) and zero knowledge `ViewZ`
-  (`zk_session_composed`); at every number of tables `SoundZJ` (`zk_session_soundJ`, the live subset draw).
+- `--zk`, public outputs: at one table `SoundZ` (`zk_session_sound`, the stratified sampling design) and zero knowledge `ViewZ`
+  (`zk_session_composed`); at every number of tables `SoundZJ` (`zk_session_soundJ`, the live subset sample).
 - `--zk`, hidden outputs: at one table `SoundZH` (`zk_session_soundH`); at every number of tables `SoundZHJ`
   (`zk_session_soundHJ`) and zero knowledge `ViewZHJ` (`zk_session_composedHJ`); and with `--registered F`, at a
-  public file with or without shared rows, `SoundZHJR` (`zk_session_soundHJR`, the live subset draw, and the registered
+  public file with or without shared rows, `SoundZHJR` (`zk_session_soundHJR`, the live subset sample, and the registered
   reads checked) and zero knowledge `ViewZHJR` (`ViewZHJ` at the check with the verifier's registered reads).
 
 At hidden outputs each soundness claim is a conjunction split on whether the circuit's wires feed its unit or its outputs
@@ -89,18 +89,18 @@ covers `--registered F` at public outputs: there it accepts no more than the ver
 
 `SoundExecJ` is a seventh soundness bound, `plain_session_soundJ`'s, and `SoundExecHJ` an eighth,
 `plain_session_soundHJ`'s and `plain_session_soundHJI`'s. The sixteen `FailClosed` headlines make eight
-distinct claims: the six soundness bounds (each its own game: the law,
-stratified or the live subset draw, and the outputs, public or hidden) and the two zero-knowledge views. The registered
+distinct claims: the six soundness bounds (each its own game: the sampling design,
+stratified or the live subset sample, and the outputs, public or hidden) and the two zero-knowledge views. The registered
 headlines make two more: `SoundZHJR` (`FailClosed.ZkRegistered`) and `SoundExecHR` (`FailClosed.PlainRegistered`), and
 `ViewZHJR` is `ViewZHJ`'s view at the statements only its check passes. `SoundExecH` and `SoundExecHR` take their law as
-a parameter (`DrawDesign`), the one the inputs make live (`LiveDesign`), so each is one claim at the stratified law
-and the live subset draw. The other eight
+a parameter (`DrawDesign`), the one the inputs make live (`LiveDesign`), so each is one claim at the stratified sampling design
+and the live subset sample. The other eight
 are corollaries of these: `flock_headline_exec` and `flock_headline_exec_hidden` state the `_dec` bounds at any decoder
 given its `DecodesOn` (`hdec`), which the `_dec` forms prove for the verifier's decoder; the soundness halves of
 `zk_session_composed` and `zk_session_composedHJ` are `zk_session_sound` and `zk_session_soundHJ`; the four `_custody`
-forms take the record (`hRec`) and draw (`hDraw`) facts from one named assumption (`Assumptions.Zk.RecordCustodyZK`,
-`RecordCustodyZKJ`), and the two `_custody_json` forms the draw fact from the draw file being `flock-verify draw`'s
-(`hdj`). The headlines remain, pinned, as lemmas. The claims take the headlines' record and draw facts as one named
+forms take the record (`hRec`) and sample (`hDraw`) facts from one named assumption (`Assumptions.Zk.RecordCustodyZK`,
+`RecordCustodyZKJ`), and the two `_custody_json` forms the sample fact from the sample file being `flock-verify draw`'s
+(`hdj`). The headlines remain, pinned, as lemmas. The claims take the headlines' record and sample facts as one named
 assumption too: without `--zk` `Assumptions.RecordCustodyExec` (`RecordCustodyExecH` at hidden outputs), under `--zk`
 `Assumptions.Zk.RecordCustodyZKLaw` (`RecordCustodyZKHLaw` at hidden outputs, `RecordCustodyZKJLaw` and
 `RecordCustodyZKHJLaw` at `J` tables).
@@ -130,19 +130,19 @@ end Accepts
 
 Every soundness claim takes the extractor's number `k` of accepted reruns and a rate `ρ < 1` with `hr`: each table of
 each plan has `2^{logLen ℓ₀}/(e·k) ≤ ρ`. `k` is the analysis's parameter, not the verifier's, and every plan reads the
-draw alone (`plan S R` does not depend on the registration `R`), so the plans have finitely many tables between them and
-a large enough `k` meets `hr` at every statement, draw file and setup, for every `ρ > 0` (`hr_exec`, `hr_execH`, `hr_z`,
+sample alone (`plan S R` does not depend on the registration `R`), so the plans have finitely many tables between them and
+a large enough `k` meets `hr` at every statement, sample file and setup, for every `ρ > 0` (`hr_exec`, `hr_execH`, `hr_z`,
 `hr_zj`, `hr_zh`, `hr_zhj`, `hr_execJ`, `hr_execHJ`). The bound states its dependence on `k`.
 
-Every claim also takes a reference setup (`x₀`, `y₀`) at some draw: at one table a setup of the statement, and in the
+Every claim also takes a reference setup (`x₀`, `y₀`) at some sample: at one table a setup of the statement, and in the
 claims at every number of tables (`SoundZJ`, `SoundZHJ`, `ViewZHJ`) a setup of table 0 under its tags (`inputsJ I 0`,
 and under `--plain-tables` `inputsPJ I 0`, with the statement untyped: `SoundExecJ`'s `ht`; `SoundExecHJ` reads it off
 the check).
-Every session flock-verify accepts at a draw the coin server's file proves, with the session's link points, sets one up
+Every session flock-verify accepts at a sample the challenger's live-coin part's file proves, with the session's link points, sets one up
 (`setup_of_verifies`, `setupH_of_verifies`, `setupZ_of_verifiesZK`, `setupZH_of_verifiesZK`, and at any number of
 tables `setupZJ_of_verifiesZK`, `setupZHJ_of_verifiesZK`, `setupPJ_of_verifiesP`, `setupPHJ_of_verifiesP`), so where there is none it accepts no such session. -/
 
-/-- **A rerun count meeting a rate**: when a plan reads the draw alone, some `k ≥ 1` puts every table's
+/-- **A rerun count meeting a rate**: when a plan reads the sample alone, some `k ≥ 1` puts every table's
 `2^{w T}/(e·k)` at most `ρ`. -/
 theorem exists_k {α : Type} {n : ℕ} {Reg : Type} (w : α → ℕ) (plan : Finset (Fin n) → Reg → List α)
     (hp : ∀ S R R', plan S R = plan S R') {ρ : ℝ} (hρ : 0 < ρ) :
@@ -178,13 +178,13 @@ theorem exists_k_rateZ {F : Type} [Field F] [Fintype F] [DecidableEq F] {n mPts 
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, ZkLink.rateZ (plan S R) j k ≤ ρ :=
   exists_k (fun T : ZkSession.TabZK F mPts => (lvOf T.sch 0).logLen) plan hp hρ
 
-/-! ## The stratified law
+/-! ## The stratified sampling design
 
-The claims at the stratified law (`SoundExec`, `SoundZ`, `SoundZH`, and their `205` and per-test forms, and
+The claims at the stratified sampling design (`SoundExec`, `SoundZ`, `SoundZH`, and their `205` and per-test forms, and
 `SoundExecH`, `SoundExecHR` at a stratified `DrawDesign` through `LiveDesign`) take the live law from the inputs, as the
 verifier does: `liveLaw I`, `HmRow.stratifiedLaw` at the verifier's own `--partition`, `--program` and `--stratified K`,
-to which `setupTables` holds a stratified draw file's law (U2). Their miss term is the stratified law's at every assignment `σs` of the population's units to the strata that the strata
-describe (`ExecStrata`), the bound the infimum over them. At an accepted draw file's law that infimum ranges over a
+to which `setupTables` holds a stratified sample file's law (U2). Their miss term is the stratified sampling design's at every assignment `σs` of the population's units to the strata that the strata
+describe (`ExecStrata`), the bound the infimum over them. At an accepted sample file's law that infimum ranges over a
 non-empty set (`liveStrata_of_ofJson`, from `Law.execStrata_of_ofJson`). -/
 
 section
@@ -193,14 +193,14 @@ open Game Model Accounting Refine Audit Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 
-/-- **The stratified law the verifier derives from its inputs**, and the population: `HmRow.stratifiedLaw` at
+/-- **The stratified sampling design the verifier derives from its inputs**, and the population: `HmRow.stratifiedLaw` at
 `--partition`, `--program` and `--stratified K`; none without all three. -/
 def liveLaw (I : Inputs) : Option (Flock.Draw.Law × ℕ) :=
   match I.partition, I.program, I.stratified with
   | some obj, some prog, some k => (Flock.HmRow.stratifiedLaw obj prog k).toOption
   | _, _, _ => none
 
-/-- **The strata of an accepted draw file describe an assignment**, at the strata's indices `Fin m`: an assignment `σs`
+/-- **The strata of an accepted sample file describe an assignment**, at the strata's indices `Fin m`: an assignment `σs`
 of the population's units to the strata over which the stratified claims' infimum ranges (`Law.execStrata_of_ofJson`). -/
 theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitDraw} {Kd m : ℕ} {St : Fin m → Flock.Draw.Stratum}
     (h : Flock.Draw.UnitDraw.ofJson j = .ok D) (hl : D.law = .stratified Kd (Array.ofFn St)) :
@@ -223,8 +223,8 @@ theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitDraw} {Kd m : �
     rw [hst]
     exact h1
 
-/-- **A draw design is the live draw's** at the inputs: at the stratified draw, its strata, `Kd` and population are the
-stratified law the verifier derives (`liveLaw`), as at `SoundExec`; the subset draw's law is the draw file's, which
+/-- **A sample design is the live sample's** at the inputs: at the stratified sample, its strata, `Kd` and population are the
+stratified sampling design the verifier derives (`liveLaw`), as at `SoundExec`; the subset sample's law is the sample file's, which
 `ProvedScope.lawWhy` admits at hidden outputs. -/
 def LiveDesign (I : Inputs) {n : ℕ} : DrawDesign n → Prop
   | .stratified St Kd pop => liveLaw I = some (.stratified Kd (Array.ofFn St), pop)
@@ -293,7 +293,7 @@ def SoundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
             (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
-/-- **`SoundExec` at A3 per test**: `SoundExec` with the verifier's bytes passing the stratified draw's escape test
+/-- **`SoundExec` at A3 per test**: `SoundExec` with the verifier's bytes passing the stratified sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
@@ -362,7 +362,7 @@ theorem soundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundExec I
     le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
       flock_headline_exec_dec hh dj x₀ σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hCust.1 hCust.2 τ hCR hKS
 
-/-- `SoundExec`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundExec`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_exec (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (x₀ : DrawSetup I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ hs : Scope I, ∀ S R j, rateB (Integrate.planAt (Reg := Reg) hs.typed dj x₀ S R) j k ≤ ρ := by
@@ -371,7 +371,7 @@ theorem hr_exec (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) 
     exact ⟨k, hk, fun _ => h⟩
   · exact ⟨1, le_rfl, fun h => absurd h hs⟩
 
-/-- **`SoundExec`'s setup exists at every accepted draw.** Where flock-verify accepts a session whose record's draw is
+/-- **`SoundExec`'s setup exists at every accepted sample.** Where flock-verify accepts a session whose record's sample is
 `d`, setupH set up at `d` (`st`), `d` decodes (`D`), and when `D` proves `S` and `st`'s link points are `mPts`, an
 `x₀ : DrawSetup I mPts S d` has statement `st`. -/
 theorem setup_of_verifies (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ} {S : Finset (Fin n)}
@@ -393,9 +393,9 @@ open FlockSoundness.Discharge.DecodeZLJ (decJ RecordsLiveJ accepts_reps_at)
 open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partS)
 
 set_option linter.unusedVariables false in
-/-- The claim under `--plain-tables` (no `--zk`, public outputs, any number of tables up to `Tags.MAX_TABLES`), the law
-the live subset draw: `plain_session_soundJ`'s. Its reference setup is table 0 of an untyped statement (`ht`, `x₀`),
-which every session `--plain-tables` accepts at a draw `DrawOkPJ` admits has (`setupPJ_of_verifiesP`). Its first
+/-- The claim under `--plain-tables` (no `--zk`, public outputs, any number of tables up to `Tags.MAX_TABLES`), the sampling design
+the live subset sample: `plain_session_soundJ`'s. Its reference setup is table 0 of an untyped statement (`ht`, `x₀`),
+which every session `--plain-tables` accepts at a sample `DrawOkPJ` admits has (`setupPJ_of_verifiesP`). Its first
 conjunct is what the statement is about: every session `--plain-tables` accepts is over a circuit whose META binds the
 verifier's own program (`ProgramOfCircuit`), and the bound is at that circuit's unit's key program (`keyProg`). -/
 def SoundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
@@ -405,12 +405,12 @@ def SoundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
+    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -459,7 +459,7 @@ def SoundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
             (rsPJ_computes ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
-/-- **`SoundExecJ` at A3 per test**: `SoundExecJ` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundExecJ` at A3 per test**: `SoundExecJ` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
@@ -469,13 +469,13 @@ def SoundExecJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
+    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -531,15 +531,15 @@ theorem soundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundExecJ
   exact plain_session_soundJ I ht dj x₀ wr dg N (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh) kd hkd Lb
     src hA3 hDraw (hs.tagsOk hh) hRec hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
 
-/-- `SoundExecJ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundExecJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_execJ (I : Inputs) {n mPts : ℕ} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ}
     (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planPJ (Reg := Reg) ht dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planPJ ht dj x₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundExecJ`'s reference setup exists at every accepted draw, at every number of tables**: where flock-verify
-`--plain-tables` accepts a session whose record's draw is `dj S`, at a draw whose parts the coin server's file proves
+/-- **`SoundExecJ`'s reference setup exists at every accepted sample, at every number of tables**: where flock-verify
+`--plain-tables` accepts a session whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves
 with the session's link points (`DrawOkPJ`), the statement is untyped and table 0 sets up, so there are `ht` and
 `x₀ : DrawSetup (inputsPJ I 0) mPts _ _`. -/
 theorem setupPJ_of_verifiesP (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}
@@ -579,8 +579,8 @@ theorem ScopeP.tagsOkH {I : Inputs} (h : ScopeP I) (hh : I.tags.hiddenOutputs = 
 
 set_option linter.unusedVariables false in
 /-- The claim under `--plain-tables` at hidden outputs (no `--zk`, any number of tables up to `Tags.MAX_TABLES`, `hm96`
-leaves), the law the live subset draw, where the wires feed neither the unit nor the outputs: `plain_session_soundHJ`'s,
-at the unit's key program. Its reference setup is table 0 (`x₀`), which every session `--plain-tables` accepts at a draw
+leaves), the sampling design the live subset sample, where the wires feed neither the unit nor the outputs: `plain_session_soundHJ`'s,
+at the unit's key program. Its reference setup is table 0 (`x₀`), which every session `--plain-tables` accepts at a sample
 `DrawOkPHJ` admits has (`setupPHJ_of_verifiesP`). Its first conjunct is `SoundExecJ`'s: the circuit's META binds the
 verifier's own program (`ProgramOfCircuit`). -/
 def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
@@ -591,12 +591,12 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
+    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -643,7 +643,7 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
             (rsPHJ_computes dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
-/-- **`SoundExecHJU` at A3 per test**: `SoundExecHJU` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundExecHJU` at A3 per test**: `SoundExecHJU` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
@@ -654,13 +654,13 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
+    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -715,7 +715,7 @@ theorem soundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prove
     Lb src hA3 hDraw (hs.tagsOkH hh) hRec hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
 
 set_option linter.unusedVariables false in
-/-- The claim under `--plain-tables` at hidden outputs, the law the live subset draw, where the wires feed the unit or the
+/-- The claim under `--plain-tables` at hidden outputs, the sampling design the live subset sample, where the wires feed the unit or the
 outputs: `plain_session_soundHJI`'s, at the template instance's program (`instProg`), its circuit conditions from
 `Layout.scopeGenH` (`General.rowsFit_of_scopeGenH`, `Layout.scopeGenH_spec`). -/
 def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
@@ -726,12 +726,12 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
+    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -790,7 +790,7 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
               (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2)) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
-/-- **`SoundExecHJG` at A3 per test**: `SoundExecHJG` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundExecHJG` at A3 per test**: `SoundExecHJG` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
@@ -801,13 +801,13 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
+    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -875,7 +875,7 @@ theorem soundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prove
     (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1 (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2 kd hkd
     Lb src hA3 hDraw (hs.tagsOkH hh) hRec hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
 
-/-- The claim under `--plain-tables` at hidden outputs, the law the live subset draw: `SoundExecHJU` where the wires
+/-- The claim under `--plain-tables` at hidden outputs, the sampling design the live subset sample: `SoundExecHJU` where the wires
 feed neither the unit nor the outputs, `SoundExecHJG` where they feed either. -/
 def SoundExecHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
   (∀ hf : ProvedScope.wiresFeed (circS I) = false, SoundExecHJU I hh hf) ∧
@@ -889,15 +889,15 @@ def SoundExecHJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
 theorem soundExecHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundExecHJ I hh :=
   And.intro (fun hf => soundExecHJU I hh hf) (fun hf => soundExecHJG I hh hf)
 
-/-- `SoundExecHJ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundExecHJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_execHJ (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planPHJ (Reg := Reg) dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planPHJ dj x₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundExecHJ`'s reference setup exists at every accepted draw, at every number of tables**
+/-- **`SoundExecHJ`'s reference setup exists at every accepted sample, at every number of tables**
 (`setupPJ_of_verifiesP` at hidden outputs): where flock-verify `--plain-tables` accepts a session of a hidden-output
-statement whose record's draw is `dj S`, at a draw whose parts the coin server's file proves with the session's link
+statement whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves with the session's link
 points (`DrawOkPHJ`), table 0 sets up with setupHidden, so there is an `x₀ : DrawSetupH (inputsPJ I 0) mPts _ _`. -/
 theorem setupPHJ_of_verifiesP (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesP I t)
@@ -930,8 +930,8 @@ open FlockSoundness.Discharge.ZkReg (OwnReadsH regPathsH)
 
 set_option linter.unusedVariables false in
 /-- The claim at a hidden-output statement without `--zk` whose wires feed neither the unit nor the outputs:
-`flock_headline_exec_hidden_design_dec`'s, at every draw design `D` the inputs make live (`LiveDesign`: the live stratified
-draw, or the live subset draw), its miss term `D.idealMiss`. -/
+`flock_headline_exec_hidden_design_dec`'s, at every sample design `D` the inputs make live (`LiveDesign`: the live stratified
+sample, or the live subset sample), its miss term `D.idealMiss`. -/
 def SoundExecHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
     Prop :=
   ∀ {n : ℕ}
@@ -1058,7 +1058,7 @@ theorem soundExecHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
 
 set_option linter.unusedVariables false in
 /-- The claim at a hidden-output statement without `--zk` whose wires feed the unit or the outputs:
-`flock_headline_exec_hiddenG_design`'s, at the template instance's program, at every draw design `D`. -/
+`flock_headline_exec_hiddenG_design`'s, at the template instance's program, at every sample design `D`. -/
 def SoundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
     Prop :=
   ∀ {n : ℕ}
@@ -1188,8 +1188,8 @@ theorem soundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
     flock_headline_exec_hiddenG_design hh hf dj x₀ D Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hCust.1 hCust.2 τ hCR hKS
 
 /-- The claim at a hidden-output statement without `--zk`: `SoundExecHU` where the wires feed neither the unit nor
-the outputs, `SoundExecHG` where they feed either, each at every draw design (`DrawDesign`: the stratified draw, and the
-subset draw that `ProvedScope.lawWhy` admits at hidden outputs without `--zk`). -/
+the outputs, `SoundExecHG` where they feed either, each at every sample design (`DrawDesign`: the stratified sample, and the
+subset sample that `ProvedScope.lawWhy` admits at hidden outputs without `--zk`). -/
 def SoundExecH (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
   (∀ hf : ProvedScope.wiresFeed (circS I) = false, SoundExecHU I hh hf) ∧
     ∀ hf : ProvedScope.wiresFeed (circS I) = true, SoundExecHG I hh hf
@@ -1504,13 +1504,13 @@ def SoundExecHRPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
 theorem soundExecHR (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundExecHR I hh :=
   And.intro (fun hf => soundExecHRU I hh hf) (fun hf => soundExecHRG I hh hf)
 
-/-- `SoundExecH`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundExecH`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_execH (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planAtH dj x₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundExecH`'s setup exists at every accepted draw** (`setup_of_verifies` under hidden outputs). -/
+/-- **`SoundExecH`'s setup exists at every accepted sample** (`setup_of_verifies` under hidden outputs). -/
 theorem setupH_of_verifies (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ} {S : Finset (Fin n)}
     {d : Lean.Json} {t : Exec.Transcript} (h : Verifies I t) (hd : recordDraw t.record = some d) :
     ∃ st D, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program =
@@ -1529,18 +1529,18 @@ open FlockSoundness.Discharge.DecodeZLJ (partJson)
 open scoped ENNReal
 
 set_option linter.unusedVariables false in
-/-- The claim at a public-output statement of one table under `--zk`, the law stratified: `zk_session_sound`'s. -/
+/-- The claim at a public-output statement of one table under `--zk`, the sampling design stratified: `zk_session_sound`'s. -/
 def SoundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKLaw I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -1571,7 +1571,7 @@ def SoundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1)
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hCust.1 hCust.2)) τ)))
 
 set_option linter.unusedVariables false in
-/-- **`SoundZ` at A3 per test**: `SoundZ` with the verifier's bytes passing the stratified draw's escape test
+/-- **`SoundZ` at A3 per test**: `SoundZ` with the verifier's bytes passing the stratified sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) : Prop :=
@@ -1579,13 +1579,13 @@ def SoundZPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKLaw I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -1621,17 +1621,17 @@ theorem soundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count �
       zk_session_sound I hh hn dj y₀ wr dg N σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
-/-- The claim at a public-output statement of any number of tables under `--zk`, the law the live subset draw: `zk_session_soundJ`'s. -/
+/-- The claim at a public-output statement of any number of tables under `--zk`, the sampling design the live subset sample: `zk_session_soundJ`'s. -/
 def SoundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKJLaw I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -1665,7 +1665,7 @@ def SoundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
           k Rw M ρ t' (reg σ) (cont σ))
 
 set_option linter.unusedVariables false in
-/-- **`SoundZJ` at A3 per test**: `SoundZJ` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundZJ` at A3 per test**: `SoundZJ` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
@@ -1674,11 +1674,11 @@ def SoundZJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKJLaw I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -1715,20 +1715,20 @@ theorem soundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundZJ I hh 
   @fun _ _ _ dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hCust _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
     zk_session_soundJ I hh dj y₀ wr dg N kd hkd Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
-/-- `SoundZ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundZ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_z (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZAt dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- `SoundZJ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundZJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_zj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZJ dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundZ`'s setup exists at every accepted draw**: where flock-verify `--zk` accepts a one-table session whose
-record's draw is `dj S`, at a draw the coin server's file proves with the session's link points (`DrawOkZK`), there is a
+/-- **`SoundZ`'s setup exists at every accepted sample**: where flock-verify `--zk` accepts a one-table session whose
+record's sample is `dj S`, at a sample the challenger's live-coin part's file proves with the session's link points (`DrawOkZK`), there is a
 `y₀ : DrawSetupZK I mPts S (dj S)`. -/
 theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
@@ -1749,8 +1749,8 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨y, -, -, -⟩ := drawSetupZK_of h.2.typed x hsh hz'
   exact ⟨y⟩
 
-/-- **`SoundZJ`'s setup exists at every accepted draw, at every number of tables**: where flock-verify `--zk` accepts a
-session whose record's draw is `dj S`, at a draw whose parts the coin server's file proves with the session's link
+/-- **`SoundZJ`'s setup exists at every accepted sample, at every number of tables**: where flock-verify `--zk` accepts a
+session whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves with the session's link
 points (`DrawOkZKJ`), table 0 sets up, so there is a `y₀ : DrawSetupZJ (inputsJ I 0) mPts _ _`. -/
 theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
@@ -1803,7 +1803,7 @@ open FlockSoundness.Discharge.DecodeZLJ (partJson)
 open scoped ENNReal
 
 set_option linter.unusedVariables false in
-/-- The claim at a hidden-output statement of one table under `--zk`, the law stratified, whose wires feed neither the
+/-- The claim at a hidden-output statement of one table under `--zk`, the sampling design stratified, whose wires feed neither the
 unit nor the outputs: `zk_session_soundH`'s. -/
 def SoundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = false) : Prop :=
@@ -1811,12 +1811,12 @@ def SoundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHLaw I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -1847,7 +1847,7 @@ def SoundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1 hCust.2)) τ)))
 
 set_option linter.unusedVariables false in
-/-- **`SoundZHU` at A3 per test**: `SoundZHU` with the verifier's bytes passing the stratified draw's escape test
+/-- **`SoundZHU` at A3 per test**: `SoundZHU` with the verifier's bytes passing the stratified sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
@@ -1856,13 +1856,13 @@ def SoundZHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHLaw I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -1899,7 +1899,7 @@ theorem soundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count �
       zk_session_soundH I hh hf hn dj y₀ wr dg N σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
-/-- The claim at a hidden-output statement of one table under `--zk`, the law stratified, whose wires feed the unit or
+/-- The claim at a hidden-output statement of one table under `--zk`, the sampling design stratified, whose wires feed the unit or
 the outputs: `zk_session_soundHG`'s, at the template instance's program. -/
 def SoundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = true) : Prop :=
@@ -1907,12 +1907,12 @@ def SoundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHLaw I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -1951,7 +1951,7 @@ def SoundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
           k Rw M ρ t' (reg σ) (cont σ))
 
 set_option linter.unusedVariables false in
-/-- **`SoundZHG` at A3 per test**: `SoundZHG` with the verifier's bytes passing the stratified draw's escape test
+/-- **`SoundZHG` at A3 per test**: `SoundZHG` with the verifier's bytes passing the stratified sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
@@ -1960,13 +1960,13 @@ def SoundZHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHLaw I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -2010,7 +2010,7 @@ theorem soundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count �
     le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
       zk_session_soundHG I hh hf hn dj y₀ wr dg N σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
-/-- The claim at a hidden-output statement of one table under `--zk`, the law stratified: `SoundZHU` where the wires
+/-- The claim at a hidden-output statement of one table under `--zk`, the sampling design stratified: `SoundZHU` where the wires
 feed neither the unit nor the outputs, `SoundZHG` where they feed either. -/
 def SoundZH (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1) : Prop :=
   (∀ hf : ProvedScope.wiresFeed (circZ I) = false, SoundZHU I hh hn hf) ∧
@@ -2025,7 +2025,7 @@ theorem soundZH (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count �
   And.intro (fun hf => soundZHU I hh hn hf) (fun hf => soundZHG I hh hn hf)
 
 set_option linter.unusedVariables false in
-/-- The claim at a hidden-output statement of any number of tables under `--zk`, the law the live subset draw, whose
+/-- The claim at a hidden-output statement of any number of tables under `--zk`, the sampling design the live subset sample, whose
 wires feed neither the unit nor the outputs: `zk_session_soundHJ`'s. -/
 def SoundZHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) :
     Prop :=
@@ -2034,10 +2034,10 @@ def SoundZHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2074,7 +2074,7 @@ def SoundZHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.
           k Rw M ρ t' (reg σ) (cont σ))
 
 set_option linter.unusedVariables false in
-/-- **`SoundZHJU` at A3 per test**: `SoundZHJU` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundZHJU` at A3 per test**: `SoundZHJU` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) :
@@ -2084,11 +2084,11 @@ def SoundZHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prove
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2130,7 +2130,7 @@ theorem soundZHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSc
     zk_session_soundHJ I hh hf dj y₀ wr dg N kd hkd Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
-/-- The claim at a hidden-output statement of any number of tables under `--zk`, the law the live subset draw, whose
+/-- The claim at a hidden-output statement of any number of tables under `--zk`, the sampling design the live subset sample, whose
 wires feed the unit or the outputs: `zk_session_soundHJG`'s, at the template instance's program. -/
 def SoundZHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = true) :
     Prop :=
@@ -2139,10 +2139,10 @@ def SoundZHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2184,7 +2184,7 @@ def SoundZHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.
           k Rw M ρ t' (reg σ) (cont σ))
 
 set_option linter.unusedVariables false in
-/-- **`SoundZHJG` at A3 per test**: `SoundZHJG` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundZHJG` at A3 per test**: `SoundZHJG` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = true) :
@@ -2194,11 +2194,11 @@ def SoundZHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prove
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2244,7 +2244,7 @@ theorem soundZHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSc
   @fun _ _ _ dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hCust _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
     zk_session_soundHJG I hh hf dj y₀ wr dg N kd hkd Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
-/-- The claim at a hidden-output statement of any number of tables under `--zk`, the law the live subset draw:
+/-- The claim at a hidden-output statement of any number of tables under `--zk`, the sampling design the live subset sample:
 `SoundZHJU` where the wires feed neither the unit nor the outputs, `SoundZHJG` where they feed either. -/
 def SoundZHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
   (∀ hf : ProvedScope.wiresFeed (circZ I) = false, SoundZHJU I hh hf) ∧
@@ -2258,26 +2258,26 @@ def SoundZHJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
 theorem soundZHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundZHJ I hh :=
   And.intro (fun hf => soundZHJU I hh hf) (fun hf => soundZHJG I hh hf)
 
-/-- `SoundZH`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundZH`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_zh (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planAtZKH dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- `SoundZHJ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
+/-- `SoundZHJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_zhj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZHJ dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundZH`'s setup exists at every accepted draw** (`setupZ_of_verifiesZK` under hidden outputs). -/
+/-- **`SoundZH`'s setup exists at every accepted sample** (`setupZ_of_verifiesZK` under hidden outputs). -/
 theorem setupZH_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
     Nonempty (DrawSetupZKH I mPts S (dj S)) :=
   ZkHidden.drawSetupZKH_of_acceptsISt ZkHidden.zk_schedOK h.2.typed (h.2.parseH hh) hh hn h.1 hd hok
 
-/-- **`SoundZHJ`'s setup exists at every accepted draw, at every number of tables** (`setupZJ_of_verifiesZK` under
+/-- **`SoundZHJ`'s setup exists at every accepted sample, at every number of tables** (`setupZJ_of_verifiesZK` under
 hidden outputs). -/
 theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
@@ -2324,8 +2324,8 @@ theorem viewZHJ (I : Inputs) : ViewZHJ I :=
 open FlockSoundness.Discharge.ZkReg (OwnReadsHJ regPathsHJ)
 
 set_option linter.unusedVariables false in
-/-- The claim at a hidden-output statement of any number of tables under `--zk --registered F` (`own` F's ports), the law
-the live subset draw, at a public file with or without shared rows, whose wires feed neither the unit nor the
+/-- The claim at a hidden-output statement of any number of tables under `--zk --registered F` (`own` F's ports), the sampling design
+the live subset sample, at a public file with or without shared rows, whose wires feed neither the unit nor the
 outputs: `zk_session_soundHJR`'s, its bound and the registered check's consequence at every accepted outcome. -/
 def SoundZHJRU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) :
     Prop :=
@@ -2334,10 +2334,10 @@ def SoundZHJRU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2380,7 +2380,7 @@ def SoundZHJRU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope
           rd.Checked o.1 (regPathsHJ I (circZ I) (pubZ I) o.2.2 rd.port)
 
 set_option linter.unusedVariables false in
-/-- **`SoundZHJRU` at A3 per test**: `SoundZHJRU` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundZHJRU` at A3 per test**: `SoundZHJRU` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZHJRUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) :
@@ -2390,11 +2390,11 @@ def SoundZHJRUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prov
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2442,8 +2442,8 @@ theorem soundZHJRU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     zk_session_soundHJR I hh hf own dj y₀ wr dg N kd hkd Lb src hA3 hCust.2 hCust.1 hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
-/-- The claim at a hidden-output statement of any number of tables under `--zk --registered F` (`own` F's ports), the law
-the live subset draw, at a public file with or without shared rows, whose wires feed the unit or the outputs:
+/-- The claim at a hidden-output statement of any number of tables under `--zk --registered F` (`own` F's ports), the sampling design
+the live subset sample, at a public file with or without shared rows, whose wires feed the unit or the outputs:
 `zk_session_soundHJRG`'s, at the template instance's program, its bound and the registered check's consequence at every
 accepted outcome. -/
 def SoundZHJRG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = true) :
@@ -2453,10 +2453,10 @@ def SoundZHJRG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2504,7 +2504,7 @@ def SoundZHJRG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope
           rd.Checked o.1 (regPathsHJ I (circZ I) (pubZ I) o.2.2 rd.port)
 
 set_option linter.unusedVariables false in
-/-- **`SoundZHJRG` at A3 per test**: `SoundZHJRG` with the verifier's bytes passing the subset draw's escape test
+/-- **`SoundZHJRG` at A3 per test**: `SoundZHJRG` with the verifier's bytes passing the subset sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundZHJRGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = true) :
@@ -2514,11 +2514,11 @@ def SoundZHJRGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prov
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's record of the live session, and its draw at each of the law's draws
+    -- the challenger's live-coin part's record of the live session, and its sample at each of the sampling design's samples
     (hCust : Assumptions.Zk.RecordCustodyZKHJLaw I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr
       (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
@@ -2628,14 +2628,14 @@ def FlockVerifySoundPerTest : Prop :=
 
 /-- **Soundness, over everything flock-verify accepts.** At every statement `I`, with or without `--zk` and with or
 without `--registered F`: the live session's probability that `flock-verify verify` accepts (`FlockVerifyAccepts zk I`,
-with `--registered F` `FlockVerifyAcceptsR zk I own`) while at least `K` of the statement's proof units are wrong is at
+with `--registered F` `FlockVerifyAcceptsR zk I own`) while at least `K` of the statement's proof blocks are wrong is at
 most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExecH` (hidden), and with `--registered F`
 at hidden outputs `SoundExecHR` (one table, the registered reads checked); under `--zk`, at one table `SoundZ` with zero
 knowledge `ViewZ` (public) or `SoundZH` (hidden), and at every number of tables `SoundZJ` (public) or `SoundZHJ` with
 zero knowledge `ViewZHJ` (hidden), and with `--registered F` at hidden outputs `SoundZHJR` with zero knowledge
 `ViewZHJR`. The registered claims hold at a public file with or without shared rows. At public outputs `--registered F`
 accepts no more than the verifier does without it (the second conjunct), so the claims without it hold. With `--plain-tables` (no `--zk`) it
-accepts `VerifiesP`, and the bound is the third conjunct's, up to `Tags.MAX_TABLES` tables at the live subset draw, over
+accepts `VerifiesP`, and the bound is the third conjunct's, up to `Tags.MAX_TABLES` tables at the live subset sample, over
 a circuit whose META binds the verifier's own program (`ProgramOfCircuit`): `SoundExecJ` at public outputs, and
 `SoundExecHJ` at hidden outputs (`hm96-sha512/v1` leaves). No hypothesis on the circuit file or
 the statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`, under

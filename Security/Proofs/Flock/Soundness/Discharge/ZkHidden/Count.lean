@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The compiled `--zk` count curve at the hidden-output tables
 
 `zk_flock_countC_execOS_cr` reads its tables only through the plan, so it holds at the one-table hidden-output plan
-`planAtZKH` as stated. The hidden-output binding enters through `place` and `vb`, which read the drawn units' places
+`planAtZKH` as stated. The hidden-output binding enters through `place` and `vb`, which read the sampled proof blocks' places
 in `tableAtZKH`'s statements (`AcceptsZKAcceptedH`).
 -/
 
@@ -38,7 +38,7 @@ variable {K : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ} {D Sl : T
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
 
 /-- **The compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
-`planAtZKH dj y₀` (each draw's table `tableAtZKH dj y₀ S`, every unit in it). -/
+`planAtZKH dj y₀` (each sample's table `tableAtZKH dj y₀ S`, every unit in it). -/
 theorem zk_flock_countC_execOS_crH (hA : A.Correct)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

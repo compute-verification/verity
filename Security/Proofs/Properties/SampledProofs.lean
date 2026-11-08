@@ -89,7 +89,7 @@ theorem checkProved_nil (draw : Json) (us : Array Nat) (n : Nat) :
   rw [show (Array.map (fun (x : Nat) => some (x : Int)) us) = (us.map fun (x : Nat) => (x : Int)).map some by
     simp [Array.map_map, Function.comp_def], map_some_inj]
 
-/-- A check of `Record.checks` that fails, other than the draw's. -/
+/-- A check of `Record.checks` that fails, other than the sample's. -/
 def Fails (x : String × Check) : Bool := x.1 != "draw" && !x.2.codes.isEmpty
 
 theorem none_fail_ite_push (b : Bool) (xs : Array (String × Check)) (y : String × Check) :
@@ -1270,8 +1270,8 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
-/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a draw of the agreed law over the
-registered population, its units proved and served as drawn, and verdicts that accept, is accepted, publishing
+/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a sample of the agreed law over the
+registered population, its units proved and served as sampled, and verdicts that accept, is accepted, publishing
 `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)

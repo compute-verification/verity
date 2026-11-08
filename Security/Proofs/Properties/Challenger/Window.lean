@@ -7,7 +7,7 @@ import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
 /-!
-# A draw's window is one the device's own ledger opens, or a break
+# A sample's window is one the device's own ledger opens, or a break
 
 `drawCoins` reads its session from the auditor's ledger: `pinnedSession` takes the v2 open whose root is the window's
 (`Ledger.auditedOpen_ok`), `sessionNamed` reads the session that open names (`sessionNamed_sid`), and `withheldOn`
@@ -155,7 +155,7 @@ theorem sessionNamed_sid {a : Audited} {session : Json} {r : LiveCommitment × R
 
 -- `mvcgen` splits `drawCoins` into one goal per check it makes of the record's form, the window and the family
 set_option maxHeartbeats 1000000 in
-/-- **`drawCoins` accepts only a draw whose window the ledger opens withheld.** -/
+/-- **`drawCoins` accepts only a sample whose window the ledger opens withheld.** -/
 theorem drawCoins_withheld {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     withheldOn (getD coins "ledger") w = true := by
   refine of_triple (Q := fun _ => withheldOn (getD coins "ledger") w = true) ?_ h
@@ -391,8 +391,8 @@ theorem window_opens {w : String} {pins main : Json} {a : Audited}
       · exact .inr b
   · exact .inr b
 
-/-- **A draw `drawCoins` accepts reads its coins against a run the device closed, a run the device's own ledger opens on
-the draw's window**, withheld, under v2, or the finder outputs a break: `Session.drawCoins_session`'s run, with
+/-- **A sample `drawCoins` accepts reads its coins against a run the device closed, a run the device's own ledger opens on
+the sample's window**, withheld, under v2, or the finder outputs a break: `Session.drawCoins_session`'s run, with
 `OpensOn`. -/
 theorem drawCoins_opens {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after

@@ -106,7 +106,7 @@ def Flattens (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) : Prop :=
       Flock.Program.resolve P P.rootScope ((P.defs[P.root]!).body.ret.get j) = .ok g
 
 /-- **The deployment's statements are their descriptors flattened**: every statement `D` parses has a descriptor
-C-Flock decodes (`Flock.Program.decode`, as the sampled verifier's `SampledProofs.Program.parse` does), and its gates
+Flock decodes (`Flock.Program.decode`, as the sampled verifier's `SampledProofs.Program.parse` does), and its gates
 are that Program's (`Flattens`). -/
 def StmtFlattens {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) : Prop :=
   ∀ x s, D.parse x = some s → ∃ P, Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ Flattens P s.prog

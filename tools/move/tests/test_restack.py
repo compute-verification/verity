@@ -2,6 +2,7 @@
 `app/util.py` to `app/core/util.py` and renames the module `app.util` to `app.core.util`."""
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -435,3 +436,65 @@ def test_a_result_without_a_list_of_pins_runs_none(repo):
     on(repo, "pr", ("edit", {"README.md": "readme 2\n"}))
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "clean" and "pins" not in [s["step"] for s in r["steps"]], r
+
+
+def test_dropping_a_scratch_worktree_never_fails_on_what_git_leaves(repo):
+    """A scratch worktree the script left a read-only directory in, which `git worktree remove` can't empty, still goes and
+    the clone forgets it: the restack's result is already read, so its cleanup fails nothing."""
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    stuck = wt / "cache" / "deep"
+    stuck.mkdir(parents=True)
+    (stuck / "f").write_text("x")
+    os.chmod(stuck, 0o555)
+    os.chmod(wt / "cache", 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert str(wt) not in git(repo, "worktree", "list")
+
+
+def test_dropping_a_scratch_worktree_changes_no_file_outside_it(repo, tmp_path):
+    """A symlink or a hard link in a read-only directory of the worktree (a tool's cache links into it) goes without its
+    target's mode changing: deleting it takes its directory's permission, never its own."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked, hard = outside / "linked", outside / "hard"
+    for f in (linked, hard):
+        f.write_text("secret")
+        os.chmod(f, 0o600)
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    for name, add in (("symlink", lambda p: p.symlink_to(linked)), ("hardlink", lambda p: os.link(hard, p))):
+        stuck = wt / "cache" / name
+        stuck.mkdir(parents=True)
+        add(stuck / "f")
+        os.chmod(stuck, 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert {f.name: f.stat().st_mode & 0o777 for f in (linked, hard)} == {"linked": 0o600, "hard": 0o600}
+
+
+def test_a_scratch_worktree_is_added_and_forgotten_holding_the_clones_worktree_lock_and_filled_without_it(repo, monkeypatch):
+    """`git worktree add` writes a placeholder HEAD before the real one, and a fetch in the clone reads every worktree's HEAD
+    (drive's sync failed on one: `bad object worktrees/restack-…/HEAD`). So a scratch worktree is added, with no checkout,
+    and forgotten holding the clone's worktree lock alone, which every fetch the queue runs holds shared, and its checkout
+    fills it after the lock goes."""
+    lock, seen, real = repo / ".git" / RS.WORKTREES_LOCK, [], RS.git
+
+    def probed(*args, **kw):
+        if args[0] in ("worktree", "reset"):
+            with open(lock, "a") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    seen.append((*args[:2], "free"))
+                except BlockingIOError:
+                    seen.append((*args[:2], "held"))
+        return real(*args, **kw)
+
+    monkeypatch.setattr(RS, "git", probed)
+    wt = repo.parent / "scratch"
+    RS.add_worktree(str(wt), "main", str(repo))
+    assert (wt / "README.md").read_text() == "readme\n"
+    RS.drop_worktree(str(wt), str(repo))
+    assert seen == [("worktree", "add", "held"), ("reset", "--hard", "free"), ("worktree", "prune", "held")]
+    assert not wt.exists() and str(wt) not in git(repo, "worktree", "list")

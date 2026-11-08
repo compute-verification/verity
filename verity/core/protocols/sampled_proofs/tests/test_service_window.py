@@ -1,6 +1,6 @@
 """The proof system over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
 digest and `Q_template_instances` in the window's order, each registration's population the templates' mixed population
-at the challenger's own counts (`register(counts=)`), drawn once by `stratified:K`, a stratum per template each drawn at
+at the challenger's own counts (`register(counts=)`), sampled once by `stratified:K`, a stratum per template each sampled at
 least once, and its whole run held to the Lean verifier's (`Run.run`) as one template's is."""
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ TRIPLE = bind(CompositeDefinition("ServiceTestTriple", 0, (), lambda S_: ((("x",
                                   lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 WINDOW = (PAIR, TRIPLE)
 QUERY = P.template_instances_query(WINDOW)
-#: PAIR's one instance is a stratum `stratified:3` draws round(3 / 10) = 0 of, so its floor draws it.
+#: PAIR's one instance is a stratum `stratified:3` samples round(3 / 10) = 0 of, so its floor samples it.
 COUNTS = {P.template_id(PAIR): 1, P.template_id(TRIPLE): 9}
 LAW = S.Law("stratified:3")
 PUBLIC = (*RECORD_ITEMS, *(S.Public(f"population:{P.template_id(t)}", "structure", "a template's stratum") for t in WINDOW))
@@ -43,22 +43,22 @@ def _stream(spec=None, coins=None, window=WINDOW, sampler=None) -> S.Stream:
                      clock=Clock(), sampler=sampler)
 
 
-def _program(counts=COUNTS, window=WINDOW):
-    return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in window])
+def _program(counts=COUNTS, window=WINDOW, values=()):
+    return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
 
 
-def _ports(counts=COUNTS) -> dict:
-    part = P.partition(_program(counts), QUERY)
+def _ports(counts=COUNTS, values=()) -> dict:
+    part = P.partition(_program(counts, values=values), QUERY)
     n = sum(counts.values())
     return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
-def _record(counts=COUNTS, program=None, query=QUERY, law=None) -> dict:
-    ports = _ports(counts)
+def _record(counts=COUNTS, program=None, query=QUERY, law=None, values=(), **kw) -> dict:
+    ports = _ports(counts, values)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return R.record(program or _program(counts), query, law or {"law": "stratified", "k": 3}, S.SCHEME, roots,
-                    {"kind": "served", "run": RUN, "row": 0})
+    return R.record(program or _program(counts, values=values), query, law or {"law": "stratified", "k": 3}, S.SCHEME,
+                    roots, {"kind": "served", "run": RUN, "row": 0}, **kw)
 
 
 def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
@@ -82,7 +82,7 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
 
 def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified:3`: registered at the challenger's own counts, sampled once
-    from its coins with each stratum drawn its k (PAIR's by its floor of one), and run to an accepted outcome, the
+    from its coins with each stratum sampled its k (PAIR's by its floor of one), and run to an accepted outcome, the
     verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
     stream = _stream()
     rec = _record()
@@ -137,9 +137,99 @@ def test_a_stratum_short_of_its_floor_is_refused():
     assert _refused(lambda: stream.select(reg))
 
 
+#: a value the window's mixed population takes ahead of its templates' parameters: 8 leaves of 16 bits, read as rows of 4
+VALUE = ("t", 8, 16)
+VALUED = S.Spec((*VALUES, S.Value("t", None, "serve", registered=True)), LAW, _check(),
+                (*PUBLIC, *(S.Public(f"{x}:t", "structure", "the value's layout") for x in ("leaves", "words", "domain"))),
+                b"service-window-test")
+
+
+def _earlier(row: int, registered=(), roots=()) -> dict:
+    """A record of the prover's log before the stream: a registration of another Program (PAIR's two instances), in
+    window ``row``."""
+    prog, q = P.population_program(PAIR, 2), P.template_instance_query(PAIR)
+    return R.record(prog, q, {"law": "subset", "k": 1}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row},
+                    registered=registered)
+
+
+def _reusing(log, entry, outputs):
+    """A window's stream that takes `VALUE` with ``log`` before it, and its registration of the value at ``entry``
+    with ``outputs``, chained after the log's last record: (the stream, the record, its call)."""
+    stream = FC.Stream(VALUED, WINDOW, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
+                       values=(VALUE,), log=log)
+    rec = _record(values=(VALUE,), previous=R.digest(log[-1]) if log else None, registered=[{**entry, "value": "t"}])
+    return stream, rec, lambda r=rec: stream.register(r, _ports(values=(VALUE,)), counts=COUNTS, registered={"t": 4},
+                                                       outputs=outputs)
+
+
+def test_a_window_reusing_an_earlier_records_value_runs_to_an_accepted_outcome_by_the_lean_run():
+    """A window whose mixed population takes a value (`Stream(values=)`) that the prover's record before the stream
+    registered first (`Stream(log=)`: a registration of another Program, the log's first record, never sampled): the
+    window's registration registers it as that record's value (`register(outputs=)`: R7 takes its domain and root),
+    chained right after it (R6), and is sampled and run to an accepted outcome, its session reading the value at that
+    root, the Lean's whole run agreeing. Refused:
+    the value at another root (``R7-held``), a registration chained after nothing (``R6-previous``), and the same
+    registration on a stream with no log before it (``R6-previous``, ``R7-output``, ``R7-domain``)."""
+    entry = {"value": "w/t", "root": "5a" * 64, "leaves": 2, "words": 4, "domain": "6b" * 64}
+    w = _earlier(-1, registered=[entry])
+    outputs = {"t": {"record": R.digest(w), "value": "w/t"}}
+    stream, honest, register = _reusing([w], entry, outputs)
+    reg = register()
+    assert stream.log == (w, honest) and reg.order == 0 and reg.receipt["received"] == "1"
+    assert stream.values == (VALUE,)
+    draw = stream.select(reg)
+    assert stream.deliver(draw, [SESSION]) is None
+    out = stream.outcome(draw, _lean(registered={"0": {"value": "t", "root": entry["root"]}}), {"statement": "stub"})
+    assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"] and stream._entries[0].read
+    assert stream.digest != _stream().digest
+    _s, _r, register = _reusing([w], {**entry, "root": "00" * 64}, outputs)
+    assert _refused(register) == ("R7-held",)
+    _s, _r, register = _reusing([w], entry, outputs)
+    assert _refused(lambda: register({**honest, "previous": None})) == ("R6-previous",)
+    _s, _r, register = _reusing([], entry, outputs)
+    assert set(_refused(lambda: register(honest))) == {"R6-previous", "R7-output", "R7-domain"}
+
+
+def test_a_registration_reads_the_earlier_record_its_outputs_name_whatever_the_log():
+    """`_earlier` gives a registration's checks the record each of its outputs names, here an earlier run's port, even
+    where that record is neither the log's last, nor of the registration's window, nor any value's first registration:
+    the verdict is the whole log's, accepted. A stream that kept no record's digest reads only the last, and refuses
+    (``R7-output``, and ``R7-domain`` with no output to take the domain of)."""
+    part = P.partition(P.population_program(PAIR, 2), P.template_instance_query(PAIR))
+    port = {"port": "o", "root": "8d" * 64, "leaves": 2,
+            "domain": R.window_domain(part["program"], P.digest(part), "o", SCHEMA, 2, RUN)}
+    w, x = _earlier(-2, roots=[port]), _earlier(-1)
+    outputs = {"t": {"record": R.digest(w), "port": "o"}}
+    entry = {"value": "t", "root": port["root"], "leaves": 2, "words": 4, "domain": port["domain"]}
+    stream, rec, register = _reusing([w, x], entry, outputs)
+    assert stream._earlier(rec, None, outputs) == [w, x] and stream._earlier(rec) == [x]
+    args = (rec, _program(values=(VALUE,)), QUERY, {"law": "stratified", "k": 3}, S.SCHEME, _ports(values=(VALUE,)),
+            None, ())
+    few = V.check(*args, stream._earlier(rec, None, outputs), None, None, {"t": 4}, outputs=outputs)
+    assert few == V.check(*args, stream.log, None, None, {"t": 4}, outputs=outputs) and few.ok
+    assert register().order == 0
+    stream, rec, register = _reusing([w, x], entry, outputs)
+    stream._digests.clear()
+    assert set(_refused(register)) == {"R7-output", "R7-domain"}
+
+
+def test_a_streams_values_and_earlier_log_are_refused_in_another_form():
+    """Values are a window's (a mixed population of its templates, each value a new name of at least one leaf), and the
+    earlier log is JSON records whose registered entries name their value, domain and root."""
+    from test_service import _spec as pair_spec
+    with pytest.raises(ValueError, match="one template's instances takes no values"):
+        FC.Stream(pair_spec(), PAIR, budget=2, delta=DELTA, challenger="c", values=(VALUE,))
+    for values in ((("t", 0, 16),), (("x", 8, 16), ("x", 8, 16)), (("0.x", 8, 16),)):
+        with pytest.raises(ValueError, match="each \\(name, leaves, width\\)"):
+            FC.Stream(_spec(), WINDOW, budget=2, delta=DELTA, challenger="c", values=values)
+    for log in ([["not", "a", "record"]], [{"registered": [{"value": "t"}]}], [{"window": {1, 2}}]):
+        with pytest.raises(ValueError, match="earlier log is the prover's records"):
+            FC.Stream(_spec(), WINDOW, budget=2, delta=DELTA, challenger="c", log=log)
+
+
 def test_a_windows_draw_from_the_challengers_coins_is_held_to_its_evidence_by_the_lean_run(
         tmp_path, signer, monkeypatch):  # noqa: F811
-    """A window's stream on the auditor's challenger's coins: the honest draw's outcome is accepted by the Lean run,
+    """A window's stream on the auditor's challenger's coins: the honest sample's outcome is accepted by the Lean run,
     and each of `coin_outcomes`' negatives is a reject the Lean run refused at its select (`coins`)."""
     def register(coins, i, window_root):
         stream = _stream(coins=coins)

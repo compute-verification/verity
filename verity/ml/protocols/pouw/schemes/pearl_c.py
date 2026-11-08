@@ -3,7 +3,7 @@ Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on
 
 The design is Pearl's H100 product and its output tickets, plus Pearl v4's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
-and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
+and no part of the clean-up can be skipped at a degenerate input.  The gap rests on the named conjecture TT_OUT(ρ) at the device
 record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl's certificate-v4 code and its ``zk-pow``
 verifier.
@@ -57,7 +57,7 @@ peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fm
 Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
 with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``: 68 units per element, 64 of them credited
 (the noise atom and the cast), at the H100's prices.  Every price is a device's (`Prices`): `H100_PRICES` (sm_90) for
-the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings draw the same seeds.
+the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings sample the same seeds.
 
 **The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
@@ -122,7 +122,7 @@ ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 #: the per-row cap at a census k, as a multiple of ρ: there each credited row's debit
-#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; γ rests on
+#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; the gap rests on
 #: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's cap is ρ, (C2)'s
 CENSUS_ROW_CAP = 4
 
@@ -469,7 +469,7 @@ class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
     and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
     the default (h0, Pearl's keyed-BLAKE3 seeds, lines and tickets, is taken by name), names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
-    `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
+    `row_digest`), the work sampling design checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
@@ -591,7 +591,7 @@ class PearlC:
     def job_cost(self, n: int, k: int) -> int:
         """The weight side of an (n, k) weight, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's
         FP32 FMA chain (r² per row at an add's price).  Neither W_ref nor the credit counts it (`creditDevRev1` leaves it
-        out, which only raises γ)."""
+        out, which only raises the gap)."""
         return (self._forming() * n * k + self._chain_units(n, R, k) + self._chain_units(R, R, k)
                 + self.prices.fadd * n * R * R)
 
