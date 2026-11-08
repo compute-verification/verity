@@ -107,8 +107,10 @@ class Refused(Exception):
     pass
 
 
-def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape", env=git_env())
+def _git(repo: Path, *args: str, check: bool = True, lazy: bool = True) -> subprocess.CompletedProcess:
+    """``git ARGS`` in ``repo``; with ``lazy`` False, a partial clone fetches no object it lacks (`GIT_NO_LAZY_FETCH`)."""
+    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape",
+                       env=git_env() if lazy else git_env(GIT_NO_LAZY_FETCH="1"))
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
@@ -1212,10 +1214,10 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
 MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
 
 
-def adds_nothing(repo: Path, commit: str, head: str) -> bool:
+def adds_nothing(repo: Path, commit: str, head: str, lazy: bool = True) -> bool:
     """Whether merging ``head`` into ``commit`` leaves ``commit``'s own tree: what ``head`` has, ``commit`` has already (a merge of
-    `main` into a pull request the tip already holds)."""
-    r = _git(repo, "merge-tree", "--write-tree", commit, head, check=False)
+    `main` into a pull request the tip already holds); with ``lazy`` False, not when that needs an object the clone lacks."""
+    r = _git(repo, "merge-tree", "--write-tree", commit, head, check=False, lazy=lazy)
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
@@ -1467,8 +1469,10 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     _git(repo, "fetch", "-q", remote, f"+refs/heads/{into}:refs/remotes/{remote}/{into}")
     tip = _git(repo, "rev-parse", f"refs/remotes/{remote}/{into}").stdout.strip()
 
+    # a head the clone lacks once `into` is fetched isn't on it, so a partial clone fetches none to say so: a lazy fetch, with no
+    # negotiation, brings that head's whole history, and git's auto maintenance never repacks such packs
     def on(sha: str) -> bool:
-        return _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0
+        return _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False, lazy=False).returncode == 0
 
     local = _git(repo, "rev-parse", "--verify", "-q", f"refs/heads/{into}", check=False).stdout.strip()
     if local and not on(local):
@@ -1487,7 +1491,7 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     pinned = {int(m[1]): parents.split()[1] for parents, _, subject in (line.partition("\0") for line in _git(
         repo, "log", "-n", "5000", "--format=%P%x00%s", "--grep", r"^Merge #[0-9]", tip).stdout.splitlines())
         if (m := MERGED_PR.fullmatch(subject)) and len(parents.split()) == 2}
-    done += [p for p in rest if p not in moved and p["number"] in pinned and adds_nothing(repo, tip, p["headRefOid"])]
+    done += [p for p in rest if p not in moved and p["number"] in pinned and adds_nothing(repo, tip, p["headRefOid"], lazy=False)]
     rest = [p for p in rest if p not in done]
     verb = "would " if dry_run else ""
     for p in moved:
