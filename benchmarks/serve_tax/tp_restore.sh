@@ -18,7 +18,7 @@
 # (tens of GB at TP8; NUM_GPU_BLOCKS caps the pool) go to a scratch directory outside the run's, removed at the end
 # unless KEEP=1. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
 # (PY and HERE, this directory, set), logging to OUT/ARM/then.log. The GPUs are held under gpu-lease where the node has
-# it. VENV's vLLM must be d9105ea80, the integration's pin.
+# it, or under `research run --gpus N` by the run's own lease. VENV's vLLM must be d9105ea80, the integration's pin.
 # MODEL_ID=moonlight (8,192 tokens of context: LONG_TOKENS=4096,7680 MAX_MODEL_LEN=8192) is a smoke of the same path
 # on one GPU, TP=2 on two ranks.
 set -uo pipefail
@@ -140,7 +140,12 @@ fi
 root=/workspace/research/scratch; [ -d "$root" ] || root=${TMPDIR:-/tmp}
 SCRATCH=${SCRATCH:-$(mktemp -d "$root/tp-restore.XXXXXX")}
 export SCRATCH
-if command -v gpu-lease > /dev/null; then
+if [ -n "${GPU_LEASE_UUID:-}" ]; then
+  # already under a lease (`research run --gpus N`), which must hold this job's GPUs: leasing again would wait on itself
+  n=$(echo "$GPU_LEASE_UUID" | tr , '\n' | grep -c .)
+  if [ "$n" -lt "$GPUS" ]; then echo "tp-restore: the run's lease holds $n GPU(s), not $GPUS"; rc=2
+  else bash "$here/tp_restore.sh" leased; rc=$?; fi
+elif command -v gpu-lease > /dev/null; then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-tp-restore} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/tp_restore.sh" leased
   rc=$?
 else
