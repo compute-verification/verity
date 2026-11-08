@@ -839,8 +839,10 @@ INGRESS = ("client", "warden")
 
 
 def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
+    """A trace-corpus trace, its certified record and its I1 v0 advice; a tick-served trace's record is on its own
+    certified tick's buckets, 100 ms buckets otherwise."""
     tr = R.read_corpus_trace(path, ingress=ingress)
-    rec = record_of(tr, stop_ids)
+    rec = record_of(tr, stop_ids, **({} if tr.releases is None else {"bucket_s": tr.releases.tick.bucket_us / 1e6}))
     return tr, rec, advice_of(tr, rec)
 
 
@@ -961,7 +963,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("traces", nargs="+", help="LABEL=DIR: a trace's directory (steps.jsonl, requests.jsonl, meta.json, "
                                               "server.log)")
     ap.add_argument("--stops", default="128001", help="the registered stop ids, comma-separated, EOS first")
-    ap.add_argument("--T", type=int, default=600, help="the window, in 100 ms buckets")
+    ap.add_argument("--T", type=int, default=600, help="the window, in the trace's certified buckets: its tick's τ_b, "
+                                                          "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
                     help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
                          "release), or the engine's own arrival stamp (warden: no deviations)")
