@@ -111,6 +111,17 @@ def Def.ordered (F : Array Bool) (df : Def) : Bool :=
   df.rows.toList.all (fun r => (r.2.1.toList ++ r.2.2.toList).all fun v => df.cols ≤ v || v < r.1) &&
     df.calls.toList.all fun c => F.getD c.def_ false && c.segs.toList.all (Seg.ordered df.cols c.base c.stride c.count)
 
+/-- `Def.ordered`, each row's A and B read in place. -/
+def Def.orderedFast (F : Array Bool) (df : Def) : Bool :=
+  df.rows.all (fun r => r.2.1.all (fun v => df.cols ≤ v || v < r.1) && r.2.2.all fun v => df.cols ≤ v || v < r.1) &&
+    df.calls.all fun c => F.getD c.def_ false && c.segs.all (Seg.ordered df.cols c.base c.stride c.count)
+
+/-- Compiled code runs `Def.orderedFast`; the kernel and every proof see `Def.ordered`. `@[csimp]` rewrites only code
+compiled after it, so it stays directly below `Def.ordered`. -/
+@[csimp] theorem Def.ordered_eq_fast : @Def.ordered = @Def.orderedFast := by
+  funext F df
+  simp only [Def.ordered, Def.orderedFast, List.all_append, Array.all_toList]
+
 /-- Which Definitions are ordered, each from the earlier ones. -/
 def flags (defs : Array Def) : Array Bool := defs.foldl (fun F df => F.push (df.ordered F)) #[]
 
@@ -125,6 +136,23 @@ def Tmpl.rootOrdered (t : Tmpl) (F : Array Bool) : Bool :=
         (t.inCols ≤ c.base && F.getD c.def_ false && c.segs.toList.all fun s =>
           (s.len == 1 && s.at_ + 1 == df.cols && s.hi c.count ≤ df.cols) ||
             (Seg.ordered df.cols c.base c.stride c.count s && (t.inCols ≤ s.at_ || t.portSpan s.at_ (s.hi c.count))))
+
+/-- `Tmpl.rootOrdered`, each row's A and B read in place. -/
+def Tmpl.rootOrderedFast (t : Tmpl) (F : Array Bool) : Bool :=
+  let df := t.defs.getD t.root default
+  let ok (r : Nat) (v : Nat) : Bool := df.cols ≤ v + 1 || (v < r && (t.inCols ≤ v || t.portSpan v (v + 1)))
+  df.rows.all (fun r => decide (r.1 < t.inCols) || (r.2.1.all (ok r.1) && r.2.2.all (ok r.1))) &&
+    df.calls.all fun c =>
+      decide (c.base + (c.count - 1) * c.stride + (t.defs.getD c.def_ default).cols ≤ t.inCols) ||
+        (t.inCols ≤ c.base && F.getD c.def_ false && c.segs.all fun s =>
+          (s.len == 1 && s.at_ + 1 == df.cols && s.hi c.count ≤ df.cols) ||
+            (Seg.ordered df.cols c.base c.stride c.count s && (t.inCols ≤ s.at_ || t.portSpan s.at_ (s.hi c.count))))
+
+/-- Compiled code runs `Tmpl.rootOrderedFast`; the kernel and every proof see `Tmpl.rootOrdered`. `@[csimp]` rewrites
+only code compiled after it, so it stays directly below `Tmpl.rootOrdered`. -/
+@[csimp] theorem Tmpl.rootOrdered_eq_fast : @Tmpl.rootOrdered = @Tmpl.rootOrderedFast := by
+  funext t F
+  simp only [Tmpl.rootOrdered, Tmpl.rootOrderedFast, List.all_append, Array.all_toList]
 
 /-- **The unrolled rows are in order**, checked on the description (`Flock.TmplOrder.rows_ordered`). -/
 def Tmpl.ordered (t : Tmpl) : Bool :=
@@ -247,7 +275,7 @@ theorem rowNums_eq (d i : Nat) (s : String) : rowNums d i s = (tokens s).mapM fu
     | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers" :=
   (Net.mapM_toNat_arr (tokens s) s!"{FORMAT}: definition {d}: row {i} is not numbers").symm
 
-/-- `parse`, each row's numbers read by `rowNums`. -/
+/-- `parse`, each row's numbers read by `rowNums` and its A and B checked in place. -/
 def parseFast (lines : Array String) : V Tmpl := do
   let h := tokens (lines.getD 0 "")
   if h[0]? != some FORMAT then throw s!"not a {FORMAT} unit"
@@ -278,7 +306,8 @@ def parseFast (lines : Array String) : V Tmpl := do
       if v.size < 2 || v.size != 3 + na + nb then throw s!"{FORMAT}: definition {defs.size}: row {i} is malformed"
       let (col, a, b) := (v[0]!, v.extract 2 (2 + na), v.extract (3 + na) (3 + na + nb))
       if col ≥ cols then throw s!"{FORMAT}: definition {defs.size}: row {i} is not at one of its columns"
-      if (a ++ b).any (· ≥ refs) then throw s!"{FORMAT}: definition {defs.size}: row {i} reads past its references"
+      if a.any (· ≥ refs) || b.any (· ≥ refs) then
+        throw s!"{FORMAT}: definition {defs.size}: row {i} reads past its references"
       rows := rows.push (col, a, b)
     let mut calls := #[]
     for i in [0:ncalls] do
@@ -318,7 +347,7 @@ it, so it stays directly below `parse`. -/
 @[csimp] theorem parse_eq_fast : @parse = @parseFast := by
   funext lines
   unfold parse parseFast
-  simp only [rowNums_eq]
+  simp only [rowNums_eq, Array.any_append]
   all_goals rfl
 
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
