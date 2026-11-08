@@ -2,6 +2,7 @@
  "roots": [
   "Flock",
   "FlockVerify",
+  "FlockReadTmpl",
   "Flock.Test.JsonParse",
   "Flock.Test.Full",
   "Flock.Test.Labels",
