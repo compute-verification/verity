@@ -1078,11 +1078,11 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool, hm9
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
         lap("rowin", &mut tl, &mut parts);
         let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
-        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        let mut hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         lap("rows", &mut tl, &mut parts);
         let mut host = if hm96 { Vec::new() } else { flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm) };
         host.extend(mask_slots());
-        let hm96_rows: Vec<F128> = if hm96 { hm.into_iter().flatten().collect() } else { Vec::new() };
+        let hm96_rows: Vec<F128> = if hm96 { std::mem::take(&mut hm).into_iter().flatten().collect() } else { Vec::new() };
         lap("hm96", &mut tl, &mut parts);
         let with_hm96 = |mut h: HostSlots, rows: Vec<F128>| {
             h.hm96_rows = rows;
@@ -3644,6 +3644,10 @@ struct Plan {
     host_mapped: Option<bool>,
     /// this session's witness, built beside the previous session (`prebuild`); taken when it is the one the session would build
     prebuilt: Option<Arc<Mutex<Option<std::thread::JoinHandle<Prebuilt>>>>>,
+    /// each session's front beside the previous session's reps ([`prove_sessions`]; `None`: unless `FC_FRONT_AHEAD=0`)
+    front_ahead: Option<bool>,
+    /// the session's turn on the device, after the previous session's reps ([`Turn`])
+    turn: Option<Arc<Turn>>,
     /// the session's tables ([`session_tables`]; 0 or 1: one table)
     tables: usize,
     /// those tables over the population, built once for a harness's repeated sessions without a sample
@@ -3788,6 +3792,49 @@ struct Prebuilt {
     built_s: f64,
 }
 
+/// A session's turn on the device when each session's front runs beside the previous session's reps ([`prove_sessions`]): its
+/// reps wait for the previous session's to end (`after`), and it says when its own start (`started`, which starts the next
+/// session's front) and end (`done`). A sender dropped unsent ends the wait on it as well, so a session that stops before its
+/// reps, or panics, never holds the next one.
+struct Turn {
+    after: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    started: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+    done: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+}
+
+impl Turn {
+    /// The previous session's reps ended: this session's start. Returns the seconds waited.
+    fn take(&self) -> f64 {
+        let t = Instant::now();
+        if let Some(r) = self.after.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = r.recv();
+        }
+        if let Some(s) = self.started.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = s.send(());
+        }
+        t.elapsed().as_secs_f64()
+    }
+
+    /// This session's reps ended, or it ended without them.
+    fn end(&self) {
+        drop(self.started.lock().unwrap_or_else(PoisonError::into_inner).take());
+        if let Some(s) = self.done.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = s.send(());
+        }
+    }
+}
+
+/// Ends a session's [`Turn`] when its thread ends, however it ends.
+struct TurnEnd(Option<Arc<Turn>>);
+
+impl Drop for TurnEnd {
+    fn drop(&mut self) {
+        if let Some(t) = &self.0 {
+            t.end();
+        }
+    }
+}
+
 /// Build the witness a one-table session of `st` with `seed` will take, on a thread of its own (the prover's host work beside the
 /// previous session's device work).
 fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed) -> std::thread::JoinHandle<Prebuilt> {
@@ -3847,6 +3894,8 @@ struct Proved {
     prove_s: Vec<f64>,
     buckets: Vec<Value>,
     tp0: Instant,
+    /// how long the reps waited for the previous session's ([`Turn`]); inside `e2e_s`
+    device_wait_s: f64,
 }
 
 /// [`session`] up to its proofs; `Err` is a session the prover stopped before proving (its record).
@@ -4015,6 +4064,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
+    // everything above is host work and the session's own; the device's reps wait for the previous session's
+    let device_wait_s = plan.turn.as_ref().map_or(0.0, |t| t.take());
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
@@ -4385,6 +4436,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             None => Ok(()),
         }
     })();
+    if let Some(t) = &plan.turn {
+        t.end();
+    }
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     if let Some(h) = salts_ahead {
@@ -4399,12 +4453,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         }
     }
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
-                prove_s, buckets, tp0 })
+                prove_s, buckets, tp0, device_wait_s })
 }
 
 fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, prove_s,
-                 buckets, tp0 } = p;
+                 buckets, tp0, device_wait_s } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
@@ -4448,6 +4502,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "step0_checked": step0.is_ok() && verified(&v)});
     // past json!'s recursion limit in the literal above
     live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
+    live["device_wait_s"] = json!(device_wait_s);
     (live, proofs)
 }
 
@@ -4499,6 +4554,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("gpu_proofs_match_cpu", true, false),
     ("gpu_paths_agree", true, false),
     ("verify_ahead_matches_serial", true, false),
+    ("front_ahead_matches_serial", true, false),
     ("host_units_match_witness", true, false),
     ("native_sha_matches_eval64", true, false),
     ("device_hm96_matches_host", true, false),
@@ -4775,6 +4831,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "verify_ahead_matches_serial" {
         return verify_ahead_case(st, inst, gpu);
+    }
+    if name == "front_ahead_matches_serial" {
+        return front_ahead_case(st, inst, gpu);
     }
     if name == "host_units_match_witness" {
         // the device witness's host units (a deep unit's slots, Stmt::slot_zab from their inputs) are the CPU witness's unit
@@ -6298,6 +6357,64 @@ fn verify_ahead_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
     json!({"case": "verify_ahead_matches_serial", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
+/// The prove loop with each session's front beside the previous session's reps (`FC_FRONT_AHEAD`), against it one session
+/// after another, over loopback TCP to one server taking three sessions at once, at the selftest's sample (`--draw-file`,
+/// `--draw`): with each session's prover seed and the verifier's coins injected, every session's proofs and transcript are
+/// byte-identical, and each session's reps waited for the previous one's.
+#[cfg(feature = "seed-injection")]
+fn front_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    const SESSIONS: usize = 3;
+    let seeds: Vec<ProverSeed> = (0..SESSIONS).map(|k| ProverSeed::injected([1 + k as u8; 32])).collect();
+    let run = |front: bool| {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let a = l.local_addr().unwrap().to_string();
+        let d = std::env::temp_dir().join(format!("fc-front-ahead-{}-{front}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let base = Plan { gpu, front_ahead: Some(front), ..Plan::default() };
+        let mut got: Vec<(Value, Vec<Vec<u8>>)> = Vec::new();
+        let ts = Instant::now();
+        std::thread::scope(|sc| {
+            let (l, d, a) = (&l, &d, &a);
+            flock_live::spawn_scoped(sc, move || serve_on(l, d, Some(SESSIONS), 3, a, None, || {
+                let mut s = server(st, inst);
+                fix_verifier_coins(&mut s, [9; 32]);
+                Some((s, Value::Null))
+            }));
+            prove_sessions(st, inst, &base, &seeds, 0, a, 0, None, &mut |_, v, proofs| got.push((v, proofs)));
+        });
+        let wall_s = ts.elapsed().as_secs_f64();
+        let recs: Vec<Value> = (0..SESSIONS).map(|k| {
+            let p = d.join(format!("l{k:04}-{}", std::process::id())).join("session.json");
+            let rec: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap_or_default()).unwrap_or(Value::Null);
+            json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]})
+        }).collect();
+        let _ = std::fs::remove_dir_all(&d);
+        (got, recs, wall_s)
+    };
+    let (a, b) = (run(false), run(true));
+    let accepted = a.0.len() == SESSIONS && b.0.len() == SESSIONS && a.0.iter().chain(&b.0).all(|(v, _)| verified(v) && v["step0_checked"] == true);
+    let modes = a.0.iter().all(|(v, _)| v["front_ahead"] == false) && b.0.iter().all(|(v, _)| v["front_ahead"] == true);
+    let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|(_, p)| !p.is_empty());
+    let te = a.1 == b.1 && a.1.iter().all(|r| !r["streams"].is_null());
+    let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);
+    let waited: Vec<Value> = b.0.iter().map(|(v, _)| v["device_wait_s"].clone()).collect();
+    // the first session's seeds and coins are `prover_is_deterministic`'s, so its digest is that case's at the same sample:
+    // `--expect-transcript HEX` pins the session front ahead to another build's
+    let digest = hex(&Sha512::digest(b.1[0].to_string().as_bytes()));
+    let pin = arg("--expect-transcript", "");
+    let pinned = pin.is_empty() || pin == digest;
+    json!({"case": "front_ahead_matches_serial", "expect": "each session's proofs and transcript are its serial twin's, byte for byte", "gpu": gpu,
+           "zk": is_zk(st), "sessions": SESSIONS, "accepted": accepted, "front_ahead": modes, "proofs_equal": pe, "transcripts_equal": te,
+           "sessions_differ": seeds_differ, "transcript_first_difference": first_diff(&json!(a.1), &json!(b.1), String::new()),
+           "transcript_sha256": digest, "transcript_pinned": (!pin.is_empty()).then_some(pinned),
+           "device_wait_s": waited, "wall_s": [a.2, b.2], "pass": accepted && modes && pe && te && seeds_differ && pinned})
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn front_ahead_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
+    json!({"case": "front_ahead_matches_serial", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
+}
+
 /// The same circuit with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
@@ -6325,7 +6442,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let mut all = true;
     for &(name, want_accept, _) in CASES {
         if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts[..st.c.n_in].iter().any(|&r| r > 1)))
-            || (["gpu_proofs_match_cpu", "gpu_paths_agree", "verify_ahead_matches_serial"].contains(&name) && !gpu) {
+            || (["gpu_proofs_match_cpu", "gpu_paths_agree", "verify_ahead_matches_serial", "front_ahead_matches_serial"].contains(&name) && !gpu) {
             println!("SKIP\t{}", json!({"case": name}));
             continue;
         }
@@ -6365,7 +6482,9 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 
 /// The prove loop: one session per seed, each on its own connection to the verifier at `addr`, the first `warm` of them warm
 /// (`addr` a comma-separated list: session k's verifier is the (k mod n)th, so n verifier processes take turns).
-/// The next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
+/// A one-table device prover outside the ZK server runs each session's front beside the previous session's reps and awaits
+/// each verdict on the session's own thread, warm sessions included ([`prove_jobs`]; FC_FRONT_AHEAD=0: what follows). Otherwise
+/// the next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
 /// witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts). Up to
 /// `verify_ahead` proved sessions send their proofs and wait for their verdicts on their own threads while the next session
 /// proves (0: each verdict before the next session starts); every warm verdict comes before the first timed session starts.
@@ -6433,7 +6552,16 @@ impl Jobs {
 /// carries the job's label and the prover's statement cache so far ([`stmt_cache_seen`]).
 fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw: Option<&ReleaseArgs>,
               emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
-    let pipeline = base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
+    let t_start = Instant::now();
+    // a one-table device prover outside the ZK server runs each session's front (Register, its drawn statement, its witness,
+    // Hello) on a thread and connection of its own, beside the previous session's reps. Its reps wait for those ([`Turn`]), so the
+    // device proves one session at a time, in order, and each session's verdict is awaited on its thread. A verifier that takes
+    // one session at a time holds the next session at its Register (`serve --concurrency 3` takes the session awaiting its
+    // verdict, the one proving and the next one's front). FC_FRONT_AHEAD=0: one session after another
+    let front_ahead = base.gpu && base.tables <= 1 && fw.is_none()
+        && base.front_ahead.unwrap_or_else(|| std::env::var("FC_FRONT_AHEAD").as_deref() != Ok("0"));
+    // the prebuild is for the registered statement, which a drawn session doesn't prove; a front ahead builds the session's own
+    let pipeline = !front_ahead && base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
     let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
     // FC_HOST_PREPIN=1: the first session's witness is built before any other's and pins `depth` more buffers of its mapped
     // host slots' size, so the next sessions' builds meet a warm buffer pool and a deep unit's flat forms built, as they do
@@ -6451,6 +6579,11 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
         v["open_rtt_ms"] = json!(rtt);
         v["open_rtt_min_ms"] = json!(rtt_min);
         v["open_rtt_n"] = json!(rtt_n);
+        v["front_ahead"] = json!(front_ahead);
+        // seconds from the loop's start to the session's verdict
+        if v["t_done_s"].is_null() {
+            v["t_done_s"] = json!(t_start.elapsed().as_secs_f64());
+        }
         if let Some(label) = label {
             v["label"] = json!(label);
         }
@@ -6465,6 +6598,56 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
         v["verdict_wait_s"] = json!(t.elapsed().as_secs_f64());
         (v, proofs)
     };
+    if front_ahead {
+        type Ran = std::thread::JoinHandle<((Value, Vec<Vec<u8>>), Rtt)>;
+        let mut running: std::collections::VecDeque<(usize, Option<String>, Ran)> = std::collections::VecDeque::new();
+        let ran = |h: Ran| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
+        let mut after: Option<std::sync::mpsc::Receiver<()>> = None;
+        for run in 0.. {
+            if jobs.get(run, false).is_none() {
+                while let Some((r, label, h)) = running.pop_front() {
+                    let (out, rtt) = ran(h);
+                    emit_one(r, label, out, rtt);
+                }
+                if jobs.get(run, true).is_none() {
+                    break;
+                }
+            }
+            jobs.drop_before(run);
+            let job = jobs.get(run, false).expect("this session's job");
+            let (st, inst, seed, label) = (job.st.clone(), job.inst.clone(), job.seed, job.label.clone());
+            let ((started, start), (done, end)) = (std::sync::mpsc::channel(), std::sync::mpsc::channel());
+            let turn = Arc::new(Turn { after: Mutex::new(after.take()), started: Mutex::new(Some(started)), done: Mutex::new(Some(done)) });
+            let mut plan = base.clone();
+            if let Some(c) = job.self_check {
+                plan.zk_self_check = c;
+            }
+            plan.turn = Some(turn.clone());
+            let (addr, frames) = session_addr(&st, &inst, table_names(plan.tables).len(), &job.addr, None).unwrap_or_else(|e| refuse(e));
+            plan.lean_session = frames.is_some();
+            plan.lean_frames = frames;
+            running.push_back((run, label, flock_live::spawn(move || {
+                let _end = TurnEnd(Some(turn));
+                let mut tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the verifier at {addr}: {e}")));
+                let rtt = tcp.ping_rtt(30);
+                let (mut v, proofs) = match session_proved(&st, &inst, shared(tcp), &plan, seed) {
+                    Ok(p) => session_finish(p),
+                    Err(stopped) => stopped,
+                };
+                v["t_done_s"] = json!(t_start.elapsed().as_secs_f64());
+                ((v, proofs), rtt)
+            })));
+            // the next session's front starts once this one's reps do, or once it ended without them
+            let _ = start.recv();
+            after = Some(end);
+            while running.front().is_some_and(|(_, _, h)| h.is_finished()) {
+                let (r, label, h) = running.pop_front().expect("a finished session");
+                let (out, rtt) = ran(h);
+                emit_one(r, label, out, rtt);
+            }
+        }
+        return;
+    }
     for run in 0.. {
         if jobs.get(run, false).is_none() {
             while let Some((r, label, rtt, h)) = verdicts.pop_front() {

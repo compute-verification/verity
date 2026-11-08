@@ -16,7 +16,7 @@
 
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::ir_block::{Group, IrUnitNet};
+use crate::ir_block::{Group, IrUnitNet, RowRead};
 
 /// The library (core's `verity.ml.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
 /// index bits, value bits. A table is `library` exactly when its SHA-512 is listed, and `program` otherwise.
@@ -204,10 +204,10 @@ impl LookupNet {
         }
         let products = self.prod0..self.prod0 + (self.k << (self.n - self.lo));
         for r in 0..net.useful {
-            let b: &[usize] = if products.contains(&r) { &[] } else { &net.b[r] };
-            for row in [&net.a[r][..], b] {
-                h.update((row.len() as u32).to_le_bytes());
-                for &c in row {
+            for (rows, product) in [(&net.a, false), (&net.b, products.contains(&r))] {
+                let len = if product { 0 } else { rows.row_len(r) };
+                h.update((len as u32).to_le_bytes());
+                for c in rows.row_cols(r).take(len) {
                     h.update((c as u32).to_le_bytes());
                 }
             }

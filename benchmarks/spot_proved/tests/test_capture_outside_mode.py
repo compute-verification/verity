@@ -1,8 +1,9 @@
 """`capture.py` records an `OUTSIDE_MODE` op (FA3's ``fwd``) with the event its recorder would write, but runs the op with the
 Python dispatch modes off: a ``Tensor[]`` return holding an undefined tensor reads None in Python, and C++ refuses a None in a
-``Tensor[]`` handed back by a mode."""
+``Tensor[]`` handed back by a mode. The recorder also hashes a one-element view whose stride isn't 1."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -56,6 +57,20 @@ def test_an_op_run_outside_the_mode_records_the_event_the_recorder_writes(tmp_pa
     assert len(events) == 1 and events == want_events and events[0]["op"] == "spotcap_test::fwd"
     assert set(events[0]["out"]) == {"ret0", "ret1", "out"}
     assert all(torch.equal(a, b) for a, b in zip(got, want)) and torch.equal(got_out, want_out)
+
+
+def test_a_one_element_view_with_a_stride_is_recorded_by_its_bytes(tmp_path, monkeypatch) -> None:
+    """A one-element view keeps its stride under ``contiguous`` (a size-1 dimension is contiguous under any stride), and a
+    uint8 ``view`` of it raises: the recorder must still hash its bytes."""
+    capture, S = _capture(tmp_path, monkeypatch)
+    one = torch.arange(16.0).view(2, 8)[1:, 0]
+    assert one.stride() == (8,) and one.is_contiguous()
+    S.events.clear()
+    with capture.Recorder():
+        one.clone()
+    (event,) = [e for e in S.events if e["op"] == "aten::clone"]
+    want = hashlib.sha512(torch.tensor([8.0]).numpy().tobytes()).hexdigest()
+    assert event["in"]["self"]["sha512"] == want and event["out"]["ret0"]["sha512"] == want
 
 
 def test_an_undefined_tensor_in_the_list_passes_and_is_recorded_as_none(tmp_path, monkeypatch) -> None:
