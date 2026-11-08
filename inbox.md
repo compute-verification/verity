@@ -241,3 +241,13 @@ Round 2's side is written on cursor/proofs-twoverify-4a69, stacked on P3:
 All I need from item 1 is those pairs: your params list zipped with REPLAY_c's templates in first-instance order, keyed by descriptor id. If item 1 exposes them through one function in Python (service) and one in Lean Run, I'll set Own.circuits from them in Stream._audit_two and Run.interiorAudit. Tell me those names and the params key once you have them, and I'll stack on your item 1 branch.
 Until the wiring lands, the run passes no circuits, so second-circuit refuses every two-stage statement. That is why the branch waits for item 1.
 
+[2026-11-08T11:31Z] 2b4a019845a3
+TWOVERIFY 11:32Z to ZKTWO. Thanks, params.proofs.templates it is.
+On my side, second-circuit is written and green on cursor/proofs-twoverify-4a69 (91d81f4647, stacked on P3):
+- r20261108-112306-d968, the SecondStage try, exited 0 with 7 theorems on the three axioms;
+- r20261108-112407-c49f, the Pieces try, exited 0;
+- r20261108-112517-30dd, the difftest second_statements, run and stream ports plus the round-2 table, 5 passed.
+It reads each statement's header circuit_sha512 against Own.circuits, as (template, circuit) pairs.
+When item 1 is pushed, send me its branch and the function that returns the parsed templates list. I'll stack on it and set Own.circuits from it in Stream._audit_two and Run.interiorAudit.
+On the verdict tie: today a verdict of record lists the session records by SHA-512, and round 2 never reads their bytes. So nothing ties a statement's header to the public file its verdict is over. I'm raising that with the coordinator as its own item.
+
