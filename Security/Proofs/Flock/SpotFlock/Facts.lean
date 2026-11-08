@@ -12,6 +12,8 @@ public import Proofs.Flock.Bridge.Members
 * `iroots_fst`: the interior roots a run shows are read off its first two prover messages.
 * `interiorFixed`: fresh second-stage coins keep them (`Code.InteriorFixed` at `SpotFlock.code h`): the interior
   registration is the prover's message at round 1, before the second stage's coin.
+* `blocksOf_of_orderOk`: where round 1's record lists the replay sample in its order (`orderOk`), its replay blocks
+  are the sample, so replay block `ρ`'s interior roots start at its place in the sample.
 * `topoOk_sound`, `partitionsOk_sound`, `oneStageOk_sound`, `scopeOk_sound`, `filesOk_sound`, `zkOk_sound`: the
   verifier's decisions are sound for what they decide.
 * `stepWith_acc_at`, `run_acc_at`: an accepting run passed every round before the verifier could accept.
@@ -91,6 +93,27 @@ def irootsAt (ms : List Msg) (ρ : ℕ) : List Msg :=
   match ms with
   | _ :: m₁ :: _ => irootsOf m₁ ρ
   | _ => []
+
+/-- Values that read as the naturals `s`, in order, read back as `s` with `0` for any that doesn't. -/
+theorem map_getD_of_map_some : ∀ (l : List Lean.Json) (s : List ℕ), l.map Spot.nat? = s.map some →
+    l.map (fun b => (Spot.nat? b).getD 0) = s
+  | [], [], _ => rfl
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+  | a :: l, b :: s, h => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    simp only [List.map_cons, h.1, Option.getD_some, map_getD_of_map_some l s h.2]
+
+/-- **Round 1's replay blocks are the replay sample**, in its order, where its record lists them so (`orderOk`). -/
+theorem blocksOf_of_orderOk {rec : Lean.Json} {sample : Array ℕ} (h : orderOk rec sample = true) :
+    blocksOf rec = sample.toList := by
+  unfold orderOk at h
+  unfold blocksOf
+  cases hj : Spot.getD rec "replay_sample" with
+  | arr bs =>
+    rw [hj] at h
+    exact map_getD_of_map_some bs.toList sample.toList (beq_iff_eq.1 h)
+  | _ => rw [hj] at h; simp at h
 
 /-- **The interior roots are read off the first two prover messages.** -/
 theorem iroots_fst (x : Msg) (v : Seen) (ρ : ℕ) :

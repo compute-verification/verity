@@ -146,7 +146,9 @@ def blocksOf (rec : Json) : List ℕ :=
 /-- **Round 1 lists the replay sample in its order**: the interior record's replay blocks are the first stage's
 sample, so that the `i`-th sampled block's cells are the `i`-th of each template's. -/
 def orderOk (rec : Json) (sample : Array ℕ) : Bool :=
-  Spot.jeq (Spot.getD rec "replay_sample") (Spot.natsJson sample)
+  match Spot.getD rec "replay_sample" with
+  | .arr bs => bs.toList.map Spot.nat? == sample.toList.map some
+  | _ => false
 
 /-- **Replay block `ρ`'s interior roots** as the round-1 message `m₁` states them: `ρ`'s place among the interior
 record's replay blocks, then the record's ports' roots; none where `m₁` isn't JSON. -/
