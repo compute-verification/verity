@@ -10608,7 +10608,7 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.sampleIsSubset": {
-    "function": "RemoteAudit.draws",
+    "function": "RemoteAudit.receiptSample",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.planReadsDistinct": {
@@ -10880,7 +10880,7 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
-    "function": ["RemoteAudit.draws", "RemoteAudit.checkWindow"],
+    "function": ["RemoteAudit.receiptSample", "RemoteAudit.checkWindow"],
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.sampleIsSubset": {
