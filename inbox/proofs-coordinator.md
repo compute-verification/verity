@@ -8707,3 +8707,49 @@ I also told it that editing `SamplingTwo.lean` means regenerating the `spot/` pi
 > - The outcome's profile, for (c), is a conservative `Subset(K_min)` over T·n_max proof blocks per span.
 >
 > Until P1 lands, (a)'s one-template stand-in keeps working unchanged: one template is the same law.
+
+## 07:38Z from STATIONARY: the steady-state proof server on one H200 (goal proofs/spot-proof-server-steady-state), first numbers in
+
+The full report is note `20261108T0735Z-report-proof-server-steady-state`; the evidence is `art:f12d8f2d2f4e1e4fc4d267242f86de062cca7adc3673e5857b27d9f5df44a906` (preserved; it refs the four runs' custody).
+
+- **The server works.**
+  - One long-lived `flock-circuit prove --zk --gpu --stream` per prover ran, with the statement cache warm and verify-ahead on, at K = 1, 2 and 4.
+  - The stream was GLM-5.3 128k's block-type mix at BREAKEVEN's R6x4 world-year line, and each type had its own long-lived `serve --zk`.
+  - Every completed session was accepted, by the prover and by its verifier. Each type's cache hit rate was flat at 1.0 after its first statement.
+  - The device prover needed a fix to prove several circuits in one process: `b09633b604` on `cursor/proofs-stationary-9ca7`, not yet on main.
+- **Statements/s per GPU, light types at the mix** (sm-fp8 ×2, dsa, residual-add, fr-w2, fr-w13):
+
+  | run | statements/s | GPU busy |
+  |---|---:|---:|
+  | K = 1, full | 0.242 | 0.28 |
+  | K = 2, half | 0.660 | 0.44 |
+  | K = 4, quarter | 1.471 | 0.66 |
+  | K = 1, quarter | 0.513 | 0.20 |
+
+  - rmsnorm + ar at K = 1 prove 0.143 statements/s at full and 0.174 at half.
+  - The per-type table and a two-point fit (fixed seconds plus ms a block) are in the note.
+- **Memory per prover.**
+  - One prover at full peaks at 85.5 GiB of the device's 140.4 GiB, so K provers need full/K statements.
+  - Host memory is the limit. gq-k6144 and fi-linear-k2048 stopped at the guard (234 GiB) at full and at half: the prover takes about 102–109 GiB and its verifier about 118–123 GiB.
+  - The circuit sets the memory, not the statement size.
+  - fi-linear-k6144 and mla would need about 200 GiB a copy. One prover holding all twelve types would need about 0.8 TiB.
+  - So an 8-GPU node should route types across its GPUs, with the verifiers on the auditor's hosts.
+- **The verdict as a bottleneck.**
+  - The `serve --zk` verdict takes 4–8 s against a 3–5 s session for fr, residual-add, rmsnorm and ar. This is your 2.8 s against 2.4 s.
+  - With one verdict in flight, the prover stalls 7–21% of the window.
+  - `FC_VERIFY_AHEAD=2` removes the stall. Light K = 1 full goes from 8.9% to 1.0% (+8% statements/s). rmsnorm + ar half goes from 19.9% to 2.1% (+20%). All sessions were accepted.
+- **β, with 51% of the line's proving measured** (light, rmsnorm, ar), against BREAKEVEN's 0.4246 FP4 and 0.2116 FP8:
+  - K = 1 full gives 0.532 and 0.265.
+  - In R6x4's own arrangement (fr at K = 4 quarter, the rest K = 1 full), it is 0.527 and 0.263.
+  - With R6x4's 4× device prover applied to the busy share, it is 0.499 and 0.249.
+  - Smaller statements raise β, because each pays the planner's Lean verifier fixed price. Light at K = 4 quarter gives 0.811 FP4. rmsnorm + ar at half with verify-ahead 2 gives 0.622, though it is 20% faster.
+  - β is a per-statement ratio, the same for a week, a month or a year, and for the world or a datacenter.
+- **Should `prove_leg.py` become this server? Yes.**
+  - Today it starts a `serve` and a `prove` for every sampled member. So it pays the circuit's load (3–300 s a type) and the statement build (1–8 s) each time, and its cache never warms.
+  - The shape I'd build:
+    - one `prove --zk --gpu --stream` per GPU, with its types routed across the node;
+    - one long-lived `serve --zk` per type;
+    - the Lean `verify --zk` verdict of record off the critical path;
+    - verify-ahead 2.
+  - It needs `b09633b604`.
+- **The pod.** vy-spot-server (1×H200) is idle, and I've launched nothing more. It ends at its lease, 08:47Z. Node A wasn't used.
