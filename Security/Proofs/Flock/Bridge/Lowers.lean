@@ -47,7 +47,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) (unitGates P u) φ Xv`, at any
 `φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
 evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads
-it at `b u := unitGates P u`. Slot `u` of `partOf P κ ns`, at any strata `ns` that sum to `n`
+it at `b u := unitGates P u`. It is `lowers_of` at `C.eval Xv`, which holds at any wire values that apply the unit's
+gates, on committed values given only where the unit reads from outside or commits (`correct_of_local`, at a unit's
+local evaluation). Slot `u` of `partOf P κ ns`, at any strata `ns` that sum to `n`
 (`blocks_partOf_getElem?`), is that proof block followed by the
 position of each input `u` owns, which reads nothing and is on every boundary, so the slot's values are the unit's
 alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and each owned input is opened
@@ -59,7 +61,8 @@ alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and e
   two XORs are interior to the unit (`boundary_inner`): no output, input or gate of another unit reads them, so `Correct`
   asks nothing of their committed values, and the AND reads them as the unit computes them.
 * `runIn_posOf_of`: by induction over the wires, each wire's position computes its value at any wire values that apply
-  the unit's gates (`C.eval`'s, `runIn_posOf`; a unit's local evaluation's, `Flock.Bridge.correct_of_progCorrect`),
+  the unit's gates (`C.eval`'s, `lowers`; a unit's local evaluation's, `Flock.Bridge.correct_of_progCorrect` and
+  `correct_of_local`),
   reading from outside the unit only positions of wires, whose committed values `Lowers` gives, or constants
   (`const_pos`), which `Prog.read` reads with no committed value.
 -/
@@ -500,14 +503,6 @@ theorem runIn_posOf_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N �
         hin 1 (by omega) _ h1 b' (by simp [hop, Verity.Boolean.Op.args, hb']) (by simp [BGate.reads]; exact ⟨b', hb', rfl⟩)
     simp [BGate.val, List.mapM_cons, r0, r1, Verity.Boolean.Op.apply]
 
-/-- `runIn_posOf_of` at the circuit's evaluation on `Xv`. -/
-theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → Bool) (ref : ℕ → Option Bool)
-    (hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
-      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (C.eval Xv a)) :
-    ∀ m (g : Fin C.N), g.val = m → P.unit g = some u →
-      (progOf C κ).runIn ref (unitGates P u) (posOf C g) = some (C.eval Xv g) :=
-  runIn_posOf_of P u (C.eval Xv) (fun _ hu => C.eval_op Xv (isInput_of_unit hu)) ref hread
-
 /-! ## The lowering is correct, unit by unit -/
 
 theorem posOf_injective : Function.Injective (posOf C) := by
@@ -518,18 +513,20 @@ theorem posOf_injective : Function.Injective (posOf C) := by
   exact (block_inj (by omega) (by omega) h).1
 
 open FlockSoundness.Discharge.ZkLink in
-/-- **`Lowers` for every circuit**: unit `u`'s proof block of `partOf P κ ns`, `unitGates P u`, is
-correct in `progOf C κ` on every committed values that carry `C`'s evaluation at the wires `φ` maps the positions it reads
-or computes to, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads evaluates to its
-constant. -/
-theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g)
-    (Xv : Fin C.N → Bool)
-    (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → C.eval Xv a = b) :
-    WrongSet.Lowers (progOf C κ) (unitGates P u) φ Xv := by
-  intro ref href
-  have hneed : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ i ∈ x.reads,
-      (progOf C κ).read ref i = some (C.eval Xv (φ i)) := by
-    intro p hp x hx i hi
+/-- **Unit `u`'s gates are correct in `progOf C κ`** at any wire values `V` that apply the unit's gates (`C.eval`'s, or
+a unit's local evaluation's), on committed values that carry `V` at the wires `φ` maps to the positions the unit reads
+from outside or commits, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads is its
+constant in `V`. Its interior positions are read as the unit computes them, so their committed values don't matter. -/
+theorem lowers_of {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g)
+    (V : Fin C.N → Bool) (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
+    (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → V a = b)
+    (ref : ℕ → Option Bool)
+    (href : ∀ g ∈ WrongSet.need (progOf C κ) (unitGates P u), (∀ c, (progOf C κ).gates[g]? ≠ some (.const c)) →
+      (g ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) g = true) → ref g = some (V (φ g))) :
+    (progOf C κ).Correct ref (unitGates P u) := by
+  have hneed : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ i ∈ x.reads, i ∉ unitGates P u →
+      (progOf C κ).read ref i = some (V (φ i)) := by
+    intro p hp x hx i hi hiu
     by_cases hc : ∃ b, (progOf C κ).gates[i]? = some (.const b)
     · obtain ⟨b, hb⟩ := hc
       rw [read_const hb]
@@ -545,21 +542,33 @@ theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) 
         · exact off_ne_posOf (g := g) (a := a) (j := 1) (by omega) h1.symm
     have hc' : ∀ b, (progOf C κ).gates[i]? ≠ some (.const b) := fun b hb => hc ⟨b, hb⟩
     rw [Boundary.read_eq _ hc']
-    refine href i ?_ hc'
+    refine href i ?_ hc' (Or.inl hiu)
     simp only [WrongSet.need, List.mem_append, List.mem_flatMap]
     exact Or.inr ⟨p, hp, by simp [hx, hi]⟩
-  have hself : ∀ p ∈ unitGates P u, ref p = some (C.eval Xv (φ p)) := fun p hp =>
-    href p (by simp [WrongSet.need, hp]) (progOf_ne_const_of_unit hp)
-  have hrun := runIn_posOf P u Xv ref fun p hp x hx a hr _ => by rw [hneed p hp x hx _ hr, hφ]
+  have hself : ∀ p ∈ unitGates P u, (progOf C κ).Boundary (unitGates P u) p = true → ref p = some (V (φ p)) :=
+    fun p hp hb => href p (by simp [WrongSet.need, hp]) (progOf_ne_const_of_unit hp) (Or.inr hb)
+  have hrun := runIn_posOf_of P u V hV ref fun p hp x hx a hr ha => by rw [hneed p hp x hx _ hr ha, hφ]
   intro p hp
-  refine ⟨fun x hx i hi _ => by rw [hneed p hp x hx i hi]; simp, fun hb => ?_⟩
+  refine ⟨fun x hx i hi hiu => by rw [hneed p hp x hx i hi hiu]; simp, fun hb => ?_⟩
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
   by_cases hjl : j + 1 < gateSize (C.op g)
   · rw [boundary_inner hu hjl] at hb
     exact absurd hb (by simp)
   · have hpos : off C g.val + j = posOf C g := by rw [posOf_eq]; omega
-    rw [hpos] at hp ⊢
-    exact ⟨_, by rw [hself _ hp, hφ], hrun g.val g rfl hu⟩
+    rw [hpos] at hp hb ⊢
+    exact ⟨_, by rw [hself _ hp hb, hφ], hrun g.val g rfl hu⟩
+
+open FlockSoundness.Discharge.ZkLink in
+/-- **`Lowers` for every circuit**: unit `u`'s proof block of `partOf P κ ns`, `unitGates P u`, is
+correct in `progOf C κ` on every committed values that carry `C`'s evaluation at the wires `φ` maps the positions it reads
+or computes to, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads evaluates to its
+constant (`lowers_of` at `C.eval Xv`). -/
+theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g)
+    (Xv : Fin C.N → Bool)
+    (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → C.eval Xv a = b) :
+    WrongSet.Lowers (progOf C κ) (unitGates P u) φ Xv := fun ref href =>
+  lowers_of P u φ hφ (C.eval Xv) (fun _ hu => C.eval_op Xv (isInput_of_unit hu)) hκ ref
+    fun g hg hc _ => href g hg hc
 
 /-- **The wire at a position** of the lowered program: the wire it is the position of, `d` at any other. -/
 def wireAt (C : Verity.Boolean.Circuit) (d : Fin C.N) (i : ℕ) : Fin C.N :=
