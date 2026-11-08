@@ -340,12 +340,13 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
 
 
-def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], n: int,
-                  k: int) -> tuple[dict[str, Any], Verdict]:
+def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], ns: Sequence[int],
+                  ks: Sequence[int]) -> tuple[dict[str, Any], Verdict]:
     """A two-stage design's second stage by the verifier: the Lean's `Select.selectSecond` on `read`, the bytes of the
     challenger's coins that the Python sample `python` (`service.select_second`'s) read in order, over the replay sample
-    `sample`, `n` proof blocks in each replay block and `k` of them sampled in each; compared as `select` compares."""
-    got = lean("select_second", {"sample": list(sample), "n": n, "k": k, "source": read.hex()})
+    `sample`, each template's `ns[t]` proof blocks in each replay block, its cell, and `ks[t]` of them sampled in each;
+    compared as `select` compares."""
+    got = lean("select_second", {"sample": list(sample), "ns": list(ns), "ks": list(ks), "source": read.hex()})
     mine = {"draw": dict(python), "read": len(read)}
     verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
                  {"read": got.get("read")}, "python": {"read": len(read)}}
@@ -382,8 +383,9 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
-    (`coins`), and its `proved_units`, `instances`, `served` and `session_roots`; `python` then holds its
-    `{"receipt", "draw", "read", "audit"}` under `interior`."""
+    (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, and `proofs`, the auditor's params naming
+    each template's circuit file (`service.template_circuits`'s form, under the interior's params; None names none);
+    `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs),
@@ -400,9 +402,12 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         it = interior
         i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \
             it["copies"]
+        i_params = _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None, None,
+                           i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs)
+        if it.get("proofs") is not None:
+            i_params["proofs"] = it["proofs"]
         args["interior"] = {
-            "params": _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None,
-                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs),
+            "params": i_params,
             "replay": codec.encode_program(it["replay"]),
             "values": [{"name": n, "registered": r} for n, r in it["values"]], "record": dict(it["record"]),
             "received": it["received"], "source": it["read"].hex(),

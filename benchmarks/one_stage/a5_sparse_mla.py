@@ -44,7 +44,7 @@ OF = {"fixture": "integrations/vllm/tests/pipeline/test_serving_rows_splits.py",
 def commit(out: Path) -> CS.Binding:
     """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
     s = TS.Served()
-    w = replace(TS.window(s, law=D.parse_law(RULE)), run=f"{ROOT}/rank0")
+    w = replace(TS.window(s, law=D.parse_design(RULE)), run=f"{ROOT}/rank0")
     got = TS.read(s, w.members)
     c = CS.commit(w, [g for g, _e in got])
     CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),

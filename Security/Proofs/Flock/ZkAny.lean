@@ -82,6 +82,10 @@ public import Proofs.Flock.ZkAny.SampledAudit
 public import Proofs.Flock.ZkAny.Stream
 public import Proofs.Flock.ZkAny.RecordHiding
 public import Proofs.Flock.ZkAny.SampledSessions
+public import Proofs.Flock.ZkAny.SampledAuditTwo
+public import Proofs.Flock.ZkAny.SampledSessionsTwo
+public import Proofs.Flock.ZkAny.SampledArgTwo
+public import Proofs.Flock.ZkAny.SampledChosenTwo
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -160,7 +164,10 @@ relay's auditor as `V*`, which answers as `V*` does at the `Hello`, the `Commit`
 session's first request, at the release without Rust's checks and the model's run of the deferred server at the
 deployed worker against the relay's auditor, `EnvPre` at the relay's requests, and the relay's model frames the
 model's messages, encoded; a sampled audit's view, the registration's record with the sampled sessions' releases;
-sessions in sequence per outcome; the registration's ideal record hiding its values at hm96 commitments; and the view
-at sampled sessions of one protocol that meets `ZKOut`. -/
+sessions in sequence per outcome; the registration's ideal record hiding its values at hm96 commitments; the view at
+sampled sessions of one protocol that meets `ZKOut`; a two-stage audit's view, a stream of registrations whose
+values follow the first-stage sample, with its ideal stream's hiding and its sessions one protocol's or a proof
+system for proof blocks'; and that view where the auditor chooses the first-stage sample from the boundary's
+record, the interior a stream under a key of its own. -/
 
 @[expose] public section

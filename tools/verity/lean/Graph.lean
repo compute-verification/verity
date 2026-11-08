@@ -32,6 +32,11 @@ unsafe def main (args : List String) : IO UInt32 := do
     if seen.contains m then continue
     seen := seen.insert m
     let olean ← findOLean m
+    unless (← olean.pathExists) do
+      -- name the module and the cause so the seal step's log says why, not an opaque read failure
+      IO.eprintln s!"Graph.lean: no `.olean` for {m} (looked at {olean}); build it, or list it under `exempt`"
+      (← IO.getStderr).flush
+      IO.Process.exit 1
     -- the region stays mapped, as `Replay.lean` keeps its own: the names below live in it
     let (header, _) ← CompactedRegion.read (α := ModuleData) olean #[]
     let imports := header.imports.map (·.module)
