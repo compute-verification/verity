@@ -7124,36 +7124,6 @@
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167",
    "unfolded_hash": "43ebfe29224b6f2d745d43f358031478a06d38c1f0d8b32177fa0869c3307857"
   },
-  "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.CircuitCarriers",
-     "Accounting.Assumptions.KeyBinding",
-     "Accounting.Assumptions.SketchHashBudget",
-     "Accounting.Assumptions.SketchRank",
-     "Accounting.Assumptions.SquaringFloor",
-     "Accounting.Assumptions.SteeredLayout",
-     "Accounting.Gates.Property",
-     "Accounting.Gates.Restricted",
-     "Accounting.RateSketch.LifetimeCapped",
-     "Accounting.Requirement.OneBlockEach",
-     "Accounting.Requirement.Placement.Deadlines",
-     "Accounting.Requirement.PlanMatches",
-     "Accounting.Requirement.StoreMatches"
-    ],
-    "reads": []
-   },
-   "type_hash": "569af6c8280ed061c1dcf7fbb42d7a6af76c8f42a3809cef93fe0f83eb7ecc8f",
-   "unfolded_hash": "148e77634e6163a2f83732abb9cf40618b81c6c723bee4c3ab1c344be2c798b8"
-  },
   "Accounting.SecurityProofs.DerivedStateResidual": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.DerivedStateResidual : Accounting.Guarantees.DerivedStateResidual"],
@@ -8806,6 +8776,36 @@
    },
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a",
    "unfolded_hash": "cd5d01ab458b1ca02e0eee3c3fc12bbcda7d3e4ecad6f1049dd37323ad9882e4"
+  },
+  "Accounting.SecurityProofs.RegisteredCircuitRequirement": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRequirement"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Assumptions.ChainSum",
+     "Accounting.Assumptions.CircuitCarriers",
+     "Accounting.Assumptions.KeyBinding",
+     "Accounting.Assumptions.SketchHashBudget",
+     "Accounting.Assumptions.SketchRank",
+     "Accounting.Assumptions.SquaringFloor",
+     "Accounting.Assumptions.SteeredLayout",
+     "Accounting.Gates.Property",
+     "Accounting.Gates.Restricted",
+     "Accounting.RateSketch.LifetimeCapped",
+     "Accounting.Requirement.OneBlockEach",
+     "Accounting.Requirement.Placement.Deadlines",
+     "Accounting.Requirement.PlanMatches",
+     "Accounting.Requirement.StoreMatches"
+    ],
+    "reads": []
+   },
+   "type_hash": "800aba6a29734ff95f69ab311e9cd8e2dc4ebfbf98aa5708cea77e286de767ef",
+   "unfolded_hash": "148e77634e6163a2f83732abb9cf40618b81c6c723bee4c3ab1c344be2c798b8"
   },
   "Accounting.SecurityProofs.Remote.Held": {
    "owner": "@memory-accounting",
@@ -28992,12 +28992,6 @@
     "Nci.Guarantees.CapabilityFloorNontrivial": "4bb1345d89a73467a1ebdb07b03caba468f96b1b2ca3bec28afdc509675d824d"
    }
   },
-  "Definitions.Accounting.Guarantees.DeclaredCircuit": {
-   "digest": "4eadbf622ff44d56c35cb0149b85e190fe2a4ca0e5dd1db089ad906f5d6ed7c6",
-   "definitions": {
-    "Accounting.Guarantees.DeclaredCircuitRequirement": "a2db38f7379552d0c332fedcc2a7fef74d154b9b2006204faf04fa122a6260c7"
-   }
-  },
   "Definitions.Accounting.Guarantees.FillerLuck": {
    "digest": "cb32b2d8395f1d5b17007c4ec71e2915d8d563960b3385e0113783bb1ed69b69",
    "definitions": {
@@ -29252,6 +29246,12 @@
     "Accounting.Guarantees.RateTensorSketchTable": "fa3b784ec840c5aeec068caa1bcab7f39b74f47ef4e4a4ff1844fae566b9dc19",
     "Accounting.Guarantees.SketchBinds": "99179ba3846341ab72bb3e352aa5af9b9f1f08f1e1cbe4777affbc2d564eef0d",
     "Accounting.Guarantees.SketchRankFiber": "1a2ac84caab0d65c5e5de1b4b14e143fffa7ac748d288a124b1d6abe705cdbe2"
+   }
+  },
+  "Definitions.Accounting.Guarantees.RegisteredCircuit": {
+   "digest": "bb66bb48b93e6455ab21c8acb96ed61f788dc6cda540ec012ee3117f8961fd33",
+   "definitions": {
+    "Accounting.Guarantees.RegisteredCircuitRequirement": "4581ce3415636b3b7a1bb643da9ff6af2679b4f6507f203bd1faf58b88a463d1"
    }
   },
   "Definitions.Accounting.Guarantees.RemoteBinding": {
