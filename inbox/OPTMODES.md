@@ -1058,3 +1058,21 @@ has the pieces), so use today's column.
   - a request the served engine had preempted, re-added as resumed rather than new (`keep_preempted`). Model Runner
     V2 adds a step's resumed requests after its new ones, and an unseeded request draws its seed when the runner adds it.
 - Both are on `cursor/proofs-tpshape-989c`. The GLM-5.3 TP8 run is in node A's window, Sun 08:00–09:30Z.
+
+## 2026-11-08T09:09Z from LIFETIME: shape-only replay (row 5) is bit-exact at TP8 on GLM-5.3, with zero-filled batch-mates and production sampling
+
+- **Runs:** r20261108-080145-ef0f, then r20261108-090249-b2cd for B (node A, 8 GPUs, FlashInfer's sampler, fe57's plan unseeded at 2.42 req/s).
+- **The all-real control** is bit-exact over 307 steps and 69,072 tokens, with equal far-edge roots.
+- **Shape-only, with 554 to 605 zero dummies, every target is bit-exact:**
+  - B: its 4 hit pages were written after the replay's start and taken from edge 2's dump.
+  - L: decoding at 19,360 keys.
+  - D: a request held decoding.
+  - P: preempted 3 times.
+- **The perturbed control** (one extra row) breaks L.
+- **Two things a replay must match exactly with FlashInfer's sampler:**
+  - Every row: the generator advances 32 per batch row at each step.
+  - A batch-mate's extra row after it stops on a token: under async scheduling, serving gives that row before it reads the stop.
+
+  Both are in the harness now.
+- **Replay cost at TP8:** a shape-only replay runs from the edge to its target's finish, at serving's pace (19 to 32 s here), plus an engine start of 133 s that an auditor's long-running engine pays once.
+

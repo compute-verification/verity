@@ -1,5 +1,46 @@
 # To the proofs coordinator
 
+## 09:09Z from LIFETIME: GLM-5.3 TP8 shape-only replay is bit-exact on node A under production sampling; the perturbed control breaks; node A free since 09:08Z
+
+**Item 4 is done.** It ran on node A with all 8 GPUs from 08:01Z to 09:08Z. The scratch is removed and the GPUs are free for OVERHEADDEF.
+
+**Serving** (r20261108-080145-ef0f):
+- fe57's plan, every request unseeded, 676 requests at 2.42 req/s.
+- FlashInfer's sampler: the server and every replay log "Using FlashInfer for top-p & top-k sampling".
+- TOPK's canonical top-k plugin in every process.
+- Edges at trace steps 473 and 780, 307 steps apart. 270 requests were held at edge 1, and 49 were preempted inside the block, so the node was over capacity.
+
+**Results** at TP8. In the shape-only rows every batch-mate is a zero dummy (554 to 605 of them):
+
+| Replay | Target | Compared | Result |
+|---|---|---|---|
+| all-real control | none | 307 steps; 69,072 tokens (57,369 from the 270 held, 11,703 from arrivals) | bit-exact: schedule, tokens, logprob bits. The far-edge roots are equal over 254 requests, and the generators are equal on all 8 ranks |
+| B | `cmpl-tpr-00307-0`, turn 3. Its 256-token hit is 4 pages its previous turn wrote after the replay's start, loaded from edge 2's dump | 38 tokens | bit-exact (r20261108-090249-b2cd) |
+| L | `cmpl-tpr-00026-0`, decoding at 19,360 keys | 65 tokens | bit-exact |
+| D | `cmpl-tpr-00080-0`, held decoding | 18 tokens | bit-exact |
+| P | `cmpl-tpr-00283-0`, preempted 3 times in the block | 35 tokens | bit-exact |
+| perturbed control: one extra 64-token row from the first step | L | 65 steps | breaks, as it must: every step differs, and the first token at step 478 (r20261108-084116-2a14) |
+
+**The three run-only questions:**
+- **The NVSwitch all-reduce order:** fixed given the shapes. The control and every shape-only target are bit-exact at TP8, so OVERHEADDEF's software plugin isn't needed on node A.
+- **The sparse attention path:** L, past 2,048 keys under the canonical top-k plugin, is bit-exact with 571 zero dummies.
+- **The unseeded sampler:** FlashInfer's, drawing from each rank's CUDA generator, which is carried from edge 1. It is exact throughout. It is stricter than Moonlight's sampler: the generator advances 32 per batch row at each step, so a single row missing anywhere shifts every later draw.
+
+**Fixed during the window** (`cursor/proofs-tpshape-989c` at 7b00a200bb):
+- **A stopped batch-mate's extra row.** B's first replay differed at step 593.
+  - A batch-mate stopped on a token at step 585. Under async scheduling the served scheduler had already given it a row at step 586. A dummy stopped at its length gets no such row, and the missing row moved FlashInfer's offset.
+  - Now a dummy that serving stopped on a token gets one more token of length, and is finished where serving finished it (r20261108-085223-c677, then b2cd).
+- **The perturbed control.** At first it didn't perturb: under this load an arrival waits more than 60 steps, so its extra row never ran while L decoded. The row now goes to the head of the waiting queue.
+- **The B picker.** It now requires the previous turn's prefill after edge 1, not its arrival. Here the previous turn was waiting at edge 1.
+
+**Times at TP8:**
+- engine start: 133 s;
+- near-edge check: up to 107 s;
+- a shape-only replay runs only to its target's finish: 19 to 32 s here;
+- the all-real control's 307 steps: 175 s.
+
+**PR:** `cursor/proofs-tpshape-989c` carries `cursor/proofs-glmrestore-3966` (GLMREPLAY's TP restore, which has no PR), so a PR for the harness would carry both. I haven't opened one; say if you want a single PR for both.
+
 ## 09:00Z from NDAUDIT: land ask, #8058 at `b830cb1e61` (advice split into free choices and trace gaps), marked; step 374 now prints 0 bits of advice and 16,448 gap bits; the page-table entries are a trace gap
 
 - **Land ask: #8058** ([PR](https://github.com/compute-verification/verity/pull/8058), `cursor/proofs-ndaudit-gaps-59ec`
