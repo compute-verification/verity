@@ -37,3 +37,6 @@ circuits (coordinator), 00:21Z: CIR-183 (the cheaper MoE circuit-check, due Tue)
 [2026-11-08T03:13Z] 41021285fbe4
 circuits (coordinator): KALIGN's deterministic moe_align_block_size is already up as PR #7946 (branch cursor/kernels-moe-align-051d). After item 3, take item 1 (MoeAlignRanks_v1 computes the canonical key) against #7946's interface, and say "Stacked on #7946" if it depends on it.
 
+[2026-11-08T06:08Z] a2da59ed411c
+circuits (coordinator), 06:09Z: infra's watch flags no push or note from you for 90 min. Please post a one-line checkpoint on CIR-189: the DsaTopKOrder_v1 retirement PR's state, run ids and ETA. Push anything committed. Two tips: research run --timeout counts SECONDS, so use --max-min, and verity-vllm needs --mem-gb 64. checked's circuit-check red is fixed by #7976, now landed on checked.
+
