@@ -222,9 +222,4 @@ def unitGatesBy (instances : Flock.TemplateQuery.Desc → Array TRange → Excep
 /-- `partition.unit_gates`, a template query's instances a range at a time (`TemplateQuery.unitGates`). -/
 def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := unitGatesBy Flock.TemplateQuery.unitGates p query
 
-/-- `unitGates` with a template query's instances unit by unit (`TemplateQuery.unitGatesRef`): the walk it replaced, which
-the `unit_gates` piece shows beside it. -/
-def unitGatesRef (p : Program) (query : Json) : V (Array (Nat × Nat)) :=
-  unitGatesBy Flock.TemplateQuery.unitGatesRef p query
-
 end SampledProofs.Partition

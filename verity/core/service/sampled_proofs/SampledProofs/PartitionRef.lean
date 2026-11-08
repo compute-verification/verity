@@ -2,16 +2,20 @@
 `committedBits` as `SampledProofs.Partition` first computed it: its own walk of one activation of the Definition, every
 gate unrolled, to each gate's last reader. `Partition.committedBits` reads the same off `Flock.Qcall.gates`' layout
 (`Gates.readTo`), and the `committed_bits` difftest piece holds the two equal on every Definition a `Q_call` partition
-cuts. The verifier never runs this.
+cuts. And `unitGates` as it first computed a template query's instances: unit by unit, each unit's walk of every
+earlier root node (`TemplateQuery.unitGatesRef`), which the `unit_gates` piece holds `Partition.unitGates` to. The
+verifier never runs these.
 -/
 module
 
 public import Flock.Program
+public import SampledProofs.Partition
 
 @[expose] public section
 
 namespace SampledProofs.Partition
 
+open Lean (Json)
 open Flock (V)
 
 /-- `partition._committed_bits` by its own walk: per unit `[lo, hi)` of one activation of definition `d`, the summed
@@ -56,5 +60,9 @@ def committedBitsRef (P : Flock.Program.Prog) (d : Nat) (units : Array (Nat × N
         | .value w => w
         | _ => 0
     else bits) 0
+
+/-- `unitGates` with a template query's instances unit by unit (`TemplateQuery.unitGatesRef`), the walk it replaced. -/
+def unitGatesRef (p : Program) (query : Json) : V (Array (Nat × Nat)) :=
+  unitGatesBy Flock.TemplateQuery.unitGatesRef p query
 
 end SampledProofs.Partition
