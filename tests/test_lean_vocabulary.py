@@ -588,7 +588,7 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Sampled/Defs.lean::FlockSampled.Trace":
-        "homonym, the sampled proofs' committed units, each one's type and values: rename (proofs)",
+        "homonym, SPOT's committed units, each one's type and values: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout.Opening":

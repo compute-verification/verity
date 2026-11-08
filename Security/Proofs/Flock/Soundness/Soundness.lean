@@ -30,7 +30,7 @@ SHA-512's collision term for the compiled protocol (`table_sound_compiled`), und
 
 **Status.** Proved. `table_sound` follows from `rep_sound` (one rep from a doomed start,
 `RepSound`, itself proved from four phase lemmas, Ligerito's in `LigeritoPhase`) and `link_sound`
-(the link points, `LinkSound`). Mutual correlated agreement up to the Johnson bound is proved
+(the link points, `BindSound`). Mutual correlated agreement up to the Johnson bound is proved
 (`mcaError_le_bchks25`, from DKT26), so there is no named assumption; `tools/verity/lean/check.py` audits every declaration's axioms.
 
 Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
@@ -49,7 +49,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 /-- **The link points** (`Flock.Statement`): if the committed values do not satisfy the statement, the two
 link points leave some rep start undoomed with probability at most `linkError`: Schwartz–Zippel
 on a failing region's difference, at two independent points, for every codeword near the
-committed table (`LinkSound`, `link_sound_of_card`, with `closeMsgs_card_le`). -/
+committed table (`BindSound`, `link_sound_of_card`, with `closeMsgs_card_le`). -/
 theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (ptLocal mPts : ℕ) (C : Oracle F)
     (hC : ¬ Committed A S sch C) (hlay : S.LinkLayout ptLocal mPts) :

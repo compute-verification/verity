@@ -88,8 +88,9 @@ def test_sparseloco_goes_as_the_served_models_parameters(out):
 def test_every_references_card_adds_its_lines(out):
     arts = [c["art"] for c in out["cards"]["references"]]
     assert len(arts) == len(set(arts)) >= 2
-    shown = {r.get("art") for r in out["panels"]["exfiltration"]["references"]}
-    assert set(arts) <= shown
+    for card in out["cards"]["references"]:
+        for panel in {line["panel"] for line in card["value"]["lines"]}:
+            assert card["art"] in {r.get("art") for r in out["panels"][panel]["references"]}, (card["art"], panel)
 
 
 def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
@@ -134,7 +135,7 @@ def test_the_design_card_picks_the_main_panels_lines(out):
     refs = out["panels"]["exfiltration"]["references"]
     main = [r for r in refs if r["main"]]
     assert {r["label"] for r in main} == {"GLM-5.3's weights", "GLM-5.3's weights at FP4 (376.7 GB)",
-                                         "Advice cap 6 bits/req (KV pool in circuit)"}
+                                         "Advice cap 5,582 bits/window (v1, measured on GLM-5.3 TP8)"}
     assert 0 < len(main) <= 6 - len(f.MAIN["exfiltration"]) and len(refs) > len(main)
     for r in main:
         assert r["style"] == next(v for k, v in chosen.items() if r["label"].startswith(k.format(model="GLM-5.3")))
