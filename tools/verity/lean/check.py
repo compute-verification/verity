@@ -2348,8 +2348,10 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     of its text under the old names when its record has that hash too (renamed, it says the same, and `--update` re-keys
     the entry): a new guarantee, and one whose statement changed, carry both. Of a guarantee whose statement is a
     definition (`lift`), the entry also holds the hash of that statement with the definition unfolded once
-    (`unfolded_hash`), so a restated definition fails it as a changed statement does (`--update` writes the hash into an
-    entry without one). An entry {type_hash, missing, why} exempts only the half `missing` names, of a
+    (`unfolded_hash`), so a restated definition fails it as a changed statement does. Its type hash is the constant's,
+    which a restated body leaves as it is, so an entry of such a guarantee without `unfolded_hash` exempts it only at the
+    hash of its statement unfolded (the guarantee's text before a lift), and fails `witnesses.unwitnessed-changed` at any
+    other, with or without `--update`. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
     witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
@@ -2386,12 +2388,22 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"{half} witness, and `witnesses` lists none of its: list the other half there"))
                 continue
             mv, rec = pin.get("moved") or {}, guarantees.get(g) or {}
-            u = unwitnessed_unfolded(allow[g])
-            if (h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash"))) or (
-                    u is not None and u != (pin.get("lift") or {}).get("unfolded_sha256") and u != mv.get("unfolded_sha256")):
-                fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
-                                     + (f"exempted its {half} witness, so it carries that witness now" if half else
-                                        f"listed it, and the rule holds it to witnesses ({why}), so it carries them now")
+            u, unfolded = unwitnessed_unfolded(allow[g]), (pin.get("lift") or {}).get("unfolded_sha256")
+            unkeyed = bool(unfolded) and u is None
+            if unkeyed:
+                changed = h not in (unfolded, mv.get("unfolded_sha256"))
+            else:
+                changed = (h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash"))) or (
+                    u is not None and u != unfolded and u != mv.get("unfolded_sha256"))
+            if changed:
+                since = (f"witnesses: `unwitnessed` lists {g} without `unfolded_hash`, and its statement is the definition "
+                         f"{pin['lift'].get('head')}, whose body its type hash doesn't cover, so the entry can't show the "
+                         f"statement is the one it was listed with" if unkeyed else
+                         f"witnesses: {g} changed since `unwitnessed` " + (f"exempted its {half} witness" if half else
+                                                                            "listed it"))
+                fails.append(Failure("witnesses.unwitnessed-changed", g, since
+                                     + (", so it carries that witness now" if half else
+                                        f", and the rule holds it to witnesses ({why}), so it carries them now")
                                      + f": {witness_shapes(g, pin, policy, own)}, and remove its `unwitnessed` entry"))
             if not half:
                 continue
@@ -2555,7 +2567,9 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
     """The `unwitnessed` entries an `--update` writes: each of a guarantee still in scope without witnesses (`witness_scope`)
     whose statement is the one it was listed with, under the hash of its new record (``kept``) when it says the same under
     another (moved, `--moved`, or lifted, `lifted_into`), and each of a guarantee the lock doesn't list yet, as it is (one a
-    PR ahead on `next` brings). Every other entry drops, and none is added."""
+    PR ahead on `next` brings). An entry without `unfolded_hash` of a guarantee whose statement is a definition gets one
+    only when its hash is that of the statement unfolded (the text before a lift), never at its type hash, which a
+    restated body leaves as it is. Every other entry drops, and none is added."""
     out, ws, guarantees = {}, policy.get("witnesses") or {}, policy.get("guarantees") or {}
     wit = claim_witnesses(policy)
     for g, v in sorted((policy.get("unwitnessed") or {}).items()):
@@ -2571,12 +2585,16 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
         unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
         if was is not None and was != unfolded and was != mv.get("unfolded_sha256"):
             continue
-        if h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv))):
-            keyed = {"unfolded_hash": unfolded} if unfolded else {}
-            if half is None:
-                out[g] = {"type_hash": built} | keyed if keyed else built
-            else:
-                out[g] = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
+        if was is None and unfolded:
+            if h not in (unfolded, mv.get("unfolded_sha256")):
+                continue
+        elif not (h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv)))):
+            continue
+        keyed = {"unfolded_hash": unfolded} if unfolded else {}
+        if half is None:
+            out[g] = {"type_hash": built} | keyed if keyed else built
+        else:
+            out[g] = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
     return out
 
 

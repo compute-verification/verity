@@ -3415,9 +3415,11 @@ def test_a_restated_definition_a_guarantee_is_stated_as_changes_its_record():
 
 def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     """Of a guarantee stated as a definition, the `unwitnessed` entry holds the statement unfolded once (`unfolded_hash`)
-    beside its type hash: a restated body fails it as a changed statement does, and `--update` drops it. `--update` writes
-    the hash into an entry without one (a whole exemption becomes {type_hash, unfolded_hash}, a half keeps its `missing` and
-    `why`)."""
+    beside its type hash: a restated body fails it as a changed statement does, and `--update` drops it. An entry without
+    `unfolded_hash` exempts it only at the hash of its statement unfolded (its text before a lift), which `--update` keys
+    (a whole exemption becomes {type_hash, unfolded_hash}, a half keeps its `missing` and `why`). At its type hash, the
+    constant's, which a restated body leaves as it is, it fails with or without `--update`, which drops it: a bare entry
+    written at the type hash was keyed by `--update` at whatever the body had become."""
     body = wbody("P.Holds", binders=["∀", "→", "→"])
     pol, f = witnessed({"lift": lifted_pin("P.Holds, first")["lift"], "body": body})
     _, g = witnessed({"lift": lifted_pin("P.Holds, restated")["lift"], "body": body})
@@ -3428,10 +3430,27 @@ def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     assert A.unwitnessed_kept(keyed, f, {}) == keyed["unwitnessed"]
     assert witness_codes(keyed, g) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(keyed, g, {}) == {}
-    assert A.unwitnessed_kept({**bare, "unwitnessed": {"P.sound": h}}, f, {}) == keyed["unwitnessed"]
+    unkeyed = {**bare, "unwitnessed": {"P.sound": h}}
+    assert A.witness_failures(unkeyed, f, WOWN)[0].startswith(
+        "witnesses: `unwitnessed` lists P.sound without `unfolded_hash`, and its statement is the definition "
+        "P.Guarantees.G, whose body its type hash doesn't cover, so the entry can't show the statement is the one it was "
+        "listed with, and the rule holds it to witnesses (it reads the claim P.Holds), so it carries them now: prove "
+        "`P.sound_honest")
+    assert witness_codes(unkeyed, g) == ["witnesses.unwitnessed-changed"]
+    assert A.unwitnessed_kept(unkeyed, f, {}) == A.unwitnessed_kept(unkeyed, g, {}) == {}
+    fails, out = A.judge({**pol, "witnesses": {}, "unwitnessed": {"P.sound": h}}, g, FILES, update=True)
+    assert [x.code for x in fails if x.code.startswith("witnesses")] == ["witnesses.unwitnessed-changed"]
+    assert "P.sound" not in out["unwitnessed"]
+    before = {**bare, "unwitnessed": {"P.sound": u}}
+    assert witness_codes(before, f) == [] and A.unwitnessed_kept(before, f, {}) == keyed["unwitnessed"]
+    assert witness_codes(before, g) == ["witnesses.unwitnessed-changed"] and A.unwitnessed_kept(before, g, {}) == {}
     half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212: not yet closed"}
     honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
-    assert A.unwitnessed_kept(honest_only, f, {}) == {"P.sound": half | {"unfolded_hash": u}}
+    assert witness_codes(honest_only, f) == ["witnesses.unwitnessed-changed"]
+    assert A.unwitnessed_kept(honest_only, f, {}) == {}
+    half_before = {**honest_only, "unwitnessed": {"P.sound": half | {"type_hash": u}}}
+    assert witness_codes(half_before, f) == []
+    assert A.unwitnessed_kept(half_before, f, {}) == {"P.sound": half | {"unfolded_hash": u}}
     keyed_half = {**honest_only, "unwitnessed": {"P.sound": half | {"unfolded_hash": u}}}
     assert witness_codes(keyed_half, f) == []
     assert witness_codes(keyed_half, g) == ["witnesses.unwitnessed-changed"]
