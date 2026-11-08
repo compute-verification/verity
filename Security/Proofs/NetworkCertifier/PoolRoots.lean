@@ -59,9 +59,11 @@ theorem digest_open_of_leakAt {L K S : ℕ} {G : Hash.Msg → Hash.Digest} {lay 
       (pout i))
     (hR7 : PoolChained chains (fun i => Hash.RowSeg.digest G (genesis i)) pin pout) (rin rout : Fin m → Hash.Row)
     (i : Fin m)
-    (hi : ∃ op F o, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) op (rin i) (rout i) F o)
-    (hprev : 0 < i.val ∧ chains i = true → ∃ op F o, LeakAtCarried lay k reg valid prow nrow Dj (sw (prevRun i))
-      (Pw (prevRun i)) (ρ (prevRun i)) op (rin (prevRun i)) (rout (prevRun i)) F o) :
+    (hi : ∃ (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ) (o : List (Obs L K S)),
+      LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) op (rin i) (rout i) F o)
+    (hprev : 0 < i.val ∧ chains i = true → ∃ (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ)
+      (o : List (Obs L K S)), LeakAtCarried lay k reg valid prow nrow Dj (sw (prevRun i)) (Pw (prevRun i))
+        (ρ (prevRun i)) op (rin (prevRun i)) (rout (prevRun i)) F o) :
     Hash.RowSeg.digest G (rin i) = Hash.RowSeg.digest G (poolOpen chains genesis rout i) := by
   obtain ⟨op, F, o, h⟩ := hi
   rw [(digests_of_leakAt (hroots i) h).1, hR7 i, poolOpen_map (Hash.RowSeg.digest G) chains genesis rout i]
