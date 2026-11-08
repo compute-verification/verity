@@ -27,7 +27,7 @@ every product, is a reference, not an answer.
   2. **Per run, for compute accounting**, `Accounting.Guarantees.ComputeOfPouwPerRun`
      (`Accounting/Guarantees/PerRun.lean`): on any device whose compute audit realizes PoUW's game, the compute
      audit's per-run guarantee holds at certificate (1 − γ)(1 − ε_s)·W with error (1 − ε_s)^t + ε(q, N), q the device's
-     oracle rate times the compute window. Assumes TT and `Accounting.BudgetAbort` (the cost model truncates).
+     oracle rate times the run's T ticks. Assumes TT and `Accounting.BudgetAbort` (the cost model truncates).
   3. **A credit period's binding**, `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`):
      binding of a credit period's openings fails in each verification phase with probability at most
      |L|·√(q/2^256 + κ), q the SHA-512 calls of the prover's own fork finder at the period's positions L. Assumes
