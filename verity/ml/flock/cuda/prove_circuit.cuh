@@ -803,18 +803,19 @@ __global__ void fc_zk_lane_input(F128* __restrict__ cw, const F128* __restrict__
     cw[i] = v;
 }
 
-// Leaves of w + 4 lanes: the witness's w lanes, then the 4 extra ones.
-__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ cw_w, const F128* __restrict__ cw_x, int w, long long n) {
+// Leaves of `stride` lanes: `width` lanes' codewords (src, position-major) as lanes [off, off + width) of each leaf.
+__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ src, int width, int off, int stride, long long n) {
     long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
-    if (i >= n * (w + 4)) return;
-    const long long pos = i / (w + 4);
-    const int lane = (int)(i - pos * (w + 4));
-    out[i] = lane < w ? cw_w[pos * w + lane] : cw_x[pos * 4 + lane - w];
+    if (i >= n * width) return;
+    const long long pos = i / width;
+    out[pos * stride + off + (i - pos * width)] = src[i];
 }
 
 // commit_zk on the device. The padding's upper half is not zero, so the transform runs every layer (M0's commit skips layer 0
-// by reading the message replicated); the witness's lanes and the extra ones go as two batches (the NTT's lane tiles are powers
-// of two), then are interleaved. The pads and extra lanes stay on the device for the lane phase (the caller frees them).
+// by reading the message replicated); the witness's lanes go in four groups and the extra ones in a batch of their own (the
+// NTT's lane tiles are powers of two), each interleaved into the leaves as it's done, so only a quarter of the witness's lane
+// codewords is ever held beside the leaves. The pads and extra lanes stay on the device for the lane phase (the caller frees
+// them).
 static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitParams* N, int log_n, const F128* df, F128** d_pads,
                            F128** d_extra, F128** d_cw0, uint8_t** d_tree0, long long* l0_bl, int* l0_ni, std::vector<MHash>& l0_cap) {
     const int k = P->initial_k, w = 1 << k, t_pad = N->zk_t_pad;
@@ -828,18 +829,21 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     const TwiddleTable* tt;
     F128* d_tw;
     CK(get_cached_twiddles(k_code, tt, d_tw));
-    F128 *cw_w, *cw_x;
-    CK(ffi_malloc(&cw_w, (size_t)n * w * sizeof(F128)));
-    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
-    fc_zk_lane_input<<<(unsigned)((n * w + 255) / 256), 256>>>(cw_w, df, w, 1, k, n, l, *d_pads, t_pad);
-    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
-    CK(cudaGetLastError());
-    launch_ntt(cw_w, d_tw, *tt, 0, k_code, w);
-    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
-    CK(cudaGetLastError());
     CK(ffi_malloc(d_cw0, (size_t)n * (w + 4) * sizeof(F128)));
     CK(ffi_malloc(d_tree0, (size_t)(2 * n - 1) * FLOCK_HB));
-    fc_zk_interleave<<<(unsigned)((n * (w + 4) + 255) / 256), 256>>>(*d_cw0, cw_w, cw_x, w, n);
+    const int g_log = k < 2 ? k : 2, wg = w >> g_log;
+    F128 *cw_w, *cw_x;
+    CK(ffi_malloc(&cw_w, (size_t)n * wg * sizeof(F128)));
+    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
+    for (int g = 0; g < w; g += wg) {
+        fc_zk_lane_input<<<(unsigned)((n * wg + 255) / 256), 256>>>(cw_w, df + g, w, 1, k - g_log, n, l, *d_pads + (size_t)g * t_pad, t_pad);
+        launch_ntt(cw_w, d_tw, *tt, 0, k_code, wg);
+        fc_zk_interleave<<<(unsigned)((n * wg + 255) / 256), 256>>>(*d_cw0, cw_w, wg, g, w + 4, n);
+        CK(cudaGetLastError());
+    }
+    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
+    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
+    fc_zk_interleave<<<(unsigned)((n * 4 + 255) / 256), 256>>>(*d_cw0, cw_x, 4, w, w + 4, n);
     CK(cudaGetLastError());
     launch_merkle((const uint8_t*)*d_cw0, *d_tree0, n, (w + 4) * 16);
     CK(cudaStreamSynchronize(0));
