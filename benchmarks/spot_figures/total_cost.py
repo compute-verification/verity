@@ -391,13 +391,14 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
                 f"{shared}; {_share(s['computed_proving'][at])} of its sampled replay block's proving computed;")
 
-    head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
+    head = (f"{f1.ROLES} {f1.TRUST} "
+            "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
             f"{_share(conf['tokens']['computed_share'])} of it computed. Every β has its own plan, the one with the "
-            f"least bound. {f1.ROLES} {f1.TRUST}")
+            "least bound.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
     head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block or of a "
              f"registration's: a registration spans the {window:g} s window on one machine "

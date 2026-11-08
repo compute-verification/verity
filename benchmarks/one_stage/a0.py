@@ -202,13 +202,12 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a prover's, `prover_env`), a None value removing its variable. `prove_timeout`: the prover's
-    limit in seconds."""
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
-    senv = environ(env)
+    senv = {**os.environ, **(env or {})}
     ch = None
     if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
         from verity_flock import challengers as CH
@@ -219,7 +218,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
                               *(ch[1] if ch else [])],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
         for _ in range(1800):
