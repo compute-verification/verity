@@ -7,7 +7,8 @@
 ``--every-call`` stages nothing: it runs the match gate on N instances of every recorded call of every type, over every layer
 of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears, MoE
 launches and cuBLAS GEMMs only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
-disagreements, errors and first failures, and the recorded ops no type reads. ``--rows`` cuts every population to some token
+disagreements, errors and first failures, the recorded ops no type gates, and apart from them the ops the Program binds to no
+value (`SCHEDULE_OPS`). ``--rows`` cuts every population to some token
 rows, and ``--rows-past-keys 2048`` to the rows attending to more than 2,048 keys (DSA's long rows), read off the indexer's
 top-k inputs (`long_rows`).
 
@@ -844,6 +845,11 @@ GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
              "fa3_sparse_mla", "aten::mm", "aten::linear", "aten::bmm", "_moe_C::grouped_topk", "_C::silu_and_mul",
              "_moe_C::moe_sum", "_C::rms_norm", "aten::add"}
+#: recorded ops the Program binds to no value, each with the rule that says so; ``--every-call`` lists them apart from the ops
+#: not gated
+SCHEDULE_OPS = {"_moe_C::moe_align_block_size": (
+    "a schedule marker (verity_vllm's MoeAlignBlockSizeRule): the fused MoE launches use its sorted order only for addressing, "
+    "and the Program is the unpermuted pair set, which the MoE launches' per-pair gates sample")}
 _EVERY: dict = {}
 
 
@@ -931,18 +937,23 @@ def every_call(cap: Capture, pops: dict, a, unstaged: dict | None = None) -> dic
                                    agree=sum(g["agree"] is True for g in gs), disagree=sum(g["agree"] is False for g in gs),
                                    errors=sum(g["agree"] is None for g in gs) - len(not_kept), not_kept=len(not_kept),
                                    failures=bad[:8] + not_kept[:2])
-    rep["gated_ops"], rep["not_gated_ops"] = op_coverage(cap, unstaged)
+    # read_ops: what a population reads, not what this run gated (--types, the deadline or an unbound Definition can
+    # leave some ungated); the per-type counts above say what was
+    rep["read_ops"], rep["not_gated_ops"], schedule = op_coverage(cap, unstaged)
+    rep["schedule_ops"] = {op: {"calls": n, "why": SCHEDULE_OPS[op]} for op, n in schedule.items()}
     return rep
 
 
-def op_coverage(cap: Capture, unstaged: dict | None = None) -> tuple[dict[str, int], dict[str, int]]:
-    """The step's recorded ops, nested ones included, that some population reads, and those that none reads and no op it
-    reads encloses (an op inside an ungated one, such as the router's top-k inside the MoE block, is listed itself). A call a
-    population refused (listed in ``unstaged``, by rank and seq or by seq on every rank) counts as not gated."""
+def op_coverage(cap: Capture, unstaged: dict | None = None) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+    """The step's recorded ops, nested ones included, that some population reads; those that none reads and no op it reads
+    encloses (an op inside an ungated one, such as the router's top-k inside the MoE block, is listed itself); and, apart from
+    them, the `SCHEDULE_OPS`. A call a population refused (listed in ``unstaged``, by rank and seq or by seq on every rank)
+    counts as not gated."""
     refused = {(c.get("rank", r), c["seq"]) for rec in (unstaged or {}).values() for c in rec.get("calls", ())
                for r in ([c["rank"]] if "rank" in c else cap.ranks)}
     gated: dict[str, int] = {}
     other: dict[str, int] = {}
+    schedule: dict[str, int] = {}
     for r in cap.ranks:
         by_seq = {e["seq"]: e for e in cap.events[r]}
         for e in cap.events[r]:
@@ -954,8 +965,9 @@ def op_coverage(cap: Capture, unstaged: dict | None = None) -> tuple[dict[str, i
             if e["op"] in GATED_OPS and (r, e["seq"]) not in refused:
                 gated[e["op"]] = gated.get(e["op"], 0) + 1
             elif not inside:
-                other[e["op"]] = other.get(e["op"], 0) + 1
-    return dict(sorted(gated.items())), dict(sorted(other.items()))
+                into = schedule if e["op"] in SCHEDULE_OPS else other
+                into[e["op"]] = into.get(e["op"], 0) + 1
+    return dict(sorted(gated.items())), dict(sorted(other.items())), dict(sorted(schedule.items()))
 
 
 def main() -> int:
@@ -1038,8 +1050,9 @@ def main() -> int:
             print(f"gate {label}: {rec.get('agree', 0)} agree, {rec.get('disagree', 0)} disagree, {rec.get('errors', 0)} errors, "
                   f"{rec.get('not_kept', 0)} not kept over {rec.get('calls_gated', 0)}/{rec.get('calls', 0)} calls "
                   f"{rec.get('why', '')}", flush=True)
-        print(f"gate: not gated ops {rep['not_gated_ops']}; not modelled {sorted(k for k, v in unstaged.items() if 'why' in v)}; "
-              f"population errors {rep['population_errors']}", flush=True)
+        print(f"gate: not gated ops {rep['not_gated_ops']}; schedule ops {sorted(rep['schedule_ops'])}; "
+              f"not modelled {sorted(k for k, v in unstaged.items() if 'why' in v)}; population errors {rep['population_errors']}",
+              flush=True)
         return 0
     for family, prefer in FAMILIES.items():
         members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, int(k[len(family):]), k))

@@ -47,10 +47,12 @@ from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.refs import runs as _refs_runs
 from verity.ml.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
 from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity_vllm.program import inputs
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
+from verity_vllm.program.frontend import stop_rule as SR
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.value_types import Alloc
@@ -366,14 +368,14 @@ class Ctx:
         except ValueError as e:
             refuse("numerics_unregistered", node, self.module_path(node), str(e))
 
-    def run_value(self, name: str, t: Type, node=None) -> Coll:
+    def run_value(self, name: str, t: Type, declared: str, node=None) -> Coll:
         """The field `name` of the `run` parameter (`RunInputs.value`): a value the served run decides and the Program checks in
-        gates rather than computes, declared by the rule's `Rule.run_inputs`."""
+        gates rather than computes, declared by the rule's `Rule.run_inputs` and read under `program.inputs.RUN[declared]`."""
         node = node or self.current
         try:
             if self.run_inputs is None:
                 raise ValueError(f"run value {name!r} read but no rule declared run inputs for this graph (`Rule.run_inputs`)")
-            return self.run_inputs.value(name, t)
+            return self.run_inputs.value(name, t, declared)
         except ValueError as e:
             refuse("side_input", node, self.module_path(node), str(e))
 
@@ -382,6 +384,10 @@ class Ctx:
         (the provenance's `checks` names each)."""
         if ok.type != Value(1):
             raise TypeError(f"a check is one bit, not {ok.type!r} ({what})")
+        try:
+            inputs.check(self.B, ok, what)
+        except inputs.Free as e:
+            refuse("side_input", self.current, self.module_path(self.current), str(e))
         self.checks.append((ok, what))
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:
@@ -821,6 +827,7 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
+    SR.in_derive(ctx, outs, out_node)    # the length rule under the config's `stop`: the last Call and check
     if ctx.checks:
         ctx.checks_output = len(outs)
         outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))

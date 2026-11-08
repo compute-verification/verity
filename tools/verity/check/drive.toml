@@ -81,6 +81,11 @@ executor = "shadow"
 # one that gains its verdict goes after those already moved, so none below it is merged again. A held member goes to `next`'s
 # top every sync, this on or not
 verdict_first = true
+# who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it, and the
+# minutes it waits before each ring (`Driver._bottom`; by default ci and top after 30): ci's reviewer pool reviews `next`'s
+# bottom as it comes, so drive rings ci alone, and only when the pool falls behind
+bottom_ring = ["@ci"]
+bottom_wait_min = 30
 # how many restacks across a move the syncs run at once in the background: one `restack.py` per head merged above a move it
 # lacks, each rewriting a whole tree on one core, its PR waiting off `next` until a later sync reads the result. The control
 # pod has 4 cores, and the tick needs one
