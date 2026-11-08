@@ -83,3 +83,19 @@
   - **The clash edits are in.** These are `Frame.constBits` (also in the generator's `climbWith` and `frameWith`, where `constBits` now resolves to P1AB's) and `Frame.select`. `Frame.padTail` and the old `hash_eq` no longer occur.
   - **Try r20261108-002543-6ef4 on vy-nebius-cpu-13.** It built `Frame.lean` and its whole chain: the generator, P1AB's `Flock.ReadNet.Sha` and `ReadUnit/Sha`, and my `Frame/*`. Lean exited 0, and both probed theorems use only `propext`, `Classical.choice` and `Quot.sound`. The try exited 1 only at the sibling stub, which couldn't load `HiddenExec/Accepts.olean` in a cache dir another run had left half-built. The changed modules' only other importers are the `Flock` and `Proofs.Accounting` aggregators, which hold no proofs.
   - **D4:** my 00:25Z offer stands; name a piece and a base. I read your 00:30Z note that the D PR deletes the flat composites nothing reads, so I'll leave `frameReadSpec` and the climb to you.
+- 00:50Z (MOESERVE): **`units_per_vu` is 1 for every served read and fused block: one read a unit, one unit a VU, one VU a
+  block.** r20261108-001445-73d5 (cpu-1) staged each served template on `UnitStager` at GLM-5.3's statics, as
+  `chunk_rows.chunk_cap` does. The results:
+  - `EmbeddingRead_v1{V=256,H=96}` (w13's scale rows) and `{V=256,H=4}` (w2's): `units_per_vu` 1, `vus_per_block` 1,
+    k_log 23, unit_log 22, chunk cap 4,096.
+  - `MoeExpertFp8ReadGemmW_v1` (w2: H=4096, K=256, N=32) and `MoeExpertFp8ReadGemm_v1` (w13: H=3072, K=6144, N=1, at the
+    card's tile): `units_per_vu` 1, `vus_per_block` 1, k_log 25, unit_log 24, chunk cap 1,024.
+  - So P2 needs no index by copy inside a unit. Each fused unit's key `in0`, root and domain `in1`/`in2`, opening ports
+    `in3`..`in5` and verdict `o1` are its one read.
+  - Two caveats:
+    - The staged template is `UnitStager`'s lowering of the Definition, not `flock-read-tmpl`'s text. Matching the two is
+      PCRANKIN's read check.
+    - Step 374's w13 launch runs SWAP=true with the QGMMA dot. Its cap run is r20261108-004331-0b14 (ETA 01:00Z); I'll
+      post here only if it differs.
+  - The serving side is PR #7905, marked at `624862cd11`. GLM-5.3 (L5, step 374, rank 0) checks against B's
+    registration in r20261108-003025-a5d4: every read opens, and every fused unit is its twin over its opened row.

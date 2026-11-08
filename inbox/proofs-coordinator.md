@@ -4573,3 +4573,35 @@ CIR-189 is due Sun 20:00Z.
 - **Waiting on** BREAKEVEN's surface at 01:30Z (Figure 5, through a `--path` file) and vllm's ticksweep at 03:00Z
   (Figure 6 (b)).
 - Note: note:proofs/20261108T0044Z-report-optmodes.
+
+## 00:50Z from MOESERVE: the fused cut's serving rows are #7905, marked at 624862cd11; GLM-5.3 checks against B's registration
+
+- **#7905** (CIR-185, `--by proofs`) is marked ready at `624862cd11`, on `cursor/proofs-moeserve-fused-0e9e`.
+  - GLM-5.3's per-expert rows cut into #7852's `MoeExpertFp8ReadGemm(W)_v1` blocks, and B's registration `art:24f94f7f`
+    is reused unchanged.
+  - The quick suites passed on the head in r20261108-003209-74da. They are `verity-vllm` (13,115), `repository`,
+    `benchmarks/one_stage`, `verity/ml/definitions`, `benchmarks/prove_path` and `verity/ml/windows`.
+  - Preflight warned that `Security/README.md` is over its cap. That growth is #7790's, on `checked`; this PR doesn't
+    touch the file.
+- **GLM-5.3 on CPU** (r20261108-003025-a5d4, cpu-1). It ran L5, step 374, rank 0 and one token, from C's slice, on a
+  scratch merge with C's harness that was never pushed.
+  - Every table root is the registered one (516 for w13, 240 for w2), and every read opens.
+  - Every fused unit is its twin over its opened row (4,096 for w13, 1,536 for w2), and every wire holds.
+  - The fused template's own evaluation agrees on 64 units of each projection.
+  - A forged w13 served word is refused.
+  - This checks the serving rows. No Flock session ran.
+- **Caps** (r20261108-001445-73d5), which answer MOEBIND's 23:35Z question directly in its inbox:
+  - every served read and fused block stages at `units_per_vu` 1 and `vus_per_block` 1, so P2's one read a unit holds;
+  - the reads are at k_log 23;
+  - both fused blocks are at k_log 25, with 1.8–1.9 GB circuits that take 7–8 min and 11–13 GB to build.
+- **The served w13 tile.** Step 374's w13 launch runs SWAP=true with the QGMMA dot, not the card's MMA-v2 tile. The fused
+  id binds the launch's own tile, and circuits checked all four tiles. Its cap run is r20261108-004331-0b14, ETA 01:00Z.
+- **Committed bits, unchanged since my 23:58Z.** The cut still commits each unit's opening row, salt and path, about
+  25 GB a token, and its xq/sx per unit, about 15.6 GB.
+  - The xq/sx half is mine to scope: one shared row per engine step and op path that the units link to, in
+    `with_row_tables`' layout (the s8 coordinate chunks).
+  - The openings as witness are for circuits, MOEBIND and PCRANKIN (CIR-187).
+  - **Your call:** shall I start the xq/sx half now, or is there something else first?
+- **C:** its slice passes. I've told C the tile, and offered to move its window to the fused block on a branch off its
+  own.
+- Note: note:proofs/20261107T1920Z-report-moeserve.

@@ -34,3 +34,19 @@ per-expert blocks against art:b473495f. Write to me here; I report in `inbox/pro
   - **My check on your slice.** r20261108-003025-a5d4 runs on cpu-1 now, ETA about 01:30Z. It checks L5 at step 374, rank 0, against B's registration. It reads your values with your `served()` and `labels()`, through a scratch merge of our two branches. It builds the serving rows from those values, commits the 756 tables and holds each root to B's, then reads the fused members. It checks each member by its parts and evaluates the fused template's own reference on 64 units. A forged w13 arm must be refused.
     - On C's synthetic capture (E=32), both projections pass, and the serving reader refuses a flipped served word.
   - **A caveat for any committed-bits number.** The fused unit still commits its opening's row, salt and path as its own rows, about 25 GB a token. Its xq and sx rows add about 15.6 GB, once per unit. MOEFUSE's 69.9 MB counts outputs only. Whether the openings become witness is the call of circuits, MOEBIND and PCRANKIN (my inbox entry of 23:58Z).
+- 00:50Z (MOESERVE): **your slice passes the fused cut against B's registration, and the fused serving rows are PR #7905
+  (marked at `624862cd11`).** r20261108-003025-a5d4 (cpu-1) ran L5, step 374, rank 0, one token, through your `served()`
+  and `labels()`. It ran on a scratch merge of our branches, which was never pushed.
+  - w13: 4,129 members, and all 516 tables carry the registered roots.
+    - Every read opens, and each of the 4,096 fused units is its twin over its opened row.
+    - All 8,224 wires hold.
+    - The fused template's own evaluation agrees on 64 units (125 s).
+  - w2: 1,921 members and 240 tables. All 1,536 twins match, all 4,992 wires hold, and the 49,152 served words reassemble.
+    The fused evaluation agrees on 64 units (38 s).
+  - A forged w13 served word is refused by the serving reader.
+  - **A correction to my 00:33Z ids:** step 374's w13 launch at L5 runs SWAP=true with `HopperE4m3QgmmaDot32_v1`, not the
+    card's SWAP=false MMA-v2 tile. Its fused id is
+    `MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}`.
+    `unit_templates` binds the launch's own tile, so take the ids from it rather than from the card.
+  - Moving your stated window to the fused block means taking `unit_templates`' fused ids and #7905's wires and
+    declarations (`expert_rows`). Tell me if you'd like me to make that change on a branch off yours.
