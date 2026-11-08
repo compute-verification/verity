@@ -41,6 +41,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -54,10 +55,17 @@ for p in (ROOT / "benchmarks" / "pouw" / "served_h1", HERE):
 import coins as CO  # noqa: E402
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
-import forms as F  # noqa: E402
 import serve as SV  # noqa: E402
+
+import forms as F  # noqa: E402
 from h1c import H1C, Dom, Tab, unwords, words  # noqa: E402
 from h1r import H1R, Call  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from vllm import LLM
+    from vllm.v1.core.sched.output import SchedulerOutput
 
 SITES = ("self_attn.qkv_proj", "self_attn.o_proj", "mlp.gate_up_proj", "mlp.down_proj")
 MODEL = {"repo": "verity-int8/Llama-3.1-8B-INT8"}
@@ -87,7 +95,8 @@ class DitherState:
     the A, admit and z tables, the step trees and the round); the receipts' call tables (one per parity, sharing one seeds
     and one receipts buffer) and the receipt trees; the `h1f` table and step struct; the live coins."""
 
-    def __init__(self, t: int, key: bytes, h1c_path: str, h1f_path: str, gate: bool, dev, rc: str = "fused"):
+    def __init__(self, t: int, key: bytes, h1c_path: str, h1f_path: str, gate: bool, dev: torch.device,
+                 rc: str = "fused") -> None:
         if rc not in RC_MODES:
             raise ValueError(f"receipts mode {rc!r}, not one of {RC_MODES}")
         self.t, self.key, self.dev, self.rc_mode = t, key, dev, rc
@@ -189,7 +198,7 @@ class DitherState:
         self.arms, self.arm_m = list(names), m
         self.caps = {n: {} for n in names}
 
-    def _poison(self, ts) -> None:
+    def _poison(self, ts: Iterable[torch.Tensor]) -> None:
         for x in ts:
             x.view(torch.uint8).fill_(POISON)
 
@@ -341,7 +350,7 @@ class DitherState:
         if self.s == ROUNDS:
             raise RuntimeError(f"the execution phase's {ROUNDS} rounds are spent")
 
-    def _side_receipts(self, main, s: int, p: int, salt: bytes) -> None:
+    def _side_receipts(self, main: torch.cuda.Stream, s: int, p: int, salt: bytes) -> None:
         """Step s's seeds, units (`h1r_launch` version 2) and receipt trees on the side stream, after its coin, while the
         engine runs step s + 1.  The main stream first waits for step s - 1's: forward s + 1 overwrites the slots they
         read, and they share the seeds and receipts buffers; salt, base and step are per parity for the same reason."""
@@ -384,7 +393,7 @@ class DitherState:
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> DitherState:
+def _window(dev: torch.device) -> DitherState:
     global WIN
     if WIN is None:
         WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
@@ -400,7 +409,7 @@ def fused_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Te
 
 
 @fused_mm.register_fake
-def _fused_mm_fake(xq, s_a, w, s_w, idx):
+def _fused_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int) -> torch.Tensor:
     return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
@@ -413,12 +422,13 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
     IV.register()
     orig_pw = IV.Int8PlainLinearMethod.process_weights_after_loading
 
-    def process_weights_after_loading(self, layer):
+    def process_weights_after_loading(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module) -> None:
         orig_pw(self, layer)
         self.dither_idx = index_of(self.prefix)
         REG[self.dither_idx] = (self.prefix, layer)
 
-    def apply(self, layer, x, bias=None):
+    def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+              bias: torch.Tensor | None = None) -> torch.Tensor:
         if bias is not None or x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: the fused arm takes bf16 activations and no bias")
         lead, k = x.shape[:-1], x.shape[-1]
@@ -433,14 +443,14 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> DitherState:
+def hook(llm: LLM) -> DitherState:
     """The step hook around the engine's runner (`execute_model`), and the execution phase (built at the engine's first forward)."""
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 
-    def execute_model(so, *args, **kw):
+    def execute_model(so: SchedulerOutput, *args, **kw) -> Any:
         m = int(getattr(so, "total_num_scheduled_tokens", 0) or 0)
         if m:
             with torch.inference_mode():

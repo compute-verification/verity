@@ -6,11 +6,15 @@ import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import j10r_ws as JWS
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 DITHER = Path(__file__).resolve().parents[1]
 
@@ -24,20 +28,21 @@ def _cb(k: int) -> int:
     return 64 * (k // 512 + 1)
 
 
-def _rows(jx: bool):
+def _rows(jx: bool) -> Callable[[int, int], int]:
     """h1u.cu's kh_j10r_rows_bytes: JX's X and A_d after the row tiles, or the row tiles alone (kr)."""
     return (lambda m, k: _cb(k) * m + m * k + 4 * (m // 32) * 3 * 8 * 32) if jx else (lambda m, k: _cb(k) * m)
 
 
 def _build(jw: bool = False, jrc: bool = False, jx: bool = True, query: bool = True, jw_export: bool = True,
-           flags: int | None = None, workspace=None) -> SimpleNamespace:
+           flags: int | None = None,
+           workspace: Callable[[int, int, int, bool], int] | None = None) -> SimpleNamespace:
     """A stand-in h1u.cu build: H1U_JW's workspace the rows, then each column tile's 64 bytes, then W' [N, K]."""
     rows = _rows(jx)
 
-    def jw_bytes(m, n, k):
+    def jw_bytes(m: int, n: int, k: int) -> int:
         return rows(m, k) + _cb(k) * n + n * k if jw else rows(m, k)
 
-    def ws_bytes(m, n, k):
+    def ws_bytes(m: int, n: int, k: int) -> int:
         return max(rows(m, k), _cb(k) * (m + n))
 
     h = SimpleNamespace(kh_j10r_rows_bytes=lambda m, k: rows(m, k))
@@ -54,7 +59,7 @@ def _build(jw: bool = False, jrc: bool = False, jx: bool = True, query: bool = T
 
 
 @pytest.mark.parametrize("m,n,k", SHAPES)
-def test_an_h1u_jw_build_is_sized_with_its_column_blocks_and_w_prime(m, n, k):
+def test_an_h1u_jw_build_is_sized_with_its_column_blocks_and_w_prime(m: int, n: int, k: int) -> None:
     """kraqwxsc's form (H1U_JW, its flags saying so): the workspace is its rows, then 64 bytes a column tile and W'
     (N K bytes), past kh_j10r_rows_bytes by at least W' (1 GiB at up's 65536 x 16384), the size the build asks for."""
     h = _build(jw=True)
@@ -66,14 +71,14 @@ def test_an_h1u_jw_build_is_sized_with_its_column_blocks_and_w_prime(m, n, k):
 
 @pytest.mark.parametrize("jx", [True, False])
 @pytest.mark.parametrize("m,n,k", SHAPES)
-def test_any_other_build_is_sized_by_its_rows(m, n, k, jx):
+def test_any_other_build_is_sized_by_its_rows(m: int, n: int, k: int, jx: bool) -> None:
     """kr, kra and kraq's forms (no H1U_JW, with or without JX): the workspace is kh_j10r_rows_bytes, whatever N."""
     h = _build(jx=jx)
     assert JWS.flags(h) == 0
     assert JWS.workspace_bytes(h, m, n, k) == _rows(jx)(m, k)
 
 
-def test_a_jrc_build_is_sized_by_its_rows_and_columns_under_rc_and_by_its_rows_otherwise():
+def test_a_jrc_build_is_sized_by_its_rows_and_columns_under_rc_and_by_its_rows_otherwise() -> None:
     """H1U_JRC: kh_units_multi_j10rc's workspace (rows, then column tiles) under rc, which kh_units_multi_j10r may run
     on too, and its rows for kh_units_multi_j10r alone."""
     h = _build(jrc=True)
@@ -83,7 +88,7 @@ def test_a_jrc_build_is_sized_by_its_rows_and_columns_under_rc_and_by_its_rows_o
     assert JWS.workspace_bytes(h, m, n, k) == _rows(True)(m, k)
 
 
-def test_builds_from_before_the_flags_query_are_sized_by_what_they_export():
+def test_builds_from_before_the_flags_query_are_sized_by_what_they_export() -> None:
     """A build without kh_j10r_flags: H1U_JW's (patched builds, and the fold before the query) by its
     kh_j10r_jw_bytes, one from before H1U_JW by its rows, and an H1U_JRC build's rc workspace by kh_j10r_ws_bytes."""
     m, n, k = 4096, 65536, 16384
@@ -111,7 +116,8 @@ def test_builds_from_before_the_flags_query_are_sized_by_what_they_export():
     (_build(jw=True, workspace=lambda m, n, k, rc: 64), False, "short of its rows"),
 ], ids=["rc-plain", "rc-jw", "rc-old-jw", "unknown-flag", "jw-and-jrc", "jw-sized-by-rows", "jw-flag-rows-size",
         "plain-not-rows", "jw-disagrees", "zero", "short"])
-def test_a_build_and_its_caller_that_disagree_are_refused_never_sized_short(h, rc, why):
+def test_a_build_and_its_caller_that_disagree_are_refused_never_sized_short(h: SimpleNamespace, rc: bool,
+                                                                            why: str) -> None:
     """Every disagreement raises WorkspaceError instead of a size: rc of a build without H1U_JRC, a flag bit no loader
     sizes, H1U_JW with H1U_JRC, an H1U_JW build's size no larger than its rows (its W' past the buffer), another build's
     not its rows, a size its own kh_j10r_jw_bytes contradicts, and a size short of the rows."""
@@ -119,7 +125,7 @@ def test_a_build_and_its_caller_that_disagree_are_refused_never_sized_short(h, r
         JWS.workspace_bytes(h, 4096, 65536, 16384, rc=rc)
 
 
-def test_a_build_with_half_of_the_query_is_refused():
+def test_a_build_with_half_of_the_query_is_refused() -> None:
     """kh_j10r_flags without kh_j10r_workspace_bytes, or the other way round, is no h1u.cu build: refused."""
     for drop in ("kh_j10r_flags", "kh_j10r_workspace_bytes"):
         h = _build(jw=True)
@@ -128,7 +134,7 @@ def test_a_build_with_half_of_the_query_is_refused():
             JWS.workspace_bytes(h, 64, 4096, 4096)
 
 
-def test_no_loader_in_dither_sizes_a_workspace_itself():
+def test_no_loader_in_dither_sizes_a_workspace_itself() -> None:
     """Every dither loader that allocates J10-R's workspace (dither_so's tables) takes
     j10r_ws.workspace_bytes: none calls a build's kh_j10r_*_bytes, so none sizes an H1U_JW build by its rows. served_h1's
     producer is held to the same in the pouw suite."""
