@@ -2,6 +2,7 @@
 infiltration panel from its card, and the JSON and renders the console and the post read."""
 import json
 import shutil
+from fractions import Fraction
 from math import log, log1p
 
 import cards
@@ -16,7 +17,7 @@ UNCAPPED = tuple(d for ds in f.DESIGNS.values() for d in ds if f.TWO_STAGE.get(d
 
 @pytest.fixture(scope="module")
 def out() -> dict:
-    return f.run("GLM-5.3", 3, SCOPES, designs=UNCAPPED)
+    return f.run("GLM-5.3", 3, SCOPES, designs=UNCAPPED, lean=False)
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ def test_a_model_runs_once_its_workload_card_lands(card_dir):
     work = cards.load("workload", "GLM-5.3")
     work["value"].pop("params")
     cards.write(work | {"model": "DeepSeek-V4-Pro"})
-    out = f.run("DeepSeek-V4-Pro", 2, ("world year",), designs=UNCAPPED)
+    out = f.run("DeepSeek-V4-Pro", 2, ("world year",), designs=UNCAPPED, lean=False)
     assert out["model"] == "DeepSeek-V4-Pro"
     assert {out["cards"][s]["model"] for s in ("workload", "proof_overhead", "replay")} == {"DeepSeek-V4-Pro"}
     syncs, weights = out["panels"]["exfiltration"]["references"][:2]
@@ -115,6 +116,19 @@ def test_a_capped_caption_says_what_it_rests_on():
         assert "the token ids, 1e-07 of the scope's compute" in caps[panel], panel
 
 
+def test_every_caption_names_spots_roles_and_what_its_bounds_rest_on():
+    """Each panel's caption says, after its deployment, that the proof server proves with no ZK server, that the
+    network certifier is a layer of its own, and that its bound is soundness alone on the trust list."""
+    caps = f.captions(1.0)
+    for panel in ("exfiltration", "exfiltration_appendix", "skipped_work"):
+        deployment = f.DEPLOYMENT["skipped_work" if panel == "skipped_work" else "exfiltration"]
+        assert caps[panel].startswith(f"{deployment} {f.ROLES} {f.TRUST} "), panel
+    assert "no ZK server and no recursion" in f.ROLES and "network certifier" in f.ROLES
+    assert all(x in f.TRUST for x in ("soundness alone", "SHA-512's collision resistance",
+                                       "uniform verifier randomness", "an honest verifier", "certifier's own assumptions"))
+    assert "zero knowledge" not in f.ROLES + f.TRUST
+
+
 def test_a_references_cards_caption_joins_its_panels_captions():
     line = {"label": "x", "unit": "bit", "value": 1.0, "source": "s"}
     notes = f.reference_notes([
@@ -159,7 +173,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
         {"panel": "infiltration", "label": "a steering vector", "unit": "bit", "value": 98304.0, "source": "a test"},
         {"panel": "skipped_work", "label": "every token", "unit": "AND", "by_scope": {"world year": 1e30},
          "source": "a test"}]}))
-    out = f.run("GLM-5.3", 3, SCOPES, designs=UNCAPPED)
+    out = f.run("GLM-5.3", 3, SCOPES, designs=UNCAPPED, lean=False)
     inf = out["panels"]["infiltration"]
     assert inf["status"] == "card" and inf["headline"] == "layer_of_token" and len(inf["series"]) == 6
     caption = out["scopes"]["world year"]["captions"]["infiltration"]
@@ -199,6 +213,32 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
         assert not p["capped"], design
         assert f.cost(m, design, target, p["bound"])["total"] <= budget, design
         assert f.cost(m, design, target, p["bound"] * (1 - 1e-3))["total"] > budget, design
+
+
+def test_a_one_stage_or_request_point_is_what_lean_certifies(world, monkeypatch):
+    """Each one-stage and request-level point's design goes to Lean's checker in one run: a leak point becomes the bits
+    Lean certifies, a point at the trivial bound has no design, and a design Lean refuses is an error.  Lean's answers
+    are stubbed; the sampled-proofs suite runs the checker on the planner's designs (`test_plancheck.py`)."""
+    c, part, fill, s = world
+    m = f.model(c, part, s, c["proof_overhead"].value, fill)
+    pts = [(m, d, t, f.point(m, d, t, 0.01 * s.gpu_seconds)) for d in ("one-stage", "request") for t in ("leak", "work")]
+    runs = []
+
+    def check(designs):
+        runs.append(designs)
+        return [Fraction(10**6, 7) if d["kind"] == "leak" else True for d in designs]
+
+    monkeypatch.setattr(f.plancheck, "check", check)
+    got = f.lean_check([*pts, (m, "one-stage", "leak", {"bound": 1e30, "capped": True})])
+    lean = f.plancheck.upper(Fraction(10**6, 7))
+    assert got == [(True, lean), (True, pts[1][3]["bound"]), (True, lean), (True, pts[3][3]["bound"]), (None, 1e30)]
+    (designs,) = runs
+    assert [(d["kind"], d.get("units")) for d in designs] == [
+        ("leak", str(m.dot.units)), ("work", None), ("leak", str(m.request.units)), ("work", None)]
+    assert designs[0]["count"] == str(f.leak_count(m.dot, pts[0][3]["bound"]))
+    monkeypatch.setattr(f.plancheck, "check", lambda ds: [None if d["kind"] == "leak" else True for d in ds])
+    with pytest.raises(f.plancheck.LeanError, match="refuses the planner's one-stage design"):
+        f.lean_check(pts)
 
 
 def test_an_incorrect_block_leaks_the_widest_blocks_output(world):
@@ -330,7 +370,8 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     """The capped curves, which plan in seconds a point and no cheaper test plots: each rises with overhead and falls
     with budget, the sets' form is at most the uncapped curve at every point and the patterns' form at most the sets',
     and the panel and captions say what each rests on."""
-    out = f.run("GLM-5.3", 2, ("datacenter week",), designs=("two-stage", "two-stage-capped", "two-stage-patterns"))
+    out = f.run("GLM-5.3", 2, ("datacenter week",), designs=("two-stage", "two-stage-capped", "two-stage-patterns"),
+                lean=False)
     rises_and_falls(out)
     p = out["panels"]["exfiltration"]
     assert p["capped"] == {"two-stage-capped": {"form": "sets", "status": "card_influenceTwo_le_served_min",
@@ -408,4 +449,4 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
                                        "figure1_overhead_appendix_datacenter_week.png",
                                        "figure1_overhead_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (stem("world year"), appendix_stem("world year")) == ("figure1_overhead", "figure1_overhead_appendix")
+    assert (stem("datacenter year"), appendix_stem("datacenter year")) == ("figure1_overhead", "figure1_overhead_appendix")
