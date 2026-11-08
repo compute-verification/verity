@@ -20,11 +20,12 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
 - its token ids: each kept output is a token select's sampled id in its request's Program (`steps.EGRESS`), an output the
   compiler never reads;
 - which response a token belongs to: the request's id, certified (the body it names is the request's, by its `user`);
-- each response's length, where its terminator goes: ``output_len``, advice, read ahead twice: on a batch-invariant target a
-  request's Program is its whole request's (T = ``output_len`` − 1) in every window; and in class G a window's close returns a
-  request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
-  INDEX_TOPK keys (`segment.edge_groups`);
-- each response's finish reason: ``finish``, advice, read only to refuse a record its body contradicts (`steps.request_of`);
+- each response's length, where its terminator goes: ``output_len``, advice, read ahead three times: on a batch-invariant
+  target a request's Program is its whole request's (T = ``output_len`` − 1) in every window; in class G a window's close
+  returns a request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
+  INDEX_TOPK keys (`segment.edge_groups`); and it sets the request's length rule (`steps.stop_of`, `RequestUnit.stop`);
+- each response's finish reason: ``finish``, advice, read ahead to set the request's length rule (`RequestUnit.stop`), and to
+  refuse a record its body contradicts (`steps.request_of`);
 - the outputs a request kept before the window opened: its carried ``kept``, advice, held to the last window's close
   (`window_advice.follows`);
 - when each output was released: ``release``, never read; the gate refuses it.
@@ -33,10 +34,11 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
 output order, n the outputs its rows keep in the window (``output_len`` for a request whole in one), and on a batch-invariant
 target nothing else; in class G then, for its rows past INDEX_TOPK keys, the bits that their top-k orders are the canonical
 ones, and for a request the window leaves with outputs to keep, its edge (`build.build_program`'s ``edge``). It returns no
-terminator and no finish reason: its ids end where its shape does, at ``output_len``, advice until a request Program checks
-the stop rule (no stop token before the last output, which is a stop token or the cap's); a finish reason is the advice's
-(eos or length follows from the ids and the cap once the stop rule is checked, and abort is the client's). A record of y that
-holds each response's ids and then a terminator is those ids with the terminator after the n-th.
+terminator and no finish reason: its ids end where its shape does, at ``output_len``, which its length rule
+(`RequestUnit.stop`: `StopCheck_v1` over `StopRule_v1`) checks against the ids (no stop token before the last output, which
+is a stop token or the cap's); a finish reason is the advice's, eos or length held by the same rule to the ids and the cap,
+and abort the client's. A record of y that holds each response's ids and then a terminator is those ids with the terminator
+after the n-th.
 """
 from __future__ import annotations
 
@@ -74,8 +76,8 @@ READS: tuple[Field, ...] = (
     *(Field("advice", n, "advice") for n in ("requests", "steps", "carried")),
     Field("request", "id", "certified", y="the response a token belongs to"),
     Field("request", "prompt_len", "certified"),
-    Field("request", "output_len", "advice", y="a response's length", ahead=("T", "edge")),
-    Field("request", "finish", "advice", y="a response's finish reason"),
+    Field("request", "output_len", "advice", y="a response's length", ahead=("T", "edge", "stop")),
+    Field("request", "finish", "advice", y="a response's finish reason", ahead=("stop",)),
     Field("step", "rows", "advice"),
     *(Field("row", n, "advice") for n in ("request", "kind", "start", "n", "cache_hit", "preempted", "sources")),
     *(Field("source", n, "advice") for n in ("request", "n")),
