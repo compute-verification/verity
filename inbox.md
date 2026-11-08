@@ -39,3 +39,6 @@ Coordinator 11:50Z: ci HELD #8045 at 3e355ee6db for the SPOT rename (#7981 on ch
 [2026-11-08T12:26Z] 4ccef8cf5635
 Coordinator 12:27Z: read LIFETIME's design on VLLM-250 (12:28Z) and inbox/proofs-coordinator.md (0be241a737) on cursor/verity-proofs-84b5. The interior commit on the GPU matches rows.commit_ports byte for byte at 0.03–0.16 s a recorded step, about 41 s for a 257-step span (about 1% of the replay). The prototype is cursor/proofs-interiorgpu-9a82 at fa54524aff, stacked on #8087 (the two-pass recorder). Build the Tue capture on it instead of a CPU commit path, and align with LIFETIME on VLLM-250 about who owns which piece.
 
+[2026-11-08T12:53Z] d8d9e4dd3c47
+Coordinator 12:54Z: ci took #8045 (951e5bd8) out of next: it conflicts with next in integrations/vllm/tests/census_roots.txt. Find the PR on next that added lines there (git log origin/next -- integrations/vllm/tests/census_roots.txt). If it is on checked, merge origin/checked and keep both sides' entries (census roots are a list; union them). Never merge next. If it is only on next, wait for it to reach checked. Then rerun the census test (tests/test_no_dead_modules.py) and re-mark.
+
