@@ -4552,15 +4552,34 @@ def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     return keys
 
 
-def facts_key(facts: dict, policy: dict, toolchain: str, moved: dict[str, str] | None = None) -> str:
+#: the lock sections the stored findings read that `facts_config` leaves out, so `facts_key` folds them: `compile_time`
+#: (`scans`, `listings`), `dependency_unchecked` (`dependency_scans`) and `upstream` (the upstream finding). The judge
+#: re-reads `guarantees`, `reads` and `dependencies` from the live lock in stage B, so those stay out of the key.
+FINDINGS_SECTIONS = ("compile_time", "dependency_unchecked", "upstream")
+
+
+def facts_key(facts: dict, policy: dict, toolchain: str, pkg: Path, files: dict[str, str],
+              moved: dict[str, str] | None = None) -> str:
     """The content address of a package's stage-A facts document (`--facts-only`): a SHA-256 over `FACTS_SCHEMA`, the
-    toolchain, `Facts.lean`, the lock slice `facts_of` feeds `Facts.lean` (`facts_config`), and the `replay_keys` of the
-    package's own modules, each of which folds its `.olean` files and its imports', so the key names exactly the build the
-    facts were read from. A `proved_in` package also folds each prover's own modules' key (`proved_keys`, left on ``facts``
-    by `proved`), since its facts take each guarantee from the prover that proves it, and the prover is not in its graph."""
+    toolchain, `Facts.lean`, the lock slice `facts_of` feeds `Facts.lean` (`facts_config`), the `replay_keys` of the
+    package's own modules, each of which folds its `.olean` files and its imports', the SHA-256 of every source file the
+    document records (``files``, {module: path}) and of the lakefile, which the source scans (`scans`, `heartbeats`,
+    `dropped`, `anonymous_instances`, `listings`) read and whose findings the document carries, and the lock sections
+    those findings read that `facts_config` omits (`FINDINGS_SECTIONS`). So the key names exactly the build the facts were
+    read from and the sources and lock the findings were taken from: a source edit the scans read (a `set_option
+    maxHeartbeats`, an `unchecked` option) or a change to one of those lock sections changes the key even when the `.olean`
+    bytes do not. The toolchain (`lean-toolchain`'s text) is already a factor; the dependency digests the findings carry
+    are a function of the imported `.olean` files, which the `replay_keys` already fold. A `proved_in` package also folds
+    each prover's own modules' key (`proved_keys`, left on ``facts`` by `proved`), since its facts take each guarantee from
+    the prover that proves it, and the prover is not in its graph."""
     keys = replay_keys(facts, toolchain)
+    srcs = {rel: sha256(pkg / rel) for rel in files.values()}
+    srcs |= {f: sha256(pkg / f) for f in ("lakefile.toml", "lakefile.lean") if (pkg / f).is_file()}
     h = hashlib.sha256(f"{FACTS_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Facts.lean')}\0".encode())
     h.update((json.dumps(facts_config(policy, moved), sort_keys=True) + "\0").encode())
+    h.update((json.dumps({s: policy.get(s, {}) for s in FINDINGS_SECTIONS}, sort_keys=True) + "\0").encode())
+    for rel, digest in sorted(srcs.items()):
+        h.update(f"src:{rel}\0{digest}\n".encode())
     for m in sorted(facts["modules"]):
         h.update(f"{m}\0{keys[m]}\n".encode())
     for entry, digest in sorted(facts.get("proved_keys", [])):
@@ -5338,7 +5357,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if update and listed:
         new["compile_time"] = listed
     if facts_cache is not None:
-        rep["facts_key"] = facts_key(facts, current, rep["toolchain"], moved)
+        rep["facts_key"] = facts_key(facts, current, rep["toolchain"], pkg, files, moved)
         facts_out = facts_cache / f"{rep['facts_key']}.json.gz"
         rep["facts_document"] = str(facts_out)
     if facts_out is not None:
