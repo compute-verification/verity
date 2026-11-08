@@ -13677,11 +13677,16 @@ them:
 - (3)'s completeness guard can't pass on an honest run until this lands.
 
 **Open:**
-- `FrameIs` covers only sessions with registered reads. A session that binds its interior ports through
-  `second-roots` needs a second branch: its published roots equal the interior record's under one domain, so its row
-  digests equal the record's, else there is a SHA-512 collision. That needs a collision-finder step across the
-  session's file and the record, in `Bridge/PortRoots`' `Claims.Finder`/`ecrBound` style. I'll scope it with
-  BINDKSAT.
+- `FrameIs` covers only sessions with registered reads, and that is the rarer path. `rootsOk` roots every template
+  port by default, and only a port a link names is read (`linkedRead`). So for honest sessions, `FrameIs` can't be
+  discharged until it has a roots branch.
+  - In that branch, the frame's opening at gate g sits under the interior record's root for g's port. Its position is
+    row n's position in the port's published tree (`PortRoots.pubRoot`). `HmOut.checkPublic` holds that tree to the
+    header's root, and `rootsOk` holds the header's root to the record's.
+  - Equal rows then follow from the tree's binding, by a collision-finder step in `Bridge/PortRoots`'
+    `Claims.Finder`/`ecrBound` style. The reads branch gets the same step from Flock's path check.
+  - (3) is blocked, so I'd start this next unless you redirect me. BINDKSAT's reveals chain reads `FrameRows`, so
+    I'd keep its conclusion's shape.
 - The PR for `-3e7a` waits for #8083 and #8168 to reach `checked`; both are open. Then I merge `checked`, run the
   records fast path, open it in the queue (`--issue PRF-460`) and mark it.
 - (3) waits on your RUN_FIELDS decision and on TWOPROVE's honest files.
