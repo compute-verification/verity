@@ -6,10 +6,10 @@ It reads break-even surfaces (`breakeven_surface.json`: each case's serve tax, i
 at each weight size, per scope) and a path, the steps in order, each adding one lever to the steps before it, with
 its status (measured, modeled or assumed) and the surface case that prices it in each series. A step whose case no
 surface has is pending: it has no number yet, and the steps after it leave it out. A lever off the path (`off`, with
-its owner, or none) is drawn in grey beside the step it would follow, and a cost no step includes (`adds`, with its
-share of serving compute, or none while unmeasured) is drawn as a named line or arrow. The bound at `GOAL` is
-interpolated on log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count
-binds.
+its owner, or none) is drawn in grey beside the step it would follow. A term no step's total includes (`unpriced`) is
+drawn as a named line at its share of serving compute (`total`), or as an arrow while it has none; one whose status is
+`charged` is stated in the caption as a condition every total holds under. The bound at `GOAL` is interpolated on
+log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count binds.
 
     uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path PATH.json] [--out DIR]
 """
@@ -31,25 +31,44 @@ TARGET, TARGET_LABEL = "FP4", "GLM-5.3's weights at FP4"
 STATUSES = ("measured", "modeled", "assumed")
 #: the default path: each step's label, status, what the status rests on, and its case in each series
 PATH = {"steps": [
-    {"label": "today's system: (A) tokens only", "status": "measured", "cases": {"two-stage": "A"},
-     "note": "the registered circuit's measured proving, serve tax and replay"},
-    {"label": "the fused per-expert cut", "status": "modeled", "cases": {"two-stage": "F"},
-     "note": "each weight read fused into its expert GEMM, priced from the measured types"},
-    {"label": "overlapped verifier waits", "status": "assumed", "cases": {"two-stage": "F-busy"},
-     "note": "the prover's busy time is measured, its overlap with the verifier's waits assumed"},
-    {"label": "a statement cache", "status": "modeled", "cases": {"two-stage": None},
-     "note": "each statement derived once, not per session, priced from the measured phases it leaves"},
-    {"label": "a 4x prover", "status": "assumed", "cases": {"two-stage": "F+busy+fast4"},
-     "note": "all proving, marginal and fixed, a quarter of today's"},
-    {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "F+busy+fast4+life"},
-     "note": "a sampled request replays only its lifetime, with no K/V committed at an edge"},
+    {"label": "(A′) per-expert cut at 128k, as Figure 1 prices it", "status": "measured",
+     "cases": {"two-stage": "R0"},
+     "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer "
+             "modeled)"},
+    {"label": "the fused per-expert cut", "status": "measured", "cases": {"two-stage": "R1", "one-stage": "R1-1s"},
+     "note": "each expert's table read fused into its GEMM at k_log 25, priced on one H200 with the cache (512 and "
+             "1024 blocks); its fixed cost before the cache is modeled"},
+    {"label": "the statement cache", "status": "measured", "cases": {"two-stage": "R2"},
+     "note": "fixed seconds a statement 8-10x lower on the H200 (experts measured; 5 types priced from H200 splits)"},
+    {"label": "4 provers on one H200, verify-ahead", "status": "measured", "cases": {"two-stage": "R3"},
+     "note": "on the expert types: the fused blocks measured at 128 and 256 blocks a statement, a quarter-statement "
+             "each"},
+    {"label": "a 3.5x GPU prover", "status": "modeled", "cases": {"two-stage": "R4"},
+     "note": "device parts only; the host witness stays"},
+    {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "R5"},
+     "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
+    {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "R5x4"}, "note": "device parts only"},
+    {"label": "the Lean verifier's CPU", "status": "measured", "cases": {"two-stage": "R6x4", "one-stage": "R6x4-1s"},
+     "note": "each statement's Lean verify (measured on 9 types; families scaled; the median 681 s elsewhere) at 81.8 "
+             "core-seconds a GPU-second, Nebius's on-demand list prices; total compute = serve tax + proving + "
+             "verifying"},
+    {"label": "4 provers on every type, four provers per H200", "status": "assumed",
+     "cases": {"two-stage": "R6x4+all+4perH200"},
+     "note": "the experts' overlap factor taken for every type, and full statements under four provers once each "
+             "prover's peak is about 33 GiB (its H200 run is pending)"},
+    {"label": "the dense types' host witness 3.5x lower", "status": "assumed",
+     "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
 ], "off": [
-    {"label": "hashing cut 4x", "status": "assumed", "owner": None, "after": "a 4x prover",
-     "cases": {"two-stage": "F+busy+fast4+hash4"}, "note": "in-proof hashing at a half share of the marginal, cut 4x"},
-], "adds": [
-    {"label": "compile-slice proving, every window, unmeasured", "total": None,
-     "note": "the network audit proves every window's compile slice, never sampled, so its share of serving compute "
-             "adds to every step's total"},
+    {"label": "hashing cut 4x", "status": "assumed", "owner": None, "after": "the dense types' host witness 3.5x lower",
+     "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
+     "note": "in-proof hashing at a half share of the marginal, cut 4x"},
+], "unpriced": [
+    {"label": "compile-slice proving: under 1% with prefix caching off or hits charged (modeled)", "status": "modeled",
+     "note": "the network audit proves every window's compile slice, never sampled, so its share adds to every step's "
+             "total"},
+    {"label": "the advice charge", "status": "charged",
+     "note": "until StopRule_v1 checks length and finish in-circuit, the advice line charges log2(max_tokens)+1 bits a "
+             "request, which no β covers at either scope; every break-even here holds once StopRule_v1 lands"},
 ]}
 COLORS = ("#08306B", "#D95F02", "#1B9E77", "#7570B3")
 
@@ -71,7 +90,8 @@ def point(row: dict, target_bits: float) -> dict:
     beta = row["beta"][TARGET]
     at = GOAL - row["tax"]
     bound = bound_at(row, at) if at > 0 else None
-    return {"case": row["case"], "tax": row["tax"], "h": row.get("h"), "beta": beta, "total": row["tax"] + beta,
+    return {"case": row["case"], "tax": row["tax"], "h": row.get("h"), "beta": beta,
+            "total": None if beta is None else row["tax"] + beta,
             "bound_at_goal": bound, "times_target": None if bound is None else bound / target_bits}
 
 
@@ -97,7 +117,7 @@ def run(surfaces: list[dict], path: dict = PATH) -> dict:
         off.append(priced(st) | {"after_index": labels.index(st["after"])})
     return {"schema": SCHEMA, "goal": GOAL, "target": {"label": TARGET_LABEL, "key": TARGET, "bits": target_bits},
             "primary": f1.PRIMARY, "secondary": f1.SECONDARY, "series": series,
-            "steps": [priced(st) for st in path["steps"]], "off": off, "adds": list(path.get("adds", []))}
+            "steps": [priced(st) for st in path["steps"]], "off": off, "unpriced": list(path.get("unpriced", []))}
 
 
 def _pct(x: float) -> str:
@@ -132,13 +152,20 @@ def caption(out: dict) -> str:
                      + f"): {st['note']}." for st, after in zip(out["steps"], later))
     second = (f" The dashed line is the same path over a {out['secondary']}." if any(
         st["at"][s0][out["secondary"]] for st in done) else "")
+    for name in out["series"][1:]:
+        at = [st["at"][name][p] for st in out["steps"] if st["at"].get(name, {}).get(p)]
+        if at and all(a["total"] is None for a in at):
+            second += (f" The {name} design never breaks even: its serve tax alone is {_pct(min(a['tax'] for a in at))}"
+                       f" of serving compute, and no β brings its bound to {out['target']['label']}.")
     off = "".join(f" Off the path, grey: {st['label']} ({st['owner'] or 'unowned'}, {st['status']}): {st['note']}"
                   + (f"; after {st['after']} it would break even at {_pct(st['at'][s0][p]['total'])}"
                      if st["at"].get(s0, {}).get(p) else "") + "." for st in out["off"])
-    adds = "".join(f" Not in any step, {a['label']}: {a['note']}"
-                   + ("" if a["total"] is None else f", {_pct(a['total'])} of serving compute") + "."
-                   for a in out["adds"])
-    return lead + marks + notes + second + off + adds
+    unpriced = "".join(f" {a['label'][0].upper()}{a['label'][1:]} is charged, in no total: {a['note']}."
+                       if a["status"] == "charged" else
+                       f" Not in any step, {a['label']}: {a['note']}"
+                       + ("" if a.get("total") is None else f", {_pct(a['total'])} of serving compute") + "."
+                       for a in out["unpriced"])
+    return lead + marks + notes + second + off + unpriced
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
@@ -152,8 +179,8 @@ def render(out: dict, outdir: Path) -> list[Path]:
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 18, "axes.labelsize": 19, "xtick.labelsize": 14,
                          "ytick.labelsize": 16, "savefig.facecolor": "white", "figure.facecolor": "white"})
-    fig, (top, bottom) = plt.subplots(2, 1, figsize=(14, 15), sharex=True, height_ratios=(3, 2))
-    fig.subplots_adjust(left=.13, right=.97, bottom=.33, top=.92, hspace=.08)
+    fig, (top, bottom) = plt.subplots(2, 1, figsize=(17, 15), sharex=True, height_ratios=(3, 2))
+    fig.subplots_adjust(left=.11, right=.97, bottom=.33, top=.92, hspace=.08)
     xs = range(len(out["steps"]))
     p, s2 = out["primary"], out["secondary"]
     fill = {"measured": "full", "modeled": "bottom", "assumed": "none"}
@@ -196,8 +223,8 @@ def render(out: dict, outdir: Path) -> list[Path]:
                             (x, here[key]), textcoords="offset points", xytext=(0, -14), ha="center", va="top",
                             fontsize=11, color="#6E6E6E")
     priced = [(x, st["at"][s0][p]["total"]) for x, st in zip(xs, out["steps"]) if st["at"].get(s0, {}).get(p)]
-    for a in out["adds"]:
-        if a["total"] is not None:
+    for a in (a for a in out["unpriced"] if a["status"] != "charged"):
+        if a.get("total") is not None:
             top.axhline(a["total"], color=grey, ls=(0, (6, 2, 1, 2)), lw=1.4, zorder=1)
             top.text(len(out["steps"]) - .6, a["total"] * 1.1, a["label"], ha="right", va="bottom", fontsize=13,
                      color="#6E6E6E")
@@ -205,7 +232,7 @@ def render(out: dict, outdir: Path) -> list[Path]:
             x, y = priced[-1][0] - .3, priced[-1][1]
             top.annotate("", (x, y * 3), (x, y * 1.15), arrowprops={"arrowstyle": "-|>", "color": grey, "lw": 1.6,
                                                                     "ls": (0, (6, 2, 1, 2))})
-            top.text(x, y * 3.3, textwrap.fill(f"+ {a['label']}", 20), ha="center", va="bottom", fontsize=12,
+            top.text(x, y * 3.3, textwrap.fill(f"+ {a['label']}", 26), ha="center", va="bottom", fontsize=12,
                      color="#6E6E6E")
     top.axhline(out["goal"], color="#E69F00", lw=1.6, zorder=1)
     top.text(-.4, out["goal"] / 1.12, f"the goal: {out['goal']:.0%} of serving compute", ha="left", va="top",
@@ -229,13 +256,14 @@ def render(out: dict, outdir: Path) -> list[Path]:
     bottom.yaxis.set_major_formatter(FuncFormatter(lambda y, _: _bytes(y)))
     top.set_ylabel("Break-even total cost:\nserve tax + β at the FP4 weights")
     bottom.set_ylabel(f"Exfiltration bound at a\ntotal cost of {out['goal']:.0%}")
-    bottom.set_xticks(list(xs), [textwrap.fill(f"+ {st['label']}" if i else st["label"][0].upper() + st["label"][1:], 16) for i, st in
-                                 enumerate(out["steps"])])
-    bottom.set_xlim(-.5, len(out["steps"]) - .5)
+    bottom.set_xticks(list(xs), [textwrap.fill(f"+ {st['label']}" if i else st["label"][0].upper() + st["label"][1:], 14) for i, st in
+                                 enumerate(out["steps"])], fontsize=12)
+    last = any(st["after_index"] == len(out["steps"]) - 1 for st in out["off"])
+    bottom.set_xlim(-.5, len(out["steps"]) - .5 + (.45 if last else 0))
     top.legend(loc="upper right", frameon=False, fontsize=14)
-    fig.text(.13, .945, f"Where {out['goal']:.0%} comes from: the levers that bring GLM-5.3's bound over a {p} under "
+    fig.text(.11, .945, f"Where {out['goal']:.0%} comes from: the levers that bring GLM-5.3's bound over a {p} under "
              "its FP4 weights", ha="left", va="bottom", fontsize=20)
-    bottom.text(0, -.42, textwrap.fill(caption(out), 128), transform=bottom.transAxes, ha="left", va="top",
+    bottom.text(0, -.42, textwrap.fill(caption(out), 160), transform=bottom.transAxes, ha="left", va="top",
                 fontsize=13, color="#444444")
     return _save(fig, outdir, "figure5")
 

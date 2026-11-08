@@ -19,7 +19,8 @@ PATH = {"steps": [{"label": "today", "status": "measured", "cases": {"two-stage"
                   {"label": "the cut", "status": "modeled", "cases": {"two-stage": "F"}, "note": "fused"}],
         "off": [{"label": "a hash cut", "status": "assumed", "owner": None, "after": "today",
                  "cases": {"two-stage": "F"}, "note": "off"}],
-        "adds": [{"label": "a slice, unmeasured", "total": None, "note": "adds to every step"}]}
+        "unpriced": [{"label": "a slice (modeled)", "status": "modeled", "note": "adds to every step"},
+                     {"label": "the advice charge", "status": "charged", "note": "until a rule lands"}]}
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +35,14 @@ def test_a_step_totals_its_tax_and_beta_and_a_later_surface_replaces_its_row(out
     assert cut["at"]["two-stage"][f1.PRIMARY]["beta"] == 1.5
     assert cut["at"]["two-stage"][f1.SECONDARY]["beta"] == 1.8
     assert cache["pending"] and cache["at"]["two-stage"][f1.PRIMARY] is None
+
+
+def test_a_design_whose_bound_never_reaches_the_weights_has_no_total_and_the_caption_says_so():
+    never = _row("O", f1.PRIMARY, 5.7, 1.0, 1e18) | {"beta": {"FP4": None}}
+    path = PATH | {"steps": [PATH["steps"][0] | {"cases": {"two-stage": "A", "one-stage": "O"}}]}
+    out = f.run([SURFACE, {"meta": SURFACE["meta"], "rows": [never]}], path)
+    assert out["steps"][0]["at"]["one-stage"][f1.PRIMARY]["total"] is None
+    assert "The one-stage design never breaks even: its serve tax alone is 570%" in f.caption(out)
 
 
 def test_the_bound_at_the_goal_is_interpolated_on_log_log_axes(out):
@@ -61,11 +70,13 @@ def test_the_figure_renders(out, tmp_path):
     assert "breaks even at 1,102%, 110x the goal" in text
     assert "A cache (assumed, pending: no number yet, and the steps after it leave it out)" in text
     assert "Off the path, grey: a hash cut (unowned, assumed): off; after today it would break even at 152%" in text
-    assert "Not in any step, a slice, unmeasured: adds to every step." in text
+    assert "Not in any step, a slice (modeled): adds to every step." in text
+    assert "The advice charge is charged, in no total: until a rule lands." in text
     assert [p.name for p in f.render(out, tmp_path)] == ["figure5.png", "figure5.svg"]
 
 
 def test_the_default_path_names_a_case_and_a_status_for_every_step():
-    assert f.PATH["steps"][0]["cases"] == {"two-stage": "A"}
+    assert f.PATH["steps"][0]["cases"] == {"two-stage": "R0"}
     assert {st["status"] for st in f.PATH["steps"] + f.PATH["off"]} <= set(f.STATUSES)
     assert not any("hash" in c for st in f.PATH["steps"] for c in st["cases"].values() if c)
+    assert [a["status"] for a in f.PATH["unpriced"]] == ["modeled", "charged"]
