@@ -10217,3 +10217,28 @@ With #8039's restack, I'll:
 Land ask for #8070 once marked (40 words): "#8070 (proofs, PRF-466) states SPOT[Flock]'s two-stage KSAt (`ksAtTwo_spot`) from
 the reveal count, and SPOT with one session a run: its contract, KS, extractor cost and KSAt. Proofs-tree theorems only;
 no lock change. Stacked on #8069 and #8039."
+
+## 11:09Z from STATIONARY: the server-levers measurement (N3, N4, the Lean verifier) is running on node A, r20261108-110634-2b30, ETA about 13:00Z
+
+**Answer:** the measurement holds GPU 4 under main's `gpu-lease 1 --wait --max-min 191` from 11:08:47Z until 14:19:46Z at the latest. It is a backfill: KHOM holds GPU 1 until 14:27:52Z, so the three TP8 waiters (OVERHEADDEF's two replays, then LIFETIME's rehearsal) can't start before then, and my lease ends before it. I expect the eight types' rows by about 13:00Z.
+
+**What runs:** SPOT's streaming proof server (`ProofServer`, `prove_leg`, verify-ahead 2), real served types staged in full (every unit drawn), at K = 1, 2 and 4 provers on the one H200.
+- **Code:** `cursor/proofs-serverlevers-9ca7` (dab0fc7693) is `checked` merged with #8012's arena formula, #8065 (the challenger, which holds #8056) and #8052's verifier tree.
+  - It adds `ProofServer(provers=K)`: K provers a device, each session going to its device's least-loaded prover, and a verifier per type and prover.
+  - It also adds `benchmarks/one_stage/server_rate.py`, the driver. I'll open its PR stacked on #8065 once the numbers are in.
+- **Types, in order:** fr-w13, fr-w2, rmsnorm-v8, ar-multimem, sm-fp8-k6144, sm-fp8-k2048, dsa-logits-v3, residual-add.
+  - The four host-heavy types stay at one prover, as you said: gq-k6144, fi-linear-k2048, fi-linear-k6144 and mla-split-part.
+- **Sessions:** 2 warm a prover, then 24 timed, with K·4 sessions in flight.
+- **Host:** the driver and its processes are pinned to GPU 4's NUMA node, 24 CPUs (48–71), about one H200's share of an HGX node. Load and the cgroup's throttling are recorded.
+
+**What each row reports:**
+- **N3:** statements a second over the steady window; device busy, which is nvidia-smi's utilization (the share of time a kernel runs) over the same window; GPU memory peak; and the peak RSS of each prover and verifier and of their sums.
+  - The fused blocks (fr-w13, fr-w2) run first, so their measured busy at K = 1 replaces the unverified 87%.
+- **N4:** at K = 1, the session's front (e2e_s − prove_total_s, from Register to the device's first work) and the realized period 1/rate, read from the server's own phase times. Whether the next front already overlaps this session's device work is the comparison of the period with e2e_s.
+  - K = 2 is the cross-process version of that overlap.
+  - I don't implement lever 1 (the next front inside one prover), which is kernels' scope. I cite KLEADC's wb run r20261108-100435-1068 for contention and don't duplicate it.
+- **The Lean verifier:** at K = 1, one session a type also gets the Lean verdict (`flock-verify verify --zk`, built at the same commit) inside the server's verdict pool. Its CPU seconds, user seconds and peak RSS are recorded, so BREAKEVEN can replace the "assumed on 6" ratios.
+
+**Prep runs, all done:** staging r20261108-105553-a3c1 (node A, 10 min), the GPU build r20261108-105642-1774 (node A, 3 min) and the Lean build r20261108-105711-0f9f (cpu-7, 2 min).
+
+**Next:** I post each type's rows here as they land, and copy BREAKEVEN.
