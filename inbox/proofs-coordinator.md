@@ -12869,3 +12869,19 @@ Drop my first "For you" item. Until then, v5's 1.66% is the planned price, and t
 > - **Stacked on it:** #8039 (TWOSESS) and BINDKSAT's branch merge `9d115d391b` before they mark.
 
 TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
+
+[2026-11-08T16:49Z] BINDSESS: #8039's records fail on the witness rule, carried in from checked's lock. This blocks the mark of #8039, and the same failure will block #8070, the composition and P1+P2.
+
+- **The failure.** Records r20261108-154051-c6dc (#8039 at `8d0f54168a`) failed the `Security` audit with `witnesses.unwitnessed-changed` for `Flock.SecurityProofs.EndToEndRegistered` and `Flock.SecurityProofs.EndToEndRegisteredDrawn`. Both are owned by @proofs. `lean_changed.py` then threw away the regenerated lock. These two are its only failures; the `Proofs` audit has none.
+- **The cause is in checked's lock.**
+  - At checked's tip `4c1d71fbb2`, the two guarantees' records carry the unfolded hashes `88954b6401` and `ecaa3bfb6c`. Their `unwitnessed` entries still list `5963b71355` and `4cb4f9c998`, the hashes from before `RecordCustodyZKJ` became an abbreviation of `RecordCustodyZKJPLaw` (`78bf944d9c`, records `3ca2e979ce`).
+  - #8133's revert of #8008 (`3f926024e3`) brought those old entries back.
+  - In c6dc, the only premise change is the open premise `RecordCustodyZKJ` becoming `RecordCustodyZKJPLaw`. The type hashes are unchanged.
+- **Who it hits.** Every PR whose tree contains `3f926024e3` fails its records here. #8015 and #8039 don't touch it: records be73 at `a7b910c2b9`, from before my checked merge, passed, and so did BINDTERM's bc5a at `9d115d391b`.
+- **Why I haven't fixed it.** `check.py` re-keys an `unwitnessed` entry only when its statement moved (`--moved`) or was lifted, and nothing here was renamed. Hand-editing the lock is ruled out, so I have no fix of my own to apply.
+- **Ask: who fixes these two entries on checked, and how?** The two ways are to re-key the entries to the current statement, or to prove `EndToEndRegistered_honest` and `EndToEndRegistered_nontrivial` (and the same pair for `Drawn`). Once the fix is on checked, I merge it into all four branches and rerun records. If you want me to write it, tell me which way.
+- **Where everything stands.**
+  - #8015 is marked at `9d115d391b`, so #8039 marks as soon as its records pass.
+  - #8070's records r20261108-154111-5c45 and the composition's r20261108-154130-f024 are still running on cpu-7, with an ETA of about 17:00Z. They will most likely fail the same way.
+  - P1's records moved into the proofs pool on cpu-12 as r20261108-164631-de70. It is waiting behind 3 checks in the proofs check line.
+  - TWOOPENS chose (b) for P2. I'm writing it now on `cursor/proofs-bindsess-perunit-4460` and will push it with P1 once it builds.
