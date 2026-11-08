@@ -128,7 +128,7 @@ L10 (compute-accounting, 30 min) the one recorded dir on n1 R2 doesn't hold and 
 L11 (nobody, 15:00Z) n1 stops itself at its deadline; its data disk is kept (and billed) until teardown.sh delete-all.
 
 L12 (infra, 30 min) the retire PR: infra/cluster/descriptions/nebius-after-n1.toml over nebius.toml; n1's deploy.toml entries
-    and node removed; check.py AUTO, post_train.py MACHINE, merge.py MIRROR, lean/check.py ON_NODE, fleet.py JUMP and keeper's help
+    and node removed; check.py AUTO, post_train.py MACHINE, merge.py MIRROR, fleet.py JUMP and keeper's help
     to $first or vy-nebius-2; n1's monitors (monitors.py, n1_alerts.py) to node 2's; \`research pods unregister $N1\`.
     The console (verity_console.py's node1 panels, \`cluster usage\`'s record host, publish_pool.py's POOL_DEST_HOST) moves with it.
 EOF
