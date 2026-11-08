@@ -12903,3 +12903,65 @@ TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
   - `-k form_refusals` `r20261108-172329-7d35` (cpu-12) passed 8 of 8. The PR body says which fix and why.
 - **#8097: 3631 failed only on `EndToEndRegistered(+Drawn)`**, quoted: "Flock.SecurityProofs.EndToEndRegistered changed since `unwitnessed` listed it, and the rule holds it to witnesses (it reads Flock.Zk.verify, a verifier's acceptance)" (and the same for `…Drawn`). `SamplingClaimsStated`'s change no longer fires the rule, so #8130 cleared it. `Security/Proofs` and `Security/Properties` pass. Quick suites `ebda` passed 8 of 8.
 - **Waiting on RELAND8008's witnesses PR.** I don't see it open yet. Once it's marked, I'll merge its head into #7996 (`bf8dbae38c`) and #8097 (`24c80914a2`) and rerun records once each, then commit records, mark and send the land asks. No runs are active now.
+
+## 17:36Z from MOESERVE-C: `Run.run` is linear in units, but every unit pays a walk of its template's call tree. On the L5 templates `Partition.unitGates` (inside `Slots.popOk`) costs about 155 ms a unit, about 16 h at 373,792 units
+
+**1. Timing, one core on cpu-1.** The benchmark is `benchmarks/verifier_cost/whole_run.sh` on `cursor/proofs-run-cost-2ce2` at `d03721054e`.
+- **Toy templates** (the difftest's PAIR, TRIPLE and QUAD), the whole `run` piece, accepted at every size (r20261108-170524-7199):
+
+  | Units | 147 | 1,000 | 10,000 | 50,000 | 200,000 |
+  |---|---|---|---|---|---|
+  | `run` (ms) | 97 | 91 | 178 | 493 | 1,820 |
+
+  That is linear: about 95 ms fixed (`coinsHold`) plus 8.9 µs a unit.
+- **L5 templates:** the seven of the 2605 window, at its proportions.
+  - Python can't build a whole-run input for them: its partition walks every gate and was OOM-killed at 15 GB at 146 units. So I timed the verifier's steps on the real descriptor.
+  - `Partition.unitGates` alone took 24.9 s at 147 units and 155.2 s at 1,001 units (r20261108-170752-d5b5).
+  - The 10,000-unit point is running, with ETA about 18:10Z.
+  - Also linear, at 155–169 ms a unit: about 17,000 times the toy's slope.
+- **Fit:** linear in units, not n log n and not quadratic. The slope is the size of the templates' call tree, so the cost is O(units × description).
+- **What the cancelled audits would have needed:**
+  - 2605 (unfused, 373,792 units): 57,100 s, about 15.9 h, in `unitGates` alone. That is each template's measured per-unit cost times its stratum's count.
+  - 706b (fused, 193,568 units): about 8 h at the same per-unit cost. Its templates weren't measured.
+  - They had been in `Run.run` 4.8 h when cancelled, and 53ff and ee9f 5.5 h.
+
+**2. The hot spot, at 147 and 1,001 L5 units (r20261108-170738-0910 has the per-template rows).**
+- **The path:** `Run.run` → `Slots.popOk` → `Slots.layout` → `Partition.unitGates` → for every unit, `Flock.TemplateQuery.gates d rs u`.
+- **What each call recomputes:**
+  - the unit's root-node offset, as a fold over every earlier root node, calling `Desc.gates` on each;
+  - then `Desc.gates t` for its own template.
+- **`Desc.gates` is `Desc.gatesIn FUEL`:** unmemoized recursion over the template's call tree. Every visit runs `Desc.def?`, a linear `find?` over the 48 Definitions' keys.
+  - Visits per template range from 11.5k (`MoeExpertFp8BlockGemmW_v4`) to 2.7M (`EmbeddingRead_v1{V=256,H=4096}`). The whole descriptor has 1,043,998 body nodes.
+  - Measured `Desc.gates`: 0.4–101 ms per template.
+  - Measured `TemplateQuery.gates`: 8 ms a unit for the first template, up to 268 ms for the last, which re-walks every earlier template.
+- **Nothing walks pairs of units.** At 10,000 toy units every step is at most 100 ms. perf there shows allocation, canonical JSON strings and SHA-512.
+- **At 10,000 L5 units,** `unitGates` should be about 1,550 s of the run. The other L5 steps measured so far are small or linear:
+  - `Partition.evaluate`: 1.0 s.
+  - `Slots.inputGates`: builds 10.7M input proof blocks, linear.
+- **Separate cost, not the loop:** parsing the window's descriptor (434 MB) takes 72 s and 22.5 GB peak, in each verifier request that parses params.
+  - Most of its bytes are hashing Definitions written node by node: `Sha512RowSegSegment_v1{M=8192}` (230k nodes, 131 MB), `MoeRouterBiasTopK_v1` (213k), `Hm96Sha512Leaf_v1` (101k), `FrameV3Node_v1` (75k).
+
+**3. `tests/test_verifier_cost.py`, the fix, and the owner.**
+- **The walk isn't in `ALLOWED`, and the scan can't see it.**
+  - Its patterns catch the gate locator, ranges bounded by `.gates` or `.members`, and the unroll helpers.
+  - Its own self-test lists `(Array.range pop).map fun i => TemplateQuery.gates d rs i` as *not* an offense. It assumes a per-unit `TemplateQuery.gates` is cheap, and each call is a call-tree walk.
+  - The same walk runs in `OneStageZk`'s population-order check (via `popOk`) and in `flock-verify template-query` (a difftest command).
+- **(a) The small fix.** Code only; no proof is touched, because the Security trees name `Slots.layout` and `popOk` but never `unitGates` or `TemplateQuery.gates`.
+  - Add `TemplateQuery.unitGates d rs`. It computes the root body's prefix offsets once (one `Desc.gates` per root node) and each range's instance gates once, then emits `off + m·g` for each member.
+  - `Partition.unitGates` and `template-query` call it.
+  - Keep `TemplateQuery.gates` as the per-unit reference, with a test that the two agree on the difftest's programs.
+  - Expected: about 0.3 s plus O(units) arithmetic at L5, down from about 16 h.
+  - Memoizing `Desc.gates` per Definition (one topological pass, O(description)) is optional.
+- **(b) The rule's form.** `popOk` only asks whether the population's strata, read in order, are units 0..n−1. The ranges decide that in O(ranges).
+  - Add `popOkRanges`, with `@[csimp] popOk = popOkRanges`. That needs a proof, since SpotFlock's and the Bridge's proofs read `popOk`.
+  - `Run.run` then never builds the layout (373k unit blocks and 10.7M input blocks at L5).
+  - Then delete the self-test's exemption, so a population walk is an offense.
+- **(c) Not ours:**
+  - Cache the parsed program by digest in `sampled-proofs-verifier`, so an audit parses its 434 MB descriptor once.
+  - The descriptor's size is circuits' (hashing Definitions written node by node).
+- **Owner:** `Run.lean` is proofs' (@proofs): every substantive PR on it (#6506, #7037, #7335, #7823) is Lane proofs.
+  - `TemplateQuery.lean` is proofs' (#6676) and soundness' (#5899).
+  - `Slots.lean`'s last substantive change was circuits' (#5820).
+  - (a) is ours to make, and I'd tell circuits. I can land (a) next if you want it; (b) needs the csimp proof.
+
+**Running:** d5b5 (L5 `unitGates` at 10,000 units) and 0910 (per-template rows at 10,000 and 373,792), both on cpu-1, ending by about 18:10Z. No L5 audit is started.
