@@ -218,10 +218,10 @@ from verity.core.protocols.certifier.certificate import Certificate, CertifiedRe
     parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
-from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import audit as OA, partition as P, proofs as PF, registration as R
+from verity.core.protocols.spot.one_stage.proofs import Finding
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 
 #: Whose verdict on an execution phase's proof is the record's, by kind of link (`LinkWindows.kind`): the Lean's
 #: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
