@@ -282,6 +282,14 @@ def norm_dir(lm: LM, w: torch.Tensor) -> torch.Tensor:
     return w / w.pow(2).mean().sqrt()
 
 
+def context(lm: LM, tok, text: str) -> tuple[Cache, torch.Tensor, int, torch.Tensor]:
+    """A prompt's prefix cache, last token and position, and its honest final state there."""
+    pre, last, t0 = prefix(lm, tok, text)
+    taps = {("final", lm.spec.layers): None}
+    lm.forward(last, pre.expand(1), taps=taps)
+    return pre, last, t0, taps[("final", lm.spec.layers)][0, 0].float()
+
+
 def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor, T: torch.Tensor, a) -> dict:
     """What a decoder that doesn't know E, g or b uses instead: per served precision, estimates of E[T] diag(g) and
     E[T] b, each up to a constant a column (softmax's shift absorbs it), read from served logprobs on the tokens T by
@@ -302,7 +310,9 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
               have mean square 1, over the coordinates whose g clears 4 times its read noise (the same faults'
               off-diagonal spread): a g lost in noise (GPT-2 has four under 0.01) would swamp it.
               `b_offset_mse` is b's error in the state's units, (b_hat - b) / g off that multiple, over those
-              coordinates."""
+              coordinates. With --peel-contexts N, the faults repeat at the last position of the first N prompts,
+              whose different honest states round differently, and the estimates are averaged: N times the faults
+              for about 1/N of the estimates' rounding error."""
     E = lm.E.float()
     V, d = E.shape
     L = lm.spec.layers
@@ -317,26 +327,30 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
         if lm.boxes is None:
             raise SystemExit(f"--peel {a.peel} reads at the boxes' amplitudes: give --boxes")
         site, layer, s = "final", L, 1.0
-        pc = int(position_class(torch.tensor(t0)))
-        hi = lm.boxes.hi[("final", L)][pc].float()
-        amps = torch.tensor([float(hi[i]) if a.peel == "box" else fault_values("own", i, h0, 0.0, hi, None)[1][0]
-                             for i in range(d)])
-        hr = lm.boxes.hi[("resid", L - 1)][pc].float()
-        deltas = (torch.minimum(hr, hr.median()) / 2).to(torch.bfloat16).double()
-    amps = amps.to(torch.bfloat16).double()
 
-    def pairs(site: str, layer: int, vals: torch.Tensor) -> dict:
+    def pairs(ctx: tuple, site: str, layer: int, vals: torch.Tensor) -> dict:
         n, obs = max(a.batch // 2, 1), {prec: [] for prec in a.precisions}
         for c0 in range(0, d, n):
             cs = list(range(c0, min(d, c0 + n)))
-            z = faulted_logits(lm, pre, last, t0, [(site, layer, i, sg * float(vals[i])) for sg in (1.0, -1.0) for i in cs])
+            z = faulted_logits(lm, *ctx[:3], [(site, layer, i, sg * float(vals[i])) for sg in (1.0, -1.0) for i in cs])
             for prec in a.precisions:
                 lp = served_logprobs(z, prec)[:, T].double()
                 obs[prec].append((lp - lp[:, :1]).view(2, len(cs), len(T)))
         return {prec: torch.cat(o, 1) for prec, o in obs.items()}
 
-    obs = pairs(site, layer, amps)
-    obr = pairs("resid", L - 1, deltas) if a.peel != "saturate" else None
+    if a.peel == "saturate":
+        amps = amps.to(torch.bfloat16).double()
+        runs = [(amps, None, pairs((pre, last, t0), site, layer, amps), None)]
+    else:
+        runs = []
+        for ctx in [(pre, last, t0, h0)] + [context(lm, tok, p) for p in PROMPTS[1:a.peel_contexts]]:
+            pc = int(position_class(torch.tensor(ctx[2])))
+            hi = lm.boxes.hi[("final", L)][pc].float()
+            amps = torch.tensor([float(hi[i]) if a.peel == "box" else fault_values("own", i, ctx[3], 0.0, hi, None)[1][0]
+                                 for i in range(d)]).to(torch.bfloat16).double()
+            hr = lm.boxes.hi[("resid", L - 1)][pc].float()
+            deltas = (torch.minimum(hr, hr.median()) / 2).to(torch.bfloat16).double()
+            runs.append((amps, deltas, pairs(ctx, site, layer, amps), pairs(ctx, "resid", L - 1, deltas)))
     W_true = E[T].double() * g.double()
     if ln and a.peel == "saturate":
         W_true = W_true - W_true.mean(1, keepdim=True)
@@ -344,20 +358,26 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
     H = honest_states(lm, tok, len(PROMPTS), a.new).double() if a.peel != "saturate" else None
     res = {}
     for prec in a.precisions:
-        o = obs[prec]
-        col = ((o[0] - o[1]) / (2 * s * (1.0 if a.peel == "saturate" else amps[:, None]))).T
+        col = torch.stack([((o[prec][0] - o[prec][1]) / (2 * s * (1.0 if a.peel == "saturate" else am[:, None]))).T
+                           for am, _, o, _ in runs]).mean(0)
         g_hat = b_hat = None
         if a.peel == "saturate":
+            o = runs[0][2][prec]
             W, beta = col, ((o[0] + o[1]) / 2).mean(0)
         else:
             A = torch.cat([col, torch.ones(len(T), 1, dtype=torch.float64)], 1)
-            dh = torch.linalg.lstsq(A, (obr[prec][0] - obr[prec][1]).T).solution[:d]
-            g_hat = dh.diagonal() / (2 * deltas)
-            noise = dh[~torch.eye(d, dtype=torch.bool)].view(d, d - 1).std(1) / (2 * deltas)
-            R = g_hat.abs() > 4 * noise
-            b_hat = torch.zeros(d, dtype=torch.float64)
-            if ln:
-                b_hat = torch.linalg.lstsq(A, ((obr[prec][0] + obr[prec][1]) / 2).T).solution[:d].diagonal().clone()
+            gs, ns, bs = [], [], []
+            for _, dl, _, r in runs:
+                dh = torch.linalg.lstsq(A, (r[prec][0] - r[prec][1]).T).solution[:d]
+                gc = dh.diagonal() / (2 * dl)
+                unit = gc.abs().median()
+                gs.append(gc / unit)
+                ns.append(dh[~torch.eye(d, dtype=torch.bool)].view(d, d - 1).std(1) / (2 * dl) / unit)
+                if ln:
+                    bs.append(torch.linalg.lstsq(A, ((r[prec][0] + r[prec][1]) / 2).T).solution[:d].diagonal())
+            g_hat = torch.stack(gs).mean(0)
+            R = g_hat.abs() > 4 * torch.stack(ns).pow(2).mean(0).sqrt() / math.sqrt(len(runs))
+            b_hat = torch.stack(bs).mean(0) if ln else torch.zeros(d, dtype=torch.float64)
             Z = H @ E[T].double().T
             if prec == "bf16":
                 Z = Z.float().to(torch.bfloat16).double()
@@ -478,9 +498,9 @@ def part_rows(lm: LM, tok, a) -> dict:
                          "bits_per_observed_bit": bits / (F * k * (math.log2(V) + LOGPROB_BITS))})
     res = {"part": "rows", "rows": rows}
     if est is not None:
-        res["peel"] = {"mode": a.peel, "tokens": len(T),
-                       "faults_by_k": {k: (2 if a.peel == "saturate" else 4) * d * math.ceil(len(T) / (k - 1))
-                                       for k in a.ks if k > 1},
+        per = 2 if a.peel == "saturate" else 4 * a.peel_contexts
+        res["peel"] = {"mode": a.peel, "tokens": len(T), "contexts": 1 if a.peel == "saturate" else a.peel_contexts,
+                       "faults_by_k": {k: per * d * math.ceil(len(T) / (k - 1)) for k in a.ks if k > 1},
                        "by_precision": {p: {n: v for n, v in e.items() if n not in ("W", "beta")}
                                         for p, e in est.items()}}
     return res
@@ -560,6 +580,8 @@ def main() -> int:
     ap.add_argument("--peel", choices=("saturate", "box", "own"),
                     help="rows: the decoder estimates E, g and b from faults on the last layer instead of knowing them "
                          "(`peel`): saturate, unclamped; box or own, at the final site under --boxes")
+    ap.add_argument("--peel-contexts", type=int, default=1,
+                    help="rows: box and own peels repeat their faults at this many prompts' last positions and average")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
