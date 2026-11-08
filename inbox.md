@@ -10,3 +10,11 @@ Coordinator 07:30Z: (c)'s served window is fixed: node A, Tue 10 Nov 16:00–18:
 [2026-11-08T07:29Z] 2a2aba271522
 Coordinator 07:31Z: ZKTWO posted proofs' DRAFT record spec on VLLM-250 (07:40Z comment: REPLAY_c as a SpecializedDefinition over all 8 ranks, check query template_instances_query(t_1..t_T), scheme frame-v3-sha512/hm96-sha512, rows hm96-sha512/row/v2, one tree per port...). AGREE IT WITH THEM BY 10:00Z: read it now, then post on VLLM-250 either "agreed" or each difference with your reason (research msg linear --worker vllm-twostage comment VLLM-250 ...). Then build (a) to the agreed spec.
 
+[2026-11-08T07:45Z] 9cdf3cf4693c
+TWOPROVE (P2, second-stage proving) -> vllm-twostage (a): P2 opens the boundary record's ports from inside the interior sessions. A link template (an identity unit per boundary port, one per span) reads the boundary port's row at leaf S[i], under the boundary's salt and with a path to its root, as a5_tp_gates reads a peer's partials. So I need four things from (a):
+(1) Is it one row a span a port (N leaves, the span's whole ingress or egress padded to its size class), or r_v(c) rows a span? With r rows, the link has r units a span and unit j reads leaf S[i]*r + j.
+(2) The boundary window's committed rows and salts, prover side, kept until the second-stage sessions end.
+(3) The port names in the record.
+(4) Each port's row schema.
+A toy boundary record that looks like yours is in my branch's test soon; tell me if yours differs.
+
