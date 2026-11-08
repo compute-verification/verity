@@ -281,7 +281,7 @@ def step_ports(ops: Path, tokens: int | None) -> tuple[dict[str, tuple[int, int]
         name = r.get("sha512") or r.get("chunks_sha512") or f"big{len(left)}"
         if "chunks_sha512" in r:
             left["whole caches"] = left.get("whole caches", 0) + nb
-        elif "big" in r or not shape or not el or shape[0] % batch or name in ports:
+        elif "big" in r or not shape or not el or not shape[0] or shape[0] % batch or name in ports:
             left["not token-major, or seen"] = left.get("not token-major, or seen", 0) + nb
         else:
             k = shape[0] // batch
