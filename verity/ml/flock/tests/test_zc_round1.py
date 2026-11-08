@@ -43,7 +43,8 @@ def lib(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
     arch = gpu_arch()
     out = tmp_path_factory.mktemp("zc_round1") / f"zc_round1_{request.param}.so"
     flags = ["-DZC_R1_TABLES"] if request.param == "tables" else []
-    r = subprocess.run(["nvcc", "-x", "cu", "-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", f"-I{GHASH}", *flags,
+    # both builds load into this process: GNU-unique statics (the launchers' one-time setup) would be the first build's
+    r = subprocess.run(["nvcc", "-x", "cu", "-O3", "-std=c++17", "-Xcompiler", "-fPIC,-fno-gnu-unique", "-shared", f"-I{GHASH}", *flags,
                         f"-gencode=arch=compute_{arch},code=sm_{arch}", "-o", str(out), str(SOURCE)],
                        capture_output=True, text=True, check=False)
     assert r.returncode == 0, f"nvcc failed:\n{r.stderr[-4000:]}"
