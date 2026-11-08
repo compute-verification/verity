@@ -9,8 +9,9 @@ records how the tree got here or who is working on it, which the tree can't keep
 * ``date``: a date, ``2026-10-12``, ``27 Oct``, ``Oct 27``;
 * ``name``: a person named as a rule's source, ``Daniel's ruling``, ``per Daniel``, except the Asks for Daniel database and
   its ``Waiting on Daniel`` status, and where AGENTS.md and the skills name the person who decides;
-* ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id, a Notion URL, a Linear issue id (``VLLM-136``, the workspace's
-  team keys) or URL, and a pull request (``#1234``, or its GitHub URL);
+* ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id or a worker's note, brief or draft by its codename
+  (``CHAINMAP's note``), a Notion URL, a Linear issue id (``VLLM-136``, the workspace's team keys) or URL, and a pull
+  request (``#1234``, or its GitHub URL);
 * ``agent``, ``slack``: a Cursor agent id (``bc-`` and hex) and a Slack timestamp or archive URL;
 * ``codename``: a worker's codename in prose: a board id (``M-1234``, ``F-r16``), a round (``R10``..``R19``), ``[lane `` or
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
@@ -94,6 +95,7 @@ PATTERNS = tuple((kind, re.compile(p), before and re.compile(before)) for kind, 
     ("date", rf"{MONTH_WORD}\.? \d{{1,2}}\b(?![:\d])", r"\w"),
     ("name", r"(?<!Asks for )(?<!Waiting on )Daniel(?:'s)?\b", r"\w"),
     ("note", r"note:[0-9A-Za-z][\w.:-]*", r"\w"),
+    ("note", r"[A-Z][A-Z0-9]{3,}'s (?:notes?|brief|draft)\b(?!:)", r"[\w']"),
     ("notion", r"notion\.(?:so|site|com)\b\S*", None),
     ("linear", rf"(?:{TEAMS})-\d+\b", r"\w"),
     ("linear", r"linear\.app/\S*", r"\w"),
@@ -315,6 +317,8 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert sites("int x;  // INF-71 (Oct 12)\nchar *u = \"https://x\";\n", "k.cu") == [
         (1, "linear: INF-71"), (1, "attribution: (Oct 12)")]
     assert sites("x = 1  # (12 Oct)\n", "a.toml") == [(1, "attribution: (12 Oct)")]
+    assert [w for _, w in sites("# CHAINMAP's note, NUMERIC's brief; not the README's note:<id>, GEMM's tile\n", "a.py")] == [
+        "note: CHAINMAP's note", "note: NUMERIC's brief"]
     named = "per Daniel. It landed 27 Oct (Oct 28 next); the Asks for Daniel database, Waiting on Daniel, Decision 3, 12:30Z, @daniel"
     assert [w for _, w in sites(f"# {named}\n", "a.py")] == ["name: Daniel", "date: 27 Oct", "attribution: (Oct 28 next)"]
     assert [w for _, w in sites(named, ".agents/skills/x/SKILL.md")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
