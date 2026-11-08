@@ -13,11 +13,11 @@
   "overheads": [1.0, 1e14],
   "token_bytes": 4,
   "main_lines": {
-   "exfiltration": {"{model}'s weights": "solid", "Advice cap 5,582 bits/window": "dashed"}
+   "exfiltration": {"{model}'s weights": "solid", "Advice today": "solid", "Advice once the length rule": "dashed"}
   },
   "notes": {
    "exfiltration_appendix": [
-    "The advice line is a registered cap a 600 s machine window on the scheduler's advice without the certified tick, times the scope's machine windows, the most any accepted advice is charged; with the tick and certified arrivals, and with batch-invariant Definitions, the advice is 0 bits and has no line."
+    "The advice cap here is a registered cap a 600 s machine window on the scheduler's advice without the certified tick, times the scope's machine windows, the most any accepted advice is charged. With the tick and certified arrivals, today's advice is the response length, charged until a circuit checks the stop rule; once one does, and with batch-invariant Definitions, it is 0 bits."
    ]
   }
  }

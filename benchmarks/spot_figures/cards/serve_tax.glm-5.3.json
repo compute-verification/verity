@@ -25,7 +25,7 @@
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
-      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves 0 bits of advice in every window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model)"
+      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves no scheduling advice in any window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model); the response length stays advice until a circuit checks the stop rule"
      },
      {
       "part": "step record, token commits and replay-block edge snapshot",
@@ -59,7 +59,7 @@
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
-      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves 0 bits of advice in every window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model)"
+      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves no scheduling advice in any window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model); the response length stays advice until a circuit checks the stop rule"
      },
      {
       "part": "step record, token commits and replay-block edge snapshot",
@@ -100,7 +100,7 @@
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
-      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves 0 bits of advice in every window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model)"
+      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves no scheduling advice in any window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model); the response length stays advice until a circuit checks the stop rule"
      },
      {
       "part": "token ids",
@@ -138,7 +138,7 @@
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
-      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves 0 bits of advice in every window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model)"
+      "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals, it leaves no scheduling advice in any window, with v1 sending no prefix-cache hit (each is the replay's, derived by the registered pool model); the response length stays advice until a circuit checks the stop rule"
      },
      {
       "part": "every proof block's outputs",

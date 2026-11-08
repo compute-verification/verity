@@ -7,8 +7,8 @@ the measured overhead as a vertical line, the references as grey horizontal ones
 each panel's caption from the JSON.  The main figure plots the series and references the JSON marks `main`; the
 appendix figure (`appendix_stem`) is the exfiltration panel with every design and the references the main figure
 leaves out.  A panel's y-axis spans its headline curves and the references up to `OFF_SCALE` above them, so a
-comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 only in the
-caption.
+comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 is drawn along
+the axis's floor, labelled as at 0.
 
     uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json [--scope "world year"] [--out DIR]
 """
@@ -51,6 +51,8 @@ VERTICAL = "#E69F00"
 OFF_SCALE = 1e3
 #: reference lines within this relative distance coincide on the plot
 COINCIDENT = 0.02
+#: how far up its axis, in the axis's height, a reference line at 0 is drawn
+FLOOR = 0.012
 #: the least gap, in the axis's height, between two labels on one side
 LABEL_GAP = 0.045
 #: how far below its axis, in the axis's height, a caption starts; the appendix's budget legend starts there beside it
@@ -98,8 +100,8 @@ def _width(design: str, headline: str) -> float:
 
 
 def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float, str, str]]:
-    """The panel's reference lines in `scope`, scaled and ascending, each with its style: a line at 0 is in the
-    caption, not here, and lines within `COINCIDENT` of one another are plotted once, under the first one's label."""
+    """The panel's reference lines in `scope`, scaled and ascending, each with its style: a line at 0 is `_floor`'s,
+    not here, and lines within `COINCIDENT` of one another are plotted once, under the first one's label."""
     rows = sorted(((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"], r.get("style", "dashed"))
                   for r in references if "value" in r or scope in r["by_scope"])
     out: list[tuple[float, str, str]] = []
@@ -107,6 +109,23 @@ def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float
         if amount > 0 and not (out and amount <= out[-1][0] * (1 + COINCIDENT)):
             out.append((amount, label, style))
     return out
+
+
+def _zeros(references: list[dict], scope: str) -> list[tuple[str, str]]:
+    """The panel's reference lines at 0 in `scope`, each with its style."""
+    return [(r["label"], r.get("style", "dashed")) for r in references
+            if ("value" in r or scope in r["by_scope"]) and (r["value"] if "value" in r else r["by_scope"][scope]) <= 0]
+
+
+def _floor(ax, zeros: list[tuple[str, str]], styles: dict, fontsize: int) -> None:
+    """Draw each line at 0, which a log axis has no place for, along the axis's floor, its label saying it is at 0; the
+    panel leaves the decade above the floor clear of its curves for them."""
+    for i, (label, style) in enumerate(zeros):
+        y = FLOOR * (1 + 3 * i)
+        ax.plot([0, 1], [y, y], transform=ax.transAxes, color="#909090", ls=styles[style], lw=1.3, zorder=1)
+        ax.text(.01, y + FLOOR / 2, f"{label}: 0, on the axis's floor", transform=ax.transAxes, ha="left",
+                va="bottom", fontsize=fontsize, color="#555555", zorder=5,
+                bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
 
 
 def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list[dict], references: list[dict],
@@ -141,6 +160,8 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
     refs = [r for r in refs if r not in above]
     top = head + [r[0] for r in refs]
     lo, hi = 10.0 ** floor(log10(min(ys + top))), 10.0 ** (floor(log10(max(top))) + 1)
+    zeros = _zeros(references, scope)
+    lo /= 10 if zeros else 1
     ax.set_yscale("log")
     ax.set_ylim(lo, hi)
     ax.yaxis.set_major_locator(FixedLocator(_decades(lo, hi, 3 if hi / lo > 1e12 else 2)))
@@ -157,11 +178,13 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
         ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va="bottom", fontsize=15,
                 color="#555555", transform=offset_copy(ax.transData, fig=fig, y=3, units="points"), zorder=5,
                 bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+    _floor(ax, zeros, REFERENCE_STYLE, 15)
     if above:
         ax.text(lo_x * 1.5, hi, "Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in above),
                 ha="left", va="top", fontsize=14, color="#555555", wrap=True,
                 transform=offset_copy(ax.transData, fig=fig, y=-4, units="points"))
-    ax.text(v["x"] * 2.5, lo * 1.6, v["label"], color=VERTICAL, fontsize=15, ha="left", va="bottom", rotation=90)
+    ax.text(v["x"] * 2.5, lo * (16 if zeros else 1.6), v["label"], color=VERTICAL, fontsize=15, ha="left", va="bottom",
+            rotation=90)
     for s in series:
         headline = s["design"] == p["headline"]
         ax.plot(s["x"], [y * scale for y in s["y"]], color=colors[s["budget"]], ls=_style(s["design"], p["headline"]),

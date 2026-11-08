@@ -191,8 +191,9 @@ def priced_card(model: str = "GLM-5.3") -> dict:
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
                        "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with "
-                       "certified arrivals, it leaves 0 bits of advice in every window, with v1 sending no prefix-cache "
-                       "hit (each is the replay's, derived by the registered pool model)"}
+                       "certified arrivals, it leaves no scheduling advice in any window, with v1 sending no "
+                       "prefix-cache hit (each is the replay's, derived by the registered pool model); the response "
+                       "length stays advice until a circuit checks the stop rule"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
     edge = {"part": "step record, token commits and replay-block edge snapshot",
@@ -788,7 +789,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     import textwrap
 
     from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
-    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _lines, _power
+    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _floor, _lines, _power, _zeros
 
     p, tax = out["panels"][panel], out["taxes"]
     series = [s for s in p["series"] if s["scope"] == scope]
@@ -814,6 +815,8 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     far = [r for r in refs if r[0] > max(ys) * OFF_SCALE]
     refs = [r for r in refs if r not in far]
     lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(ys + [r[0] for r in refs]))) + 1)
+    zeros = _zeros(p["references"], scope)
+    lo /= 10 if zeros else 1
     caption = out["scopes"][scope]["captions"][panel]
     if far:
         caption += " Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in far) + "."
@@ -834,6 +837,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
                 ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
                 zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+    _floor(ax, zeros, styles, 14)
     for s in series:
         color, ls, lw = STYLE[s["config"]]
         t = tax[s["config"]]
