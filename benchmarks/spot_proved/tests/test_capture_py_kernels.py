@@ -105,6 +105,7 @@ def test_python_launched_kernels_are_recorded_with_their_outputs_and_return_the_
     S.recording, S.layer = True, 4
     q, kv, pe, topk, cache = _norm_rope_call(mods)
     logits = _router_call()
+    capture._drain()
     for got, want in ((q, want_q), (kv, want_kv), (pe, want_pe), (topk, want_topk), (cache, want_cache), (logits, want_logits)):
         assert torch.equal(got, want)
 
