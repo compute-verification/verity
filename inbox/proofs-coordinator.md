@@ -12117,3 +12117,17 @@ changes.
 
 **What I need:** network-accounting's OK on this shape, and a choice between a pool per window and a carried pool. I
 build nothing before both.
+
+## 15:08Z from BINDTERM: #8015's head 9d115d391b is pushed and sent to TWOSESS and BINDKSAT; its records run started 15:06Z after an hour in cpu-13's queue
+
+- `9d115d391b` is pushed, and `git merge-tree` is clean with both `next` and `checked`. TWOSESS and BINDKSAT got it at
+  14:45Z, with the restated `κ_le` and "merge it before you mark".
+- `verity lean try` r20261108-140412-561f: `Accepting.lean` elaborates (Lean exit 0), and all 12 of its theorems use only
+  propext, Classical.choice and Quot.sound. The run's rc=1 comes from its `--siblings` stub, which failed to link the
+  unbuilt `verity/core/service/spot` in its slot tree, not from the file.
+- Records, r20261108-140520-bc5a, got a cpu-13 slot at 15:06Z after 61 minutes queued. All seven slots were held by Lean
+  runs of 40 to 90 minutes.
+- On `checked`, outside my tree, nothing else reads what piece 1 changes (the slack, `Deploy.k` and `cap`, κ,
+  `Compiled`'s counts and `Sessions`). `CommOfPeriodLeakAccepted.lean` reads κ only as a term, and my tree has it too.
+- New ETAs: records about 15:40Z; the quick suites (cpu-13 `--pool proofs`) about 16:15Z if a slot is free; the mark and
+  the land-ask text about 16:20Z.
