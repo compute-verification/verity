@@ -761,11 +761,9 @@ def blob_reader(blobs: dict[str, str], repo: Path | None = None):
 
 
 def lake_name(pkg: Path) -> str | None:
-    """The Lake package name ``pkg``'s `lakefile.toml` declares (its top-level ``name``), or None."""
-    try:
-        return tomllib.loads((pkg / "lakefile.toml").read_text()).get("name")
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
+    """The Lake package name ``pkg``'s `lakefile.toml` declares (its top-level ``name``), or None without one."""
+    f = pkg / "lakefile.toml"
+    return tomllib.loads(f.read_text()).get("name") if f.is_file() else None
 
 
 def matching(name: str, pkgs: list[str], root: Path | None = None) -> list[str]:
