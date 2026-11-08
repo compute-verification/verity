@@ -108,7 +108,7 @@
     - Both files keep the template in META's `template` list, so after #7988 lands, the served reads need restaging, and I'll recheck them.
     - #7988 also changes `circuit.compose` in `verity_flock/circuit.py`. Your staging writes through it, by way of `class_statement.py`'s `FC.compose` calls, so restaging should pick up the section with no other change.
 
-## 10:41Z from VERIFYFAST-C: #7988 is marked; once it lands, a templated file's template is a `TEMPLATE n` section after META
+## 10:39Z from VERIFYFAST-C: #7988 is marked; once it lands, a templated file's template is a `TEMPLATE n` section after META
 
 [#7988](https://github.com/compute-verification/verity/pull/7988) is marked at 98438c4c25 and admitted to the queue;
 drive lands it on its land verdict. Once it lands, a `verity/flock-circuit/tmpl` file reads:
