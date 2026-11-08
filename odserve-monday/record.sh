@@ -7,6 +7,8 @@
 #                       public file is the pin's staged body completed, and θ's layout is the pin's
 #   RECORD-CHECKED      every check with holds and why: auditor-listing, auditor-record, scan-state-pinned, ...
 #   CERTIFIER-KEY       open or not: where it is open, the network certifier's verdict is NOT_ESTABLISHED
+#   COINS               the record's open draws (empty, else every cell is conditional on live-coins) and whether it
+#                       read the chain report before the report moved to the serve dir's private/
 #   RECORD-OPEN         each verdict with open terms or conditions; RECORD-CONDITIONAL of_record's conditions
 #   K                   the figure of record (bound.of_record's K, bits a phase) and what is open under it
 #   NETWORK-RUN/-PERIOD the network bound over the run and pooled over each monitoring period, for the serving node, a
@@ -44,6 +46,9 @@ for name, x in sorted(checked.items()):
     print('RECORD-CHECKED:', name, json.dumps({'holds': x.get('holds'), 'why': str(x.get('why') or '')[:300]}, sort_keys=True))
 key_open = sorted(k for k, x in v.items() if 'certifier-key' in (x.get('open') or []))
 print('CERTIFIER-KEY:', 'open in ' + ', '.join(key_open) if key_open else 'not open')
+coins = rec.get('coins') or {}
+cdraws = (coins.get('draws') or {}) if isinstance(coins.get('draws'), dict) else {}
+print('COINS: open draws', json.dumps(coins.get('open_draws')), '; chain report:', 'missing' if cdraws.get('missing') else 'read')
 for name, x in sorted(v.items()):
     if x.get('open') or x.get('conditional_on'):
         print('RECORD-OPEN:', name, json.dumps({k: x.get(k) for k in ('verdict', 'answer', 'open', 'conditional_on')}, sort_keys=True)[:600])

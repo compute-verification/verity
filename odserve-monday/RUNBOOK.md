@@ -312,6 +312,7 @@ RECORD-CHECKED: auditor-listing {"holds": true, "why": ""}
 RECORD-CHECKED: auditor-record {"holds": true, "why": ""}
 RECORD-CHECKED: scan-state-pinned {"holds": true, "why": ""}
 CERTIFIER-KEY: not open
+COINS: open draws [] ; chain report: read
 K: <about 3.6e12> bits a phase; open under it: [...]
 NETWORK-RUN / NETWORK-PERIOD: the network bound over the run and pooled per week, month and year (node, datacenter, world)
 SAMPLED-PER-WINDOW / SAMPLED-PERIOD: sampled proofs' ε at δ and its pooled cells
@@ -321,7 +322,10 @@ LAYOUT: the pin states one: yes ; θ names one: yes ; equal: yes
 
 The checks it reads: **pinned** (`registered_files` holds, comparing circuit and public: the public file is the pin's
 staged body completed, and θ's layout is the pin's); **auditor-listing**; **scan-state-pinned**; **auditor-record**;
-**certifier-key** not open (where it is, the network certifier's verdict is NOT_ESTABLISHED); and **v2's member layout
+**certifier-key** not open (where it is, the network certifier's verdict is NOT_ESTABLISHED); **coins**, no open
+draw (the record must read the chain's `pieces/certifier/chain/report/report.json` before `private_pieces` moves it
+to the serve dir's private/; a record written again later, the cut lemma's included, must link that report in, or
+every cell turns conditional on live-coins); and **v2's member layout
 from the pre-draw pin** (a5 wrote each member's k and n into `public-pin.json` at staging, before the draw; v2 reads its
 layout from that pin, and the record refuses a θ layout that differs: `LAYOUT ... equal: yes`).
 
