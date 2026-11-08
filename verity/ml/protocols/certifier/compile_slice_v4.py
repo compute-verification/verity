@@ -22,9 +22,12 @@ rows but three:
 decisions as CompileSlice_v1 charges them (en_i = i < ``count``), and a length slot for each arrival slot of ``cert``,
 qen_k its ``a_valid``, mt_k its ``a_mt`` and olen_k its ``a_O`` (the certified output length, zero-extended to 32
 bits). So the window charges each request whose body lands in it, the window's certified arrivals, bitlen(max_tokens)
-+ 1 bits, as `code_v1` sends its term (`lengths.tails`), and ``code`` refuses an output length past its max_tokens'
-width. No input of the charge is witness: qen, mt and olen are ``cert``'s, which the verifier holds by its b‖c to the
-certified record's commitment, as it holds the arrivals the replay loads, and en is ``adv``'s count. H = O = 0: the
++ 1 bits, as `code_v1` sends its term (`lengths.tails`), whether or not its output ends in the window (the slice loads
+each window from the empty state, so a window that opens with a request running is no slice), and ``code`` refuses an
+output length past its max_tokens' width. No input of the charge is free witness: qen, mt and olen are ``cert``'s, and en
+is ``adv``'s count. What holds ``cert`` to the certified record is a stand-in: the honest cert row, opened by its b‖c
+under the certifier's salt (`compile_slice_zk`), until max_tokens is read from the certified body. The circuit bounds
+max_tokens only from above, so until then a lower max_tokens the output still fits passes at a lower charge. H = O = 0: the
 slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no hits and no order
 entries (`protocol/charge-chain.md`, "The slice"), and a window that sends either is CompileSlice_v1's stand-in, the
 still-sent fields, as before.
