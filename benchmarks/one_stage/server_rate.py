@@ -28,9 +28,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections import Counter
@@ -139,17 +141,20 @@ def throttled() -> dict:
 
 class Lean:
     """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
-    file and tables archived once."""
+    file and tables archived once, in scratch outside ``out`` (`close` removes it)."""
 
     def __init__(self, lean: str, d: Path, out: Path) -> None:
         self.lean, self.out = lean, out
-        self.archive = out / "archive"
+        self.archive = Path(tempfile.mkdtemp(prefix="server-rate-archive-"))
         tables = sorted(str(f) for f in (d / "tables").glob("*") if f.is_file()) if (d / "tables").is_dir() else []
         p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables],
                            capture_output=True, text=True)
         (out / "archive-put.log").write_text(p.stdout + p.stderr)
         self.keys = {Path(x.split()[1]).name: x.split()[0] for x in p.stdout.splitlines() if len(x.split()) == 2}
         self._one = threading.Lock()
+
+    def close(self) -> None:
+        shutil.rmtree(self.archive, ignore_errors=True)
 
     def __call__(self, s) -> dict:
         cmd = [self.lean, "verify", "--statement", STATEMENT_ID, "--archive", str(self.archive),
@@ -268,6 +273,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                 rec["lean"].append({"label": s.label, **s.verdict()})
             except Exception as e:  # noqa: BLE001 -- a failed verdict is recorded, not raised
                 rec["lean"].append({"label": s.label, "error": str(e)[:400]})
+        lean.close()
     with open(out / "sessions.jsonl", "w") as f:
         for r in done:
             live = {k: v for k, v in (r["s"].live or {}).items() if k not in ("verdict", "buckets", "roots", "unit_draw", "identity")}
