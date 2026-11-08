@@ -28,7 +28,7 @@ switch routes only the rank bits past t, so its tags cost kb - t ANDs.  `DsaButt
 `DsaWaksmanSwap_v2` and `DsaWaksmanPick_v2`, one AND a payload bit a switch, and `DsaTopKRow_v2` is the three over the indices'
 constant bits.
 
-ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048, run r20261107-210852-ec66:
+ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048:
 
     N          mask         settings     switches   rows, W 576 E 16   DsaTopKRow
     4,096         631,138      230,892     24,576       226,492,416      1,648,462

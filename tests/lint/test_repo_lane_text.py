@@ -13,14 +13,16 @@ records how the tree got here or who is working on it, which the tree can't keep
   (``CHAINMAP's note``), a Notion URL, a Linear issue id (``VLLM-136``, the workspace's team keys) or URL, and a pull
   request (``#1234``, or its GitHub URL);
 * ``agent``, ``slack``: a Cursor agent id (``bc-`` and hex) and a Slack timestamp or archive URL;
+* ``run``, ``art``: a run id (``r20261025-031300-0fcc``) and an ``art:`` id (``art:23a3``), except where ``OWN_IDS``
+  says the tooling mints and reads them;
 * ``codename``: a worker's codename in prose: a board id (``M-1234``, ``F-r16``), a round (``R10``..``R19``), ``[lane `` or
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
   as an owner.
 
-``art:`` ids are allowed: they name evidence, which the store keeps.  Declared data isn't read at all (``*.json``, ``*.csv``
-and every other file not named above: ``fixtures/artifacts.json``, each ``lean-audit.json``'s records, the handle registry,
-the manifests), nor what ``SKIP`` names, each with its reason.  This lint takes over P11's docstring patterns
-(``integrations/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``, rounds and dates), for the whole tree.
+Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``fixtures/artifacts.json``,
+each ``lean-audit.json``'s records, the handle registry, the manifests), nor what ``SKIP`` names, each with its reason.
+This lint takes over P11's docstring patterns (``integrations/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
+rounds and dates), for the whole tree.
 
 Sites are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count`` sites in
 its file.  A file with more than its entry allows, or with one and no entry, fails, and the files ``PINNED`` names
@@ -60,6 +62,11 @@ SKIP = {
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
+#: the kinds a path prefix's prose may hold, each with its reason
+OWN_IDS = {
+    "tools/research/": (("run", "art"), "runs and the evidence store mint and read these ids: they are its subject"),
+    "infra/": (("run", "art"), "the machines launch runs and fetch evidence by these ids: they are its subject"),
+}
 #: test fixtures: a path with one of these directories is data
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")
 #: the files that hold no lane text and may have no entry
@@ -67,7 +74,7 @@ PINNED = ("AGENTS.md", "ARCHITECTURE.md", "GLOSSARY.md", ".agents/skills/")
 #: where AGENTS.md and the skills name handles as owners
 OWNERS = ("AGENTS.md", ".agents/skills/")
 FIX = ("Say what is true now, and put the rest where it lives: history in git (the commit message), work in Linear (the "
-       "issue), rulings in Notion (the decisions log), results in the store (`research data put`, cited as `art:<id>`). "
+       "issue), rulings in Notion (the decisions log), results in the store (`research data put`, cited outside the tree). "
        f"If the file moved, move its entry in the same change: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
 
 PY = (".py", ".pyi")
@@ -102,6 +109,8 @@ PATTERNS = tuple((kind, re.compile(p), before and re.compile(before)) for kind, 
     ("pr", r"#\d{3,5}\b", r"[\w&/#]"),
     ("pr", r"github\.com/[\w.-]+/[\w.-]+/(?:pull|issues)/\d+", None),
     ("agent", r"bc-[0-9a-f]{6,}", r"\w"),
+    ("run", r"r20\d{6}-\d{6}-[0-9a-f]{4}", r"[\w-]"),
+    ("art", r"art:[0-9a-f]{4,}", r"\w"),
     ("slack", r"1[5-9]\d{8}\.\d{6}\b", r"\w"),
     ("slack", r"slack\.com/archives/\S*", None),
     ("codename", r"M-\d{4}\b|F-r\d+|R1\d\b", r"\w"),
@@ -129,9 +138,9 @@ def holds(path: str) -> bool:
     return path.endswith(PY + LEAN + MARKDOWN + HASH + SLASH)
 
 
-def found_in(prose: list[tuple[int, str]], owners: bool = False) -> list[tuple[int, str]]:
+def found_in(prose: list[tuple[int, str]], owners: bool = False, own: tuple[str, ...] = ()) -> list[tuple[int, str]]:
     """(line, ``kind: text``) of each site in ``prose``, its chunks' (first line, text); ``owners``: handles name owners
-    here."""
+    here; ``own``: the kinds this prose may hold (``OWN_IDS``)."""
     text = "\n".join(chunk for _, chunk in prose)
     if not text:
         return []
@@ -146,7 +155,7 @@ def found_in(prose: list[tuple[int, str]], owners: bool = False) -> list[tuple[i
         at += len(chunk) + 1
     out, end = [], 0
     for start, _, stop, kind, what in sorted(hits):
-        if start < end or owners and (kind == "codename" and HANDLE.match(what) or kind == "name"):
+        if start < end or kind in own or owners and (kind == "codename" and HANDLE.match(what) or kind == "name"):
             continue
         i = bisect.bisect_right(starts, start) - 1
         out.append((prose[i][0] + text.count("\n", starts[i], start), f"{kind}: {what.strip()[:80]}"))
@@ -242,7 +251,8 @@ def sites(text: str, path: str) -> list[tuple[int, str]]:
         prose = comments(text, SLASH_COMMENT)
     else:
         return []
-    return sorted(found_in(sorted(prose, key=lambda c: c[0]), owners), key=lambda s: s[0])
+    own = tuple(k for p, (kinds, _) in OWN_IDS.items() if path.startswith(p) for k in kinds)
+    return sorted(found_in(sorted(prose, key=lambda c: c[0]), owners, own), key=lambda s: s[0])
 
 
 def parse(doc: object) -> Counter:
@@ -305,8 +315,12 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert [(line, w.split(":")[0]) for line, w in sites(py, "a.py")] == [
         (1, "codename"), (1, "attribution"), (1, "pr"), (1, "linear"), (2, "agent"), (2, "note"), (4, "attribution"),
         (4, "codename"), (4, "codename"), (6, "date"), (6, "notion"), (6, "slack"), (6, "codename"), (6, "codename"),
-        (7, "codename")]
+        (7, "codename"), (7, "art")]
     assert sites("m = (\n    '(12 Oct) in a call'\n    'and #1234'\n)\nf(x,\n  '''VLLM-1''')\n", "b.py") == []
+    ids = ("# r20261025-031300-0fcc, art:23a3; not x-r20261025-031300-0fcc, cart:23a3 or art:<id>\n"
+           "RUN, ART = 'r20261025-031300-0fcc', 'art:23a3'\n")
+    assert [w for _, w in sites(ids, "a.py")] == ["run: r20261025-031300-0fcc", "art: art:23a3"]
+    assert sites(ids, "tools/research/src/research/a.py") == sites(ids, "infra/a.sh") == []
     lean = ("/-- Lean's (Daniel, 8 Oct)\n  /- nested -/ still (12 Oct) -/\n"
             'def s := "-- (12 Oct) is a string"  -- PRF-12\n/-! #4040 -/\n')
     assert [(line, w.split(":")[0]) for line, w in sites(lean, "A.lean")] == [
