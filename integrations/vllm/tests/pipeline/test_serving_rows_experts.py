@@ -16,6 +16,7 @@ router's slots, the reads of the scale rows and the fused blocks:
 from __future__ import annotations
 
 import json
+from functools import cache
 from types import SimpleNamespace
 
 import numpy as np
@@ -50,27 +51,33 @@ ROUTER = descriptor_id(bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=2.5,
 SLOTS = descriptor_id(bind(BMOE.MoeRouterSigmoidBiasSlots, E=E, TOPK=TOPK, SCALE=2.5, KERNEL="block"))
 READ_W, READ_WS = descriptor_id(EMB.read(E, NR * K // 2)), descriptor_id(EMB.read(E, 2 * K // G))
 LAYER = "model.layers.3.mlp"
-#: each projection's pair row, block GEMM and fused block of NR rows, as served: w13 unweighted on MMA v2, w2 weighted and swapped
-#: on QGMMA
-PROJ = {proj: SimpleNamespace(
-            row=descriptor_id(bind(row, E=E, K=K, N=N, G=G, KB=KB, SWAP=swap, DOT=dot)),
-            block=descriptor_id(bind(block, K=K, N=NR, G=G, KB=KB, SWAP=swap, DOT=bdot)),
-            fused=descriptor_id(bind(fused, READ=EMB.read(E, NR * K // 2), K=K, N=NR, G=G, KB=KB, SWAP=swap, DOT=bdot)),
-            swap=swap, twin=twin, routed=routed, w=f"{LAYER}.experts.{proj}_weight", ws=f"{LAYER}.experts.{proj}_weight_scale_inv")
-        for proj, row, block, fused, swap, dot, bdot, twin, routed in (
-            ("w13", X.MoeExpertFp8Gemm, BM.MoeExpertFp8BlockGemmV4, BM.MoeExpertFp8ReadGemmV1, False, MV, BG.HopperE4m3MmaV2Dot32,
-             "mmav2", False),
-            ("w2", X.MoeExpertFp8GemmW, BM.MoeExpertFp8BlockGemmWV4, BM.MoeExpertFp8ReadGemmWV1, True, HP, BG.HopperE4m3QgmmaDot32,
-             "hopper", True))}
+
+
+@cache
+def ids(proj: str, n: int = N, nr: int = NR) -> SimpleNamespace:
+    """Projection ``proj``'s pair row of n rows, and its block GEMM and fused block of nr rows, as served: w13 unweighted on MMA v2,
+    w2 weighted and swapped on QGMMA."""
+    row, block, fused, swap, dot, bdot, twin = {
+        "w13": (X.MoeExpertFp8Gemm, BM.MoeExpertFp8BlockGemmV4, BM.MoeExpertFp8ReadGemmV1, False, MV, BG.HopperE4m3MmaV2Dot32, "mmav2"),
+        "w2": (X.MoeExpertFp8GemmW, BM.MoeExpertFp8BlockGemmWV4, BM.MoeExpertFp8ReadGemmWV1, True, HP, BG.HopperE4m3QgmmaDot32, "hopper"),
+    }[proj]
+    return SimpleNamespace(
+        row=descriptor_id(bind(row, E=E, K=K, N=n, G=G, KB=KB, SWAP=swap, DOT=dot)),
+        block=descriptor_id(bind(block, K=K, N=nr, G=G, KB=KB, SWAP=swap, DOT=bdot)),
+        fused=descriptor_id(bind(fused, READ=EMB.read(E, nr * K // 2), K=K, N=nr, G=G, KB=KB, SWAP=swap, DOT=bdot)),
+        swap=swap, twin=twin, routed=proj == "w2", w=f"{LAYER}.experts.{proj}_weight", ws=f"{LAYER}.experts.{proj}_weight_scale_inv")
+
+
+PROJ = {proj: ids(proj) for proj in ("w13", "w2")}
 GEMM, BLOCK, W, WS = PROJ["w13"].row, PROJ["w13"].block, PROJ["w13"].w, PROJ["w13"].ws
 TMPLS = [SLOTS, READ_W, READ_WS, BLOCK]
 CAPS = {SLOTS: 4, READ_W: 4, READ_WS: 4, BLOCK: 3}
 COMMITTER = {"key": bytes(range(32)), "program": "ab" * 64}
 
 
-def fused(proj: str) -> tuple[list[str], dict[str, int]]:
+def fused(proj: str, n: int = N, nr: int = NR) -> tuple[list[str], dict[str, int]]:
     """A fused window's templates and chunk caps: the router's slots, the reads of the scale rows and the fused blocks."""
-    t = PROJ[proj].fused
+    t = ids(proj, n, nr).fused
     return [SLOTS, READ_WS, t], {SLOTS: 4, READ_WS: 4, t: 4}
 
 
@@ -85,16 +92,17 @@ def _f32(rng: np.random.Generator, lo: float, hi: float, *shape: int) -> np.ndar
 
 
 class Index:
-    """The rows' Program: its ``weights`` struct of the layer's expert weights and scales (projection ``proj``'s), and its router
-    rows' outputs, the weights ``[0, TOPK)`` and the ids ``[TOPK, 2 TOPK)`` of each."""
+    """The rows' Program: its ``weights`` struct of the layer's expert weights and scales (projection ``proj``'s, n rows), and its
+    router rows' outputs, the weights ``[0, TOPK)`` and the ids ``[TOPK, 2 TOPK)`` of each."""
     pnames = ["weights"]
 
-    def __init__(self, proj: str = "w13") -> None:
-        self.w, self.ws = PROJ[proj].w, PROJ[proj].ws
-        self.fields = [(self.w, E * N * K, [E, N, K], 8), (self.ws, E * NB * KG, [E, NB, KG], 32)]
+    def __init__(self, proj: str = "w13", n: int = N) -> None:
+        self.w, self.ws, nb = PROJ[proj].w, PROJ[proj].ws, -(-n // G)
+        self.fields = [(self.w, E * n * K, [E, n, K], 8), (self.ws, E * nb * KG, [E, nb, KG], 32)]
+        self.at = {(0, E * n * K): (self.w, [E, n, K]), (E * n * K, E * n * K + E * nb * KG): (self.ws, [E, nb, KG])}
 
     def weight_slice(self, lo: int, hi: int):
-        at = {(0, E * N * K): (self.w, [E, N, K]), (E * N * K, E * N * K + E * NB * KG): (self.ws, [E, NB, KG])}.get((lo, hi))
+        at = self.at.get((lo, hi))
         return None if at is None else (at[0], 0, hi - lo, at[1])
 
     def weight_bits(self, label: str) -> int:
@@ -105,14 +113,14 @@ class Index:
         return (d, "topk_ids", lo - TOPK, hi - TOPK, "i32") if lo >= TOPK else (d, "topk_weights", lo, hi, "f32")
 
 
-def build(monkeypatch, proj: str = "w13", rank: int = 0) -> SimpleNamespace:
-    """Rank ``rank``'s two tokens' router rows and their pairs' rows of projection ``proj`` (token-major, each token's slots in
-    order), each operand by its argument group, and the store of their served outputs: the router's on its logits and bias, each
-    pair's its twin on its expert's rows (and its slot's weight, w2's).  Each rank's weights are its own; the serving rows read
-    this rank's operands from here on."""
-    rng = np.random.default_rng(0xC185 + 0x100 * rank + (proj != "w13"))
-    pr, pi = PROJ[proj], Index(proj)
-    w, ws = _e4m3(rng, E * N * K), _f32(rng, 1e-4, 1e-2, E * NB * KG)
+def build(monkeypatch, proj: str = "w13", rank: int = 0, n: int = N) -> SimpleNamespace:
+    """Rank ``rank``'s two tokens' router rows and their pairs' rows of projection ``proj`` and n rows (token-major, each token's
+    slots in order), each operand by its argument group, and the store of their served outputs: the router's on its logits and
+    bias, each pair's its twin on its expert's rows (and its slot's weight, w2's).  Each rank's weights are its own; the serving
+    rows read this rank's operands from here on."""
+    rng = np.random.default_rng(0xC185 + 0x100 * rank + (proj != "w13") + (n != N) * 0x10)
+    pr, pi, nb = ids(proj, n), Index(proj, n), -(-n // G)
+    w, ws = _e4m3(rng, E * n * K), _f32(rng, 1e-4, 1e-2, E * nb * KG)
     ops = {json.dumps([["p", 0, 0, w.size]]): w, json.dumps([["p", 0, w.size, w.size + ws.size]]): ws}
     words = {"topk_weights": [], "topk_ids": [], "out": []}
     routers, pairs, experts = [], [], []
@@ -135,13 +143,13 @@ def build(monkeypatch, proj: str = "w13", rank: int = 0) -> SimpleNamespace:
             ops.update({json.dumps(args[0]): xq, json.dumps(args[1]): sx, json.dumps(args[2]): np.array([e], np.int32)})
             if pr.routed:
                 ops[json.dumps(args[3])] = np.array([slots[k]], np.uint32)
-            y, nonfinite = FR.moe_expert_fp8_block_row(xq, sx, w.reshape(E, N, K)[e], ws.reshape(E, NB, KG)[e], G=G, KB=KB,
+            y, nonfinite = FR.moe_expert_fp8_block_row(xq, sx, w.reshape(E, n, K)[e], ws.reshape(E, nb, KG)[e], G=G, KB=KB,
                                                        swap=pr.swap, g=int(slots[k]) if pr.routed else None, dot=pr.twin)
             assert not nonfinite.any()
             words["out"] += y.tolist()
             pairs.append(("r0", pi, {"i": 20 + p, "spec": pr.row, "args": args},
                           {"statics": spec_statics(pr.row), "op_path": f"{LAYER}.experts", "row": p, "step": 7,
-                           "members": [("out", N, "bf16")]}))
+                           "members": [("out", n, "bf16")]}))
             experts.append(e)
     assert len(set(experts)) > 1
     dtype = {"topk_weights": np.uint32, "topk_ids": np.int32, "out": np.uint16}
@@ -156,7 +164,7 @@ def build(monkeypatch, proj: str = "w13", rank: int = 0) -> SimpleNamespace:
 
     monkeypatch.setattr(SRW, "_slices", slices)
     return SimpleNamespace(routers=routers, pairs=pairs, store=Store(), slices=slices, w=w, ws=ws, experts=experts,
-                           out=held["out"], ops=ops)
+                           out=held["out"], ops=ops, n=n)
 
 
 def rows_of(tmpls, ns):
@@ -241,11 +249,11 @@ def opened(rows, i):
     return h if ok == 1 else None
 
 
-def check_words(plan, ms, got, block, out):
+def check_words(plan, ms, got, block, ns, nr=NR, gemm=None):
     """Each member's words are its template's reference on its rows (a read's: its row, salt and path open its root at its key, to
-    its output row; a fused block's, by its parts: its read's ports open to its row, and its block GEMM's reference on that row is
-    its output), every verdict 1, each wired row its writer's output row, each unit in an index entry, and block template
-    ``block``'s outputs, each at its pair's block, the served words ``out``."""
+    its output row; a fused block's, by its parts: its read's ports open to its row, and the reference of ``gemm``, its block GEMM,
+    on that row is its output), every verdict 1, each wired row its writer's output row, each unit in an index entry, and block
+    template ``block``'s outputs, each at its pair's block of nr rows, layer ``ns``'s served words."""
     at = {m.base + i: (j, i) for j, m in enumerate(ms) for i in range(m.n)}
     for m, (g, entries) in zip(ms, got):
         layout = SRW.template(m.template).layout
@@ -253,7 +261,6 @@ def check_words(plan, ms, got, block, out):
             row = g["rows"]["in3"] if layout == "fused" else g["outs"]["o0"]
             assert all(opened(g["rows"], i) == row[i].tolist() for i in range(m.n))
         if layout == "fused":
-            gemm = next(pr.block for pr in PROJ.values() if pr.fused == m.template)
             fu = ports(m.template)
             stager(gemm).reference_check({p: g["rows"][fu["row" if nm == "w" else nm]] for nm, p in ports(gemm).items()},
                                          {"o0": g["outs"]["o0"]})
@@ -266,19 +273,19 @@ def check_words(plan, ms, got, block, out):
                 assert np.array_equal(g["rows"][port][i], got[j][0]["outs"][o][k])
         held = [u for e in entries for u in range(max(e[0], m.base), min(e[1], m.base + m.n))]
         assert held == list(range(m.base, m.base + m.n))
-    served = np.concatenate([g["outs"]["o0"].reshape(-1, NR) for m, (g, _e) in zip(ms, got) if m.template == block])
-    words = np.zeros((P, N), dtype=np.uint16)
+    served = np.concatenate([g["outs"]["o0"].reshape(-1, nr) for m, (g, _e) in zip(ms, got) if m.template == block])
+    words = np.zeros((P, ns.n), dtype=np.uint16)
     for u, row in enumerate(served):
         p, b = plan.units[block][u]
-        words[p, b * NR:(b + 1) * NR] = row
-    assert words.reshape(-1).tolist() == out.tolist()
+        words[p, b * nr:(b + 1) * nr] = row
+    assert words.reshape(-1).tolist() == ns.out.tolist()
 
 
 def test_the_members_are_their_references_the_reads_open_and_the_blocks_are_the_served_words(layer):
     plan, ms = cut(layer.rows)
     tables = EX.commit_tables(plan, layer.store, None, None, SRW._slices, committer(plan))
     assert sorted(tables) == sorted([EX.table_param(W, NR * K // 2, b) for b in range(B)] + [EX.table_param(WS, 2 * K // G, 0)])
-    check_words(plan, ms, SRW.read_all(ms, layer.rows, layer.store, None, tables=tables), BLOCK, layer.out)
+    check_words(plan, ms, SRW.read_all(ms, layer.rows, layer.store, None, tables=tables), BLOCK, layer)
 
 
 def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_count_registered_where_pinned(layer):
@@ -384,7 +391,26 @@ def test_the_fused_blocks_are_their_references_open_their_tables_and_are_the_ser
     plan, ms = cut(rows, tmpls, caps)
     tables = EX.commit_tables(plan, ns.store, None, None, SRW._slices, committer(plan))
     assert sorted(tables) == sorted([EX.table_param(pr.w, NR * K // 2, b) for b in range(B)] + [EX.table_param(pr.ws, 2 * K // G, 0)])
-    check_words(plan, ms, SRW.read_all(ms, rows, ns.store, None, tables=tables), tmpls[-1], ns.out)
+    check_words(plan, ms, SRW.read_all(ms, rows, ns.store, None, tables=tables), tmpls[-1], ns, gemm=pr.block)
+
+
+def test_a_fused_blocks_scale_row_is_its_own_g_blocks(monkeypatch):
+    """At N = 64 in blocks of 16 rows, four blocks a pair over two G-blocks: each fused block's ``ws`` is wired to the read of its
+    own G-block's scale row, and its words are its parts' references there."""
+    n, nr = 64, 16
+    tmpls, caps = fused("w2", n, nr)
+    pr, ns, FU = ids("w2", n, nr), build(monkeypatch, "w2", n=n), tmpls[-1]
+    rows = rows_of(tmpls, ns)
+    plan, ms = cut(rows, tmpls, caps)
+    base = {t: min(m.base for m in ms if m.template == t) for t in tmpls}
+    pair = {(20 + TOPK * t + k): (t, k) for t in range(T) for k in range(TOPK)}
+    for m in (m for m in ms if m.template == FU):
+        keys = [(pair[plan.key(FU, u)[1]], plan.units[FU][u][1]) for u in range(m.base - base[FU], m.base - base[FU] + m.n)]
+        assert dict((p, list(w)) for p, _o, w in m.wired)[ports(FU)["ws"]] == [
+            base[READ_WS] + (b * nr // G * TOPK + k) * T + tok for (tok, k), b in keys]
+    assert {b * nr // G for _p, b in plan.units[FU]} == {0, 1}
+    tables = EX.commit_tables(plan, ns.store, None, None, SRW._slices, committer(plan))
+    check_words(plan, ms, SRW.read_all(ms, rows, ns.store, None, tables=tables), FU, ns, nr=nr, gemm=pr.block)
 
 
 def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_count_registered_where_pinned(monkeypatch):
@@ -446,7 +472,7 @@ def test_two_ranks_windows_each_commit_and_open_their_own_registration_and_a_fus
     assert sorted(ranks[0][4]) == sorted(ranks[1][4]) and all(ranks[0][4][p].root != ranks[1][4][p].root for p in ranks[0][4])
     for ns, rows, plan, ms, tables in ranks:
         monkeypatch.setattr(SRW, "_slices", ns.slices)
-        check_words(plan, ms, SRW.read_all(ms, rows, ns.store, None, tables=tables), tmpls[-1], ns.out)
+        check_words(plan, ms, SRW.read_all(ms, rows, ns.store, None, tables=tables), tmpls[-1], ns, gemm=PROJ["w2"].block)
     with pytest.raises(ValueError, match="is not row"):
         SRW.read_all(ranks[1][3], ranks[1][1], ranks[1][0].store, None, tables=ranks[0][4])
 
