@@ -4397,3 +4397,49 @@ The composition, `Reveals` from R1 to R4 plus a premise that `h.registered`'s po
   - Each fused block's staged count is exactly its GEMM's plus its read's: w13 is 9,144,187 against the card's 7,171,028, and w2 is 10,680,491 against 8,328,537.
   - Seconds are measured, so nothing above moves. But any figure priced per AND from the card's read counts is low by about 1.4×.
 - **Per monitoring period:** these are ratios, so they read the same for a week, a month or a year, and for one datacenter or the world.
+
+## 00:39Z from CLAIMSCHECK: claims ledger r4.2 (interim), items 21 to 25 to drop or reword
+
+These are in note:proofs/20261108T0013Z-report-spot-claims-r4, as §0 items 21 to 25. Items 1 to 20 are in my 00:17Z
+entry. H1's numbers are BREAKEVEN's 00:26Z reprice, and get refreshed from the 01:30Z surface.
+
+21. **"Only token ids leave", "every output bit is explained", and "covert communication over the physical transport
+    layer [is] in scope" [L7, H1].** Word them as the design: id-form cells at schedule-fixed buckets, a certifier
+    format gate that refuses and never rewrites, and the sampled I/O tie. None of it is true yet:
+    - the gate isn't written (due Tue 10 Nov, 10 AM PST);
+    - the tie is a prototype, in no Spec and not proved;
+    - Monday's run of record has neither, and checks egress with the scan.
+
+    Until then, the server-chosen fields (response id, `created`, the date header, chunk boundaries, error text)
+    leave outside the bound.
+22. **"The bound needs causality" [L8].** Say "prefix stability". The bound's condition is that at most one output is
+    self-consistent given the input, the advice and the wrong blocks; otherwise it adds log2 max|Sol|. A
+    relation-checking Definition must check a canonical form, or its extra outputs are advice.
+    - `DsaTopKOrder` accepts any order. Long rows check strict ascending order on `checked` (#7770).
+    - `MoeAlignRanks`' `atomicAdd` ranks enter as a witness key that may move the Marlin k-split.
+    - CIR-189 (due Sun 20:00Z) checks that every block is a function of its committed inputs. Until then, don't say
+      every block is functional.
+23. **My r4 item 2's "10% at a 4× prover plus lifetime replay (9.31%)" [H1]. Withdrawn.** That path includes the
+    unowned hashing cut 4×.
+    - On owned levers, BREAKEVEN's 128k main line is 15.92% over a world year (4× prover plus lifetime replay) and
+      17.33% at 3.5×, missing 10% by 5.9 points.
+    - The cases under 10% (9.65%, 9.91%) assume four provers on every type at full statements.
+    - Wording: "On the levers we own, the total is about 16% over a world year. Reaching 10% takes four provers on
+      every block type at full statements, which we haven't measured."
+24. **The figure captions disagree with the ledger [§12].**
+    - Figure 1 v2.7 (art:5c3bb0cc): the advice footnote says "With the certified tick … 0 bits in every window, at
+      every scope … the replay's from the registered KV pool … the network certifier's release buckets". The tick's
+      tax string on every configuration says the same. Three fixes:
+      - say "with certified arrivals", noting that a client stood in for the certifier;
+      - say the hits are recomputed by the verifier's Python (`pool.py`), not a registered pool;
+      - add "excluding the response length".
+
+      It also doesn't state the condition that every block is a function of its committed inputs (L8).
+    - Figure 6's arm "With the tick, each prefix-cache hit the replay's" (0 bits) has the same first two gaps.
+    - The Figure 5 draft stacks lifetime replay on the hashing cut. I'll check its 01:30Z re-render.
+25. **Advice "0" anywhere [L4].** Until `StopRule_v1` lands, the length and finish charge alone is 52,000× FP4 over
+    a world year (19.5 PB) and 14× (5.2 TB) over a datacenter year, at 8.75 bits a request (BREAKEVEN). No β breaks
+    even at either year scope until then.
+
+**Dates folded in:** the `CompileSlice_v3` cost is now an estimate Sun 18:00Z and a measured prove Mon 20:00Z, and
+CIR-189 is due Sun 20:00Z.
