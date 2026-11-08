@@ -128,6 +128,22 @@ def Tab.bind (ref : Tab → Nat → Nat → F128 → Nat → Tab) (c : Call) (o 
     let (px, fx) := rm cx
     (wk kc j).foldl (fun o (k, f) => ref o k px (f * v * fx) (bd.getD t' 0)) o) { o with work := o.work + ch.U.size }
 
+/-- `Tab.bind` given only the child's open inputs `chU`. -/
+def Tab.bindU (ref : Tab → Nat → Nat → F128 → Nat → Tab) (c : Call) (o : Tab) (j : Nat)
+    (chU : HashMap (Nat × Nat × Nat) F128) (rm : Nat → Nat × F128) (wk : Nat → Nat → List (Nat × F128)) : Tab :=
+  let bd := (c.bound id j).toArray
+  chU.fold (fun o (t', kc, cx) v =>
+    let (px, fx) := rm cx
+    (wk kc j).foldl (fun o (k, f) => ref o k px (f * v * fx) (bd.getD t' 0)) o) { o with work := o.work + chU.size }
+
+/-- `Tab.bind` through `Tab.bindU`: handed the whole child, the compiled code builds the result in the child's cell and
+borrows `o`, so the first insert into `o`'s tables copies them whole. -/
+def Tab.bindFast (ref : Tab → Nat → Nat → F128 → Nat → Tab) (c : Call) (o : Tab) (j : Nat) (ch : Tab)
+    (rm : Nat → Nat × F128) (wk : Nat → Nat → List (Nat × F128)) : Tab :=
+  Tab.bindU ref c o j ch.U rm wk
+
+@[csimp] theorem Tab.bind_eq_bindFast : @Tab.bind = @Tab.bindFast := rfl
+
 /-- Copies `0 .. count`' bindings through `bind`. -/
 def Tab.binds (bind : Tab → Nat → Tab → (Nat → Nat × F128) → (Nat → Nat → List (Nat × F128)) → Tab) (o : Tab)
     (count : Nat) (ch : Tab) (rm : Nat → Nat × F128) (wk : Nat → Nat → List (Nat × F128)) : Tab :=
