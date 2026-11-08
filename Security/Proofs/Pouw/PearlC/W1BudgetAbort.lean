@@ -300,7 +300,7 @@ def toyP : Protocol Unit Bool Unit where
   ticket := fun _ _ _ _ a i j => wordQ (if i = 0 ∧ j = 0 then a 0 0 else 0)
   useful := fun _ _ _ _ _ _ _ => wordQ 0
   actOK := fun _ _ => True
-  weightOK := fun _ _ _ => True
+  fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 0
   capOK := fun H _ _ _ _ => H () = true
   Wref := fun _ _ => 0
