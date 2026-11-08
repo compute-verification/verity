@@ -2,6 +2,7 @@ module
 
 public import SampledProofs.Registration
 public import Proofs.Flock.Claims.Sampling.Reference.Deployed
+public import Proofs.Flock.Claims.Sampling.Reg
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -69,7 +70,7 @@ At this code:
   with no unit named.
 * `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
-  `sess`: its registration refusal (`Draw.countVaries`) fixes the sampled count only, and its outcome step takes the
+  `sess`: its registration refusal (`Draw.bernoulli`) fixes the sampled count only, and its outcome step takes the
   session's statement as an opaque object.
 * `shapeChecked`, `shapesFixed_checked`, `shapesFixed_iff_checked`, `sessIn_checked`: the shape check an outcome step
   would run (`sess` with every session refused whose tables aren't `shape x`) fixes the shapes, refuses nothing exactly
@@ -83,31 +84,6 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Claims.Sampling.Reference Properties.SampledProofs
 open Lean (Json)
-
-/-- **A registration as the sample of record reads it**, what `SampledProofs.Run.run` passes to `Select.select`: the
-verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
-rule and the challenger's closure map. -/
-structure Reg where
-  verifier : SampledProofs.Registration.Verifier
-  rule : SampledProofs.Select.Rule
-  closure : Option (Array (Int × Array Int))
-
-def Reg.program (g : Reg) : SampledProofs.Program := g.verifier.program
-
-def Reg.query (g : Reg) : Json := g.verifier.query
-
-def Reg.table (g : Reg) : Option Json := g.verifier.workTable
-
-/-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
-def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
-  match SampledProofs.Slots.layout g.program g.query with
-  | .ok l => l
-  | .error _ => default
-
-/-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
-is refused (`drawChecked`). -/
-def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **The sampled verifier's code with its Lean sample**: `c` with `checked` the sample of record on the registration
 `reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`. -/
@@ -289,7 +265,7 @@ theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.countVaries`: `shapes`) fixes the sampled
+sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
 def ShapesFixed (shape : Msg → List ℕ) : Prop :=

@@ -2,7 +2,18 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
+
+
+def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
+    """GLM-5.3's served router (``served-``): `MoeRouterSigmoidBias_v1` at its 256 experts, top 8, scale 2.5, on each kernel
+    `router_kernel` picks (block to 1,024 tokens, warp past them), which verity-vllm's `test_moe_fp8_served` holds to the
+    compiler's choice."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import moe as M
+
+    return [(f"MoeRouterSigmoidBias_v1/served-{k}", lambda k=k: bind(M.MoeRouterSigmoidBias, E=256, TOPK=8, SCALE=2.5, KERNEL=k))
+            for k in M.ROUTER_KERNELS]
 
 
 def _boolean_roots() -> list[Any]:

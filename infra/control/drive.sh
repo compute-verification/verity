@@ -1,5 +1,5 @@
 #!/bin/sh
-# Drive (INF-129, ci's CI-78): `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
+# Drive: `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
 # origin/main into /data/drive/verity and runs one tick from that tree's tools/research, checked out at the commit
 # /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
 # checkout, as lane ci (RESEARCH_LANE), with its flags from tools/verity/check/drive.toml at main (read fresh each tick, their one
@@ -8,20 +8,20 @@
 # there refuses the tick); a `--config FILE` there is refused unless every key it sets has main's value; then sleeps 120 s.
 # The queue's state is root's ~/.research/queue/verity.state.json, on the volume. Both git clones, drive's checkout ($REPO) and
 # the queue's (~/.research/queue/verity, a symlink), live on the container disk under $FAST: on the volume's NFS git cost
-# about 4.3 min a tick (ci's tick profile, 26 Oct). `fast_clones` seeds each from its copy on the volume ($DIR/verity,
+# about 4.3 min a tick. `fast_clones` seeds each from its copy on the volume ($DIR/verity,
 # verity.volume) when the container is new, so a pod restart costs one copy, and the next fetch brings it up to date.
 # GitHub: both clones' origin is https and their local credential helper is `gh_app_token.sh git`, which hands git the
 # verity-drive App's token when git asks, so the token is never in git's config or arguments; drive gives its own clone the same
 # helper (`credential_args`). gh is $DIR/ghw/gh, which sets GH_TOKEN the same way for each call before running /data/drive/bin/gh.
-# The token is an installation token (1 h, contents and pull requests write on verity; INF-133) from
+# The token is an installation token (1 h, contents and pull requests write on verity) from
 # /data/state/secrets/verity-drive.pem, reused for 45 min (`gh_app_token.sh --cached`): a tick can outlast one token, and the
 # push of next at the end of a 90-min tick failed with an expired one.
 # r2.env (the store's parent key, which train.sh needs) and relay.env (SLACK_BOT_TOKEN for drive's posts) are sourced.
-# Drive posts as @ci, which `research msg` allows only ci's holder: RESEARCH_AGENT_URL is the caller's, else /data/drive/agent-url
+# Drive posts as ci's handle, which `research msg` allows only ci's holder: RESEARCH_AGENT_URL is the caller's, else /data/drive/agent-url
 # (ci's coordinator URL, one line; ci rewrites it at a handover). The nodes are reached as `research run --on` reaches them: the notes clone's
 # machines.d (RESEARCH_NOTES, the steward's clone) and ~/.runpod/ssh/runpodctl-ssh-key. The store is a cache of the bucket on the
 # container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull. Its
-# objects/ and attempts/ are links into $DIR/store on the volume (`store_links`): they filled the pod's 20 GiB root to 94% (26 Oct),
+# objects/ and attempts/ are links into $DIR/store on the volume (`store_links`): they filled the pod's 20 GiB root to 94%,
 # and the store writes each file beside its destination, so a link never makes a write cross filesystems.
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
@@ -31,7 +31,7 @@
 # `queue baseline SHA --by ci` and `queue promote` (a loop's, every minute or so), which fast-forward main and write nothing of
 # drive's, run beside a tick (`unlocked`), so main follows a passed after-landing run within minutes, and `drive.sh merge
 # ARGS` runs `research merge ARGS` (`--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
-# the verity-drive App move main and next (23 Oct), and `checked` once infra adds it there (drive lands the reviewed
+# the verity-drive App move main and next, and `checked` once infra adds it there (drive lands the reviewed
 # prefix on checked, fast-forwards main only to a checked commit whose after-landing run passed every step on the merge
 # gate, and merges a main pushed outside it into checked); `research` refuses those pushes anywhere else.
 # Log: /data/drive/drive.log
@@ -44,7 +44,7 @@ CONF=/root/.config/verity
 STOP=$DIR/stopped
 TICK=/root/drive-tick.lock
 # TMPDIR is on the volume: a train's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
-# root overlay to 95% (21 Oct). post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
+# root overlay to 95%. post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
 # A train's checkout (~430 MB) is on the container disk ($TRAIN_TREES): on the volume, uv and Python's imports from it left
 # check.py in NFS waits for minutes, and launches registered no run. `prune_trees` removes one an hour after its last
 # change once no process runs in it, so a few an hour stay a few GB.
@@ -81,7 +81,7 @@ store_links() {
     rm -rf "$RESEARCH_STORE/$d.old"
   done
 }
-# origin's main in $REPO: `research merge` refuses any checkout but branch main (CI-169); the tick and `queue` take a detached one,
+# origin's main in $REPO: `research merge` refuses any checkout but branch main; the tick and `queue` take a detached one,
 # at the commit $DIR/deployed pins (`deploy`) when it names one, else at main's tip, so a landing of drive's own code changes what
 # drive runs only once it is deployed.  A pin $REPO can't find fails the tick rather than run another commit.
 checkout() {
