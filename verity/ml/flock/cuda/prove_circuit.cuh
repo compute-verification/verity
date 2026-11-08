@@ -226,6 +226,30 @@ struct FcKept {
 };
 static FcKept g_fc_kept;
 
+// A circuit's index arrays on the device, uploaded once per circuit and kept for the process, so one prover proves statements
+// of many circuits. Keyed by the host arrays' addresses, which the host builds once per circuit and never frees
+// (gpu_circuit.rs `types`, gpu.rs `statics_for`).
+struct FcUploads {
+    std::mutex mu;
+    std::vector<std::pair<std::vector<const void*>, std::vector<uint32_t*>>> held;
+    // the device copies of the `n` arrays `h[i]` of `len[i]` words each
+    cudaError_t get(const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d) {
+        const std::vector<const void*> key(h, h + n);
+        std::lock_guard<std::mutex> lock(mu);
+        for (const auto& e : held)
+            if (e.first == key) { std::copy(e.second.begin(), e.second.end(), d); return cudaSuccess; }
+        std::vector<uint32_t*> got(n, nullptr);
+        for (size_t i = 0; i < n; i++) {
+            cudaError_t err = cudaMalloc(&got[i], (len[i] ? len[i] : 1) * sizeof(uint32_t));
+            if (err == cudaSuccess && len[i]) err = cudaMemcpy(got[i], h[i], len[i] * sizeof(uint32_t), cudaMemcpyHostToDevice);
+            if (err != cudaSuccess) { for (uint32_t* p : got) if (p) cudaFree(p); return err; }
+        }
+        held.emplace_back(key, got);
+        std::copy(got.begin(), got.end(), d);
+        return cudaSuccess;
+    }
+};
+
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
@@ -511,19 +535,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
         CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
         {
-            static std::once_flag h_once;
-            static cudaError_t h_err = cudaSuccess;
-            static uint32_t *h_ao = nullptr, *h_ac = nullptr, *h_bo = nullptr, *h_bc = nullptr, *h_lo = nullptr, *h_ord = nullptr;
-            std::call_once(h_once, [&] {
-                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                    if (h_err == cudaSuccess) h_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                    if (h_err == cudaSuccess && n) h_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-                };
-                up(&h_ao, N->h_a_off, N->h_useful + 1); up(&h_bo, N->h_b_off, N->h_useful + 1);
-                up(&h_ac, N->h_a_col, N->h_a_off[N->h_useful]); up(&h_bc, N->h_b_col, N->h_b_off[N->h_useful]);
-                up(&h_lo, N->h_level_off, N->h_levels + 1); up(&h_ord, N->h_order, N->h_level_off[N->h_levels]);
-            });
-            CK(h_err);
+            static FcUploads h_up;
+            uint32_t* hd[6];
+            {
+                const uint32_t* h[6] = {N->h_a_off, N->h_b_off, N->h_a_col, N->h_b_col, N->h_level_off, N->h_order};
+                const size_t len[6] = {(size_t)N->h_useful + 1, (size_t)N->h_useful + 1, N->h_a_off[N->h_useful],
+                                       N->h_b_off[N->h_useful], (size_t)N->h_levels + 1, N->h_level_off[N->h_levels]};
+                CK(h_up.get(h, len, 6, hd));
+            }
+            uint32_t *h_ao = hd[0], *h_bo = hd[1], *h_ac = hd[2], *h_bc = hd[3], *h_lo = hd[4], *h_ord = hd[5];
             const int hr = N->h_range;
             const int hl = N->type_log[N->r_type[hr]];
             const long long hper = N->r_count[hr];
@@ -674,20 +694,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         }
         auto t1 = std::chrono::steady_clock::now();
         if (!N->u_host) {
-            static std::once_flag net_once;
-            static cudaError_t net_err = cudaSuccess;
-            static uint32_t *d_ao = nullptr, *d_ac = nullptr, *d_bo = nullptr, *d_bc = nullptr, *d_lo = nullptr, *d_ord = nullptr;
-            std::call_once(net_once, [&] {
-                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                    if (net_err == cudaSuccess) net_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                    if (net_err == cudaSuccess && n) net_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-                };
-                const size_t na = N->u_a_off[N->u_useful], nb = N->u_b_off[N->u_useful];
-                up(&d_ao, N->u_a_off, N->u_useful + 1); up(&d_bo, N->u_b_off, N->u_useful + 1);
-                up(&d_ac, N->u_a_col, na); up(&d_bc, N->u_b_col, nb);
-                up(&d_lo, N->u_level_off, N->u_levels + 1); up(&d_ord, N->u_order, N->u_level_off[N->u_levels]);
-            });
-            CK(net_err);
+            static FcUploads net_up;
+            uint32_t* ud[6];
+            {
+                const uint32_t* h[6] = {N->u_a_off, N->u_b_off, N->u_a_col, N->u_b_col, N->u_level_off, N->u_order};
+                const size_t len[6] = {(size_t)N->u_useful + 1, (size_t)N->u_useful + 1, N->u_a_off[N->u_useful],
+                                       N->u_b_off[N->u_useful], (size_t)N->u_levels + 1, N->u_level_off[N->u_levels]};
+                CK(net_up.get(h, len, 6, ud));
+            }
+            uint32_t *d_ao = ud[0], *d_bo = ud[1], *d_ac = ud[2], *d_bc = ud[3], *d_lo = ud[4], *d_ord = ud[5];
             const int ur = N->u_range;
             const int ul = N->type_log[N->r_type[ur]];
             const long long per_block = N->r_count[ur];
@@ -761,22 +776,21 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
 }
 
 static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, const F128* d_eq, F128 alpha, int k_log, F128* d_comb) {
-    static std::once_flag once;
-    static cudaError_t err = cudaSuccess;
-    static uint32_t* d_csc[FC_MAX_TYPES][4];
-    std::call_once(once, [&] {
-        auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-            if (err == cudaSuccess) err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-            if (err == cudaSuccess && n) err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-        };
+    static FcUploads up;
+    uint32_t* d_csc[FC_MAX_TYPES][4];
+    {
+        const uint32_t* h[FC_MAX_TYPES * 4];
+        size_t len[FC_MAX_TYPES * 4];
         for (int t = 0; t < N->n_types; t++) {
             const size_t cols = (size_t)1 << N->type_log[t];
             const bool comp = N->t_a_col_ptr[t] == nullptr;
-            up(&d_csc[t][0], comp ? P->a_col_ptr : N->t_a_col_ptr[t], cols + 1); up(&d_csc[t][1], comp ? P->a_rows : N->t_a_rows[t], comp ? P->a_nnz : N->t_a_nnz[t]);
-            up(&d_csc[t][2], comp ? P->b_col_ptr : N->t_b_col_ptr[t], cols + 1); up(&d_csc[t][3], comp ? P->b_rows : N->t_b_rows[t], comp ? P->b_nnz : N->t_b_nnz[t]);
+            h[4 * t] = comp ? P->a_col_ptr : N->t_a_col_ptr[t]; len[4 * t] = cols + 1;
+            h[4 * t + 1] = comp ? P->a_rows : N->t_a_rows[t]; len[4 * t + 1] = (size_t)(comp ? P->a_nnz : N->t_a_nnz[t]);
+            h[4 * t + 2] = comp ? P->b_col_ptr : N->t_b_col_ptr[t]; len[4 * t + 2] = cols + 1;
+            h[4 * t + 3] = comp ? P->b_rows : N->t_b_rows[t]; len[4 * t + 3] = (size_t)(comp ? P->b_nnz : N->t_b_nnz[t]);
         }
-    });
-    CK(err);
+        CK(up.get(h, len, 4 * (size_t)N->n_types, &d_csc[0][0]));
+    }
     int min_log = 64;
     for (int t = 0; t < N->n_types; t++) min_log = std::min(min_log, N->type_log[t]);
     std::vector<F128> head((size_t)1 << std::min(min_log, 10));
