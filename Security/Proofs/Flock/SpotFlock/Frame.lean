@@ -25,7 +25,8 @@ session layout `L`. At each such gate whose row the session reads (`L.rowOf … 
 `opens_frame`: an opening the frame checks so passes the deployed check where its row's `b ‖ c` opens `reg` at that
 position through its path (`Flock.Registered.opens`), which `opens_of_stmtOk` gives for the table's row once the
 opening's `b ‖ c` is the table row's. `leaf_commitString`: the deployed check's hm96 leaf is Flock's tree leaf of the
-commit string `b ‖ c`.
+commit string `b ‖ c`. `opens_of_frameIs`: so `Reveals`' opening at a gate follows from `FrameIs` wherever the row's
+instance is one of the statement's and the table's row there is the commit string of the hidden row and salt bytes.
 -/
 
 @[expose] public section
