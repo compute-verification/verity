@@ -99,7 +99,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   changing y at or after step s doesn't change what C computes before s. Every block is a function of its committed
   inputs. Anything the prover chooses that reaches y or B is advice and is charged; anything else that leaves is refused
   by the egress spec.
-- **Nondeterminism is quantified, never buried** (Daniel, 7 Nov). Every value a circuit reads is the output of one of its
+- **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
   blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
   (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
   canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
