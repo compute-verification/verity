@@ -3876,6 +3876,47 @@ def _shifted(ss, k: int):
     return out
 
 
+def _shared_at(c: dict, i: int, ports, reads=()) -> dict:
+    """`c` with its `i`-th statement's header, and its template's reference header, sharing rows at `ports`
+    (``shared_rows``, a table of one row a slot each), and that statement reading each port of `reads` more from its own
+    rows of the interior record, each slot its own row, which the verifier of record reports."""
+    s = c["statements"][i]
+    t, h, named = s["template"], s["header"], any("/" in r["port"] for r in c["interior"]["roots"])
+    shared = dict.fromkeys(ports, h["instances"])
+    more = {}
+    for p in reads:
+        x = next(r for r in c["interior"]["roots"] if r["port"] == (f"{t}/{p}" if named else p))
+        more[p] = {"value": x["port"], "root": x["root"], "domain": x["domain"], "leaves": x["leaves"],
+                   "reads_from": h["units"]["indices"][0], "reads": list(range(h["instances"]))}
+    registered = s["registered"]
+    if more:
+        registered = {"format": "verity/registered-reads/v1", "ports": {**(registered or {}).get("ports", {}), **more}}
+    lean = c["verdicts"]["lean"]
+    reported = {**lean.get("registered", {}), **{f"{t}/{p}": {"value": e["value"], "root": e["root"]} for p, e in more.items()}}
+    return {**_second_with(c, i, header={**h, "shared_rows": shared}, registered=registered),
+            "refs": {**c["refs"], t: {**c["refs"][t], "shared_rows": shared}},
+            "verdicts": {**c["verdicts"], "lean": {**lean, **({"registered": reported} if reported else {})}}}
+
+
+def _shared_rows(c: dict, x: int) -> dict:
+    """`c` with its first statement's header sharing rows (``shared_rows``) at its `frame_v3` ports, at the ports it
+    reads registered, or at none, its template's reference sharing them too or not."""
+    ss = c.get("statements")
+    if not (isinstance(ss, list) and ss and isinstance(ss[0], dict) and isinstance(ss[0].get("header"), dict)):
+        return c
+    s, h = ss[0], ss[0]["header"]
+    fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
+    r = s["registered"] if isinstance(s.get("registered"), dict) else {}
+    ports = [fv["schemas"] if isinstance(fv.get("schemas"), dict) else {},
+             r["ports"] if isinstance(r.get("ports"), dict) else {}, {}][x % 3]
+    shared = dict.fromkeys(ports, h.get("instances"))
+    out = {**c, "statements": [{**s, "header": {**h, "shared_rows": shared}}, *ss[1:]]}
+    refs, t = c.get("refs"), s.get("template")
+    if x % 2 == 0 and isinstance(refs, dict) and isinstance(t, str) and isinstance(refs.get(t), dict):
+        out["refs"] = {**refs, t: {**refs[t], "shared_rows": shared}}
+    return out
+
+
 def _relinked(c: dict, x: int) -> dict:
     """`c` with the design's links underived (null), none, of another type, of a template not a string, naming another
     boundary port, or one more for a template of no part."""
@@ -3933,13 +3974,15 @@ def _reordered(c: dict, x: int) -> dict:
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on, the design's links, the reads the verifier of record reports, the reference
-#: headers (`_referenced`), or the interior record's replay sample or run (`_reordered`).
+#: headers (`_referenced`), the interior record's replay sample or run (`_reordered`), or the rows a header shares
+#: (`_shared_rows`).
 SECOND_CHANGES = [
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
     _relinked,
     _reported,
     _referenced,
     _reordered,
+    _shared_rows,
     lambda c, x: {**c, "statements": _restated(c["statements"], x)},
     lambda c, x: {**c, "statements": c["statements"] and c["statements"][::-1]},
     lambda c, x: {**c, "statements": c["statements"] and c["statements"][1:]},
@@ -5246,6 +5289,38 @@ def test_round_two_holds_each_session_to_its_part(pieces):
          ["second-interior-order", "second-order"]),
         (odd, []),
         (placed(odd, replay_sample=[True, 3]), ["second-interior-order"]),
+    ]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(pieces):
+    """`second-refs`, Lean's the Python's whole, over the two-template interior after a replay sample of two, PAIR reading
+    its own `x` and TRIPLE its linked `x` at the boundary: a header sharing rows (``shared_rows``, as its template's
+    reference does) only at ports its statement reads registered passes, PAIR's own `out` read at each slot's own rows
+    and TRIPLE's at its own; a shared port left unread, whose refs the session's verifier would only bound by their
+    table, is refused, as is a header sharing rows with no registered reads; a shared port read at another slot's rows
+    is `second-read`'s."""
+    pair, triple = SECOND_MIXED.templates
+    sample, drawn = [0, 2], [1, 4, 6, 9]
+    honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
+    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair}, allow=True)
+    both = _shared_at(own, 0, ("out", "x"), reads=("out",))
+    mine = both["statements"][0]["registered"]["ports"]["x"]
+    assert both["statements"][0]["header"]["shared_rows"] == {"out": 6, "x": 6} == both["refs"][pair]["shared_rows"]
+    cases = [
+        (both, []),
+        (_shared_at(own, 0, ("x",)), []),
+        (_shared_at(own, 1, ("out", "x"), reads=("out",)), []),
+        (_shared_at(both, 1, ("out", "x"), reads=("out",)), []),
+        (_shared_at(own, 0, ("out", "x")), ["second-refs"]),
+        (_shared_at(own, 1, ("out", "x")), ["second-refs"]),
+        (_shared_at(honest, 0, ("out", "x")), ["second-refs"]),
+        (_second_with(both, 0, registered={"ports": {**both["statements"][0]["registered"]["ports"],
+                                                     "x": {**mine, "reads": mine["reads"][::-1]}}}), ["second-read"]),
+        ({**both, "refs": own["refs"]}, ["second-header"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))
