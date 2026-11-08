@@ -265,8 +265,11 @@ def render(out: dict, outdir: Path) -> list[Path]:
     top.legend(loc="upper right", frameon=False, fontsize=14)
     fig.text(.11, .945, f"Where {out['goal']:.0%} comes from: the levers that bring GLM-5.3's bound over a {p} under "
              "its FP4 weights", ha="left", va="bottom", fontsize=20)
-    bottom.text(0, -.42, textwrap.fill(caption(out), 160), transform=bottom.transAxes, ha="left", va="top",
-                fontsize=13, color="#444444")
+    fig.canvas.draw()
+    ticks = min(t.get_window_extent().y0 for t in bottom.get_xticklabels())
+    below = bottom.transAxes.inverted().transform((0, ticks))[1] - .05
+    bottom.text(0, min(-.42, below), textwrap.fill(caption(out), 160), transform=bottom.transAxes, ha="left",
+                va="top", fontsize=13, color="#444444")
     return _save(fig, outdir, "figure5")
 
 
