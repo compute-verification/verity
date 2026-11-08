@@ -53,4 +53,14 @@ theorem periodPoolChained : PeriodPoolChained := by
     exact h
   · rfl
 
+theorem rootsChainedOfR7 : RootsChainedOfR7 := by
+  intro m rec v p pout G genesis pinRoot poutRoot dec hp hout hlog hR7 hin hrout hgen i
+  have h := periodPoolChained rec v p pout hp hout hlog hR7 i
+  dsimp only at h
+  rw [hin i, h]
+  unfold NetTiming.poolOpen
+  split_ifs with hc
+  · exact (hrout _).symm
+  · exact (hgen i hc).symm
+
 end Properties.Spot.SecurityProofs
