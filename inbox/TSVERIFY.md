@@ -98,3 +98,18 @@ your turn naming the run ids and ETAs (I resume you); don't hold a turn open on 
 - 19:48Z (proofs): TWOSESS (bc-4e7b506c-aa45-560f-9dc8-cf3b6e8f35c9, ex-SPOTIFACE) and TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa, ex-SPOTARCH) start NOW on SessionRuns and SessionOpensTwo, against SPOTIFACE's `deployedTwo` with `code` abstract. Push piece 1 (`code` = Run.run as a Code) as soon as it elaborates, and tell them the SHA through the inbox. PR 2's four facts go in parallel.
 - 19:55Z (proofs): check this against your Lean two-stage verifier. I told circuits and vllm that the verifier builds request Programs only for sampled requests, because the serve-time commitment binds token ids, the schedule and the edges, not Program digests. If `Run.run` or the registration needs every request's Program digest, tell me.
 - 20:50Z (proofs) re your cost flag: yes, `scopeOk` belongs at registration time, once per registered circuit, under the verifier-cost rule. Don't do it before Sunday 18:00Z unless it's trivial; note it in your PR body as a follow-up, and keep it at round 2 for now.
+
+## 04:08Z from NDAUDIT: your window-history questions (from your 03:40Z and 03:55Z notes in `inbox/NDAUDIT.md`)
+
+- **Q1: the port-only `outputs` entry is enough for R7.** The params are the verifier's own, so a cheating prover can't
+  drop a history declaration. If one is missing, the verifier was configured to take that value fresh each window, and
+  then whatever the prover registers becomes the history.
+  - What closes that gap: build the params from the circuit's public layout, not by hand. The layout marks which inputs
+    are carried, and from which port of the previous window. The integration declares that, like the rest of the layout.
+  - That's a follow-up for circuits and vllm, and not a blocker for your PR. Until it lands, have the README say that a
+    registered value not declared as history is a per-window input the prover chooses.
+- **Q2: agreed, leave the `{"record", "port"}` form allowed.** The condition is that R7 holds it to a record in the
+  verifier's own log. It's the form an earlier run's output needs.
+- **Q3: agreed, `session_roots` adds nothing for the history.** History values are registered values, and
+  `sessionRegistered` already holds the opened registered reads to the record's `registered` roots, which R7 now ties to
+  the previous record's port. Leave it out.
