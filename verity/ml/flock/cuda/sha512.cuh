@@ -143,29 +143,27 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
 //   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
 //   leaf = SHA-512(leaf_prefix || b || c). Salts are the host's (zk_hooks::LeafSalts, read from the OS): the tree callback hands
 //   tree k's salts (192 bytes per leaf, in host memory until the proof ends); a salted tree's leaves are hashed and finished
-//   HM96_CHUNK at a time, each piece's salts copied on a stream of their own into the next of the ring's device buffers, as
-//   soon as the buffer's last piece is finished, and an opening's are copied from the host's.
+//   HM96_CHUNK at a time, each piece's salts copied on a stream of their own into the next of HM96_RING device buffers beside
+//   the previous piece's leaves, and an opening's are copied from the host's.
 
 typedef const uint8_t* (*Hm96TreeCb)(void* ctx, int tree, long long leaves);
 
 static const long long HM96_CHUNK = 1 << 18;   // leaves per piece of a salted tree (48 MiB of salts on the device)
-// device buffers of pieces' salts: FC_HM96_RING (2 to HM96_RING_MAX), else HM96_RING. Level 0's tree is enqueued well ahead of
-// the device, so a deeper ring copies more of its pieces' salts under the work before it, at 48 MiB of device memory a buffer.
-static const int HM96_RING = 6, HM96_RING_MAX = 8;
+static const int HM96_RING = 2;                 // device buffers of a piece's salts: one copied while the other's piece runs
 // hm96_mask_leaves' B fragments: (mask word, n-tile, k-tile, lane) of 8 x 8 x 6 x 32, two words each
 static constexpr int HM96_FRAGS = 8 * 8 * 6 * 32;
 
 struct Hm96Ctx {
     Hm96TreeCb tree_cb = nullptr;
     void* ctx = nullptr;
-    int trees = 0, ring = HM96_RING;
+    int trees = 0;
     long long level0_leaves = 0;
     uint32_t* d_frag = nullptr;     // hm96_fragments of the key's tables
     uint64_t* d_mid = nullptr;      // SHA-512 states after the salt prefix block, then after the leaf prefix block
-    uint8_t* d_salts = nullptr;     // `ring` buffers of HM96_CHUNK leaves' salts, zeroed when the proof ends
+    uint8_t* d_salts = nullptr;     // HM96_RING buffers of HM96_CHUNK leaves' salts, zeroed when the proof ends
     cudaStream_t copy = nullptr;    // the salts' copies (non-blocking: beside the kernels on the default stream)
-    cudaEvent_t copied[HM96_RING_MAX] = {};   // buffer r's piece is on the device
-    cudaEvent_t done[HM96_RING_MAX] = {};     // buffer r's piece is finished, so the buffer can take the next
+    cudaEvent_t copied[HM96_RING] = {};   // buffer r's piece is on the device
+    cudaEvent_t done[HM96_RING] = {};     // buffer r's piece is finished, so the buffer can take the next
     std::map<const uint8_t*, std::pair<const uint8_t*, long long>> salts;   // device tree -> its host salts and leaves
 };
 static Hm96Ctx g_hm96;
@@ -373,7 +371,7 @@ inline const uint8_t* hm96_tree_salts(int k, long long num_leaves) {
 
 // the salts' copy stream and its events, destroyed: each piece's salts are then copied on the default stream
 inline void hm96_drop_copy_stream() {
-    for (int r = 0; r < HM96_RING_MAX; r++) {
+    for (int r = 0; r < HM96_RING; r++) {
         if (g_hm96.copied[r]) cudaEventDestroy(g_hm96.copied[r]);
         if (g_hm96.done[r]) cudaEventDestroy(g_hm96.done[r]);
         g_hm96.copied[r] = g_hm96.done[r] = nullptr;
@@ -392,12 +390,9 @@ struct Hm96Guard {
         if (g_hm96.tree_cb) { fprintf(stderr, "hm96: a salt context is already installed (one proof at a time per process)\n"); abort(); }
         mine = true;
         g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = level0_leaves;
-        const char* rs = getenv("FC_HM96_RING");
-        const int ring = rs ? atoi(rs) : HM96_RING;
-        g_hm96.ring = ring < 2 ? 2 : ring > HM96_RING_MAX ? HM96_RING_MAX : ring;
-        cudaMalloc(&g_hm96.d_salts, (size_t)g_hm96.ring * HM96_CHUNK * 192);
+        cudaMalloc(&g_hm96.d_salts, (size_t)HM96_RING * HM96_CHUNK * 192);
         bool ok = cudaStreamCreateWithFlags(&g_hm96.copy, cudaStreamNonBlocking) == cudaSuccess;
-        for (int r = 0; r < g_hm96.ring; r++)
+        for (int r = 0; r < HM96_RING; r++)
             ok = ok && cudaEventCreateWithFlags(&g_hm96.copied[r], cudaEventDisableTiming) == cudaSuccess
                     && cudaEventCreateWithFlags(&g_hm96.done[r], cudaEventDisableTiming) == cudaSuccess;
         if (!ok) {
@@ -422,9 +417,9 @@ struct Hm96Guard {
         if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
         if (g_hm96.copy) cudaStreamSynchronize(g_hm96.copy);
         hm96_drop_copy_stream();
-        if (g_hm96.d_salts) { cudaMemset(g_hm96.d_salts, 0, (size_t)g_hm96.ring * HM96_CHUNK * 192); cudaFree(g_hm96.d_salts); }
+        if (g_hm96.d_salts) { cudaMemset(g_hm96.d_salts, 0, (size_t)HM96_RING * HM96_CHUNK * 192); cudaFree(g_hm96.d_salts); }
         g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_frag = nullptr; g_hm96.d_mid = nullptr; g_hm96.d_salts = nullptr;
-        g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = 0; g_hm96.ring = HM96_RING;
+        g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = 0;
     }
 };
 
@@ -452,11 +447,11 @@ inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long n
             abort();
         }
         const uint8_t* h = hm96_tree_salts(g_hm96.trees++, num_leaves);
-        // piece j's salts go into buffer j % ring once that buffer's last piece is finished, and are copied beside the pieces
-        // before j; the default stream finishes piece j once they are on the device
+        // piece j's salts go into buffer j % HM96_RING once that buffer's last piece is finished, and are copied beside piece
+        // j - 1's leaves and finishing and piece j's leaves; the default stream finishes piece j once they are on the device
         for (long long at = 0, j = 0; at < num_leaves; at += HM96_CHUNK, j++) {
             const long long n = num_leaves - at < HM96_CHUNK ? num_leaves - at : HM96_CHUNK;
-            const int r = (int)(j % g_hm96.ring);
+            const int r = (int)(j % HM96_RING);
             uint8_t* d_s = g_hm96.d_salts + (size_t)r * HM96_CHUNK * 192;
             if (g_hm96.copy) {
                 cudaStreamWaitEvent(g_hm96.copy, g_hm96.done[r], 0);
