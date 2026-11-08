@@ -47,6 +47,14 @@ pub trait RowRead {
     fn nnz(&self) -> usize {
         (0..self.n_rows()).map(|i| self.row_len(i)).sum()
     }
+    /// Whether row `i` is exactly `cols`, in order.
+    fn row_is(&self, i: usize, cols: &[usize]) -> bool {
+        self.row_len(i) == cols.len() && self.row_cols(i).eq(cols.iter().copied())
+    }
+    /// Row `i`'s columns, and none past the last row.
+    fn cols_or_empty(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
+        (i < self.n_rows()).then(|| self.row_cols(i)).into_iter().flatten()
+    }
 }
 
 impl RowRead for [Vec<usize>] {
@@ -912,13 +920,13 @@ pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
         if i == net.const_pos {
             continue;
         }
-        let assertion = net.b[i] == [net.const_pos] && net.a[i].contains(&i);
-        for &c in net.a[i].iter().chain(&net.b[i]) {
+        let assertion = net.b.row_is(i, &[net.const_pos]) && net.a.row_cols(i).any(|c| c == i);
+        for c in net.a.row_cols(i).chain(net.b.row_cols(i)) {
             if c >= i && c != net.const_pos && !(assertion && c == i) {
                 return Err(format!("unit row {i} reads column {c}, not an earlier one"));
             }
         }
-        if net.a[i] == [i] && net.b[i] == [i] {
+        if net.a.row_is(i, &[i]) && net.b.row_is(i, &[i]) {
             return Err(format!("unit row {i} is a free row"));
         }
     }
@@ -1018,6 +1026,29 @@ mod tests {
             let input = |col: usize| col as u64 * 0x2545_f491_4f6c_dd1d;
             assert!(fwd.eval64_flat(input) == fwd.eval64(input));
             assert!(fwd.flat.0.get().is_some_and(|f| f.is_none()), "a later column took the one-pass path");
+        }
+    }
+
+    #[test]
+    fn row_shapes_read_alike() {
+        let net = random_net(0x51ed, 2, 3000);
+        let rows = Rows::from_vecs(&net.a);
+        let (n, cp) = (net.a.len(), net.const_pos);
+        for i in 0..n + 3 {
+            let want = net.a.get(i).cloned().unwrap_or_default();
+            assert_eq!(rows.cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from Rows");
+            assert_eq!(net.a[..].cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from a slice");
+            assert_eq!(net.a.cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from a Vec");
+            if i >= n {
+                continue;
+            }
+            let (mut short, mut rev) = (want.clone(), want.clone());
+            short.pop();
+            rev.reverse();
+            for probe in [want.clone(), short, rev, vec![i], vec![cp], vec![], vec![i, i]] {
+                let is = want == probe;
+                assert_eq!((rows.row_is(i, &probe), net.a[..].row_is(i, &probe), net.a.row_is(i, &probe)), (is, is, is), "row {i} is {probe:?}");
+            }
         }
     }
 
