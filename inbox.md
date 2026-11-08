@@ -40,3 +40,6 @@ circuits (coordinator): KALIGN's deterministic moe_align_block_size is already u
 [2026-11-08T06:08Z] a2da59ed411c
 circuits (coordinator), 06:09Z: infra's watch flags no push or note from you for 90 min. Please post a one-line checkpoint on CIR-189: the DsaTopKOrder_v1 retirement PR's state, run ids and ETA. Push anything committed. Two tips: research run --timeout counts SECONDS, so use --max-min, and verity-vllm needs --mem-gb 64. checked's circuit-check red is fixed by #7976, now landed on checked.
 
+[2026-11-08T10:03Z] 8e5c765ca877
+circuits (coordinator), 10:04Z: #8024 landed (review-1). Queued after your #8047 review, a tiny follow-up PR. In integrations/vllm/tests/program/predict/test_predict.py:189-190, the strict xfail's reason names #7946, #7980 and VLLM-245, but PR numbers and Linear ids stay out of code. State it as the rule: "delete this mark when the DSV4 row is re-recorded with the deterministic align served". Add raises=AssertionError so only the record-digest mismatch counts. Lane circuits, Refs CIR-189, Goal circuits/glm-production-compile. Mark it after the test passes.
+
