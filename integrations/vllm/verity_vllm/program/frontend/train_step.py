@@ -122,7 +122,8 @@ def _ident(s: str) -> str:
     return s + "_" if keyword.iskeyword(s) else s
 
 
-def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor):
+def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW,
+                example_batch: torch.Tensor) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
@@ -183,7 +184,7 @@ class StepSurvey:
 
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep",
-                exported=None) -> DeriveReport | StepSurvey:
+                exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
     """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `exported`:
     `export_step`'s result. `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole
     (`rules.training_survey.survey`)."""
@@ -204,12 +205,13 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     if isinstance(prog, Unsupported):
         return StepSurvey(rep.unsupported, holes, None, {}, {}, layout, refused=prog)
     nodes = prog.root.body.nodes
-    return StepSurvey(rep.unsupported, holes, census(prog), _primitives(prog), {
+    return StepSurvey(rep.unsupported, holes, census(prog), primitives(prog), {
         "names": list(prog.theta), "input_nodes": len(prog.root.theta),
         "bits": sum(nodes[i].n * nodes[i].fn.ret.w for i in prog.root.theta)}, layout)
 
 
-def _primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
+def primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
+    """The primitives `prog` calls, at any depth, by id: what a census (`verity.ml.circuits.census.census`) prices."""
     out, seen, stack = {}, set(), [prog.root]
     while stack:
         fn = stack.pop()
@@ -272,4 +274,4 @@ def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
     return True
 
 
-__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "step_report", "step_program"]
+__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program"]

@@ -1588,6 +1588,11 @@
     },
     {
       "paths": {
+        "benchmarks/covert_witness/grader/": "benchmarks/training_slowdown/grader/"
+      }
+    },
+    {
+      "paths": {
         "Security/Definitions/Population.lean": "Security/Definitions/SampledProofs.lean",
         "Security/Definitions/Population/": "Security/Definitions/SampledProofs/",
         "Security/Proofs/Population.lean": "Security/Proofs/SampledProofs.lean",

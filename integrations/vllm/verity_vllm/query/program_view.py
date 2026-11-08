@@ -11,7 +11,8 @@ Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Pro
 
 Both yield the same :class:`ProgramView`: Calls with ports, reads and names; prescribed inputs as Values of negative ids
 (`-(k + 1)` for parameter `k`; a record parameter has one port per field, anything else the port `out`); outputs as the reader
-knows them (a descriptor's `ret`; an instance sequence carries none).
+knows them (a descriptor's `ret`; an instance sequence carries none), and of them the Program's checks where the reader is told
+how many (`from_descriptor`'s `checks`).
 
 Ports.  A Definition returning one collection (`Array<N, Value<w>>`, a `Value<w>`) has the one port `out`; a tuple has the ports
 `"0"`, `"1"`, ...; a record its field names.  Every port knows its element count and word width (None when the leaves are not
@@ -107,7 +108,8 @@ class ProgramView:
     outputs: tuple[ValueRef, ...]
     digest: str | None
     source: str                      # "descriptor" | "instances"
-    checks: frozenset[int] = frozenset()   # the Calls of its checks (its instances header's `checks`, `at`), which the runtime never runs
+    checks: tuple[ValueRef, ...] = ()   # of `outputs`, the Program's checks (`predict.common.with_checks`), each required to be 1
+    check_cids: frozenset[int] = frozenset()   # the Calls of its checks (its instances header's `checks`, `at`), never run
 
     @property
     def inputs(self) -> tuple[ValueRef, ...]:
@@ -498,8 +500,9 @@ class _Builder:
                     out.append(v)
         return tuple(out)
 
-    def view(self, outputs: tuple[ValueRef, ...], digest: str | None, source: str, checks: frozenset[int] = frozenset()) -> ProgramView:
-        return ProgramView(_Calls(self.c), self._params, outputs, digest, source, checks)
+    def view(self, outputs: tuple[ValueRef, ...], digest: str | None, source: str, checks: tuple[ValueRef, ...] = (),
+             check_cids: frozenset[int] = frozenset()) -> ProgramView:
+        return ProgramView(_Calls(self.c), self._params, outputs, digest, source, checks, check_cids)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -688,7 +691,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
             with _open_text(path_or_doc) as f:
                 doc = json.load(f)
             return from_instances(doc)
-        return b.view((), hdr.get("digest"), "instances", _check_calls(hdr))
+        return b.view((), hdr.get("digest"), "instances", check_cids=_check_calls(hdr))
     doc = path_or_doc
     params = _params_view(doc.get("params") or [])
     rows = sorted(doc["rows"], key=lambda r: int(r["i"]))
@@ -696,14 +699,15 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
         b = _instances_columns(params, rows, memo=True)
     except _OutOfOrder as e:
         raise ValueError(f"instance rows are not a body in order: {e}") from None
-    return b.view((), doc.get("digest"), "instances", _check_calls(doc))
+    return b.view((), doc.get("digest"), "instances", check_cids=_check_calls(doc))
 
 
-def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
+def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) -> ProgramView:
     """A Program descriptor (dict, or a path to `descriptor.json[.gz]`), decoded by `codec.decode_program` -> ProgramView of its
     program function's body, or of the root's body when the program function is inlined into the root (a request Build's
     descriptor).  Names from the decoded annotations' `node_hints` (node index -> hint); ports from each node's own output type;
-    outputs from the body's `ret`."""
+    outputs from the body's `ret`, the last `checks` of its leaves the Program's checks (`BuildResult.checks`' `of`), which the
+    descriptor doesn't mark."""
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
@@ -734,6 +738,18 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     for i, (k, n) in enumerate(rows):
         b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
               ([remap(r) for r in runs(a.refs)] for a in n.args))
-    outs = b.outputs([remap(r) for r in runs(body.ret)])
+    ret = [remap(r) for r in runs(body.ret)]
     from verity.ml.circuits.codec import program_digest
-    return b.view(outs, program_digest(desc), "descriptor")
+    return b.view(b.outputs(ret), program_digest(desc), "descriptor", b.outputs(_last_leaves(ret, checks)) if checks else ())
+
+
+def _last_leaves(ret: list, n: int) -> list:
+    """The runs of the last `n` leaves of the reference runs `ret`, in order."""
+    out, left = [], n
+    for space, idx, lo, hi, *_ in reversed(ret):
+        take = min(hi - lo, left)
+        out.append((space, idx, hi - take, hi))
+        left -= take
+        if not left:
+            return out[::-1]
+    raise ValueError(f"the Program returns fewer than its {n} checks' leaves")

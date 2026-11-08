@@ -96,8 +96,17 @@ def check(B: Any, ids: Coll, config: Mapping[str, Any]) -> tuple[Coll, str]:
     return B.call(fn, ids, name=NAME), what(s)
 
 
-def over(B: Any, outs: Sequence[Coll], config: Mapping[str, Any]) -> tuple[Coll, str]:
-    """`check` over a traced source's returned values (`derive`'s config ``stop``), which must be one: the request's outputs."""
-    if len(outs) != 1:
-        raise ValueError(f"it reads a request's outputs, one returned value, and the source returns {len(outs)}")
-    return check(B, outs[0], config)
+def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
+    """Under `derive`'s config ``stop``, `check` over the traced source's returned values, which must be one (the request's
+    outputs), as the Program's last Call and check (`Ctx.check`), which no fx node lowers; a config it can't read refuses at
+    fx node ``at``."""
+    from verity_vllm.program.frontend.outcomes import refuse
+    if (config := ctx.config.get("stop")) is None:
+        return
+    try:
+        if len(outs) != 1:
+            raise ValueError(f"it reads a request's outputs, one returned value, and the source returns {len(outs)}")
+        ctx.check(*check(ctx.B, outs[0], config))
+    except (TypeError, ValueError) as e:
+        refuse("shape", at, None, f"the length rule (config `stop`): {e}")
+    ctx.node_hints[len(ctx.B.nodes) - 1] = NAME

@@ -23,6 +23,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `bodies.py` | a composite's evaluation and its non-constant gates, body by body |
 | `targets.py` | what a target string names, and the catalog `--all` runs over |
 | `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json` |
+| `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
 | `structural.py`, `ambient.py`, `by_calls.py` | `--structural`, `--ambient`, and a Program root checked by its calls alone |
 | `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged |

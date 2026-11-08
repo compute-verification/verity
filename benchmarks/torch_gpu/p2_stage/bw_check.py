@@ -164,7 +164,7 @@ def bench(dev: torch.device) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--lib", type=Path, help="build.sh's libp2v1 directory: the toy through the staging decode too")
+    ap.add_argument("--lib", type=Path, help="build.sh's libp2v1 directory: the toy through the store's load too")
     ap.add_argument("--random", type=int, default=0, help="units of random C* against the CPU reference")
     ap.add_argument("--sample", type=int, default=2000, help="units whose σ the reference recomputes from C*")
     ap.add_argument("--bench", action="store_true")
