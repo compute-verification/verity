@@ -252,13 +252,10 @@ def collectives() -> dict[str, Any]:
     first call), the custom all-reduce's and torch symmetric memory's byte caps, and the NCCL version pynccl loaded.  A read that
     fails is recorded as ``error``: this record is never a reason to fail a Commit."""
     try:
+        from vllm.distributed.device_communicators import flashinfer_all_reduce as fi
         from vllm.distributed.parallel_state import get_tp_group
         dc = getattr(get_tp_group(), "device_communicator", None)
-        try:
-            from vllm.distributed.device_communicators import flashinfer_all_reduce as fi
-            ws = getattr(fi, "_fi_ar_workspace", None)
-        except ImportError:
-            ws = None
+        ws = getattr(fi, "_fi_ar_workspace", None)
 
         def on(name: str) -> bool:
             c = getattr(dc, name, None)
@@ -284,7 +281,7 @@ def collectives_differ(a: Mapping[str, Any], b: Mapping[str, Any]) -> list[str]:
     for k in sorted(set(ra) & set(rb)):
         sa, sb = ra[k]["switches"], rb[k]["switches"]
         out += [f"rank {k}: {s} {sa.get(s)!r} against {sb.get(s)!r}" for s in COLLECTIVE_SWITCHES if sa.get(s) != sb.get(s)]
-        ca, cb = ra[k].get("collectives") or {}, rb[k].get("collectives") or {}
+        ca, cb = ra[k].get("collectives", {}), rb[k].get("collectives", {})
         out += [f"rank {k}: {c} {ca.get(c)!r} against {cb.get(c)!r}" for c in sorted(set(ca) | set(cb)) if ca.get(c) != cb.get(c)]
     return out
 
