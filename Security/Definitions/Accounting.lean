@@ -36,6 +36,7 @@ public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
 public import Definitions.Accounting.Slowdown
 public import Definitions.Accounting.Pouw
+public import Definitions.Accounting.PouwWitness
 public import Definitions.Accounting.PouwWork
 public import Definitions.Accounting.RateAudit
 public import Definitions.Accounting.RateAuditDeployed
@@ -48,6 +49,7 @@ public import Definitions.Accounting.RateAuditSketch
 public import Definitions.Accounting.RateAuditSketchDeployed
 public import Definitions.Accounting.RateAuditSketchInteractive
 public import Definitions.Accounting.RateAuditSketchLayout
+public import Definitions.Accounting.ReadUnit
 public import Definitions.Accounting.Remote
 public import Definitions.Accounting.Remote.Deployed
 public import Definitions.Accounting.Requirement
@@ -80,9 +82,10 @@ the lock's `layers` lists what they may import:
   audits); `JointPeriod` and `JointBridge` (a period audited by every subprotocol, and each subprotocol's per-period
   guarantee read as its account); `JointLive` (a period as a causal game, its claims on a fixed extractor's values);
   `JointBlocks` and `Wipe` (server blocks, each opened by a memory wipe, and the streamed-label wipe on the device
-  model).
+  model); `ReadUnit` (a unit that returns one row of a registered table at an index another unit picks, and what
+  binds it to that row).
 * **Each audit's game.** The compute audit: `Pouw` and `PouwWork` (PoUW's game, and its work on one node of the actual
-  circuit), `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
+  circuit), `PouwWitness` (the run its witnesses fail at), `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
   and over a monitoring period), `HMu` and `CoinFlow` (the receipt-luck premise H-μ⁺ and a Program's coin flow),
   `Served`, `Filler`, `BoundReceipt` and `BoundSketch` (receipts bound to the matmul), and `TS`, `Headline` and
   `HeadlineDc` (the tensor–scalar model and the headline instances' exact data). The capacity audit: `Capacity`,
