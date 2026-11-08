@@ -130,7 +130,7 @@ def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
     here = Path(__file__).resolve()
     pinned = here.parents[4] / "verity/core/service/flock/VStar/Menu/Pinned.lean"
     mn = json.loads((here.parent / "data/f6-menu.json").read_text())
-    assert M.lean(mn, "art:bb9b72df0377d54ad001bb52a9d24b6152e83cdefb896d02fbbce26bc281dffa (menu.json)") == pinned.read_text()
+    assert M.lean(mn, "`benchmarks/numerical/tests/bench/data/f6-menu.json`") == pinned.read_text()
 
 
 def _entry(slots, regions, m=35, k=27, outer_s=100.0, sessions=1):
