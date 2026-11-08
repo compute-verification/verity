@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -213,10 +214,9 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
               record: dict, links: list[dict]):
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed), where the tree has it: over the
     design's ``links`` and the reads the audit record's verdicts of record report."""
-    try:
-        from verity.core.protocols.spot import second_stage as SS
-    except ImportError:
+    if importlib.util.find_spec("verity.core.protocols.spot.second_stage") is None:
         return None
+    from verity.core.protocols.spot import second_stage as SS
     from verity.core.protocols.spot.one_stage import audit as A, partition as P
 
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
