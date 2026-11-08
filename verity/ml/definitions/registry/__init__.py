@@ -67,6 +67,10 @@ def _register_lazy_families() -> None:
         from verity.ml.definitions.registry import dsa_topk
         return dsa_topk
 
+    def _dsa_topk_mask():
+        from verity.ml.definitions.registry import dsa_topk_mask
+        return dsa_topk_mask
+
     def _marlin_moe():
         from verity.ml.definitions.registry import marlin_moe
         return marlin_moe
@@ -82,6 +86,10 @@ def _register_lazy_families() -> None:
     register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
     # [GLM-5.3] the canonical top-k row's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().long_row_check(int(m[1]), int(m[2])))
+    # the mask form's accelerators, one per (row length, TOPK): the threshold `DsaTopKMask` compares each key with, and a slot of
+    # the ascending top set (`DsaTopKRow`)
+    register_lazy_family(r"^DsaTopKThreshold(\d+)x(\d+)_v1$", lambda m: _dsa_topk_mask().threshold(int(m[1]), int(m[2])))
+    register_lazy_family(r"^DsaTopKSlot(\d+)x(\d+)_v1$", lambda m: _dsa_topk_mask().slot(int(m[1]), int(m[2])))
     # the top-p keep word (one per vocabulary; the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
     register_lazy_family(r"^BitAtx(\d+)_v1$", lambda m: _sampling().bit_at(int(m[1])))
