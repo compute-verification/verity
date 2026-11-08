@@ -27,7 +27,7 @@ open scoped ENNReal
 
 variable {β : ℕ → Type} {O V Tick Adv : Type}
 
-theorem period_lead (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → Served O V Tick Adv)
+theorem period_lead (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → Served O V Tick Adv)
     (good : (i : ℕ) → Strategy (G i) → Prop) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hstage : ∀ i τ, good i τ → ∃ w : ℕ, (∀ b, (rec i τ b).wrong = w) ∧
       prob (fun b => ¬ (rec i τ b).drawnWrong) (G i) τ ≤ x ^ w) :
@@ -38,7 +38,7 @@ theorem period_lead (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strateg
       exact value_le_one _ _
   | 0, _, _, M + 1, _ => by
       classical
-      show value (fun l => M + 1 ≤ Served.lead l) (Game.ret []) ≤ _
+      show value (fun l => M + 1 ≤ Served.lead l) (Verity.Game.ret []) ≤ _
       simp [Served.lead]
   | T + 1, i, s, M + 1, hs => by
       obtain ⟨w, hw, hp⟩ := hstage i _ hs.1
@@ -65,7 +65,7 @@ theorem period_lead (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strateg
         _ = x ^ (w + (M + 1 - w)) := (pow_add _ _ _).symm
         _ ≤ x ^ (M + 1) := pow_le_pow_of_le_one zero_le hx (by omega)
 
-theorem period_escapes (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → Served O V Tick Adv)
+theorem period_escapes (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → Served O V Tick Adv)
     (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hacc : ∀ i τ, good i τ → prob (fun b => (rec i τ b).accepted ∧ (rec i τ b).drawnWrong) (G i) τ ≤ ε i)
     (hstage : ∀ i τ, good i τ → ∃ w : ℕ, (∀ b, (rec i τ b).wrong = w) ∧
