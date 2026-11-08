@@ -673,6 +673,34 @@ def test_a_window_root_and_held_values_are_the_verifiers_in_one_form():
             R.check(recs[0], prog, Q, **kw, window_root=WINDOWS[0], held=bad)
 
 
+def test_a_seed_salt_the_server_chose_is_refused_by_name():
+    """The window's seed salt is the verifier's, read from its challenger's log (`coins.seed_salt_of`), never the
+    record's: a verifier that read it accepts a window naming it and refuses by name (`R6-seed-salt`) one naming another
+    or none; one that read none refuses a window naming any, a salt the server chose, and the detail names both. A salt
+    is read on the window's session in one form: in another, or without the window's open root, the verifier refuses its
+    own inputs."""
+    prog = _program()
+    w = _registered(prog)
+    x = G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
+    (rec,), kw = _windows(prog, [x], w)
+    kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
+    salt, other = "5a" * 64, "5b" * 64
+    named = lambda s: {**rec, "window": {**rec["window"], R.SEED_SALT: s}}  # noqa: E731
+    assert R.check(named(salt), prog, Q, **kw, seed_salt=salt).ok
+    assert R.check(rec, prog, Q, **kw).ok
+    for s in (other, salt.upper(), None, 5):
+        assert R.check(named(s), prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",), s
+    assert R.check(rec, prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",)
+    chosen = R.check(named(salt), prog, Q, **kw)
+    assert chosen.codes == ("R6-seed-salt",)
+    assert chosen.detail == {"R6-seed-salt": {"registered": salt, "verifier": None}}
+    for bad in (salt.upper(), salt[:-2], salt + "\n", "", 5, bytes.fromhex(salt)):
+        with pytest.raises(ValueError, match="seed salt is lowercase hex"):
+            R.check(named(salt), prog, Q, **kw, seed_salt=bad)
+    with pytest.raises(ValueError, match="window's open root"):
+        R.check(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
+
+
 def test_a_record_without_registered_values_keeps_v1s_bytes():
     prog = _program()
     rec, _ = _record(prog, _registered(prog))

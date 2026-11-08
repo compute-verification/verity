@@ -315,8 +315,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 A registration fixes everything a sampled proof block's statement can depend on before the verifier samples. Its record,
 `verity/registration/v1` (`one_stage.registration.record`), names the program, query and partition digests, the
 population, the sampling design expanded over the verifier's program and query, the commitment scheme, each port's root
-with its leaf count and domain, the leaf layer, the anchors, the window (its provenance, `served` or `stand-in`, and the
-stream and prover it is bound to) and `previous`, the digest of this prover's last record. A record that registers values
+with its leaf count and domain, the leaf layer, the anchors, the window (its provenance, `served` or `stand-in`, the
+stream and prover it is bound to, and its seed salt) and `previous`, the digest of this prover's last record. A record that registers values
 is `verity/registration/v2`: the same keys and `registered` (below), so v1's bytes are unchanged. Its digest is
 `SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical JSON (RFC 8785, `verity.ml.circuits.codec.canonical_json`).
 
@@ -327,7 +327,7 @@ The verifier holds the record to its own copies with R1 to R7 (`check`):
 - R3: the scheme, and each port's root, leaf count and domain;
 - R4: the leaf layer;
 - R5: the anchors;
-- R6: `previous`, one record a window, and the window's stream and prover;
+- R6: `previous`, one record a window, the window's stream and prover, and its seed salt;
 - R7: the registered values.
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
@@ -551,3 +551,19 @@ session is a withheld one (`withheld_on`: the ledger's open says `withheld: true
 salt or path before it closed) and the bytes the sample read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.
+
+### The window's seed salt
+
+A request the window serves without a seed of its own still samples, and its seed is fixed before serving, from a coin
+of the challenger's, not chosen by the server. At the window's open, before it serves, the stream draws the window's
+seed salt (`Stream.seed_salt`, `coins.draw_seed_salt`): the first coin of the challenger's `seed-salt` family, opened
+after the window's open root, read whole with no derivation, once a window, and logged in the epoch log. No sample reads
+that family, so a sample's coins stay their own family's, released after the registration's commitment. The window's
+record names the salt (`window.seed_salt`, 64 bytes in lowercase hex), a certified input the window's circuits read,
+which the Spec declares public, of kind `coins` (`check_public`). A verifier reads the salt from the challenger's log
+(`coins.seed_salt_of`, Lean `Challenger.seedSaltOf`): the session the auditor's ledger opens for the window under its
+own key, whose `seed-salt` family shows one coin, its first, released after the window's open root. R6 holds the
+record's window to that salt (`registration.check`'s `seed_salt`, Lean `Registration.Verifier.seedSalt`): a window
+naming another salt or none is refused (`R6-seed-salt`), and so is a window naming a salt where the verifier read none,
+one the server chose. Pinned by `tests/test_registered.py`, `tests/test_challenger_coins.py`, `tests/test_service.py`
+and the difftest's `challenger_seed_salt`, `registration` and `check_public`.

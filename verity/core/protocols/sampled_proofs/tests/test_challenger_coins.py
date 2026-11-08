@@ -315,3 +315,51 @@ def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn
             T.draw_seed_salt(_salt_coins()[1], bad)
     assert draw.record.roots == []
 
+
+def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):  # noqa: F811
+    """Over a challenger served on loopback for the window, withheld: the stream draws the window's seed salt at its
+    open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
+    (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the
+    window's open root). A session whose challenger released a second coin after the root (a server picking its salt
+    between two) is refused, read alone or both, and so are a forged coin, another family's coins and another window's."""
+    import test_remote
+    from test_challenger import lms_verify
+    from test_service import _stream
+
+    monkeypatch.setattr(test_remote, "FAMILIES", [(T.SEED_SALT_FAMILY, 2), ("positions", 2)])
+    window, other = test_remote.WINDOW["root"], "22" * 64
+    host = Host(tmp_path, signer, withhold=True)
+    alt = Host(tmp_path, signer, session="s-2", seed="alt", ledger=host.ledger, window={"root": other}, withhold=True)
+    stream, salts, segments, second = _stream(), {}, {}, None
+    for h, root in ((host, window), (alt, other)):
+        client = R.RemoteChallenger.connect(h.address)
+        coins = T.ChallengerCoins(C.LiveRecord(client, T.SEED_SALT_FAMILY, itertools.count().__next__))
+        salts[root] = stream.seed_salt(coins, root)
+        if h is alt:
+            coins.record.record(bytes.fromhex(root))
+        client.close()
+        coins.settle()
+        assert h.ended() is None
+        segments[root] = coins.segments[0].to_json()
+        second = client.opened.get((T.SEED_SALT_FAMILY, 1), second)
+    assert [e["window_root"] for e in stream.epoch_log] == [window, other]
+    ledger = R.ledger_lines(host.ledger.path)
+    files = {window: R.session_files(host.directory), other: R.session_files(alt.directory)}
+
+    def read(root: str, segment: dict | None = None, at: str | None = None) -> bytes | str:
+        """The seed salt the verifier reads on window `at` (`root`'s, unless given) from `root`'s session's evidence."""
+        evidence = {"ledger": ledger, "main": test_remote.MAIN, "pins": test_remote.HOST_PINS,
+                    "segment": segments[root] if segment is None else segment, "session": files[root]}
+        try:
+            return T.seed_salt_of(test_remote.pinned_key(), at or root, evidence, lms_verify)
+        except C.CoinError as e:
+            return str(e)
+
+    assert read(window) == salts[window] and len(salts[window]) == C.COIN_BYTES
+    assert "not the ones the challenger's log shows" in read(other)
+    assert second is not None and read(other, {**segments[other], "openings": [*segments[other]["openings"],
+                                                                                second.to_json()]}) == T.SEED_SALT_ONE
+    forged = {**segments[window], "openings": [{**segments[window]["openings"][0], "coin": "5a" * 64}]}
+    assert "does not open" in read(window, forged)
+    assert "family's" in read(window, {**segments[window], "label": "positions"})
+    assert isinstance(read(window, at=other), str) and isinstance(read(window, at="33" * 64), str)

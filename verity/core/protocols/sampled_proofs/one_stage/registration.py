@@ -23,13 +23,14 @@
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
   - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
-    window, and for a bound verifier the window names its stream and prover (Binding).
+    window, for a bound verifier the window names its stream and prover (Binding), and the window names the seed salt
+    the verifier read from its challenger, or none when it read none (Seed salt).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
   to the record. That they are the proved rows' is `flock-verify`'s check of the public file (`checkPublic`), stated by
   the Lean guarantee `FailClosed.flock_verify_public_ties`; `flock-verify` reads no `scheme` from the header, only META's.
-* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what the integration
+* **`window`** is provenance, apart from the binding and the seed salt it names (Binding, Seed salt). `kind` says whether the roots are what the integration
   committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
   root is provenance, not proof).
 * **Window domains** (`window_domain`, `verity.ml.commitments.window`'s): each port's frame domain binds the program, the
@@ -64,6 +65,12 @@
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
+* **Seed salt** (`seed_salt`): the window's seed salt, the one coin of the challenger's seed-salt family released after
+  the window's open root, before the window serves (`coins.draw_seed_salt`), which the verifier reads from the
+  challenger's log (`coins.seed_salt_of`), never from the record: lowercase hex of 64 bytes, read on the window's
+  session, so only beside `window_root`. The record's window names it (`SEED_SALT`), a certified input the window's
+  circuits read, and R6 refuses a window that names another or none, or names one where the verifier read none
+  (`R6-seed-salt`), so a salt the server chose is refused by name.
 * **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
   P}}`; never the inference-only check's θ, which holds registered public data only) reuses that output's commitment instead of
   committing it afresh: its entry takes port P's domain and root from the `roots` of the log's record with digest D, and
@@ -95,6 +102,8 @@ FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
 KINDS = ("served", "stand-in")
+#: the window's field naming its seed salt (Seed salt)
+SEED_SALT = "seed_salt"
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
@@ -163,7 +172,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None, day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+          declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -189,8 +198,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
-    to the day's one declaration (`_declared`).  R3 reads `ports` by name, so its codes come in the ports' sorted
-    order whatever order the mapping has, as the Lean port reads them."""
+    to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
+    challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.  R3
+    reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
+    reads them."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -202,6 +213,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     formats = _schemas(schemas, registered or {}, sup)
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
+    salt = _seed_salt(seed_salt, window)
     log = list(log)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     keys = _KEYS | {"registered"} if v2 else _KEYS
@@ -273,11 +285,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-previous", rec["previous"])
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
+    w = rec["window"] if isinstance(rec["window"], Mapping) else {}
     if bound is not None:
-        w = rec["window"] if isinstance(rec["window"], Mapping) else {}
         for k in ("stream", "prover"):
             if w.get(k) != bound[k]:
                 c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
+    if w.get(SEED_SALT) != salt:
+        c.fail("R6-seed-salt", {"registered": w.get(SEED_SALT), "verifier": salt})
     # R7
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
@@ -446,6 +460,18 @@ def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
     if not (isinstance(p, str) and _HEX.fullmatch(p) and len(p) % 2 == 0):
         raise ValueError(f"the binding's prover is not lowercase hex bytes: {p!r}")
     return {"stream": s, "prover": p}
+
+
+def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
+    """The window's seed salt the verifier read (Seed salt): None, or lowercase hex of 64 bytes beside the window's open
+    root `window`; ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if seed_salt is None:
+        return None
+    if not (isinstance(seed_salt, str) and len(seed_salt) == 128 and _HEX.fullmatch(seed_salt)):
+        raise ValueError(f"a seed salt is lowercase hex of 64 bytes: {seed_salt!r}")
+    if window is None:
+        raise ValueError("a seed salt is read on the window's session: it needs the window's open root (window_root)")
+    return seed_salt
 
 
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], pinned: Mapping[str, str],
