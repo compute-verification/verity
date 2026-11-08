@@ -12219,3 +12219,38 @@ prover without MPS.
 
 **Status.** 4d23 is done: its lease exited at 15:07:34Z with rc 0. No run of mine is pending. The scripts these runs used
 (`launch.sh`, `levers.sh`, `memgate.py`, with the K = 4 lock and the memory gate) are in 4d23's inputs.
+
+## 15:20Z from TWOOPENS (P4): change 1 doesn't need (A), but it needs two smaller generic changes in #8070's files; the cheaper variant wouldn't help. Change 1 is bigger than I said: 1,100–1,700 lines
+
+- **No (A).** BINDSESS's reading holds: `CompiledTwo.Sessions.runs` is one-way, and its extractor waits on the unit's session.
+- **The one-stage `SessionRuns` is read once in my chain.**
+  - `Flock.Guarantees.SampledKSTwo` takes `Sampling.SessionRuns`, both ways, as a premise.
+  - The premise passes through `ksTwo_atOrder`, `ksTwo_code` and `sessionsTwo_compiled` to `runs_ofDeploy`. That lemma reads only the forward half (`.mp`) and the session read-off.
+  - SpotFlock discharges it with `SpotFlock.sessionRuns`, from the one-session `SessionSteps`, in `ksTwo_spot` and `accepting`.
+  - With one session per template, the reverse half is false: a later session's messages can read an earlier session's coins. So SpotFlock can't discharge it.
+- **BINDSESS's cheaper variant wouldn't unblock me.** Taking the reverse half as a premise leaves SpotFlock a premise it can never discharge. I need the reverse half dropped:
+  - **P1, about 50–80 lines.** A one-way `SessionRunsTo` (the forward half and the read-off), taken by `runs_ofDeploy` and the four lemmas above it. No extractor change.
+  - `SampledKSTwo` keeps its text and converts inside its proof, so no record moves. Its premise could also be weakened to the one-way form, a stronger claim whose record moves; I'd propose that separately.
+- **P2, about 150–300 lines: one `N₀` per statement.**
+  - `ofDeploy`'s `sh x u` holds every unit's session to one `innerN₀ x` (`InnerNumbers`, `SessionsIn`).
+  - A session's `N₀` is the sum over its tables of `2^d(m)`, and `innerK = ⌈4·N₀/e⌉` follows from it. Templates whose sessions have different tables have different `N₀`.
+  - `Compiled.sh` is already per unit, so P2 makes `innerN₀` per unit where `ofDeploy` reads it: `SamplingDeploy.Code`, `deployOf`, `InnerNumbers`, `SessionsIn`, and `sh` and `κb`.
+  - If it goes through `Claims.Sampling.Deploy`, the one-stage records that read `Deploy` move too, with no change in meaning.
+- **Who writes P1 and P2.** Both are in the files #8039 and #8070 rewrite (`SamplingGeneric/{Deployed,TwoDeployed,TwoCode,TwoAt}.lean`, `Claims/Sampling/{Code,Deployed}.lean`). Either BINDSESS folds them into #8070, or I write them on its head once it lands. Your call. I've sent BINDSESS the details.
+- **#8070's session keys are what change 1 needs.** They give one `E^rep` per template session: a checked slot's key is its template, `shared` holds by construction, and `n_sess` is the template count. So change 1 stacks on #8070 and ZKTWO's members head.
+- **The model is sequential, as the deployment is.** `a5.audit` stages every member's statement before any session flips a coin, then runs the sessions one at a time in the members' order (`ONE_AT_A_TIME`).
+  - So round 2 carries all T statements, then T Flock sessions run back to back, then one verdict round.
+  - The verdict round is needed because Flock can decide at any round (`act` decides once the last message parses as a final).
+  - Each session's answers are Flock's, with acceptance turned into a marker the run continues past. The verdict round accepts only if every session's first decision accepted.
+  - The session read off a run is its slice, cut at the first marker. Then the forward half and the read-off hold at every session.
+- **Change 1, revised: 1,100–1,700 lines, up from the 500–800 I gave at 11:16Z.** That figure assumed (A) would bring a multi-session lemma. The parts:
+  - P1 and P2, as above.
+  - The sequential step structure and `sessionRunsTo_of_seq`, 400–600, generic, in a new file.
+  - SpotFlock's code and facts, 500–700:
+    - `Held` with one reference statement per template;
+    - round 2's T statements, each checked against its member's circuit;
+    - `next` with the verdict round, `session`, `rounds` and `skey`;
+    - `RegMatchesTwo`, `RefusesTwo`, `InteriorFixed`, `SessionsIn`, `DrawFixed` and `Accepting`.
+  - Then 3a's layout half, 150–350 lines. 3a's Fri 13 Nov no longer holds.
+- **Starting now:** `SessionRunsTo` and the sequential step structure, in new files, so nothing conflicts with #8039, #8070 or ZKTWO. They go on ZKTWO's `-wip` at `dfe7e753d2`, which its build r20261108-131605-54ce passed (rc 0). ZKTWO hasn't moved its head yet. SpotFlock's side follows on ZKTWO's final head and #8070.
+- **Runs:** none of mine yet. I'll give run ids and ETAs at the end of this turn.
