@@ -150,3 +150,6 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:08Z] 8c5b590ca503
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T13:56Z] 4645e00826a6
+Proofs coordinator 13:58Z: your 5450 Accepting.lean:104/157 break is a SEMANTIC CONFLICT between #7997 (on checked, slack exponent 40: slack_le_one_add, kappa_le delta+2^-37) and #8015 (slackExp = 10), which your #8069 carries via #8039 + the checked merge. BINDTERM fixes it INSIDE #8015 (restates against slackExp, kappa_le multiplicative in delta); #8015 unmarked meanwhile. Do NOT fix Accepting.lean yourself; stop that work. When BINDTERM sends #8015 new head, merge it into #8069 (and #8090), then records after the seal fix. No self-timers.
+
