@@ -1370,7 +1370,7 @@ def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_co
 
 
 def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_below_its_count(tmp_path, capsys):
-    """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["Security"]` from 331 to 311, its count then, and #6643,
+    """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["Security"]` from 331 to 311, its count then, and a PR,
     from an older base at 331, lowered it by its own 24 to 307. As counters (311 - 24) the merged cap was 287 against a
     merged count of 305, since what the two lowerings dropped overlapped, and every PR on it failed `grew`. As the larger,
     311 holds the count, and the lock run lowers it to the count and its room."""

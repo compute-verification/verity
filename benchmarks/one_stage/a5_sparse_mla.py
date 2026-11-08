@@ -5,7 +5,7 @@ window (one ``SparseMlaSplit_v1{T=40,NS=3,NH=2,DR=16,DV=32,BN=16}`` row in its s
 partial and lse by the twin, `ml.windows.rows.commit`) and audited by `a5.audit` as rank 0 of a one-rank step on a local
 challenger's coins under ``stratified-rate:1/64``, a 64th of each template's units and at least one: the wiring check on the public bodies before the sample
 (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; the 16-key part's MUFU reads in lookup
-slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each sampled proof block behind the ZK server, the Lean verifier, the stream's
+slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each sampled proof block (behind the ZK server under ``--firewall``), the Lean verifier, the stream's
 outcome and the negatives (`a5.wiring_negatives` among them). It stands in for step 16's 78 rows (at T = 272, per head, four
 64-key parts, one 16-key part and a five-split combine), whose units it does not prove. The run exits 0 only when the outcome
 is accepted and every negative refused. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's
@@ -13,7 +13,7 @@ records (``rank0/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --main FILE --out DIR
+        [--firewall flock-firewall] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -57,7 +57,8 @@ def main() -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)

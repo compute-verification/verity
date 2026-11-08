@@ -220,12 +220,12 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 continue
             ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
             chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else "split" if ts[k].layout == "split" else None for k, _ in hits}
-            experts = all(ts[k].layout in ("read", "expert") for k, _ in hits)
+            experts = all(ts[k].layout in ("read", "expert", "fused") for k, _ in hits)
             if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1) and not experts:
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
                                  f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS), or one "
-                                 f"per split part and combine template of it (SPLITS), or its per-expert blocks and table reads "
-                                 f"(EXPERTS)")
+                                 f"per split part and combine template of it (SPLITS), or its per-expert blocks, fused blocks and "
+                                 f"table reads (EXPERTS, FUSED)")
             for k, n in hits:
                 out[k].append((str(rid), pi, r, d))
                 counts[k] += n

@@ -631,7 +631,7 @@ def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
 
 def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | ValueError:
     """`OneStage.coinsReason`: the sample's units are not the ones `src` samples under the sampling design (`coins.draw_first` read in
-    order, its refusal the problem, and a Bernoulli sampling design refused, `OneStage.coveredLaw`), or a coin opened was not
+    order, its refusal the problem, and a Bernoulli sampling design refused, `OneStage.coveredDesign`), or a coin opened was not
     read."""
     n = rec.get("population")
     if not _nat(n):
