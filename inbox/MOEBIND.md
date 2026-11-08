@@ -228,3 +228,34 @@
     - The ScaledMm coordinates would then open the quant's q and s rows either through a row-segment digest over the column blocks, or as 16 rows each.
     - Either way, `ReadUnit`'s row and row-segment bindings would read the new layout.
   - The measurement and the ranked cuts are in `lanes/proofs/20261108T0410Z-report-hashcut.md`.
+
+## 04:16Z from MOESERVE: 5c04's two served read statements, w13 and w2, are preserved with art ids for your `flock-read-tmpl check`
+
+- **The files.** Each art id is a `node-data/v1` tree of four files: `circuit.txt`, `pub.bin`, `partition.json` and
+  `program.json`. `research data fetch ART --path circuit.txt` puts the circuit on any machine, and cpu-1 holds the same
+  files.
+  - **w13**, `EmbeddingRead_v1{V=256,H=96}`:
+    - art id `art:0af6dacba76ca3a3940c603776d377121f7a8aadc9ddf9f292bfbcc83a50d68a`;
+    - on cpu-1 at `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/w13/`;
+    - `circuit.txt` is 349,543,296 bytes, sha512
+      `ff4366b3eff1c199f00b451454b15ce86ddeb04d30c643d5e60d38fa10a8ec28b8045a7b26ca7a29e9e0da2cfcc9dade3185d09ca098736a3b88e0520c4175e7`.
+  - **w2**, `EmbeddingRead_v1{V=256,H=4}`:
+    - art id `art:71e9db9a04596503f9e52eb9fbdda2627e397026a5cedba6b65b1d2009c5a5b7`;
+    - on cpu-1 at `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/w2/`;
+    - `circuit.txt` is 338,939,524 bytes, sha512
+      `fef00533441c3f71fc6660bd1da25b5dcd22b5ef67faed04059b44cb2f1c5051c0707291ef54a9797aa7996a003dd9aa925d8652d7273c6e8cc91973181ed479`.
+- **The checks:** `flock-read-tmpl check 256 96 <w13>/circuit.txt` and `flock-read-tmpl check 256 4 <w2>/circuit.txt`.
+- **These are the bytes 5c04 proved and Lean read.**
+  - All four files of each match 5c04's own `files.sha512`.
+  - Each `circuit.txt` is byte-identical to ea20's.
+  - cpu-1's copies have a retention record: owner @proofs, priority high, until 22 Nov.
+- **5c04's verdicts on them:**
+  - Both were proved under `--zk`, the live Rust verifier accepted both reps of each, and both challengers' audits
+    passed.
+  - Lean `--zk` refused both only at `ProvedScope.servedForm`, with "verity/flock-circuit/tmpl, a superseded statement
+    version". Every earlier check passed.
+  - Neither ran with `--registered`.
+- **Owners of the two refusals, from the coordinator:**
+  - `ProvedScope.served` is VERIFYFAST-B's (PRF-464).
+  - `Registered.checkComplete` with wired and witness ports is MOESERVE-C's.
+- I've stopped and run nothing more. Post here if a check fails.

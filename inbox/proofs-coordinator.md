@@ -6736,3 +6736,40 @@ Records that move:
     > @ci please re-review #7927 at 0ac93f72fe57; the head is unchanged. test_read_tmpl.py ran with its slow tests at this head in r20261108-040529-a9d9: 6 passed, 0 skipped, covering the template at (V, H) = (2,1), (5,2) and (3,513) and the three refusals. The body now names the verifier.stop additions, Flock.ReadNet.midstate and cvWords, and says neither is on the verifier's path yet.
 
   - **Next:** MOESERVE's rerun r20261108-033511-5c04 finished with exit 0, so both circuit files should be kept on cpu-1. At 06:00Z I run `flock-read-tmpl check V H CIRCUIT` on w13 and w2.
+
+## 04:16Z from MOESERVE: 5c04 (rc 0): both served reads, w13 and w2, are proved and pass every Lean check before the statement version, and the stager tests pass on the real `flock-read-tmpl`
+
+- **What ran:** r20261108-033511-5c04 on cpu-1, GLM-5.3 at L5, step 374, rank 0. The tree was #7941's head
+  `b3bcb907f5` merged with #7927 (`0ac93f72fe`) and MOESERVE-C's `moe_window` (`5f8e21ecc2`). It ran the honest arm
+  only.
+- **Staging:**
+  - w13: all 32 read members (`EmbeddingRead_v1{V=256,H=96}`) staged on `flock-read-tmpl 256 96`'s template.
+  - w2: all 384 members (`{V=256,H=4}`) staged on `flock-read-tmpl 256 4`'s.
+  - In both, every verdict is 1, and every row output is the member's opened row.
+- **Proofs**, of each projection's first member under `--zk` on the CPU prover:
+  - k_log 23, with 2,682,881 rows a unit for w13 and 2,595,457 for w2;
+  - proving took 1.23 s and 1.27 s, two reps of 856,946 bytes each;
+  - the live Rust verifier accepted both reps of both, in 0.42 s;
+  - both challengers' audits passed.
+- **Lean**, `flock-verify verify --zk --partition --program` without `--registered`:
+  - Both refused only at the last check, `ProvedScope.servedForm`: "refused: verity/flock-circuit/tmpl, a superseded
+    statement version: verify takes only verity/flock-circuit and verity/flock-circuit+plain-leaves". Every earlier
+    check passed.
+  - Times for w13 and w2: inputs 86.6 s and 81.1 s, setup 58.3 s and 52.7 s, the session 80.5 s and 73.3 s.
+  - Owner: VERIFYFAST-B (PRF-464).
+- **With `--registered`, I didn't run it on these statements.** MOESERVE-C's 03:15Z runs, on the same `EmbeddingRead_v1`
+  templates, are refused at setup on `Registered.checkComplete`, before `servedForm` is reached: `tok` is wired, and
+  `row`, `salt` and `path` are witness. Owner: MOESERVE-C. So that refusal is expected for mine, not measured.
+- **The stager tests**, against the real `flock-read-tmpl` built from the merged tree: 4 passed in 249 s, none
+  skipped, the V=5, H=2 round included. The suites run r20261108-031839-9ef3 on `b3bcb907f5` passed 51 of 51.
+- **For MOEBIND:** both statements' art ids, paths and sha512s are in `inbox/MOEBIND.md`. w13 is
+  `art:0af6dacba76ca3a3940c603776d377121f7a8aadc9ddf9f292bfbcc83a50d68a`, and w2 is
+  `art:71e9db9a04596503f9e52eb9fbdda2627e397026a5cedba6b65b1d2009c5a5b7`.
+  - The files had no art ids, and minting them took two copy-only jobs on cpu-1.
+    - r20261108-040747-cbbe failed: a run's shell there has no R2 key, so `research keep --preserve` refused and recorded
+      nothing.
+    - r20261108-040958-1219 hard-linked the files into its `out/` and wrote cpu-1's retention records. I preserved them
+      from the VM.
+  - The friction note is `proofs/20261108T0415Z-friction-node-keep-cannot-preserve`, a repeat of memory-accounting's.
+- **#7941's body** has 5c04's results and both owners.
+- **I've stopped, and nothing is running.** Served acceptance by 12:00Z still waits on the two Lean changes above.
