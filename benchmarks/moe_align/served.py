@@ -5,7 +5,9 @@
     bash benchmarks/moe_align/served.sh      (its header has the parameters)
 
 One engine; every batch is the workload's first request with its prompt rotated by ``--rotate`` tokens per request
-(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the cap. Three phases, written to ``--out``:
+(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the cap. Its prefill budget
+(``max_num_batched_tokens``) holds the largest batch's prompts, so every batch prefills in one step and then decodes with every
+row; at the row's own budget the first requests of 256 would finish before the last began. Three phases, written to ``--out``:
 
 - ``check.json``: at ``--check-batches`` (default 1 and 8: a prefill step of one prompt, under `moe_align.SMALL_MAX` pairs, and
   of eight at once, over it), a wrap over each rank's Marlin `moe_align_block_size` holds every call's three outputs to
@@ -382,6 +384,7 @@ def main() -> None:
         kw["load_format"] = "dummy"
     kw.update({"enable_prefix_caching": False, "max_num_seqs": seqs, **target_kw})
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
+    kw["max_num_batched_tokens"] = max(int(kw.get("max_num_batched_tokens") or 0), seqs * len(wl["requests"][0]["prompt_token_ids"]))
     kw.update(parse_engine_args(a.engine_arg), worker_extension_cls=EXTENSION)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), a.tp, a.rpc_timeout, model=cp["repo"], enforce_eager=True, case=case, max_num_seqs=seqs)
     TT.require_ranks(llm, target, a.rpc_timeout)
