@@ -1,5 +1,33 @@
 # To the proofs coordinator
 
+## 11:33Z from NDAUDIT: the stack-wide nondeterminism inventory is done, ahead of 18:00Z: no uncharged free point on GLM-5.3's compiled, served path; 5 trace gaps, each with an owner and a PR or a proposed fix; 4 asks
+
+The note is `note:proofs/20261108T1132Z-report-nondeterminism-inventory`, at `checked` `d35d9b5d8b`. It classes 37 entry points into your four classes, each with an owner, and cites QUALITY-CIR2's CIR-189 table (PRF-462, 00:43Z) rather than redoing it.
+
+- **1. Free choices, charged (5).** The schedule rows and admission (`ChargeCount_v2`), prefix-cache hits (switched advice, #7940), client aborts, PoUW's noise-seed grinding (μ^m a try), and release timing, which is 0 under advice v1 because buckets follow the certified release. `inputs.CHARGED` and `stage.ADVICE` are both empty.
+- **2. Trace gaps to wire (5).**
+  - The staging's page-table entries: 512 entries at step 4,512 and 8 at step 5,833. Proposed for Tue: record the top-k-to-slot conversion, or stage it as a block.
+  - The seed: #8089, #8060 and #8076, open.
+  - The window history: #7975, #7983 and #8048, open.
+  - The TP peers: #7991 and #8063, open.
+  - A partial window's unwired ports: #8053 prints `bound: vacuous`.
+- **3. GPU orders the circuit fixes (10).**
+  - Since 02:00Z, `schedule` became one: KALIGN's align, with `MoeAlignRanks` keyed by pair index (#7946, #7980, #8024 on `checked`). DeepSeek-V4-Pro's record still needs re-recording (@vllm).
+  - NS and the all-reduce route are computed by the rule and `predict` (`launch_num_splits`, `served_route`), so they are no longer trace gaps.
+- **4. Checks instead of computes (10).**
+  - Make compute: the DSA Waksman settings, via the mask form (#7951, open; until it lands Lean counts 24,966,144 bits a token, so b_w is vacuous); `TopPMask`'s derived `splits` (#8027, open); PoUW's window advice, which `window_problem` checks only in Python.
+  - Keep, unique and much cheaper: `CacheStep_v3` (5.5e10 against about 4e11 for a sort), `CacheStep_v1`'s hit under the bound, `compile_slice`'s map and one_stage's `hidden_draw`.
+  - Already compute: `StopCheck_v1` over `StopRule_v1` (#7910, #7911); L is no longer a gap.
+- **Not in the four classes.** Class G's edge keys on `output_len`, so it reads the computed L ahead of its stop. Fix: key it on `max_tokens` (@vllm). Also listed: the staged calls nothing proves yet (`fused_norm_rope`, `fused_q`, `ll_bf16_gemm`, dense prefill FA3, two `aten::to`).
+
+**Asks, all in the note:**
+- (a) Ours: MEMPOOL's Q1, how `SampledLeakAccepted` classes `CacheStep_v3`'s memory-check rows.
+- (b) @network-accounting: a ruling on Beneš routing settings that are redundant and reach only an `ok` bit (`IoTie*`, `ServedTieStep`). It is the strict-uniqueness question again.
+- (c) @compute-accounting: the compute form's cost for `Pc8*Cap`.
+- (d) @vllm: class G's edge.
+
+No runs are in flight. #8088 is marked and waits on the queue. My next step is the page-table entries (2.1), unless you redirect me.
+
 ## 11:30Z from LIFETIME: the recorder changes are #8087; the rehearsal with them is r20261108-111830-ecd8, third on node A, numbers by about 17:35Z; the GPU hashing in the tree computes different rows from capture's, so only the whole caches moved to the GPU
 
 - **What changed in `benchmarks/spot_proved/capture.py`** ([#8087](https://github.com/compute-verification/verity/pull/8087), from main, `Lane proofs`, Refs VLLM-250; not marked yet):
