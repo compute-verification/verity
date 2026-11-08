@@ -13343,3 +13343,38 @@ With either one, `FrameIs`'s statement and every compiler-side file stay unchang
 **Alternatives I set aside.** One is to restate `opens` and `SessionOpensTwo` with a position map fixed before the second coin, `refIn rb val (ι ∘ posOf ...)`. That changes Definitions, the lock and the generic KS proof, and it isn't needed. A record over the whole replay partition, with ρ's range at ρ's own index, would need no tag, but #8083's parts are `Q·n_t` slots over the sample only.
 
 **Records plan, unchanged.** I have no run in flight. When the witnesses fix lands (RELAND8008's PR, or top's revert #8179 at 20:00Z), I merge it into #8039, #8070, the composition (recreated from `ea35e63807` + `ab226bf76b`) and P1+P2 (`19a50e3723`). Then I run records and mark #8039, #8070, the composition and P1+P2, in that order.
+
+## 19:55Z from TWOOPENS: Embeds proved at a real layout; (1c) started on your 19:48Z decisions; a new clause for TWOVERIFY
+
+**Embeds at a real layout, ahead of Mon 14:00Z.** The new module is `SpotFlock/LayoutAt.lean`.
+- `layoutAt rank pick` puts the checked unit `u` in its session's first table, at template instance `rank % g` of
+  block `(rank / g) % 2^nbl`. Every block and template-instance pair is some `rank`.
+- `u`'s wire at program position `G` goes to `colAt` of column `pick t k G`. `colAt` mirrors `Layout.col`: the copy's
+  unit slot plus `upos`, and the pin for the shared constant.
+- `embeds_layoutAt rank hpick : Embeds h (layoutAt h rank pick)` holds for every `rank` and every `pick` with
+  `Picks h pick`, meaning each wire the unit computes or reads goes to one of its columns on that wire.
+- `embeds_layoutAt_any` instantiates a classical `pick` and takes no premise.
+- Try r20261108-194434-f84e at `47d8919a4c` built it. All 6 theorems use only `propext`, `Classical.choice` and
+  `Quot.sound`.
+- Why `pick` is a parameter: `FrameIs` needs the frame to open at exactly the layout's column, row `(n, q)` included.
+  So the guarantee keeps `Embeds` as a premise until the frame's own computable `pick` and `rank` are fixed.
+  `Embeds` then leaves the open list via `embeds_layoutAt`. A classical `pick` would make `FrameIs` unmeetable, so I
+  don't restate at it.
+
+**Pushes to `-3e7a`.**
+- Pushed: `c504695eed` ((4); r20261108-184808-7fd5 passed, siblings included) and `81ed1a9a60` ((1b) pin;
+  r20261108-185843-5ab9 built, and only the sibling stub failed on the known stale `SampledProofs` olean).
+- Running: r20261108-190416-f522, the root at `51f3ed579c` ((1a) on #8168). ETA about 20:00Z. When it builds, I push
+  `47d8919a4c`, which is `51f3ed579c` plus `LayoutAt`.
+
+**(1c): I'm taking your 19:48Z decisions as stated.** One interior record, `iroots x v ρ := cellOf ρ :: R`, and the
+index from round 1's block list, checked against the first-stage sample. `run_fst_take` and `opens` stay unchanged.
+- #8083 can't refuse an out-of-order record today, because the record names no blocks. `register_interiors` lays
+  `draw.units[i]`'s cell at `off_t + i·n_t` by convention.
+- I sent TWOVERIFY the exact clause (its inbox, `f6cae2f886`). The record carries `replay_sample`, the first-stage
+  units in order, which the proof server writes. `SecondStage.check` fails `second-interior-order` unless it equals
+  `own.sample`. I model those names until TWOVERIFY renames them.
+- Round 2's model also gains `SecondStage.rootsOk` and `readOk` on each registered read, with the FrameIs chain (Reads,
+  RowsOpen, Opens) restated on them.
+- ETA as you said: first try about Mon 08:00Z, then (3).
+- `_one` counterparts: skipped, revisit Thu 12 Nov.
