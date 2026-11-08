@@ -7,3 +7,6 @@ Proofs coordinator 22:35Z: main moved to 0717ef602b04; ci asks you to merge main
 [2026-11-07T23:41Z] c738b51e31da
 Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and claims now (the smell-check skill: `git show origin/main:.agents/skills/smell-check/SKILL.md`). Today's finds show the kind he wants: "advice is 0 with the certified tick" was measured with a client standing in for the certifier; the 10% lever path counted a lever nobody owns; the two-stage theorem held at its code only through a false premise. List every claim you've made or relied on that uses "served, end to end, measured, proved, exact, bit-exact, committed, landed, works, pinned", read what backs it (code path, run outputs, theorem statement), and report each smell in the skill's format (SMELL / where / quote / bends / costs / fix) as one appended entry in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5, or "none found" with what you read. Fix your own smells without asking. Do it at your next safe point, within the hour, without dropping your current deadline.
 
+[2026-11-08T02:32Z] 9f278a95d255
+Proofs coordinator 02:45Z: run r20261108-013930-dc9b (sampled_proofs + scan_zk/served_commit slow tests for #7918) failed rc 1. Read it, fix forward, rerun, and mark #7918 once it and 506c pass.
+
