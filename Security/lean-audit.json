@@ -42133,7 +42133,7 @@
    }
   },
   "Flock.TmplSplit": {
-   "digest": "fcc92f102aa538c385a980c1e840651e541f10ee8f43d4f10bbcd14e9a575e05",
+   "digest": "be7c2d63624ff39b15520ac6151b8457eb8fc5070a226be6252770a8592b1c3c",
    "definitions": {
     "Flock.Tmpl.Half": "2b52564ae7f2d796a4d26d632c1bfda5be1b22c7c0effc74aea06c4e13cf2841",
     "Flock.Tmpl.Half.at": "1d43b30a2415904d629ffd8edb2de3a5ae5bb4350aca4338afacc5c9ce2b4297",
@@ -42152,9 +42152,15 @@
     "Flock.Tmpl.Tab.addChild": "045aafff6dbcfefdb4e550beddf97b2b727ccdb544aaefb7f66b2333f5601b96",
     "Flock.Tmpl.Tab.bind": "625ad31b7e04c8772ec127e641c8d838244e7d24a3c3c137b5688494122c7981",
     "Flock.Tmpl.Tab.binds": "c575f5d1a652d0cc87a13ed5ed12894ff4fdf2a17902a8c1762769e64df4582f",
+    "Flock.Tmpl.Tab.flush": "18feb95d4de12ab14cd70b5ebbfdc7f606e3c67d518b4e08d5656c7f8b3cbbcc",
+    "Flock.Tmpl.Tab.flushK": "6ce135859364b09ffce395d324fef38971beaf0f94136f07422161b532bdac21",
     "Flock.Tmpl.Tab.ref": "dc189b62a3ff35e55fc984a88c9d9b80a46292cf07faba2914b085775a80d94f",
+    "Flock.Tmpl.Tab.refStep": "10eb6a01856ca58eb18cc61665e043a6b10b66f8b41507afde160197fa88a245",
+    "Flock.Tmpl.Tab.refStepK": "b52ed587f26782e8b5ab664fef5be31b74bd4123be9dc7d67605343956a5c1b3",
+    "Flock.Tmpl.Tab.refs": "04ae286e3e3de7177e25ab8e54500dc719ee7b1e28a48b2cf4e83f767e473c75",
+    "Flock.Tmpl.Tab.refsK": "43934ee035f7c98286cf7c5079ec2c54ee39fdb6c1ca194c81129bb022e9484a",
     "Flock.Tmpl.Tab.rowLow": "0ca102096328317585c8afff079cd8e7dbec9ff95ed509ed58cdd93bbf44883a",
-    "Flock.Tmpl.Tab.rows": "3b5f193a78d6ce8653c4109576ee49a9998757376144af14f99fffec0e2f56bd",
+    "Flock.Tmpl.Tab.rows": "3b0e778cc14983183864a04f37b11b1be00f92ef1a8d5f185c541700a44e06c9",
     "Flock.Tmpl.Tab.slots": "fa11fd85758859d8164dd59ebf772bf5b8a22a65e89cb81a64e71645afd4a6fe",
     "Flock.Tmpl.Tab.work": "394873f000e8a94a655097b8cee4b36bb71e7fd29731e1a2298ee278f9b7f336",
     "Flock.Tmpl.bump": "823302131589c3b4ee6afc38ac13be6f3ca64dbc188ed52c4b3a5b65b6363bee",
@@ -42165,7 +42171,8 @@
     "Flock.Tmpl.half": "3bca3016a0a47c21cf841ed3d4d23a0dfdc36aa6b8e51a6f037fc4ed3ab55aaa",
     "Flock.Tmpl.ident": "1c1a99388ad1d7b6b2e4a30b3efe77c9094c3967959bcaa0481746e5672a062f",
     "Flock.Tmpl.rekeyAt": "368d572b224e1a8df07e407aa6bbec470a9464945fe06f9ed4237959ac7fc31e",
-    "Flock.Tmpl.walk": "1710d47704397e2268f4c39d3a44a7362e620a1fd4338efaa5a6eec87ffb2b9d",
+    "Flock.Tmpl.tabled": "cefb479472f758a11d66ab1d02ba98d7268701b3818992e8e26229fc5755f459",
+    "Flock.Tmpl.walk": "44fc0311877e5363044192e740cf06efce7d8222ca95953cc4a359db59b86951",
     "Flock.Tmpl.walkCall": "5a6613cf699981d8d99301e5344870e25c798b3f12e9add724097fd9ea9fe85a",
     "Flock.Tmpl.walkChild": "f0fb60dba0cf34c0b8dd45b1199136db4419b2357deb9dbff06f512611ab4e8c"
    }
