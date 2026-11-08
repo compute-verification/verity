@@ -27,6 +27,7 @@ def _eval(fn, *args) -> list[int]:
     return [int(v) for v in np.asarray(evaluate_words(fn, *args), dtype=np.uint64).reshape(-1)]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("COIN, RID, n", [(16, 4, 1), (64, 16, 2)], ids=["one-block", "two-block"])
 def test_the_rule_is_the_bodys_seed_else_derived_from_the_coin_and_the_id(COIN, RID, n):
     fn = bind(SR.ServedSeed, COIN=COIN, RID=RID)
@@ -43,6 +44,7 @@ def test_the_rule_is_the_bodys_seed_else_derived_from_the_coin_and_the_id(COIN, 
     assert [g for g, s in zip(got, seeded) if s] == [x for x, s in zip(seeds, seeded) if s]
 
 
+@pytest.mark.slow
 def test_a_forged_seed_fails_the_check():
     """From two bodies' bytes, one naming no seed and one naming 12345, through `IngressSampled_v1` to `SeedCheck_v1` under the
     window's coin: the seed the rule gives passes, and every other a server might sample under fails: the derived seed with a
