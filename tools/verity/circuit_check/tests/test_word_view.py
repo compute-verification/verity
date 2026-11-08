@@ -32,8 +32,9 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     assert r["mismatches"] == r["compared"] and [f["code"] for f in F.failures] == ["word-mismatch"]
 
 
-def _xor_bits(word: bool):
-    """x ^ y on four bits, with ``x ^ y`` on 4-bit words as its word Definition when ``word``."""
+def _xor_bits(word: bool | str):
+    """x ^ y on four bits, with ``x ^ y`` on 4-bit words as its word Definition when ``word``: a primitive, or an unbound
+    composite calling it when ``word == "composite"``."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
     from verity.ml.circuits.refs import Coll, concat
@@ -48,6 +49,10 @@ def _xor_bits(word: bool):
     if word:
         d.word = PrimitiveDefinition("CircuitCheckXorNibbleWord", 1, (("x", Value(4)), ("y", Value(4))), Value(4), lambda x, y: x ^ y,
                                      register=False)
+    if word == "composite":
+        xor = d.word
+        d.word = CompositeDefinition("CircuitCheckXorNibbleWordCall", 1, (), lambda S: ((("x", Value(4)), ("y", Value(4))), Value(4)),
+                                     lambda B, S, x, y: B.call(xor, x, y), register=False)
     return bind(d)
 
 
@@ -64,6 +69,14 @@ def test_a_word_view_past_its_budget_still_compares_random_vectors():
     for opts in (CK.Options(vectors=8, reference_budget=0, min_vectors=0), CK.Options(vectors=0, min_vectors=0)):
         r = CK.word_view(t, opts, F)
         assert r["compared"] - r["edge_vectors"] >= CK.WORD_RANDOM_FLOOR == 2 and r["mismatches"] == 0 and not F.failures
+
+
+def test_a_word_definition_named_unbound_is_bound_for_its_budget():
+    """A word Definition named unbound (a composite without parameters, as `ArgmaxStep_v1` is to `ArgmaxStep_v2`) has its gates
+    counted bound, for the budget of its vectors."""
+    F = CK.Findings()
+    r = CK.word_view(_xor_bits(word="composite"), CK.Options(vectors=8), F)
+    assert r["via"] == "word:CircuitCheckXorNibbleWordCall_v1" and r["compared"] == 128 and r["mismatches"] == 0 and not F.failures
 
 
 def test_a_boolean_composite_over_the_input_budget_is_compared_through_its_word_view():
