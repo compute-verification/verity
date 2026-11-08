@@ -1,7 +1,6 @@
 module
 
 public import Definitions.NetworkCertifier.Guarantees.PoolRoots
-public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The pool's roots, from each run's in-circuit checks and the record rule: proofs
@@ -9,8 +8,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 A run's leak relation gives its check's run, so its opened row has the digest `pin i` and its left row `pout i`
 (`digests_of_leakAt`). The record rule puts at `pin i` run `i - 1`'s `pout` where run `i` carries the pool and the
 empty pool's root otherwise, the digest of the row `poolOpen` names (`digest_open_of_leakAt`). `RootsOfChecked` reads
-that at every run. `PeriodRootsOfChecked` bounds the runs where run `i`'s or, where it carries the pool, run `i - 1`'s
-leak relation fails, which acceptance being prefix-closed puts on run `i - 1`'s accepted audit.
+that at every run.
 -/
 
 @[expose] public section
@@ -74,29 +72,7 @@ theorem digest_open_of_leakAt {L K S : ℕ} {G : Hash.Msg → Hash.Digest} {lay 
   · rfl
 
 theorem rootsOfChecked : Guarantees.RootsOfChecked := by
-  intro L K S G lay k reg valid prow nrow Dj m sw Pw ρ op chains genesis pin pout hroots hR7 W o rin rout hleak i
+  intro L K S G lay k reg valid prow nrow Dj m sw Pw ρ op chains genesis pin pout hroots hR7 o W rin rout hleak i
   exact digest_open_of_leakAt hroots hR7 rin rout i ⟨_, _, _, hleak i⟩ fun _ => ⟨_, _, _, hleak (prevRun i)⟩
-
-theorem periodRootsOfChecked : Guarantees.PeriodRootsOfChecked := by
-  intro L K S G lay k reg valid prow nrow Dj m sw Pw ρ op chains genesis pin pout hroots hR7 Ω Z _ Zs acc W rin rout
-    obs e' hpre hleak z hz i
-  let Good : Fin m → (Fin m → Ω) → Prop := fun j ω =>
-    LeakAtCarried lay k reg valid prow nrow Dj (sw j) (Pw j) (ρ j) (op j (runsBefore (obs z ω) j)) (rin z ω j)
-      (rout z ω j) (W z ω j) (obs z ω j)
-  dsimp only
-  refine Claims.Sampling.Pr_or_le (q := fun ω => acc z i ω (ω i) ∧ ¬Good i ω)
-    (r := fun ω => (0 < i.val ∧ chains i = true) ∧ acc z (prevRun i) ω (ω (prevRun i)) ∧ ¬Good (prevRun i) ω)
-    (fun ω h => ?_) (hleak z hz i) ?_
-  · obtain ⟨ha, hne⟩ := h
-    by_cases h1 : Good i ω
-    · by_cases hc : 0 < i.val ∧ chains i = true
-      · refine Or.inr ⟨hc, hpre z ω i hc.1 ha, fun h2 => hne ?_⟩
-        exact digest_open_of_leakAt hroots hR7 (rin z ω) (rout z ω) i ⟨_, _, _, h1⟩ fun _ => ⟨_, _, _, h2⟩
-      · exact absurd (digest_open_of_leakAt hroots hR7 (rin z ω) (rout z ω) i ⟨_, _, _, h1⟩
-          fun h => absurd h hc) hne
-    · exact Or.inl ⟨ha, h1⟩
-  · split_ifs with hc
-    · exact (Claims.Pr_mono fun ω h => h.2).trans (hleak z hz (prevRun i))
-    · exact (Claims.Pr_mono (q := fun _ => False) fun ω h => (hc h.1).elim).trans (le_of_eq Claims.Pr_false)
 
 end NetTiming

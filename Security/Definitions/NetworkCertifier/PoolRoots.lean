@@ -11,7 +11,7 @@ opening root `pin` as its `sha512/row-seg/v1` digest, and that the row it leaves
 which the pool's units are, proved every run. Under the record rule (`R7-pool-chain`) run `i`'s registered `pin` is run
 `i - 1`'s registered `pout` where it carries the pool, and the empty pool's root otherwise: `PoolChained` over the runs'
 registered roots. Together they give each run, at rows its and the previous run's leak relations accept, an opened row
-with the digest of the row `poolOpen` names, with no probability: what `PeriodRoots` asks.
+with the digest of the row `poolOpen` names, with no probability: what `CarriedRoots` asks.
 -/
 
 @[expose] public section
