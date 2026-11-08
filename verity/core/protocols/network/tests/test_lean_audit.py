@@ -36,6 +36,9 @@ from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, Sy
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
+#: the changes of a certified record that leave its window without a verdict (`V2.EXPECT`)
+UNDECIDED = tuple(m for m, v in V2.EXPECT.items() if v == "no-verdict")
+
 
 @pytest.fixture(scope="module")
 def lean():
@@ -113,6 +116,16 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
             no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     same()
+
+    # Hypothesis mixes the literals of every imported local module into what it draws, so the 600 cases above move with
+    # unrelated code; a grid-free no-verdict is among them only a few times, and certified units under the changes that
+    # leave a window undecided carry it whatever else is imported.
+    @settings(derandomize=True, database=None, deadline=None, max_examples=40)
+    @given(R.record_cases(("certified",), UNDECIDED), st.data())
+    def undecided(case, data):
+        same.hypothesis.inner_test(case, data)
+
+    undecided()
     print(kinds, no_grid)
     assert {"accept", "no-verdict", "duplicate", "signature", "advice", "mismatch"} <= set(kinds), kinds
     assert any(k.startswith("status:") for k in kinds), kinds
