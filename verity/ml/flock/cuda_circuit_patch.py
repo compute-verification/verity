@@ -6,7 +6,7 @@ flock_cuda_prove_circuit is flock_cuda_prove_chunk's body with three parts repla
 check (fc_bad_shape), the witness (fc_witness: device compressions and units, or the host's witness) and the lincheck fold
 (fc_fold: every slot range of every type). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the
 live coins) is the chunk prover's, so no second copy of it is kept in the repository. Its buffer lifetimes change so that
-rep 1 can prove from rep 0's witness and level-0 commitment (rep_reuse, FcKept).
+rep 1 can prove from rep 0's level-0 commitment (rep_reuse, FcKept).
 
 M1 adds Ligerito level 0's hiding behind FlockCircuitParams::zk_on, as a handful of anchored insertions (each
 anchor must occur once): level 0's commitment (fc_commit_l0_zk; M0's commit is the other branch), lincheck's folded comb, the
@@ -65,28 +65,16 @@ body = put(body, "d_cw0, d_tree0, l0_bl, l0_ni, arena, lig);", "d_cw0, d_tree0, 
 body = put(body, "    ffi_free(d_cw0); ffi_free(d_tree0);\n",
            "    ffi_free(d_cw0); ffi_free(d_tree0);\n    if (d_zk_pads) ffi_free(d_zk_pads);\n    if (d_zk_extra) ffi_free(d_zk_extra);\n")
 body = put(body, "    CKI(phase(6));\n", "    if (N->zk_on) fc_write_zk(W, fc_zk, fc_zk_comb);\n    CKI(phase(6));\n")
-# rep 1 from rep 0's witness and level-0 commitment (FlockCircuitParams.rep_reuse): keeping holds z, a and b to the end of
-# rep 0 and gives its Ligerito a copy of z (the folds overwrite it), three more witness-sized arena buffers; rep 1 transposes
-# z for the lincheck again. Under M1 both reps commit one level-0 codeword (the session's pads and four extra lanes; only the
-# lane phase is the rep's), so rep 0 keeps the pads and extra lanes too, which the lane phase only reads
-W3 = "fc_keep_extra(packed_witness_bytes)"
+# rep 1 from rep 0's level-0 commitment (FlockCircuitParams.rep_reuse), which both reps bind: rep 0 keeps level 0's codeword,
+# tree and cap, and under M1 its pads and four extra lanes (the session's; only the lane phase is the rep's, and it only reads
+# them). They are live to the end of rep 0's Ligerito anyway, and rep 1 builds its witness again into the room rep 0's left,
+# so keeping them adds nothing to the arena's peak. The arena stays open between the two calls.
 body = put(body, "    CK(device_arena.begin(arena_bytes));\n",
            "    const bool take = N->rep_reuse == 2 && g_fc_kept.live && g_fc_kept.tag == N->reuse_tag;\n"
-           "    if (take && (g_fc_kept.m != m || g_fc_kept.k_log != k_log)) { printf(\"FFI circuit: the kept witness is another shape's\\n\"); return 207; }\n"
+           "    if (take && (g_fc_kept.m != m || g_fc_kept.k_log != k_log)) { printf(\"FFI circuit: the kept level 0 is another shape's\\n\"); return 207; }\n"
            "    if (!take) fc_kept_drop();\n"
-           f"    const bool keep = !take && N->rep_reuse == 1 && fc_can_keep(arena_bytes, {W3}, FC_KEEP_MARGIN);\n"
-           "    if (!take) {\n"
-           f"        const size_t want = arena_bytes + (keep ? {W3} : 0);\n"
-           "        CK(device_arena.begin(want));\n"
-           "        g_fc_arena = std::max(g_fc_arena, want);\n"
-           "    }\n")
-alloc = ("    CK(ffi_malloc(&df, len * sizeof(F128)));\n    CK(ffi_malloc(&d_a, len * sizeof(F128)));\n"
-         "    CK(ffi_malloc(&d_b, len * sizeof(F128)));\n")
-wit = "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b));\n"
-body = put(body, alloc + wit,
-           "    std::vector<F128> fc_zk_comb(64);\n"
-           "    if (take) {\n        df = g_fc_kept.df; d_a = g_fc_kept.d_a; d_b = g_fc_kept.d_b;\n"
-           "    } else {\n" + "".join("    " + x for x in (alloc + wit.split("\n", 1)[1]).splitlines(True)) + "    }\n")
+           "    const bool keep = !take && N->rep_reuse == 1;\n"
+           "    if (!take) CK(device_arena.begin(arena_bytes));\n")
 body = put(body, "    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n",
            "    fc_zlin_transpose(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n")
 body = put(body, "    if (N->zk_on) {\n        CKI(fc_commit_l0_zk(",
@@ -95,18 +83,12 @@ body = put(body, "    if (N->zk_on) {\n        CKI(fc_commit_l0_zk(",
            "        l0_cap = g_fc_kept.l0_cap; d_zk_pads = g_fc_kept.d_zk_pads; d_zk_extra = g_fc_kept.d_zk_extra;\n"
            "        fc_rejoin_level0(d_tree0);\n"
            "    } else if (N->zk_on) {\n        CKI(fc_commit_l0_zk(")
-body = put(body, "    ffi_free(d_a); ffi_free(d_b);\n", "    if (!keep) { ffi_free(d_a); ffi_free(d_b); }\n")
-body = put(body, "    LigF256Proof lig;\n",
-           "    F128* d_lz = df;\n    if (keep) {\n        CK(ffi_malloc(&d_lz, len * sizeof(F128)));\n"
-           "        CK(cudaMemcpy(d_lz, df, len * sizeof(F128), cudaMemcpyDeviceToDevice));\n    }\n    LigF256Proof lig;\n")
-body = put(body, "first_u0, first_u2, df, dcb,\n", "first_u0, first_u2, d_lz, dcb,\n")
-body = put(body, "    ffi_free(d_cw0); ffi_free(d_tree0);\n    if (d_zk_pads) ffi_free(d_zk_pads);\n    if (d_zk_extra) ffi_free(d_zk_extra);\n"
-                 "    ffi_free(df); ffi_free(dcb);\n",
-           "    if (keep) ffi_free(d_lz);\n    else { ffi_free(d_cw0); ffi_free(d_tree0); ffi_free(df); }\n"
-           "    if (d_zk_pads && !keep) ffi_free(d_zk_pads);\n    if (d_zk_extra && !keep) ffi_free(d_zk_extra);\n    ffi_free(dcb);\n")
+body = put(body, "    ffi_free(d_cw0); ffi_free(d_tree0);\n    if (d_zk_pads) ffi_free(d_zk_pads);\n    if (d_zk_extra) ffi_free(d_zk_extra);\n",
+           "    if (!keep) {\n        ffi_free(d_cw0); ffi_free(d_tree0);\n        if (d_zk_pads) ffi_free(d_zk_pads);\n"
+           "        if (d_zk_extra) ffi_free(d_zk_extra);\n    }\n")
 body = put(body, "    CK(device_arena.finish());\n    return 0;\n}",
            "    if (keep) {\n        // the arena stays open for rep 1\n"
-           "        g_fc_kept = FcKept{true, N->reuse_tag, m, k_log, df, d_a, d_b, d_cw0, d_tree0, l0_bl, l0_ni, l0_cap, d_zk_pads, d_zk_extra};\n"
+           "        g_fc_kept = FcKept{true, N->reuse_tag, m, k_log, d_cw0, d_tree0, l0_bl, l0_ni, l0_cap, d_zk_pads, d_zk_extra};\n"
            "        return 0;\n    }\n    if (take) g_fc_kept = FcKept{};\n    CK(device_arena.finish());\n    return 0;\n}")
 for gone in ("C->comp_slots", "C->units", "C->unit_log", "C->unit_pos0", "C->mode", "C->u_"):
     assert gone not in body, f"{gone} left in the circuit prover"
