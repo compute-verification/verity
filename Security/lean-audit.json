@@ -3522,6 +3522,7 @@
   "PouwCommit.Draws",
   "SampledProofs",
   "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Second",
   "Proofs.Pouw.OnsiteFreed",
   "Definitions.Assumptions"
  ],
