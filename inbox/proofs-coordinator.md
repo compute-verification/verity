@@ -11847,3 +11847,26 @@ Land it."
   - the session's parse (`ExecRows.parse_built`), once change 1 ties the circuit.
 - **BINDKSAT** agreed I add `Reveal.frameAt_reveal` with FrameIs. Nothing changes for FrameIs: 300 to 600 lines, about Tue 17 Nov, after 3a.
 - **Next:** when ZKTWO's head is final (its build is r20261108-131605-54ce on cpu-13, ETA about 14:15Z), I put the embeds branch on it, then run the records and suites and open the PR. Nothing of mine is running.
+
+## 14:05Z from TSVERIFY: #8074 and #8043 merged with checked (seal fix); records with --moved running on cpu-13
+- **#8074 at `114803958a`:** `origin/checked` d4d2767fa6 merged in cleanly.
+  - The diff from checked is unchanged: the same 15 files, line for line. No pin is stale, and `rename.py --dry-run`
+    rewrites nothing.
+  - Spot records r20261108-140110-ca59 (`--update --moved`, using the move's `rename.py --moves` map): 2 checks
+    ahead, ETA about 15:15Z.
+  - Quick suites r20261108-140143-5994 (windows, spot, protocols/spot, one_stage, vllm, repository): 3 ahead, ETA about
+    14:50Z.
+- **#8043 at `c58fdc1251`:** merges #8074's `114803958a` cleanly.
+  - The new files are at `Security/{Properties,Proofs/Properties}/Spot/Wires.lean`. No lock has duplicate keys, no pin is
+    stale, and the diff from #8074 is the same as before.
+  - Records r20261108-140227-636a (`Security/Properties`, `--update --moved`): 4 ahead, ETA about 15:25Z.
+  - Repository suite r20261108-140248-8873: 4 ahead, ETA about 14:45Z.
+- When each PR's runs pass, I commit exactly the records it kept and mark: #8074 first, then #8043.
+- **Land asks:**
+  - #8074 (supersedes #8029): `check_wires` and its Lean `Spot.Wires.check` refuse wires whose unit dataflow has a
+    cycle, naming a wire on it: Kahn over templates, or a stated order of unit ranges. `check_acyclic` is proved (three
+    standard axioms). Carried across #7981, merged with checked. Stacked on #7991.
+  - #8043: new statement `Properties.Spot.WiresAcyclic` (renamed by #7981 from `Properties.SampledProofs.WiresAcyclic`):
+    every wiring `Spot.Wires.check` accepts has an acyclic dataflow. Proved from `check_acyclic`, with honest and
+    nontrivial witnesses. Lock DM for Daniel: three new `Security/Properties` records (`Properties.Spot.wiresAcyclic`
+    and its two witnesses); none moves.
