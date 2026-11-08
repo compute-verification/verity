@@ -117,7 +117,7 @@ outputs, which the verifier checks against the registered rows; their salts are 
 structure Stmt where
   m : ℕ
   kLog : ℕ
-  C : FlockSoundness.Audit.Circuit
+  C : Verity.Boolean.Circuit
   inp : ℕ → ℕ → Src
   out : ℕ → ℕ → Src
   pub : List Bool
@@ -138,7 +138,7 @@ def val (s : Stmt) (w : Wit) : Src → Bool
   | .hid i => w.hid.getD i false
 
 /-- **Flock's relation** on a parsed statement: `C` maps inputs to outputs in every block. Evaluated one bit per gate
-(`FlockSoundness.Audit.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each
+(`Verity.Boolean.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each
 output gate `o` the value `out b o`. That is the whole relation: the commitments are hm96 rows under frame-v3-sha512
 trees that `C` computes from the hidden values, salts included, and outputs, so this clause reads them as `C`'s
 outputs. -/

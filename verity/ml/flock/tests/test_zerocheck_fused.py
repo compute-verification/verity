@@ -1,8 +1,9 @@
 """``cuda/zerocheck_fused.cuh``, the zerocheck's round 2 and the tail's first lookahead from the packed witness, word for word
 against upstream's round 2 fold (``zerocheck_round2.cuh``) and first lookahead over its tables (``zerocheck_tail.cuh``):
-both message sets and the lookahead's folded a and b, under every table mode, on both of round 2's eq paths (per point at
-small sizes, one eqhi entry per block at large ones) and with the lookahead striding its grid. ``zerocheck_fused.cu`` runs
-them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash`` (``VERITY_ML_FLOCK_CUDA_GHASH``) where a GPU is present."""
+both message sets and the lookahead's folded a and b, under every table mode and chunk width, on both of round 2's eq
+paths (per point at small sizes, one eqhi entry per block at large ones) and with the lookahead striding its grid.
+``zerocheck_fused.cu`` runs them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash``
+(``VERITY_ML_FLOCK_CUDA_GHASH``) where a GPU is present."""
 from __future__ import annotations
 
 import ctypes
@@ -18,7 +19,8 @@ from verity import settings
 SOURCE = Path(__file__).resolve().with_name("zerocheck_fused.cu")
 #: log2 of round 2's rows: per-point eq through 16, one eqhi entry per block from 17, the lookahead's grid strided at 24
 LOG_ROWS = (4, 5, 8, 12, 16, 17, 20, 24)
-TABLES = (0, 1, 2)
+#: zerocheck_fused.cu's table codes: modes 0 and 1, and mode 2 in chunks of 4 to 7 bits
+TABLES = (0, 1, 4, 5, 6, 7)
 
 
 @cache
