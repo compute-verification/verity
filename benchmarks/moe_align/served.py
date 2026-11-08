@@ -1,0 +1,374 @@
+"""DeepSeek-V4-Pro served TP8 eager with the canonical `moe_align_block_size` on its Marlin MoE path
+(`verity_vllm.engine.moe_align`, installed in every rank by the integration's vLLM plugin and the rank worker's import), on one
+8 x H200 node. Measurement only.
+
+    bash benchmarks/moe_align/served.sh      (its header has the parameters)
+
+One engine; every batch is the workload's first request with its prompt rotated by ``--rotate`` tokens per request
+(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the cap. Three phases, written to ``--out``:
+
+- ``check.json``: at ``--check-batches`` (default 1 and 8: a prefill step of one prompt, under `moe_align.SMALL_MAX` pairs, and
+  of eight at once, over it), a wrap over each rank's Marlin `moe_align_block_size` holds every call's three outputs to
+  `moe_align.reference(topk_ids, num_experts, block_size)` bit for bit, by MoE layer, and counts the calls by step kind (a
+  prefill step is one with more tokens than the batch has requests) and by the `Align` path the call took; with each rank's
+  `Align.record` before and after.
+- ``decode.jsonl``: the decode step (TPOT, `served_commit.tp_decode.phases`) at ``--batches`` rows, the canonical op against
+  vLLM's (`moe_align.uninstall` on every rank, then `moe_align.install` of the same `Align`), interleaved over ``--pairs``
+  pairs after a warm-up of each, with a digest of each run's tokens.
+- ``host.json``: per batch, op and rank, the host's time to issue a call of `moe_align_block_size` (no sync, eager), from one
+  more run of each op under a timing wrap, split into decode and prefill calls.
+
+``summary.json`` gathers them: per rank the MoE layers whose every call equalled the reference, the paths each rank took in
+prefill and in decode, per batch the TPOT of each op and the paired ratios, and the host cost per call and per decode step.
+Exits 3 when a rank does not serve the canonical op, a call differs from the reference, or a rank took either path in no
+prefill step.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib
+import json
+import os
+import statistics
+import time
+from pathlib import Path
+from typing import Any
+
+from served_commit.tp_decode import phases, requests_at
+from verity_vllm.engine import moe_align as MA
+
+UNATTRIBUTED = "<outside every MoE layer>"
+#: rank-local state of the phases (`check_on`, `use`, `timer_on`)
+_STATE: dict[str, Any] = {}
+
+
+def _tp_rank() -> int:
+    from vllm.distributed import get_tensor_model_parallel_rank
+
+    return int(get_tensor_model_parallel_rank())
+
+
+def _site() -> Any:
+    return importlib.import_module(MA.SITE)
+
+
+def status(worker: Any) -> dict[str, Any]:
+    """On a rank: the function Marlin's experts call, the installed `Align`'s record, and the vLLM plugins this process sees."""
+    from importlib.metadata import entry_points
+
+    fn = getattr(_site(), MA.NAME)
+    a = MA.installed()
+    return {"rank": _tp_rank(), "pid": os.getpid(), "calls": f"{fn.__module__}:{fn.__qualname__}", "canonical": a is not None,
+            "align": a.record() if a is not None else None,
+            "plugins": sorted(f"{ep.name} = {ep.value}" for ep in entry_points(group="vllm.general_plugins"))}
+
+
+class Checker:
+    """Holds each `moe_align_block_size` call of one rank to `moe_align.reference`, attributed to the MoE layer whose forward
+    made it."""
+
+    def __init__(self, model: Any) -> None:
+        from verity_vllm.acquire.sources.moe_source import moe_layers_of
+        from verity_vllm.engine import hooks
+
+        self.layers = moe_layers_of(model)
+        self.modules = [(n, m) for n, m in model.named_modules() if n in self.layers]
+        self.hooks, self.handles, self.cur, self.rows = hooks.Hooks(), [], None, 0
+        self.by_layer: dict[str, dict[str, Any]] = {}
+
+    def install(self) -> None:
+        for name, m in self.modules:
+            self.handles.append(m.register_forward_pre_hook(self._enter(name)))
+            self.handles.append(m.register_forward_hook(self._leave(name), always_call=True))
+        self.hooks.wrap(_site(), MA.NAME, self.wrap)
+
+    def uninstall(self) -> None:
+        for h in self.handles:
+            h.remove()
+        self.handles = []
+        self.hooks.uninstall()
+
+    def _enter(self, name: str) -> Any:
+        def pre(_m: Any, _a: tuple) -> None:
+            self.cur = name
+        return pre
+
+    def _leave(self, name: str) -> Any:
+        def post(_m: Any, _a: tuple, _o: Any) -> None:
+            if self.cur == name:
+                self.cur = None
+        return post
+
+    def wrap(self, orig: Any) -> Any:
+        def moe_align_block_size(topk_ids: Any, block_size: int, num_experts: int, expert_map: Any = None, *a: Any, **k: Any) -> Any:
+            out = orig(topk_ids, block_size, num_experts, expert_map, *a, **k)
+            self.check(topk_ids, int(block_size), int(num_experts), expert_map, out)
+            return out
+        return moe_align_block_size
+
+    def check(self, topk_ids: Any, block: int, num_experts: int, expert_map: Any, out: tuple) -> None:
+        ids = topk_ids.reshape(-1).tolist()
+        s, b, n = (t.reshape(-1).tolist() for t in out)
+        ref = MA.reference(ids, num_experts, block, None if expert_map is None else expert_map.tolist(), length=len(s))
+        equal = s == ref[0] and b == ref[1] and n[0] == ref[2]
+        a = MA.installed()
+        path = "none" if a is None else "one" if len(ids) <= a.small_max else "chunked"
+        kind = "prefill" if int(topk_ids.shape[0]) > self.rows else "decode"
+        row = self.by_layer.setdefault(self.cur or UNATTRIBUTED, {"calls": 0, "equal": 0, "paths": {}, "blocks": [], "experts": [],
+                                                                    "expert_map": 0, "first_unequal": None})
+        row["calls"] += 1
+        row["equal"] += equal
+        row["paths"][f"{kind}/{path}"] = row["paths"].get(f"{kind}/{path}", 0) + 1
+        row["expert_map"] += expert_map is not None
+        for key, v in (("blocks", block), ("experts", num_experts)):
+            if v not in row[key]:
+                row[key].append(v)
+        if not equal and row["first_unequal"] is None:
+            row["first_unequal"] = {"tokens": int(topk_ids.shape[0]), "pairs": len(ids), "block": block, "path": path,
+                                    "sorted_ids": s != ref[0], "expert_ids": b != ref[1], "total": [n[0], ref[2]]}
+
+
+def check_on(worker: Any, *, rows: int) -> dict[str, Any]:
+    """On a rank: the `Checker` installed over Marlin's `moe_align_block_size` for a run of ``rows`` requests."""
+    c = _STATE.get("checker")
+    if c is None:
+        c = _STATE["checker"] = Checker(worker.model_runner.get_model())
+        c.install()
+    c.rows = rows
+    return {"rank": _tp_rank(), "layers": len(c.layers)}
+
+
+def check_off(worker: Any) -> dict[str, Any]:
+    """On a rank: the `Checker` uninstalled, and what it saw."""
+    c = _STATE.pop("checker")
+    c.uninstall()
+    return {"rank": _tp_rank(), "layers": len(c.layers), "by_layer": c.by_layer}
+
+
+def use(worker: Any, *, canonical: bool) -> dict[str, Any]:
+    """On a rank: Marlin's experts call the canonical op (the same `Align` again) or vLLM's."""
+    a = MA.installed()
+    if a is not None:
+        _STATE["align"] = a
+    if canonical and a is None:
+        MA.install(_site(), align=_STATE["align"])
+    elif not canonical and a is not None:
+        MA.uninstall()
+    return status(worker)
+
+
+class Timer:
+    """The host's time to issue each `moe_align_block_size` call, with its token count."""
+
+    def __init__(self) -> None:
+        from verity_vllm.engine import hooks
+
+        self.hooks, self.calls = hooks.Hooks(), []
+
+    def wrap(self, orig: Any) -> Any:
+        def moe_align_block_size(topk_ids: Any, *a: Any, **k: Any) -> Any:
+            t0 = time.perf_counter_ns()
+            out = orig(topk_ids, *a, **k)
+            self.calls.append((int(topk_ids.shape[0]), time.perf_counter_ns() - t0))
+            return out
+        return moe_align_block_size
+
+
+def timer_on(worker: Any) -> None:
+    t = _STATE["timer"] = Timer()
+    t.hooks.wrap(_site(), MA.NAME, t.wrap)
+
+
+def timer_off(worker: Any, *, rows: int) -> dict[str, Any]:
+    """On a rank: the timing wrap uninstalled; the median, 10th and 90th percentile host µs a call, decode and prefill apart."""
+    t = _STATE.pop("timer")
+    t.hooks.uninstall()
+    out: dict[str, Any] = {"rank": _tp_rank()}
+    for kind, ns in (("decode", [v for m, v in t.calls if m <= rows]), ("prefill", [v for m, v in t.calls if m > rows])):
+        q = statistics.quantiles(ns, n=10) if len(ns) > 1 else [float(ns[0])] * 9 if ns else None
+        out[kind] = {"calls": len(ns), "median_us": statistics.median(ns) / 1e3, "p10_us": q[0] / 1e3, "p90_us": q[-1] / 1e3} if ns else None
+    return out
+
+
+def digest(tokens: Any) -> str:
+    return hashlib.sha256(json.dumps(tokens, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def summarize_check(seen: list[dict[str, Any]], before: list[dict[str, Any]], after: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per rank: the MoE layers all of whose calls equalled the reference, the unequal ones, and the calls by step kind and path,
+    beside the `Align` counts' change; ``ok`` when every rank's every call equalled it and every rank took both paths in prefill."""
+    align0 = {int(s["rank"]): (s["align"] or {}).get("calls", {}) for s in before}
+    ranks, ok = {}, True
+    for r in sorted(seen, key=lambda r: int(r["rank"])):
+        rank, layers = int(r["rank"]), r["by_layer"]
+        paths: dict[str, int] = {}
+        for row in layers.values():
+            for k, v in row["paths"].items():
+                paths[k] = paths.get(k, 0) + v
+        unequal = sorted(n for n, row in layers.items() if row["equal"] != row["calls"])
+        a1 = next(((s["align"] or {}).get("calls", {}) for s in after if int(s["rank"]) == rank), {})
+        both = all(paths.get(f"prefill/{p}", 0) > 0 for p in ("one", "chunked"))
+        ok &= not unequal and both and UNATTRIBUTED not in layers and len(layers) == r["layers"]
+        ranks[rank] = {"layers": r["layers"], "layers_called": len(layers), "layers_equal": len(layers) - len(unequal),
+                       "calls": sum(row["calls"] for row in layers.values()), "unequal": unequal[:8],
+                       "first_unequal": next((layers[n]["first_unequal"] for n in unequal), None), "paths": dict(sorted(paths.items())),
+                       "both_paths_in_prefill": both,
+                       "align_calls": {k: v - align0.get(rank, {}).get(k, 0) for k, v in a1.items()},
+                       "blocks": sorted({b for row in layers.values() for b in row["blocks"]}),
+                       "experts": sorted({e for row in layers.values() for e in row["experts"]}),
+                       "expert_map_calls": sum(row["expert_map"] for row in layers.values())}
+    return {"ok": ok and bool(ranks), "ranks": ranks}
+
+
+def summarize_decode(rows: list[dict[str, Any]], host: dict[int, dict[str, list[dict[str, Any]]]], layers: int) -> dict[str, Any]:
+    """Per batch: each op's median TPOT, the canonical/vLLM ratio over pairs, whether each op's runs gave one set of tokens and
+    whether the two ops gave the same; the host µs a decode call (the median over ranks of each rank's median) and its change
+    times ``layers`` calls a decode step."""
+    out: dict[str, Any] = {}
+    for b in sorted({r["batch"] for r in rows}):
+        by = {op: {r["pair"]: r["phases"]["tpot_s"] for r in rows if r["batch"] == b and r["op"] == op and r["phases"]["tpot_s"]}
+              for op in ("canonical", "vllm")}
+        tpot = {op: statistics.median(v.values()) for op, v in by.items() if v}
+        q = [by["canonical"][p] / by["vllm"][p] for p in sorted(set(by["canonical"]) & set(by["vllm"]))]
+        tok = {op: sorted({r["tokens"] for r in rows if r["batch"] == b and r["op"] == op}) for op in by}
+        hu = {op: [h["decode"]["median_us"] for h in host.get(b, {}).get(op, []) if h.get("decode")] for op in ("canonical", "vllm")}
+        call = {op: statistics.median(v) if v else None for op, v in hu.items()}
+        d_call = call["canonical"] - call["vllm"] if None not in call.values() else None
+        out[str(b)] = {"tpot_ms": {op: 1e3 * v for op, v in tpot.items()},
+                       "tpot_delta_ms": 1e3 * (tpot["canonical"] - tpot["vllm"]) if len(tpot) == 2 else None,
+                       "tpot_ratio": {"median": statistics.median(q), "min": min(q), "max": max(q), "pairs": len(q)} if q else None,
+                       "tokens_one_set": {op: len(v) == 1 for op, v in tok.items()},
+                       "tokens_equal_across_ops": tok.get("canonical") == tok.get("vllm"),
+                       "host_us_per_decode_call": call, "host_delta_us_per_call": d_call,
+                       "host_delta_us_per_decode_step": None if d_call is None else d_call * layers}
+    return out
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="DeepSeek-V4-Pro TP8 eager: the canonical moe_align_block_size checked, timed and costed")
+    ap.add_argument("--workload", required=True, help="the row (its first request is every batch's prompt)")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--case", default=None)
+    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
+    ap.add_argument("--tp", type=int, default=8)
+    ap.add_argument("--check-batches", default="1,8")
+    ap.add_argument("--batches", default="1,16,64,256")
+    ap.add_argument("--pairs", type=int, default=3)
+    ap.add_argument("--rotate", type=int, default=8)
+    ap.add_argument("--engine-arg", action="append", default=[])
+    ap.add_argument("--rpc-timeout", type=float, default=3600.0)
+    a = ap.parse_args()
+
+    from verity_vllm.engine import engine_profile as prof
+    prof.apply_env()
+    from vllm import LLM
+
+    from verity_vllm import protocols as PO
+    from verity_vllm.engine import served as SV
+    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.pipeline.commit import git_head, run_workload
+    from verity_vllm.pipeline.tp import phases as PH
+    from verity_vllm.pipeline.tp import target as TT
+    from verity_vllm.pipeline.tp import trace as TRACE
+    from verity_vllm.pipeline.tp.capture import parse_engine_args
+    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
+
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    check_batches = [int(b) for b in a.check_batches.split(",")]
+    batches = [int(b) for b in a.batches.split(",")]
+    wl = va.load_workload(a.workload, None)
+    target = PO.commit_guard(va.target_of_workload(wl), world=a.tp, installs=False)
+    target_env, target_kw = TT.apply(target, wl["execution"])
+    env_flags = {**prof.apply_env(), **target_env}
+    case = va.case_of(wl, a.case)
+    cp = prof.checkpoint_for(case, a.checkpoints)
+    seqs = max(check_batches + batches)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=a.tp)
+    kw.update({"enable_prefix_caching": False, "max_num_seqs": seqs, **target_kw})
+    kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
+    kw.update(parse_engine_args(a.engine_arg), worker_extension_cls=EXTENSION)
+    llm, build_s, topo = PH.engine(lambda: LLM(**kw), a.tp, a.rpc_timeout, model=cp["repo"], enforce_eager=True, case=case, max_num_seqs=seqs)
+    TT.require_ranks(llm, target, a.rpc_timeout)
+    served = SV.require(llm, wl, target, out, a.rpc_timeout)
+    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
+    rpc = a.rpc_timeout
+    to_cap = va.sampling_params
+
+    def capped(req: dict[str, Any], sampling: dict[str, Any]) -> Any:
+        p = to_cap(req, sampling)
+        p.ignore_eos = True
+        return p
+
+    va.sampling_params = capped
+    sampling = wl["sampling"]
+    reqs = {b: requests_at(wl, b, a.rotate) for b in sorted(set(check_batches + batches))}
+    start = llm.collective_rpc(status, timeout=rpc)
+    engine_kwargs = {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}
+    versions = {"git_head": git_head(), "args": vars(a), "build_s": round(build_s, 1), "engine_kwargs": engine_kwargs,
+                "target": TT.as_json(target), "served": served, "ranks": topo, "status": start}
+    (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
+    if len(start) != a.tp or not all(s["canonical"] and s["calls"].startswith(f"{MA.__name__}:") for s in start):
+        print(f"[moe-align] not every rank's Marlin experts call {MA.__name__}'s op: {start}", flush=True)
+        raise SystemExit(3)
+
+    def warm(b: int, seed: int) -> None:
+        PH.warmups(1, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=seed + i), sampling), tag="moe-align")
+
+    for b in check_batches:
+        warm(b, 100 + b)
+        llm.collective_rpc(check_on, timeout=rpc, kwargs={"rows": b})
+        r = run_workload(eng, reqs[b], sampling)
+        print(f"[moe-align] check B{b}: {r['wall_s']:.2f}s, {len(r['step_wall_s'])} steps", flush=True)
+    seen = llm.collective_rpc(check_off, timeout=rpc)
+    after = llm.collective_rpc(status, timeout=rpc)
+    check = summarize_check(seen, start, after)
+    (out / "check.json").write_text(json.dumps({**check, "seen": seen, "before": start, "after": after}, indent=1) + "\n")
+    print(f"[moe-align] check ok {check['ok']}: " + "; ".join(
+        f"rank {r}: {v['layers_equal']}/{v['layers']} layers equal, {v['calls']} calls, {v['paths']}" for r, v in check["ranks"].items()), flush=True)
+
+    rows: list[dict[str, Any]] = []
+    host: dict[int, dict[str, list[dict[str, Any]]]] = {}
+    with (out / "decode.jsonl").open("w") as f:
+        for b in batches:
+            for op in ("canonical", "vllm"):
+                llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": op == "canonical"})
+                warm(b, 200 + 2 * b + (op == "vllm"))
+            for pair in range(a.pairs):
+                for k, op in enumerate(("canonical", "vllm") if pair % 2 == 0 else ("vllm", "canonical")):
+                    llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": op == "canonical"})
+                    cpu0 = llm.collective_rpc(TRACE.thread_cpu, timeout=rpc)
+                    r = run_workload(eng, reqs[b], sampling)
+                    cpu = TRACE.cpu_delta(cpu0, llm.collective_rpc(TRACE.thread_cpu, timeout=rpc))
+                    row = {"batch": b, "pair": pair, "order_in_pair": k, "op": op, "wall_s": r["wall_s"],
+                           "phases": phases(r["step_wall_s"], r["step_tokens_out"], b), "tokens": digest(r["tokens"]),
+                           "thread_cpu_s_rank0": cpu.get(0), "step_wall_s": r["step_wall_s"]}
+                    rows.append(row)
+                    f.write(json.dumps(row) + "\n")
+                    f.flush()
+                    print(f"[moe-align] B{b} pair {pair} {op}: TPOT {1e3 * (row['phases']['tpot_s'] or 0):.3f} ms over "
+                          f"{row['phases']['decode_steps']} steps, tokens {row['tokens']}", flush=True)
+            for op in ("canonical", "vllm"):
+                llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": op == "canonical"})
+                llm.collective_rpc(timer_on, timeout=rpc)
+                run_workload(eng, reqs[b], sampling)
+                host.setdefault(b, {})[op] = llm.collective_rpc(timer_off, timeout=rpc, kwargs={"rows": b})
+    final = llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": True})
+    (out / "host.json").write_text(json.dumps({str(b): v for b, v in host.items()}, indent=1) + "\n")
+    layers = max((v["layers"] for v in check["ranks"].values()), default=0)
+    decode = summarize_decode(rows, host, layers)
+    summary = {"check": check, "decode": decode, "layers": layers, "world": len(topo), "restored": all(s["canonical"] for s in final)}
+    (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
+    for b, d in decode.items():
+        print(f"[moe-align] B{b}: TPOT {d['tpot_ms']} ms, ratio {d['tpot_ratio']}, host {d['host_us_per_decode_call']} us a call, "
+              f"{d['host_delta_us_per_decode_step']} us a step; tokens one set {d['tokens_one_set']}, "
+              f"equal across ops {d['tokens_equal_across_ops']}", flush=True)
+    if not check["ok"]:
+        raise SystemExit(3)
+
+
+if __name__ == "__main__":
+    from moe_align.served import main as _main
+
+    _main()

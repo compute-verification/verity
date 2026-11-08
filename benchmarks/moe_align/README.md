@@ -79,3 +79,21 @@ experts (E = 384, top-k 6) with the moe block Marlin picks:
 - `stress.py time` writes `time.json`. Per row count, it records the device time of a call (CUDA events, queued behind a
   sleep) and the host's time to issue it. It covers vLLM's op and each `Align` variant (`--variants`), alone and through
   a wrapper (vLLM's, and `moe_align.wrapper`), and what `Align` adds to a decode step of `stress.LAYERS` calls.
+
+On DeepSeek-V4-Pro's 8 x H200 node, served TP8 eager with the plugin loaded from a site directory:
+
+~~~text
+research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/moe_align/served.sh
+~~~
+
+`served.py` builds one engine and refuses to go on unless every rank's Marlin experts call `moe_align.wrapper`. It then
+runs three phases:
+
+- **`check.json`.** A wrap over each rank's `moe_align_block_size` holds every call to `moe_align.reference`, by MoE
+  layer, through the prefill and decode of one request and of eight. It counts each rank's calls by step kind and
+  `Align` path.
+- **`decode.jsonl`.** The decode step at 1, 16, 64 and 256 rows, with the canonical op and with vLLM's, interleaved, and
+  each run's tokens.
+- **`host.json`.** The host's time to issue a call of each op on each rank.
+
+`summary.json` gathers the three.
