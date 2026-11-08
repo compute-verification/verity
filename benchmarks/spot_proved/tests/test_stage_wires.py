@@ -1,8 +1,9 @@
 """`stage.Wires` on a committed capture: a staged instance's input is wired to the latest earlier call that output its bytes
-(``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of; a
-parameter is ``registered`` with its committed SHA-512; an `ADVICE` input is charged at its width; anything else, and an
-output of the call enclosing the reader, is `Unwired` with the fix. `traced` records what an instance's arguments read, and
-`wiring` charges each advice argument once."""
+(``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of, or
+whose output is a strided view into its real rows, its padding rows uncharged; a parameter is ``registered`` with its
+committed SHA-512; an `ADVICE` input is charged at its width; anything else, and an output of the call enclosing the reader,
+is `Unwired` with the fix. `traced` records what an instance's arguments read, and `wiring` charges each advice argument
+once."""
 from __future__ import annotations
 
 import hashlib
@@ -69,7 +70,9 @@ def step(tmp_path, monkeypatch):
     rng = np.random.default_rng(3)
     b = _Blobs(tmp_path)
     x, y, z, q, kv, p = (rng.integers(0, 2 ** 16, s, dtype=np.uint16) for s in ((4, 8), (4, 8), (4, 8), (4, 8), (2, 6, 4), (4, 8)))
+    pad, short = (rng.integers(0, 2 ** 16, (6, 8), dtype=np.uint16) for _ in range(2))
     w = {"shape": [8, 8], "dtype": BF16, "sha512": "ab" * 64}
+    heads = [4, 8, 1]  # (head, token, column) of a [tokens, 2 heads x 4] buffer, as MLA's absorb writes o_proj's input
     events = [
         _ev(0, "aten::mm", {"self": b.ref(x), "mat2": {"param": "w", "shape": [8, 8], "dtype": BF16}}, {"ret0": b.ref(y)}),
         _ev(1, "aten::gelu", {"self": b.ref(y)}, {"ret0": b.ref(z)}),
@@ -78,6 +81,11 @@ def step(tmp_path, monkeypatch):
         _ev(4, "fa3_sparse_mla", {"kv_gathered": b.ref(kv)}, {}),
         _ev(5, "vllm::outer", {}, {"ret0": b.ref(p)}),
         _ev(6, "aten::mm", {"self": b.ref(p)}, {"ret0": b.ref(p + 2)}, parent=5),
+        _ev(7, "aten::bmm", {}, {"out": b.ref(pad[:4].reshape(4, 2, 4).transpose(1, 0, 2), stride=heads)}),
+        _ev(8, "vllm::linear", {"input": b.ref(pad)}, {}),
+        _ev(9, "_C::per_token_group_fp8_quant", {"input": b.ref(pad)}, {}, parent=8),
+        _ev(10, "aten::bmm", {}, {"out": b.ref(short[:3].reshape(3, 2, 4).transpose(1, 0, 2), stride=heads)}),
+        _ev(11, "aten::gelu", {"self": b.ref(short)}, {}),
     ]
     _commit(tmp_path, events, {"w": w})
     cap = stage.Capture(tmp_path, 0)
@@ -94,6 +102,20 @@ def test_an_input_is_wired_to_the_call_that_output_its_bytes_or_a_tensor_it_view
     assert (view["kind"], view["seq"], view["view"]) == ("block", 0, {"offset": 2, "stride": [8, 1]})
     assert wires.source(0, ev[3]["in"]["self"]) is view, "a reference's source is found once"
     assert wires.source(0, ev[0]["out"]["ret0"]) == {"kind": "block", "rank": 0, "seq": 0, "op": "aten::mm", "out": "ret0"}
+
+
+def test_a_buffer_a_call_wrote_through_a_view_is_wired_to_it_and_its_padding_rows_cost_nothing(step) -> None:
+    stage, cap, wires = step
+    ev = cap.events[0]
+    src = wires.source(0, ev[8]["in"]["input"])
+    assert src == {"kind": "block", "rank": 0, "seq": 7, "op": "aten::bmm", "out": "out",
+                   "into": {"seq": 8, "op": "vllm::linear", "in": "input"}, "cover": {"stride": [4, 8, 1], "rows": 4}}
+    quant = wires.source(0, ev[9]["in"]["input"])
+    assert (quant["seq"], quant["into"]["seq"], quant["cover"]) == (7, 9, src["cover"]), "the enclosing call is skipped"
+    w = stage.wiring({"A": {"gate": [{"key": [0, 8, 0], "sources": [src]}, {"key": [0, 9, 0], "sources": [quant]}]}})
+    assert w["advice_bits"] == 0, "the padding rows past the 4 real rows are in no population"
+    with pytest.raises(stage.Unwired, match="reads self"):
+        wires.source(0, ev[11]["in"]["self"])
 
 
 def test_a_parameter_is_registered_and_an_advice_input_charged_at_its_width(step) -> None:
