@@ -3977,3 +3977,19 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
 - **#7877 is marked at `1f418b4368`.** The records (r20261107-235004-ca12) are regenerated and committed: Security/Properties, plus Security's records after checked's `BindSound`/`parseDesign` renames. The quick suites (r20261107-233655-0cc8) are green: sampled_proofs 662, service/sampled_proofs 168, spot_figures 61, pous 539.
 - **The lock's shape rule refused `D.form = …` beside the acceptance.** Each guarantee now takes `checkTwoStage { D with form := … } = some b` as its acceptance, with no form hypothesis. Lean try r20261107-234636-d888 passes: 32 theorems, standard axioms.
 - **The whole-figure sweep at the precision-64 search**, r20261107-232744-c994 (cpu-3), should finish around 00:35Z. I'll post the per-configuration ratios, with (B) at world year, when it does.
+
+## 00:25Z from ZKTWO: #7876 is marked ready after #7856; the chosen-sample relay view is #7893, open, with its records passing
+
+- **#7876** (the two-stage theorems) is marked at `27bb0c7698`. It was admitted after #7354, #7415 and #7856, in that order, so the code lands first.
+  - Quick suites r20261107-225436-22d3: 9 of 10 pass. verity-vllm fails 5 tests (`test_ruff::test_no_new_findings` and 4 `test_class_g_plans_a_request…`); #7876's diff touches nothing under `integrations/`.
+  - The preflight reports a conflict with `next` in `Security/Proofs/Flock/ZkAny.lean`, in "files only the move 2d79a6911051 … touches". `next` already has a restack commit that reran the move there (`fa42d12a1c`), so I expect the sync to do the same for #7876. If it ejects #7876 instead, I'll merge `next` and re-mark.
+- **#7893** (`cursor/proofs-zktwo-b9bf` @ `9be82deec3`), stacked on #7876: `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed`.
+  - It is the auditor-chosen two-stage view at the deployed session loop, through the held relay (`ZKOutRelay`).
+  - The interior is a stream of its own under a uniform `k₁`, with hiding `r·N·2γ` and `r₁·N₁·2γ` from `ideal_hm96_stream`, and no new premise.
+  - Try r20261107-231737-333e passed, with the siblings check clean and only the three standard axioms in both theorems. Records r20261107-234122-5fcc pass.
+  - Quick suites r20261107-234345-0f41 (cpu-2) are running against `27bb0c7698`. I mark #7893 when they pass.
+- **How it covers the deployed interior.**
+  - The OS salts are the instance whose key is the pair of `k₁` and a uniform table of salts per session (`salts (k₁, t) s = t s`), which no stack reads, so the interior's PRF term covers only its tags and record tag.
+  - Still open, stated in the PR: the deployed `k₁` is `SHA-512(k ‖ L' ‖ s)` at the fresh 64-byte session `s`, which adds one PRF term (`prf/sha-512`) not in the bound.
+  - This is why the interior's tags aren't MACs under `k`, as 20:50Z said. Under `k`, they would be PRF queries at inputs fixed after the auditor's choice, which `prf/sha-512` as stated doesn't cover (my 20:41Z). Under `interiorKey k s`, `k` meets the interior only at `s`.
+- Still open with you: PRF-457 has no live-goal label, so each PR open warns. Should I write the derived-`k₁` PRF term next, or the honest-session-loop corollaries once #7447 lands?
