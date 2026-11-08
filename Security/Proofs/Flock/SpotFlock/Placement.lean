@@ -14,9 +14,9 @@ parses, unrolled) of the template's reference session statement `xS₀ t` (`Held
 from the circuit file's descriptor: `stmt_of_parseStmt`, `built_of_parseStmt`) with at most `2^32` gates
 (`unitLog ≤ 32`).
 
-`stmt_of_pin`: a session statement that is a reference statement but for its sample and its registered reads (`pinOk`)
-has the reference statement's statement circuit, which reads only the statement's tags, circuit file, table files and
-table count.
+`stmt_of_pin`: a session statement that is a reference statement but for its sample, its public file and its registered
+reads (`pinOk`) has the reference statement's statement circuit, which reads only the statement's tags, circuit file,
+table files and table count.
 
 `PlacesAt h L x m₁ xS u`: the layout places unit `u`, member `t`'s unit `k`, in its session statement `xS`. At a table
 `j` of the statement the verifier parses, and at every accepted statement of that table (`HiddenExec.AcceptedH`) whose
@@ -101,11 +101,12 @@ theorem readOf_of_parseBytes {xS : Msg} {p : Parsed} (hp : parseBytes (FlockDepl
   exact hr
 
 /-- **A pinned session statement has its reference statement's statement circuit**: two statements equal but for
-their samples and registered reads have the same tags, circuit file, table files and table count, which are all that
-the statement circuit (`Read.stmt`) and the masked verifier's tags (`ZkExec.zkTags`) read. -/
+their samples, public files and registered reads have the same tags, circuit file, table files and table count, which
+are all that the statement circuit (`Read.stmt`) and the masked verifier's tags (`ZkExec.zkTags`) read. -/
 theorem stmt_of_pin {xS xS₀ : Msg} {w w₀ : FlockDeploy.Raw} (hw : FlockDeploy.decode xS = some w)
     (hw₀ : FlockDeploy.decode xS₀ = some w₀)
-    (he : { w with draw := none, registered := none } = { w₀ with draw := none, registered := none })
+    (he : { w with draw := none, registered := none, publicFile := .empty } =
+      { w₀ with draw := none, registered := none, publicFile := .empty })
     {r r₀ : Readable.Read} (hr : FlockDeploy.readOf true xS = some r) (hr₀ : FlockDeploy.readOf true xS₀ = some r₀) :
     r.stmt = r₀.stmt := by
   have hz : r.zk = true := FlockDeploy.readOf_zk hr

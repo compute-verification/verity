@@ -25,9 +25,9 @@ Bridge lowers it at constants `κ` (`Bridge.blockOf`), and that lowering sits in
 position `o` (`SitsAt`). At every hidden-value list Flock's relation accepts, `C`'s values at the wires the layout gives
 the positions of `C'`'s wires (`unitVals`) hold each of `v`'s gates (`Audit.Op.apply`) and carry `κ` wherever `v` reads
 it. These are `C'`'s gates, not the lowered program's: no value is asked at a row's two XORs, which no wire of `C`
-holds and `Prog.Correct` never reads. It holds of every accepted list, not of one witness: it reads only the unit's
-session statement's circuit, inputs and public values, which the verifier's check fixes to its template's reference
-statement's (`xS₀ t`) but for the sample and the registered reads (`pin_of_stmtOkAt`), and the layout. So it is a
+holds and `Prog.Correct` never reads. It holds of every accepted list, not of one witness, whatever the run's public
+values: whether it holds turns only on the unit's session statement's circuit, which the verifier's check fixes to its
+template's reference statement's (`xS₀ t`, `pin_of_stmtOkAt`), and the layout (`SpotFlock.Placement`). So it is a
 property of the registration. The relation, not `C`'s
 evaluation alone, has to carry it: where a wire is an input of `C`, only the outputs Flock's relation checks tie its
 value to the others.

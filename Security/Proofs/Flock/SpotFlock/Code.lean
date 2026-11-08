@@ -7,6 +7,7 @@ public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
 public import Properties.Spot.Members
 public import Flock.Desc
+public import Flock.Comp
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -26,8 +27,8 @@ partition query; the two-stage registration the samples read
 (`filesBlockOf`); the second
 stage's count per stratum; the registered reads template `t`'s session must open against at a run's roots and interior
 roots (`registered t`); template `t`'s reference session statement (`xS₀ t`), in Flock's masked scope, which template
-`t`'s session statement is but for its sample and its registered reads; and the commitment's layout and the reference
-prover's framing (`frame`, a code whose verifier and samples are unread).
+`t`'s session statement is but for what the run sets (`pinOk`); and the commitment's layout and the reference prover's
+framing (`frame`, a code whose verifier and samples are unread).
 
 **The run's statement** (`Roots`): the roots the boundary values are committed under, as canonical bytes
 (`Roots.encode`, read back by `decode`, which keeps only bytes that encode back to themselves).
@@ -43,7 +44,8 @@ prover's framing (`frame`, a code whose verifier and samples are unread).
   statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked scope, in the scope Flock's
   soundness proof covers and with hidden outputs, and with `xS₀ t`'s table shapes (`sessionOk`), its sample is the
   second stage's, its registered reads are the auditor's for template `t` at the run's roots and the interior
-  registration's, and it is `xS₀ t` in every other field (`pinOk`); it refuses the message otherwise;
+  registration's, and it is `xS₀ t` but for its sample, its registered reads, its public file's rows and the four
+  fields of its public file's header the run sets (`pinOk`); it refuses the message otherwise;
 * rounds `off t` to `off t + k₀ t − 1`: template `t`'s session, Flock's masked verifier at its statement on the
   session's messages, its acceptance answered with the message `[]`, which Flock never answers, and the session's rounds
   after a decision (`decidedAt`) answered `[]` too;
@@ -297,11 +299,33 @@ def secondDraw (c₀ c₁ : FlockDeploy.Coin) : Option Json :=
 
 deriving instance DecidableEq for FlockDeploy.Raw
 
-/-- **Template `t`'s session statement is its reference one** but for its sample and its registered reads: decoded as
-`w`, it is `xS₀ t`'s in every other field, its circuit, public file, tables and program among them. -/
+/-- Object `j` with key `k`'s value mapped by `f`; `j` itself where it is no object or holds no `k`. -/
+def atKey (k : String) (f : Json → Json) (j : Json) : Json :=
+  match j, j.getObjVal? k with
+  | .obj _, .ok v => j.setObjVal! k (f v)
+  | _, _ => j
+
+/-- **A session statement's public file as `pinOk` compares it**: its header line's JSON with the fields the run sets
+nulled (`instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`); none where the header doesn't parse.
+The rows after the header line are the run's. -/
+def pinHeader (file : ByteArray) : Option Json := do
+  let nl ← _root_.Flock.findByte file 10
+  let text ← String.fromUTF8? (file.extract 0 nl)
+  let j ← (_root_.Flock.JsonParse.parse text).toOption
+  let null : Json → Json := fun _ => .null
+  pure <| atKey "instances" null <| atKey "units" (atKey "indices" null) <|
+    atKey "frame_v3" (atKey "roots" null ∘ atKey "domain_ids" null) j
+
+/-- **Template `t`'s session statement is its reference one** but for what the run sets: decoded as `w`, it is
+`xS₀ t`'s in every field but its sample, its registered reads and its public file, its circuit, tables and program
+among them, and its public file's header is `xS₀ t`'s but for its instances, its units and its frame-v3 roots and
+domains (`pinHeader`). -/
 def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
   match FlockDeploy.decode (h.xS₀ t) with
-  | some w₀ => decide ({ w with draw := none, registered := none } = { w₀ with draw := none, registered := none })
+  | some w₀ =>
+    decide ({ w with draw := none, registered := none, publicFile := .empty } =
+      { w₀ with draw := none, registered := none, publicFile := .empty }) &&
+      (pinHeader w.publicFile).isSome && pinHeader w.publicFile == pinHeader w₀.publicFile
   | none => false
 
 /-- **Template `t`'s session statement reads the run's**, at the statement `s`, the round-1 message `m₁` and the coins
@@ -463,11 +487,13 @@ def reg (x : Msg) : Option RegTwo := (decode x).map fun _ => h.reg
 
 /-- **SPOT[Flock]'s two-stage code**: the code at its round order, its checked units the two stages' on the
 auditor's registration, each stage's bytes its own coin's. -/
-noncomputable abbrev code : Code := codeTwoAt (base h) (reg h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
+noncomputable abbrev code : Code :=
+  codeTwoAt (base h) (reg h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
 
 /-- **The replay sample of record**: the first stage's checked slots on the replay layout. -/
 noncomputable def rs : (x : Msg) → (Fin ((code h).V.k x) → FlockDeploy.Coin) → List ℕ :=
-  replayTwo ((base h).atOrder (order h)) (reg h) (fun _ => L) (bytesFirst (base h) (fun _ => L) (order h) fun _ => coinByte)
+  replayTwo ((base h).atOrder (order h)) (reg h) (fun _ => L)
+    (bytesFirst (base h) (fun _ => L) (order h) fun _ => coinByte)
 
 /-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them; none where it
 doesn't decode or names no such block. -/

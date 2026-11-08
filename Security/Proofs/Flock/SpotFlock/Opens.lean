@@ -38,7 +38,7 @@ unit's correctness reads, under the roots its gate is committed under (`Reveals`
 reveal say of the witness). `Decodes` follows from `Evaluates`, that the decoded values evaluate each of the unit's
 gates on the decoded values of the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is what a
 session circuit that computes the unit's gates gives. Neither holds of every `h`. The check fixes template `t`'s session
-statement to `xS₀ t` but for its sample and its registered reads (`pin_of_stmtOkAt`), so `Evaluates` says that each
+statement to `xS₀ t` but for what the run sets (`pin_of_stmtOkAt`), so `Evaluates` says that each
 `xS₀ t`'s circuit computes the gates of the drawn units of template `t` on the values its witness encodes, and `Reveals`
 that the frame (`h.frame`) opens them.
 
@@ -137,13 +137,14 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
   rfl
 
 /-- **Template `t`'s session statement as the verifier's check passes it is the template's reference one** (`pinOk`)
-but for its sample and its registered reads, which are the auditor's for `t` at the run's roots and the round-1
-interior roots. -/
+but for its sample, its public file and its registered reads, which are the auditor's for `t` at the run's roots and the
+round-1 interior roots. -/
 theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
     ∃ s it w w₀, parse h x = some s ∧ interiorsOf m₁ = some it ∧ FlockDeploy.decode xS = some w ∧
       FlockDeploy.decode (h.xS₀ t) = some w₀ ∧
-      { w with draw := none, registered := none } = { w₀ with draw := none, registered := none } ∧
+      { w with draw := none, registered := none, publicFile := .empty } =
+        { w₀ with draw := none, registered := none, publicFile := .empty } ∧
       w.registered.map ByteArray.data = some (h.registered t s.roots it.roots).data := by
   unfold stmtOkAt at hok
   cases hs : parse h x with
@@ -171,8 +172,8 @@ theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : �
             cases hw₀ : FlockDeploy.decode (h.xS₀ t) with
             | none => simp [hw₀] at hpin
             | some w₀ =>
-              simp only [hw₀, decide_eq_true_eq] at hpin
-              exact ⟨s, it, w, w₀, rfl, rfl, rfl, rfl, hpin, hreg⟩
+              simp only [hw₀, Bool.and_eq_true, decide_eq_true_eq] at hpin
+              exact ⟨s, it, w, w₀, rfl, rfl, rfl, rfl, hpin.1.1, hreg⟩
 
 /-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
 theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
