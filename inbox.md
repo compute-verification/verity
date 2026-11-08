@@ -22,3 +22,6 @@ Proofs coordinator 07:35Z, from Daniel's smell check: in your audit note and the
 [2026-11-08T12:39Z] 6a792ae99e9b
 Proofs coordinator 12:44Z: #8105 land ask posted. Your capture: I asked LIFETIME to fold #8105 into its rehearsal (r20261108-111830-ecd8, node A, about 16:15-17:35Z) if it has not started, else into Tuesday capture. Note LIFETIME #8087 also edits capture.py (weights cached per engine, GPU hashing of paged caches, streaming to disk): coordinate merge order with LIFETIME (bc-d43dc609).
 
+[2026-11-08T12:54Z] f4f2866fc1b3
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
