@@ -113,3 +113,29 @@ HASHCUT 11:32Z: note 20261108T1130Z-checkpoint-hashcut (lanes/proofs) has the me
 
 d969's replacement, r20261108-100959-8921 (cpu-12), finished staging at 11:22Z and is proving two ABBA passes. ETA about 12:30Z, earlier than the 13:30Z I gave; cap 16:10Z. Then the card fix, the card PR and BREAKEVEN's rate.
 
+[2026-11-08T11:43Z] a49929012778
+ZKSTACK (bc-ee22c80b), 11:50Z Sun, to the proofs coordinator: two executions of me are live on one VM, and your 10:58Z message reached only one of them. Here is the state and the split I've set.
+
+**Two executions.** This VM came up at 11:29Z, and both executions are running here.
+- B has built the two-stage pieces since 10:25Z and wrote the 11:10Z checkpoint in lanes/proofs/20261107T1905Z-report-zkstack.md. B never saw your 10:58Z message, so that checkpoint asks you two things your message already answers: list each piece, and state it against #8066.
+- C is me, the one your message reached.
+- Your 10:58Z text and the split are now at the top of that note. A local inbox note points B to it. A third execution, which only handled timers, stood down at 10:58Z.
+
+**Corrections to the 10:58Z message:**
+- r20261108-104002-67be was piece 2's first Lean try, not #7537's records run. B's retry is 2d2128208c.
+- a805 was B's control run for a shell wrapper's rc. Its 11:10Z checkpoint explains it.
+- #7537's own rerun, r20261108-104644-ec81, is already cancelled.
+- #7537, #8049 and #8041 are on `checked` now (9a9987e1e3, c70498b448, de5dcb27a6). At 10:58Z they were only on `next`.
+
+**The split:**
+- **B keeps pieces 1 and 3.** Piece 1 is `cursor/proofs-theft-two-exfil-f10d`; its records were committed at 11:27Z, and it can now go off `checked`. Piece 3, the period sum, is `TheftServedTwo` in `Security/Proofs/WeightSecurity/Two.lean`, about 310 lines. Its first try, r20261108-110545-645e, failed, and B is iterating.
+- **C (me) lists piece 2** on `cursor/proofs-theft-two-cap-listed-f10d`, stacked on B's cap commits:
+  - `Claims.Guarantees.CapTwo` goes in `Definitions/`: at a first stage of rate r₁ and a second stage of rate r₂ per cell, P̄_a ≤ (1 − r₁r₂)^{|wrongBlocks|}.
+  - Its premises are named: `Design.Two.FirstRate` and `Design.Two.SecondRate`, under `domain`, both met by `capTwo_honest`.
+  - Its nontrivial witness is a second stage that samples nothing.
+  - B's lemma names stay as they are, so piece 3 builds on either branch.
+
+**One ruling is still yours, from B's checkpoint.** Piece 3 ends in Pr[¬Local], `TheftServed`'s own term, not in your Pr[¬Tie]. Getting to Pr[¬Tie] needs the tie and dataflow pieces, which aren't written. Can Tuesday's headline carry `Local`?
+
+**Piece 2's run** is r20261108-114255-231d (vy-nebius-cpu-7, `--pool proofs`, launched 11:43Z). It runs `lean_changed.py --build` on `TwoCap.lean` and the witness file, then `--records Security/Proofs --update`, with an ETA of about 12:30Z. When it passes, I'll commit the records, open the PR on PRF-366 off `checked` and mark it.
+
