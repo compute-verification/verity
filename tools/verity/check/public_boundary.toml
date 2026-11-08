@@ -18,8 +18,8 @@ when_closed = ["tests"]
 spot = [
     "Security/Definitions/Claims/SamplingGeneric.lean",
     "Security/Proofs/Flock/SamplingGeneric*",
-    "verity/core/protocols/sampled_proofs",
-    "verity/core/service/sampled_proofs",
+    "verity/core/protocols/spot",
+    "verity/core/service/spot",
 ]
 # C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
 flock = [
@@ -56,11 +56,11 @@ shared = [
     "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,tests/test_cards.py}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "examples/vllm/serve_load.py",
-    "Security/Properties/SampledProofs/{Draw,Bits}.lean",
+    "Security/Properties/Spot/{Draw,Bits}.lean",
     "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
-    "Security/Properties/SampledProofs/Second.lean",
+    "Security/Properties/Spot/Second.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
@@ -153,7 +153,7 @@ from = "*"
 
 [[needed]]
 why = "the challenger and service code SPOT needs"
-paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{SampledProofs,Challenger}{,.lean}"]
+paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}"]
 from = ["spot"]
 
 [[needed]]
@@ -168,8 +168,8 @@ from = ["pouw"]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
 paths = [
-    "verity/core/protocols/{sampled_proofs,pouw}",
-    "verity/core/service/sampled_proofs",
+    "verity/core/protocols/{spot,pouw}",
+    "verity/core/service/spot",
     "Security/*/Pouw",
     "Security/Proofs/Properties/Pouw",
     "integrations/vllm",

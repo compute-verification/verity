@@ -5,7 +5,7 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
 /-!
-# The design the sample runs is well formed (`Properties.SampledProofs.DesignWellFormed`)
+# The design the sample runs is well formed (`Properties.Spot.DesignWellFormed`)
 
 * `derive_bounds`, `deriveWork_wf`, `workTable_floor`: the expansions' refusals: `1 ≤ k ≤ N`, a floor of at least one
   per stratum, and some work.
@@ -16,9 +16,9 @@ import all Init.Data.Ord.String
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 open Claims.Sampling
@@ -418,7 +418,7 @@ theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (n
         exact Nat.pos_of_ne_zero (by simpa [Function.comp_def] using htot)
 
 /-- **The design the sample runs is well formed on the partition it runs over**
-(`Properties.SampledProofs.DesignWellFormed`). -/
+(`Properties.Spot.DesignWellFormed`). -/
 theorem designWellFormed : DesignWellFormed := by
   intro rule d query table l D hl hD
   obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok d query l hl
@@ -449,4 +449,4 @@ theorem designWellFormed : DesignWellFormed := by
   · simpa [strataSizes, Function.comp_def, hns] using hf
   · trivial
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs
