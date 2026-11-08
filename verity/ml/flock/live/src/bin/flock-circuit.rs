@@ -6344,10 +6344,16 @@ fn front_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let te = a.1 == b.1 && a.1.iter().all(|r| !r["streams"].is_null());
     let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);
     let waited: Vec<Value> = b.0.iter().map(|(v, _)| v["device_wait_s"].clone()).collect();
+    // the first session's seeds and coins are `prover_is_deterministic`'s, so its digest is that case's at the same sample:
+    // `--expect-transcript HEX` pins the session front ahead to another build's
+    let digest = hex(&Sha512::digest(b.1[0].to_string().as_bytes()));
+    let pin = arg("--expect-transcript", "");
+    let pinned = pin.is_empty() || pin == digest;
     json!({"case": "front_ahead_matches_serial", "expect": "each session's proofs and transcript are its serial twin's, byte for byte", "gpu": gpu,
            "zk": is_zk(st), "sessions": SESSIONS, "accepted": accepted, "front_ahead": modes, "proofs_equal": pe, "transcripts_equal": te,
            "sessions_differ": seeds_differ, "transcript_first_difference": first_diff(&json!(a.1), &json!(b.1), String::new()),
-           "device_wait_s": waited, "wall_s": [a.2, b.2], "pass": accepted && modes && pe && te && seeds_differ})
+           "transcript_sha256": digest, "transcript_pinned": (!pin.is_empty()).then_some(pinned),
+           "device_wait_s": waited, "wall_s": [a.2, b.2], "pass": accepted && modes && pe && te && seeds_differ && pinned})
 }
 
 #[cfg(not(feature = "seed-injection"))]
