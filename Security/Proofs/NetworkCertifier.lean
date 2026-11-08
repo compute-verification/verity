@@ -144,9 +144,10 @@ theorem EncardIngressObsDecodableLeContentsPerWindow :
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
-  fun hSA => NetTiming.sampledLeak_reg hSA
+  NetTiming.sampledLeak_reg NetTiming.SecurityProofs.SampledAuditAccepted
 theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
-  intro hSA _ _ _ _ _ H D hks hb L K S lay k δ hδ reg ops β Dj hβ
+  have hSA := NetTiming.SecurityProofs.SampledAuditAccepted
+  intro _ _ _ _ _ H D hks hb L K S lay k δ hδ reg ops β Dj hβ
   exact ⟨fun x hx hreg Ω _ _ P =>
       NetTiming.sampledLeak_registered hSA H D hks hb L K S lay k δ hδ reg ops Dj x hx hreg Ω P,
     fun x hx s P hs hP op =>

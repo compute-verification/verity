@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
 public import Definitions.NetworkCertifier.Guarantees.Period
-public import Proofs.Accounting.JointBridge.HonestH200
+public import Definitions.Accounting.NetWitness
 public import Proofs.NetworkCertifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,6 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.PouwWork
+import Proofs.Pouw.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
@@ -146,31 +147,19 @@ theorem CommOfPeriodLeakAccepted : Guarantees.Bridge.CommOfPeriodLeakAccepted :=
   intro ι d α _ C I Ω _ _ Coin _ _ _ A r c p H D L Kₒ S lay k δ reg Dj n R
   exact comm_of_periodLeak NetTiming.periodLeak c p R
 
-open Properties.Pouw.Period.SecurityProofs Pouw.RelativeSecurity
-
-/-- **The verifier that accepts everything, against the network certifier's claim**: `HonestH200.acceptAll`, whose
-every subprotocol accepts at every coin, with the network certifier's claim never holding. -/
-def acceptAllNet (n : ℕ) :
-    Accounting.PeriodRun (HonestH200.device n) Unit HonestH200.emptyCircuit (fun _ : Unit => Paths HonestH1.Ω1 n) :=
-  { HonestH200.acceptAll n with commWithin := fun _ _ => False }
-
+open NetWitness in
 /-- **`CommOfPeriodLeakAccepted`'s conclusion fails at the verifier that accepts everything** (`acceptAllNet`): the
 network audit accepts on every coin while the network certifier's claim fails on it, so the audit's guarantee fails at
 error `½`. -/
 theorem CommOfPeriodLeakAccepted_nontrivial :
-    ¬ (acceptAllNet 0).Sound ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network (1 / 2) := by
+    ¬ acceptAllNet.Sound ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network (1 / 2) := by
   intro h
   have h1 := h fun _ => ()
-  have hev : ∀ x : Paths HonestH1.Ω1 0,
-      (acceptAllNet 0).accepts .network (Function.update (fun _ => ()) ((acceptAllNet 0).own .network) x) ∧
-        ¬ (acceptAllNet 0).Holds ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network
-          (Function.update (fun _ => ()) ((acceptAllNet 0).own .network) x) := fun _ => ⟨trivial, fun h => h⟩
-  have hpr : Pouw.pr (fun x : Paths HonestH1.Ω1 0 =>
-      (acceptAllNet 0).accepts .network (Function.update (fun _ => ()) ((acceptAllNet 0).own .network) x) ∧
-        ¬ (acceptAllNet 0).Holds ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network
-          (Function.update (fun _ => ()) ((acceptAllNet 0).own .network) x)) = 1 :=
-    haveI : Nonempty (Paths HonestH1.Ω1 0) := ⟨()⟩
-    Pouw.pr_eq_one hev
+  have hpr : Pouw.pr (fun x : Unit =>
+      acceptAllNet.accepts .network (Function.update (fun _ => ()) (acceptAllNet.own .network) x) ∧
+        ¬ acceptAllNet.Holds ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network
+          (Function.update (fun _ => ()) (acceptAllNet.own .network) x)) = 1 :=
+    Pouw.pr_eq_one fun _ => ⟨trivial, fun h => h⟩
   rw [hpr] at h1
   norm_num at h1
 

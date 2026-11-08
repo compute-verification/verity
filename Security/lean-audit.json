@@ -4303,11 +4303,11 @@
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
   },
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
-   "honest": ["NetTiming.Witness.SampledLeakAccepted_honest"],
+   "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakAccepted_nontrivial"
   },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
-   "honest": ["NetTiming.Witness.SampledLeakRegistered_honest"],
+   "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakRegistered_nontrivial"
   },
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
@@ -18141,14 +18141,8 @@
   "NetTiming.Witness.SampledAuditAccepted_nontrivial": {
    "owner": "@proofs"
   },
-  "NetTiming.Witness.SampledLeakAccepted_honest": {
-   "owner": "@network-accounting"
-  },
   "NetTiming.Witness.SampledLeakAccepted_nontrivial": {
    "owner": "@network-accounting"
-  },
-  "NetTiming.Witness.SampledLeakRegistered_honest": {
-   "owner": "@proofs"
   },
   "NetTiming.Witness.SampledLeakRegistered_nontrivial": {
    "owner": "@proofs"

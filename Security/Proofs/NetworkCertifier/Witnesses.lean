@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Deployed
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Definitions.NetworkCertifier.TapRows
+public import Definitions.NetworkCertifier.Witness
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 public import Definitions.NetworkCertifier.SampledCharge
 public import Definitions.NetworkCertifier.SampledReg
@@ -72,7 +73,9 @@ accepts everything. Each builds its instance and takes no hypothesis.
   carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
   `PeriodLeakAccepted`'s at `tapL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
   certifier's openings (`tapOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
-  witness is in `RLeakTap`.
+  witness is in `RLeakTap`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`, `leakL`,
+  `tapL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`, `tapOps`), and
+  no definition of this module: a statement the lock lists reads no proof-only definition outside the excepted toys.
 * `PooledWrongUnitsLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
@@ -86,7 +89,8 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Compiled)
-open Claims.Witness.SamplingGeneric (toyA sksL trueCm sksL_scope sksL_κ sksL_bound_fails noHash_compiledE bext_pr)
+open Claims.Witness.SamplingGeneric (toyA sksL trueCm sksL_scope sksL_κ sksL_bound_fails noHash_compiledE bext_pr
+  notProg notStmt notPart leakL tapL)
 
 local notation "relD" => _root_.Flock.Readable.relation
 local notation "shaD" => FlockDeploy.sha512
@@ -126,25 +130,13 @@ theorem ks_toy : (toyL).KS shaD :=
       simp at hx)
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledAuditAccepted`'s premise at the toy code**: `Compiled.KS` (`ks_toy`). -/
+/-- **`SampledAuditAccepted`'s premise at the toy code**, which is `SampledLeakAccepted`'s too: `Compiled.KS`
+(`ks_toy`). -/
 theorem SampledAuditAccepted_honest : (toyL).KS shaD := ks_toy
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledLeakAccepted`'s premises at the toy code**: `SampledAuditAccepted`, and `Compiled.KS` (`ks_toy`). -/
-theorem SampledLeakAccepted_honest : NetTiming.Guarantees.SampledAuditAccepted ∧ (toyL).KS shaD :=
-  ⟨NetTiming.SecurityProofs.SampledAuditAccepted, ks_toy⟩
-
-set_option synthInstance.maxSize 1024 in
-/-- **`SampledLeakRegistered`'s premises at the toy code**: `SampledLeakAccepted`'s, and the code's commitment binds
-(`binds_deployOf`). -/
-theorem SampledLeakRegistered_honest :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ (toyL).KS shaD ∧ (toyL).commit.Binds shaD :=
-  ⟨NetTiming.SecurityProofs.SampledAuditAccepted, ks_toy,
-    binds_deployOf (FlockDeploy.deployZk relD) SamplingDeploy.toyCode shaD⟩
-
-set_option synthInstance.maxSize 1024 in
-/-- **`PeriodLeakAccepted`'s premises at the toy code**, which are `CommOfPeriodLeakAccepted`'s too: `Compiled.KS`
-(`ks_toy`), and the code's commitment binds (`binds_deployOf`). -/
+/-- **`PeriodLeakAccepted`'s premises at the toy code**, which are `SampledLeakRegistered`'s and
+`CommOfPeriodLeakAccepted`'s too: `Compiled.KS` (`ks_toy`), and the code's commitment binds (`binds_deployOf`). -/
 theorem PeriodLeakAccepted_honest : (toyL).KS shaD ∧ (toyL).commit.Binds shaD :=
   ⟨ks_toy, binds_deployOf (FlockDeploy.deployZk relD) SamplingDeploy.toyCode shaD⟩
 
@@ -152,29 +144,11 @@ end Honest
 
 /-! ## At the accepting verifier -/
 
-/-- A layout of one link of one slot, with no gate. -/
-def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
-
-/-- One input gate and its negation, the negation returned. -/
-def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
-
-/-- The program, sampled `all`. -/
-def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
-
-/-- One class of one stratum of one proof block, `{0, 1}`. -/
-def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
-
-/-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
-
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
 
 /-- One step: a frame on the link, every status complete. -/
 def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
-
-/-- The network certifier's openings: the input and its negation, both `true`. -/
-def tapOps : List (Opening Bool) := [⟨0, true, []⟩, ⟨1, true, []⟩]
 
 theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
@@ -226,14 +200,6 @@ theorem notProg_val_true (inp : ℕ → Bool) (h0 : inp 0 = true) : valOver notP
 section Toy
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-
-/-- `sksL` at `notStmt`: the verifier accepts, no opening passes, and no unit has a session. -/
-noncomputable def leakL (Coin : Type) : Compiled Coin (toyA Coin) :=
-  { sksL Coin with parse := fun _ => some notStmt, partition := fun _ => some notPart }
-
-/-- `leakL` under `trueCm`: the verifier accepts, the openings of `true` pass, and no unit has a session. -/
-noncomputable def tapL (Coin : Type) : Compiled Coin (toyA Coin) :=
-  { leakL Coin with commit := trueCm }
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem leakL_scopeAcc (x : Msg) : ScopeAcc (leakL Coin) (fun _ => notLay) (fun _ => 1) x :=

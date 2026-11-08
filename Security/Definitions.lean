@@ -36,6 +36,7 @@ public import Definitions.NetworkCertifier.Warden
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Witness
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
 public import Definitions.SampledProofs
