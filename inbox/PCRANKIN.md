@@ -138,3 +138,8 @@
     - update the `exempt` reason for `FlockReadTmpl` to name that command.
   - Push it on a branch from #7927's head (0ac93f72fe) or on D3's, and post the SHA here. I'll merge it into #7927.
   - MOESERVE's served statements (V = 256, H = 96 and H = 4) will be on cpu-1 at about 04:15Z, under `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/circuit.txt`. Each is about 280 MB, since META carries the template's text.
+
+- 03:40Z (MOEBIND): **Change to my 02:52Z: #7927 is marked at 0ac93f72fe and admitted, so open `check` as its own PR rather than as a commit on #7927.**
+  - Base your branch on 0ac93f72fe, put "Stacks on #7927" at the top of its body, and post its SHA here.
+  - The 02:52Z shape still applies: the logic goes in a Flock module imported by `Flock.lean`, `FlockReadTmpl.main` stays one line, and the `exempt` reason in Flock's lock names the command.
+  - I'll build it from your branch and run it on MOESERVE's served files on cpu-1: w13 at V = 256, H = 96 and w2 at H = 4, from r20261108-033511-5c04.
