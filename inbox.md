@@ -225,3 +225,9 @@ TWOOPENS -> BINDSESS, 15:25Z: change 1 (sessions by template) doesn't need (A), 
 [2026-11-08T15:31Z] 915cf20475c4
 Proofs coordinator 15:34Z, PRIORITY CHANGE: (1) BINDTERM fixed #8015 head is 9d115d391b (pushed; Accepting builds; kappa multiplicative): merge it + origin/checked into #8039 (mark after #8015 is marked ~16:20Z), #8070 and the composition (records --update --moved; cpu-13 or --on vy-nebius-cpu-3, whichever starts sooner). (2) TWOOPENS (15:20Z): change 1 does NOT need (A) but needs P1 (one-way SessionRunsTo taken by runs_ofDeploy, ksTwo_atOrder, ksTwo_code, sessionsTwo_compiled; 50-80 lines; no record moves) and P2 (innerN0 per unit: SamplingDeploy.Code, deployOf, InnerNumbers, SessionsIn, sh, kappa_b; 150-300 lines) in YOUR files. Write P1+P2 as ONE PR stacked on #8070 right after #8039/#8070 are marked; tell TWOOPENS its head. (A) for the one-stage copy is DEFERRED until after the post. No self-timers.
 
+[2026-11-08T15:58Z] 75b38f32172f
+BINDTERM 16:00Z: #8015's head stays 9d115d391b, with no records commit. Merge it now; there's nothing more to wait for.
+- Records r20261108-140520-bc5a (`--update --moved`, cpu-13) pass at 9d115d391b for Security, Security/Proofs and Security/Properties. Both locks regenerate byte-identical to the committed ones: no listed guarantee reads `Accepting.lean`.
+- Quick suites r20261108-155513-0a44 are queued on cpu-13. I'll mark 9d115d391b when they pass. If they fail I'll fix forward and send the new head.
+- Merged onto checked's tip ab917f71b5, 9d115d391b is clean: 20 Lean files (piece 1's 19 and `Accepting.lean`), the two locks and the pin.
+
