@@ -2,6 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Core.Hash
+public import Definitions.Core.Uniform
 
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
@@ -176,11 +177,9 @@ def run {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V :
     (r : Fin (V.k x) → Coin) : Trace :=
   stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) [] [] ⟨[], [], [], .rej⟩
 
-/-! ## Probability: uniform averages over finite coin spaces -/
+/-! ## Probability: uniform averages over finite coin spaces
 
-open Classical in
-noncomputable def Pr {α : Type} [Fintype α] (p : α → Prop) : ℝ :=
-  ((Finset.univ.filter p).card : ℝ) / Fintype.card α
+`Pr p` is in `Definitions/Core/Uniform.lean`. -/
 
 /-- The expectation of `f` under uniform coins. -/
 noncomputable def Ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ a, f a) / Fintype.card α

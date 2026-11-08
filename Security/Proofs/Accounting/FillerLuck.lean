@@ -78,7 +78,7 @@ theorem luck_of_sq {p : ℝ} {K R : ℕ} (hp : p ≤ 1) (h : (2 * p - 1) ^ 2 ≤
     linarith
 
 theorem prob_none {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 theorem prob_all {Ω : Type} [Fintype Ω] [Nonempty Ω] : prob (fun _ : Ω => True) = 1 := by
@@ -109,11 +109,11 @@ theorem card_fiber_eq {Y : Type} [Fintype Y] {K : ℕ} (π : Y → Fin K → ZMo
   have hY : (Fintype.card Y : ℝ) ≠ 0 := by
     intro h0
     have := hπ z
-    unfold prob at this
+    unfold prob Claims.prUniform at this
     rw [h0, div_zero] at this
     exact (by positivity : (0 : ℝ) < 1 / 2 ^ K).ne this
   have h := (hπ z).trans (hπ z').symm
-  unfold prob at h
+  unfold prob Claims.prUniform at h
   have h' := (div_left_inj' hY).mp h
   rw [Fintype.card_subtype, Fintype.card_subtype]
   convert (Nat.cast_inj (R := ℝ)).mp h' using 2 <;> ext <;> simp
@@ -170,7 +170,7 @@ theorem nonempty_of_balanced {Y A : Type} [Fintype Y] [CommRing A] {K : ℕ} {φ
   by_contra hY
   rw [not_nonempty_iff] at hY
   have := hc 0
-  unfold prob at this
+  unfold prob Claims.prUniform at this
   rw [Fintype.card_eq_zero, Nat.cast_zero, div_zero] at this
   exact (by positivity : (0 : ℝ) < 1 / 2 ^ K).ne this
 
@@ -283,7 +283,7 @@ theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : pro
       rw [this, h0]
       simp
     · have hC : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast h0
-      unfold prob at h
+      unfold prob Claims.prUniform at h
       rwa [div_le_iff₀ hC] at h
   calc (∑ a, if q a then Real.exp v else 0) = ((univ.filter q).card : ℝ) * Real.exp v := by
         rw [← Finset.sum_filter, sum_const, nsmul_eq_mul]
@@ -384,7 +384,7 @@ theorem budget_blocks {K : ℕ} {ρ ν Y A Ω₀ : Type} [DecidableEq ρ] [Decid
 /-- **An event and its complement**: `Pr[q] ≤ 1 − Pr[¬q]` (equality on a nonempty type). -/
 theorem prob_le_one_sub_not {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q ≤ 1 - prob fun a => ¬q a := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
   · simp [h0]
   · have hC : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast h0

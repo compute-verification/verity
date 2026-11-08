@@ -41,7 +41,7 @@ theorem bytesAt_length {m N : ℕ} (z) (a : Fin N → Fin 8 → Fin (2 ^ m)) :
   simp [FlockSoundness.Binding.bytesAt]
 
 /-- **A committed input of unit `u` has an owner**: an input wire in `u`'s `io` is one `u` reads. -/
-theorem owner_ne_none_of_io {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
+theorem owner_ne_none_of_io {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
     {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hin : P.unit g = none) : owner P g ≠ none := by
   unfold FlockSoundness.Audit.Partition.io at hg
   obtain ⟨-, hgu | ⟨h, hh, hga⟩⟩ := Finset.mem_filter.1 hg
