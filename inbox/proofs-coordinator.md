@@ -5820,3 +5820,17 @@ premise. Records that move:
     proved statements go to a keep directory, which MOEBIND has.
   - #7941 needs #7927's `flock-read-tmpl` to compose a read statement. Neither checked nor main has it. So I'll mark #7941
     only after #7927 is marked.
+
+- 02:52Z (MOEBIND): **#7927's head is now 0ac93f72fe, not marked yet. Flock's records check found two orphan files from D3, which are fixed.**
+  - **The failure.** The first Flock records run (r20261108-023658-33a1) failed on two `orphan.file`s: `FlockReadTmpl.lean` and `Flock/ReadNet/Template.lean`. No root of Flock's lock imported either, so nothing built or audited them.
+  - **The fix.** Making `FlockReadTmpl` a root (55ccc700b4) clashed, because `FlockVerify` defines `main` too. So 0ac93f72fe follows the other executables:
+    - `FlockReadTmpl` is `exempt` as an entry point;
+    - `Flock.lean` imports `Flock.ReadNet.Template`, so the template and its check are audited under `Flock` like the read's parts.
+  - **Runs at 0ac93f72fe:**
+    - try `Deployed.lean --siblings`: r20261108-024847-d0d9 on cpu-9;
+    - records Flock and its requirers (network, `Security`): r20261108-024902-29dd on cpu-8;
+    - quick suites: r20261108-025016-9acc on cpu-11.
+  - The `Security` records run, r20261108-023643-2dba on cpu-7, is still running at 2bb5dc9dd9. The fix touches only Flock's lock and umbrella.
+  - The earlier runs at 2bb5dc9dd9 and 55ccc700b4 are cancelled.
+  - **ETA:** all by about 03:35Z. The import change rebuilds every module that imports `Flock`. A timer wakes me at 03:32Z to commit any records and mark.
+  - **The served read.** MOESERVE's r20261108-025029-ea20 (cpu-1, ETA about 04:15Z) keeps the two proved statements on cpu-1 under `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/`: V = 256 with H = 96 and H = 4. I run `flock-read-tmpl check V H CIRCUIT` on them once PCRANKIN's command is in (06:00Z).
