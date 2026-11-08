@@ -4,6 +4,9 @@ tests/program/test_dsa_topk.py holds equal to them.
     DsaTopKOneHot_v1{N}           (idx: 32 bits) -> N bits: bit j is idx == j (unsigned); traced, no word Definition
     DsaTopKVerdict_v1{N,TOPK}     (members: N bits, scores: N x 32 bits) -> bit; traced, no word Definition
     DsaTopKOrder_v2{N,TOPK}       (scores: N x 32 bits, order: TOPK x 32 bits) -> bit; word view DsaTopKOrder_v1
+    DsaTopKAscending_v1{TOPK}     (order: TOPK x 32 bits) -> bit: each slot below the next (unsigned); traced, no word Definition
+    DsaTopKLongRow_v2{N,TOPK}     (scores: N x 32 bits, order: TOPK x 32 bits) -> bit: DsaTopKOrder_v2 AND DsaTopKAscending_v1;
+                                  word view DsaTopKLongRow_v1
     Xor3x16_v2, Xor3x32_v2        (a, b, c: 16 or 32 bits) -> 16 or 32 bits; word views their _v1
     DsaWaksmanSwap_v2{W,E}        (s: bit, a, b: W x E bits) -> 2 x W x E bits; word view DsaWaksmanSwap_v1
     DsaWaksmanPick_v2{W,E}        (s: bit, a, b: W x E bits) -> W x E bits; word view DsaWaksmanPick_v1
@@ -160,6 +163,27 @@ def _order(B, S, scores, order):
 DsaTopKOrderV2 = EW.on_bits("DsaTopKOrder", 2, ["N", "TOPK"], _sig_order, _order, T.DsaTopKOrder)
 
 
+def _ascending(S):
+    """`DsaTopKAscending_v1{TOPK}`: each slot's index below the next one's (unsigned), the borrow of their difference a pair, ANDed."""
+    def build(C, *order):
+        return [and_reduce(C, [sub(C, a, b, 32)[1] for a, b in zip(order, order[1:])])]
+    return build
+
+
+DsaTopKAscending = EW.specialized("DsaTopKAscending", 1, ["TOPK"], _ascending, lambda S: ((("order", Array(S.TOPK, I32)),), BIT),
+                                  doc=_ascending.__doc__)
+
+
+def _long_row(B, S, scores, order):
+    """`DsaTopKLongRow_v1` on bits: `DsaTopKOrder_v2` and `DsaTopKAscending_v1{TOPK}`, ANDed."""
+    ok = B.call(bind(DsaTopKOrderV2, N=S.N, TOPK=S.TOPK), scores, order)
+    asc = B.call(bind(DsaTopKAscending, TOPK=S.TOPK), order)
+    return B.call(BL.AND, Coll(Array(2, BIT), concat([ok.refs, asc.refs])))
+
+
+DsaTopKLongRowV2 = EW.on_bits("DsaTopKLongRow", 2, ["N", "TOPK"], _sig_order, _long_row, T.DsaTopKLongRow)
+
+
 def _xor3(C, a, b, c):
     return [x ^ y ^ z for x, y, z in zip(a, b, c)]
 
@@ -224,5 +248,6 @@ def _net_order(B, S, sw):
 
 DsaWaksmanOrderV2 = EW.on_bits("DsaWaksmanOrder", 2, ["N", "TOPK"], _sig_net_order, _net_order, T.DsaWaksmanOrder)
 
-BOOLEAN_DSA_TOPK = [DsaTopKOneHot, DsaTopKVerdict, DsaTopKOrderV2, Xor3x16, Xor3x32, DsaWaksmanSwapV2, DsaWaksmanPickV2,
+BOOLEAN_DSA_TOPK = [DsaTopKOneHot, DsaTopKVerdict, DsaTopKOrderV2, DsaTopKAscending, DsaTopKLongRowV2, Xor3x16, Xor3x32,
+                    DsaWaksmanSwapV2, DsaWaksmanPickV2,
                     DsaWaksmanRowsV2, DsaWaksmanOrderV2]

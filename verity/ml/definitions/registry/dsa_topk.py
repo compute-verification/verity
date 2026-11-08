@@ -1,17 +1,19 @@
 """[GLM-5.3] The DSA indexer's top-k of a row past TOPK keys, under the pattern for data-dependent structure: a static
 superset of wires plus selection values computed in the circuit.
 
-* The selected-key order is a value: the served kernel's `topk_indices` row, whose order (the above-threshold keys' places come
-  from shared-memory atomics) no circuit computes.  The Program takes it from its `run` parameter (`derive.RunInputs`).
+* The selected-key order is a value: the served `topk_indices` row.  The Program takes it from its `run` parameter
+  (`derive.RunInputs`).
 * The selected rows are read through `DsaWaksmanRows`, a Waksman permutation network over the row's whole history (the static
   candidate superset): its switch settings are the run's value (`waksman_settings` of the served order), and the network's wiring
   is static.  `DsaWaksmanOrder` routes each history row's index through the same settings, so its output is the order the rows
   arrive in.
-* `DsaTopKOrder` checks in gates that this order is a permutation of the top-TOPK set the circuit computes from the row's logits,
-  under the tie rule below; its bit is one of the Program's checks, which the verifier requires to be 1.
+* `DsaTopKLongRow` checks in gates that this order is the top-TOPK set the circuit computes from the row's logits, under the tie
+  rule below, in strictly ascending index order (the canonical row, which `VERITY_DSA_TOPK=canonical` serves); its bit is one of the
+  Program's checks, which the verifier requires to be 1.
 
-So wrong settings can only route an order the relation accepts, a permutation of the right set, which changes only the order
-sparse MLA accumulates the rows in; this is not a witness exemption, since the relation is checked in the circuit.
+So the settings the run brings route the one order the logits fix: sparse MLA accumulates the rows in an order the prover does not
+choose.  `DsaTopKOrder`, the relation without the order, accepts any permutation of the set; the pin's kernels unpatched serve
+such an order, whose places come from shared-memory atomics and vary run to run, and the long-row check refuses it.
 
 The served kernel (vLLM d9105ea80): decode takes `cooperative_topk` at most 64 rows a call (sparse_attn_indexer.py:615-642),
 whose rows of 2049..16384 keys run `histogram_4096_topk` (topk_histogram_4096.cuh:380-548): a 4096-bin histogram of each logit's
@@ -50,6 +52,8 @@ Registered functions (`_v1`; their Boolean versions in `boolean_dsa_topk` are th
 equal to them):
   DsaTopKOrder{N,TOPK}        (scores: N f32, order: TOPK i32) -> bit: order is a permutation of `topk_set`(scores, TOPK)
   DsaTopKOrderCheck{N}x{K}    the same function as one primitive (`order_check`), DsaTopKOrder's body
+  DsaTopKLongRow{N,TOPK}      (scores: N f32, order: TOPK i32) -> bit: order is `topk_set`(scores, TOPK) in ascending order
+  DsaTopKLongRowCheck{N}x{K}  the same function as one primitive (`long_row_check`), DsaTopKLongRow's body
   Xor3x16, Xor3x32            (a, b, c: 16 or 32 bits) -> a ^ b ^ c
   DsaWaksmanSwap{W,E}         (s: bit, a, b: W x E bits) -> 2 x W x E bits: (a, b) when s is 0, (b, a) when 1
   DsaWaksmanPick{W,E}         (s: bit, a, b: W x E bits) -> W x E bits: a when s is 0, b when 1
@@ -74,7 +78,10 @@ _CONF = ("model-untested: the tie rule read from vLLM d9105ea80 topk_histogram_4
          "(cooperative_topk's rows of 2049..16384 keys) and held by the served cooperative_topk's and persistent_topk's orders "
          f"on synthetic rows ({EVIDENCE['dsa_topk_order_probe']['run_record']}); a captured served decode past TOPK keys is its "
          "hardware check")
+_CANONICAL = ("model-untested: the served row under VERITY_DSA_TOPK=canonical, which rewrites each top-k row past TOPK keys as "
+              "`topk_set` in ascending index order; a captured served decode past TOPK keys under it is its hardware check")
 _ORDERS: dict[tuple[int, int], PrimitiveDefinition] = {}
+_LONG_ROWS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 
 def topk_key(bits: int) -> int:
@@ -122,6 +129,35 @@ def DsaTopKOrder(B, S, scores, order):
     """The selection relation of a row of N keys: 1 when ``order``'s TOPK slots are distinct indices in [0, N) forming the
     top-TOPK set of ``scores`` under the module docstring's tie rule, in any order; else 0.  `DsaTopKOrder_v2` is it on bits."""
     return B.call(order_check(S.N, S.TOPK), scores, order)
+
+
+def canonical_ok(scores, order, TOPK: int) -> int:
+    """1 when the TOPK words ``order`` (u32) are `topk_set`(scores, TOPK) in strictly ascending index order, else 0."""
+    got = [int(w) & M32 for w in order]
+    return int(bool(order_ok(scores, got, TOPK)) and all(a < b for a, b in zip(got, got[1:])))
+
+
+def long_row_check(N: int, TOPK: int) -> PrimitiveDefinition:
+    """`DsaTopKLongRowCheck{N}x{TOPK}_v1`: `canonical_ok` over a row of N f32 scores and a TOPK-slot order."""
+    check_statics(N, TOPK)
+    p = _LONG_ROWS.get((N, TOPK))
+    if p is None:
+        def ev(*w: int, _N=N, _K=TOPK) -> int:
+            return canonical_ok(w[:_N], w[_N:], _K)
+
+        p = PrimitiveDefinition(f"DsaTopKLongRowCheck{N}x{TOPK}", 1, (("scores", Array(N, F32)), ("order", Array(TOPK, I32))), BIT,
+                                ev, doc=long_row_check.__doc__ or "", conformance=_CANONICAL)
+        _LONG_ROWS[(N, TOPK)] = p
+    return p
+
+
+@composite("DsaTopKLongRow", 1, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)), ("order", Array(S.TOPK, I32))), BIT),
+           conformance=_CANONICAL)
+def DsaTopKLongRow(B, S, scores, order):
+    """The canonical row of N keys: 1 when ``order`` is `DsaTopKOrder`'s top-TOPK set of ``scores`` listed in strictly ascending
+    index order, else 0.  One order passes a row, so the order sparse MLA sums the selected rows in is a function of the logits.
+    `DsaTopKLongRow_v2` is it on bits."""
+    return B.call(long_row_check(S.N, S.TOPK), scores, order)
 
 
 def _sub_live(n: int, k: int) -> tuple[int, int, list[int]]:
@@ -331,4 +367,4 @@ def DsaWaksmanOrder(B, S, sw):
     return Coll(Array(S.TOPK, I32), B.call(bind(DsaWaksmanRows, N=S.N, K=S.TOPK, W=1, E=32), sw, tags).refs)
 
 
-DSA_TOPK_COMPOSITES = [DsaTopKOrder, DsaWaksmanSwap, DsaWaksmanPick, DsaWaksmanRows, DsaWaksmanOrder]
+DSA_TOPK_COMPOSITES = [DsaTopKOrder, DsaTopKLongRow, DsaWaksmanSwap, DsaWaksmanPick, DsaWaksmanRows, DsaWaksmanOrder]

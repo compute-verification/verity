@@ -62,6 +62,7 @@ untraced = [
     "tests/test_pouw_rows.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
+    "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
 ]
@@ -237,6 +238,11 @@ paths = [
     "verity/ml/flock/python/verity_flock/templates",
     "verity/ml/windows",
 ]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_sha512_leaves.py"]
+# nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
+paths = ["verity/ml/kernels/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]

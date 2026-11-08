@@ -27,6 +27,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
+| `moe_align/` | the Marlin MoE path's `moe_align_block_size` at the integration's vLLM pin made a function of its inputs by a vLLM plugin, each expert's pairs in pair-index order: outputs run to run, each expert's pairs against the pin's op, and its cost against it | maintained |
 | `g2/` | the served Commit's overhead curve over stock, rendered from the evidence store; it measures nothing itself | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to the production server (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, and replaying a recorded window under its committed schedule | maintained |
@@ -59,7 +60,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
-| `spot_proved/` | a served step's own values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
+| `spot_proved/` | a replayed served step's values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
 | `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
 | `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |

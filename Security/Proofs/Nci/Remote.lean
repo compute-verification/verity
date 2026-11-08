@@ -217,7 +217,7 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
-      a * unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ := by
+      a * unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ := by
   have hS : 0 < C + U := by linarith
   have hκi : κ * κ⁻¹ = 1 := mul_inv_cancel₀ hκ.ne'
   have hSi : (C + U) * (C + U)⁻¹ = 1 := mul_inv_cancel₀ hS.ne'
@@ -227,10 +227,10 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
     linear_combination (-(κ * W / 2)) * hCi
   have hB : 0 ≤ a * κ * U / 2 + κ * C / 2 * residualShare W C + C / ρ + κ * χ * (C + U) / 2 - M := by
     linarith
-  have key : a * unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ -
+  have key : a * unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ -
       efficiency κ M C U =
       2 / κ / (C + U) * (a * κ * U / 2 + κ * C / 2 * residualShare W C + C / ρ + κ * χ * (C + U) / 2 - M) := by
-    simp only [declaredShare, unmonitoredShare, efficiency]
+    simp only [declaredShare, unregisteredShare, efficiency]
     linear_combination
       (-(a * U * (C + U)⁻¹ + C * residualShare W C * (C + U)⁻¹ + χ * (C + U) * (C + U)⁻¹)) * hκi +
       (-(residualShare W C + 2 * κ⁻¹ * ρ⁻¹ + χ)) * hSi
@@ -259,14 +259,14 @@ theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     (ha1 : a ≤ 1) (hM0 : 0 < M) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2)
     (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
-        unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
-      remoteDampener a (unmonitoredShare C U)
-          ((1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
+        unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
+      remoteDampener a (unregisteredShare C U)
+          ((1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
         hardwareMultiple a κ M C U := by
   have h := sources_le_at hκ hC hU hM hu hr hd hx
   have hS : 0 < C + U := by linarith
-  have hs0 : 0 ≤ unmonitoredShare C U := div_nonneg hU hS.le
-  have h2 : a * unmonitoredShare C U ≤ unmonitoredShare C U := by
+  have hs0 : 0 ≤ unregisteredShare C U := div_nonneg hU hS.le
+  have h2 : a * unregisteredShare C U ≤ unregisteredShare C U := by
     have := mul_le_mul_of_nonneg_right ha1 hs0
     linarith
   have hη : 0 < efficiency κ M C U := by

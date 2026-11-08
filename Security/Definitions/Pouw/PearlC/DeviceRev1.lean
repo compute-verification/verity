@@ -12,7 +12,7 @@ program can skip it. rev1 takes every promotion into a +0 total out of the credi
   honest kernel needn't execute it either;
 * **any later one** (`T_{g−1} = 0` for `g ≥ 2`): debited by replay (`laterZeroPromos`), since only the chain's values
   show it. It is rare: at most 3.9·10⁻⁶ of later promotions on the H100 atom and none measured on sm_120,
-  so it moves no γ. `W_ref` keeps it: the honest kernel can't skip it
+  so it moves no gap. `W_ref` keeps it: the honest kernel can't skip it
   without a per-word test that costs as much as the add.
 
 The maps, the domain and the cap's form are the device record's. The debit gains the later +0 promotions and is
@@ -92,7 +92,7 @@ noncomputable def pearlCProtocolDevRev1 (d : PearlCDevice) (sem : PearlCSem Q R 
   ticket := fun H s U u act => atNat (d.ticket (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUsefulDev d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
+  fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s U u act : ℚ) : ℝ)
   capOK := fun H s U u act => sem.unitDebitRev1 d H s U u act ≤ ρ * creditDevRev1 d (U.layout.shape u)
