@@ -13763,7 +13763,7 @@
    }
   },
   "Definitions.Core.Interaction": {
-   "digest": "523f9c3a54369bc5ced4fc8454d35c99753feb926d5da8ba198dc2c03c88d5e9",
+   "digest": "89dea30ae3b9d06886a8c6fca4118888027b1595fbc6bc1481025e635933ea60",
    "definitions": {
     "Claims.Collision": "c9aa38dcdefc9acdf1e2b55b91bd771bda4cbf43d796761cda34074058a3c4da",
     "Claims.Ex": "c2c94d12b1a732e69312adbfd75898bd82844441f36c75ab6c132a808e7f85ff",
@@ -13775,7 +13775,6 @@
     "Claims.Finder.fin": "1b06b4fe8a3ad95a1a707b4e6b8cd1621884d7da8a367f1a224894e00fec2675",
     "Claims.Finder.out": "1f2e96ba2d94703b13797de2b60b1089e0014df7842a3a3beef4d8d4d62558e2",
     "Claims.Msg": "9bc9b800b5bce281e5b98074a8e91abfc5cfac65815c16ebed337e3c22c81f1e",
-    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d",
     "Claims.findColl": "f39659c01c907985e276f71eb1be0ce57508cddaa28210fb44f7f5293d65bed6"
    }
   },
@@ -14072,6 +14071,12 @@
     "Verity.TC.Spec.packValue": "528e510353bc25a638fa1363b94dba47f1b22c453b7701b6f7bfa9691da5803e",
     "Verity.TC.Spec.runGroups": "d0968531ff8c4cf1b6f9bd78d8674ddf24ad5ee2a2ef36c8a5fe1c4e007f56c2",
     "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
+   }
+  },
+  "Definitions.Core.Uniform": {
+   "digest": "4c89bb9e29a36a5684af69a69f2a713a3757cca256ab843a79183e6a3ec68de9",
+   "definitions": {
+    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d"
    }
   },
   "Definitions.Flock.Audit.Harm": {
@@ -14566,9 +14571,9 @@
    }
   },
   "Definitions.Pouw.Basic.Prob": {
-   "digest": "942703a432c5fb2594b72b9f7bd38aa8f1cc0a08aff2cdaf5742a1935d9ca690",
+   "digest": "95ffff7d20d7e3f7fd9d36678827bffdec0cc058b05c4cdbdb5f5ea6a05ec4dc",
    "definitions": {
-    "Pouw.pr": "c72cdec579500ec37c510210e22769c63de3d3f4f7e39a9f243452a0b22e4134"
+    "Pouw.pr": "6f1b562dc06aad84d836228f2049fc8cd0db85fa862ed120fb3de65a548fa2f9"
    }
   },
   "Definitions.Pouw.Dither": {

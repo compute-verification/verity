@@ -7,7 +7,9 @@ import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
 import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Basic.ENNReal.Real
 import Mathlib.Data.EReal.Inv
+import Mathlib.Data.Fintype.BigOperators
 import Proofs.Spot.Determinacy
 import Proofs.Spot.Exfiltration
 
@@ -15,7 +17,7 @@ import Proofs.Spot.Exfiltration
 # Exfiltration before detection: tightness, and what fails without each assumption
 
 * `tight_cum`, `tight_exists`: **the stopping-time bound is attained.** A strategy that leaks `ℓ` every window and
-  escapes each window with mass exactly `exp (-κ ℓ)` reaches `(j + 1) ℓ` with probability exactly `exp (-κ j ℓ)`, which
+  escapes each window with probability exactly `exp (-κ ℓ)` reaches `(j + 1) ℓ` with probability exactly `exp (-κ j ℓ)`, which
   is `tail_cum`'s bound at `x = (j + 1) ℓ`; for every `κ ≥ 0` and `ℓ > 0` there is such a sample.
 * `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no sample catches: no incorrect proof block,
   a sample known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
@@ -33,7 +35,7 @@ namespace Population.Exfil
 
 open Finset
 
-variable {Ω : Type} [Fintype Ω] [DecidableEq Ω] {μ : Ω → ℝ}
+variable {Ω : Type} [Fintype Ω] [DecidableEq Ω] {μ : PMF Ω}
 
 /-- Leak `ℓ` in every window and escape on the coins `s`. -/
 def constStrategy (ℓ : ℝ) (s : Finset Ω) : Strategy Ω := ⟨fun _ => ℓ, fun _ => s⟩
@@ -49,31 +51,30 @@ theorem const_leakBounded {ℓ : ℝ} (hℓ : 0 ≤ ℓ) (s : Finset Ω) : LeakB
   fun _ => ⟨hℓ, le_rfl⟩
 
 omit [DecidableEq Ω] in
-theorem prob_true (hμ : IsDist μ) (n : ℕ) : prob μ n (fun _ => True) = 1 := by
-  simp only [prob, ite_true]
-  exact ex_const hμ n 1
+theorem prob_true (n : ℕ) : prob μ n (fun _ => True) = 1 :=
+  Verity.Game.prPMFReal_true _
 
 /-! ## Tightness -/
 
 /-- **The constant strategy, exactly**: it reaches `(j + 1) ℓ` within `n > j` windows exactly when its first `j` coins
 escape, with probability `a ^ j`, `a` the acceptance probability. -/
-theorem tight_cum (hμ : IsDist μ) {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω) :
+theorem tight_cum {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω) :
     ∀ (n j : ℕ) (h : List Ω), j < n →
-      prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) = (∑ c ∈ s, μ c) ^ j
+      prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) = Verity.Game.prPMFReal μ (· ∈ s) ^ j
   | 0, _, _, hj => absurd hj (Nat.not_lt_zero _)
   | n + 1, 0, h, _ => by
     rw [pow_zero]
-    refine (prob_congr (E' := fun _ => True) fun cs => ?_).trans (prob_true hμ (n + 1))
+    refine (prob_congr (E' := fun _ => True) fun cs => ?_).trans (prob_true (n + 1))
     simp only [Nat.cast_zero, zero_add, one_mul, iff_true]
     rw [← Fin.cons_self_tail cs, cum_cons, const_leak, const_esc]
     have := cum_nonneg (const_leakBounded hℓ.le s) n (cs 0 :: h) (Fin.tail cs)
     split_ifs <;> linarith
   | n + 1, j + 1, h, hj => by
     have key : ∀ c : Ω, prob μ n (fun cs => (((j + 1 : ℕ) : ℝ) + 1) * ℓ ≤
-        (constStrategy ℓ s).cum (n + 1) h (Fin.cons c cs)) = if c ∈ s then (∑ c ∈ s, μ c) ^ j else 0 := by
+        (constStrategy ℓ s).cum (n + 1) h (Fin.cons c cs)) = if c ∈ s then Verity.Game.prPMFReal μ (· ∈ s) ^ j else 0 := by
       intro c
       by_cases hc : c ∈ s
-      · rw [ite_eq_left hc, ← tight_cum hμ hℓ s n j (c :: h) (by omega)]
+      · rw [ite_eq_left hc, ← tight_cum hℓ s n j (c :: h) (by omega)]
         refine prob_congr fun cs => ?_
         rw [cum_cons, const_leak, const_esc, ite_eq_left hc]
         push_cast
@@ -90,30 +91,30 @@ theorem tight_cum (hμ : IsDist μ) {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω)
 
 /-- **`tail_cum` is attained**: when every window's acceptance probability is exactly `exp (-κ ℓ)`, the constant
 strategy reaches `(j + 1) ℓ` with probability `exp (-κ ((j + 1) ℓ - ℓ))`, the bound itself. -/
-theorem tight_tail (hμ : IsDist μ) {κ ℓ : ℝ} (hℓ : 0 < ℓ) {s : Finset Ω} (hs : ∑ c ∈ s, μ c = Real.exp (-(κ * ℓ)))
+theorem tight_tail {κ ℓ : ℝ} (hℓ : 0 < ℓ) {s : Finset Ω} (hs : Verity.Game.prPMFReal μ (· ∈ s) = Real.exp (-(κ * ℓ)))
     {n j : ℕ} (h : List Ω) (hj : j < n) :
     prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) =
       Real.exp (-(κ * (((j : ℝ) + 1) * ℓ - ℓ))) := by
-  rw [tight_cum hμ hℓ s n j h hj, hs, ← Real.exp_nat_mul]
+  rw [tight_cum hℓ s n j h hj, hs, ← Real.exp_nat_mul]
   ring_nf
-
-/-- The two-coin sample that catches with probability `1 - a`. -/
-noncomputable def coin (a : ℝ) : Bool → ℝ := fun b => if b then a else 1 - a
-
-theorem coin_isDist {a : ℝ} (h0 : 0 ≤ a) (h1 : a ≤ 1) : IsDist (coin a) :=
-  ⟨fun b => by cases b <;> simp [coin] <;> linarith, by simp [coin]⟩
 
 /-- **The bound is tight for every `κ ≥ 0` and `ℓ > 0`**: some sample and some strategy meet detection pressure `κ` and the
 per-window bound `ℓ`, and reach `(j + 1) ℓ` with probability exactly `tail_cum`'s bound, at every horizon `n > j`. -/
 theorem tight_exists {κ ℓ : ℝ} (hκ : 0 ≤ κ) (hℓ : 0 < ℓ) :
-    ∃ (μ : Bool → ℝ) (A : Strategy Bool), IsDist μ ∧ DetectionPressure μ κ A ∧ LeakBounded ℓ A ∧
+    ∃ (μ : PMF Bool) (A : Strategy Bool), DetectionPressure μ κ A ∧ LeakBounded ℓ A ∧
       ∀ (n j : ℕ), j < n → prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ A.cum n [] cs) =
         Real.exp (-(κ * (((j : ℝ) + 1) * ℓ - ℓ))) := by
+  have h0 : 0 ≤ Real.exp (-(κ * ℓ)) := (Real.exp_pos _).le
   have h1 : Real.exp (-(κ * ℓ)) ≤ 1 := Real.exp_le_one_iff.2 (by nlinarith)
-  have hs : ∑ c ∈ {true}, coin (Real.exp (-(κ * ℓ))) c = Real.exp (-(κ * ℓ)) := by simp [coin]
-  refine ⟨coin (Real.exp (-(κ * ℓ))), constStrategy ℓ {true}, coin_isDist (Real.exp_pos _).le h1,
-    fun _ => hs.le, const_leakBounded hℓ.le _, fun n j hj => ?_⟩
-  exact tight_tail (coin_isDist (Real.exp_pos _).le h1) hℓ hs [] hj
+  let μ : PMF Bool :=
+    PMF.ofFintype (fun b => ENNReal.ofReal (if b then Real.exp (-(κ * ℓ)) else 1 - Real.exp (-(κ * ℓ)))) (by
+      rw [Fintype.sum_bool]
+      exact (ENNReal.ofReal_add h0 (sub_nonneg.2 h1)).symm.trans (by rw [add_sub_cancel, ENNReal.ofReal_one]))
+  have hs : Verity.Game.prPMFReal μ (· ∈ ({true} : Finset Bool)) = Real.exp (-(κ * ℓ)) := by
+    rw [Verity.Game.prPMFReal_mem, sum_singleton]
+    exact ENNReal.toReal_ofReal h0
+  refine ⟨μ, constStrategy ℓ {true}, fun _ => hs.le, const_leakBounded hℓ.le _, fun n j hj => ?_⟩
+  exact tight_tail hℓ hs [] hj
 
 /-! ## Without detection pressure -/
 
@@ -128,11 +129,11 @@ theorem no_pressure_cum (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n �
 
 omit [DecidableEq Ω] in
 /-- A positive leak that every coin lets escape meets no detection pressure `κ > 0`. -/
-theorem not_pressure_univ (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ) (hℓ : 0 < ℓ) :
+theorem not_pressure_univ {κ ℓ : ℝ} (hκ : 0 < κ) (hℓ : 0 < ℓ) :
     ¬ DetectionPressure μ κ (constStrategy ℓ univ) := by
   intro hP
   have h := hP []
-  simp only [constStrategy, hμ.2] at h
+  simp only [constStrategy, mem_univ, Verity.Game.prPMFReal_true] at h
   have : Real.exp (-(κ * ℓ)) < 1 := Real.exp_lt_one_iff.2 (by nlinarith)
   linarith
 
@@ -153,7 +154,7 @@ theorem no_halt_cumUpTo (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n �
 omit [Fintype Ω] [DecidableEq Ω] in
 /-- It meets detection pressure at every `κ`: its acceptance probability is zero. -/
 theorem pressure_empty (κ ℓ : ℝ) : DetectionPressure μ κ (constStrategy ℓ (∅ : Finset Ω)) :=
-  fun _ => by simpa [constStrategy] using (Real.exp_pos _).le
+  fun _ => by simpa [constStrategy, Verity.Game.prPMFReal_false] using (Real.exp_pos _).le
 
 omit [Fintype Ω] in
 /-- With the halt, the same strategy leaks one window's `ℓ`. -/
@@ -164,15 +165,14 @@ theorem halt_cum (ℓ : ℝ) (n : ℕ) (h : List Ω) (cs : Fin (n + 1) → Ω) :
 
 /-! ## Without a trusted model -/
 
-open Classical in
 /-- **A model that reveals the target**: if the honest outputs determine `S`, a guesser gets it with probability one,
 so no `g < 1` is a trusted-model bound. -/
-theorem not_trustedModel_of_reveal {W H T : Type} [Fintype W] {ρ : W → ℝ} (hρ : IsDist ρ) {S : W → T}
+theorem not_trustedModel_of_reveal {W H T : Type} [Fintype W] {ρ : PMF W} {S : W → T}
     {hon : W → H} (dec : H → T) (hdec : ∀ w, dec (hon w) = S w) {g : ℝ} (hg : g < 1) :
     ¬ TrustedModel ρ S hon g := by
   intro hT
   have := hT dec
-  simp only [hdec, ite_true, mul_one, hρ.2] at this
+  simp only [hdec, Verity.Game.prPMFReal_true] at this
   linarith
 
 end Population.Exfil
