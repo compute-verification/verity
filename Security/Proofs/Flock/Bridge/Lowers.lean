@@ -101,9 +101,9 @@ theorem exists_of_lt_flatMap {α β : Type} (f : α → List β) :
 
 /-! ## Where each wire's lowered gates sit -/
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
-theorem one_le_gateSize {N : ℕ} (o : Op N) : 1 ≤ gateSize o := by
+theorem one_le_gateSize {N : ℕ} (o : Verity.Boolean.Op N) : 1 ≤ gateSize o := by
   cases o <;> simp [gateSize]
 
 theorem length_lower (g : Fin C.N) : (lower C κ g).length = gateSize (C.op g) := by
@@ -225,7 +225,7 @@ theorem posOf_mem_unitGates {n : ℕ} {P : Partition C n} {u : Fin n} {a : Fin C
 theorem lower_ne_const {g : Fin C.N} (hni : (C.op g).isInput = false) (b : Bool) :
     ∀ x ∈ lower C κ g, x ≠ .const b := by
   unfold lower
-  cases h : C.op g <;> simp_all [Op.isInput]
+  cases h : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
 
 theorem isInput_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} (hu : P.unit g = some u) :
     (C.op g).isInput = false := by
@@ -253,11 +253,11 @@ theorem const_pos {i : ℕ} {b : Bool} (h : (progOf C κ).gates[i]? = some (.con
     rw [hin] at hx
     cases hk : κ g <;> simp [hk] at hx ⊢ <;> first | exact hx | exact hx.symm
   · exfalso
-    have hni : (C.op g).isInput = false := by cases h : C.op g <;> simp_all [Op.isInput]
+    have hni : (C.op g).isInput = false := by cases h : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
     exact lower_ne_const hni b _ (List.mem_of_getElem? hx) rfl
 
 theorem input_of_isInput {g : Fin C.N} (h : (C.op g).isInput = true) : C.op g = .input := by
-  cases hop : C.op g <;> simp_all [Op.isInput]
+  cases hop : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
 
 /-- An input the constants fix lowers to its constant, at its wire's position. -/
 theorem gates_posOf_const {a : Fin C.N} {b : Bool} (hin : C.op a = .input) (hk : κ a = some b) :
@@ -312,30 +312,30 @@ theorem reads_lower_args {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g
     subst hx
     simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
     rcases hi with rfl | rfl
-    · exact Or.inl ⟨a, by simp [Op.args], rfl⟩
-    · exact Or.inl ⟨b, by simp [Op.args], rfl⟩
+    · exact Or.inl ⟨a, by simp [Verity.Boolean.Op.args], rfl⟩
+    · exact Or.inl ⟨b, by simp [Verity.Boolean.Op.args], rfl⟩
   | xor a b =>
     rw [hop] at hx
     rcases j with _ | j <;> simp at hx
     subst hx
     simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
     rcases hi with rfl | rfl
-    · exact Or.inl ⟨a, by simp [Op.args], rfl⟩
-    · exact Or.inl ⟨b, by simp [Op.args], rfl⟩
+    · exact Or.inl ⟨a, by simp [Verity.Boolean.Op.args], rfl⟩
+    · exact Or.inl ⟨b, by simp [Verity.Boolean.Op.args], rfl⟩
   | not a =>
     rw [hop] at hx
     rcases j with _ | j <;> simp at hx
     subst hx
     simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
-    exact Or.inl ⟨a, by simp [Op.args], hi⟩
+    exact Or.inl ⟨a, by simp [Verity.Boolean.Op.args], hi⟩
   | row a b =>
     rw [hop] at hx
     rcases j with _ | _ | _ | j <;> simp at hx <;> subst hx <;> simp only [BGate.reads, List.mem_map,
       List.mem_cons, List.not_mem_nil, or_false] at hi
     · obtain ⟨a', ha', rfl⟩ := hi
-      exact Or.inl ⟨a', by simp [Op.args, ha'], rfl⟩
+      exact Or.inl ⟨a', by simp [Verity.Boolean.Op.args, ha'], rfl⟩
     · obtain ⟨a', ha', rfl⟩ := hi
-      exact Or.inl ⟨a', by simp [Op.args, ha'], rfl⟩
+      exact Or.inl ⟨a', by simp [Verity.Boolean.Op.args, ha'], rfl⟩
     · exact Or.inr ⟨rfl, hi⟩
 
 theorem off_ne_posOf {g a : Fin C.N} {j : ℕ} (hj : j + 1 < gateSize (C.op g)) : off C g.val + j ≠ posOf C a := by
@@ -400,8 +400,8 @@ theorem foldl_xor (l : List Bool) (b : Bool) : l.foldl Bool.xor b = Bool.xor b (
 
 theorem val_xorList {rd : ℕ → Option Bool} {v : Fin C.N → Bool} (ws : List (Fin C.N)) (own : Option Bool)
     (h : ∀ a ∈ ws, rd (posOf C a) = some (v a)) :
-    (BGate.xor (ws.map (posOf C))).val rd own = some (xorSum ws v) := by
-  simp [BGate.val, mapM_posOf ws h, xorSum, foldl_xor]
+    (BGate.xor (ws.map (posOf C))).val rd own = some (Verity.Boolean.xorSum ws v) := by
+  simp [BGate.val, mapM_posOf ws h, Verity.Boolean.xorSum, foldl_xor]
 
 /-- **Each wire's lowered gates compute its value** in the unit holding it, at any wire values `V` that apply each of
 the unit's gates to its arguments, on committed values `ref` that carry `V` at every position the unit reads from
@@ -442,36 +442,36 @@ theorem runIn_posOf_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N �
     fun j hj x hx a ha hr => hfeed a ha _ (hmem j hj) (Nat.le_add_right _ _) x hx hr
   rw [hV g hu, runIn_feed, posOf_eq]
   cases hop : C.op g with
-  | input => simp [hop, Op.isInput] at hni
+  | input => simp [hop, Verity.Boolean.Op.isInput] at hni
   | and a b =>
     have h0 : (progOf C κ).gates[off C g.val + 0]? = some (.and [posOf C a, posOf C b]) := by
       simpa [lower, hop] using hgate 0 (by simp [hop, gateSize])
-    have hs : gateSize (Op.and a b : Op C.N) - 1 = 0 := rfl
+    have hs : gateSize (Verity.Boolean.Op.and a b : Verity.Boolean.Op C.N) - 1 = 0 := rfl
     have h1 : 0 < gateSize (C.op g) := by simp [hop, gateSize]
     rw [hs, h0, Option.bind_some]
-    have fa := hin 0 h1 _ h0 a (by simp [hop, Op.args]) (by simp [BGate.reads])
-    have fb := hin 0 h1 _ h0 b (by simp [hop, Op.args]) (by simp [BGate.reads])
+    have fa := hin 0 h1 _ h0 a (by simp [hop, Verity.Boolean.Op.args]) (by simp [BGate.reads])
+    have fb := hin 0 h1 _ h0 b (by simp [hop, Verity.Boolean.Op.args]) (by simp [BGate.reads])
     simp only [Nat.add_zero] at fa fb
-    simp [BGate.val, List.mapM_cons, fa, fb, Op.apply]
+    simp [BGate.val, List.mapM_cons, fa, fb, Verity.Boolean.Op.apply]
   | xor a b =>
     have h0 : (progOf C κ).gates[off C g.val + 0]? = some (.xor [posOf C a, posOf C b]) := by
       simpa [lower, hop] using hgate 0 (by simp [hop, gateSize])
-    have hs : gateSize (Op.xor a b : Op C.N) - 1 = 0 := rfl
+    have hs : gateSize (Verity.Boolean.Op.xor a b : Verity.Boolean.Op C.N) - 1 = 0 := rfl
     have h1 : 0 < gateSize (C.op g) := by simp [hop, gateSize]
     rw [hs, h0, Option.bind_some]
-    have fa := hin 0 h1 _ h0 a (by simp [hop, Op.args]) (by simp [BGate.reads])
-    have fb := hin 0 h1 _ h0 b (by simp [hop, Op.args]) (by simp [BGate.reads])
+    have fa := hin 0 h1 _ h0 a (by simp [hop, Verity.Boolean.Op.args]) (by simp [BGate.reads])
+    have fb := hin 0 h1 _ h0 b (by simp [hop, Verity.Boolean.Op.args]) (by simp [BGate.reads])
     simp only [Nat.add_zero] at fa fb
-    simp [BGate.val, List.mapM_cons, fa, fb, Op.apply]
+    simp [BGate.val, List.mapM_cons, fa, fb, Verity.Boolean.Op.apply]
   | not a =>
     have h0 : (progOf C κ).gates[off C g.val + 0]? = some (.not (posOf C a)) := by
       simpa [lower, hop] using hgate 0 (by simp [hop, gateSize])
-    have hs : gateSize (Op.not a : Op C.N) - 1 = 0 := rfl
+    have hs : gateSize (Verity.Boolean.Op.not a : Verity.Boolean.Op C.N) - 1 = 0 := rfl
     have h1 : 0 < gateSize (C.op g) := by simp [hop, gateSize]
     rw [hs, h0, Option.bind_some]
-    have fa := hin 0 h1 _ h0 a (by simp [hop, Op.args]) (by simp [BGate.reads])
+    have fa := hin 0 h1 _ h0 a (by simp [hop, Verity.Boolean.Op.args]) (by simp [BGate.reads])
     simp only [Nat.add_zero] at fa
-    simp [BGate.val, fa, Op.apply]
+    simp [BGate.val, fa, Verity.Boolean.Op.apply]
   | row a b =>
     have h3 : gateSize (C.op g) = 3 := by simp [hop, gateSize]
     have h0 : (progOf C κ).gates[off C g.val + 0]? = some (.xor (a.map (posOf C))) := by
@@ -480,25 +480,25 @@ theorem runIn_posOf_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N �
       simpa [lower, hop] using hgate 1 (by omega)
     have h2 : (progOf C κ).gates[off C g.val + 2]? = some (.and [off C g.val, off C g.val + 1]) := by
       simpa [lower, hop] using hgate 2 (by omega)
-    have hs : gateSize (Op.row a b : Op C.N) - 1 = 2 := rfl
+    have hs : gateSize (Verity.Boolean.Op.row a b : Verity.Boolean.Op C.N) - 1 = 2 := rfl
     rw [hs, h2, Option.bind_some]
     have r0 : feed (progOf C κ) ref (unitGates P u) (off C g.val + 2) (off C g.val) =
-        some (xorSum a V) := by
+        some (Verity.Boolean.xorSum a V) := by
       have hm := hmem 0 (by omega)
       rw [Nat.add_zero] at hm
       unfold feed
       simp only [hm, show off C g.val < off C g.val + 2 by omega, ↓reduceIte]
       rw [runIn_feed, ← Nat.add_zero (off C g.val), h0, Option.bind_some]
       exact val_xorList a _ fun a' ha' =>
-        hin 0 (by omega) _ h0 a' (by simp [hop, Op.args, ha']) (by simp [BGate.reads]; exact ⟨a', ha', rfl⟩)
+        hin 0 (by omega) _ h0 a' (by simp [hop, Verity.Boolean.Op.args, ha']) (by simp [BGate.reads]; exact ⟨a', ha', rfl⟩)
     have r1 : feed (progOf C κ) ref (unitGates P u) (off C g.val + 2) (off C g.val + 1) =
-        some (xorSum b V) := by
+        some (Verity.Boolean.xorSum b V) := by
       unfold feed
       simp only [hmem 1 (by omega), show off C g.val + 1 < off C g.val + 2 by omega, ↓reduceIte]
       rw [runIn_feed, h1, Option.bind_some]
       exact val_xorList b _ fun b' hb' =>
-        hin 1 (by omega) _ h1 b' (by simp [hop, Op.args, hb']) (by simp [BGate.reads]; exact ⟨b', hb', rfl⟩)
-    simp [BGate.val, List.mapM_cons, r0, r1, Op.apply]
+        hin 1 (by omega) _ h1 b' (by simp [hop, Verity.Boolean.Op.args, hb']) (by simp [BGate.reads]; exact ⟨b', hb', rfl⟩)
+    simp [BGate.val, List.mapM_cons, r0, r1, Verity.Boolean.Op.apply]
 
 /-- `runIn_posOf_of` at the circuit's evaluation on `Xv`. -/
 theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → Bool) (ref : ℕ → Option Bool)
@@ -562,7 +562,7 @@ theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) 
     exact ⟨_, by rw [hself _ hp, hφ], hrun g.val g rfl hu⟩
 
 /-- **The wire at a position** of the lowered program: the wire it is the position of, `d` at any other. -/
-def wireAt (C : FlockSoundness.Audit.Circuit) (d : Fin C.N) (i : ℕ) : Fin C.N :=
+def wireAt (C : Verity.Boolean.Circuit) (d : Fin C.N) (i : ℕ) : Fin C.N :=
   ((List.finRange C.N).find? fun g => posOf C g = i).getD d
 
 theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
@@ -606,7 +606,7 @@ theorem mem_insOf {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} :
   · rintro ⟨⟨h1, h2⟩, h3⟩
     exact ⟨input_of_isInput h1, h2, h3⟩
   · rintro ⟨h1, h2, h3⟩
-    exact ⟨⟨by simp [h1, Op.isInput], h2⟩, h3⟩
+    exact ⟨⟨by simp [h1, Verity.Boolean.Op.isInput], h2⟩, h3⟩
 
 /-- A wire's owner reads it. -/
 theorem reads_of_owner {n : ℕ} {P : Partition C n} {g : Fin C.N} {u : Fin n} (ho : owner P g = some u) :

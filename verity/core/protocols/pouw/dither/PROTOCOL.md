@@ -334,7 +334,7 @@ Inside a selected block, its proof block p is sampled with probability W_p/W_b.
 - `work:K` and `stratified:K` sample a fixed-size subset per template stratum once, over the whole registration. Dither
   has no strata, a random count, and a sample interleaved with serving.
 
-It needs a sampling-design object beside `draw.parse_design`'s and the Lean verifier's `Flock.Draw`. Its acceptance probability bound
+It needs a sampling-design object beside `draw.parse_design`'s and the Lean verifier's `Flock.Draw`. Its miss probability bound
 is `WorkSound`'s sampling term, a moment bound at rate ηq/W_reg a unit of cost, rather than `work_escape_le`. The
 integrity profile has no field for a cost-weighted moment bound; that field is sampled proofs', which produce the
 profile.

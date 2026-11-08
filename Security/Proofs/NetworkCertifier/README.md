@@ -297,8 +297,8 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
   the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the incorrect set `W_i` of the
-  witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
-  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `1 − q` the design's per-window acceptance probability
+  witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional miss bound
+  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `1 − q` the design's per-window miss probability
   (no sample's form: a uniform `kd_i`-of-`n_i` sample meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
   outside the monitoring period's good event (`PooledGood`: the incorrect sets hold under `Fmax ≥ ln(1/δ)/q` units and
