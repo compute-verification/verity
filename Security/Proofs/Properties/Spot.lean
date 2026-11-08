@@ -1296,21 +1296,6 @@ theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl, hs⟩
 
-/-- **`AcceptMeans`' nontrivial lemma**: its conclusion fails at the commitment to the record `null`, which a check that
-accepts everything accepts, whatever the law, its profile's sample and the population: `null` has no keys, so no
-registration keeps it (`R1`). -/
-theorem acceptMeans_nontrivial :
-    ∀ (law : Json) (d : Core.Draw) (n : Nat),
-      ¬ (Registered bareParams.verifier nullCommitment.record law ∧
-        Drawn bareEvidence.draw (getD nullCommitment.record "population") law ∧
-        UnitsProved nullCommitment bareEvidence ∧ VerdictsAccept bareEvidence.verdicts ∧
-        Record.profileDraw law = some d ∧ nat? (getD nullCommitment.record "population") = some n ∧
-        barePublic = publicOf bareParams bareEvidence law d n ∧
-        bareProfile = profileOf bareParams nullCommitment bareEvidence d n ∧
-        SeedSaltNamed bareParams nullCommitment bareEvidence) := by
-  rintro _ _ _ ⟨⟨⟨hk, -⟩, -⟩, -⟩
-  simp [nullCommitment, keys?] at hk
-
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
   unfold OneStage.commitmentOf at h

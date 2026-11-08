@@ -384,22 +384,14 @@ def BernoulliBounds : Prop :=
       ∀ (r : Core.Ratio) (l : Core.Level), l ∈ prof.levels → l.draw = some (.bernoulli r) →
         pub.bound = Bound.bernoulliBound l.size r p.delta
 
-/-! ## A commitment a check that accepts everything accepts, and `AcceptMeans` refuses -/
+/-! ## An honest one-stage audit, and its window with the seed salt's evidence missing
 
-/-- The verifier of the default program, holding no copies, at δ = 0 and with no challenger. -/
-def bareParams : Params :=
-  { verifier :=
-      { program := default, query := .null, law := .null, workTable := none, scheme := "", ports := #[],
-        leafLayer := none, anchors := #[], log := #[], partition := none },
-    delta := ⟨0, 1⟩ }
-
-/-- The commitment to the record `null`, which has no keys, so no registration keeps it (`R1`). -/
-def nullCommitment : Commitment := { record := .null, digest := .empty }
-
-/-- Evidence holding nothing. -/
-def bareEvidence : Evidence :=
-  { receipt := .null, draw := .null, provedUnits := #[], instances := 0, statement := .null, verdicts := #[],
-    sessions := #[], served := none, sessionRoots := none }
+A program of one Call of a one-gate, 16-bit template, partitioned by `Q_template_instance` into its one unit; a v1
+record keeping R1–R6 against the verifier's copies, its partition's and query's digests the SHA-512s its check computes;
+a `subset` sample of that unit, its receipt naming the record's digest, and one verdict of record that accepted. The
+verifier names no challenger, so the window names no seed salt (`params`). `saltParams` names a challenger and the
+window's open root for the same window, whose evidence carries no seed salt: a check that accepts everything accepts it,
+publishing `barePublic` and `bareProfile`, and `AcceptMeans` refuses it. -/
 
 /-- Public outputs of no units, with a bound of 0. -/
 def barePublic : Public := { drawn := #[], proved := #[], bound := 0, perTemplate := none }
@@ -407,5 +399,95 @@ def barePublic : Public := { drawn := #[], proved := #[], bound := 0, perTemplat
 /-- The profile of no program and no level. -/
 def bareProfile : Core.Integrity :=
   { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := ⟨0, 1⟩, drawn := #[] }
+
+namespace Honest
+
+/-- The template: one primitive gate of 16 bits. -/
+def templateDefn : Flock.Program.Defn :=
+  { key := "T", id := "T_v1", prim := true, params := #[], ret := .value 16, gates := 1, paramLeaves := 0,
+    outLeaves := 1 }
+
+/-- The root: one Call of the template, returning its output. -/
+def rootDefn : Flock.Program.Defn :=
+  { key := "R", id := "R_v1", prim := false, params := #[], ret := .value 16,
+    body := { params := #[], retType := .value 16, nodes := #[{ form := .call, fn := 1, args := #[], out := .value 16 }],
+              ret := { parts := #[.affine false 0 0 1], starts := #[0], count := 1 }, offsets := #[0] },
+    gates := 1, paramLeaves := 0, outLeaves := 1 }
+
+/-- The program, its SHA-512 named by 64 zero bytes. -/
+def prog : Flock.Program.Prog :=
+  { defs := #[rootDefn, templateDefn], index := {}, root := 0, programFn := "R", sha512 := ⟨Array.replicate 64 0⟩ }
+
+def program : Program := { desc := .ofProg prog, prog }
+
+def templateParams : List (String × Json) := [("template", .str "T")]
+
+def queryItems : List (String × Json) :=
+  [("name", .str "Q_template_instance"), ("params", Json.mkObj templateParams), ("version", Lean.toJson (0 : Nat))]
+
+/-- The query: every instance of the template is a unit. -/
+def query : Json := Json.mkObj queryItems
+
+/-- The program's SHA-512, in hex. -/
+def hex : String := Flock.hexOf prog.sha512
+
+/-- The canonical partition object over the program and the query. -/
+def partitionItems : List (String × Json) :=
+  [("format", .str Flock.HmRow.PARTITION_V1), ("program", .str hex), ("query", query)]
+
+/-- The sampling design: one unit, uniformly. -/
+def law : Json := Json.mkObj [("law", .str "subset"), ("k", Lean.toJson (1 : Nat))]
+
+/-- The one port's layout. -/
+def port : Json := Json.mkObj [("domain", .str "d"), ("leaves", Lean.toJson (1 : Nat))]
+
+def rootEntry : Json :=
+  Json.mkObj [("domain", .str "d"), ("leaves", Lean.toJson (1 : Nat)), ("port", .str "x"), ("root", .str "00")]
+
+def window : Json := Json.mkObj [("kind", .str "served")]
+
+/-- The partition's digest as the check computes it. -/
+def partitionHex : String := (Partition.digest (Json.mkObj partitionItems)).getD ""
+
+/-- The query's digest as the check computes it. -/
+def queryHex : String := match Registration.queryDigest query with
+  | .ok q => q
+  | .error _ => ""
+
+def recordItems : List (String × Json) :=
+  [("anchors", .arr #[]), ("format", .str Registration.FORMAT), ("law", law), ("leaf_layer", .null),
+   ("partition", .str partitionHex), ("population", Lean.toJson (1 : Nat)), ("previous", .null), ("program", .str hex),
+   ("protocol", .str Registration.PROTOCOL), ("query", .str queryHex), ("roots", .arr #[rootEntry]),
+   ("scheme", .str "s"), ("window", window)]
+
+/-- The registration record. -/
+def record : Json := Json.mkObj recordItems
+
+def verifier : Registration.Verifier :=
+  { program, query, law, workTable := none, scheme := "s", ports := #[("x", port)], leafLayer := none,
+    anchors := #[], log := #[], partition := none }
+
+/-- The commitment to the record, under the record's own digest (`OneStage.commitmentOf`). -/
+def commitment : Commitment := { record, digest := (Flock.WindowRecord.digest record).toOption.getD .empty }
+
+def draw : Json :=
+  Json.mkObj [("k", Lean.toJson (1 : Nat)), ("law", .str "subset"), ("population", Lean.toJson (1 : Nat)),
+    ("units", .arr #[Lean.toJson (0 : Nat)])]
+
+/-- The evidence: the sample of the one unit, proved, and a verdict of record that accepted; no seed salt. -/
+def evidence : Evidence :=
+  { receipt := Json.mkObj [("registration", .str (Flock.hexOf commitment.digest))], draw, provedUnits := #[0],
+    instances := 1, statement := .null,
+    verdicts := #[("v", Json.mkObj [("accepted", .bool true), ("of_record", .bool true)])], sessions := #[],
+    served := none, sessionRoots := none }
+
+def params : Params := { verifier, delta := ⟨1, 2⟩ }
+
+/-- The same verifier and window, naming a challenger and the window's open root. -/
+def saltParams : Params :=
+  { verifier := { verifier with windowRoot := some (Flock.hexOf ⟨Array.replicate 64 0⟩) }, delta := ⟨1, 2⟩,
+    challenger := some (⟨⟨64, 8, 10⟩, ⟨Array.replicate Challenger.PUBLIC_BYTES 0⟩⟩, "sample") }
+
+end Honest
 
 end Properties.Spot
