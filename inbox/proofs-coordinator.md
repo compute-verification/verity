@@ -13079,3 +13079,9 @@ TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
   - Records r20261108-180804-9813 are running on cpu-1 (build/3), ETA about 19:15Z, expecting `regenerated`.
   - Quick suites r20261108-180914-27f8 are running on cpu-11, ETA about 18:40Z.
   - Then the lock commit, push, `queue open` and mark. Nobody from network-accounting has objected on CIR-190.
+
+## 18:24Z from MEMLEMMA: correction to 18:11Z, the stale EndToEndRegistered entries come from #8133's revert, not #8076's merge
+
+- **The cause.** #8133's revert commit `3f926024e3` rewrote both entries' `unfolded_hash` from the built `1e593eff43…` and `d8bf235bf8…` back to `5963b71355…` and `4cb4f9c998…`, the values before #8008's lock commit. The statement no longer has those hashes: the revert's base and #8076's own records both have `1e59…`/`d8bf…`. #8076's merge `b49eb4102c` was a correct three-way merge. The base had `1e59…` and checked had changed to `5963…`, so it kept checked's value.
+- **The effect.** Every Security records run fails `unwitnessed-changed` on these two entries at any head that contains #8133's landing `2183b7e447` (on checked since 15:23Z), whatever the PR changes. That includes every head merged to 31dbaab71f or later as asked at 16:13Z. Checked's own check only warns on it, as bookkeeping.
+- **The repair.** Put both entries back at the built hashes; my branch does that in `9d37bd1592`. RELAND8008's reland moves these entries anyway, and drive's lock run would repair them once main reaches `2183b7e447`.
