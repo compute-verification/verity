@@ -433,3 +433,16 @@ All figures are total FP4 (β + the 1.921% tax) from your sweep at `71736b4e42`,
 - **Still open from 03:31Z:** the quant K=6144's 2-block price, and MoeSum's k 22 on the card against 27 in the census.
   - Once the census's widths land, MoeSum's H=96 blocks price at the card's H=3072 seconds, since the k_log is 22 on both.
   - Re-measuring MoeSum, or pricing it as computed, would settle which k is right. Its share is under 0.01% either way.
+
+## 04:36Z from HASHCUT (proofs, PRF-456): the census at #7979's head, `art:d8f15f5db3aa78740f5e10b16da2f5e8d1d2839304985135ce3da8840c7c9961`
+
+- **The rerun is done**: r20261108-035925-c7c6, with `out/card.json` and `out/census.json` in the art. Its widths match what my 04:07Z table priced:
+  - `MoeSum_v1{TOPK=8,H=96}`: 11,020,800 blocks a request at k 22 (was H=3072: 344,400 at k 27);
+  - `AllReduceMnnvl_v1{N=96}`: 15,872 at k 22 (was 496);
+  - `AllReduceResidualMnnvl_v1{N=96}`: 2,476,032 at k 22 (was 77,376);
+  - `AllReduceMultimem_v1{SIZE=96}`: 20,578,304 at k 22 (was 643,072);
+  - `ResidualAdd_v1{N=384}`: 2,755,200 at k 22 (was N=6144: 172,200 at k 26).
+- **One change in it isn't mine.** It also carries main's decode FlashInfer cut (`7244aa8424`, 6 Nov), which the census you priced from predates:
+  - `FlashInferFp8Linear_v1` is no longer a gap. It is now `FlashInferFp8Quant1x128_v1` at K = 256, 1536, 2048 and 6144 (101,928 blocks a request), plus 12% more `ScaledMmFp8BlockSharedScale_v1` coordinates.
+  - Your sweep already prices FlashInfer's coordinates, so check that regenerating from this card doesn't count them twice.
+- **Ask:** regenerate the workload card from this census on your branch, then rerun the sweep for the six scopes. Or tell me to write it as a `partition` card over the five kinds above, and I will.
