@@ -33,10 +33,12 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   template's whole output, its field's (`o<j>` for field `j`).
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part, `second-statements` when no
-  statements are given, `second-cover` for each part the second draw samples that no statement is for, and
-  `second-reported` when the `{value: root}` the verifiers of record report the sessions read (`Record.sessionRegistered`)
-  is not the statements' (`statementReads`). A passing check (`check_ok`) holds every session's sample to the second
-  draw, cell by cell, and every read it reports to a statement's.
+  statements are given, `second-order` for each statement for a part before an earlier statement's (round 2 reads the
+  statements in the parts' order, the interior program's strata's: `orderFailures`), `second-cover` for each part the
+  second draw samples that no statement is for, and `second-reported` when the `{value: root}` the verifiers of record
+  report the sessions read (`Record.sessionRegistered`) is not the statements' (`statementReads`). A passing check
+  (`check_ok`) holds every session's sample to the second draw, cell by cell, the statements to the parts' order
+  (`inOrder`), and every read it reports to a statement's.
 * **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
   doesn't, no run passes (`check_refused`).
 -/
@@ -369,6 +371,24 @@ def stmtFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : List
       else (stmtCodes own (byTemplate own.interior) p s).map fun c => (c, detailOf i (.str s.template))
     | none => [("second-template", detailOf i (.str s.template))]
 
+/-- The index of the part of `ps` statement `j` is for: none when it is no statement, or for no part. -/
+def partAt (ps : Array Part) (j : Json) : Option Nat :=
+  (Stmt.ofJson? j).bind fun s => ps.findIdx? (·.template == s.template)
+
+/-- Statements `i` and `j` of `ss` are in the parts' order: where both are for parts, `i`'s is not after `j`'s. -/
+def inOrder (ps : Array Part) (ss : List Json) (i j : Nat) : Bool :=
+  match partAt ps (ss.getD i .null), partAt ps (ss.getD j .null) with
+  | some k, some l => decide (k ≤ l)
+  | _, _ => true
+
+/-- `second-order` for each statement of `ss` for a part before an earlier statement's: round 2 reads the statements
+in the parts' order, the interior program's strata's. -/
+def orderFailures (ps : Array Part) (ss : List Json) : List (String × Json) :=
+  (List.range ss.length).filterMap fun j =>
+    if (List.range j).all (inOrder ps ss · j) then none
+    else
+      some ("second-order", detailOf j ((Stmt.ofJson? (ss.getD j .null)).elim Json.null fun s => Json.str s.template))
+
 /-- `second-cover` for each part the second draw samples that no statement is for. -/
 def coverFailures (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   ps.toList.filterMap fun p =>
@@ -396,8 +416,8 @@ def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
 /-- Every failure of statements `ss` over parts `ps`, then, when there is none and the form isn't allowed, its
 refusal. -/
 def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
-  let found := (List.range ss.length).flatMap (stmtFailures own ps ss) ++ coverFailures own ps ss ++
-    reportedFailures own ss
+  let found := (List.range ss.length).flatMap (stmtFailures own ps ss) ++ orderFailures ps ss ++
+    coverFailures own ps ss ++ reportedFailures own ss
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- **Round 2's statement check** (module docstring) of statements `stmts`, the two-stage form allowed when `allow`
@@ -480,15 +500,25 @@ theorem check_refused (own : Own) (stmts : Option (Array Json)) : (check false o
   · split <;> simp
   · split <;> simp [failures_ne_nil]
 
+/-- **In the parts' order**: with no `second-order`, every two statements for parts are in the parts' order. -/
+theorem orderFailures_nil {ps : Array Part} {ss : List Json} (h : orderFailures ps ss = []) {i j : Nat} (hij : i < j)
+    (hj : j < ss.length) : inOrder ps ss i j = true := by
+  have hj' := List.filterMap_eq_nil_iff.1 h j (List.mem_range.2 hj)
+  split at hj'
+  · rename_i hall
+    exact List.all_eq_true.1 hall i (List.mem_range.2 hij)
+  · simp at hj'
+
 /-- **What a passing check says**: the form is allowed, the interior program's strata make parts, the replay block's
 Definition makes links, each for a part's template, each statement is one for a part's template, no earlier
-statement's, and passes every check (`stmtCodes_nil`), each part the second draw samples has a statement, and the reads
-the verifiers of record report are the statements'. -/
+statement's, and passes every check (`stmtCodes_nil`), the statements are in the parts' order (`inOrder`), each part the
+second draw samples has a statement, and the reads the verifiers of record report are the statements'. -/
 theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
     allow = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own.links = true ∧
       (∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
         ps.find? (·.template == s.template) = some p ∧ (templates (ss.toList.take i)).contains s.template = false ∧
         stmtCodes own (byTemplate own.interior) p s = []) ∧
+      (∀ i j, i < j → j < ss.size → inOrder ps ss.toList i j = true) ∧
       (∀ p ∈ ps.toList, own.drawn.any (p.holds own.sample.size) = true → (templates ss.toList).contains p.template = true) ∧
       Record.sameDict (own.reported.getD #[]) (statementReads ss.toList) = true := by
   simp only [check, fold_codes_empty] at h
@@ -506,8 +536,9 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
     · rename_i hne
       simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
       simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
-      obtain ⟨hst, hcov, hrep⟩ := h
-      refine ⟨by simpa using hne, ps, hp, hl, ?_, ?_, ?_⟩
+      obtain ⟨hst, hord, hcov, hrep⟩ := h
+      refine ⟨by simpa using hne, ps, hp, hl, ?_, fun i j hij hj => orderFailures_nil hord hij (by simpa using hj),
+        ?_, ?_⟩
       · intro i hi
         have hi' : i < ss.toList.length := by simpa using hi
         have := hst i hi'
@@ -602,6 +633,17 @@ private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "b
 #guard (check true { exOwn with links := none } (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-links"]
 #guard (check true { exOwn with links := none } none).codes == #["second-links"]
 #guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+
+/-- A statement for template `t`'s part. -/
+private def exFor (t : String) : Json := (exStmt [] []).setObjVal! "template" (.str t)
+
+private def exTwoParts : Array Part := #[⟨"Pair_v0", 0, 3⟩, ⟨"Triple_v0", 6, 1⟩]
+
+#guard (orderFailures exTwoParts [exFor "Pair_v0", exFor "Triple_v0"]).isEmpty
+#guard (orderFailures exTwoParts [exFor "Triple_v0", exFor "Pair_v0"]).map (·.1) == ["second-order"]
+#guard (orderFailures exTwoParts [exFor "Triple_v0", exFor "Other_v0", .null, exFor "Triple_v0"]).isEmpty
+#guard (check true { exOwn with parts := some exTwoParts } (some #[exFor "Triple_v0", exFor "Pair_v0"])).codes.contains
+  "second-order"
 
 private def exArg (p : Bool) (i : Nat) : Flock.Program.Arg :=
   { ty := .value 8, seq := Flock.Program.Seq.ofParts #[.affine p i 0 1] }

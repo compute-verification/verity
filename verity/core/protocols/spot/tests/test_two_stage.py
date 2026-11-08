@@ -560,6 +560,20 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
         assert cells <= Fraction(comb(4 - sum(w), 1), comb(4, 1))
 
 
+def test_round_two_refuses_statements_out_of_the_parts_order():
+    """Round 2 reads the statements in the parts' order, the interior program's strata's (PAIR's, then TRIPLE's): the
+    honest statements swapped are refused by name (`second-order`), at the first statement out of it, and the run of
+    record refuses them alike."""
+    stream = _window_stream()
+    second = _window_stages(stream)
+    statements = stream.statements(second)[::-1]
+    out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+                         session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and checks["statements"]["codes"] == ["second-order"] and "run" not in checks, checks
+    assert checks["statements"]["detail"]["second-order"] == {"statement": 1, "template": codec.descriptor_id(PAIR)}
+
+
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():
     """`k` per template: k_t of each cell of template t, capped at the cell's size; counts naming another template are
     refused, and so are counts proving every cell whole."""

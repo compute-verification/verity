@@ -4884,10 +4884,11 @@ def _second_with(c: dict, i: int, **fields) -> dict:
 
 def test_round_two_holds_each_session_to_its_part(pieces):
     """Round 2's statement check, Lean's the Python's whole, over the two-template interior (`SECOND_MIXED`, its ports
-    named by template) after a replay sample of two: the honest statements pass, in either order, with a part's `x`
-    read from the boundary at its cells' replay blocks where the design links it, or read from its own `x` at its own
-    rows, and fail only on the form while it is refused (`two-stage-form`); a part needs a statement only where the
-    second stage drew in it (`second-cover`); a read of the boundary at another cell's replay block, of its own `x` at
+    named by template) after a replay sample of two: the honest statements pass, in the parts' order (out of it,
+    `second-order`), with a part's `x` read from the boundary at its cells' replay blocks where the design links it, or
+    read from its own `x` at its own rows, and fail only on the form while it is refused (`two-stage-form`); a part
+    needs a statement only where the second stage drew in it (`second-cover`); a read of the boundary at another
+    cell's replay block, of its own `x` at
     another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but the boundary port
     its link names, or a linked port not read (`second-read`) is refused, as are reads the verifier of record doesn't
     report (`second-reported`); links none derived, or one for a template of no part, are refused (`second-links`);
@@ -4905,7 +4906,7 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     cases = [
         (honest, []),
         ({**honest, "allow": False}, ["two-stage-form"]),
-        ({**honest, "statements": honest["statements"][::-1]}, []),
+        ({**honest, "statements": honest["statements"][::-1]}, ["second-order"]),
         (linked, []),
         (own, []),
         ({**own, "allow": False}, ["two-stage-form"]),
