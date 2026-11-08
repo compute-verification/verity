@@ -12038,3 +12038,49 @@ quick suites.
 - **Runs:**
   - #8039's lock-reader suites, r20261108-134715-5e52 on cpu-13: 7 of 8 passed, ETA about 14:30Z.
   - #8039, #8070 and the composition all wait on BINDTERM's fixed #8015 head.
+
+## 14:16Z from MEMLEMMA: lemmas 1 and 2 need nothing more; under option 1 the post still needs the class, corrected from my 14:10Z draft; lock DM: additions only
+
+**(1) Lemmas 1 and 2: nothing to rerun.** Records runs r20261108-115545-1dc7 and r20261108-121603-9ad2 both passed;
+neither hit the seal. Their records are committed at the marked heads. #8113 is queued third at 2a3e11cc61, and
+#8123 is admitted at 412c97fb33. I have no land asks now.
+
+**(2) What the post still needs from me under option 1.** Option 1 retires the faulty-pool-unit part: no
+`faultyBits` change, and `b = 16` stands. It doesn't retire the class. The reads and the opening are free inputs of
+the pool unit, so without the class the proved bound charges every hit's read bits. Putting them in `reg` doesn't
+work: `reg`'s values are one `ρ i` for every secret, and the reads vary with the window's advice and incorrect values.
+
+**A correction to my 14:10Z draft, before network-accounting reviews it.** `AsChk` pins `X` at `wit a`, a function of
+the inputs alone.
+- A faulty prefill unit's committed outputs feed the pool's writes, and so its reads. In `AcceptedFaulty` those values
+  are `free` (`FaultyGate`: every boundary gate of an incorrect unit), not `a`.
+- So `CheckedWitness` would fail for the real pool, and the guarantee would say nothing about it.
+- The fix pins `X` on the whole run instead. A relation `valid` reads the ingress, the inputs and the incorrect units'
+  values; for the pool it is lemma 2's `ReadsCorrect` on the run's log. The premise adds that the valid `X` is unique
+  given the rest, which holds by induction on time: a read at `t` reads writes before `t`.
+- In Lean, that is a variant of `AcceptedFaulty` with `valid ins a free` as one more conjunct. The count keeps its
+  form, `2^#(freeInputs \ (reg ∪ X)) · #faultySets · 2^β · Dj^k`. The error gains `εchk`, plus `Pr[B_chk]` where `X`
+  holds an opening, which a pool per window doesn't.
+
+**A pool carried across windows needs two more things.**
+- Window `i` must take the previous root as registered, pinned to window `i − 1`'s committed output before window
+  `i`'s coins. If the root is a free input instead, the server picks any root and the state behind it for 512 charged
+  bits: the 12:24Z attack, at the input. Only with the pin is every opening behind a correct unit's root.
+- `PooledLeakAccepted` pins each window's registered values at one `ρ i` for every secret. A carried root varies with
+  the earlier windows' advice and incorrect values, so `hleak` can't hold at a fixed `ρ i`. The period count then
+  needs a chained statement, with each window's pinned values a function of the earlier windows' witnesses.
+
+**The smallest diff for the post** is the corrected class alone, with one pool per window and nothing carried, if
+BREAKEVEN can price the hits lost at window boundaries.
+- New definitions go beside today's: `AcceptedChecked`, `AccSeqsChecked`, `LeakAtChecked`, `PooledGoodChecked` and
+  `CheckedWitness`. Two new guarantees, `SampledLeakChecked` and `PooledLeakChecked`, use them, and today's statements
+  don't change.
+- `CheckedWitness` goes in as `domain` (a scope), concluded by a witness whose check is exact, so it needs no `open`
+  entry. That MemCheck_v1 meets it at `εchk` stays unproved until MemCheck_v1's Lean exists, and the post says so.
+- With a carried pool, the registered root and a chained `PooledLeakChecked` come on top, a larger proof.
+
+**Lock DM: yes, additions only.** The landing DM lists the new guarantees, and no existing guarantee or definition
+changes.
+
+**What I need:** network-accounting's OK on this shape, and a choice between a pool per window and a carried pool. I
+build nothing before both.
