@@ -357,19 +357,23 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
             b_hat = torch.zeros(d, dtype=torch.float64)
             if ln:
                 F = torch.cat([2 * Hh, torch.ones(len(Hh), 1, dtype=torch.float64)], 1)
-                b_hat = torch.linalg.lstsq(F, (Hh / g_hat).pow(2).sum(1, keepdim=True)).solution[:d, 0] * g_hat.pow(2)
+                ridge = torch.eye(d + 1, dtype=torch.float64)[:d] * math.sqrt(1e-6 * float(F[:, :d].pow(2).sum()) / d)
+                rhs = torch.cat([(Hh / g_hat).pow(2).sum(1, keepdim=True), torch.zeros(d, 1, dtype=torch.float64)])
+                b_hat = torch.linalg.lstsq(torch.cat([F, ridge]), rhs).solution[:d, 0] * g_hat.pow(2)
             xs = (Hh - b_hat) / g_hat
             if ln:
                 xs = xs - xs.mean(1, keepdim=True)
             g_hat = g_hat * xs.pow(2).mean().sqrt()
             W, beta = col * g_hat, col @ b_hat
-        b_err = None
-        if b_hat is not None and ln:
-            e, gd = b_hat - b.double(), g.double()
-            b_err = float((e - (e @ gd) / (gd @ gd) * gd).pow(2).mean() / b.double().pow(2).mean())
-        res[prec] = {"W": W, "beta": beta, "W_mse_over_var": scaled_mse(W, W_true),
-                     "g_mse_over_var": None if g_hat is None else scaled_mse(g_hat, g.double()),
-                     "b_mse_over_var_off_g": b_err}
+        diag = {"W_mse_over_var": scaled_mse(W, W_true)}
+        if g_hat is not None:
+            E_rel = E[T].double() - E[T[0]].double()
+            diag |= {"E_mse_over_var": scaled_mse(col, E_rel), "g_mse_over_var": scaled_mse(g_hat, g.double())}
+            if ln:
+                e = b_hat - b.double()
+                diag["b_mse_over_var_off_g"] = float((e - (e @ g_hat) / (g_hat @ g_hat) * g_hat).pow(2).mean()
+                                                     / b.double().pow(2).mean())
+        res[prec] = {"W": W, "beta": beta} | diag
     if max(e["W_mse_over_var"] for e in res.values()) > 0.5:
         raise SystemExit(f"--peel {a.peel}: E diag(g) read no better than its variance, the peel is broken: "
                          + peel_summary(res))
@@ -377,8 +381,8 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
 
 
 def peel_summary(res: dict) -> str:
-    return ", ".join(f"{p} " + ", ".join(f"{n} {v:.3g}" for n, v in e.items() if n.endswith(("var", "off_g"))
-                                          and v is not None) for p, e in res.items())
+    return ", ".join(f"{p} " + ", ".join(f"{n} {v:.3g}" for n, v in e.items() if n not in ("W", "beta"))
+                     for p, e in res.items())
 
 
 def scaled_mse(x: torch.Tensor, y: torch.Tensor) -> float:
@@ -511,7 +515,7 @@ def read_row(Et, g, Eb, zt, precision, s, tru, lm) -> tuple[float, float, torch.
     # Not C @ ...: a centred head (LayerNorm's, as a peel reads it) leaves P's condition near 1e14 at fp32's weights,
     # where the explicit inverse loses the estimate and a solve doesn't.
     xh = torch.linalg.solve(P, A.T @ (w * y))
-    est = norm_dir(lm, xh[:-1].float())
+    est = norm_dir(lm, xh[:-1]).float()
     r = float((est - tru).pow(2).mean())
     mi = -0.5 * float(torch.linalg.slogdet(C[:-1, :-1])[1]) / math.log(2)
     return r, mi, est
