@@ -28,7 +28,9 @@ Usage::
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window; FILE.json the interior values,
 ``[[name, schema], ...]``; REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows
-name.
+name. A ``local`` session's challenger reads its coins through ``sampled-proofs-verifier``, which must be built first
+(``lake build sampled-proofs-verifier`` in ``verity/core/service/sampled_proofs``): building it on first use outlasts the
+local gate's start.
 """
 from __future__ import annotations
 
