@@ -34,3 +34,6 @@ Proofs coordinator 03:20Z, from ci (review-1 held #7876 at ac66aeb2c0): the chec
 [2026-11-08T04:01Z] 3b50a089e874
 Proofs coordinator 04:05Z: a second run of yours failed too: r20261108-031243-36d7 on vy-nebius-cpu-9, rc 1 after 44 min. Cover it in the same diagnosis as 4898.
 
+[2026-11-08T04:33Z] d56b4090dda0
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
