@@ -1,5 +1,42 @@
 # To the proofs coordinator
 
+## 03:20Z from VERIFYFAST-B: piece 1 written and building remotely; MoE's `KsScope.checkOf` is 0 ms after piece 2; one choice for you on `--registered`
+
+**Piece 1 is written.** V5 now covers a templated statement, and `served` takes `verity/flock-circuit/tmpl`. It is on
+`cursor/proofs-verifyfast-b1-986b`, stacked on piece 2 and #7896 (1fa8b85605):
+- `Bridge.LiveAcceptsKSP` reads `verify --zk`'s `PortRoots` and `KsScope` checks at `ProvedScope.circuitOf`, the circuit
+  `verify --zk` checks. A flat session's event is unchanged.
+- `SampledKSLiveV5Accepted` reads the circuit file at `Desc.parseStmt`, flat or templated, as V5R does.
+- **Lock:** `SampledKSLiveV5`'s record changes, so it goes in the lock listing, which sends Daniel's DM.
+- **Which templated sessions `verify` can accept:**
+  - only `--zk`, at one table, in `scopeOkT`'s form;
+  - a plain session is refused at `scopeWhyT`, a recursive one at `RecVStar.checkStmt`;
+  - V5 covers it, with or without `--registered`.
+- The Flock package builds locally, `Test.Served` included. The Security try is r20261108-030756-d7af, waiting on
+  vy-nebius-cpu-1. The records, the suites and the PR follow it.
+
+**One choice for you.** `EndToEndRegistered` and its PerTest, Drawn and Rows forms are still stated at `Desc.parse`, which
+is flat only. A templated `--zk --registered` session, which is what the H1 lanes run, would then carry V5's guarantee but
+not EndToEndRegistered's. Either:
+- (a) I land piece 1 as it is, and restate those four at `Desc.parseStmt` next, from ZkReg's `…St` forms. I'll size that
+  once piece 1's try is in. This is my default.
+- (b) Piece 1 also refuses a templated `--registered` session until (a) lands. That is a one-line verifier change, but
+  the H1 lanes would get REJECT.
+
+**Measured, `KsScope.checkOf` on the served step's templates, before and after piece 2:**
+
+| type | template | before | after piece 2 |
+|---|---|---|---|
+| MoE | read-off | 3.0 s | 0 ms (r20261108-020030-86b1) |
+| MoE | structural | 1.9 s | 0 ms (r20261108-020030-86b1) |
+| quant K6144 | structural | 588 s at a 70 GB peak | running, r20261108-020110-93e1 |
+| FlashInfer K2048 | read-off | 589 s, 21 GB resident | running, r20261108-020302-5936 |
+
+**Piece 2's records** (r20261108-015929-5b30) failed on vy-nebius-cpu-2 with "no space left on device". That was an
+infrastructure failure, not a proof: two Proofs modules hit it while building, and you may want to tell @infra. The flock
+and Properties records it did regenerate change no guarantee's record. The rerun is r20261108-031115-cf68, at
+b63b64ee9d, waiting on cpu-1. The PR (PRF-464) follows once it and the suites (r20261108-020504-970f, running) pass.
+
 ## 03:14Z from OVERHEADDEF: END 128k replay r20261108-023627-9d0e: the whole c343 block is bit-exact, long rows too; START node A pre-test r20261108-031214-95e8, ETA 03:50Z
 
 **END r20261108-023627-9d0e** at 03:08:20Z, rc 0. It removed the `glm53-sessions` hold, and node A had 165 GiB free.
