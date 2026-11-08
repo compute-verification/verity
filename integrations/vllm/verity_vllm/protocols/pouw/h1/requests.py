@@ -94,7 +94,7 @@ EMPTY_REQUEST = bytes(20)
 EMPTY_SLOT = bytes(4)
 #: the hm96 salt stream's nonces of round r's request and slot tables are REQUESTS_NONCE + r and SLOTS_NONCE + r. Both sit
 #: inside `audit`'s activation nonces (below 2^62); the streams are apart from the activation trees' only because each run
-#: draws its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
+#: samples its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
 #: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`TABLE_NONCES`; 1 was the retired y table's)

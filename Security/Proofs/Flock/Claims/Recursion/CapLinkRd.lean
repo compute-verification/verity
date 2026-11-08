@@ -44,7 +44,7 @@ import Proofs.Flock.Soundness.Game.Expect
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# A cap position's off mass at the abort law, at read sets
+# A cap position's off mass at the abort distribution, at read sets
 
 `Pr_off_le_capHit` charges an opening that a run makes at one value per position. A deployed run can open a position
 twice, to different rows, and then no single value per run is the model's opening there. Here the run reads a set of
@@ -70,7 +70,7 @@ section CapLinkRd
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- The value `f` reads alone most often over uniform draws. -/
+/-- The value `f` reads alone most often over uniform samples. -/
 noncomputable def plurRd {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f : Dr → Finset Val) : Val :=
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = {v}) Finset.univ_nonempty).choose
 
@@ -103,7 +103,7 @@ theorem tiedColl_dup {H : Msg → Msg} {l : List (Msg × Msg)} (h : TiedColl H (
   simp only [List.map_append, List.mem_append, or_self] at hu hv
   exact TiedColl.append_right ⟨u, v, hc, hu, hv⟩ l'
 
-/-- **One base run's forks at read sets, linearly**: draws read anything but their plurality single reading alone at
+/-- **One base run's forks at read sets, linearly**: samples read anything but their plurality single reading alone at
 most as often as the link finder over them succeeds, plus `1/(eM)`. -/
 theorem offRd_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [DecidableEq Val] [Nonempty Val]
     (f : Dr → Finset Val) (M : ℕ) (hM : 1 ≤ M) :

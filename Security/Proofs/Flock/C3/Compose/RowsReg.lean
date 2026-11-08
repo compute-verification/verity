@@ -147,8 +147,8 @@ namespace FlockSoundness.Discharge.ZkReg
 open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind ZkHidden HiddenExec HiddenDec DecodeZL Composed
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 
-/-- **An accepted transcript reads every port of `own` at every drawn unit** (`opens_of_acceptsZKR`'s position, which
-`checkPort`'s `badInstance` requires): where the record's draw draws `u` into its table and that table's drawn statement
+/-- **An accepted transcript reads every port of `own` at every sampled proof block** (`opens_of_acceptsZKR`'s position, which
+`checkPort`'s `badInstance` requires): where the record's sample samples `u` into its table and that table's sampled statement
 labels its instances `idx`, each port of `own` gives a position for `u`'s label. -/
 theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
@@ -186,8 +186,8 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   obtain ⟨-, hreads, -⟩ := hall _ (by rw [hn]; exact hi)
   exact ⟨_, hreads⟩
 
-/-- **An accepted transcript sets up the table each unit is drawn into**: at the record's draw `d`, the table `u` is
-drawn into (`partOf`) has a draw, a drawn statement over `pub` at it, and that statement's labels, which the registered
+/-- **An accepted transcript sets up the table each unit is sampled into**: at the record's sample `d`, the table `u` is
+sampled into (`partOf`) has a sample, a sampled statement over `pub` at it, and that statement's labels, which the registered
 check reads. -/
 theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
@@ -295,7 +295,7 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
 
 /-- **The registrant holds the rows `own` names**: at each typing of the session, a record of registered reads holding
 every row of a port `own` names, at every unit, under the first port of its name, at the position that port gives the
-unit's label where it gives one. The label is the one the drawn statement of any draw that draws the unit gives it
+unit's label where it gives one. The label is the one the sampled statement of any sample that samples the unit gives it
 (its `units.indices` at the unit's instance, `Registered.unitIndices`), the label `Registered.check` reads the position
 at; the verifier derives it (`Registered.derived`), and `loadPublic` does not make it the unit's own index. The honest
 registrant's: it committed every row it registered. -/
@@ -315,9 +315,9 @@ def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
               (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
                 rdH.readAt (.inl (u, q)) = pos
 
-/-- **An accepted session draws each unit of its draw into a drawn statement**: at every accepted outcome, the record
-names the law's draw file (the record's custody, `RecordsLiveZKJ`), its table `u` is drawn into has a drawn statement
-labelling its instances (`drawn_of_acceptsZKR`), and that table's draw proves `u` (the coin server's draw, `hDraw`). -/
+/-- **An accepted session samples each unit of its sample into a sampled statement**: at every accepted outcome, the record
+names the sampling design's sample file (the record's custody, `RecordsLiveZKJ`), its table `u` is sampled into has a sampled statement
+labelling its instances (`drawn_of_acceptsZKR`), and that table's sample proves `u` (the challenger's live-coin part's sample, `hDraw`). -/
 theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr)
     (ht : x.I.tags.typed = false) (hc : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I)) (ω : Lv.Ω) (R' : Reg')
@@ -334,9 +334,9 @@ theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsL
   exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((x.hDraw ω) (partOf x.I _ u.val)).1 D hD u (mem_partS hu)⟩
 
 /-- **The registrant's record is the verifier's own at every accepted outcome** (`hown`): restricted to the rows `own`
-names, each drawn row is a row of a unit its record's draw draws (`labelsSelf`, from the record's custody), its port
+names, each sampled row is a row of a unit its record's sample samples (`labelsSelf`, from the record's custody), its port
 is `own`'s first of its name and the circuit's port `q` by name (an accepted circuit names each port once,
-`names_of_acceptsZKR`), and its position is the one that port gives the unit's label in that draw's statement, which
+`names_of_acceptsZKR`), and its position is the one that port gives the unit's label in that sample's statement, which
 acceptance requires (`reads_of_acceptsZKR`). -/
 theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) (ht : x.I.tags.typed = false) {S₀ : Finset (Fin nv)}
@@ -372,7 +372,7 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
   · rw [hport, hpos, hat d D dp idx hD hdp hidx hmD pos hpos]
 
 /-- **The session with the honest registrant's record**: `x` with, at each typing, the registrant's record
-(`RegistrantOpens`) restricted to the rows `own` names. Its inputs, own list, draw files and writer are `x`'s, so its
+(`RegistrantOpens`) restricted to the rows `own` names. Its inputs, own list, sample files and writer are `x`'s, so its
 game, its custody and its typings are too. -/
 noncomputable def coveredSession (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hO : RegistrantOpens x)
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) : ZkOuterR mPts nv J Reg' c hU hscope Lv :=

@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# C-Flock's masked knowledge soundness and zero knowledge at the deployed record (trusted)
+# Flock's masked knowledge soundness and zero knowledge at the deployed record (trusted)
 
 `MaskedKS` and `MaskedZK` are `def G : Prop`s in the form of `Flock.Guarantees.EndToEnd`: two claims of
 `Definitions.Claims`, `Claims.Flock.KS` and `Claims.Flock.ZK`, at the deployed masked record of the deployed relation
@@ -43,7 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 `Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK`. `MaskedZK` holds `Claims.Flock.ZK`'s text in the lock in
 place of `Flock.Guarantees.ClaimsStated`.
 
-C-Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at the deployed plan) are still in its
+Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at the deployed plan) are still in its
 proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Models.lean`, which the `security` package
 builds without `security_proofs`, does not import it: `Proofs.Flock.Masked` does.
 -/

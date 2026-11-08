@@ -264,9 +264,9 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
 
 
 def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path, monkeypatch):
-    """A prover that runs the window again finds the challenger draws no second salt for its binding; one that reuses the
+    """A prover that runs the window again finds the challenger samples no second salt for its binding; one that reuses the
     first salt's source, so setup publishes the logged salt, finds the challenger runs no second session for it. Each
-    is undecided with its reason, and no retry redraws."""
+    is undecided with its reason, and no retry resamples."""
     auditor = Auditor(tmp_path)
     first, _ = _run(served, tmp_path, monkeypatch, auditor)
     assert first["verdict"] == "accept", first["reason"]
@@ -432,7 +432,7 @@ def case_exe() -> Path:
 def registered(served, monkeypatch) -> Served:
     """`served` at PoUS's registered point, the one a P2 registration names (2,056-byte blocks, 4 a segment: the two
     layers' 8 linears in 2 segments, 2 units), with each segment's encode kept across the module's tests, so ``C*``,
-    whose salt `_bandwidth`'s challenger draws from a fixed source, is encoded once."""
+    whose salt `_bandwidth`'s challenger samples from a fixed source, is encoded once."""
     monkeypatch.setattr(pous, "_base", lambda scheme: REGISTERED)
     S = pous._p2("store")
     encode = S.CpuEncoder.encode

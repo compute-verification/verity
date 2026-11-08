@@ -21,13 +21,13 @@ the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`),
 history (newest first) and the name of the period it credits, a string.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
-period's open commits the period's circuit, its draw K, its table rows T, its weights' root and model and its fixed
+period's open commits the period's circuit, its sample K, its table rows T, its weights' root and model and its fixed
 length before any coin of the period, and each window's session its roots before their coins. Its digest is
 SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"pins": pins, "windows": [window, …]}`: the challenger host's published pins log, and each
 window's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, session, salt, manifest, served rows, Commit
-record, round log, draw, descriptor, registered entries, each drawn unit's proof outcome and its live evidence).
+record, round log, sample, descriptor, registered entries, each sampled proof block's proof outcome and its live evidence).
 
 **The check** first refuses, by name (`form: why`, `form`), every window in a form the period's proved guarantee
 (`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
@@ -41,9 +41,9 @@ the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it.
 
 **Profile**: the period's name and its number of windows.
 
-What it doesn't check: each drawn unit's statement and each round's live statement, whose proof outcomes the evidence
-carries as the verifier of record's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
-C-Flock's Lean verifier run outside).
+What it doesn't check: each sampled proof block's statement and each round's live statement, whose proof outcomes the evidence
+carries as the verifier's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
+Flock's Lean verifier run outside).
 -/
 
 @[expose] public section
@@ -98,7 +98,7 @@ def GUARANTEE : String := "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
 /-- A Pearl-C pass's evidence (`credit.PEARL_C_KEYS`). -/
 def PASS_KEYS : List String := ["context", "descriptor", "manifest", "session"]
 def TILE_ID : String := "PouwH1Tile_v"
-/-- The one tile the guarantee covers: a drawn per-call unit over it is proved as its 32 lanes and their combine
+/-- The one tile the guarantee covers: a sampled per-call unit over it is proved as its 32 lanes and their combine
 (`h1zy.PouwH1LaneZy_v2`, `PouwH1Combine_v2`). -/
 def COVERED_TILE : String := "PouwH1Tile_v5{"
 

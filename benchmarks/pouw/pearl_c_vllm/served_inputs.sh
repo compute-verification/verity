@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # The served table's measurements of one retained pass, CPU only, after the pass (served_table.py reads their inputs.json):
 #   bash benchmarks/pouw/pearl_c_vllm/served_inputs.sh <pass run id> <label> [J] [SOURCE]
-# Without SOURCE: each input's census or draw bound.  With SOURCE: the same inputs by N = 384 fresh trials each
+# Without SOURCE: each input's census or sample bound.  With SOURCE: the same inputs by N = 384 fresh trials each
 # (HonestCap's fourth case).  Fixed here before any fresh run, as the completeness citation's conditions require:
 # - the inputs: served_debit --per-input 2 at seed 20261002 (two of each (k, n) in decode and in prefill, 16 a model), census
-#   at most 128 tiles, else 64 work-weighted draws;
-# - N = 384 trials an input; m counts every bound the table states: Llama-3.1-8B and Qwen3-8B, 16 inputs each, a census or draw
+#   at most 128 tiles, else 64 work-weighted samples;
+# - N = 384 trials an input; m counts every bound the table states: Llama-3.1-8B and Qwen3-8B, 16 inputs each, a census or sample
 #   bound and a fresh one each, so m = 64, δ = 0.05/64, and at k = 0 the fresh limit is 1 − δ^(1/384) = 1.846%;
 # - SOURCE: 32 bytes of OS randomness (os.urandom) sampled by the launcher after the pass has ended with rc 0, so after its
 #   activations are fixed, and written into the command, so the run's Attempt records it; every trial's sample and salt derive

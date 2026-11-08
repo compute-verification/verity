@@ -11,7 +11,7 @@ tree's root changed, or a bit row's port with its words or width changed.
 `--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
 (`Flock.PortRoots`, `Flock.KsScope`). The rows of all three and their shared-row public files are in it, so each session
 is accepted.
-A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw, on the challenger's coin tree,
+A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified sample, on the challenger's coin tree,
 its coins the ones the challenger's release log shows) is accepted on that file too, and refused with the root changed and
 without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
@@ -37,7 +37,7 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
-#: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
+#: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
     G.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
@@ -108,7 +108,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
 
 def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
     """`live.json`'s ``public_file_sha512`` is the SHA-512 of ``stage/pub-32.bin``, the file `verify --public` reads. Its
-    ``public_sha512`` is Σ's public digest, over the drawn statement's header, which no file holds."""
+    ``public_sha512`` is Σ's public digest, over the sampled statement's header, which no file holds."""
     _, fx = fx
     live = json.loads((fx / "live.json").read_text())
     assert live.get("public_file_sha512") == hashlib.sha512((fx / "stage" / "pub-32.bin").read_bytes()).hexdigest()
@@ -187,7 +187,7 @@ def test_the_plain_sessions_coins_are_the_challengers(plain):
 def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its_reads(plain, tmp_path):
     """Without `--zk`, a shared-row public file at hidden outputs and `hm96-sha512/v1` leaves is a covered form when the
     verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session sampled by
-    the verifier's own stratified law is accepted on `register_served`'s file, and refused on it with the tree's root changed
+    the verifier's own stratified sampling design is accepted on `register_served`'s file, and refused on it with the tree's root changed
     (the registered check opens no row) and without `--registered`."""
     import served_registered as SR
 
