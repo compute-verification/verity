@@ -5,8 +5,9 @@ On the served H200 node, `CudaCommunicator.all_reduce` hands a bf16 all-reduce F
 symmetric memory (``multimem.ld_reduce ... acc::f32``, to 64 MiB) and past that to NCCL's NVLS; the node's capture found both reduce
 every element in one tree of f32 adds, then round to bf16 (`AllReduceMultimem_v1` at the node's TREES, FTZ off). This plugin keeps
 FlashInfer's route, the custom all-reduce and the fused all-reduce + RMSNorm as they are (their order is in software, the same on every node),
-and replaces the other two with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. It
-changes what the replay node computes, never the served record: a replay under it says so.
+and replaces the other two with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. On a
+replay node without symmetric memory (no multicast), the custom all-reduce keeps the serving node's size cap
+(`served_custom_cap`). It changes what the replay node computes, never the served record: a replay under it says so.
 
     python tree_allreduce.py site DIR --tree '(((((((0,2),3),1),5),6),4),7)' --source WHERE
         # DIR on PYTHONPATH registers the plugin (vLLM general plugin ``verity_tree_allreduce``) with that tree
@@ -93,12 +94,36 @@ CHUNK = 1 << 22  # words a rank gathers at once: elementwise, so only the worksp
 UNMEASURED = ("qr_comm", "fi_pcie_ipc_ar_comm", "aiter_ar_comm")
 
 
+def served_custom_cap(comm: Any) -> int | None:
+    """Give the custom all-reduce the size cap it had on the serving node, which had torch's symmetric memory: vLLM then caps
+    it at `CUSTOM_ALL_REDUCE_MAX_SIZES` (256 KB on H200 at TP8, under FlashInfer's 0.5 MiB). On a replay node without multicast
+    vLLM disables symmetric memory and leaves the custom all-reduce its full size (8 MiB), so it would take calls the serving
+    node summed in the tree. Returns the cap set, or None when the cap already matches."""
+    ca, sm = comm.ca_comm, getattr(comm, "symm_mem_comm", None)
+    if ca is None or ca.disabled or (sm is not None and not sm.disabled):
+        return None
+    from vllm.distributed.device_communicators.all_reduce_utils import CUSTOM_ALL_REDUCE_MAX_SIZES
+    from vllm.platforms import current_platform
+    cap = current_platform.get_device_capability()
+    m = CUSTOM_ALL_REDUCE_MAX_SIZES.get(cap.as_version_str() if cap is not None else "", {}).get(comm.world_size)
+    if m is None or ca.max_size <= m:
+        return None
+    ca.max_size = m
+    return m
+
+
 def wrap(orig: Any, t: Tree) -> Any:
     """`CudaCommunicator.all_reduce` with the calls vLLM hands torch's symmetric memory or NCCL summed in ``t``. FlashInfer's and
     the custom all-reduce's calls (an order in software, the same on every node) and other dtypes go to vLLM; a route the tree
     wasn't measured with (NCCL's symmetric memory, quick reduce, FlashInfer's PCIe IPC, aiter) is refused."""
     def all_reduce(self, input_):
         import torch
+        if not getattr(self, "_tree_cap_set", False):
+            self._tree_cap_set = True
+            m = served_custom_cap(self)
+            if m is not None:
+                print(f"[tree-allreduce] no symmetric memory on this node: the custom all-reduce is capped at {m} bytes, as on the "
+                      "serving node", file=sys.stderr, flush=True)
         fi, ca = self.fi_ar_comm, self.ca_comm
         if input_.dtype != torch.bfloat16 or (fi is not None and not fi.disabled and fi.should_use_fi_ar(input_)) \
                 or (ca is not None and not ca.disabled and ca.should_custom_ar(input_)):
