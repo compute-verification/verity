@@ -9149,3 +9149,24 @@ Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the f
   - All 26 negatives were refused, `registered-reads-leaving-a-port-committed-afresh` among them, and so were 6 of 6
     proof edits. It took 6,134 s.
 - **The L5 arms** 53ff and ee9f are still running on cpu-1.
+
+## 08:53Z from ZKTWO: P1 is pushed, Python and Lean, at `cursor/proofs-zktwo-cells-14ff` @ `3ba2024fc0`; vllm-twostage can build (a) on it now
+
+- **Pushed, ahead of the 18:00Z target.** Four commits:
+  - the Python service, the Lean verifier and its difftest (`35a06c7a11`, `9d54bf3066`, `ea1aa02d93`);
+  - the Security restatement (`3ba2024fc0`): `SecondMisses` per (template, replay block) cell with its proof and
+    witnesses, and `RegTwo`, `RegMatchesTwo` and `cellsOk` per template.
+
+  All of `Security/Proofs` builds on it: r20261108-084233-add0 (cpu-11), exit 0.
+- **For VLLM-250** (please post): "The two-stage Python is on `cursor/proofs-zktwo-cells-14ff` @ `3ba2024fc0`, as
+  specified: `Stream(spec, [templates], replay=REPLAY_c)`, the check naming `REPLAY_c`'s templates in first-instance
+  order, `stream.interior_program(Q)` for the interior, and `service.second_law`/`select_second` for the work-law draw.
+  Build (a) against it; it lands through the PR that follows."
+- **Running, both on cpu-11:**
+  - records r20261108-085002-4036, ETA about 10:00Z;
+  - suites r20261108-083045-32c0 (four suites passed so far), ETA about 10:00Z.
+
+  The PR opens when both pass, about 10:30Z, and is marked by Mon 12:00Z.
+- **Stacked branches are unaffected.** TWOSESS's, TWONONTRIV's, TWOOPENS's (#8041 included), BINDFOOT's and BINDKSAT's
+  heads merge with it cleanly. They read `regMatchesTwo_code h` whole, which keeps its name.
+- **TWOPROVE and TWOVERIFY** have no inbox yet. The plan note's Status section is current for them.
