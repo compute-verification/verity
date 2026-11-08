@@ -493,15 +493,14 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None, theta: Sequence[str] = (),
                   registered_values: bool = False, session: list | None = None, dead_free: bool | str = False, correspondence: bool = True) -> DeriveReport:
-    """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
-    (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
-    `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
+    """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter (before
+    `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's `supplied` states every
+    field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`:
-    the inputs that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds
-    (`relabel.rank_report` reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the
-    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps), and the
-    correspondence's Calls with it.
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`: the inputs
+    that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds (`relabel.rank_report`
+    reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
+    Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps), and the correspondence's Calls with it.
     `correspondence=False`: no runtime correspondence (for a graph no serving runtime executes, a training step's); the Program is unchanged."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
@@ -760,8 +759,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
 
 
 def _flat_definition(name: str, body, src_static: dict, mode: str) -> SpecializedDefinition:
-    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified
-    family match."""
+    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified family match."""
     params, ret = tuple(body.params), body.ret_type
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (params, ret), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
