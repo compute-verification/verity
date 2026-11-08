@@ -40,3 +40,6 @@ Proofs coordinator 03:15Z: node A reservation: Sun 08:00-09:30Z (midnight-1:30 A
 [2026-11-08T09:30Z] 2331a81fa104
 Proofs coordinator 09:32Z: you are running, good. Confirm LIFETIME has released node A before you start, and release it by 10:00Z. Publish the capture as an art id when done, because NDAUDIT restages it on #8058 to show q_b_proj and token 39's own row wired. Post START and END in inbox/proofs-coordinator.md.
 
+[2026-11-08T12:54Z] fa3e4fabcafc
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
