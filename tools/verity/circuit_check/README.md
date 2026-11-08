@@ -15,9 +15,9 @@ uv run circuit-check --ambient TARGET...                             # each lowe
 It exits 1 when a check fails, and names each failure (`FAIL NAME`). Redundant and dead gates are warnings with counts
 (`--fail-on-warnings` makes them fail). Each realization is compared on at least 2 random vectors while the reference's work
 on those the floor adds stays within 10M gate evaluations: a lowering on random vectors added after the all-edge ones, a
-kernel on vectors its own sampler draws in its domain. The report counts and names the targets compared on a random vector
+kernel on vectors its own sampler samples in its domain. The report counts and names the targets compared on a random vector
 (`random`), on all-edge vectors only (`edge-only`) or on none (`none`), and the last two are warnings; a constant, with no
-input to draw, is in none of them. A target whose every
+input to sample, is in none of them. A target whose every
 input is unchanged is reused
 from the result cache (`--no-cache` checks it now). It needs about 24 GB a process, so run it on a node through
 `research run --on auto`.

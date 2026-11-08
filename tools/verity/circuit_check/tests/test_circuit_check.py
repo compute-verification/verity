@@ -415,9 +415,9 @@ def test_a_realization_compares_at_least_two_random_vectors_within_the_budget():
 
 def test_a_kernel_takes_its_floor_from_its_own_sampler():
     """No lowering takes a Definition C-Flock has no piece for, so past ``reference_budget`` its vectors stay all-edge; each
-    kernel is then compared on two vectors its own sampler draws in its domain (a random vector over many leaves almost always
+    kernel is then compared on two vectors its own sampler samples in its domain (a random vector over many leaves almost always
     holds a word a finite-only kernel declines).  One right on every edge word and wrong elsewhere fails by name; one whose
-    sampler draws only outside its domain compared on edge vectors only; past ``random_budget`` none is drawn."""
+    sampler samples only outside its domain compared on edge vectors only; past ``random_budget`` none is sampled."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.evaluation import register_kernel
     from verity.ml.circuits.evaluation.batch import _KERNELS
@@ -445,7 +445,7 @@ def test_a_kernel_takes_its_floor_from_its_own_sampler():
                    "kernel:finite": (4, 2, {"vectors": 2, "compared": 2, "mismatches": 0}),
                    "kernel:outside": (4, 0, {"vectors": 2, "compared": 0, "mismatches": 0})}
     assert [f["name"] for f in e["failures"]] == [
-        "correspondence/kernel-mismatch CircuitCheckFloorKernel_v1 [edges-only]: 2 of the 2 vectors its sampler drew"]
+        "correspondence/kernel-mismatch CircuitCheckFloorKernel_v1 [edges-only]: 2 of the 2 sampled vectors"]
     assert CK.vector_class(e) == "random"
     assert not over["failures"] and CK.vector_class(over) == "edge-only"
     assert all("sampled" not in r for r in over["correspondence"]["realizations"])
@@ -454,7 +454,7 @@ def test_a_kernel_takes_its_floor_from_its_own_sampler():
 def test_the_summary_counts_and_names_the_targets_by_vector_class():
     """Each target is ``random``, ``edge-only`` or ``none`` by its realizations (a row by its worst Definition, a template by its
     Definitions', target's and proof blocks'), each named; those read lazily are named too; a by-calls root and a constant (no
-    input, so no vector to draw) are none of them."""
+    input, so no vector to sample) are none of them."""
     def entry(name, *recs, **corr):
         corr = {"vectors": 4, "edge_vectors": 4, **corr}
         return {"definition": name, "correspondence": {"realizations": list(recs), **corr}, "failures": [], "warnings": []}

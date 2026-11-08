@@ -21,7 +21,7 @@
                      count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf.
                      Each realization is compared on at least ``Options.random_floor`` random vectors within
                      ``Options.random_budget``: a lowering on random ones added to the vectors (`floored`), a kernel on
-                     those its own sampler draws in its domain (`_sampled`); a target no realization compared on a random
+                     those its own sampler samples in its domain (`_sampled`); a target no realization compared on a random
                      vector is a warning, ``vectors/edge-only`` when one compared it on all-edge vectors only, else
                      ``vectors/none`` (`vector_class`)
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
@@ -102,7 +102,7 @@ class Options:
     a composite of at most ``struct_max_gates`` gates is realized by its structural lowering too (`struct_lowering`; 0, the
     default: none).  Each realization is compared on at least ``random_floor`` random vectors while the reference's work on those
     the floor adds is at most ``random_budget`` gate evaluations (and a template's lanes on them at most ``lane_budget``):
-    added after the all-edge ones for a lowering (`floored`), drawn by a kernel's own sampler for it (`_sampled`)."""
+    added after the all-edge ones for a lowering (`floored`), sampled by a kernel's own sampler for it (`_sampled`)."""
 
     vectors: int = 64
     min_vectors: int = 4
@@ -381,7 +381,7 @@ def _lowered(t: Any, opts: Options, lower_whole: bool) -> bool:
 
 def _sampled(t: Any, name: str, rec: dict, opts: Options, F: Findings) -> None:
     """The floor for kernel ``name``, which ``rec`` says compared ``random`` of the shared random vectors without a fault: up to
-    ``opts.random_floor`` more, drawn by the kernel's own sampler (`self_check`'s: random inputs in its domain, where the
+    ``opts.random_floor`` more, sampled by the kernel's own sampler (`self_check`'s: random inputs in its domain, where the
     shared ones over many leaves almost always hold a word it declines, a NaN), while the reference's work on them is within
     ``opts.random_budget`` gate evaluations; recorded under ``sampled`` and counted in ``random``.  A mismatch fails as on the
     shared vectors; a sampler whose every vector the kernel declines leaves it compared on edge vectors only."""
@@ -390,18 +390,18 @@ def _sampled(t: Any, name: str, rec: dict, opts: Options, F: Findings) -> None:
         return
     try:
         sc = self_check(t, kernel=name, n=want, seed=opts.seed + 3)
-    except Exception as e:  # noqa: BLE001  (a sampler or kernel that can't draw or take its vectors: no random one, recorded)
+    except Exception as e:  # noqa: BLE001  (a sampler or kernel that can't sample or take its vectors: no random one, recorded)
         rec["sampled"] = {"vectors": want, "compared": 0, "raised": f"{type(e).__name__}: {str(e)[:200]}"}
         return
     rec["sampled"] = {"vectors": sc.n, "compared": sc.compared, "mismatches": len(sc.mismatches)}
     rec["random"] += sc.compared
     if sc.mismatches:
-        F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of the {sc.n} vectors its sampler drew",
+        F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of the {sc.n} sampled vectors",
                via=f"kernel:{name}", examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)}
                                                 for i, a, k, r in sc.mismatches[:_EXAMPLES]])
     elif not sc.partial and sc.declined != sc.outside:
-        F.fail("correspondence", "kernel-declined-in-domain", t.id, f"[{name}]: declined {sc.declined} of the {sc.n} vectors its "
-               f"sampler drew, {sc.outside} outside the reference's domain", via=f"kernel:{name}")
+        F.fail("correspondence", "kernel-declined-in-domain", t.id, f"[{name}]: declined {sc.declined} of the {sc.n} sampled "
+               f"vectors, {sc.outside} outside the reference's domain", via=f"kernel:{name}")
 
 
 def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = True) -> tuple[dict, list[np.ndarray] | None, list]:
@@ -1432,7 +1432,7 @@ _VECTOR_WARNINGS = {"edge-only": "its realizations compared it with the referenc
 
 
 def _corrs(r: dict) -> list[dict]:
-    """``r``'s correspondences that read an input: a Definition without parameters (a constant) has no vector to draw."""
+    """``r``'s correspondences that read an input: a Definition without parameters (a constant) has no vector to sample."""
     return [c for e in (r, *r.get("definitions", ())) if (c := e.get("correspondence"))
             and not (c.get("vectors") and not c.get("edge_vectors") and "table" not in c and "wide" not in c)]
 
