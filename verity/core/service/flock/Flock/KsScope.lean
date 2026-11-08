@@ -14,9 +14,10 @@ of a statement outside them is refused, beside `ProvedScope.check` and `PortRoot
 * `drawWhy count draw`: at more than one table, a session whose record holds no sample that parses, or whose subset sample's
   `k` the tables don't divide (V3's `kd % nTab = 0`).
 
-`checkOf parsed tags publicFile count draw` runs them on the circuit as `HmOut.parse` reads it and the public file as
-`HmOut.loadPublic` loads it; `check_ok` says what passing it establishes: V4's file preconditions, or V5's at a
-shared-row file. V3's sixth, that the unit is a built net, follows
+`checkOf parsed tags publicFile count draw` runs them on the circuit `parsed` it is handed and the public file as
+`HmOut.loadPublic` loads it over that circuit. `check` runs `checkOf` on the circuit `HmOut.parse` reads, a flat file's,
+and `check_ok` says what passing `check` establishes: V4's file preconditions, or V5's at a shared-row file. V3's sixth,
+that the unit is a built net, follows
 from the parse of an untyped statement. A V* session (`--rec-inner`) is the recursion's, whose guarantee is its own, so
 `verify` doesn't run the check on it. `flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python
 mirror (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.

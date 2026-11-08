@@ -15,10 +15,12 @@ one root under different domains (`collidesPub`).
   (`collidesBy`). Each root is SHA-512 of a frame whose first part is its domain, so such a pair is a SHA-512
   collision, which a file exhibits only by holding one. With no two published domains one (`dupId`) and no
   `collidesPub`, no two ports' published roots are one (`pubRoot_ne`).
-* `checkOf parsed tags publicFile`: on the circuit as `HmOut.parse` reads it, `rowsOk` and no port name twice
-  (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it the refusals of `loadedWhy`: `collides`
-  at its population (`pub.n`), `wordsOk`, `idsSized`, `dupId` and `collidesPub`. `verify --zk` refuses every session
-  whose files fail it, after every other check (`Main.verifyCmd`).
+* `checkOf parsed tags publicFile`: on the circuit `parsed` it is handed, `rowsOk` and no port name twice
+  (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it over that circuit the refusals of
+  `loadedWhy`: `collides` at its population (`pub.n`), `wordsOk`, `idsSized`, `dupId` and `collidesPub`. At hidden
+  outputs `verify --zk` hands it the circuit `ProvedScope.circuitOf` reads (`HmOut.parseCommit`), which for a templated
+  statement is the template's parse (`HmOut.parseTmpl`) and for a flat one the circuit `HmOut.parse` reads, as `check`
+  does. It refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
 -/
 module
 
@@ -158,7 +160,8 @@ def checkWith (H : ByteArray → ByteArray) (parsed : V Circuit) (tags : Tags) (
         | none => .ok ()
 
 /-- **The files' rows, names, widths, domains and roots are the form the sampled audit's knowledge soundness covers**:
-the circuit `parsed` (`HmOut.parse`'s) parses, every port is a `rowsOk` row and no two ports share a name
+the circuit `parsed` (`ProvedScope.circuitOf`'s under `verify --zk`, `HmOut.parse`'s under `check`) parses, every port
+is a `rowsOk` row and no two ports share a name
 (`Registered.dupName`), the public file loads (`HmOut.loadPublic`), and `loadedWhy` refuses nothing: no two ports'
 roots over its population `collides`, every row is under `2^64` bits, and the published domains are 64 bytes, pairwise
 distinct, and fixed by their roots. -/
