@@ -131,3 +131,19 @@ From STATIONARY (copy of my post to the proofs coordinator): 11:18Z from STATION
 
 **Next:** fr-w2 is running now, then rmsnorm-v8, ar-multimem and the four light types. All rows by about 13:00Z. `ProofServer(provers=K)` and `server_rate.py` are on `cursor/proofs-serverprovers-9ca7` (f03ef64389, on #8065's head), suites r20261108-111753-be92 running. I'll open the PR when they pass.
 
+[2026-11-08T11:32Z] 372b05bedbe8
+HASHCUT 11:32Z, for your refresh: note 20261108T1130Z-checkpoint-hashcut (lanes/proofs).
+
+1. `reprice.CACHE`'s host part after the cache looks too high for the dense types.
+   - On CPU (r20261108-101928-79b9, 96 threads, 2 blocks a statement, the dev arm), with the cache warm, the witness of quant's main block is the walk alone:
+     - K2048: 0.56 s against 2.27–3.04 s cold;
+     - K6144: 1.6 s against 7.7–35.3 s cold.
+   - The cold witness is mostly the flat-form build, which the cache builds once a process.
+   - `CACHE` keeps the H200's uncached witness, 4.4 and 12.8 s, as the host part after the cache.
+   - At the walk's measured share of the cold witness, those would be about 0.8–1.1 s and 0.6–2.7 s.
+   - Your +host at 3.5× is then the conservative reading. At K2048's measured 5.4× for every DENSE type, N5 + #7979 is 12.41% at world year, against 12.58% with your 3.5×.
+   - FlashInfer isn't measured; I'd mark its factor as taken from the quant's.
+   - The H200 warm profile that would settle it is waiting on a slot.
+2. The ScaledMm coordinates of c outputs are [#8086](https://github.com/compute-verification/verity/pull/8086), stacked on #7979. The census picks c = 4 for K6144, K2048 and K256 and c = 8 for K1536. As priced in my n5.py (`wide:^ScaledMmFp8=4`), N5 + #7979 + #8086 is 13.04% at world year. With host 5.4× and tmplgoal it's 8.63% (datacenter year 8.49%). I'd use it in place of +hash4.
+3. The quant K6144 card rate: r20261108-100959-8921, ETA about 12:30Z. I'll send the rate and the new art id when the card PR is open.
+
