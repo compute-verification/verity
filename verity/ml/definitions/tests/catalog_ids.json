@@ -47,6 +47,8 @@
 "AllReduceNcclTreeCoordinate_v2",
 "AllReduceNcclTree_v1",
 "AllReduceNcclTree_v2",
+"AllReduceResidualMnnvlAt_v1",
+"AllReduceResidualMnnvlAt_v2",
 "AllReduceResidualMnnvlCoordinate_v1",
 "AllReduceResidualMnnvlCoordinate_v2",
 "AllReduceResidualMnnvl_v1",

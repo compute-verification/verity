@@ -1,12 +1,15 @@
 """`registry.tp_combine`'s combine units hold every split of a TP all-reduce bit for bit to the Definition it splits:
 
-* the fused MNNVL: one `AllReduceResidualMnnvlCoordinate_v1` per coordinate, then `RmsNormMnnvl_v1` on their r's, compute
-  `AllReduceRmsNormMnnvl_v1`'s normed row and r and `AllReduceResidualMnnvl_v1`'s r, and agree with `tp_allreduce_check`'s numpy
-  model of the kernel, at GLM-5.3's served statics (every shot and cluster its fused calls launch at N = 6144) and at small
-  widths, on hidden-state-like, special and NaN words;
+* the fused MNNVL: one `AllReduceResidualMnnvlCoordinate_v1` per coordinate, or one `AllReduceResidualMnnvlAt_v1` per chunk
+  (`row_binding`'s), then `RmsNormMnnvl_v1` on their r's, compute `AllReduceRmsNormMnnvl_v1`'s normed row and r and
+  `AllReduceResidualMnnvl_v1`'s r, and agree with `tp_allreduce_check`'s numpy model of the kernel, at GLM-5.3's served statics
+  (every shot and cluster its fused calls launch at N = 6144, in chunks of 96) and at small widths, on hidden-state-like,
+  special and NaN words;
 * every coordinate of each route's call is `coordinate_binding`'s unit on the ranks' words there, and every row of an n-row call
   `row_binding`'s unit on the ranks' rows, at small sizes and at GLM-5.3's width, on words whose sum the multimem tree and the
   custom kernel's owner decide (`WITNESS`), so a unit bound at another position's statics would differ;
+* the units of a GLM-5.3 call at chunks of 96 fit a C-Flock proof block (`windows.interface.check_proof_block`), and its
+  coordinate units do not;
 * the σ versions (`registry.boolean_tp_combine`) compute their words on bits."""
 from __future__ import annotations
 
@@ -16,10 +19,12 @@ import pytest
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import b1, b1_tp2, dead_free
 from verity.ml.definitions.registry import boolean_tp_combine as BC
 from verity.ml.definitions.registry import tp_allreduce as TA
 from verity.ml.definitions.registry import tp_allreduce_check as K
 from verity.ml.definitions.registry import tp_combine as TC
+from verity.ml.windows.interface import K_MAX, check_proof_block
 
 GLM53_N = 6144
 #: (SHOT, CLUSTER) of the fused calls GLM-5.3 serves at TP8 on H200: one-shot to 10 tokens, then two-shot; 8 CTAs to 16 tokens,
@@ -96,6 +101,31 @@ def test_the_fused_call_is_its_coordinates_then_its_norm(shot: int, N: int, clus
     want_normed, want_r = K.mnnvl_norm_rows(parts.transpose(1, 0, 2), res, w, shot, cluster, 1e-5, fma)
     assert (r_coord == r).all() and (r_part == r).all() and (r == want_r).all()
     assert (normed_coord == normed).all() and (normed == want_normed).all()
+    assert (normed[-1] == 0x7FFF).all() and not (normed[0] == 0x7FFF).any()
+
+
+@pytest.mark.parametrize("shot,N,cluster,fma,C", [(1, 256, 1, False, 32), (2, 512, 2, True, 64),
+                                                  *[pytest.param(s, GLM53_N, c, True, 96, marks=pytest.mark.slow)
+                                                    for s, c in GLM53_FUSED]])
+def test_the_fused_call_is_its_chunks_then_its_norm(shot: int, N: int, cluster: int, fma: bool, C: int) -> None:
+    """`row_binding`'s chunk units of either fused Definition, each on the ranks' chunk and the whole residual row, concatenate to
+    the fused call's r, and `RmsNormMnnvl_v1` on that row is its normed row."""
+    rng = np.random.default_rng(N + 10 * shot + cluster + C)
+    parts, res, w = _tokens(rng, 2, N)
+    M, ws, rows = len(res), np.broadcast_to(w, res.shape), N // C
+    statics = {"WORLD": 8, "N": N, "SHOT": shot, "CLUSTER": cluster, "EPS": 1e-5, "FMA": fma}
+    (both,) = _ev(bind(TA.AllReduceRmsNormMnnvl, **statics), parts.reshape(M, -1), res, ws)
+    normed, r = both[:, :N], both[:, N:]
+    chunks = []
+    for at in range(rows):
+        binding = TC.row_binding(TA.AllReduceRmsNormMnnvl, statics, rows, at)
+        assert binding == TC.row_binding(TA.AllReduceResidualMnnvl, {"WORLD": 8, "N": N, "SHOT": shot}, rows, at)
+        fn = _bind(binding)
+        assert fn.id == f"AllReduceResidualMnnvlAt_v1{{WORLD=8,N={N},C={C},AT={at},SHOT={shot}}}"
+        chunks.append(_ev(fn, parts[:, :, at * C:(at + 1) * C].reshape(M, -1), res)[0])
+    r_chunks = np.concatenate(chunks, axis=1)
+    (normed_chunks,) = _ev(bind(TA.RmsNormMnnvl, N=N, SHOT=shot, CLUSTER=cluster, EPS=1e-5, FMA=fma), r_chunks, ws)
+    assert (r_chunks == r).all() and (normed_chunks == normed).all()
     assert (normed[-1] == 0x7FFF).all() and not (normed[0] == 0x7FFF).any()
 
 
@@ -222,8 +252,10 @@ def test_the_units_refuse_what_they_do_not_state() -> None:
     fused = {"WORLD": 8, "N": 256, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
     with pytest.raises(ValueError, match="elements are 0..255"):
         TC.coordinate_binding(TA.AllReduceRmsNormMnnvl, fused, 256)
-    with pytest.raises(ValueError, match="one token a call"):
-        TC.row_binding(TA.AllReduceRmsNormMnnvl, fused, 1, 0)
+    with pytest.raises(ValueError, match="rows of equal width"):
+        TC.row_binding(TA.AllReduceRmsNormMnnvl, fused, 3, 0)
+    with pytest.raises(ValueError, match="whole chunks of a residual row"):
+        bind(TC.AllReduceResidualMnnvlAt, WORLD=8, N=64, C=24, AT=0, SHOT=1).body  # noqa: B018
     with pytest.raises(ValueError, match="rows of equal width"):
         TC.row_binding(TA.AllReduceMnnvl, {"WORLD": 8, "N": 96, "SHOT": 1}, 5, 0)
     with pytest.raises(ValueError, match="rows of equal width"):
@@ -236,8 +268,46 @@ def test_the_units_refuse_what_they_do_not_state() -> None:
         bind(TC.AllReduceMultimemRow, WORLD=8, N=12, ROWS=4, ROW=0, TREES=TREES, FTZ=False).body  # noqa: B018
 
 
+def test_glm53s_units_at_chunks_of_96_fit_a_flock_block_and_its_coordinate_units_do_not() -> None:
+    """A GLM-5.3 call of N = 6144 a token, each rank's partial one-word producer rows, at chunks of K = 96: a rank's K words
+    gathered into a row (`AllGather_v1{WORLD=K, N=1}`), each chunk's combine reading the 8 ranks' chunk rows (`row_binding`'s), the
+    chunks gathered into the call's row, and its readers reading that row whole; its logits (8 ranks of 19,360 one-word LM-head
+    rows) gathered 121 words a row, which `TokenSelectGroups_v1{C=1936, G=16}` reads 16 of. Each fits a C-Flock proof block (at
+    most 256 rows, one past 111 B, within 2^27 bits). A coordinate unit, whose rows are a word each, does not, nor does a chunk
+    combine reading words (8V rows: at V >= 56 one row would pass 111 B, past 256 rows), nor a norm reading 256 chunks (no
+    divisor of 6144 lies in 25..31), nor one token select over the whole vocabulary."""
+    K, n = 96, GLM53_N // 96
+    fused = {"WORLD": 8, "N": GLM53_N, "SHOT": 1, "CLUSTER": 8, "EPS": 1e-5, "FMA": True}
+    norm = bind(TA.RmsNormMnnvl, N=GLM53_N, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True)
+    fits = [
+        (bind(b1_tp2.AllGather, WORLD=K, N=1), {"parts": K}),
+        (_bind(TC.row_binding(TA.AllReduceRmsNormMnnvl, fused, n, n - 1)), {"parts": 8}),
+        (_bind(TC.row_binding(TA.AllReduceMnnvl, {"WORLD": 8, "N": GLM53_N, "SHOT": 2}, n, 0)), {"parts": 8}),
+        (_bind(TC.row_binding(TA.AllReduceCustom, {"WORLD": 8, "SIZE": GLM53_N, "STAGE": 2}, n, 7)), {"parts": 8}),
+        (_bind(TC.row_binding(*TA.route_binding(_served("symm_mem_comm"), 8, 1, GLM53_N, 1), n, 0)), {"parts": 8}),
+        (bind(b1_tp2.AllGather, WORLD=n, N=K), {"parts": n}),
+        (norm, None),
+        (bind(TA.AllReduceRmsNormMnnvl, **fused), {"parts": 8}),
+        (bind(b1_tp2.AllGather, WORLD=121, N=1), {"parts": 121}),
+        (bind(dead_free.TokenSelectGroupsV1, C=1936, G=16), {"x": 16}),
+    ]
+    for fn, cuts in fits:
+        assert check_proof_block(fn, cuts) <= K_MAX, fn.id
+    for fn, cuts, why in [
+        (bind(TC.AllReduceResidualMnnvlCoordinate, WORLD=8, SHOT=1), {"col": 8}, "no row past 111 B"),
+        (bind(TA.AllReduceResidualMnnvl, WORLD=8, N=24, SHOT=1), {"parts": 8 * 24, "res": 24}, "no row past 111 B"),
+        (bind(TA.AllReduceResidualMnnvl, WORLD=8, N=32, SHOT=1), {"parts": 8 * 32, "res": 32}, "past a proof block's 256"),
+        (norm, {"r": 256}, "258 rows"),
+        (bind(b1.TokenSelect, V=154880), {"logits": 8}, r"2\^28 bits"),
+    ]:
+        with pytest.raises(ValueError, match=why):
+            check_proof_block(fn, cuts)
+
+
 @pytest.mark.parametrize("word", [
     bind(TC.AllReduceResidualMnnvlCoordinate, WORLD=8, SHOT=1), bind(TC.AllReduceResidualMnnvlCoordinate, WORLD=8, SHOT=2),
+    bind(TC.AllReduceResidualMnnvlAt, WORLD=8, N=64, C=16, AT=2, SHOT=1),
+    bind(TC.AllReduceResidualMnnvlAt, WORLD=8, N=64, C=16, AT=3, SHOT=2),
     bind(TC.AllReduceMultimemRow, WORLD=8, N=24, ROWS=4, ROW=2, TREES=TREES, FTZ=False),
     bind(TC.AllReduceMultimemRow, WORLD=8, N=24, ROWS=4, ROW=2, TREES=TREES, FTZ=True),
     bind(TC.AllReduceCustomRow, WORLD=8, N=16, ROWS=4, ROW=1, STAGE=2),
