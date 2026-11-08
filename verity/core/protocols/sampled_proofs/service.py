@@ -333,7 +333,7 @@ def _replay_law(text: Any) -> bool:
 @dataclass(frozen=True)
 class TwoStage:
     """A two-stage sampling design (the module docstring). `grain`: the replay grain, the replay partition's query,
-    `Q_template_instance` over the     replay block's Definition (`partition.template_instance_query`), whose instances in the
+    `Q_template_instance` over the replay block's Definition (`partition.template_instance_query`), whose instances in the
     registration's program are its replay blocks. `replay`: the first stage's law over them, a rate law.
     `k`: the proof blocks the second stage samples in each sampled replay block, on fresh coins after the interior
     registration; a `Stream` holds it to 1 <= k < n_rho, since k = n_rho would prove whole replay blocks, and refuses
