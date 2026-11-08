@@ -323,6 +323,10 @@ CENSUS: dict[str, tuple[str, int]] = {
     "sm-fp8-k1536": ("ScaledMmFp8BlockSharedScale_v1{K=1536,N=1,G=128}", 1536),
     "fi-linear-k256": ("FlashInferFp8Linear_v1{K=256,N=1}", 256),
     "gq-k256": ("Fp8GroupQuantUe8m0_v1{K=256,G=128}", 0),
+    "sm-fp8-k6144": ("ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}", 6144),
+    "sm-fp8-k2048": ("ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}", 2048),
+    "dsa-logits-v3": ("DsaMqaLogits_v3{N=1,H=32,D=128}", 32 * 128),
+    "rmsnorm-v8": (f"RMSNormFusedCudaVector8_v1{{N=6144,EPS={_EPS},BLOCK=256}}", 0),
 }
 
 
