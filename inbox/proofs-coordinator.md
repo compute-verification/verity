@@ -10282,3 +10282,42 @@ session ignores the unit. With sessions by template, the key is the unit's templ
 covers. I asked BINDKSAT to tell BINDSESS.
 
 **Next:** sessions by template, in `~/wt/p4` on ZKTWO's newest P1 head. No runs are in flight.
+
+## 11:16Z from TWOOPENS: BLOCKER for sessions by template: the generic extractor assumes each session decides the run, which fails with T sessions in a row
+
+**I was wrong at 09:45Z** that sessions by template is SpotFlock's own change. It needs a generic change first, in
+`Claims/Sampling` and `SamplingGeneric` (TWOSESS's and BINDSESS's code), so Tue 18:00Z doesn't hold.
+
+**Why.** The generic `SessionRuns` (`Claims/Sampling/Session.lean`) asks, for each checked unit, that the run accept
+exactly when the unit's Flock session accepts, at any coins on that session's rounds with the other coins fixed.
+- The generic extractor uses both directions. `firstWait_map`, in `SessionKS_of` and `SamplingGeneric/Instance.lean`,
+  matches the sampled extractor's wait, which reruns forks until the whole run accepts, with Flock's, which waits for
+  the session to accept. The two must agree at every fork.
+- With T sessions in template order, the prover's messages in a later session can depend on an earlier session's coins.
+  A fork can then pass session t and fail session t + 1, so "run accepts ⇒ session accepts" holds but its converse
+  doesn't, for every session but the last.
+- A cheating Flock prover for session t can't repair this. It would have to foresee the later sessions' verdicts
+  before Flock's last coin.
+- With one template it's today's one session, and nothing changes.
+
+**The options I see:**
+- **(A) Generic: the extractor waits on the session.** Make `SessionRuns`' acceptance one-way, and have the sampled
+  extractor rerun forks until the unit's session accepts, read off the run's transcript, rather than the whole run.
+  `firstWait_map`'s match then holds by construction, since the session's transcript is the Flock run's.
+  - This changes the extractor's definition in `Definitions/Claims/Sampling*.lean`, so guarantee records move and
+    Daniel gets a DM at landing.
+  - My guess is 300–600 lines in TWOSESS's and BINDSESS's files. They should size it.
+  - SpotFlock's side is then my change 1 as planned, 500–800 lines.
+- **(B) Deployment: one multi-table session for the second stage.** That's the model as it is today. The STATIONARY proof
+  server's `--stream` refuses more than one table a session, so TWOPROVE would need the non-streaming prover or a
+  multi-table stream. That's TWOPROVE's cost to size. A model of one session over a deployment of T would be a smell, so
+  (B) means changing the deployment.
+
+**I'd take (A).** It's the right theory for SPOT's sessions anyway: the two-stage composition and #8039's per-session
+keys both assume several sessions a run. Please route it to TWOSESS or BINDSESS. I can also write it myself if you'd
+rather, but it's their code.
+
+**Meanwhile** I'm building what 3a needs whatever the session count. That's the glue from one session's statement to
+the placed template-instance rows: SpotFlock's `Readable.relation` at a table, through `relS_layout` and
+`toModel_ofStmt`, to `placement_of_setupH` and `ProgPlaces` for the unit's block. I'm not touching `Held` or `stmtOk`
+until you rule.
