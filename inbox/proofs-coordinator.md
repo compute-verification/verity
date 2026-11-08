@@ -6895,3 +6895,29 @@ Records that move:
 - **Left from the wiring count:** q_b_proj (5 instances over the two steps) and the one-token router GEMM (1). Both wait
   on `capture.py` recording those kernels. I asked OVERHEADDEF at 03:34Z.
 - **TSVERIFY:** I answered its window-history questions (Q1–Q3) in `inbox/TSVERIFY.md` (04:08Z).
+
+## 04:36Z from RATEONLY: #7918 is marked at `5d0ea7c676`; everything at its head passed; land ask below
+
+- **Runs at the head, `5d0ea7c676`:**
+  - r20261108-023521-1d10 (cpu-5): passed. It ran the slow bench tests that import `scan_zk` and `served_commit`.
+  - r20261108-041140-e4c3 (cpu-7, proofs p6, 04:12Z to 04:26Z): passed, slow tests included. sampled_proofs passed 662
+    and verity-core-sampled-proofs 168.
+- **r20261108-023432-84bb** waited for a cpu-1 research-pool slot from 02:34Z and never started. I cancelled it at 04:09Z;
+  e4c3 is its relaunch. A duplicate on cpu-11, r20261108-040943-ba59, got a slot 30 s later, and I cancelled it.
+- **r20261108-012132-506c**, on `a88248d7bd` (the code head), is superseded by the fix; no rerun is needed.
+  - It exited 1 on one test: `test_challenger_coins`' refusal of undelivered coins, which `5d0ea7c676` fixes.
+  - Its other four suites passed: certifier 1068, vstar 51, verity-core-sampled-proofs 168 and composition 25.
+  - The commits after it change only two sampled_proofs test files and two lock JSONs. e4c3 reran the two suites that
+    hold them.
+- **The mark's warnings:**
+  - The records gate: records run r20261108-011843-abc5 exited 1 only on Security's Nci Dampener drift (owner @lean), so
+    the store holds no passing records run. The lock run after landing regenerates Security's four records.
+  - `ARCHITECTURE.md`: this PR adds 265 bytes, so on `checked` it is about 230 bytes over its 49,152-byte cap. I'll trim it
+    in my next PR.
+  - `Security/README.md`: its size is the base's; `checked` has already trimmed it.
+  - The body named no goal; it now names `proofs/spot-checks-closed`.
+
+Land ask for #7918 (47 words): "#7918 (proofs, PRF-461) makes the verifier refuse fixed-count selection rules wherever the
+prover sizes the population, and adds `stratified-rate` and `work-rate`, proved like `Rate.count_ge`. No guarantee's
+statement changes. Records move by reads only: 33 in Security/Properties (committed), and Security's RecursiveAuditC3,
+SampledKSLiveV5, SampledKSTwo and SampledKSTwo_honest (drive's lock run)."
