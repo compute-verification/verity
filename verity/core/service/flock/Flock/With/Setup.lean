@@ -430,16 +430,23 @@ theorem sectionsLoop_nil (tags : Tags) (nets : Array (String × Net)) (n : Nat) 
   rw [Lean.Loop.forIn_eq_of_monadTail]
   simp
 
-/-- `parseRest` with no template: its sections, then the rest from the nets they give. -/
+/-- `parseRest` with no template: its sections, past a template section (`tmplLines`), then the rest from the nets they
+give. -/
 theorem parseRest_split (tags : Tags) (tables : List (String × ByteArray)) (pre : Array (String × Net))
     (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) :
     parseRest tags tables none pre sha lines name mj classSha = (do
-      let s ← sectionsLoop tags lines (pre, 2)
+      let s ← sectionsLoop tags lines (pre, 2 + tmplLines tags lines)
       parseRest tags tables none s.1 sha #[] name mj classSha) := by
   unfold parseRest
   congr 1
   funext s
   rw [sectionsLoop_nil]
+  rfl
+
+theorem tmplLines_view (tags : Tags) (v : ByteLines.View) :
+    tmplLines tags #[v.str 0, v.str 1, v.str 2] = tmplLines tags v.lines := by
+  unfold tmplLines
+  rw [ByteLines.View.getD_lines]
   rfl
 
 /-- `parseWith` with an ASCII file's lines read off its bytes (`ByteLines.View`), a row's numbers too, so a row makes no
@@ -456,7 +463,7 @@ def parseWithB (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List 
       let text ← (pure v.s : M String)
       if text = v.s then
         headWith hs tags bytes (v.str 0) (v.str 1) fun name mj classSha => do
-          let s ← sectionsLoopV tags v (pre, 2)
+          let s ← sectionsLoopV tags v (pre, 2 + tmplLines tags #[v.str 0, v.str 1, v.str 2])
           parseRest tags tables none s.1 sha #[] name mj classSha
       else
         let lines0 := (text.splitOn "\n").toArray
@@ -486,9 +493,8 @@ after it, so it stays directly below `parseWith`, above every caller. -/
       by_cases ht : text = v.s
       · subst ht
         rw [ite_eq_left rfl, hok.lines, ByteLines.View.getD_lines, ByteLines.View.getD_lines]
-        congr 1
-        funext name mj classSha
-        rw [parseRest_split, sectionsLoopV_eq tags v hok]
+        refine congrArg (headWith hs tags bytes (v.str 0) (v.str 1)) (funext fun name => funext fun mj => funext fun cs => ?_)
+        rw [parseRest_split, sectionsLoopV_eq tags v hok, tmplLines_view]
       · rw [ite_eq_right ht]
 
 /-- `parseTyped` through the oracle. -/

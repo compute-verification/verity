@@ -10,8 +10,10 @@ module
 
 public import Flock.ByteLines
 public import Flock.Test.Tmpl
+public import Flock.With.Setup
 meta import Flock.ByteLines
 meta import Flock.Test.Tmpl
+meta import Flock.With.Setup
 
 @[expose] public section
 
@@ -59,5 +61,27 @@ def flat : Array String := Flock.Test.Tmpl.flatText
 #guard netAgrees (file flat []) 1 300
 #guard netAgrees (file flat []) 0 (1 + flat.size)
 #guard netAgrees (file (flat.set! 5 "1 2 x") []) 1 (1 + flat.size)
+
+/-- A file of `tags` whose header and META pass `HmRow.headWith` and whose META `HmRow.parseRest` refuses after the
+sections: `sec`, then the section `CIRCUIT unit` holding `flat`. -/
+def stmt (tags : Tags) (sec : String) : ByteArray :=
+  let hex := String.ofList (List.replicate 128 'a')
+  (tags.fileFormat ++ " u\nMETA {\"format\":\"" ++ tags.fileFormat ++ "\",\"statement\":\"" ++ tags.statement ++
+    "\",\"program_sha512\":\"" ++ hex ++ "\",\"partition\":{\"rule\":\"" ++ HmRow.PARTITION_V1 ++ "\",\"digest\":\"" ++
+    hex ++ "\"}}\n" ++ sec ++ String.intercalate "\n" (s!"CIRCUIT unit {flat.size}" :: flat.toList) ++ "\n").toUTF8
+
+/-- What `HmRow.parseWith`'s compiled code (`parseWithB`) and `HmRow.parse` give on `b`: one error, or both a circuit. -/
+def sameParse (tags : Tags) (b : ByteArray) : Bool :=
+  match HmRow.parseWith (M := V) (Hashes.ofSha512 Sha512.hash) tags b, HmRow.parse tags b with
+  | .error x, .error y => x == y
+  | .ok _, .ok _ => true
+  | _, _ => false
+
+def sec : String := "TEMPLATE 2\na b\nc d\n"
+
+#guard [Tags.circuitTmpl, Tags.circuit].all fun t => sameParse t (stmt t sec) && sameParse t (stmt t "")
+#guard match HmRow.parse Tags.circuitTmpl (stmt Tags.circuitTmpl sec) with
+  | .error e => !e.startsWith "circuit: expected" && !e.startsWith "unit:"
+  | .ok _ => true
 
 end Flock.Test.ByteLines
