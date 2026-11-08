@@ -248,7 +248,10 @@ def rowsFormat : String := "verity-network-warden/registration/v2"
 def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
 def cellKinds : List Nat := [0, 1, 32, 33, 34]
-def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed"]
+def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed", "format"]
+/-- The egress form (`WardenParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
+of another form has a digest no schedule here has. -/
+def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
 
@@ -422,11 +425,13 @@ def scheduleOf (j : Json) : V Schedule := do
   unless s.window % s.every == 0 do throw "schedule: every divides the window: a window is whole timesteps"
   pure s
 
-/-- `WardenParams.digest`: the schedule's canonical JSON, with the cell kinds and the fail reasons, tagged. -/
+/-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
+tagged. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
   Identity.identityDigestSha512 scheduleTag (Json.mkObj [
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
-    ("egress_cells", toJson s.egressCells), ("every", toJson s.every), ("ingress_buckets", toJson s.ingressBuckets),
+    ("egress", toJson egressForm), ("egress_cells", toJson s.egressCells), ("every", toJson s.every),
+    ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
     ("reasons", toJson failReasons)])

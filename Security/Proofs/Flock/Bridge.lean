@@ -10,6 +10,7 @@ public import Proofs.Flock.Bridge.Slots
 public import Proofs.Flock.Bridge.SlotsKey
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
+public import Proofs.Flock.Bridge.UnitRows
 public import Proofs.Flock.Bridge.Canon
 public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
@@ -44,14 +45,16 @@ parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarante
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
 (`Bridge.Assumptions.ServedFilesParse`). `LeafSeg`: the `hm96-sha512/row-seg/v1` leaf binds, and
 `Flock.Bridge.commitRowL`, the deployed commitment with each port's own leaf, binds at every circuit file and opens at
-SHA-512 what `commitDepL` opens. `BitsRows`: `SampledProofs.Bits`' stacked unit rows are a circuit's template
+SHA-512 what `commitDepL` opens. `BitsRows`: `Spot.Bits`' stacked unit rows are a circuit's template
 instance rows (`Flock.Bridge.rowsAgree_circuitRows`). `BitsLower`: where a Bits key program lays out a circuit and its
 units, the bridge's lowering, positions and proof blocks are Bits' (`Flock.Bridge.LaysOut.progOf_eq`,
 `Flock.Bridge.blockOf_eq`). `BitsKeys`: Bits' source keys are the bridge's (`Flock.Bridge.keyIdx_eq`). `BitsKeyProg`:
 Bits' key program lays out a circuit file's and its units, so the bridge's program, positions and proof blocks are
 Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_bitsKeyProg`). `BitsRowMap`:
 Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
-returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). -/
+returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). `UnitRows`: each copy
+of a unit of the parsed file holds the unit net's rows at the unit's local evaluation (`Flock.Bridge.rows_localEval`).
+-/
 
 @[expose] public section
 

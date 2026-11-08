@@ -32,6 +32,8 @@ from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
+from verity.ml.definitions.tiny import TINY
+
 from . import cache as CC
 
 _LOADED = False
@@ -241,13 +243,10 @@ def _lift(fam: str) -> None:
     """Register ``Lifted[<composite>]_v2``, the lift a body that calls the composite makes (`lifted.lift_composite`), where no body
     has yet: unregistered, `word.specialization` takes it for a lifted primitive.  An id whose composite is lifted otherwise (by hand,
     `lifted.register_hand_lift`, or at another version) names no Definition, and is refused by name."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
-    from verity.ml.definitions.registry import lifted as L
+    from . import sidecars as SC
 
-    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fam)
-    inner = REGISTRY.defs.get(m[1]) if m else None
-    if isinstance(inner, CompositeDefinition) and (made := L.lift_composite(inner).id) != fam:
-        raise LookupError(f"{fam} names no Definition: {inner.id}'s lift is {made}")
+    if (made := SC.composite_lift(fam)) is not None and made.id != fam:
+        raise LookupError(f"{fam} names no Definition: {made.lifted_from.id}'s lift is {made.id}")
 
 
 def definition(spec: str) -> Any:
@@ -318,12 +317,6 @@ def kind_of(spec: str) -> str:
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
-
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64, "QKV": 64, "GU": 64,
-        "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
-TINY_NOBIAS = {**TINY, "BIAS": False, "KVH": 2, "QKV": 96}
-#: FP8's per-token quantization reads whole 256-thread CTAs: every reduction length is at least 256
-TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V": 16, "QKV": 512, "GU": 512}
 
 
 #: the binding units (`cache`'s units of a binding file: a root function, a `_model_roots` entry, a `TEMPLATE_PARAMS` entry;

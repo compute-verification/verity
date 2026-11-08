@@ -94,6 +94,38 @@ def warden_log(d: Path) -> dict[int, dict]:
     return {c["ordinal"]: c for c in json.loads(p.read_text())["connections"]} if p.exists() else {}
 
 
+def feed_releases(d: Path, wardens: dict[int, dict],
+                  client: dict[str, dict]) -> tuple[dict[str, tuple[int, int]], dict] | None:
+    """A warden trace's releases under ``--admit tick`` as the server got them: each request's (N, bucket) from the
+    release headers that `tick_plugin.TickFeed` wrote to the feed (``raw/tick-feed.jsonl``, keyed by the request's id),
+    kept where they agree with the network certifier's own record: the deployment's ``run_id``, and its log of the
+    request's connection (warden.json's ``release`` and ``ingress_end``, a, by the client's ordinal) where it has one. A
+    request whose release disagrees is left out, so `replay.read_corpus_trace` refuses the trace rather than read an
+    uncertified release. Returns the releases by request id and what the check found; None for a trace without a
+    network certifier's deployment or a feed."""
+    feed, dep = d / "raw" / "tick-feed.jsonl", d / "warden" / "deployment.json"
+    if not (feed.exists() and dep.exists()):
+        return None
+    run = json.loads(dep.read_text()).get("run_id")
+    got: dict[str, dict] = {}
+    for r in read_jsonl(feed):
+        if "key" in r:
+            got.setdefault(str(r["key"]), r)
+    out, disagree, unlogged = {}, [], 0
+    for rid, f in got.items():
+        w = wardens.get(((client.get(rid) or {}).get("warden") or {}).get("ordinal")) or {}
+        server = [f.get("run"), f.get("n"), f.get("bucket")]
+        warden = None if w.get("release") is None else [run, w["release"], w["ingress_end"]]
+        if server[0] == run and warden in (None, server):
+            out[rid] = (f["n"], f["bucket"])
+            unlogged += warden is None
+        else:
+            disagree.append({"id": rid, "server": server, "warden": warden or [run, None, None]})
+    return out, {"from": "the server's feed (raw/tick-feed.jsonl)", "run": run, "released": len(got),
+                 "agree": len(out) - unlogged, "unlogged": unlogged, "disagree": len(disagree),
+                 "disagreeing": disagree[:10]}
+
+
 def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, wardens: dict) -> dict:
     """A request's arrival on each side of the wire: the API server's (`vllm_accept_stamp`), the engine core's (the
     tracer's `arrivals`) and, through the warden, its connection's (`warden_log`)."""
@@ -173,6 +205,9 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
     accepts = {a["id"]: a for a in raw(d, "accept") if a.get("id") and a.get("path") == "/v1/completions"}
     added = {a["id"]: (k, a) for k, a in enumerate(raw(d, "arrivals"))}
     wardens = warden_log(d)
+    releases = {rid: (c["release"], c["bucket"]) for rid, c in client.items() if "release" in c}
+    if (fed := feed_releases(d, wardens, client)) is not None:
+        releases = fed[0]
     first, last = {}, {}
     with open(d / "steps.jsonl", "w", encoding="utf-8") as f:
         for s in steps:
@@ -203,16 +238,17 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
             "done_s": c.get("done_s"), "chunks": c.get("chunks"), "client_status": c.get("status"),
             "client_error": c.get("error"), "client_finish_reason": c.get("finish_reason"),
             "client_ids_match": c.get("output_ids") == out_ids if c else None,
-            **({"release": c["release"], "bucket": c["bucket"]} if "release" in c else {}),
+            **(dict(zip(("release", "bucket"), releases[e["id"]])) if e["id"] in releases else {}),
             **arrival_fields(e["id"], c, accepts, added, wardens)})
     reqs.sort(key=lambda r: (r["i"] is None, r["i"]))
     with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
         for r in reqs:
             f.write(json.dumps(r, separators=(",", ":")) + "\n")
-    w = warden_summary(d)
+    w, tick = warden_summary(d), tick_log(d)
     return summarize_trace(d, steps, reqs, client) | {"adversary": adversary(d, calls), "warden": w,
                                                       "arrival_order": arrival_order(reqs, steps, w),
-                                                      "engine": engine_geometry(d), "tick": tick_log(d)}
+                                                      "engine": engine_geometry(d),
+                                                      "tick": tick if fed is None else {**(tick or {}), "releases": fed[1]}}
 
 
 def engine_order(steps: list[dict]) -> list[str]:
@@ -852,8 +888,10 @@ FIELDS = """\
   in that order, which FCFS's waiting queue keeps); through the warden, `warden`: its `ordinal` and `outcome` at the
   client, and from the warden's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
   cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null). Under `--admit tick`,
-  `release` and `bucket`: its number in the stand-in network certifier's release order and its release bucket, counted
-  from the trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets (`corpus.StandIn`).
+  `release` and `bucket`: its number in the network certifier's release order and its release bucket, counted from the
+  trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets: in a warden trace the network certifier's, as the
+  server got them (`raw/tick-feed.jsonl`) where they agree with its log (`summary.feed_releases`, and summary.json's
+  `tick.releases`), elsewhere the client's stand-in's (`corpus.StandIn`).
 - `<trace>/engine.json`: the scheduler's KV pool as the hook saw it (`block_size`, `num_gpu_blocks`, `kv_cache_groups`),
   which `replay.read_corpus_trace` takes over the server log's KV cache size.
 - `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with the `seed` each request sent, if any) and
@@ -862,8 +900,9 @@ FIELDS = """\
   `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `tick_plugin.TickFeed` wrote
   (`raw/tick-feed.jsonl`) and the gate's log (`raw/tick.PID.jsonl`: each step's admissions and every event);
   `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
-  warden (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run and the watermark's
-  outcome).
+  warden (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
+  outcome, and `where` the releases came from: a warden trace's watermark is warden.json's, its last line, the lost
+  releases it named and its error).
 - `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
   `responses.records`, an admission-based relay's `fails.records`, `certified.jsonl`, `warden.json` with every
   connection's buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
@@ -901,7 +940,8 @@ def readme(s: dict) -> str:
         *([f"Admission: the certified tick (`--admit tick`, `verity_vllm.pipeline.serve_admit`), τ_b {tick['bucket_us']} µs, "
            f"τ_sat {tick['sat_us']} µs, τ_free {tick['free_us']} µs"
            f"{', calibrated on ' + tick['calibrated_from']['trace'] if tick.get('calibrated_from') else ''}, behind the "
-           "client's stand-in network certifier (`corpus.StandIn`); each trace's gate log is its `tick` in summary.json.",
+           "network certifier each trace's meta.json `tick.where` names (a warden trace's own, the client's stand-in, "
+           "`corpus.StandIn`, for the others); each trace's gate log is its `tick` in summary.json.",
            ""] if tick else []),
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
         "fresh server, so each starts with a cold prefix cache.", "",
@@ -960,7 +1000,15 @@ def readme(s: dict) -> str:
                   "didn't order: `unordered`, `stale`, `late`; one it gave up on: `skipped`; the gate opened: `opened`).", "",
                   "| trace | steps that added | requests added | events | opened |", "|---|---|---|---|---|"]
         for name, g in gated.items():
-            lines.append(f"| {name} | {g['steps']} | {g['requests']} | {g['events'] or 'none'} | {g['opened'] or '-'} |")
+            lines.append(f"| {name} | {g.get('steps')} | {g.get('requests')} | {g.get('events') or 'none'} | "
+                         f"{g.get('opened') or '-'} |")
+        fed = {name: g["releases"] for name, g in gated.items() if g.get("releases")}
+        if fed:
+            lines += ["", "A warden trace's releases are the server's (`raw/tick-feed.jsonl`), checked against the network "
+                          "certifier's log of each connection and its run (`summary.feed_releases`); a disagreeing one is "
+                          "left out of requests.jsonl, so the replay refuses the trace:", ""]
+            lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the certifier logged no "
+                      f"release for, {r['disagree']} disagree" for name, r in fed.items()]
     wardens = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
     if wardens:
         where = {w.get("where") for w in wardens.values()}
