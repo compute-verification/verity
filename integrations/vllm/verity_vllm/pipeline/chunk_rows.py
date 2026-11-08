@@ -1,8 +1,9 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
-(`unit_rows`) and table reads (`reads`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's
-``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`)
-and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows` and
-`reads`.  Each function takes the template as `serving_rows.template` reads it."""
+(`unit_rows`), table reads (`reads`) and statement (`statement`), the most of them one flock-circuit statement holds
+(`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
+chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
+(``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
+`serving_rows.template` reads it."""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -14,6 +15,8 @@ from verity.ml.windows import interface as IF, rows as CS
 #: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
 M_MAX = 35
+#: the layout mode of a table read's templated statement (`statement`; `verity_flock.tmpl.mode_of`)
+READ_LAYOUT = "iv/hybrid/4"
 
 
 def s8_words(K: int) -> int:
@@ -48,6 +51,15 @@ def reads(tp: Any) -> str:
     return "slots" if int(S["T"]) >= int(S["BN"]) else "inline"
 
 
+def statement(tp: Any) -> dict[str, Any]:
+    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``) the templated statement at
+    `READ_LAYOUT` of the verifier's read template (``structural``: `verity_flock.read_tmpl`, the one template
+    `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says."""
+    if tp.layout == "read":
+        return {"layout": READ_LAYOUT, "structural": True}
+    return {"reads": reads(tp)}
+
+
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`split_rows.cuts`, a ``SPLITS`` combine's), parameter g's row ``in<g>``, or
@@ -76,7 +88,7 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
 
 def chunk_cap(tp: Any) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) with its `reads`, then
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) as its `statement`, then
     ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
     about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
@@ -86,7 +98,7 @@ def chunk_cap(tp: Any) -> int:
     in_rows, out_rows = unit_rows(tp)
     with tempfile.TemporaryDirectory() as d:
         st = UnitStager(tp.fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
-                        bind={"partition": "0" * 128, "program": "0" * 128}, reads=reads(tp))
+                        bind={"partition": "0" * 128, "program": "0" * 128}, **statement(tp))
     if M_MAX - st.meta["k_log"] < 3:
         raise ValueError(f"{tp.id}: k_log {st.meta['k_log']} leaves no statement inside the spec shape (m <= {M_MAX})")
     return int(st.meta["vus_per_block"]) << (M_MAX - int(st.meta["k_log"]))

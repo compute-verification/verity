@@ -66,13 +66,13 @@ theorem unrollAt_eval {t : Tmpl} {lays : Array Lay} {net : Net} (hwf : t.wellFor
 converse of `rowsSat_of_netSat` on the rows `Rows.ofNet` reads. -/
 theorem netRow_of_rowsSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32) {z : ℕ → Bool}
     (hs : (Rows.ofNet hB).Sat fun c => z c.val) {r : ℕ} (h1 : min (net.inWords * WORD) net.constPos ≤ r)
-    (h2 : r < net.constPos) : z r = (xorSum (net.a.row r).toList z && xorSum (net.b.row r).toList z) := by
+    (h2 : r < net.constPos) : z r = (Verity.Boolean.xorSum (net.a.row r).toList z && Verity.Boolean.xorSum (net.b.row r).toList z) := by
   have hn : (Rows.ofNet hB).nComp = net.constPos - min (net.inWords * WORD) net.constPos := rfl
   have hr : (Rows.ofNet hB).nIn + (r - min (net.inWords * WORD) net.constPos) = r := by
     rw [Rows.ofNet_nIn]; omega
   have e := hs ⟨r - min (net.inWords * WORD) net.constPos, by omega⟩
   change z ((Rows.ofNet hB).nIn + (r - min (net.inWords * WORD) net.constPos)) =
-    (xorSum ((Rows.ofNet hB).a _) (z ∘ Fin.val) && xorSum ((Rows.ofNet hB).b _) (z ∘ Fin.val)) at e
+    (Verity.Boolean.xorSum ((Rows.ofNet hB).a _) (z ∘ Fin.val) && Verity.Boolean.xorSum ((Rows.ofNet hB).b _) (z ∘ Fin.val)) at e
   rw [← xorSum_map, ← xorSum_map, Rows.ofNet_a hB hu, Rows.ofNet_b hB hu] at e
   simp only [hr] at e
   exact e

@@ -7,6 +7,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoWork
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoCredit
@@ -29,9 +30,10 @@ public import Proofs.Flock.Claims.Witnesses.BindingMeets
 Every claim definition in `Definitions.Core.Interaction` and `Definitions.Claims*` carries a theorem `<Claim>_fails`: a
 concrete toy instance at which the claim is false, so its definition constrains something. `Shared` has the shared
 forms' witnesses and the toys they use, `Flock` Flock's, `Sampling` the sampling compiler's, `SamplingGeneric` the
-generic sampled compiler's (with their statements over the spec; `SamplingGenericCost` its cost claims', and
-`SamplingGenericZK` its zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met
-by a trivial instance has a theorem `<Claim>_vacuous` that exhibits it.
+generic sampled compiler's (with their statements over the spec; `SamplingGenericCost` its cost claims',
+`SamplingGenericKSAt` its KS read at a time budget, with `CompilerKSAt`'s nontrivial lemma, and `SamplingGenericZK` its
+zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met by a trivial
+instance has a theorem `<Claim>_vacuous` that exhibits it.
 
 The lock's `claims` section (`Security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
 guarantees: `Stated` states the shared, Flock and sampling claims' failures over the spec (`Claims.<Claim>_fails`), and

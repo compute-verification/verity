@@ -79,7 +79,7 @@ theorem constWiresOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.un
 
 /-- **A proof block reads the constants only at its unit's inputs**: constants that agree at every gate whose owner is
 `u` give unit `u` one block. -/
-theorem blockOf_congr {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+theorem blockOf_congr {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     {κ κ' : Fin C.N → Option Bool} (u : Fin n) (h : ∀ g, owner P g = some u → κ g = κ' g) :
     blockOf P κ u = blockOf P κ' u := by
   have hf : ((List.finRange C.N).filter fun g => (C.op g).isInput && (κ g).isNone && decide (owner P g = some u)) =

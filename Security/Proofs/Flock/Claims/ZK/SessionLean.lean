@@ -690,7 +690,7 @@ theorem Flock.zk_server_lean_loop
       (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) Ok)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
-    (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hEf : LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :

@@ -49,7 +49,7 @@ def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:
     -> (the verifier's window, the step roots serving recorded)."""
     w, s, ms = TR.window()
     w = replace(w, run=f"{ROOT}/rank0")
-    if D.parse_law(RULE) != w.law:
+    if D.parse_design(RULE) != w.law:
         raise SystemExit(f"the fixture's law is {w.law}, not {RULE}")
     SRW._operand = s.operand  # the fixture's served operands, as `test_row_tables.committed` reads them
     got = SRW._read_s8(ms, s.rows, s, None, TR.ARRIVALS)
