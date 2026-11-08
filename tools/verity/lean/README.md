@@ -257,20 +257,17 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `guarantees`: the guarantees (GLOSSARY.md), and the theorems that witness them (`witnesses`, `claims.witnesses`), so
-  their records show in the landing DM; no other lemma or completeness theorem.
+- `guarantees`: the guarantees (GLOSSARY.md) and their witnesses (`witnesses`, `claims.witnesses`), never another lemma.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
   hypotheses, the `premises` (its named assumptions, open premises, and the `Prop`s it only `reads`), a hash of the type, and for each module the
   definitions the guarantees read, with a hash each (not who
   reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
   a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
-  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record written
-  before guarantees were called that holds them under `pins`: the audit reads it so, `--update` rewrites it under
-  today's names, and one holding both is refused.
-- `owner`, in each guarantee's entry: the handle of the lane that answers for it (a handle of the registry), whom
-  a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
-  `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
-  entry without one. A changed owner is one line in the review and no change of the statement.
+  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record that
+  holds them under their old name, `pins`, is read so and rewritten by `--update`; one holding both is refused.
+- `owner`, in each guarantee's entry: the registry handle of the lane that answers for it, whom a broken or restated
+  guarantee goes to; an entry without one fails. Write it by hand, or pass `--update --owner @lane`, which owns only the
+  new entries (`--update` keeps an entry's owner). A changed owner is one line in the review, not a changed statement.
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
   inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
@@ -291,11 +288,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
-  `falsified`, or `unstated` for a statement no guarantee states), so a record counts its guarantees by category. The
-  lock lists what is assumed and what is proved, so a reason starting `lemma` or `completeness` is refused with its fix:
-  a lemma comes off `guarantees` (its theorem stays in `Proofs/`, and a spec statement only it states moves to
-  `Proofs/<Area>/Lemmas/`), and a completeness theorem goes under its guarantee's `witnesses` entry when it is that
-  guarantee's honest witness, else comes off too. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
+  `falsified`, or `unstated` for a statement no guarantee states), so a record counts its guarantees by category. A
+  reason starting `lemma` or `completeness` is refused with its fix: unlist it (a spec statement only it states moves to
+  `Proofs/<Area>/Lemmas/`), or list it under `witnesses` as its guarantee's honest witness. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
   its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs
@@ -319,7 +314,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   The check refuses a guarantee or property whose statement reads a definition in the proofs tree (move it to the
   definitions tree, or unlist it as a lemma), and a module of the definitions or properties tree that imports one.
   `except` ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that
-  excepts nothing fails. Excepted modules are still recorded. `Security`'s `except` is the cleanup's to-do. The report
+  excepts nothing fails. Excepted modules are still recorded. The report
   also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
   in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
