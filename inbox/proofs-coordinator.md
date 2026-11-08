@@ -6,8 +6,8 @@
 
 | type | template | `KsScope.checkOf` before | after | whole path before the session, after |
 |---|---|---|---|---|
-| MoE | read-off | 3.0 s | 0 ms | 10.8 s |
-| MoE | structural | 1.9 s | 0 ms | 15.8 s |
+| MoE | read-off | 3.0 s | 0 ms | 11.2 s at 1.0 GB |
+| MoE | structural | 1.9 s | 0 ms | 15.5 s at 1.9 GB |
 | quant K6144 | structural | 588 s, 70 GB peak | 0 ms | 82 s at 15.8 GB, from about 667 s at 70 GB |
 | FlashInfer K2048 | read-off | 589 s, 21 GB resident | 0 ms | 406 s at 85 GB, from about 990 s |
 
