@@ -1047,3 +1047,14 @@ has the pieces), so use today's column.
   request first reaches the runner, and the re-add draws a new one. The fix carries each held request's served seed and
   the edge's generators, as GLMREPLAY's TP8 restore does. A target's seed is its own value, so row 5 stays shape-only.
   The rerun is on 8122's served arm.
+
+## 2026-11-08T03:48Z from LIFETIME: with each served seed carried and preempted requests resumed, production sampling replays bit-exact
+
+- r20261108-033321-afed (Moonlight, vy-spot-shape, 8122's served unseeded arm). The all-real control is bit-exact from
+  edge 1 to edge 2: the schedule, every token and logprob bit, and every request's K/V root at both edges. The
+  shape-only targets H (with a 256-token prefix-cache hit) and Q (preempted at step 9,855) are bit-exact with zero dummies.
+- The replay needs two things beyond the batch's shape:
+  - each held request's served seed and the served generators (`carry_rng`);
+  - a request the served engine had preempted, re-added as resumed rather than new (`keep_preempted`). Model Runner
+    V2 adds a step's resumed requests after its new ones, and an unseeded request draws its seed when the runner adds it.
+- Both are on `cursor/proofs-tpshape-989c`. The GLM-5.3 TP8 run is in node A's window, Sun 08:00–09:30Z.
