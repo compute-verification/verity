@@ -98,9 +98,8 @@ from verity_vllm.pipeline.advice_code import schedule as S
 from verity_vllm.pipeline.advice_code import window_code as CV
 
 __all__ = ["advice_of_replay", "AdviceCodeError", "arrival_order", "bits_by_window", "book_of", "CAPS", "charged",
-    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "length_widths", "lengths",
-    "Lookup", "Record",
-    "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS", "streams", "string_of", "TICK_CAPS",
+    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "length_tails", "length_widths",
+    "lengths", "Lookup", "Record", "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS", "streams", "string_of", "TICK_CAPS",
     "windows"]
 
 T = TypeVar("T")
@@ -560,6 +559,11 @@ def length_widths(record: Record, reg: Registered) -> list[list[int]]:
     return LN.widths(record.requests, lengths(record, reg))
 
 
+def length_tails(record: Record, reg: Registered) -> list[list[tuple[int, int]]]:
+    """Each window's tail as `string_of` takes it: (value, width) of each length term's output_len and finish."""
+    return LN.tails(record.requests, lengths(record, reg), reg.config(reg.engine))
+
+
 def string_of(wins: Sequence[Any], reg: Registered,
               tails: Sequence[Sequence[tuple[int, int]]] | None = None) -> tuple[list[int], list[int]]:
     """The string's bits, unpadded, and each window's charge: its segment's bits and its tail's (the length terms)."""
@@ -704,7 +708,7 @@ def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = 
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
     ones). `check` decodes the string back and holds it to the advice."""
     wins, rp, order = _residual_of(advice, record, reg)
-    data = CV.pack(string_of(wins, reg, LN.tails(record.requests, lengths(record, reg), reg.config(reg.engine)))[0])[0]
+    data = CV.pack(string_of(wins, reg, length_tails(record, reg))[0])[0]
     if check:
         index = {record.requests[k].id: e for e, k in enumerate(order)}
         theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]

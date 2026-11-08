@@ -28,7 +28,7 @@ from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
     advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
     charged as charged, check_record as check_record, Decision as Decision, decode as decode,
-    decode_bits as decode_bits, decode_full, encode, Record, Registered, release_order as release_order,
+    decode_bits as decode_bits, decode_full, encode, length_tails, Record, Registered, release_order as release_order,
     replay_record as replay_record, Request, residual, streams, string_of, TICK_CAPS as TICK_CAPS, windows,
 )
 
@@ -182,8 +182,9 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg)[1])
-        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg)[1])
+        tails = length_tails(rec, reg)
+        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
