@@ -8812,3 +8812,29 @@ writer writes (check_rows unchanged), and two class-G tests count the rule. Full
 - **Earlier failure, fixed:** the first suites run at b0fff7ce08 failed `tests/lint/test_repo_env_reads.py`, because a new test read the environment directly. c803886d98 declares `FLOCK_READ_SERVED` in `verity/ml/flock/tests/settings.py`, on PoUS's pattern.
 - **The goal:** step (3), the committed check, is done, pending its landing. I haven't touched the goal's status or blockers, since you set them at 07:02Z.
 - **#7988:** no change to the command is needed. After #7988 lands, the served files are restaged and `served_reads.json` is updated. VERIFYFAST-C hasn't replied yet.
+
+## 08:14Z from TWOOPENS: #8041 marked at `1561cdd138`: `SpotKSTwo` in the lock, unwitnessed only for its honest half; land ask below
+
+- **Land ask: #8041** (https://github.com/compute-verification/verity/pull/8041) at `1561cdd138`, branch
+  `cursor/proofs-twoopens-listed-3d1a`. Lane proofs, `Refs PRF-460`, goal `proofs/spot-two-stage-sound`. Marked at
+  08:11Z. It is stacked on #7977 and #7997, both already on `next`.
+  - The lock lists `Flock.SecurityProofs.SpotKSTwo` with open premises `SpotFlock.Embeds`, `SpotFlock.FrameIs`
+    (PRF-460, due 30 Nov) and the existing `CompiledTwo.Scope` (LEAN-186). It has a frozen shape reason.
+  - Witnesses: `compilerKSTwo_nontrivial` is the nontrivial half. The honest half sits under `unwitnessed` with your
+    `why`.
+  - `UNWITNESSED` goes from 305 to 306 and `TREES_EXCEPT` from 40 to 41. `UNDOCUMENTED` stays at 61.
+- **Checks:**
+  - Records r20261108-071748-1ab8 (cpu-11) on `3f28de0788` passed for `Security/Proofs`, `Security` and
+    `Security/Properties`. Its records are committed exactly at `1561cdd138`, and the records gate vouched for all three.
+  - Quick suites r20261108-074736-903b (cpu-7) on `1561cdd138` passed: 9 of 9 suites, with nothing cached.
+  - The preflight merged it onto `next` at `cf12cfe57c`, and its suites passed. Its Lean build (r20261108-080601-d98d,
+    cpu-9) was still waiting after its 180 s, so that check was skipped.
+  - My own build of the merge onto `next` is r20261108-081216-ca0d on cpu-7, 15 modules, ETA about 08:35Z. The earlier
+    one, r20261108-063618-5a5d, passed before the doc comments were added.
+- **For the reviewer:**
+  - The records commit also drops 13 stale `shape.inline` premises that the lock merge of the two stacked branches had
+    kept. That puts `INLINE` for `Security` at 914, under its cap of 927, which only warns. I left the cap alone,
+    because the lock merge onto `next` keeps those premises.
+  - Merged onto `next`, the PR changes four files.
+- **Next for me:** ZKTWO's 07:27Z plan proposes P4 for TWOOPENS: by Mon 06:00Z, assess whether `SampledKSLiveV5` gives
+  `SessionOpensTwo` directly, then `Embeds` by Wed as a stretch. I'll start it when you assign it.
