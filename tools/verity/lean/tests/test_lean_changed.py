@@ -1039,3 +1039,17 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
+    """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
+    path alone refused it as matching no package, after the run had waited for its slot."""
+    pkgs = ["verity/core/protocols/network/lean", "verity/core/protocols/network/nci/lean", "Security"]
+    for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
+        (tmp_path / p).mkdir(parents=True)
+        (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("verity/core/protocols/network/lean/", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network/lean", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network", pkgs, tmp_path) == pkgs[:2]
+    assert LC.matching("network_check", pkgs) == []
