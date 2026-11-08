@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Audit.OneStage
 public import Proofs.Flock.Soundness.Instance
 public import Definitions.Flock.Game.Batch
 public import Mathlib.Order.CompletePartialOrder
