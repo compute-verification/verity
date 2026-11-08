@@ -418,7 +418,7 @@ def run(a) -> int:
             "gpu_mem_max_mib": max((m for *_, m in samples), default=None), "cgroup": cgroup(),
             "verify_s": by_type([(v["type"], v["verify_s"]) for v in verdicts if v["verify_s"] is not None]),
             "verifier_cache": {t: next((v["stmt_cache"] for v in reversed(verdicts) if v["type"] == t), None) for t in types},
-            "accepted": all(x["accepted"] is True for x in lives) and len(lives) == K * len(per[0])
+            "accepted": all(x["accepted"] is True for x in lives) and len(lives) == sum(map(len, per))
             and len(verdicts) == sum(len(x) for x in draws.values()) and all(v["accepted"] is True for v in verdicts)}
     with open(out / "busy.csv", "w") as f:
         f.writelines(f"{t:.3f},{u},{m}\n" for t, u, m in samples)
