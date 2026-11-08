@@ -389,7 +389,7 @@ theorem quiet_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) (r : Fin 3) : q
 
 theorem prob_eq_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p = 1 := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   rw [filter_true_of_mem fun ω _ => h ω, card_univ, div_self (by exact_mod_cast Fintype.card_ne_zero)]
 
 end OnsiteFreedWitness

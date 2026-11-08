@@ -62,7 +62,7 @@ open Claims Finset
 theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : β → Prop) :
     Pr (fun a => p (e a)) = Pr p := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [Fintype.card_congr e]
   congr 2
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]
@@ -89,7 +89,7 @@ theorem Ex_ite_const {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p
 
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a ∨ q a) ≤ Pr p + Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   exact_mod_cast (Finset.card_le_card fun a ha => by

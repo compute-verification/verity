@@ -90,7 +90,7 @@ theorem sum_prob_le {Y P : Type} [Fintype Y] (L : Finset P) (F : P → Y → Pro
       _ = ∑ y, ∑ p ∈ L, (if F p y then 1 else 0 : ℕ) := Finset.sum_comm
       _ ≤ ∑ y, k * (if ∃ p ∈ L, F p y then 1 else 0) := Finset.sum_le_sum fun y _ => key y
       _ = k * (univ.filter fun y => ∃ p ∈ L, F p y).card := by rw [← Finset.mul_sum, Finset.card_filter]
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   rw [← Finset.sum_div, mul_div_assoc']
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have := (Nat.cast_le (α := ℝ)).2 hn
@@ -126,11 +126,11 @@ theorem tally_le_held [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
   Accounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
 
 theorem toReal_pr {α : Type} [Fintype α] (P : α → Prop) : (Pous.pr P).toReal = prob P := by
-  unfold Pous.pr prob Claims.Pr
+  unfold Pous.pr prob Claims.prUniform
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = prob P := by
-  unfold prob Claims.Pr
+  unfold Claims.Pr prob Claims.prUniform
   congr
 
 /-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
@@ -242,7 +242,7 @@ theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Session n m s κ X) (R
       funext y
       exact propext ⟨fun ⟨p, _, _, h⟩ => h (hF t y.1 y.2 p), False.elim⟩
     rw [this]
-    unfold prob Claims.Pr
+    unfold prob Claims.prUniform
     simp
   have h2 : √((2 : ℝ) ^ (513 : ℝ)) = 2 ^ (256.5 : ℝ) := by
     rw [Real.sqrt_eq_rpow, ← Real.rpow_mul (by norm_num)]

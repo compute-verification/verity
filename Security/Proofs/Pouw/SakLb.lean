@@ -41,19 +41,19 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
 
 section Averaging
 
-theorem prob_eq_card_subtype {Ω : Type} [Fintype Ω] (p : Ω → Prop) [Fintype {x // p x}] :
+theorem prob_eq_card_subtype {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [Fintype {x // p x}] :
     prob p = (Fintype.card {x // p x} : ℝ) / Fintype.card Ω := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   congr 2
   rw [Fintype.card_subtype]
 
-theorem prob_nonneg {Ω : Type} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
-  unfold prob Claims.Pr; positivity
+theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
+  unfold prob Claims.prUniform; positivity
 
-theorem prob_le_one {Ω : Type} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
+theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
   classical
-  unfold prob Claims.Pr
+  unfold prob Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h | h
   · simp [h]
   · rw [div_le_one (by exact_mod_cast h)]
@@ -75,7 +75,7 @@ theorem wordsMoment_le_one (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pu
   by_cases hd : Deg d
   · simp [hd]
   · have hp := h d hd
-    unfold prob Claims.Pr at hp
+    unfold prob Claims.prUniform at hp
     simp only [hd, not_false_eq_true, true_and]
     rw [← Finset.sum_filter, Finset.sum_const, nsmul_eq_mul]
     rcases Nat.eq_zero_or_pos (Fintype.card P.Chk) with hc | hc

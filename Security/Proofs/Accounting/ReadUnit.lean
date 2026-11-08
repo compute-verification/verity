@@ -64,7 +64,7 @@ theorem collisionIn_mono {H : Hash.Msg → Verity.Digest} {xs ys : List Hash.Msg
 theorem pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   exact_mod_cast (Finset.card_le_card fun a ha => by

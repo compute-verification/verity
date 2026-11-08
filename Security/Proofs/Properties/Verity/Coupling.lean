@@ -326,7 +326,7 @@ theorem prCoin_eq_ofReal_pr {C : Type} [Fintype C] (p : C → Prop) :
     prCoin p = ENNReal.ofReal (Pouw.pr p) := by
   classical
   rw [prCoin_eq_card p]
-  unfold Pouw.pr Claims.Pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   rcases (Fintype.card C).eq_zero_or_pos with h | h
   · have := Fintype.card_eq_zero_iff.mp h
     simp

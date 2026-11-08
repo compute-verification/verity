@@ -79,20 +79,20 @@ theorem game_prob_exists_le {α : Type} {ι : Type*} (s : Finset ι) (E : ι →
     · exact Or.inl hE
     · exact Or.inr ⟨i, hi, hE⟩
 
-theorem wprob_mono {β : Type} [Fintype β] {p q : β → Prop} (h : ∀ b, p b → q b) :
+theorem wprob_mono {β : Type*} [Fintype β] {p q : β → Prop} (h : ∀ b, p b → q b) :
     Pouw.RelativeSecurity.prob p ≤ Pouw.RelativeSecurity.prob q := by
   classical
-  unfold Pouw.RelativeSecurity.prob Claims.Pr
+  unfold Pouw.RelativeSecurity.prob Claims.prUniform
   apply div_le_div_of_nonneg_right _ (by positivity)
   exact_mod_cast Finset.card_le_card fun b hb => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
     exact h b hb
 
-theorem wprob_or_le {β : Type} [Fintype β] (p q : β → Prop) :
+theorem wprob_or_le {β : Type*} [Fintype β] (p q : β → Prop) :
     Pouw.RelativeSecurity.prob (fun b => p b ∨ q b) ≤
       Pouw.RelativeSecurity.prob p + Pouw.RelativeSecurity.prob q := by
   classical
-  unfold Pouw.RelativeSecurity.prob Claims.Pr
+  unfold Pouw.RelativeSecurity.prob Claims.prUniform
   rw [← add_div]
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s t u : Finset β, (∀ b ∈ s, b ∈ t ∨ b ∈ u) → (s.card : ℝ) ≤ t.card + u.card := fun s t u h => by
