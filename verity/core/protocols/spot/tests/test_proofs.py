@@ -260,17 +260,20 @@ def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx,
 
 
 def _pointed(fx: Path) -> str:
-    """The fixture's public file with instance 0's ref at port 0 (the row it reads of that port's shared table) pointed
-    at instance 1's, as a prover pointing a unit at another unit's rows would write it; its header and tables kept. Port
-    0 is an input: a circuit's inputs precede its outputs, whose refs setup holds to each instance's own row."""
+    """The fixture's public file with the first drawn unit's ref at port 0 (the row it reads of that port's shared table)
+    pointed at the next instance's, as a prover pointing a drawn unit at another unit's rows would write it; its header
+    and tables kept. A drawn unit's, since the session's statement is the drawn units' (`Flock.Draw`); port 0, an input,
+    since a circuit's inputs precede its outputs, whose refs setup holds to each instance's own row."""
     st = fx / "stage"
     head, body = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
     header = json.loads(head)
     n, np_ = header["instances"], len(header["shared_rows"])
     at = PRODUCED.BC_BYTES * sum(header["shared_rows"].values())
     refs = bytearray(body[at:at + 4 * n * np_])
-    assert refs[:4] != refs[4 * np_:4 * np_ + 4], "instances 0 and 1 read one row at port 0: nothing to point"
-    refs[:4] = refs[4 * np_:4 * np_ + 4]
+    i = header["units"]["indices"].index(DRAWN[0])
+    a, b = 4 * i * np_, 4 * ((i + 1) % n) * np_
+    assert refs[a:a + 4] != refs[b:b + 4], "the drawn unit and the next read one row at port 0: nothing to point"
+    refs[a:a + 4] = refs[b:b + 4]
     (st / "pub-pointed.bin").write_bytes(head + b"\n" + body[:at] + bytes(refs) + body[at + 4 * n * np_:])
     return "pub-pointed.bin"
 
@@ -279,8 +282,8 @@ def _pointed(fx: Path) -> str:
 @pytest.mark.slow
 def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
     """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
-    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): instance 0's input ref
-    pointed at instance 1's row is refused at setup, before any proof is read, and proves no proof block. Round 2
+    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a drawn unit's input ref
+    pointed at the next instance's row is refused at setup, before any proof is read, and proves no proof block. Round 2
     requires every port a second-stage header shares rows at to be registered (`second-refs`), so its sessions' refs are
     held this way."""
     got, why = _verify(fx, fx / "session", public=_pointed(fx))
