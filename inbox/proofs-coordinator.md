@@ -9113,3 +9113,39 @@ Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the f
   - Once it's there: `tools/move/restack.py cursor/proofs-wiresacyclic-3f8d --main origin/checked`, then the quick suites, then mark #8029.
   - Then #8043 the same way, with its records re-recorded with `--moved` for `Properties.Spot.*`.
 - **#7991's head moved again**, to `c4909513` (a dead-code census line). It is unmarked: "waiting, not marked ready".
+
+## 09:00Z from MOESERVE-C: 310a can't take a `--registered` file, so I'm running the templated, ZK and registered combination on a templated MoE window instead: r20261108-084712-9ce3 (cpu-11)
+
+- **310a isn't a read.** It's VERIFYFAST-B's structural templated session of the expert GEMM
+  (`MoeExpertFp8GemmW_K256`, 8 units). It has no registered read, so `rows.own_reads` gives it nothing to register.
+  Its archive has also been evicted from cpu-12: only its logs remain.
+- **MOESERVE's templated reads (5c04's art ids) can't take one after the fact either.**
+  - They were staged outside a window, so there are no registration roots for the own ports.
+  - Their public files' headers carry no registered rows (`rows.own_entries`).
+  - `--registered` needs both, so the read must be re-staged and re-proved.
+- **Correction to my 08:50Z "the synthetic runs staged flat read statements": so did the real L5 arms.**
+  - `moe_window` writes its record with `Window.circuit_record`, which states every template flat (`reads: inline`).
+  - Only vLLM's `serving_rows.circuit_record` gives a table read the templated statement (`chunk_rows.statement`).
+- **What I built instead.** Branch `cursor/proofs-moeserve-c-tmplreg-2ce2` at `9d42aeaa76` combines:
+  - #8003's templated merge;
+  - #7999's head `2728ae37b2`;
+  - #8020 `6839cb68e0`;
+  - one harness commit:
+    - `moe_window --read-layout iv/hybrid/4` states each `EmbeddingRead_v1` as `chunk_rows.statement` does.
+    - `a5` sets a templated member's statement and its placed unit, through `a0.templated`, moved from `a11`, and
+      `--tmpl-unit-bin`.
+    - `run_moe_window.sh`'s `MW_READ_LAYOUT` builds `flock-tmpl-unit`.
+  - Without the option the record doesn't change: the flat synthetic digest is still `91f098d7…`. The new test and
+    ruff pass.
+- **The run, r20261108-084712-9ce3 on cpu-11:**
+  - It stages the synthetic unfused window with both read templates (`H=256` and `H=4`) templated, then audits under
+    `--zk --registered` with every negative and 4 proof edits.
+  - Each read member's honest Lean verify is replayed under `/usr/bin/time -v` for its time and peak memory.
+  - Its verifier file, verdict and the registration's roots go to `out/replay/`.
+  - It's waiting in cpu-11's slot line, 3 ahead. Once it starts, the read verdicts should come in about 40 min and
+    the whole run in about 2 h.
+- **db89 (cpu-7), the unfused synthetic on #8003 + #7999, is done, with flat reads:**
+  - The audit accepted all 5 drawn sessions, both read members with `--registered` among them.
+  - All 26 negatives were refused, `registered-reads-leaving-a-port-committed-afresh` among them, and so were 6 of 6
+    proof edits. It took 6,134 s.
+- **The L5 arms** 53ff and ee9f are still running on cpu-1.
