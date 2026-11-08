@@ -1,6 +1,6 @@
 //! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (verity/ml/flock/cuda/prove_circuit.cuh,
-//! installed by verity/ml/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions'
-//! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
+//! installed by verity/ml/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions' and
+//! hm96 slots' inputs and every unit's input words (all computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
 //! a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
 
 use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock, time::Instant};
@@ -105,6 +105,17 @@ struct CircuitParams {
     h_tape_words: i32,
     /// `host0_zab`'s layout: 0 each slot's z, a, b words; 1 its a, b words, z = a & b (mapped host memory only)
     host0_ab: i32,
+    /// the hm96 slots' native witness beside `h_plan`'s: their range, the hm96 circuit's plan and useful rows, the tape's words
+    /// per slot, every hm96 slot's input words, the salt prefix's midstate and the key's byte tables; null `m_plan`: the hm96
+    /// slots are among the host slots
+    m_range: i32,
+    m_useful: i32,
+    m_in_words: i32,
+    m_tape_words: i32,
+    m_plan: *const u32,
+    m_inputs: *const u64,
+    m_mid: *const u64,
+    m_tables: *const u64,
 }
 
 #[cfg(feature = "sha512")]
@@ -205,6 +216,9 @@ unsafe extern "C" {
     fn flock_cuda_free(p: *mut u8);
     #[cfg(feature = "sha512")]
     fn flock_cuda_hm96_leaves(x: *const u8, salts: *const u8, n: i64, prefixes: *const u8, tables: *const u64, out: *mut u8) -> i32;
+    #[cfg(feature = "sha512")]
+    fn flock_cuda_hm96_slots(inputs: *const u64, in_words: i32, n: i64, plan: *const u32, useful: i32, tape_words: i32, mid: *const u64,
+                             tables: *const u64, slot_log: i32, z: *mut u64, a: *mut u64, b: *mut u64) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
     fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_host_register(p: *mut c_void, bytes: usize) -> i32;
@@ -257,20 +271,79 @@ impl Drop for Pinned {
 /// least this deep is evaluated on the host; `FC_HOST_UNITS=0|1` overrides.
 pub const HOST_UNIT_LEVELS: usize = 2048;
 
-/// The compression slots' native witness plan (`sha512_native`): the sha512x3 circuit's rows' `(a, b)` sources as `u32` pairs, and
-/// the tape's words per slot. Derived and checked against `eval64` once per process (the slot circuit is pinned); `None` if the
-/// circuit's plan cannot be derived.
+/// A slot circuit's native witness plan (`sha512_native`): its rows' `(a, b)` sources as `u32` pairs, and the tape's words per
+/// slot. Derived and checked against `eval64` once per process (the slot circuit is pinned); `None` if the plan cannot be derived.
 #[cfg(feature = "sha512")]
-fn native_plan(st: &Stmt) -> Option<&'static (Vec<u32>, i32)> {
-    static PLAN: OnceLock<Option<(Vec<u32>, i32)>> = OnceLock::new();
-    PLAN.get_or_init(|| match crate::sha512_native::NativeSha::derive(&st.c.nets[st.c.sha_net].1) {
+fn plan_of(cell: &'static OnceLock<Option<(Vec<u32>, i32)>>, net: &IrUnitNet) -> Option<&'static (Vec<u32>, i32)> {
+    cell.get_or_init(|| match crate::sha512_native::NativeSha::derive(net) {
         Ok(p) => Some((p.rows.iter().flat_map(|&(a, b)| [a, b]).collect(), p.roles.len() as i32)),
         Err(e) => {
-            eprintln!("the native compression witness is off: {e}");
+            eprintln!("the native witness of {} is off: {e}", net.name);
             None
         }
     })
     .as_ref()
+}
+
+/// The compression slots' (sha512x3) native witness plan.
+#[cfg(feature = "sha512")]
+fn native_plan(st: &Stmt) -> Option<&'static (Vec<u32>, i32)> {
+    static PLAN: OnceLock<Option<(Vec<u32>, i32)>> = OnceLock::new();
+    plan_of(&PLAN, &st.c.nets[st.c.sha_net].1)
+}
+
+/// The hm96 slots' native witness plan.
+#[cfg(feature = "sha512")]
+fn hm96_plan(st: &Stmt) -> Option<&'static (Vec<u32>, i32)> {
+    static PLAN: OnceLock<Option<(Vec<u32>, i32)>> = OnceLock::new();
+    plan_of(&PLAN, &st.c.nets[st.c.hm_net].1)
+}
+
+/// Whether the device builds the hm96 slots natively beside the compressions (both plans derived), so the host hands it their
+/// input words ([`HostSlots::hm96_rows`]) rather than their witness; not with `FC_HM96_HOST=1`.
+pub fn hm96_native(st: &Stmt) -> bool {
+    #[cfg(feature = "sha512")]
+    return std::env::var("FC_HM96_HOST").as_deref() != Ok("1") && native_plan(st).is_some() && hm96_plan(st).is_some();
+    #[cfg(not(feature = "sha512"))]
+    {
+        let _ = st;
+        false
+    }
+}
+
+/// SHA-512's chaining value after hm96-sha512's salt prefix block: where every hm96 slot's salt compressions start.
+#[cfg(feature = "sha512")]
+fn hm96_midstate() -> &'static [u64; 8] {
+    static MID: OnceLock<[u64; 8]> = OnceLock::new();
+    MID.get_or_init(|| {
+        let mut mid = crate::circuit::SHA512_IV;
+        crate::circuit::compress(&mut mid, &flock_merkle::hm96::consts().salt_prefix);
+        mid
+    })
+}
+
+/// The hm96 slots' words as the device builds them natively (`flock_cuda_hm96_slots`, the kernels `fc_witness` runs), from
+/// their input words (`Stmt::row_inputs`' hm96 slots): a test vector against the host's (`Stmt::slot_zab`).
+#[cfg(feature = "sha512")]
+pub fn device_hm96_slots(st: &Stmt, ins: &[Vec<F128>]) -> Result<Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>, String> {
+    let net = &st.c.nets[st.c.hm_net].1;
+    let (plan, words) = hm96_plan(st).ok_or("the hm96 slots have no native plan")?;
+    let uw = 1usize << (net.unit_log - 7);
+    let flat: Vec<u64> = ins.iter().flat_map(|w| {
+        assert_eq!(w.len(), net.in_words, "an hm96 slot's input words");
+        w.iter().flat_map(|x| [x.lo, x.hi])
+    }).collect();
+    let (mut z, mut a, mut b) = (vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()]);
+    let rc = unsafe {
+        flock_cuda_hm96_slots(flat.as_ptr(), net.in_words as i32, ins.len() as i64, plan.as_ptr(), net.useful as i32, *words,
+                              hm96_midstate().as_ptr(), flock_merkle::hm96::consts().tables.as_ptr() as *const u64, net.unit_log as i32,
+                              z.as_mut_ptr(), a.as_mut_ptr(), b.as_mut_ptr())
+    };
+    if rc != 0 {
+        return Err(format!("the device's hm96 slots failed ({rc})"));
+    }
+    let slot = |v: &[u64], s: usize| v[2 * uw * s..2 * uw * (s + 1)].chunks_exact(2).map(|p| F128::new(p[0], p[1])).collect::<Vec<F128>>();
+    Ok((0..ins.len()).map(|s| (slot(&z, s), slot(&a, s), slot(&b, s))).collect())
 }
 
 /// Whether the statement's units are evaluated on the host (`HOST_UNIT_LEVELS`).
@@ -479,19 +552,22 @@ pub struct HostSlots {
     pub dev_rows: Option<DevBuf>,
     /// a page-locked copy of the compressions' input rows ([`HostSlots::pin_rows`]), which the device copies at full speed
     pub pinned_rows: Option<HostBuf>,
+    /// the hm96 slots' input words (`[blocks][hm96 slots per block][in_words]`, `Stmt::row_inputs`), from which the device builds
+    /// them natively ([`hm96_native`]); empty: the hm96 slots are among the host slots
+    pub hm96_rows: Vec<F128>,
 }
 
 impl Clone for HostSlots {
     /// The host words only: a clone may be changed, so it takes no device copy
     fn clone(&self) -> Self {
         HostSlots { at: self.at.clone(), words: self.words.clone(), zab: self.zab.clone(), ab: self.ab, dev_zab: None, dev_rows: None,
-            pinned_rows: None }
+            pinned_rows: None, hm96_rows: self.hm96_rows.clone() }
     }
 }
 
 impl HostSlots {
     fn of(at: Vec<i64>, words: Vec<i32>, zab: HostBuf, ab: bool) -> Self {
-        HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None, pinned_rows: None }
+        HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None, pinned_rows: None, hm96_rows: Vec::new() }
     }
 
     /// Copy `rows` (the compressions' input rows) into page-locked memory, which the device copies from at full speed rather
@@ -645,7 +721,8 @@ pub enum CircuitSrc<'a> {
     /// A cut template: as `Device`, the units in two passes around `mid`.
     DeviceCut { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128], mid: Mid<'a> },
     /// Every compression slot's input words (`[blocks][slots per block][in_words]`, `Stmt::row_inputs`), the hm96 slots' witness
-    /// (host slots), and every unit's input words (`[blocks][units per block][in_words]`): the honest witness, built on the device.
+    /// (host slots) or input words (`HostSlots::hm96_rows`), and every unit's input words (`[blocks][units per block][in_words]`):
+    /// the honest witness, built on the device.
     /// With `inputs` empty, every unit slot is among the host slots (`deep_unit`).
     Device { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128] },
 }
@@ -981,6 +1058,14 @@ pub fn prove_circuit(
         reuse_tag: match reuse { Reuse::None => 0, Reuse::Keep(t) | Reuse::Take(t) => t },
         h_plan: null(),
         h_tape_words: 0,
+        m_range: 0,
+        m_useful: 0,
+        m_in_words: 0,
+        m_tape_words: 0,
+        m_plan: null(),
+        m_inputs: null(),
+        m_mid: null(),
+        m_tables: null(),
     };
     #[cfg(feature = "sha512")]
     if let Some((plan, words)) = native_sha.then(|| native_plan(st)).flatten() {
@@ -988,6 +1073,26 @@ pub fn prove_circuit(
     }
     #[cfg(not(feature = "sha512"))]
     let _ = native_sha;
+    if let Some(rows) = host0.map(|h| &h.hm96_rows).filter(|r| !r.is_empty()) {
+        #[cfg(feature = "sha512")]
+        {
+            let net = &st.c.nets[st.c.hm_net].1;
+            let (plan, words) = hm96_plan(st).ok_or("the hm96 slots' input words without their native plan")?;
+            if p.h_plan.is_null() {
+                return Err("the hm96 slots' native witness needs the compressions' native witness".into());
+            }
+            assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.hm_net).count * net.in_words, "the hm96 slots' input words");
+            let r = st.c.ranges.iter().position(|r| r.kind == Kind::Net(st.c.hm_net)).unwrap();
+            (p.m_range, p.m_useful, p.m_in_words, p.m_tape_words) = (r as i32, net.useful as i32, net.in_words as i32, *words);
+            (p.m_plan, p.m_inputs, p.m_mid) = (plan.as_ptr(), rows.as_ptr() as *const u64, hm96_midstate().as_ptr());
+            p.m_tables = flock_merkle::hm96::consts().tables.as_ptr() as *const u64;
+        }
+        #[cfg(not(feature = "sha512"))]
+        {
+            let _ = rows;
+            return Err("the hm96 slots' native witness needs the SHA-512 build".into());
+        }
+    }
     #[cfg(feature = "sha512")]
     let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
