@@ -2,7 +2,7 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        [--device D] [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]]
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
   sampled replay block at the full statement.
@@ -41,16 +41,17 @@ STATEMENT_ID = "verity/flock-circuit"
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
 
 
-def cpu_s(pids) -> float:
-    """The user and system seconds of ``pids`` so far (`/proc/PID/stat`); an exited process counts nothing."""
-    s = 0
+def cpu_s(pids) -> tuple[float, list[int]]:
+    """The user and system seconds of ``pids`` so far (`/proc/PID/stat`), and the pids already gone, which count nothing."""
+    s, gone = 0, []
     for pid in pids:
         try:
             f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
-        except OSError:
+        except FileNotFoundError:
+            gone.append(pid)
             continue
         s += int(f[11]) + int(f[12])
-    return s / os.sysconf("SC_CLK_TCK")
+    return s / os.sysconf("SC_CLK_TCK"), gone
 
 
 def staged(z: Path, t: str) -> tuple[Statement, int, Path]:
@@ -65,6 +66,7 @@ class Device:
 
     def __init__(self, dev: str, ms: int = 200) -> None:
         self.samples: list[tuple[float, float, float]] = []
+        self.unparsed: list[str] = []
         self._p = subprocess.Popen(["nvidia-smi", "-i", dev, "--query-gpu=utilization.gpu,memory.used",
                                     "--format=csv,noheader,nounits", f"--loop-ms={ms}"], stdout=subprocess.PIPE, text=True)
         self._t = threading.Thread(target=self._read, daemon=True)
@@ -75,6 +77,7 @@ class Device:
             try:
                 u, m = (float(x) for x in line.split(","))
             except ValueError:
+                self.unparsed.append(line.strip())
                 continue
             self.samples.append((time.monotonic(), u, m))
 
@@ -96,7 +99,7 @@ class Host:
     verifiers' sums."""
 
     def __init__(self, ps: ProofServer, every: float = 0.5) -> None:
-        self.ps, self.peak, self.provers_kb, self.verifiers_kb = ps, {}, 0, 0
+        self.ps, self.peak, self.provers_kb, self.verifiers_kb, self.gone = ps, {}, 0, 0, set()
         self._stop = threading.Event()
         self._every = every
         self._t = threading.Thread(target=self._run, daemon=True)
@@ -108,7 +111,8 @@ class Host:
             for name, pid in self.ps.pids.items():
                 try:
                     kb = int(Path(f"/proc/{pid}/statm").read_text().split()[1]) * PAGE_KB
-                except (OSError, IndexError, ValueError):
+                except FileNotFoundError:
+                    self.gone.add(name)
                     continue
                 self.peak[name] = max(self.peak.get(name, 0), kb)
                 sums[name.split("-", 1)[0]] = sums.get(name.split("-", 1)[0], 0) + kb
@@ -121,15 +125,13 @@ class Host:
         self._t.join()
         gib = lambda kb: round(kb / 2**20, 2)  # noqa: E731
         return {"provers_gib": gib(self.provers_kb), "verifiers_gib": gib(self.verifiers_kb),
-                "each_gib": {k: gib(v) for k, v in sorted(self.peak.items())}}
+                "each_gib": {k: gib(v) for k, v in sorted(self.peak.items())}, "exited_while_sampled": sorted(self.gone)}
 
 
 def throttled() -> dict:
-    """The cgroup's CPU throttling so far (cpu.stat), where readable."""
-    try:
-        return {k: int(v) for k, v in (x.split() for x in Path("/sys/fs/cgroup/cpu.stat").read_text().splitlines())}
-    except OSError:
-        return {}
+    """The cgroup's CPU throttling so far (cgroup v2's cpu.stat; none without it)."""
+    p = Path("/sys/fs/cgroup/cpu.stat")
+    return {k: int(v) for k, v in (x.split() for x in p.read_text().splitlines())} if p.exists() else {}
 
 
 class Lean:
@@ -187,9 +189,10 @@ def one(a, dev: str, t: str, K: int) -> dict:
             err = None
         except Exception as e:  # noqa: BLE001 -- recorded with the session, the rest go on
             err = str(e)[:600]
-        c = cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))
+        c, gone = cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))
         with lock:
-            done.append({"t": time.monotonic(), "i": i, "s": s, "error": err, "cpu": c, "load1": os.getloadavg()[0]})
+            done.append({"t": time.monotonic(), "i": i, "s": s, "error": err, "cpu": c, "cpu_gone": gone,
+                         "load1": os.getloadavg()[0]})
         room.release()
 
     waits, judged = [], []
@@ -220,6 +223,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
         rec["host"] = host.stop()
         gpu.stop()
     rec["wall_s"] = round(time.monotonic() - t_start, 1)
+    rec["smi_unparsed"] = gpu.unparsed[:8]
     done.sort(key=lambda r: r["t"])
     bad = [r for r in done if r["error"] or not r["s"].accepted]
     rec["accepted"] = len(done) - len(bad)
@@ -267,7 +271,7 @@ def main() -> int:
     ap.add_argument("--types", required=True, help="comma-separated staged type directories, each run at every K")
     ap.add_argument("--provers", default="1,2,4")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--device", default=None, help="the GPU (default: CUDA_VISIBLE_DEVICES, as gpu-lease sets it)")
+    ap.add_argument("--device", required=True, help="the GPU's index (gpu-lease's CUDA_VISIBLE_DEVICES)")
     ap.add_argument("--sessions", type=int, default=24, help="timed sessions a K")
     ap.add_argument("--warm", type=int, default=2, help="warm sessions a prover")
     ap.add_argument("--ahead", type=int, default=2)
@@ -275,7 +279,6 @@ def main() -> int:
     ap.add_argument("--lean-sessions", type=int, default=2)
     ap.add_argument("--deadline", type=float, default=0, help="UTC epoch seconds after which no type and K starts")
     a = ap.parse_args()
-    dev = a.device or (os.environ.get("CUDA_VISIBLE_DEVICES") or "0").split(",")[0]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -285,7 +288,7 @@ def main() -> int:
                 rows.append({"type": t, "provers": K, "skipped": "past the deadline"})
                 continue
             try:
-                r = one(a, dev, t, K)
+                r = one(a, a.device, t, K)
             except Exception as e:  # noqa: BLE001 -- the next type and K go on
                 r = {"type": t, "provers": K, "error": f"{type(e).__name__}: {str(e)[:800]}"}
             rows.append(r)
