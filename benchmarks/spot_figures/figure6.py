@@ -152,10 +152,7 @@ def caption(out: dict) -> str:
          "certifier is pending: in the measured runs a client stood in for it. Until a circuit checks the stop rule, "
          "each response's length is advice with the tick too, charged today at log2(max_tokens) + 1 bits a request. "
          "The 0 holds with prefix caching off, once the length rule is checked in-circuit (pending); with prefix "
-         "caching on, its alternative is each hit sent whole and charged as advice, also pending. Every arm charges "
-         "the K/V cache 0, pending two fixes: each step's cache write recorded as a proof block, with the "
-         "sparse-attention gather staged, and the K/V rows from earlier steps checked as history ports in each "
-         "sampled block. Until both are in, staged attention reads cost advice.")
+         "caching on, its alternative is each hit sent whole and charged as advice, also pending.")
     return a + b + c
 
 

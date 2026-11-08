@@ -91,9 +91,6 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     `consumers.exfiltration_bound`'s form, at most the served bits by the same count. The caption names the lines
     that at β = 1% are bounded only by everything the scope serves, the trivial bound, so that value isn't read as a
     result.
-  - Every advice line charges the K/V cache 0, marked pending, as are Figure 5's break-evens and Figure 6's arms, until
-    each step's cache write is a proof block (with the sparse-attention gather staged) and earlier steps' K/V rows are
-    checked as history ports in each sampled block.
   - The break-even (`breakeven`, `breakeven.txt` and `figure1.json`'s `breakeven`): for each patterns'-form line and
     scope, the marginal overhead at which its bound at β = 1% reaches the FP8 and the FP4 weights, the β at which it
     does at its own overhead, and its floor, the bound as proving's cost goes to nothing.
