@@ -278,7 +278,7 @@ BENCHMARKS_IMPORTERS = {
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
-                         "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
+                         "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
