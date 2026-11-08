@@ -237,7 +237,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
         want[f"{name}/{p_}"] = wd
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the served rows held to their Programs' statics on a sealed served window "
                                       f"({a.serve_run.name} w{a.window})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

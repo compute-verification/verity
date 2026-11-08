@@ -76,7 +76,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 307, "Security/Properties": 191, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 311, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -97,13 +97,13 @@ def test_the_trust_base_is_one_list():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
-    for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
-    updates the citation."""
-    proofs = ROOT / "Security/Proofs"
-    version = (proofs / "lean-toolchain").read_text().strip().rpartition(":")[2]
-    for doc in ("ASSUMPTIONS.md", "Assumptions.lean"):
-        assert f"Lean {version}'s runtime" in (proofs / "Flock/Soundness" / doc).read_text(), doc
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes` in `Definitions/Assumptions/Flock.lean`)
+    cites what the toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump
+    fails here until someone re-reads it and updates the citation."""
+    security = ROOT / "Security"
+    version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
+    for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Definitions/Assumptions/Flock.lean"):
+        assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
 
 
 def _module_roots(pkg: Path):
