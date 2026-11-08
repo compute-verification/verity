@@ -1,9 +1,9 @@
 """`stage.Wires` on a committed capture: a staged instance's input is wired to the latest earlier call that output its bytes
 (``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of, or
 whose output is a strided view into its real rows, its padding rows uncharged; a parameter is ``registered`` with its
-committed SHA-512; an `ADVICE` input is charged at its width; anything else, and an output of the call enclosing the reader,
-is `Unwired` with the fix. `traced` records what an instance's arguments read, and `wiring` charges each advice argument
-once."""
+committed SHA-512; an `ADVICE` input is charged at the union of the parts instances read (`Capture.part`), else at its
+width; anything else, and an output of the call enclosing the reader, is `Unwired` with the fix. `traced` records what an
+instance's arguments read, and `wiring` charges each advice argument once."""
 from __future__ import annotations
 
 import hashlib
@@ -17,6 +17,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 BF16 = "torch.bfloat16"
+DTYPES = {np.dtype(np.uint16): BF16, np.dtype(np.int32): "torch.int32", np.dtype(np.int64): "torch.int64"}
 
 
 def _stage(monkeypatch):
@@ -42,11 +43,11 @@ class _Blobs:
         p = self.d / "rank0" / "blobs" / h[:2] / h
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(raw)
-        return {"shape": list(a.shape), "dtype": BF16, "stride": stride or [int(np.prod(a.shape[i + 1:])) for i in range(a.ndim)],
-                "sha512": h}
+        return {"shape": list(a.shape), "dtype": DTYPES[a.dtype],
+                "stride": stride or [int(np.prod(a.shape[i + 1:])) for i in range(a.ndim)], "sha512": h}
 
 
-def _commit(d: Path, events: list[dict], params: dict) -> None:
+def _commit(d: Path, events: list[dict], params: dict, scheduled: dict | None = None) -> None:
     sd = d / "rank0" / "step0"
     sd.mkdir(parents=True, exist_ok=True)
     ops = "".join(json.dumps(e, sort_keys=True) + "\n" for e in events).encode()
@@ -54,7 +55,7 @@ def _commit(d: Path, events: list[dict], params: dict) -> None:
     (sd / "ops.jsonl").write_bytes(ops)
     (sd / "params.json").write_bytes(pj)
     root = _sha(f"verity/spot/rank-root\0{_sha(ops)}\0{_sha(pj)}".encode())
-    (sd / "meta.json").write_text(json.dumps({"scheduled": {"req": 4}, "ops_sha512": _sha(ops), "params_sha512": _sha(pj),
+    (sd / "meta.json").write_text(json.dumps({"scheduled": scheduled or {"req": 4}, "ops_sha512": _sha(ops), "params_sha512": _sha(pj),
                                               "rank_root": root, "check": {}}))
     (sd / "commit.json").write_text(json.dumps({"root": _sha(f"verity/spot/step-root\0{root}".encode()), "coins": "00" * 64,
                                                 "rank_roots": [root], "layers": {"dense": [0]}, "opened": {}}))
@@ -149,3 +150,140 @@ def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_charges_a
                             {"key": [0, 2, 0], "unwired": "rank 0 ..."}]}}
     w = stage.wiring(types)
     assert w["advice_bits"] == 2 * 6 * 4 * 16 and len(w["inputs"]["A"]) == 2 and w["unwired"] == {"A": ["rank 0 ..."]}
+
+
+def test_an_advice_input_is_charged_at_the_union_of_the_parts_staged_instances_read(step) -> None:
+    stage, cap, wires = step
+    kv = cap.events[0][4]["in"]["kv_gathered"]
+    row = 4 * 16
+
+    def read(*keys):
+        reads: list = []
+        got = stage.traced(cap, lambda: [cap.part(0, kv, k) for k in keys], reads)()
+        assert all(np.array_equal(x, cap.tensor(0, kv)[k]) for x, k in zip(got, keys))
+        return wires.of(reads)
+
+    a, b, whole = read((0, slice(1, 4)), (0, slice(2, 5))), read((1, slice(0, 2))), read((1, slice(0, 2)), (0,))
+    assert a[0]["parts"] == [[[0, 1], [1, 4]], [[0, 1], [2, 5]]] and a[0]["bits"] == 4 * row, "token 0's rows 1 to 4, once"
+    assert b[0]["bits"] == 2 * row and "parts" not in wires.source(0, kv), "a reference's own source stays whole"
+    assert whole[0]["parts"] == [[[1, 2], [0, 2]], [[0, 1]]] and whole[0]["bits"] == 8 * row
+
+    def charged(*instances):
+        return stage.wiring({"S": {"gate": [{"key": [0, 4, i], "sources": s} for i, s in enumerate(instances)]}})["advice_bits"]
+
+    assert charged(a, b, a) == 6 * row, "the union over instances, each row once: 6 of the 12 rows"
+    assert charged(a, whole) == 8 * row, "a part over fewer axes takes the rest of them whole: all of token 0's rows"
+    reads: list = []
+    stage.traced(cap, lambda: [cap.tensor(0, kv)[0, 1:4]], reads)()
+    assert charged(a, wires.of(reads)) == 12 * row, "a read through `Capture.tensor` takes the input whole"
+
+
+KV_W = 6  # a cache row's words: kv_c_out's 4, then k_pe_out's 2
+TOPK = 8
+#: the step's tokens as (request, position): decodes a (10 keys, past the top-k) and b (6 keys), then c's 2-token prefill
+TOKENS = [("a", 9), ("b", 5), ("c", 0), ("c", 1)]
+BLOCKS = {"a": [3, 1, 6], "b": [0, 5], "c": [2]}  # each request's cache blocks, of `stage.KV_BLOCK` = 4 slots in the tests
+PICKED = {0: [0, 1, 2, 4, 5, 7, 8, 9], 1: [0, 1, 2, 3, 4, 5], 2: [0], 3: [0, 1]}  # each token's top-k, as positions
+
+
+def _slot(req: str, p: int) -> int:
+    return BLOCKS[req][p // 4] * 4 + p % 4
+
+
+@pytest.fixture()
+def gather(tmp_path, monkeypatch):
+    """A step whose tap gathers tokens 0, 1 and 3's K/V rows through its page table (top-k positions to slots), and the
+    capture of it: with the step's cache write (``write``) and its positions (``positions``) recorded or not, a gathered row's
+    bytes changed (``corrupt``: token 1's row 5, its own position), and the requests' scheduled counts."""
+    stage = _stage(monkeypatch)
+    monkeypatch.setattr(stage, "KV_BLOCK", 4)
+
+    def make(write=True, positions=True, corrupt=False, scheduled=None):
+        d = tmp_path / f"w{int(write)}p{int(positions)}c{int(corrupt)}{len(scheduled or ())}"
+        rng = np.random.default_rng(5)
+        cache = {s: rng.integers(0, 2 ** 16, KV_W, dtype=np.uint16) for s in range(28)}
+        kv_c, k_pe = (rng.integers(0, 2 ** 16, (len(TOKENS), w), dtype=np.uint16) for w in (4, 2))
+        slots = np.array([_slot(q, p) for q, p in TOKENS], np.int64)
+        for t, s in enumerate(slots.tolist()):
+            cache[s] = np.concatenate([kv_c[t], k_pe[t]])
+        page = np.full((len(TOKENS), TOPK), -1, np.int32)
+        for t, ps in PICKED.items():
+            page[t, :len(ps)] = [_slot(TOKENS[t][0], p) for p in ps]
+        kept = [0, 1, 3]
+        kv = np.zeros((len(kept), TOPK, KV_W), np.uint16)
+        for i, t in enumerate(kept):
+            for j, s in enumerate(page[t].tolist()):
+                if s >= 0:
+                    kv[i, j] = cache[s]
+        if corrupt:
+            kv[1, 5, 0] ^= 1
+        b = _Blobs(d)
+        events = [_ev(0, "_C::cooperative_topk", {"lengths": b.ref(np.array([[10], [6]], np.int32))}, {})]
+        if write:
+            ins = {"slot_mapping": b.ref(slots), **({"positions": b.ref(np.array([p for _, p in TOKENS]))} if positions else {})}
+            events.append(_ev(1, "fused_norm_rope", ins, {"kv_c_out": b.ref(kv_c), "k_pe_out": b.ref(k_pe.reshape(-1, 1, 2))}))
+        used = np.array([len(PICKED[t]) for t in range(len(TOKENS))], np.int32)
+        events.append(_ev(2, "fa3_sparse_mla", {"block_table": b.ref(page), "seqused_k": b.ref(used), "kv_gathered": b.ref(kv),
+                                                "kv_gathered_rows": kept, "kv_gathered_tokens": len(kept)}, {}))
+        _commit(d, events, {}, scheduled or {"a": 1, "b": 1, "c": 2})
+        cap = stage.Capture(d, 0)
+        wires = stage.Wires(cap)
+        kv_ref = cap.events[0][-1]["in"]["kv_gathered"]
+
+        def of(*keys):
+            reads: list = []
+            stage.traced(cap, lambda: [cap.part(0, kv_ref, k) for k in keys], reads)()
+            return wires.of(reads)
+        return of
+    return stage, make
+
+
+def test_a_gathered_row_is_wired_to_the_steps_cache_write_by_slot_else_to_history(gather) -> None:
+    stage, make = gather
+    of = make()
+    got = of((0, slice(4, 8)), (1, slice(2, 6)), (2, slice(0, 2)))
+    assert [s["kind"] for s in got] == ["call", "history", "advice", "selection"]
+    write, history, table, pick = got
+    assert (write["seq"], write["op"], write["out"]) == (1, "fused_norm_rope", "kv_c_out+k_pe_out")
+    assert write["rows"] == [[0, 7, 0], [1, 5, 1], [2, 0, 2], [2, 1, 3]], "each decode's own position, and the prefill's two"
+    assert (history["port"], history["parts"]) == (stage.HISTORY_PORT, [[[0, 1], [4, 7]], [[1, 2], [2, 5]]])
+    assert history["bits"] == 6 * KV_W * 16 and history["why"] == stage.HISTORY_WHY
+    assert (table["in"], table["parts"]) == ("block_table", [[[0, 1], [4, 8]], [[1, 2], [2, 6]], [[3, 4], [0, 2]]])
+    assert table["bits"] == 10 * 32, "every page-table entry a wired or history row is read through"
+    from verity.ml.definitions.registry.dsa_topk import waksman_switches
+    assert pick == {"kind": "selection", "rank": 0, "seq": 0, "token": 0, "via": "DsaWaksmanRows_v1{N=10,K=8,W=6,E=16}",
+                    "bits": waksman_switches(10, TOPK), "why": stage.SELECTION_WHY}, "token 0's 10 keys pass a selection"
+    w = stage.wiring({"S": {"gate": [{"key": [0, 2, 0], "sources": got}, {"key": [0, 2, 1], "sources": got}]}})
+    assert (w["advice_bits"], w["history_bits"], w["selection_bits"]) == (10 * 32, 6 * KV_W * 16, waksman_switches(10, TOPK))
+    assert w["unproved_calls"] == {"fused_norm_rope": 1}
+
+
+def test_a_row_at_a_slot_the_write_filled_with_other_bytes_or_a_long_row_without_positions_is_unwired(gather) -> None:
+    stage, make = gather
+    with pytest.raises(stage.Unwired, match=r"row 5 at slot 21, which fused_norm_rope \(seq 1\) wrote from its row 1, but not"):
+        make(corrupt=True)((1, slice(2, 6)))
+    of = make(positions=False)
+    assert [s["kind"] for s in of((1, slice(2, 6)))] == ["call", "history", "advice"], "a short row needs no positions"
+    with pytest.raises(stage.Unwired, match="token 0 reads 8 rows, and its keys"):
+        of((0, slice(4, 8)))
+
+
+def test_without_the_steps_cache_write_a_single_token_requests_other_rows_are_history_by_the_layout(gather) -> None:
+    stage, make = gather
+    history, left, table = make(write=False)((0, slice(4, 8)), (1, slice(2, 6)), (2, slice(0, 2)))
+    assert history["parts"] == [[[1, 2], [2, 5]]] and history["bits"] == 3 * KV_W * 16, "token 1's rows but its own"
+    assert left["parts"] == [[[0, 1], [4, 8]], [[1, 2], [5, 6]], [[2, 3], [0, 2]]], (
+        "token 0 reads the top-k's 8 rows (its keys unknown), token 1's row 5 is its own position, token 3 is a prefill's")
+    assert (table["in"], table["parts"], table["bits"]) == ("block_table", [[[1, 2], [2, 5]]], 3 * 32)
+    every = make(write=False, scheduled={"a": 1, "b": 1, "c": 1, "d": 1})((1, slice(2, 6)))
+    assert [s["kind"] for s in every] == ["advice"], "requests the top-k's decode rows don't match: no token is known single"
+
+
+def test_own_rows_reads_the_paged_layout_in_any_order_and_refuses_a_row_that_breaks_it(gather) -> None:
+    stage, _ = gather
+    row = np.array
+
+    assert stage.own_rows(row([21, 0, 20, 1, 2, 3, -1, -1]), 6, 4) == {0}, "the partly filled block's highest residue"
+    assert stage.own_rows(row([4, 5, 6, 7, 0, 1, 2, 3, -1]), 8, 4) == {3, 7}, "whole blocks: each block's last residue"
+    for bad, n in (([1, 2, -1], 2), ([0, 4, -1], 2), ([0, 1, 7], 2), ([0, 0, -1], 2), ([0, 1, 2, 3, 5, 6], 6)):
+        assert stage.own_rows(row(bad), n, 4) is None, bad
