@@ -513,14 +513,14 @@ __global__ void __launch_bounds__(256) fc_sha_rows_runs(const uint64_t* __restri
                                                         const uint32_t* __restrict__ goff, const uint32_t* __restrict__ gw, int per_block,
                                                         int pos0, int slot_log, int k_log, uint32_t* __restrict__ z_out,
                                                         uint32_t* __restrict__ a_out, uint32_t* __restrict__ b_out) {
-    extern __shared__ uint64_t sm[];
+    extern __shared__ uint64_t fc_rows_sm[];
     const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
     const int g0 = blockIdx.x * 8, g = g0 + w;
     const long long s = (long long)blockIdx.y * 32 + lane;
     const bool on = g < nrg && s < n;
-    uint64_t* col = sm + threadIdx.x;
+    uint64_t* col = fc_rows_sm + threadIdx.x;
     const uint32_t base = poff[16 * g0];
-    uint4* rs = reinterpret_cast<uint4*>(sm + (size_t)cols * 256);
+    uint4* rs = reinterpret_cast<uint4*>(fc_rows_sm + (size_t)cols * 256);
     for (uint32_t k = threadIdx.x, e = poff[16 * min(g0 + 8, nrg)] - base; k < e; k += 256) rs[k] = rq[base + k];
     if (on) {
         const uint32_t w0 = goff[g], nw = goff[g + 1] - w0;
@@ -534,7 +534,7 @@ __global__ void __launch_bounds__(256) fc_sha_rows_runs(const uint64_t* __restri
     uint32_t W[2][8] = {};
     if (on) fc_rows_words(col, 256, poff, rs, base, g, W);
     __syncthreads();
-    uint32_t* t = reinterpret_cast<uint32_t*>(sm);
+    uint32_t* t = reinterpret_cast<uint32_t*>(fc_rows_sm);
     if (on) {
         uint4* r = reinterpret_cast<uint4*>(t + lane * FC_ROWS_TILE + w * 8);
         r[0] = make_uint4(W[0][0] & W[1][0], W[0][1] & W[1][1], W[0][2] & W[1][2], W[0][3] & W[1][3]);
