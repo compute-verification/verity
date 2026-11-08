@@ -18,12 +18,11 @@ ROOT = Path(__file__).resolve().parents[4]
 FIX = "serve it canonically"
 
 #: the list only shrinks: lower the cap with the entry that goes
-ALLOWED_CAP = 3
+ALLOWED_CAP = 2
 
 #: where each `ALLOWED` entry is still made or read, so an entry nothing makes is stale
 MADE_AT = {
     "schedule": ("integrations/vllm/verity_vllm/program/predict/build.py", '("schedule", '),
-    "splits": ("integrations/vllm/verity_vllm/program/predict/build.py", '("splits", '),
     "run.survey_hole": ("integrations/vllm/verity_vllm/program/frontend/rules/training_survey.py", '"survey_hole"'),
 }
 PACKAGE = ROOT / "integrations/vllm/verity_vllm"

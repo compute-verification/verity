@@ -93,10 +93,6 @@ ALLOWED: dict[str, str] = {
         "step, c_e the expert's pairs and s_b its blocks' sizes. `predict.batch.check_compiled` refuses it (R1) in every "
         "compiled session. Fix: serve the align in pair order and key `MoeAlignRanks` by the pair index, or charge the key "
         "as advice",
-    "splits":
-        "a derived top-p split count, SplitsFor_v1 of the batch's live rows, per sampling event, at most log2 6 bits an event; "
-        "`predict.batch.check_compiled` refuses it (R3) in every compiled session, and serving pins `registered_splits`. Fix: "
-        "delete the derived form",
     "run.survey_hole":
         "a survey's stand-in for a node every rule refuses (`frontend.rules.training_survey.Hole`): `check_identity` refuses "
         "every Program with one, so no registered Program reads it",
