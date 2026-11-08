@@ -144,24 +144,29 @@ def Tab.flush (summed : Bool) (o : Tab) (cx cy : Nat) (w : F128) (acc : Array F1
         let x := acc.getD s 0
         if x.isZero then m else bump m (cx, cy, s) (w * x)) o.P }
 
-/-- Copy `k`'s references `vs` of a row of chunk `cx`, weight `w`, as `Tab.ref` adds them one at a time, but an own
-column's factor is summed into `acc` (by slot while explicit) along each run of references in one column chunk `cy`, and
-each run's sums reach the table once (`Tab.flush`): a table read's row of thousands of references costs a sum per
-reference and at most 64 table entries. -/
+/-- One reference of `Tab.refs` on its table, run chunk and sums: an own column's factor summed at its slot (`0`
+summed), a new run once its column chunk changes, any other reference through `Tab.ref`. -/
+def Tab.refStep (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (k cx : Nat) (w : F128) (st : Tab × Nat × Array F128) (v : Nat) : Tab × Nat × Array F128 :=
+  if v < D.cols then
+    let P := pos v
+    let q := as.getD k 0 + B * (P % A)
+    let i := if summed then 0 else q % 64
+    let g := if summed then gL.at (P % A) else gL.at (q / 64)
+    if P / A == st.2.1 then (st.1, st.2.1, st.2.2.modify i (· + g))
+    else (Tab.flush summed st.1 cx st.2.1 w st.2.2, P / A, (Array.replicate 64 0).modify i (· + g))
+  else (Tab.ref D pt summed A B as gL pos st.1 k cx w v, st.2.1, st.2.2)
+
+/-- Copy `k`'s references `vs` of a row of chunk `cx`, weight `w`, as `Tab.ref` adds them one at a time. A row of 64
+or more sums an own column's factors along each run of references in one column chunk (`Tab.refStep`) and adds each
+run's sums once (`Tab.flush`): a table read's row of thousands of references costs a sum per reference and at most 64
+table entries. -/
 def Tab.refs (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (o : Tab) (k cx : Nat) (w : F128) (vs : Array Nat) : Tab :=
-  let a := as.getD k 0
-  let (o, cy, acc) := vs.foldl (fun (st : Tab × Nat × Array F128) v =>
-    let (o, cy, acc) := st
-    if v < D.cols then
-      let P := pos v
-      let (i, g) := if summed then (0, gL.at (P % A)) else
-        let q := a + B * (P % A)
-        (q % 64, gL.at (q / 64))
-      if P / A == cy then (o, cy, acc.modify i (· + g))
-      else (Tab.flush summed o cx cy w acc, P / A, (Array.replicate 64 0).modify i (· + g))
-    else (Tab.ref D pt summed A B as gL pos o k cx w v, cy, acc)) (o, 0, Array.replicate 64 0)
-  Tab.flush summed o cx cy w acc
+  if vs.size < 64 then vs.foldl (fun o v => Tab.ref D pt summed A B as gL pos o k cx w v) o
+  else
+    let st := vs.foldl (Tab.refStep D pt summed A B as gL pos k cx w) (o, 0, Array.replicate 64 0)
+    Tab.flush summed st.1 cx st.2.1 w st.2.2
 
 /-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`. -/
 def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
