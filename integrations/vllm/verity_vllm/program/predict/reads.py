@@ -32,11 +32,15 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
 - its token ids: each kept output is a token select's sampled id in its request's Program (`steps.EGRESS`), an output the
   compiler never reads;
 - which response a token belongs to: the request's id, certified (the body it names is the request's, by its `user`);
-- each response's length, where its terminator goes: ``output_len``, advice, read ahead twice: on a batch-invariant target a
-  request's Program is its whole request's (T = ``output_len`` − 1) in every window; and in class G a window's close returns a
-  request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
-  INDEX_TOPK keys (`segment.edge_groups`);
-- each response's finish reason: ``finish``, advice, read only to refuse a record its body contradicts (`steps.request_of`);
+- each response's length, where its terminator goes: ``output_len``, advice, read ahead: on a batch-invariant target a
+  request's Program is its whole request's (T = ``output_len`` − 1, and its length rule, ``stop``) in every window; and in
+  class G a window's close returns a request it leaves with outputs to keep with its indexer's keys and scales on its edge
+  where its last row reads past INDEX_TOPK keys (`segment.edge_groups`). Its length rule (`frontend.stop_rule`, the request
+  Program's last check) holds it to the ids where the request ends on a stop id or its cap: the first stop id's, else the
+  certified ``max_tokens``' or the model's length; only an abort's is the advice's alone;
+- each response's finish reason: ``finish``, advice, read ahead into the length rule (``stop``) and to refuse a record its body
+  contradicts (`steps.request_of`): an eos or length finish is the one the rule derives from the ids, the registered model's
+  stop ids and the certified ``max_tokens``, and an abort is the client's, the advice's;
 - the outputs a request kept before the window opened: its carried ``kept``, advice, held to the last window's close
   (`window_advice.follows`);
 - when each output was released: ``release``, never read; the gate refuses it.
@@ -45,9 +49,9 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
 output order, n the outputs its rows keep in the window (``output_len`` for a request whole in one), and on a batch-invariant
 target nothing else; in class G then, for its rows past INDEX_TOPK keys, the bits that their top-k orders are the canonical
 ones, and for a request the window leaves with outputs to keep, its edge (`build.build_program`'s ``edge``). It returns no
-terminator and no finish reason: its ids end where its shape does, at ``output_len``, advice until a request Program checks
-the stop rule (no stop token before the last output, which is a stop token or the cap's); a finish reason is the advice's
-(eos or length follows from the ids and the cap once the stop rule is checked, and abort is the client's). The egress record
+terminator and no finish reason: its ids end where its shape does, at ``output_len``, which its length rule holds to the ids
+where it ends on a stop id or the cap (no stop id before the last output, which is a stop id or the cap's); an abort's end
+is the advice's. The egress record
 (the network certifier's, per request) is n ``DATA`` cells, the token ids in order, then one ``END`` at cell n, and ``PAD``
 elsewhere; it sends no finish reason. Its ``DATA`` cells are the Program's ids, and its ``END`` sits at ``output_len``.
 """
@@ -98,8 +102,8 @@ READS: tuple[Field, ...] = (
     *(Field("advice", n, "advice") for n in ("requests", "steps", "carried")),
     Field("request", "id", "certified", y="the response a token belongs to"),
     Field("request", "prompt_len", "certified"),
-    Field("request", "output_len", "advice", y="a response's length", ahead=("T", "edge")),
-    Field("request", "finish", "advice", y="a response's finish reason"),
+    Field("request", "output_len", "advice", y="a response's length", ahead=("T", "edge", "stop")),
+    Field("request", "finish", "advice", y="a response's finish reason", ahead=("stop",)),
     Field("step", "rows", "advice"),
     *(Field("row", n, "advice", switch=PREFIX_CACHE if n in ("cache_hit", "sources") else "")
       for n in ("request", "kind", "start", "n", "cache_hit", "preempted", "sources")),

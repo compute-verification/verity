@@ -2,9 +2,10 @@
 each a checked circuit output, certified or committed advice, and reads the advice through the gate that refuses any other by
 name; and prefix stability, changing y at or after a step changing nothing the circuit computes before it. A window cut after
 any step plans and compiles those steps as the whole does, and another length for a request in flight moves only the unit
-fields `READS` declares its length read ahead for: `T` on a batch-invariant target, which sizes only its Program's later
-decodes, and `edge` in class G, what the window's close returns, for which the Program also computes its indexer's keys and
-scales for the rows it ran, the one read ahead that isn't prefix stable (accounted only as the advice it is)."""
+fields `READS` declares its length read ahead for: `T` and its length rule (`stop`, the Program's last check) on a
+batch-invariant target, which size only its Program's later decodes and that check, and `edge` in class G, what the window's
+close returns, for which the Program also computes its indexer's keys and scales for the rows it ran, the one read ahead
+that isn't prefix stable (accounted only as the advice it is)."""
 from __future__ import annotations
 
 import json
@@ -14,7 +15,7 @@ from dataclasses import fields, replace
 
 import pytest
 
-from verity.ml.circuits.types import Array, field_types
+from verity.ml.circuits.types import Array, Value, field_types
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
 from verity_vllm.program.predict.common import Unexpressible
@@ -42,14 +43,15 @@ pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
 #: the advice records' fields `READS` declares, the ones the gate passes
 GATED = {(f.record, f.name) for f in R.READS if f.record in R.RECORDS}
-#: a unit's fields the window's end shapes for a request it leaves with outputs to keep: how far it reaches and what its edge returns
-REACH = {"T", "carried_out", "launch", "chunks", "edge"}
+#: a unit's fields the window's end shapes for a request it leaves with outputs to keep: how far it reaches, what its edge returns
+#: and its length rule's outputs through there
+REACH = {"T", "carried_out", "launch", "chunks", "edge", "stop"}
 AHEAD = {n for f in R.READS for n in f.ahead}
 
 
 def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     assert R.refusals() == []
-    assert [(f.record, f.name) for f in R.READS if f.ahead] == [("request", "output_len")]
+    assert [(f.record, f.name) for f in R.READS if f.ahead] == [("request", "output_len"), ("request", "finish")]
     assert AHEAD <= {f.name for f in fields(RequestUnit)}
     assert ("advice", "release") not in GATED, "the compiler never reads when an output was released"
 
@@ -224,19 +226,26 @@ def _calls(program) -> list[str]:
     return [n.fn.id for n in program.fn.body.nodes]
 
 
-def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
-    """Batch-invariant: a request's Program is its whole request's in every window, so its length sets its T ahead of its stop,
-    and nothing else in the plan moves."""
+def _before_rule(program) -> list[str]:
+    """``program``'s calls before its length rule, `StopCheck_v1`, its last call where it has one."""
+    calls = _calls(program)
+    return calls[:-1] if calls and calls[-1].startswith("StopCheck_v1") else calls
+
+
+def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t_and_length_rule():
+    """Batch-invariant: a request's Program is its whole request's in every window, so its length and finish set its T and its
+    length rule (`stop`, the Program's last check) ahead of its stop, and nothing else in the plan moves."""
     reg = _registered()
     for session in (_mixed(), _hit(16), (A_WHOLE, A_BODY)):
-        assert _prefix_stable(reg, *session) == {"T"}
+        assert _prefix_stable(reg, *session) == {"T", "stop"}
 
 
 @pytest.mark.slow
 def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
-    """At every cut each request compiles to the Program it has whole, and its Programs at each length its body allows are,
-    call for call, prefixes of one another, returning its token ids alone, ``Array(L, I32)``: its length sizes only its later
-    decodes (about 6 s)."""
+    """At every cut each request compiles to the Program it has whole, and its Programs at each length its body allows (an abort
+    before the cap, the cap's at it) are, call for call, prefixes of one another but for their last call, the length rule, each
+    returning its token ids, ``Array(L, I32)``, and the rule's bit: its length sizes only its later decodes and that check
+    (about 6 s)."""
     reg = _registered()
     advice, ingress = _mixed()
     whole = compile_steps(reg, advice, ingress)
@@ -246,9 +255,11 @@ def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
         assert [u.digest for u in c.requests] == [u.digest for u in whole.requests[:len(c.requests)]], s
     for u in whole.requests[:2]:
         m = ingress[u.id]["max_tokens"]
-        built = [request_program(reg, replace(u, T=L - 1)).program for L in range(1, m + 1)]
-        assert [p.fn.signature()[1] for p in built] == [Array(L, I32) for L in range(1, m + 1)]
-        assert all(_calls(p) == _calls(built[-1])[:len(_calls(p))] for p in built), u.id
+        built = [request_program(reg, replace(u, T=L - 1, stop={**u.stop, "outputs": L, "finish": 2 if L == m else 0})).program
+                 for L in range(1, m + 1)]
+        assert [field_types(p.fn.signature()[1]) for p in built] == [(Array(L, I32), Array(1, Value(1))) for L in range(1, m + 1)]
+        assert all(_calls(p)[-1].startswith("StopCheck_v1") for p in built), u.id
+        assert all(_before_rule(p) == _before_rule(built[-1])[:len(_before_rule(p))] for p in built), u.id
 
 
 def test_a_class_g_window_is_prefix_stable_at_every_step(tmp_path):
@@ -292,7 +303,7 @@ def test_a_class_g_length_past_index_topk_sizes_only_what_the_windows_close_retu
 def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_indexer_history(tmp_path):
     """Class G at INDEX_TOPK 4 on GLM-5.3's first four layers (about 35 s). A (3 prompt tokens, 4 outputs, prefilled in chunks
     of 2 and 1, its rows at positions 4 and 5 past INDEX_TOPK) compiled in a window cut after each step is, call for call, its
-    whole Program up to there, and its edge carries its indexer's history from the first cut on, before any row has read past
+    whole Program up to there, each but for its last call, its length rule over its outputs through the cut, and its edge carries its indexer's history from the first cut on, before any row has read past
     INDEX_TOPK. But b, left after two outputs, computes its indexer's keys for the 3 rows it ran (a key row and its projection
     in each of the 3 indexer layers) only where it runs on to 4 outputs, so that the close returns them, its calls stopping at
     3 a subsequence of those: the one read of y ahead that isn't prefix stable, accounted as the advice ``output_len`` is.
@@ -305,7 +316,7 @@ def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_index
         c = compile_steps(reg, A_CHUNKED if s == len(A_CHUNKED.steps) - 1 else _cut(A_CHUNKED, s), A_BODY)
         (p,) = c.programs.values()
         assert c.batch_rule is None
-        calls.append(_calls(p))
+        calls.append(_before_rule(p))
         edges.append(c.requests[0].edge)
     assert all(cut == calls[-1][:len(cut)] for cut in calls) and len({len(cut) for cut in calls}) == len(calls)
     assert edges == [("prefix", "prefix_ik", "prefix_iks")] * (len(calls) - 1) + [()]
