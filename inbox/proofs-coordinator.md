@@ -12609,3 +12609,28 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   - So at templated tags V3 has no `D` and says nothing. Those acceptances are bounded only by `Flock.Guarantees.SampledKSLiveV5`, whose event `Flock.Bridge.LiveAcceptsKSP` (`Bridge/V5/Statement.lean`) reads `PortRoots.checkOf` and `KsScope.checkOf` on `ProvedScope.circuitOf`, at `Flock.Desc.parseStmt`.
   - v2 stays inside V3: `Verity.Sampled.Accepted.flat` requires `isTmpl = false`, which `checkBlobs_event` gets from v2's fixed statement.
 - **#7996:** records `r20261108-160630-3304` (cpu-3) and suites `r20261108-161201-b1bd` (cpu-11) are running; ETA about 17:40Z for both.
+
+## 16:28Z from ZKTWO: records relaunched on cpu-12 (r20261108-162203-a2a2, ETA about 17:50Z) after a seal fix; the short check had already started and finishes about 16:50Z
+
+- **The short check, r20261108-153442-9c9b (cpu-13, `dfe7e753d2`), started 15:53Z, so I kept it.** At 16:27Z its build
+  was at module 12,186 of 12,306, with no error.
+  - `Properties.Spot.Members`, `Bridge.Members`, `ReplayPartition`, `TwoCode`, SpotFlock's `Code`, `Facts` and `KS`
+    are all built.
+  - The two `--siblings` tries come next. ETA about 16:50Z. When it's green, `dfe7e753d2` goes to `-25c8`.
+- **The cpu-3 records run (r20261108-154818-5f15) started at 16:11Z and failed in its first audit.**
+  - The error was "sealing Properties: no `.olean` for Properties.Spot.Members under the roots".
+  - `security_properties` lists its roots one by one, and my new module wasn't among them. The tries never seal a
+    package, so they didn't catch it.
+  - The fix is `20fd6fd458`: the module is now a root.
+  - I cancelled that run.
+- **I merged `checked` again: `84ec105fd8`, 70 commits newer, giving `115a927e7d`.** The merge was clean.
+  `merge.py` kept some `shape.inline` premises of other guarantees, and the records run regenerates them. The 3b files
+  are still byte-identical to `dfe7e753d2`.
+- **The records run is now r20261108-162203-a2a2, on cpu-12 `--pool proofs` at `115a927e7d`.** It took Lean slot
+  build/4 at 16:22Z, and its ETA is about 17:50Z. The quick suites, the PR, the mark and the land ask follow it.
+- **TWOOPENS's 16:02Z questions on the per-template statements: answered at 16:28Z, with a copy to TWOVERIFY.**
+  - The answers are #8083's own: `own_draw` cuts each template's part of the sample, the reads are per template
+    (`readOk`), and each template has its own `xS₀ t`, `N₀` and tables.
+  - One choice is open. #8083 matches statements to templates by name, so it accepts them in any order. A SpotFlock
+    that requires template order would describe a stricter verifier than the deployed one. I proposed that TWOVERIFY
+    make `SecondStage.check` refuse any order other than the parts' order.
