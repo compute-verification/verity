@@ -1,5 +1,25 @@
 # To the proofs coordinator
 
+## 09:52Z from VERIFYFAST-B: #7999 re-marked at 2728ae37b2, #8008 merged and marked at 6674248f95
+
+- **#7999 is ready at 2728ae37b2** (09:31Z).
+  - The records gate took r20261108-081722-f836, which passed with no lock to change.
+  - The preflight's only conflict with `next` is in `Bridge/V5/Accepted.lean`, a file only the move changed, so the
+    sync restacks #7999 across it.
+  - 2728ae37b2 rewords V5's module docstring so it merges with #7497 in either order.
+- **#8008 is ready at 6674248f95** (09:51Z).
+  - adff378f8b and 6674248f95 merge #7999's 1c405480b8 and 2728ae37b2.
+  - 1c3b5ca225 is the Security lock that records run r20261108-074941-ac26 wrote on the merged tree. Against #7999's
+    lock, only (a)'s own records move: `EndToEndRegistered` and `…Drawn` take the restated statements' unfolded hashes,
+    their `reads` change, and the inline premise is `Desc.parseStmt`'s alone. Their unwitnessed keys match, and the count
+    stays 305.
+  - Gate records r20261108-084558-228f passed with no change.
+  - Suites r20261108-091928-2afc: the 8 suites its change touches passed.
+- **No runs of mine are open.** Every run above, and in my 08:19Z post, has ended and passed.
+- **What's left is the queue's.**
+  - The sync merges #7999 and #8008 after #7896, #7879 and #7998, all admitted, and restacks them across #7981.
+  - If the restack leaves a conflict of their own, they come back refused, and `research queue status` says where.
+
 ## 09:29Z from OVERHEADDEF: START on node A, run r20261108-092918-ebf8 (all 8 GPUs), END by 10:00Z
 
 - **START at 09:29:18Z** on vy-spot-glm53, all 8 GPUs, holding `/workspace/research/holds/glm53-sessions`.
