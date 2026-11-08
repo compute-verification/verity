@@ -1273,13 +1273,61 @@ fn salt_trees(st: &Stmt, lig: LigeritoProfile, level0: u64) -> Vec<(u64, usize)>
 }
 
 #[cfg(feature = "gpu")]
-fn pin_salts(b: &Arc<Vec<u8>>) -> Option<flock_live::gpu_circuit::Pinned> {
-    flock_live::gpu_circuit::Pinned::new(b)
+type SaltBuf = flock_live::gpu_circuit::Pinned;
+#[cfg(not(feature = "gpu"))]
+type SaltBuf = ();
+
+/// The read-ahead's salt buffers of the process's last session, page-locked once: a later session refills those of its trees'
+/// sizes in place (every byte, from the source a sample reads), so it locks, unlocks and faults in no page of them
+/// (FC_SALTS_REUSE=0: each session locks its own and unlocks them after it, the reference for the reuse's gain).
+static SALT_BUFS: Mutex<Vec<SaltBuf>> = Mutex::new(Vec::new());
+
+/// A tree's `n`-byte buffer for the read-ahead, written whole by `fill`: one of `free` (an earlier session's) of that size, else a
+/// fresh one, page-locked; `held` keeps it locked for the session.
+#[cfg(feature = "gpu")]
+fn salt_buffer(free: &mut Vec<SaltBuf>, held: &mut Vec<SaltBuf>, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Arc<Vec<u8>> {
+    for i in 0..free.len() {
+        if let Some(b) = free[i].refill(n, fill) {
+            held.push(free.swap_remove(i));
+            return b;
+        }
+    }
+    let mut b = vec![0u8; n];
+    fill(&mut b);
+    let b = Arc::new(b);
+    held.extend(flock_live::gpu_circuit::Pinned::new(&b));
+    b
 }
 
 #[cfg(not(feature = "gpu"))]
-fn pin_salts(_: &Arc<Vec<u8>>) -> Option<()> {
-    None
+fn salt_buffer(_: &mut Vec<SaltBuf>, _: &mut Vec<SaltBuf>, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Arc<Vec<u8>> {
+    let mut b = vec![0u8; n];
+    fill(&mut b);
+    Arc::new(b)
+}
+
+/// The read-ahead's own pool: FC_SALTS_THREADS threads (default: one a core; 0: rayon's global pool, the witness build's) at
+/// nice FC_SALTS_NICE (default 19), so its draws take the cores the witness build leaves idle, not a share of its cores. A
+/// sample that finds its tree not yet read reads its own on the caller's pool, so no draw waits on the read-ahead's priority.
+fn salts_pool() -> Option<&'static rayon::ThreadPool> {
+    static POOL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let var = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<i32>().ok());
+        let n = var("FC_SALTS_THREADS").map_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()), |n| n.max(0) as usize);
+        let nice = var("FC_SALTS_NICE").unwrap_or(19).clamp(0, 19);
+        (n > 0).then(|| {
+            rayon::ThreadPoolBuilder::new().num_threads(n).stack_size(flock_live::THREAD_STACK).thread_name(|i| format!("flock-salts-{i}"))
+                .start_handler(move |_| nice_thread(nice)).build().expect("the salts' pool")
+        })
+    })
+    .as_ref()
+}
+
+/// This thread's nice value raised to `nice` (Linux keeps one per thread); left as it is where refused.
+fn nice_thread(nice: i32) {
+    if nice > 0 {
+        unsafe { libc::setpriority(libc::PRIO_PROCESS, libc::syscall(libc::SYS_gettid) as libc::id_t, nice) };
+    }
 }
 
 /// A table's level-0 root before any stream opens, in a session of several tables (whose one `Commit` carries every table's
@@ -3419,7 +3467,7 @@ fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused:
            "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" }})
 }
 
-/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its witness and level-0 commitment on the device and rep 1 takes them.
+/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its level-0 commitment on the device and rep 1 takes it.
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
@@ -3437,8 +3485,8 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     Ok((bytes, bk))
 }
 
-/// Rep 0 keeps its witness and level-0 commitment for the session's `reuse_tag` and rep 1 takes them; whether the device
-/// holds them for this rep.
+/// Rep 0 keeps its level-0 commitment for the session's `reuse_tag` and rep 1 takes it; whether the device holds it for this
+/// rep.
 #[cfg(feature = "gpu")]
 fn reuse_of(reuse_tag: Option<u64>, rep: usize) -> (flock_live::gpu_circuit::Reuse, bool) {
     use flock_live::gpu_circuit::{Reuse, kept};
@@ -3545,7 +3593,7 @@ struct Plan {
     coin_nonce: Option<[u8; 32]>,
     /// the device witness's units from the host (`Some(true)`), the device (`Some(false)`), or by depth (`deep_unit`)
     host_units: Option<bool>,
-    /// rep 1 from rep 0's device witness and level-0 commitment (default: unless `FC_REP_REUSE=0`; never under `--zk`)
+    /// rep 1 from rep 0's device level-0 commitment (default: unless `FC_REP_REUSE=0`)
     rep_reuse: Option<bool>,
     /// the compression slots' witness natively (`Some(true)`) or level by level (`Some(false)`); default native unless
     /// `FC_NATIVE_SHA=0`
@@ -3815,8 +3863,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let tree = is_zk(st) || plain_tree(st);
     let mut commit: Vec<F128> = Vec::new();
     let (device, host_units, mapped) = witness_mode(st, plan);
-    // on the device, rep 1 proves from rep 0's witness and level-0 commitment (the session's tag keys what rep 0 keeps), under
-    // M1 too: both reps commit one level-0 codeword
+    // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
+    // witness again, under M1 too: both reps commit one level-0 codeword
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let native_sha = plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"));
     let reuse_tag = (plan.gpu && !plan.rep1_other_witness
@@ -3829,9 +3877,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
-    // the device's trees' salts read beside the witness build and page-locked for its copies, not inside its timed phases
-    // (FC_SALTS_AHEAD=0: each tree's where the device builds it); not under the ZK server, whose Lean draws them
-    let salts_ahead = (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
+    // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
+    // buffers for its copies (`SALT_BUFS`), not inside its timed phases (FC_SALTS_AHEAD=0: each tree's where the device builds
+    // it; FC_SALTS_AFTER=1: from when every table's witness is built, beside the device's phases only); not under the ZK
+    // server, whose Lean draws them
+    let after = std::env::var("FC_SALTS_AFTER").as_deref() == Ok("1");
+    let start_ahead = || (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
         && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0"))
     .then(|| {
         let tables: Vec<_> = salts_t.iter().map(|s| {
@@ -3840,13 +3891,24 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         }).collect();
         flock_live::spawn(move || {
             let t0 = Instant::now();
-            let mut pinned = Vec::new();
-            for (a, trees) in &tables {
-                a.draw(trees, &mut |b| pinned.extend(pin_salts(b)));
+            let reuse = std::env::var("FC_SALTS_REUSE").as_deref() != Ok("0");
+            let mut free = if reuse { std::mem::take(&mut *SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner)) } else { Vec::new() };
+            let (had, mut held) = (free.len(), Vec::new());
+            let mut draw = || for (a, trees) in &tables {
+                a.draw(trees, &mut |n, fill| salt_buffer(&mut free, &mut held, n, fill));
+            };
+            let pool = salts_pool();
+            match pool {
+                Some(p) => p.install(draw),
+                None => draw(),
             }
-            (tables, pinned, t0.elapsed().as_secs_f64())
+            let reused = had - free.len();
+            drop(free);
+            let threads = pool.map_or(0, |p| p.current_num_threads());
+            (tables, held, reuse, reused, threads, t0.elapsed().as_secs_f64())
         })
     });
+    let mut salts_ahead = if after { None } else { start_ahead() };
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
@@ -3888,6 +3950,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         };
         witness_s += tw0 + tw1;
         wits.push((w0, Some(wt0), wt1));
+    }
+    if after {
+        salts_ahead = start_ahead();
     }
     let tj = Instant::now();
     let mut zk_pre = match zk_pre.map(|h| h.join()) {
@@ -4266,11 +4331,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     if let Some(h) = salts_ahead {
-        let (tables, pinned, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
+        let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
         let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
-        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": pinned.len(),
-                                            "untaken": untaken}));
-        flock_live::spawn(move || drop(pinned));
+        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": held.len(),
+                                            "reused": reused, "threads": threads, "untaken": untaken}));
+        if reuse {
+            SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner).extend(held);
+        } else {
+            flock_live::spawn(move || drop(held));
+        }
     }
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
                 prove_s, buckets, tp0 })
@@ -6059,7 +6128,7 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
 }
 
 /// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
-/// the host's units, rep 1 from rep 0's witness and level-0 commitment, and the compressions natively (host units only where the
+/// the host's units, rep 1 from rep 0's level-0 commitment, and the compressions natively (host units only where the
 /// device witness takes them, a statement whose units return its outputs), its witness built ahead of the
 /// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
 #[cfg(feature = "seed-injection")]
