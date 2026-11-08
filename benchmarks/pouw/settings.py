@@ -122,11 +122,16 @@ REGISTRY = Registry(
     S("POUW_LIBCUDA", str, "libcuda.so.1", WHERE, f"the CUDA driver gemm_rate's torch_rate.py loads its stamp cubin through: {LIB}"),
     S("POUW_TIER", str, "2a", VALUE, "the evidence tier verify.py records a variant at (ledger.TIERS)"),
     S("POUW_LEDGER_PUBLISH", one, False, WHERE, "1: verify.py publishes the variant's record to the ledger"),
+    S("VERITY_BENCH_CUBIN", str, None, WHERE, "the cubin `verity bench overhead run --cubin ART` sent (verity_bench's "
+                                              "overhead_node sets it), which pearl_c_sm90's overhead arm loads; unset, the "
+                                              "arm builds one, for development only"),
     # ---------------------------------------------------------------- served H1
     S("POUW_CHALLENGER", str, None, WHERE, "the window's challenger session's address (infra's gate)"),
     S("POUW_CHALLENGER_SESSION", str, None, WHERE, "the window's challenger session's id"),
     S("POUW_CHALLENGER_SECRET_FILE", str, None, WHERE, "the file holding the session's secret"),
     S("POUW_CHALLENGER_COMMITMENT", str, None, WHERE, "the session's commitment"),
     S("POUW_CHALLENGER_GATE", str, None, WHERE, "infra's gate, USER@HOST"),
+    S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
+    S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
     standalone=STANDALONE,
 )

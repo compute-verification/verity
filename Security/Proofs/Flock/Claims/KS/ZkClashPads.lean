@@ -1,12 +1,50 @@
-import Proofs.Flock.Claims.KS.ZkFork0
-import Proofs.Flock.Claims.KS.ZkPadsLog
+module
+
+public import Proofs.Flock.Claims.KS.ZkFork0
+public import Proofs.Flock.Claims.KS.ZkPadsLog
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 
 /-!
 # The masked view's pads clash
 
-`PadsZ`, `SelfClashZ`'s pads case, at an accepting run's view: two of a rep's pads openings, both drawn at one
+`PadsZ`, `SelfClashZ`'s pads case, at an accepting run's view: two of a rep's pads openings, both sampled at one
 position, that verify there to one root with different pairs. At the view the deployed decoders are right at
-`OpensRows`, whose pads openings are rep `r`'s proof file's inner-proof openings at `wrS`'s transcript, drawn at the
+`OpensRows`, whose pads openings are rep `r`'s proof file's inner-proof openings at `wrS`'s transcript, sampled at the
 positions the rep stream's last round's coins give (`PadsRep`). That stream has the run's rep stream's coins, and the
 run's verifier opened each of those queries against the inner proof's root at that position, so two at one position
 with different pairs collide in the run's log (`tiedColl_of_verifyInner`). The root the clash reads plays no part.
@@ -18,6 +56,8 @@ with different pairs collide in the run's log (`tiedColl_of_verifyInner`). The r
 * `zk_KS_of_forks`, `zk_tableBoundJOnAccR_of_forks`, `zk_KSFlock_of_forks`: masked KS and the recursion's chain rest on
   the cap/`τ` and pads fork bounds alone.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -48,7 +88,7 @@ theorem coins_last {a b : Array Flock.Round}
 
 /-- **Two of an accepted masked rep's pads openings at one position with different pairs collide in the run's log**:
 where a stream `y` has the coins of the live session's rep stream `2j + r` and rep `r`'s proof file decodes to pads
-openings drawn at the positions `y`'s last round's coins give (`PadsRep`), the run's verifier opened those queries
+openings sampled at the positions `y`'s last round's coins give (`PadsRep`), the run's verifier opened those queries
 against the inner proof's root at those positions (`zkVerifyRepWith_inner`), so two of them at one position with
 different pairs collide among its calls (`tiedColl_of_verifyInner`). -/
 theorem zk_padsClash_tied {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
@@ -118,7 +158,7 @@ variable [S : ZkSetup]
 
 /-- **A pads clash at an accepting run's view is a collision in its log**: at the view the deployed decoders are right
 at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` queries and its pads openings are its proof
-file's inner-proof openings at `wrS`'s transcript, drawn at the positions its rep stream's last round's coins give; that
+file's inner-proof openings at `wrS`'s transcript, sampled at the positions its rep stream's last round's coins give; that
 stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
 position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
 theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ := by
@@ -190,7 +230,7 @@ end Gen
 
 /-- **A pads clash at an accepting run's view is a collision in its log**: at the view the deployed decoders are right
 at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` queries and its pads openings are its proof
-file's inner-proof openings at `wrS`'s transcript, drawn at the positions its rep stream's last round's coins give; that
+file's inner-proof openings at `wrS`'s transcript, sampled at the positions its rep stream's last round's coins give; that
 stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
 position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
 theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ :=

@@ -1,8 +1,26 @@
-import Proofs.Flock.Soundness.TmplUnrollAt
+module
+
+public import Aesop.BuiltinRules
+public import Flock.KnownRead
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.C3.Reps.ReadWhole
+import all Init.Util
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.SparseRows
-import Proofs.Flock.C3.Reps.ReadWhole
-import Flock.TmplReads
-import Flock.KnownRead
+import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
 # A templated unit's surely read columns are read by its committed net
@@ -13,6 +31,8 @@ the constant reads (`Flock.TmplReads.rows_sure`). On the committed net (`Tmpl.un
 a row past them is placed past them and before the constant. So where `KnownRead.readsOk` checks a templated unit's known
 bits at the columns `KnownRead.sureReads` gives, it accepts only what it would at `readIns` (`readsAt_of_readsOk`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

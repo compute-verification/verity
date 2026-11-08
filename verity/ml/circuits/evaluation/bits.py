@@ -25,7 +25,7 @@ import numpy as np
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.types import Type
+from verity.ml.circuits.types import Type, axis_runs
 
 from .reference import refuse_registered_tables
 
@@ -37,12 +37,44 @@ _ARRAY = 256  # bytes of one ndarray's header, shape and strides (a scan keeps t
 _SLACK = 1 << 16  # bytes of numpy's iteration buffers and the frames' own objects
 
 
+class Members:
+    """A call's member argument indices, ``(members, width)``: row m is member m's operand wires, each argument's in order. An
+    argument a batch shares is held once, not once a member, so a batch of N reading a wide shared operand holds N rows of its
+    mapped arguments only. A slice of rows is an ndarray; so is a row."""
+
+    def __init__(self, n: int, parts: Sequence[np.ndarray]):
+        self.n, self.parts = n, list(parts)
+        self.shape = (n, sum(p.shape[-1] for p in self.parts))
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, i: int | slice) -> np.ndarray:
+        if not isinstance(i, slice):
+            m = range(self.n)[i]
+            return self[m:m + 1][0]
+        lo, hi, step = i.indices(self.n)
+        if step != 1:
+            raise IndexError("members are sliced by contiguous runs")
+        hi = max(lo, hi)
+        if not self.parts:
+            return np.empty((hi - lo, 0), np.int64)
+        return np.concatenate([np.broadcast_to(p, (hi - lo, len(p))) if p.ndim == 1 else p[lo:hi] for p in self.parts], axis=1)
+
+    def __iter__(self):
+        return (self[m] for m in range(self.n))
+
+    def tolist(self) -> list[list[int]]:
+        return self[:].tolist()
+
+
 @dataclass
 class Compiled:
     """One body: ``steps`` in order, each ``("gates", [(kind, out, a, b), ...])`` (local wire indices, every operand computed
-    before its group), ``("call", callee, [member argument indices], out base, out leaves)`` or ``("scan", step, init, xs,
-    shared, n, carry leaves, out base)``; an n-input gate is a balanced tree of two-input operations on scratch wires after the
-    node outputs. ``counts`` are the two-input operations of the flattened circuit, by kind (an n-input gate counts n - 1)."""
+    before its group), ``("call", callee, members (`Members`, or a one-row array for a call), out base, out leaves)`` or
+    ``("scan", step, init, xs, shared, n, carry leaves, out base)``; an n-input gate is a balanced tree of two-input operations
+    on scratch wires after the node outputs. ``counts`` are the two-input operations of the flattened circuit, by kind (an
+    n-input gate counts n - 1)."""
 
     target: str
     params: tuple[Type, ...]
@@ -103,17 +135,20 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
         return np.fromiter((p_base[i] + j if s == "p" else const[i] if i in const else node_base[i] + j for s, i, j in refs),
                            dtype=np.int64, count=refs.count)
 
-    def member_refs(nd, m: int) -> np.ndarray:
+    def member_refs(nd) -> Members:
+        """Row m: member m's operand wires, ``a.take(ax, m)`` of each argument mapped over ``ax`` and the whole of each shared
+        one, read off one pass over each argument's references."""
         out = []
         for a, ax in zip(nd.args, nd.axes):
+            whole = idx(a.refs)
             if ax is None:
-                out.append(idx(a.refs))
-            elif ax == 0:
-                L = a.type.elem.leaves
-                out.append(idx(a.refs.slice(m * L, (m + 1) * L)))
-            else:
-                out.append(idx(a.take(ax, m).refs))
-        return np.concatenate(out) if out else np.empty(0, np.int64)
+                out.append(whole)
+                continue
+            outer, n, L = axis_runs(a.type, ax)
+            if n != nd.n:
+                raise ValueError(f"{spec.id}: a batch of {nd.n} maps an axis of {n}")
+            out.append(whole.reshape(outer, n, L).transpose(1, 0, 2).reshape(n, outer * L))
+        return Members(nd.n, out)
 
     steps: list[tuple] = []
     run: list[tuple] = []
@@ -137,7 +172,7 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
             if nd.form == "primitive":
                 ops = np.concatenate([idx(a.refs) for a in nd.args]).reshape(1, arity)
             else:
-                ops = np.stack([member_refs(nd, m) for m in range(nd.n)]).reshape(nd.n, arity)
+                ops = member_refs(nd)[:].reshape(nd.n, arity)
             out = np.arange(base, base + len(ops), dtype=np.int64)
             ki, cols = _KINDS.index(kind), [ops[:, j] for j in range(arity)]
             while len(cols) > 2:
@@ -156,9 +191,9 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
         child = compile(fn)
         max_size = max(max_size, child.max_size)
         if nd.form == "call":
-            members = [np.concatenate([idx(a.refs) for a in nd.args]) if nd.args else np.empty(0, np.int64)]
+            members = np.stack([np.concatenate([idx(a.refs) for a in nd.args]) if nd.args else np.empty(0, np.int64)])
         elif nd.form == "batch":
-            members = [member_refs(nd, m) for m in range(nd.n)]
+            members = member_refs(nd)
         else:
             xs = [(idx(a.refs), a.type.elem.leaves) for a in nd.args[1:1 + nd.n_xs]]
             shared = [idx(a.refs) for a in nd.args[1 + nd.n_xs:]]
@@ -166,7 +201,7 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
             for kk in _KINDS:
                 counts[kk] += nd.n * child.counts[kk]
             continue
-        steps.append(("call", child, np.stack(members), base, fn.out_leaves))
+        steps.append(("call", child, members, base, fn.out_leaves))
         for kk in _KINDS:
             counts[kk] += len(members) * child.counts[kk]
     flush()

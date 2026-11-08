@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+
 import slots as S
 import slots_gpu as G
 

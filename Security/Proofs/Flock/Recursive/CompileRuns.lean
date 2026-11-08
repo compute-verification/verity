@@ -1,6 +1,9 @@
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.ForkRuns
-import Proofs.Flock.Recursive.ClashFree
+module
+
+public import Proofs.Flock.Recursive.ClashFree
+public import Proofs.Flock.Recursive.Target
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
@@ -20,6 +23,8 @@ level-0 cap and a conflict at a rep's recorded cap each imply, so that `Compile`
 * `compiled_runs_sound`: the lemma, from the three. With no clash between two runs satisfying `G`, `RunOut` is clash
   free, every accepted run satisfying `G` ends in it, and the simulation reads the table's value there.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

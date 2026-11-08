@@ -1,4 +1,4 @@
-"""`verity.core.protocols.pouw.core_check` held to `pouw-check serve`, PoUW's verifier of record (`pouw.verifier`), on
+"""`verity.core.protocols.pouw.core_check` held to `pouw-check serve`, PoUW's verifier (`pouw.verifier`), on
 the shared harness (`verity_difftest`, `of_record="lean"`): one `ProtocolPort`, over the cases `pouw_check_cases`
 generates from a Hypothesis-controlled `random.Random` (honest windows, and one mutation each aimed at every refusal, the
 case's framing included), so a run is deterministic and shrinks. Every port here holds the Python to the Lean.
@@ -14,7 +14,7 @@ reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified window's and a live
-Pearl-C pass's, and honest draws, then one mutation each aimed at every refusal), compared output for output: how the
+Pearl-C pass's, and honest samples, then one mutation each aimed at every refusal), compared output for output: how the
 salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
@@ -37,7 +37,7 @@ Its `salt` against `core_check.salt` likewise, over the live windows' salt coins
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`). Its
 `live-salt` against `core_check.live_salt` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
 salt-only session the auditor's ledger reserves, opens on the pass's salt epoch's root and ends complete, its commitment
-read from the session's own files, a drawn `pass_index` and call indices offset within the epoch), compared output for
+read from the session's own files, a sampled `pass_index` and call indices offset within the epoch), compared output for
 output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
@@ -99,7 +99,7 @@ server = D.server_fixture(PORT)
 @pytest.mark.slow
 def test_pouw_check(server):
     """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the sample: the
-    seeded draw moves whenever the cases' modules change, and a run of it has drawn no `answer-undecided`."""
+    seeded sample moves whenever the cases' modules change, and a run of it has sampled no `answer-undecided`."""
     RULES.clear()
     stats = D.run(PORT, examples=EXAMPLES, server=server)
     swept = Counter(D.replay(PORT, cases.instance(random.Random(f"{name}/{seed}"), name), server)[0]
@@ -227,7 +227,7 @@ pass_server = D.server_fixture(PASS)
 
 
 def test_pass_and_draw(pass_server):
-    """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
+    """Generated passes (a certified window's among them) and samples, then each mutation over a few seeds (`replay`), so
     every refusal is reached whatever the sample."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
@@ -244,7 +244,7 @@ def test_pass_and_draw(pass_server):
                  "the auditor's ledger opens no challenger session for this window"):
         assert any(_template(part) in k for k in PASSED), part
     assert "draw accept" in PASSED and len(PASSED) > 40
-    for seed in range(4):   # `COIN_EARLY`'s draws: accepted only as a replay of a recorded run, by both sides
+    for seed in range(4):   # `COIN_EARLY`'s samples: accepted only as a replay of a recorded run, by both sides
         early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)
         live = {**early, "recorded": False}
         assert (draw(early), draw(live)["refused"][0]) == (None, "coin")
@@ -393,7 +393,9 @@ def test_credit(pass_server):
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
-                 "credit coin: the challenger's session is not trusted", "outcome missing: ", "outcome failed: ",
+                 "credit coin: the draw's session is not trusted",
+                 "credit coin: the session the auditor's ledger opens on the window does not withhold",
+                 "outcome missing: ", "outcome failed: ",
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
@@ -408,8 +410,8 @@ def test_credit(pass_server):
                  "period layout: period ", "'s open commits no table rows T (rows, a positive integer",
                  "so the period earns nothing: layout: the period's T = # table rows give an A slot",
                  "window manifest: call # states # served rows and call # #, both of step #",
-                 "period period: period ", "period missing: window #", "period order: window #",
-                 "period period: the windows presented run past", "period period: window ", "period window: window #",
+                 "period period: period ", "period missing: session #", "period order: session #",
+                 "period period: the sessions presented run past", "period period: session ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
                  "drawn budget: the draw's K is not",
                  "drawn budget: the window's # units are fewer than K", "period budget: period ",
@@ -496,10 +498,14 @@ def test_credit(pass_server):
 def test_honest_j10r_windows_are_credited(pass_server):
     """The compiled `Credit.window` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
     a call), as the Python verifier does: the code fact `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` takes as `hacc`.
-    `test_credit` replays these cases but holds only the two sides to each other."""
+    `test_credit` replays these cases but holds only the two sides to each other. A window whose calls all carry credit
+    bit false is credited with nothing, so the test asks only that some of them credit a call."""
+    credited = []
     for seed in range(3):
         kind, out = D.replay(WINDOW, credit_cases.window_instance(random.Random(f"j10r/{seed}"), "j10r"), pass_server)
-        assert kind == "output" and json.loads(out).get("credited"), out
+        assert kind == "output" and "credited" in json.loads(out), out
+        credited.append(json.loads(out)["credited"])
+    assert any(credited), credited
 
 
 def leaf_words(case: dict) -> dict:
@@ -515,7 +521,7 @@ LEAF_WORDS = D.Port("pouw-check-difftest", "leaf-words", leaf_words, package=LEA
 
 def test_leaf_words(pass_server):
     """`weights.leaf_words` (a leaf's words at K: a chunk's codes, then the row's scale) against `Credit.leafWords` at every
-    K to 4096 + 64, every multiple of 32 below 2^17 (the models' K, the ones with no chunks among them) and drawn K to
+    K to 4096 + 64, every multiple of 32 below 2^17 (the models' K, the ones with no chunks among them) and sampled K to
     2^20."""
     stats = D.run(LEAF_WORDS, examples=500, server=pass_server)
     got = Counter(D.replay(LEAF_WORDS, {"k": k}, pass_server)[1] == '{"leaf_words":null}'
@@ -539,7 +545,7 @@ CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record
 
 def test_chunks(pass_server):
     """`PouwCheck.Chunks.chunks` is `weights.chunks` at every multiple of 32 below 2^17 (every served K, the whole lane up to
-    4096 and up to 256 chunks past it, each refusal's message included), then on drawn integers, negative ones a reject,
+    4096 and up to 256 chunks past it, each refusal's message included), then on sampled integers, negative ones a reject,
     and non-integers."""
     outs = [json.loads(D.replay(CHUNKS, k, pass_server)[1]) for k in range(0, 1 << 17, 32)]
     stats = D.run(CHUNKS, examples=500, server=pass_server)

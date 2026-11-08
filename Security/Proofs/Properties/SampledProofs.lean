@@ -1,5 +1,9 @@
-import Properties.SampledProofs
-import Proofs.Properties.Challenger
+module
+
+public import Properties.SampledProofs
+public import Proofs.Properties.Challenger
+public import Proofs.Properties.SampledProofs.FilePart
+import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 
@@ -9,6 +13,8 @@ the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a 
 the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts and
 that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete` the converse.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs
@@ -82,7 +88,7 @@ theorem checkProved_nil (draw : Json) (us : Array Nat) (n : Nat) :
   rw [show (Array.map (fun (x : Nat) => some (x : Int)) us) = (us.map fun (x : Nat) => (x : Int)).map some by
     simp [Array.map_map, Function.comp_def], map_some_inj]
 
-/-- A check of `Record.checks` that fails, other than the draw's. -/
+/-- A check of `Record.checks` that fails, other than the sample's. -/
 def Fails (x : String × Check) : Bool := x.1 != "draw" && !x.2.codes.isEmpty
 
 theorem none_fail_ite_push (b : Bool) (xs : Array (String × Check)) (y : String × Check) :
@@ -795,12 +801,22 @@ theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Opti
 
 theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
 
+theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
+    (Registration.declaredCode (getD rec "program") v.declared).isSome = false ↔ DeclaredDay rec v := by
+  unfold DeclaredDay Registration.declaredCode
+  rcases v.declared with _ | ⟨day, ds⟩
+  · simp
+  · rcases h : Registration.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
+    · simp [h]
+    · by_cases hp : jeq (getD rec "program") (.str p) = true <;> simp [h, hp]
+    · simp [h]
+
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   rw [Registration.check_eq_checkRef]
   unfold Registration.checkRef
-  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
-    c1
+  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
+    j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
   have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
     intro c
@@ -884,10 +900,11 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       rcases x with ⟨p, w⟩
       exact Array.any_eq_true')
   have h5 := step_ite (jeq (getD rec "scheme") (.str v.scheme) = true) j5 j6 _ _ h6 (fun _ => rfl) (not_false_iff' _)
-  have h5r := reset h5
+  have hD := step_ite (DeclaredDay rec v) jD j5 _ _ h5 (fun _ => rfl) (declaredCode_none_iff rec v)
+  have h5r := reset hD
   have h4 : ∀ c, j4 () c = #[] ↔ c = #[] ∧ (∀ x ∈ mine, ∀ m, x.2 = some m → jeq (get x.1) m = true) ∧
       (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (get "population") (Lean.toJson n) = true) ∧
-      j5 () #[] = #[] := by
+      jD () #[] = #[] := by
     intro c
     simp only [j4, id_bind]
     rcases hu : Partition.units v.program v.query with a | n
@@ -970,7 +987,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     · show #["keys"] = #[] ↔ _
       exact ⟨fun h => by simp at h, fun ⟨h, _⟩ => absurd (hk.2 h) (by decide)⟩
   refine (top _ _ bne_eq_false_iff_eq (not_and_false_iff _ _)).trans ?_
-  rw [h1 #[], h5 #[]]
+  rw [h1 #[], hD #[]]
   have hv2 : v2 = !v.registered.isEmpty := rfl
   have ek : (keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) ↔
       keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) := by
@@ -984,16 +1001,16 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
-  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
-      h4', h5', h6a, h6b, h6c, h7r, _⟩
+  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
+      h7', h4', h5', h6a, h6b, h6c, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
+    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
-  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
+  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
       ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
-      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
-      h6a, h6b, h6c, h7r, trivial⟩
+      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
+      h5', h6a, h6b, h6c, h7r, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1258,8 +1275,8 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
-/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a draw of the agreed law over the
-registered population, its units proved and served as drawn, and verdicts that accept, is accepted, publishing
+/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a sample of the agreed law over the
+registered population, its units proved and served as sampled, and verdicts that accept, is accepted, publishing
 `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)

@@ -1,8 +1,27 @@
-import Proofs.Flock.C3.Compose.SparseEnds
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Opening.Session
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.Recursive.Loads
+module
+
+public import Proofs.Flock.C3.Compose.SparseEnds
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.Recursive.Loads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Lowering
+import Proofs.Flock.VBridge.OpeningUnit
+import Proofs.Flock.VBridge.Pinned
 
 /-!
 # RsRead's facts
@@ -28,6 +47,8 @@ pass (`sessStmt_of_accepted`, from `ChecksAccepted`), and at the checked family 
 (`sessStmt_checked`: the checked sessions carry the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted`
 composes them, and `rsRead_checked` is it at the checked family.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -236,8 +257,7 @@ def SessStmt (ish : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
     ∃ (ss : Array VStar.Stmt) (sv : VStar.Stmt) (cf : ByteArray), RecVStar.statements ish = .ok ss ∧
       ss[(s : ℕ)]? = some sv ∧ ss.toList.filter (·.name == (Vs s).c.unit.name) = [sv] ∧
       RecVStar.circuitFile sv (bind s) ish.holo = .ok cf ∧
-      Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
-        (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok (Vs s).c
+      Flock.HmRow.parse (Flock.Zk.tags Flock.Tags.circuit (Flock.Zk.maskLogOf cf) 1) cf [] = .ok (Vs s).c
 
 /-- **`SessStmt` from the verifier's statement check**: where a session accepts, some transcript it accepts passes
 `checkStmt` as statement `s` under `bind s` (`StmtsChecked`, the checked family's `ChecksAccepted`), and the inputs

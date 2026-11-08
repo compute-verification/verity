@@ -1,4 +1,4 @@
-"""`research run --on auto`'s placement (research.auto): a CPU node's pool first, node 2's share only for a job no pool fits. 19 Oct:
+"""`research run --on auto`'s placement (research.auto): a free CPU pool slot first, then node 2's share if it starts the job now. 19 Oct:
 two runs held all 48 of the share's cores for hours while 56 waited, a 4-CPU suite 36th in line, and cpu-1's cores sat idle."""
 from __future__ import annotations
 
@@ -53,10 +53,20 @@ def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
     full = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=3)                      # (3 + 1) / 4 = 1
     assert auto.choose({N2: share(waiters=56), CPU1: full}, 4, 16)[0] == (CPU1, "research")
-    assert auto.choose({N2: share(free=8), CPU1: full}, 4, 16)[0] == (CPU1, "research"), "node 2 free still waits in a pool"
+    assert auto.choose({N2: share(free=8, waiters=1), CPU1: full}, 4, 16)[0] == (CPU1, "research"), "node 2 has a line too"
     busier = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=7)                    # (7 + 1) / 4 = 2
     target, why = auto.choose({N2: share(), CPU1: busier, CPU5: full}, 4, 16)
     assert target == (CPU5, "research") and why.endswith(f"the shortest line per run that fits is {CPU5}'s research pool")
+
+
+def test_with_every_pool_full_node_2_takes_a_job_it_can_start_now():
+    """--on auto once queued a lane's suites behind cpu-6's 8 held slots and 9 waiters while node 2's 48 CPUs sat free with no
+    one waiting."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    target, why = auto.choose({N2: share(free=48), CPU1: full, CPU5: full}, 4, 16)
+    assert target is None and why.endswith(f"no pool slot is free, and it starts on {N2} now")
+    assert auto.choose({N2: share(free=2), CPU1: full}, 4, 16)[0] == (CPU1, "research"), "too few free CPUs there: the pool's line"
+    assert auto.choose({N2: share(free=48), CPU1: pool(slot("r0"))}, 4, 16)[0] == (CPU1, "research"), "a free pool slot still wins"
 
 
 def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
@@ -67,6 +77,20 @@ def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
         assert target is None and f"{CPU1}'s research pool skipped: no slot of" in why
     target, why = auto.choose({**docs, CPU1: pool(slot("r0", blocked="its window opens"))}, 4, 16)
     assert target == (CPU1, "research") and "r0 blocked" in why and "shortest line" in why, "a blocked slot is no free one"
+
+
+def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job():
+    """A window that closes every fitting slot of a pool for days leaves that pool's line empty, which must not rank it first:
+    a job placed there waits until the window ends."""
+    win = "window 2026-11-06T19:25:00Z (5315 min) is open or starts within 30 min"
+    closed = pool(*(slot(f"b{i}", blocked=win) for i in range(4)))
+    busy = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=6)
+    target, why = auto.choose({N2: share(waiters=56), CPU1: closed, CPU5: busy}, 4, 16)
+    assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: every slot of" in why
+    target, why = auto.choose({N2: share(free=48), CPU1: closed}, 4, 16)
+    assert target is None and why.endswith(f"no pool fits, and it starts on {N2} now")
+    half = pool(slot("b0", blocked=win), slot("b1", held=True))
+    assert auto.choose({N2: share(waiters=56), CPU1: half}, 4, 16)[1].count("b0 blocked") == 1, "an open slot keeps the pool"
 
 
 def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node_2_the_job_is_refused():
@@ -90,6 +114,7 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     monkeypatch.setattr(cores, "CLAIMS", claims)
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))   # a slot-only host (cpu-1) carries the real one
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
     src = tmp_path / "src"
@@ -114,6 +139,27 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert target is None and "disk:" in why, "a pool on a full disk is skipped like one that can't be read"
     failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
     assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
+
+
+def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_path, monkeypatch):
+    """A node 2 carrying /etc/vy/runs-via-slot refuses a run placed on its share, so its share reads as unread."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    marker = tmp_path / "runs-via-slot"
+    marker.write_text("slot only\n")
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'file': 'f', 'slots': [], 'waiters': []}\n")
+    n2 = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[N2]
+    assert "runs-via-slot" in n2["share"]["error"]
+    target, why = auto.choose({N2: n2, CPU1: pool(slot("r0", held=True), waiters=9)}, 4, 16)
+    assert target == (CPU1, "research") and f"{N2}'s share wasn't read" in why
+    with pytest.raises(auto.Unplaceable):
+        auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
 
 
 def _auto_repo(tmp_path: Path) -> Path:

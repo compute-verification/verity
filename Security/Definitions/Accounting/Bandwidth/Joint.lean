@@ -1,4 +1,7 @@
-import Definitions.Accounting.Bandwidth.Game
+module
+
+public import Definitions.Accounting.Bandwidth.Game
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0 with a second secret the chip's view determines
@@ -9,6 +12,8 @@ and every answer it read) determines `z`. The device lays out its on-chip state,
 store and `z`, and its chip outputs `z` along with its tags. That is the same as the view determining `z`, since a chip
 program's output is any function of its state and of the answers it read.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

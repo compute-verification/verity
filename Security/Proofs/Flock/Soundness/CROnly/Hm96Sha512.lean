@@ -1,15 +1,24 @@
+module
+
+public import Mathlib.Analysis.Real.Sqrt
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.CROnly.Hankel
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # `hm96-sha512`'s hiding gap
 
-`hm96-sha512` (`verity/commitments/hm96/PROTOCOL.md` §1) hashes a salt of `l = 1536` bits with the Hankel matrix of a key
+`hm96-sha512` (`verity/ml/commitments/hm96/PROTOCOL.md` §1) hashes a salt of `l = 1536` bits with the Hankel matrix of a key
 of `n + l − 1 = 2047` bits into `n = 512` bits, beside the salt's own SHA-512 hash `c`, which takes at most `2^512`
 values. The leftover hash lemma (`sum_hidingGap_le`, `hankel_universal`) gives the gap's mean over a uniform key,
 `½·√(2^512·2^512/2^1536) = 2^-257` (`hm96_sha512_sum`), and Markov's inequality the keys whose gap exceeds `2^-193`:
 at most a `2^-64` fraction (`hm96_sha512_tail`). That the pinned key is not among them is `hash-derived-key`, the
 common-reference-string step of §2a. Bits are a field `F` of two elements.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

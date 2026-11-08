@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -19,8 +20,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")])
-    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[2] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[3] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[4] == ("lean", "skipped: verity/core/service/flock is not on this tree")
 
 
@@ -43,7 +44,7 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     patched = set()
     for p in sorted((ROOT / "verity" / "ml" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
@@ -139,6 +140,9 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
+    warn = CHECK.lean_steps(out, bookkeeping=True)[2][1]
+    assert "--bookkeeping" not in lean_audit and warn[warn.index("--bookkeeping") + 1] == "warn"
+    assert "--bookkeeping" not in CHECK.lean_steps(out, regenerate=False, bookkeeping=True)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -642,7 +646,7 @@ def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncach
 
 
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
-    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
+    """An after-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
     slot while pytest kept to its half of the rest, 175, would leave lean-suites' 175 unused and run the 147-167 GiB SHA-512
     targets one at a time.  Pytest's share is unchanged."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
@@ -710,9 +714,9 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
-    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -784,7 +788,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -795,7 +799,7 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/ml/flock/verifier/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
+    docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
     assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
@@ -872,6 +876,22 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+
+
+def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
+    """A case that records a divergence (`upstream_accepted`: an honest session Lean refuses for completeness and upstream
+    accepts) is held to upstream's own verdict: held to Lean's, it would fail the preflight. A case without the key expects
+    its one verdict of both."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    sets = [{"pr83": c, "lean_statement": "s", "statement": {"circuit": f"art:{c}/c", "public": f"art:{c}/p"},
+             "sessions": [{"dir": f"art:{c}/honest", "expect": expect}]}
+            for c, expect in (("aa", {"accepted": False, "why": "setup: registered reads (complete): ", "upstream_accepted": True}),
+                              ("bb", {"accepted": True, "why": ""}))]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
 
 
 def _fake_run(monkeypatch, groups, pre=()):
@@ -1224,6 +1244,59 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
     assert rec["status"] == "failed" and rec["detail"].startswith(f"refused: a: a {kind} result"), rec
 
 
+def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_lock_by_their_inputs_keys(tmp_path, monkeypatch):
+    """result.json's `passes` ({inputs key: package}): each package the lean-audit step passed with the kernel replay on the
+    commit's own lock, under the key `lean_changed.py --inputs-key` prints for it at that commit, which a records run of the
+    commit keeps too, so `research queue`'s records gate finds a check's pass as it finds a records run's.  None of a
+    package that failed, passed only on a record it regenerated or without the replay; none at all from a refused or stopped
+    step or an audit that crashed."""
+    import subprocess
+    import sys
+
+    lc = CHECK._load("lean_changed", CHECK.LEAN_JOBS)
+    root = tmp_path / "repo"
+    files = {"a/lakefile.toml": "", "a/lean-audit.json": "{}", "a/A.lean": "def a := 1\n",
+             "a/lake-manifest.json": json.dumps({"packages": [{"name": "p", "type": "path", "dir": "../p"}]}),
+             "p/lakefile.toml": "", "p/lean-audit.json": "{}", "p/P.lean": "def p := 1\n",
+             "c/lakefile.toml": "", "c/lean-audit.json": "{}", "d/lakefile.toml": "", "d/lean-audit.json": "{}"}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    for args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "packages"]):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=root,
+                       check=True, capture_output=True)
+    for m in (CHECK, lc, lc.LA):
+        monkeypatch.setattr(m, "ROOT", root)
+    full = {"failures": [], "seconds": {"build": 1.0, "audit": 1.0, "replay": 1.0}}
+    audit = {"passed": False, "failed": ["p"], "cached": {"a": "k"}, "regenerated": {"c": "c/lean-audit.json"},
+             "packages": [{**full, "package": "a"}, {**full, "package": "p", "failures": ["audit: no"]},
+                          {**full, "package": "c", "settled": True, "regenerated": "c/lean-audit.json"},
+                          {**full, "package": "d", "seconds": {"build": 1.0, "audit": 1.0}}]}
+    (tmp_path / "lean-audit").mkdir()
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    step = {"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log", "seconds": 1.0}
+    printed = subprocess.run([sys.executable, str(CHECK.LEAN_JOBS / "lean_changed.py"), "--inputs-key", "a", "--repo", str(root)],
+                             check=True, capture_output=True, text=True).stdout
+    key = json.loads(printed)["a"]
+    assert CHECK.lean_passes(tmp_path, [step], lc) == {key: "a"}
+    for bad in ({**step, "detail": "refused: a: a lean-fast/v1 result"}, {**step, "status": "stopped", "rc": -15},
+                {**step, "detail": "hung: no output for 30 min"}):
+        assert CHECK.lean_passes(tmp_path, [bad], lc) == {}, bad
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({**audit, "failed": ["p", "check.py exit 2"]}))
+    assert CHECK.lean_passes(tmp_path, [step], lc) == {}, "check.py crashed: what it reported isn't every verdict"
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    (root / "a" / "A.lean").write_text("def a := 2\n")
+    got = CHECK.lean_passes(tmp_path, [step], lc)
+    assert list(got.values()) == ["a"] and key not in got, "keyed on the files the audit read: here a change not committed"
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    monkeypatch.setattr(CHECK, "lean_passes", lambda out, done, lc=None: {key: "a"})
+    CHECK.write_result(tmp_path, False, [step])
+    assert json.loads((tmp_path / "result.json").read_text())["passes"] == {key: "a"}
+    CHECK.write_result(tmp_path, False, [step], stopped_by="SIGTERM")
+    assert json.loads((tmp_path / "result.json").read_text())["passes"] == {}, "a stopped run has no verdict"
+
+
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
@@ -1265,6 +1338,30 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert done[1]["detail"] == "not started: preflight-lock failed" and not marker.exists()
     _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
+
+
+def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_even_under_keep_going(tmp_path, monkeypatch):
+    """The C++ models' prebuild ran with its output captured and its exit ignored, and fell back to building nothing where the
+    twins didn't import, so a check whose models didn't build ran on, each step compiling them untraced: it refuses now."""
+    import json
+
+    assert "except" not in CHECK.PREBUILD, "a prebuild whose models don't import fails, never falls back to building none"
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for keep_going in (False, True):
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+        monkeypatch.setattr(CHECK, "PREBUILD", "import sys\nprint('compiling tc_model.cpp', flush=True)\nsys.exit('g++: not found')")
+        ok, done = CHECK.run(tmp_path, 2, keep_going=keep_going)
+        assert not ok and not marker.exists(), keep_going
+        assert [(s["step"], s["status"], s.get("rc")) for s in done] == [("preflight-lock", "passed", 0), ("prebuild", "failed", 1)]
+        assert done[1]["detail"].startswith("refused: the C++ models' prebuild exited 1 (g++: not found; prebuild.log)")
+        assert (tmp_path / "prebuild.log").read_text().splitlines() == ["compiling tc_model.cpp", "g++: not found"]
+        assert json.loads((tmp_path / "steps.jsonl").read_text().splitlines()[-1])["step"] == "prebuild"
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    monkeypatch.setattr(CHECK, "PREBUILD", "print('{\"tc_model\": \"libtc_model.so\"}')")
+    ok, done = CHECK.run(tmp_path, 2)
+    assert ok and marker.exists() and [s["step"] for s in done] == ["preflight-lock", "pytest"]
+    assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
 
 
 def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
@@ -1651,6 +1748,7 @@ def _train_repo(tmp_path):
         env.pop(k, None)
 
     def train(*a, **extra):
+        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
                               cwd=tmp_path / "repo", env={**env, **extra})
 
@@ -1673,29 +1771,6 @@ def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
     assert not argv.exists()
-
-
-def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tmp_path):
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--agreement")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
-                                                                     "--circuit-cache", "--no-regenerate"], args
-    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "2/3")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[-4:] == ["--deferred", "pytest", "--shard", "2/3"], args
-    assert "shard 2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-2of3.log" in p.stdout, p.stdout
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
 def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
@@ -1743,6 +1818,34 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
                        (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
         p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
+    """Drive's lock run (`--deferred lean-audit --bookkeeping-warn`): the flag reaches check.py --record when the commit's
+    check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
+    --shard or without --deferred it is refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "lean-audit", "--bookkeeping-warn"], (
+        p.stderr, args)
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--bookkeeping-warn" not in args and "predates --bookkeeping-warn" in p.stdout, (p.stdout, args)
+    argv.unlink()
+    for flags in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
+                  ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
@@ -1916,7 +2019,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")

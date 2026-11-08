@@ -8,7 +8,7 @@ node's records in a private copy whose requests.jsonl is rebuilt from the users 
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
 seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
-rehearsal's records, and is refused without the leak guard; its draw on the gate's coins names the auditor's node as
+rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
 the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
@@ -269,7 +269,8 @@ def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
 
 
 def _certified(d: Path, ps: list[list[int]]) -> Path:
-    """io's file: the warden run's deployment.json and its certified I/O, each prompt answered with [1, 2]."""
+    """io's file: the network certifier run's deployment.json and its certified I/O, each prompt answered with [1,
+    2]."""
     d.mkdir(parents=True, exist_ok=True)
     (d / SS.CERTIFIED).write_text(json.dumps({
         "deployment": {"run_id": RUN, "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},

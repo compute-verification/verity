@@ -1,6 +1,44 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.DeployChecked
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # V*'s bound-layout premises at the deployment
@@ -17,8 +55,8 @@ record `deployRec IVStar scope {b with rd := L.readers}`. What holds of them the
   statement of the shape with a part.
 * **What the route reads of it holds** (`StagedB`, `stagedB_deployRec`): `vstarAccepts_bound` reads `VstarShowsB` only
   at an accepted run's first `k_I + kS` pairs. `StagedB` is that, the bound layout's `VStar.Staged`, and at `deployRec`
-  it holds as `staged_deployRec` does, at the coin server's transcript read by a reader (`showsTr`, `cmtTr`) wherever
-  that reader reads it back before the last round at an accepted run (`ReadsBackB`, which the coin server's record
+  it holds as `staged_deployRec` does, at the challenger's live-coin part's transcript read by a reader (`showsTr`, `cmtTr`) wherever
+  that reader reads it back before the last round at an accepted run (`ReadsBackB`, which the challenger's live-coin part's record
   meets: it records no last round) and `HeldB` pins the layout's rounds. Route 2C reads `StagedB` for `VstarShowsB`,
   with `RunPairs` proved (`runPairs_deployRec`): `ksLin2_route_staged`, and `ksLin2_deployed_parts` with the staging
   discharged (`KSLin2Staged`).
@@ -31,6 +69,8 @@ record `deployRec IVStar scope {b with rd := L.readers}`. What holds of them the
 The outer parse (`readOfO`) runs none of them, so off `StagedPart` a statement whose public rows disagree with its
 transcript still parses. `StagedB` holds at `showsPart` (`stagedB_deployRec_part`): an accepted run stages every part.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 
@@ -358,7 +398,7 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
 
-/-- **`StagedB` at `deployRec`**: as `staged_deployRec`, at the coin server's transcript read by `untr` (`showsTr`,
+/-- **`StagedB` at `deployRec`**: as `staged_deployRec`, at the challenger's live-coin part's transcript read by `untr` (`showsTr`,
 `cmtTr`), wherever `untr` reads it back before the last round at an accepted run (`ReadsBackB`) at the compiled
 statements of the shape, at a layout whose rounds `HeldB` pins to the inner verifier's. -/
 theorem stagedB_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)

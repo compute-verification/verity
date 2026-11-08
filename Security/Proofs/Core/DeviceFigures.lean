@@ -1,4 +1,10 @@
-import Definitions.Core.DeviceFigures
+module
+
+public import Definitions.Core.DeviceFigures
+public import Mathlib.Algebra.Field.Rat
+import Mathlib.Algebra.Order.Field.Rat
+import Mathlib.Algebra.Order.Ring.NNRat
+import Mathlib.Data.Finset.Attr
 
 /-!
 # The figures a bound reads
@@ -12,6 +18,8 @@ estimate. Registration accepts an estimate's own figures when its rates are posi
 `Accepted` is not vacuous; it refuses a toy device stated ten percent slow or ten percent fast, and one stating a zero
 rate even where the tolerance would allow it.
 -/
+
+@[expose] public section
 
 namespace Verity
 

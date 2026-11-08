@@ -1,5 +1,22 @@
-import Proofs.Flock.C3.Sparse.SrcTie
-import Proofs.Flock.VBridge.ResLayer
+module
+
+public import Proofs.Flock.C3.Sparse.SrcTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.VBridge.Sparse.Unit
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # The sparse tie at V*'s layer
@@ -19,6 +36,8 @@ off V*'s layer, as `ResLayer` does for `RecResiduals`: a copy's columns of the u
 * `SparseTieL`, `sparseTie_of_layer`: `SparseTie` with the unit a copy in a good layer, its inputs registered and its
   residuals' output columns 0 there, in place of `LaidRows`; it gives `SparseTie`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

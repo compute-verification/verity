@@ -1,12 +1,63 @@
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.SlotsCommit
+module
+
+public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.VBridge.Family.OutCols
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.PubRows.Check
+import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.Transport
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Recursive.ValueInner
-import Proofs.Flock.VBridge.Family.OutCols
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The `rec-residuals` pieces' lowering at the deployed run (U12)
@@ -40,6 +91,8 @@ are `openSetupSt`).
   it at every part where the pieces are owned by algebra parts only, which is `DecompBR.ResLowJ`'s conclusion at each
   part of a `Joint` acceptance.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -1212,17 +1265,17 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
   exact (FlockSoundness.Discharge.Hidden.committed_of_commit s.parse).outRows ht fun p hp => (hv1 p hp).1
 
-/-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's under the session's coins. -/
+/-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's are them. -/
 theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
-    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
+    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, rfl⟩)
 
-/-- A recursive statement's tags are a known statement's, and C's are them under the session's coins. -/
+/-- A recursive statement's tags are a known statement's, and C's are them. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
-    (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ ∃ coins, i.base.read.I.tags = i.base.stmtTags.withCoins coins := by
+    (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ i.base.read.I.tags = i.base.stmtTags := by
   cases hd : decodeRec x with
   | none => unfold insO at h; rw [hd] at h; simp at h
   | some w =>
@@ -1233,7 +1286,7 @@ theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
     · simp at h
     have h' : w.ins.toOption = some i := by simpa using h
     obtain ⟨hf, hc⟩ := raw_ins_tags (RecRaw.ins_base (toOption_eq_some h'))
-    exact ⟨⟨_, hf⟩, _, hc⟩
+    exact ⟨⟨_, hf⟩, hc⟩
 
 /-- With an inner shape, `RecVStar.checkStmt` refuses a statement other than `verity/flock-circuit`. -/
 theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
@@ -1252,7 +1305,7 @@ theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : 
     simpa using hn
 
 /-- **A staged part's tables have hidden outputs**: its setup's `checkStmt` holds it to `verity/flock-circuit`
-(`checkStmt_name`), the one statement of that name (`Tags.byName?`), whose outputs are hidden, under any coins and in
+(`checkStmt_name`), the one statement of that name (`Tags.byName?`), whose outputs are hidden, and in
 `verify --zk`'s tags (`zkTags_hiddenOutputs`). -/
 theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
@@ -1265,15 +1318,13 @@ theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
   have hn := checkStmt_name (checks_stmt hC t ht)
-  obtain ⟨⟨nm, hf⟩, coins, hI⟩ := insO_tags hins
+  obtain ⟨⟨nm, hf⟩, hI⟩ := insO_tags hins
   have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
   rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
-    rw [hI, hT]
-    unfold Flock.Tags.withCoins
-    split <;> rfl
+    rw [hI, hT] <;> rfl
   show i.base.read.tags.hiddenOutputs = true
   unfold Flock.Readable.Read.tags
   split
@@ -1417,8 +1468,7 @@ theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
   obtain ⟨rfl, rfl, rfl⟩ := hpart'
   obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid (L.built_flat P.tmpl) hnet
-  have hcp : (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nIn +
-      (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nComp =
+  have hcp : (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nIn + (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nComp =
       p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one (L.built_flat P.tmpl)
   have hsm := FlockVBridge.OfVStar.part_small hpart
   have hR : RecResiduals.RES_OUT_WORDS = 128 := rfl

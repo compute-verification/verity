@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.Pipe
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
 
 /-!
 # Theorem 1 of `a1-cost.md` (the forest argument): statements (trusted)
@@ -22,6 +24,8 @@ free values, `F₁`-functions free.
 * Together: `A1_cost_quad 2 0` for every `k` and `R` (`A1CostQuadHolds`) and Theorem D's `16·D` for the quadratic
   closed pipe at `c_s = 8` (`AlgBoundQuad8`). The open part of `A1_cost(2, 0)` is `A1_nonquad` (`A1CostOfNonquad`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Forest
 
@@ -132,8 +136,7 @@ def GridNear : Prop :=
 
 /-- **Theorem 1 for every family near the words**: under checkpoint independence and MinRank ≥ 5, a quadratic closed
 pipe whose outputs include `|S|` non-final values of a family that differs from the checked words by elements of
-`V₀` has at least `2·|S|` steps. At `w = word` this is `A1_cost_quad 2 0`; at route U's `wordU` it is
-`A1_cost_quad_U 2 0`. -/
+`V₀` has at least `2·|S|` steps. At `w = word` this is `A1_cost_quad 2 0`; route U's `wordU` is such a family. -/
 def A1CostQuadNear : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
     (w : ℕ → ℕ → Noise N m n k → ℚ), CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →

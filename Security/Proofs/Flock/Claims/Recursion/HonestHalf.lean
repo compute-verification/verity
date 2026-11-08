@@ -1,18 +1,52 @@
-import Proofs.Flock.Claims.Recursion.VStarFinal
-import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.HonestRun
+public import Proofs.Flock.Claims.Recursion.HpEarly
+public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.VStarHonest
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HhHeld
-import Proofs.Flock.Claims.Recursion.HmsgRun
-import Proofs.Flock.Claims.Recursion.HonestRun
-import Proofs.Flock.Claims.Recursion.MoreSlotsAll
 import Proofs.Flock.Claims.Recursion.HonestPartsLayR
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.HonestWitR
+import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+import Proofs.Flock.Claims.Recursion.MoreSlotsAll
 import Proofs.Flock.Claims.Recursion.NumsFixedR
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
 import Proofs.Flock.Claims.Recursion.RoundWords
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.VStarFinal
 import Proofs.Flock.Claims.Recursion.VStarPortNames
+import Proofs.Flock.Claims.Recursion.VStarTopsOk
+import Proofs.Flock.Claims.Recursion.VStarTraceAt
 
 /-!
 # The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half`)
@@ -52,6 +86,8 @@ exception (`hTops`).
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.HonestHalf
 
 open _root_.Flock
@@ -84,7 +120,7 @@ variable (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (
   (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
   (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
 
-/-- The deployed brings at `x` under `deployedB`, with the coin server's record and V\*'s layout's readers. -/
+/-- The deployed brings at `x` under `deployedB`, with the challenger's live-coin part's record and V\*'s layout's readers. -/
 noncomputable abbrev bLAt : Brings :=
   { { bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } with
     rd := (DeployedR.layR OpenRows.elemR).readers }
@@ -105,7 +141,7 @@ verifier accepts the reference prover's run on tape `ω` and coins `r`. A concre
 session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
 compiled verdict exists).
 
-The witness is a run of `benchmarks/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the firewall, at
+The witness is a run of `benchmarks/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the ZK server, at
 16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
 alg-p0, alg-p1, cap, cap-L1–L3), and the inner session was accepted. With a challenge or query coin flipped, the parts
 that read it refused.

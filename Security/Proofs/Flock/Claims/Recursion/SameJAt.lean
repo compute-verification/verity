@@ -1,5 +1,41 @@
-import Proofs.Flock.Claims.Recursion.DecodeSame
-import Proofs.Flock.Claims.Recursion.NextR
+module
+
+public import Proofs.Flock.Claims.Recursion.DecodeSame
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+public import Proofs.Flock.Claims.Recursion.NextSha
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.NextShaDec
 
 /-!
@@ -15,6 +51,8 @@ record (`fill_of_live`): an erased round's coins are no list.
   the substitutions make of it, by `same_mkObj`.
 * **The offsets don't read the proof digests** (`streamOffset_shaSubJ`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecodeAt
 
@@ -358,6 +396,7 @@ theorem arr_mapKey_null' {k : String} {j : Json} {a : Array Json}
     rw [hf] at h
     cases h
 
+-- `liveOfJ`'s run unfolded at the substituted record, `simp` and `omega` on each stream's offsets
 set_option maxHeartbeats 1600000 in
 /-- **The fill finds a coin for every recorded round** of the record of streams `S` wherever `liveOf` reads its
 substituted value, at rep streams of distinct names. -/

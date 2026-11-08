@@ -1,5 +1,9 @@
-import Definitions.Flock.Defs
-import Definitions.Flock.Holo
+module
+
+public import Definitions.Flock.Defs
+public import Definitions.Flock.Holo
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Recursion: hidden unit circuits' class, registered table and registered schedule
@@ -18,6 +22,8 @@ The statement objects of hidden unit circuits, beside `Target.lean`'s `HClass` a
   stacked table and that radius is positive.
 * `holoTableOf`: `Model.holoTable` on the class's public statement at the slots' types.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

@@ -1,6 +1,11 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import RemoteAudit.Difftest
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import RemoteAudit.Difftest
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Difftest
 
 /-!
 # A remote bandwidth session as a core protocol
@@ -17,11 +22,11 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 * the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
   kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
 * the evidence `{"append_coins": [hex, …], "coins": [hex, …], "events": [...]}`: the verifier's log of the session, its
-  coins (W challenges and W openings coins, then the append coins in the order drawn) and every event it took with
+  coins (W challenges and W openings coins, then the append coins in the order sampled) and every event it took with
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
 
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
@@ -32,6 +37,10 @@ hiding term, since the prover is sent the coin commitment only at the session's 
 session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
 why.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Protocol
 

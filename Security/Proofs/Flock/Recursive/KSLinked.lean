@@ -1,11 +1,44 @@
-import Proofs.Flock.Recursive.KSNontrivial
+module
+
+public import Proofs.Flock.Recursive.KSNontrivial
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HresAsm
 
 /-!
 # The recursive verifier's knowledge soundness at the linked relation
 
 `RecursiveKSLinkAt` is `RecursiveKSAt` with the linked relation `R_L` (the deployed relation, and every listed link's
-reader row equal to its writer row), the extractor that also reads the link table's rows off its judged draw, and one
+reader row equal to its writer row), the extractor that also reads the link table's rows off its judged sample, and one
 more term, the link finder's `Pr[B_L]`. `recursiveKSLink_of` proves it at the deployed values from `RecursiveKS`, the
 deployed chain at `R` (`RecDeploy.ResLower.recursiveKS_deployed`), and the links' binding at the deployment
 (`LinksBindDeployed`: on an accepted run whose extracted witness is in `R` and fails the link clause, two of the inputs
@@ -13,12 +46,14 @@ the link finder reads collide), by the union bound `Claims.Recursion.ksLin2LinkO
 its conclusion's nontrivial lemma, at any link clause, from `RecDeploy.KSFixture`, as `recursiveKS_nontrivial`'s.
 -/
 
+@[expose] public section
+
 namespace Flock.Guarantees
 
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 
-/-- **The links bind at the deployment**: at every brings, coin-server record, pair of decoders meeting the
+/-- **The links bind at the deployment**: at every brings, live-coin record, pair of decoders meeting the
 list-decoding spec and dense statement, `LinkBindsAt` at the deployed record, bound and outer Flock. -/
 def LinksBindDeployed {Tb : Type} (Q : Msg → Claims.Flock.Wit → Tb → Prop) (rows : Msg → List Claims.Flock.Wit → Tb)
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →

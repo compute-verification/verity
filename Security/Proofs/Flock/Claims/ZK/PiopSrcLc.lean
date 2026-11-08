@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.ZK.PiopSrcVals
+module
+
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
+public import Proofs.Flock.Claims.ZK.SimPiopGo
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The deployed source's lincheck values at the opened coins
@@ -11,10 +48,12 @@ session's pads.
 * `Replay.Lc.combT_lcU`, `zrT_lcV`: the prover's halved circuit and witness columns after `j` rounds are the model's
   `lcU`, `lcV` folded at the first `j` round coins (`foldl_halve`, `FoldRealizes.fold`, `zr0_hcol`), so its round-`j`
   message is the model's (`msg_lcMsg`).
-* `Masked.rhoF_out`, `tsF_lc`, `lcH_exe`: the draw's residual and round coins are the zerocheck's output `ρ` and the
+* `Masked.rhoF_out`, `tsF_lc`, `lcH_exe`: the sample's residual and round coins are the zerocheck's output `ρ` and the
   `lcCoins` round coins, so the cut's honest lincheck message is `lcMsg` at the executable's coins.
 * `Masked.src_lc0`, `src_lc1`, `src_zp`: `PiopSrc`'s lincheck fields at the deployed source.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Lc
 
@@ -153,7 +192,7 @@ theorem arr_eq_pushes {α : Type} [Inhabited α] {a : Array α} {f : ℕ → α}
   rw [← getElem!_pos a k h1, ← getElem!_pos (FlockComplete.Replay.pushes f n) k h2, h k (lt_of_lt_of_eq h1 hs),
     FlockComplete.Replay.pushes_get f n k (lt_of_lt_of_eq h1 hs)]
 
-/-- **The draw's residual coins are the zerocheck's output `ρ`** at the opened coins. -/
+/-- **The sample's residual coins are the zerocheck's output `ρ`** at the opened coins. -/
 theorem rhoF_out {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2)
     (tr : FlockComplete.Trace) :
     Composed.rhoF (zkTab x j).table (stAt x j) (czExe PE x c j) r =
@@ -161,7 +200,7 @@ theorem rhoF_out {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf
   show _ = FlockComplete.Replay.pushes (zcE c j r).ρ ((zkTab x j).table.S.m - 6)
   exact arr_eq_pushes (by unfold Composed.rhoF; exact Array.size_ofFn) (rhoF_czExe c j r)
 
-/-- **The draw's round coins are the lincheck's** (`lcCoins`) at the opened coins. -/
+/-- **The sample's round coins are the lincheck's** (`lcCoins`) at the opened coins. -/
 theorem tsF_lc {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
     Composed.tsF (zkTab x j).table (stAt x j) (czExe PE x c j) r =
       FlockComplete.Replay.pushes (lcE c j r).τ ((zkTab x j).table.S.kLog - 6) := by

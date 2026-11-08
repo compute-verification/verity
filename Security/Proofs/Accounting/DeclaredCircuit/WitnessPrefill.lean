@@ -1,5 +1,39 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Witness
+module
+
+public import Proofs.Accounting.DeclaredCircuit.Witness
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # An honest run with a prefill meets every hypothesis of `DeclaredCircuitRequirement`
@@ -33,6 +67,8 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8 (`life30_8b`,
   `life30_70b`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
 
@@ -141,7 +177,7 @@ theorem lag_ge {N k : ℕ} (hk : N ≤ k) : 3 ≤ lag N k := by
 /-- Deferred residency: page `k` of request `r` is first read encoded at step `4r + lag N k`. -/
 def encoded (N b : ℕ) : ℕ := b / (N + 4) * 4 + lag N (b % (N + 4))
 
-def kvLayout (n P N : ℕ) : Requirement.Layout Val := ⟨block n P N, offset, encoded N⟩
+def kvLayout (n P N : ℕ) : Requirement.Store.Placement Val := ⟨block n P N, offset, encoded N⟩
 
 /-- A value's group: its request, layer `0`, plane `0` and page. -/
 def kvGrp : Val → ℕ × ℕ × ℕ × ℕ

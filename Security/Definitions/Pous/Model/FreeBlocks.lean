@@ -1,15 +1,19 @@
-import Definitions.Pous.Model.Audit
+module
+
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The sequential audit with free blocks (a sampled setup)
 
-A sampled setup proves that `s` blocks of the committed code, drawn uniformly after its root, decode to `W`; so with
-probability at least `1 − (1 − ε)^s` over the draw, all but at most `ε·B` committed blocks are the true ones. The
+A sampled setup proves that `s` blocks of the committed code, sampled uniformly after its root, decode to `W`; so with
+probability at least `1 − (1 − ε)^s` over the sample, all but at most `ε·B` committed blocks are the true ones. The
 others are free: the prover commits anything there, stores nothing for them, and answers a challenge on one from its
 commitment, so the audit's check on that round always passes. This game gives preprocessing that choice: besides its
 `S`-bit state, it names at most `F` free blocks from `(W, pp, C)` and the whole primitive, and a round whose index is
 free passes whatever the responder returns. With `F = 0` it is `seqAccepts`.
 -/
+
+@[expose] public section
 
 namespace Pous
 

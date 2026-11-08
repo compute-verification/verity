@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
-import Proofs.Flock.Soundness.Game.Batch
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The compiled `--zk` table with its digests read as caps
@@ -14,6 +16,8 @@ function of the session's outputs, the primed prover sending the constant cap at
 (`Lock (Cap D) D`) between the two (`pushSess`) whose leaves relate equal outputs while every cap sent is constant at
 its digest (`Pushed`), which the pushing chooser keeps (`expect_push`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

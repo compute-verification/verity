@@ -1,17 +1,20 @@
-import PouwWindow.Entry
-import Identity.Tagged
-import PouwCommit.Py
-import Identity.Domains
+module
+
+public import PouwWindow.Entry
+public import PouwCommit.Py
+public import Identity.Domains
 
 /-!
 # The side trees (`window.py`, "The side trees")
 
 Each side of an entry is one frame-v3-sha512 tree of 2^D leaves over the rows its tiles keep, in order, the rest
-frame-v3's pad leaves, under the window's side domain: `binding = identity_digest_sha512(SIDE_DOMAIN, {window, side,
+frame-v3's pad leaves, under the execution phase's side domain: `binding = identity_digest_sha512(SIDE_DOMAIN, {window, side,
 depth})`, owner −1, positions `0 … 2^D − 1`. A side row is its operand row's u16 words, then its place in the call as a u32
 in one 128-bit word (`sideRow?`, `sideIndex?`). `sideLevels?` builds a tree's levels over its first leaves and `sidePath`
 reads a leaf's siblings from them, each node past them a node over pad leaves only (`padNode`).
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 
@@ -19,7 +22,7 @@ open Lean (Json)
 open PouwCommit (Domain)
 
 def SIDE_DOMAIN : String := Domains.POUW_PERIOD_SIDE_DOMAIN
-/-- `OWNER`: the frame's owner, as C-Flock's statement domains have it. -/
+/-- `OWNER`: the frame's owner, as Flock's statement domains have it. -/
 def owner : Int := -1
 /-- `SIDE_INDEX_WORDS`: a side row's index field, one 128-bit word. -/
 def sideIndexWords : Nat := 8
@@ -38,7 +41,7 @@ def sideIndex? (row : List Int) : Except String Nat := do
     throw "the row's last 128-bit word is not a u32 index and zeros"
   pure ((field[0]!).toNat + (field[1]!).toNat * 2 ^ 16)
 
-/-- `side_domain`: the domain of every side-`side` tree of the window whose root's domain id is `window`. -/
+/-- `side_domain`: the domain of every side-`side` tree of the execution phase whose root's domain id is `window`. -/
 def sideDomain? (window : ByteArray) (side : String) : Except String Domain := do
   let some s := Side.ofName? side | throw s!"a side is one of ['a', 'b'], not {PouwCommit.pyRepr side}"
   if window.size != 64 then throw "the window's domain id is 64 bytes"

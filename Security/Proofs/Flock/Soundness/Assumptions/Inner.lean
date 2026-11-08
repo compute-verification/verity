@@ -1,19 +1,22 @@
-import Flock.RecVStar
-import Flock.Record
+module
+
+public import Flock.RecVStar
 
 /-!
-# live-verifier at the inner session: the coin server's records of it
+# live-verifier at the inner session: the challenger's live-coin part's records of it
 
-Assumption (`live-verifier` at the inner session): the inner transcript and the session record the verifier of record
-reads (`--rec-inner-transcript`, `--rec-inner-session`) are the coin server's records of the live session. Lean reads
+Assumption (`live-verifier` at the inner session): the inner transcript and the session record the verifier
+reads (`--rec-inner-transcript`, `--rec-inner-session`) are the challenger's live-coin part's records of the live session. Lean reads
 them only as the verifier does (`heldRow`, `heldCoins`, `Record.decode`), and nothing the verifier checks ties them to
 the recursive game's history: the event constrains the records, the bound is over the history. `InnerRecordCustody`
-says that at every history the records the coin server writes there (`wr t`) hold that history's commitments and
+says that at every history the records the challenger's live-coin part writes there (`wr t`) hold that history's commitments and
 coins, where a map `InnerRecordMap` says what each round fixes in them.
 
 The records are read through `held`, the verifier's hold of the inner transcript (`Recursion.innerCommitsAt` against
 R's registration, at the guarantee), so this module reads only the executable: `Flock.Premises` abbreviates it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 
@@ -50,12 +53,12 @@ structure InnerRecordMap (Cm Coin : Type) where
   coin : List Coin → String → Nat → Array F128
   points : Coin → Array (Array F128)
 
-/-- **The coin server's records of the inner session are the live history's** (`live-verifier` at the inner session):
-at every history `t`, the inner transcript and session record the coin server writes there (`wr t`), as the verifier
+/-- **The challenger's live-coin part's records of the inner session are the live history's** (`live-verifier` at the inner session):
+at every history `t`, the inner transcript and session record the challenger's live-coin part writes there (`wr t`), as the verifier
 holds them (`held`), hold
 
 * at every row `x` of a value `v` that round `i` fixes (`m.sel i v x`), the `b ‖ c` of `t`'s round-`i` commitment;
-* at every round `k` of a stream `s` that round `i` draws (`m.selC i s k`), the coins `m.coin` reads off `t`'s coins up
+* at every round `k` of a stream `s` that round `i` samples (`m.selC i s k`), the coins `m.coin` reads off `t`'s coins up
   to round `i` (the link points, `{table}/rep<r>`, `sparse/rep<r>` and `stacked/rep0`'s rounds, which check 5 and V*'s
   registered values read);
 * in the session record, at whatever session parameters it decodes under, `t`'s first coin as its link points. -/

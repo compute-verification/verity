@@ -1,7 +1,50 @@
-import Proofs.Flock.Claims.Recursion.VerdictLog
-import Proofs.Flock.Claims.Recursion.LastColsDeployed
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Claims.Recursion.DecodeLog
+public import Proofs.Flock.Claims.Recursion.VerdictLog
+import Flock.With.SimVerify
+import all Init.Data.Repr
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.Recursion.LastColsDeployed
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Two accepted plain decisions on one set of proof files make one set of calls
@@ -19,6 +62,8 @@ import Proofs.Flock.Claims.DeployK
   files and the same rep rounds, make one set of calls: a decision logs the setup's calls, then the verdict's
   (`next_decide_calls`), and custody pins the rest. `plain_decide_shared` gives the shared decision.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -176,12 +221,12 @@ theorem pubField_of {pubs : Json} {t : String} {p : ByteArray}
 
 /-- **What `Record.decode` reads of the public words.** -/
 theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
-    ∃ j l pubs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+    ∃ j l pubs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
   revert sess
   show Ret (Record.decode spec text) _
   rw [Record.decode.eq_def]
-  cases hp : Json.parse text with
+  cases hp : Flock.JsonParse.parse text with
   | error e => intro sess h; cases h
   | ok j =>
     simp only []
@@ -214,12 +259,12 @@ theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h :
 
 /-- **What `liveOf` reads of the public words.** -/
 theorem liveOf_pubs {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
-    ∃ j l pubs, Json.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+    ∃ j l pubs, Flock.JsonParse.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList lv.publics.toList := by
   revert lv
   show Ret (liveOf spec record) _
   rw [liveOf.eq_def]
-  cases hp : Json.parse record with
+  cases hp : Flock.JsonParse.parse record with
   | error e => intro lv h; cases h
   | ok j =>
     dsimp only

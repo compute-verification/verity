@@ -1,13 +1,45 @@
-import Definitions.Accounting.Served
-import Properties.Accounting.Compose
-import SampledProofs.Draw
+module
+
+public import Definitions.Accounting.Served
+public import Properties.Accounting.Compose
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The served window's units and draw are the service's, per call (`SampledProofs.Slots.layout`, `Draw.drawUnits`)
+# The served window's units and sample are the service's, per call (`SampledProofs.Slots.layout`, `Draw.drawUnits`)
 
 The served replacement of `Properties.Compose.UnitsOfLayout` for a window of per-call Programs
 (`Accounting.Served.Shape`, `Accounting.Served.Tie`). `UnitsOfLayout` reads one Program's partition and puts every
-value the prover writes at the draw (its commit-coin conjunct, PoUW's seeded salt-and-draw schedule), so it can't sit
+value the prover writes at the sample (its commit-coin conjunct, PoUW's seeded salt-and-draw schedule), so it can't sit
 beside `LayerCommitted` on a circuit with a run input any gate reads (`SeededScheduleNotLive`): the live statements need
 the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of it here, per call:
 
@@ -20,7 +52,7 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
   overlap (W-a);
 * **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the declared circuit's units are
   the window's `population`;
-* **the draw** (`DrawMissesSubset`): the verifier's `subset:K_d` draw over the window's population from `L` uniform bytes
+* **the sample** (`DrawMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
   (`SampledProofs.Draw.drawUnits`, what `flock-verify draw --population N --k K` runs) misses a set `U` no more often
   than `Pouw.Window.subsetDraw K_d` of a uniform permutation does. It is over the code alone, like
   `Properties.SampledProofs.DrawMisses`.
@@ -30,8 +62,10 @@ seed.
 
 These are stated, not proved. The units and population conjuncts are facts of four compiled Programs a form, checkable
 once by evaluation; the forms' Programs differ in each unit's spans, never in the unit count, so `population` is one for
-all three. The draw conjunct is a property of `drawUnits`, with no premise.
+all three. The sample conjunct is a property of `drawUnits`, with no premise.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open Pouw.RelativeSecurity (prob)
@@ -65,8 +99,8 @@ def ServedUnits {ι : Type} (L : Shape) (Cd : Declared ι) (prog : ℕ → Sampl
     ∀ c, c < Cd.calls → ∀ l, SampledProofs.Slots.layout (prog (L.linearOf c)) (query (L.linearOf c)) = .ok l →
       CallUnits L Cd start c l
 
-/-- **The verifier's subset draw over a population misses no more often than a uniform `K`-subset**: for every `K ≤ N`,
-number `L` of uniform bytes and set `U`, `drawUnits (subset K) N` is accepted on the bytes and draws no unit of `U` with
+/-- **The verifier's subset sample over a population misses no more often than a uniform `K`-subset**: for every `K ≤ N`,
+number `L` of uniform bytes and set `U`, `drawUnits (subset K) N` is accepted on the bytes and samples no unit of `U` with
 probability at most the probability that `Pouw.Window.subsetDraw K` of a uniform permutation of `Fin N` misses `U`. -/
 def DrawMissesSubset : Prop :=
   ∀ (K N L : ℕ) (U : Finset ℕ), K ≤ N →
@@ -76,7 +110,7 @@ def DrawMissesSubset : Prop :=
       prob (fun β : Equiv.Perm (Fin N) => ∀ t ∈ Pouw.Window.subsetDraw K β, t.val ∉ U)
 
 /-- **`UnitsOfLayout`'s seeded schedule and `LayerCommitted` exclude each other** on a well-formed declared circuit with
-a run input that some gate reads: `UnitsOfLayout` commits the run input at the draw, and `LayerCommitted` needs it by
+a run input that some gate reads: `UnitsOfLayout` commits the run input at the sample, and `LayerCommitted` needs it by
 its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the live
 statements can't take `UnitsOfLayout` as written. -/
 def SeededScheduleNotLive : Prop :=
@@ -86,9 +120,9 @@ def SeededScheduleNotLive : Prop :=
       (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
 
 /-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
-units are the per-call Programs' (`ServedUnits`), and the verifier's draw over its population misses as a uniform
+units are the per-call Programs' (`ServedUnits`), and the verifier's sample over its population misses as a uniform
 subset does (`DrawMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
-(`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and draw, per call. -/
+(`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and sample, per call. -/
 def IsServed {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) (prog : ℕ → SampledProofs.Program)
     (query : ℕ → Json) (start : ℕ → ℕ) : Prop :=
   Tie L F Cd cls ∧ ServedUnits L Cd prog query start ∧ DrawMissesSubset

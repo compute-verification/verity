@@ -1,20 +1,13 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Option
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Data.Fintype.Sum
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
+module
+
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Model.Dense
+public import Definitions.Pous.Model.Inc
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Pous.Audit.SampledAudit
+public import Proofs.Pous.B5.ExPostFacto
+public import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Audit.SampledAudit
-import Proofs.Pous.B5.ExPostFacto
-import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
@@ -39,6 +32,8 @@ The proof composes five pieces:
 It imports the Theorem 1 library (`PousThm1`, with `theorem1_ii_seq`) and the B5 proof (`PousB5`); the scheme and
 the proof are `PousDense`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

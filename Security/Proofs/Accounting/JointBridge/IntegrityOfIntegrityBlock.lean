@@ -1,16 +1,34 @@
-import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
-import Proofs.Flock.EndToEnd.Carry
+module
+
+public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
+public import Proofs.Flock.EndToEnd.Carry
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Game.Interleave
 import Proofs.Pouw.Prob
 
 /-!
-# Proof of the integrity audit of a server-time block from C-Flock's integrity audit of that block
+# Proof of the integrity audit of a server-time block from Flock's integrity audit of that block
 
-At each value of the other coins, a draw of the period's sampled coins on which its audit accepts while more than `ε` of
-its units are wrong is one on which every sampling block of the server-time block is accepted and their wrong units
+At each value of the other coins, a sample of the period's sampled coins on which its audit accepts while more than `ε` of
+its units are wrong is one on which every sampling block of the server-time block is accepted and their incorrect proof blocks
 total more than `ε·units ≥ ln(1/δ)/q`. Read on the monitoring period's records, that is the block escaping
 (`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `law`
 carries the bound from the monitoring period's game to the uniform coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

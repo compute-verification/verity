@@ -116,7 +116,7 @@ frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, f
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
-weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
+weights tag. It is an identity from the protocol and the Program, not something the frame computes. Under every frame it is 64 bytes, an
 `identity_digest_sha512` or another SHA-512 digest (one hash, SHA-512), or 32 bytes, a SHA-256 identity
 digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
@@ -177,7 +177,7 @@ P(ℓ)      = ( "verity/sha512-row/v2\0" ‖ u64be ℓ )  zero-padded to 128 byt
 digest    = SHA-512( P(ℓ) ‖ row bytes )
 ~~~
 
-- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the Boolean IR's element
+- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the circuit format's element
   convention. For every format in use the row bytes are then the tensor's memory: two E2M1 codes a byte, the first in the low nibble;
   one byte per E4M3 element or scale; two little-endian bytes per BF16 element. An NVFP4 or MXFP4 row is its k codes followed by its
   scales, as one row (4k + 8·k/16 or 4k + 8·k/32 bits), so an NVFP4 row's bytes are §4a's `nvfp4_row_bytes`. Which values form a
@@ -257,6 +257,16 @@ The schema string names the rule that produced the 64 bytes, so a statement is e
 `hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). `rowleaf.row_leaf` accepts each at its width. The SHA-256 frame has no hiding
 row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (one hash, SHA-512).
 
+**Keyed leaves.** The one exception is PoUW's lead, whose instances are keyed leaves. A keyed leaf is a `frame-v3-sha512`
+subtree hashed as above up to M_top, the message whose SHA-512 would be its root (its root node, or a one-leaf subtree's
+leaf), and published as d = SHA-512(ks ‖ salt ‖ M_top) in the root's place, with ks the window's secret key (64 OS bytes,
+never published) and salt its live salt; ks ‖ salt is one 128-byte block (`Hash.Keyed`). It hides computationally: over
+tops with distinct domain ids, a distinguisher's view (the key leaf and every digest) moves by at most the explicit
+advantages of two distinguishers built from it, one in hm96's hiding game and one against SHA-512 as a PRF keyed by its
+first block (`Pouw.Guarantees.KeyedLeaf.Hides`). The window's key is committed before its salt as its key leaf, the
+`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the lead's registration records (`pouw.salt.lead_record`)
+and a proof opens ks against.
+
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.
 - `verify_opening` and `FrameV3.verify_path` reject a sibling, leaf or root of the other size.
@@ -288,5 +298,5 @@ and `test_rowleaf_bits.py` check them.
   domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
   rests on `cr/sha-512` alone.
 - **What may still rest on SHA-256.** Which statement and which session a root belongs to also rests on `binding`. A 64-byte binding
-  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the IR does not, and a Table 1 row that cites this
+  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the Program does not, and a Table 1 row that cites this
   frame over one cites `cr/sha-256` beside `cr/sha-512`.

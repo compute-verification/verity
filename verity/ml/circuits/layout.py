@@ -1,4 +1,4 @@
-"""Canonical layout, root-scoped value references, and the three gate-selection classes (IR §4.4, §6, §D).
+"""Canonical layout, root-scoped value references, and the two addressing classes (IR §4.4, §6, §D).
 
 Layout: a function body is laid out in body order; each node is one interval; `batch` members and `scan`
 iterations are consecutive in structural order. Gate counts and offsets are *intrinsic summaries* cached per
@@ -8,33 +8,32 @@ hierarchy — never by expansion.
 Canonical reference of a produced value = its producing gate's root-scoped index. Prescribed inputs are
 `Input[k] : () -> Value<w_k>` gates (IR §D.3) and therefore have their own canonical references.
 
-Three classes (IR §D.1/§D.2), not synonyms:
+A set of gates is a `query_ast.GateSet`; an explicit one, and its boundary by expansion, are the test-only
+`query_ast.oracle_gateset` / `oracle_in` / `oracle_out`. Two addressing classes (IR §D.1/§D.2), not synonyms:
 
-* `GateSelection` — any selected set of gates of the root circuit + the wiring among them + its induced
-  boundary. `S.size`, `S[i]` (i-th selected gate in root canonical order), `S.in_` (the boundary gates
-  entering from outside: distinct gates outside S with a wire into S), `S.out` (the boundary gates leaving:
-  distinct gates inside S with a wire to a gate outside S, or designated root outputs). Boundaries are sets of
-  *gates* — a producer counts once regardless of fan-out; there is no `distinct()` operation. Canonical
-  boundary order: ascending root-scoped producing-gate index. These explicit computations are the oracle for
-  the compact per-part analysis in `verity.ml.circuits.boundary` (`in_gates` / `out_gates` / `w_out`).
-* `Region` — the contiguous special case `C[i:j]`, efficiently addressable.
-* `FunctionCall` — a hierarchy-defined gate selection (always a region in this layout) **plus** the declared interface
+* `Region` — the contiguous interval `C[i:j]`, efficiently addressable. `R.in_` (the boundary gates entering from
+  outside: distinct gates outside R with a wire into R) and `R.out` (the boundary gates leaving: distinct gates
+  inside R with a wire to a gate outside R, or designated root outputs). Boundaries are sets of *gates* — a producer
+  counts once regardless of fan-out. Canonical boundary order: ascending root-scoped producing-gate index.
+* `FunctionCall` — a hierarchy-defined region **plus** the declared interface
   `call.args` / `call.returns`, which keep signature order and repeated references. `F(v, v)` returning
   `(t, a, t)` has `args = [v, v]`, `returns = [t, v, t]`, `in_ = [v]`, `out = [t]` (if only `t` escapes).
 
 Intrinsic vs contextual summaries: gate count, interface types and offsets are intrinsic to a specialized
 definition and cached on it. Anything depending on consumers, enclosing wiring, protected outputs or a plan
-(`S.out` of an arbitrary gate selection, reachability, cuts) is contextual and is computed per instance, never
+(`out` of a gate set, reachability, cuts) is contextual and is computed per instance, never
 cached by definition.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator, Sequence
+from functools import partial
+from typing import Callable, Iterator, Sequence
 
 from .defs import Node, PrimitiveDefinition, SpecializedDefinition
 from .refs import Ref
+from .types import axis_runs
 
 
 class Scope:
@@ -73,6 +72,29 @@ def param_leaf(scope: Scope, pi: int, leaf: int) -> int:
     return resolve_gate(scope, ("p", pi, leaf))[0]
 
 
+def _arg_ref(scope: Scope, idx: int, leaf: int) -> Ref | None:
+    """The parent's reference that leaf `leaf` of parameter `idx` of the activation `scope` is bound to (through the parent's node
+    that activates it); None for a scan's carry past its first iteration, the previous iteration's returned carry."""
+    node = scope.parent.spec.body.nodes[scope.node_idx]
+    if node.form == "call":
+        return node.args[idx].refs[leaf]
+    if node.form == "batch":
+        ax, a = node.axes[idx], node.args[idx]
+        if ax is None:
+            return a.refs[leaf]
+        if ax == 0:
+            return a.refs[scope.member * a.type.elem.leaves + leaf]
+        _outer, n, L = axis_runs(a.type, ax)
+        return a.refs[(leaf // L) * n * L + scope.member * L + leaf % L]
+    # scan: params are (carry, xs..., shared...)
+    if idx == 0:
+        return node.args[0].refs[leaf] if scope.member == 0 else None
+    if idx <= node.n_xs:
+        a = node.args[idx]
+        return a.refs[scope.member * a.type.elem.leaves + leaf]
+    return node.args[idx].refs[leaf]
+
+
 def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
     """Root-scoped gate index and producing primitive of the value denoted by body-scoped `ref` in `scope`: one walk
     up through parameters (to the argument the parent passed) and down through returns (to the producing node)."""
@@ -82,30 +104,12 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
             parent = scope.parent
             if parent is None:
                 raise ValueError("the root has no parameters (prescribed inputs are Input gates)")
-            node = parent.spec.body.nodes[scope.node_idx]
-            if node.form == "call":
-                space, idx, leaf = node.args[idx].refs[leaf]
-            elif node.form == "batch":
-                ax, a = node.axes[idx], node.args[idx]
-                if ax is None:
-                    space, idx, leaf = a.refs[leaf]
-                elif ax == 0:
-                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
-                else:
-                    space, idx, leaf = a.take(ax, scope.member).refs[leaf]
-            else:  # scan: params are (carry, xs..., shared...)
-                if idx == 0:
-                    if scope.member == 0:
-                        space, idx, leaf = node.args[0].refs[leaf]
-                    else:  # the previous iteration's returned carry
-                        scope = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
-                        space, idx, leaf = scope.spec.body.ret[leaf]
-                        continue
-                elif idx <= node.n_xs:
-                    a = node.args[idx]
-                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
-                else:
-                    space, idx, leaf = node.args[idx].refs[leaf]
+            r = _arg_ref(scope, idx, leaf)
+            if r is None:  # the previous iteration's returned carry
+                scope = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
+                space, idx, leaf = scope.spec.body.ret[leaf]
+                continue
+            space, idx, leaf = r
             scope = parent
             continue
         body = scope.spec.body
@@ -195,20 +199,83 @@ WIDE_FAN_IN = 4096
 
 def _prim_member_args(scope: Scope, node: Node, m: int):
     """Operand gate indices of member `m` of a primitive node (`prim`, or a `batch` of a primitive)."""
+    return _member_operands(scope, node, m)
+
+
+def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None):
+    """`_prim_member_args` of ``node`` in ``scope``, each reference resolved by ``res`` (`resolve` in ``scope`` when None; a wide
+    gate's, lazily, always by `resolve`)."""
     if sum(p.leaves for _, p in node.fn.params) > WIDE_FAN_IN:
         return LazyOperands(scope, node, m)
+    if res is None:
+        res = partial(resolve, scope)
     if node.form == "primitive":
-        return tuple(resolve(scope, r) for a in node.args for r in a.refs)
+        return tuple(res(r) for a in node.args for r in a.refs)
     out: list[int] = []
     for a, ax in zip(node.args, node.axes):
         if ax is None:
-            out.extend(resolve(scope, r) for r in a.refs)
+            out.extend(res(r) for r in a.refs)
         elif ax == 0:
             L = a.type.elem.leaves
-            out.extend(resolve(scope, a.refs[m * L + j]) for j in range(L))
+            out.extend(res(a.refs[m * L + j]) for j in range(L))
         else:
-            out.extend(resolve(scope, r) for r in a.take(ax, m).refs)
+            outer, n, L = axis_runs(a.type, ax)
+            if not 0 <= m < n:
+                raise IndexError(m)
+            refs = a.refs
+            out.extend(res(refs[k * n * L + m * L + j]) for k in range(outer) for j in range(L))
     return tuple(out)
+
+
+#: the parameter leaves' gates one activation `Circuit.gates` has entered keeps, at most (`_Bound`), so what it holds is bounded
+#: by the depth of the hierarchy, not by the leaves a gate reads (an expert GEMM's gather reads every expert's weights)
+BOUND_LEAVES = 1 << 9
+
+
+class _Bound:
+    """An activation `Circuit.gates` has entered, with the gates its parameter leaves are bound to as `resolve` finds them, the
+    first `BOUND_LEAVES` of them kept: a leaf through its parent's (`_arg_ref`), a reference into the body by `resolve`."""
+
+    __slots__ = ("scope", "up", "params")
+
+    def __init__(self, scope: Scope, up: "_Bound | None") -> None:
+        self.scope, self.up, self.params = scope, up, {}
+
+    def ref(self, r: Ref) -> int:
+        if r[0] != "p":
+            return resolve(self.scope, r)
+        key = (r[1], r[2])
+        g = self.params.get(key)
+        if g is None:
+            a = None if self.up is None else _arg_ref(self.scope, r[1], r[2])
+            g = resolve(self.scope, r) if a is None else self.up.ref(a)
+            if len(self.params) < BOUND_LEAVES:
+                self.params[key] = g
+        return g
+
+
+def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
+    """`Circuit.gate` of each gate of the activation ``b`` in [lo, hi), in order."""
+    s = b.scope
+    body = s.spec.body
+    offs = body.offsets
+    for k in range(body.node_at(lo - s.offset) if lo > s.offset else 0, len(body.nodes)):
+        start, end = s.offset + offs[k], s.offset + offs[k + 1]
+        if start >= hi:
+            return
+        if end <= max(lo, start):
+            continue
+        node = body.nodes[k]
+        fn = node.fn
+        if isinstance(fn, PrimitiveDefinition):
+            one = node.form in ("primitive", "call")
+            for i in range(max(lo, start), min(hi, end)):
+                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref), s)
+            continue
+        G = fn.gates
+        first, last = ((0, 0) if node.form == "call" else ((max(lo, start) - start) // G, (min(hi, end) - 1 - start) // G))
+        for m in range(first, last + 1):
+            yield from _walk(_Bound(Scope(fn, start + m * G, s, k, m), b), lo, hi)
 
 
 @dataclass(frozen=True)
@@ -230,79 +297,12 @@ class Gate:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# GateSelection / Region / FunctionCall
+# Region / FunctionCall
 # ---------------------------------------------------------------------------------------------------------
 
 
-class GateSelection:
-    """A selected set of gates of the root circuit + wiring among them + induced boundary (IR §D.1).
-    Constructed explicitly from a gate set; intended for small/flattened circuits (cones, hand-picked sets).
-    `in_`/`out` are *contextual*: computed on demand, never cached by definition."""
-
-    def __init__(self, circuit: "Circuit", gates: Sequence[int]) -> None:
-        self.circuit = circuit
-        self._gates = tuple(sorted(set(int(g) for g in gates)))
-        for g in self._gates[:1] + self._gates[-1:]:
-            if not (0 <= g < circuit.size):
-                raise IndexError(g)
-        self._set = frozenset(self._gates)
-
-    @property
-    def size(self) -> int:
-        return len(self._gates)
-
-    def __len__(self) -> int:
-        return self.size
-
-    def __contains__(self, g: int) -> bool:
-        return g in self._set
-
-    def gate_indices(self) -> tuple[int, ...]:
-        return self._gates
-
-    def __getitem__(self, i: int) -> Gate:
-        return self.circuit.gate(self._gates[i])
-
-    def __iter__(self) -> Iterator[Gate]:
-        for g in self._gates:
-            yield self.circuit.gate(g)
-
-    @property
-    def in_(self) -> tuple[int, ...]:
-        """Boundary gates entering from outside — distinct gates outside S with a wire into S — ascending by
-        gate index (`in(S)` of `verity/ml/circuits/parts.py`)."""
-        self.circuit._check_explicit(self.size)
-        s: set[int] = set()
-        for g in self:
-            s.update(o for o in g.operands if o not in self._set)
-        return tuple(sorted(s))
-
-    @property
-    def out(self) -> tuple[int, ...]:
-        """Boundary gates leaving — distinct gates inside S with a wire to a gate outside S, or designated root
-        outputs — ascending by gate index (`out(S)` of `verity/ml/circuits/parts.py`). Requires enumerating consumers:
-        explicit over the whole circuit; the compact equivalent is `boundary.out_gates`."""
-        c = self.circuit
-        c._check_explicit(c.size)
-        used: set[int] = set()
-        for g in range(c.size):
-            if g in self._set:
-                continue
-            for o in c.gate(g).operands:
-                if o in self._set:
-                    used.add(o)
-        used |= {o for o in c.root_outputs() if o in self._set}
-        return tuple(sorted(used))
-
-    def __repr__(self) -> str:
-        return f"GateSelection({self.size} gates)"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, GateSelection) and self.circuit is other.circuit and self._gates == other._gates
-
-
-class Region(GateSelection):
-    """`C[i:j]`: the contiguous special case; addressable without materialising the gate set."""
+class Region:
+    """`C[i:j]`: a contiguous interval of the root circuit; addressable without materialising the gate set."""
 
     def __init__(self, circuit: "Circuit", lo: int, hi: int) -> None:
         if not (0 <= lo <= hi <= circuit.size):
@@ -312,6 +312,9 @@ class Region(GateSelection):
     @property
     def size(self) -> int:
         return self.hi - self.lo
+
+    def __len__(self) -> int:
+        return self.size
 
     def __contains__(self, g: int) -> bool:
         return self.lo <= g < self.hi
@@ -332,8 +335,7 @@ class Region(GateSelection):
         return self.circuit.gate(self.lo + i)
 
     def __iter__(self) -> Iterator[Gate]:
-        for g in range(self.lo, self.hi):
-            yield self.circuit.gate(g)
+        return self.circuit.gates(self.lo, self.hi)
 
     @property
     def interval(self) -> tuple[int, int]:
@@ -534,6 +536,17 @@ class Circuit:
                 return Gate(i, node.fn, _prim_member_args(scope, node, m), scope)
             scope = Scope(node.fn, node_off + m * node.fn.gates, scope, k, m)
 
+    def gates(self, lo: int = 0, hi: int | None = None) -> Iterator[Gate]:
+        """`gate(i)` for each i in [lo, hi), in order, in one walk down the hierarchy: each activation entered once, not once a
+        gate, and each of its parameter leaves resolved once (`_Bound`)."""
+        hi = self.size if hi is None else hi
+        if lo < 0 and lo < hi:
+            raise IndexError(lo)
+        if lo < min(hi, self.size):
+            yield from _walk(_Bound(self.root_scope, None), lo, min(hi, self.size))
+        if hi > max(lo, self.size):
+            raise IndexError(max(lo, self.size))
+
     def __getitem__(self, i):
         if isinstance(i, slice):
             lo, hi, step = i.indices(self.size)
@@ -544,9 +557,6 @@ class Circuit:
 
     def region(self, lo: int, hi: int) -> Region:
         return Region(self, lo, hi)
-
-    def gate_selection(self, gates: Sequence[int]) -> GateSelection:
-        return GateSelection(self, gates)
 
     def root_calls(self, primitive_batches: "str | None" = None) -> Iterator[FunctionCall]:
         yield from _node_calls(self, self.root_scope, primitive_batches)

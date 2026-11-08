@@ -7,16 +7,18 @@ from .common import Unexpressible
 from .phi import Phi
 
 #: the engine environment a Program reads only as `tp_allreduce.settings_of` (above two ranks; two ranks' AllReduce2 is route-free)
-#: or not at all (the transport: `pipeline.build` records NCCL_P2P_DISABLE, never consults it); the target's own are `TargetProfile.env()`
-_ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER", "NCCL_P2P_DISABLE")
+#: or not at all (the transport: `pipeline.build` records NCCL_P2P_DISABLE, never consults it; the DSA top-k's canonical row
+#: `engine_classes.DSA_TOPK_ENV`, which `dsa.Net` requires of a row past INDEX_TOPK); the target's own are `TargetProfile.env()`
+_ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER", "NCCL_P2P_DISABLE", "VERITY_DSA_TOPK")
 #: the engine args a component Program does not read but through `settings_of` (the scheduler's: a component is one request's)
 _ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched_tokens", "max_num_seqs", "enable_prefix_caching",
-                  "enable_chunked_prefill")
+                  "enable_chunked_prefill", "long_prefill_token_threshold")
 
 
-def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, tuple[str, ...]]) -> None:
-    """Refuse φ outside a decoder's domain (worlds, execution, checkpoint dtypes) or the samplers the vocabulary has."""
-    worlds, execution, dtypes = domain
+def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tuple[str, ...]]) -> None:
+    """Refuse φ outside a decoder's domain (worlds, execution or executions, checkpoint dtypes) or the samplers the vocabulary has."""
+    worlds, executions, dtypes = domain
+    executions = (executions,) if isinstance(executions, str) else executions
     facts = []
     s = phi.sampling or {}
     if s.get("kind", "greedy") == "stochastic":
@@ -31,7 +33,7 @@ def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, tuple[str, ...]]) ->
         facts.append(f"tensor parallel world {world} ({' and '.join(f'TP{w}' for w in worlds)}, the worlds a Build has traced)")
     if phi.profile != "b1-eager-v3":
         facts.append(f"numerics profile {phi.profile!r}")
-    if phi.execution != execution:
+    if phi.execution not in executions:
         facts.append(f"execution {phi.execution!r}")
     if (phi.model or {}).get("dtype", "bfloat16") not in dtypes:
         facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({' or '.join(dtypes)} only)")

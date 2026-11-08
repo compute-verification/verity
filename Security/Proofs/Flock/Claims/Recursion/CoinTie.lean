@@ -1,30 +1,70 @@
+module
+
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+public import Proofs.Flock.Claims.Recursion.RecRecord
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Soundness.ExecDraw
 
 /-!
-# The coins a staged part's check 5 computes `v` at are the coins the coin server's transcript shows
+# The coins a staged part's check 5 computes `v` at are the coins the challenger's live-coin part's transcript shows
 
 Check 5 (`RecCoins.checkResiduals`) computes each rep's `v` at its rounds' coins as the inner session's record holds them:
 `Inner.load` decodes that record (`Record.decode`), and `Inner.rounds r` is its stream `<table>/rep<r>`'s coins, round by
 round (`load_rounds`). `PartComputes` evaluates at the coins the V\* statement's transcript shows (`showsTr recRead`):
-the coin server's record read in its own format (`RecRecord.readFull`). This file ties the two, from the verifier's code
+the challenger's live-coin part's record read in its own format (`RecRecord.readFull`). This file ties the two, from the verifier's code
 alone, with no premise on JSON.
 
 The tie runs through the transcript's JSON, which the recursive setup reads twice (`RecSetup.commits`):
 
 * `RecVStar.innerCommits` holds the inner session record's coin strings to the transcript JSON's, round for round on
   each rep stream (`repCoins`, which places a holo session's split z_partial round), and `Record.decode` parses those
-  same strings of the same record text (`decode_streams`, `coins_hex`), since both read `Json.parse record`;
+  same strings of the same record text (`decode_streams`, `coins_hex`), since both read `Flock.JsonParse.parse record`;
 * `RecSetup.checkReads` holds `readFull`'s rounds to the transcript JSON's, stream, round and hex-parsed coins
   (`jsonRounds`, `checkReads_rounds`).
 
-`Json.parse` is opaque to the kernel, and the proof never looks inside it: each side reads one parse of one text.
+The proof never looks inside the parser: each side reads one parse of one text.
 
 `coinTie_core` is the tie in the verifier's code: rep `r`'s round `m` has the coins of `readFull`'s round of that stream
 at round `sp m`, where `sp` is the identity or skips the split round. `staged_coinTie` takes it to a staged part, at the
 record `shownOf recRead` reads, and `staged_coinTie_drawn` to `showsTr`: each such round's coins are the values its coin
 drew (`Drawn`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CoinTie
 
@@ -263,9 +303,9 @@ def StreamOk (x : Json) (st : StreamRec) : Prop :=
 set_option maxHeartbeats 1000000 in
 theorem decode_streams {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) :
-    ∃ j sj, Json.parse text = .ok j ∧ Record.arr j "streams" = .ok sj ∧ Pairs StreamOk sj.toList sess.streams.toList := by
+    ∃ j sj, Flock.JsonParse.parse text = .ok j ∧ Record.arr j "streams" = .ok sj ∧ Pairs StreamOk sj.toList sess.streams.toList := by
   unfold Record.decode at h
-  cases hp : Json.parse text with
+  cases hp : Flock.JsonParse.parse text with
   | error e => rw [hp] at h; obtain ⟨w, hw, -⟩ := tie_bind h; cases hw
   | ok j =>
   rw [hp] at h
@@ -451,7 +491,7 @@ the record's streams, both JSON, and at every stream the record names (`recNames
 theorem innerCommits_reps {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option StackedShape} {cs : InnerCommits}
     (h : innerCommits tr record reg bound shape = .ok cs) :
-    ∃ rounds rj streams, tr.getObjValAs? (Array Json) "rounds" = .ok rounds ∧ Json.parse record = .ok rj ∧
+    ∃ rounds rj streams, tr.getObjValAs? (Array Json) "rounds" = .ok rounds ∧ Flock.JsonParse.parse record = .ok rj ∧
       rj.getObjValAs? (Array Json) "streams" = .ok streams ∧
       ∀ s ∈ streams.toList.filterMap (fun x => (x.getObjValAs? String "stream").toOption),
         CoinsAgree s rounds streams := by
@@ -542,7 +582,7 @@ theorem jsonRounds_both {tr : Json} {rounds : Array Json} {L : List (Option (Lis
 theorem some_beq_some {α : Type} [BEq α] [LawfulBEq α] {a b : α} : ((some a == some b) = true) ↔ a = b := by
   simp
 
-/-- **The coin tie, in the verifier's code**: where `innerCommits` and `checkReads` pass on the coin server's transcript
+/-- **The coin tie, in the verifier's code**: where `innerCommits` and `checkReads` pass on the challenger's live-coin part's transcript
 (`tt`, its JSON `tr`) and the inner session's record (`record`), and `Record.decode` decodes that record, each round
 `m` of the record's stream `name` has the coins of a round of the record `checkReads` reads in its own format
 (`readFull`): of that stream, at round `sp m`, where `sp` is the identity or skips the one split round of a holo
@@ -625,7 +665,7 @@ theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x,
 
 theorem commits_inner {sh : RecVStar.Inner} {tt : String} {tr : Json} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (htr : Json.parse tt = .ok tr) (h : RecSetup.commits (some sh) (.ok tt) r bound record = .ok cs) :
+    (htr : Flock.JsonParse.parse tt = .ok tr) (h : RecSetup.commits (some sh) (.ok tt) r bound record = .ok cs) :
     ∃ reg d shp, RecVStar.innerCommits tr record reg d shp = .ok cs := by
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, htr] at h
@@ -638,7 +678,7 @@ theorem commitsOf_tie {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () ∧
       ∃ reg d shp, RecVStar.innerCommits tr record reg d shp = .ok cs := by
   unfold commitsOf at h
@@ -662,7 +702,7 @@ theorem commitsOf_tie {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr =>
           exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX,
@@ -679,7 +719,7 @@ theorem atC3_record {src : Option RecCoins.Source} {inner : Option RecVStar.Inne
     split <;> rfl
   · subst h; rfl
 
-/-- **The coin tie at a staged part**: the coin server's record `R` that `recRead` reads off the V\* statement
+/-- **The coin tie at a staged part**: the challenger's live-coin part's record `R` that `recRead` reads off the V\* statement
 (`shownOf`), and wherever check 5 loads the inner statement from its source (`Source.atC3`, `Inner.load`), each round
 `m` of rep `r`'s coins is the coins of `R`'s round of rep `r`'s stream at round `sp m`, `sp` the identity or skipping
 the one split round. -/

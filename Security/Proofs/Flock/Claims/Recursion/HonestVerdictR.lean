@@ -1,6 +1,46 @@
-import Proofs.Flock.Claims.Recursion.NextRTables
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.NextRSession
+public import Proofs.Flock.Claims.Recursion.NextRTables
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
-import Proofs.Flock.Claims.Recursion.DeployedR
+import Proofs.Flock.Claims.Complete.Shaped
+import Proofs.Flock.Claims.Recursion.NextRCoins
+import Proofs.Flock.Claims.Recursion.NextRRows
+import Proofs.Flock.Claims.Recursion.NextRSetup
+import Proofs.Flock.Claims.Scope.Check
 
 /-!
 # The honest run passes `nextR`'s checks
@@ -24,6 +64,8 @@ its ring switch's batched value (`Run.recTs`), and a last message the reader rea
   openings only (`opensOf`). `readRep` takes from the last message's proof exactly the fields no frame absorbs, which
   are its openings (`absorbedFrom_opensOf`), so `decR` decides the same at the proofs or their openings.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Run
 

@@ -18,6 +18,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("QuantLinearFp8_v1", lambda: bind(fp8.QuantLinearFp8, K=256, N=2, BIAS=True)),
         ("ScaledMmFp8NoSwap_v1", lambda: bind(fp8.ScaledMmFp8NoSwap, K=64, N=2, BIAS=True, DOT=BlackwellE4m3QmmaDot32)),
         ("ScaledMmFp8BlockSharedScale_v1", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=256, G=128)),
+        # the per-coordinate form the shared-scale one restates, no Call of a served Program, at the shared form's numerics shapes
+        ("ScaledMmFp8Block_v1", lambda: bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)),
+        ("ScaledMmFp8Block_v1/k128-ragged", lambda: bind(fp8.ScaledMmFp8Block, K=128, N=192, G=128)),
         # a partial last weight block (GLM-5.3's fused_qkv_a_proj, N = 2624 over 21 scale rows)
         ("ScaledMmFp8Block_v1/ragged", lambda: bind(fp8.ScaledMmFp8Block, K=256, N=192, G=128)),
         ("ScaledMmFp8BlockSharedScale_v1/ragged", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=192, G=128)),

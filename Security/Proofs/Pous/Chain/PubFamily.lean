@@ -1,4 +1,8 @@
-import Proofs.Pous.Chain.Family
+module
+
+public import Proofs.Pous.Chain.Family
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The band store with a public encoder at every segment count from 1 to 2^64
@@ -8,6 +12,8 @@ import Proofs.Pous.Chain.Family
 with the exact check the same statement as `Meets`, and `band_meets_family_final` proves the latter for
 `1 ≤ N ≤ 2^64` and `d ≥ 5`. `Pous.SecurityProofs.BandPubMeetsFamily` proves the guarantee `BandPubMeetsFamily` from it.
 -/
+
+@[expose] public section
 
 namespace PousPub
 

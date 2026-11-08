@@ -53,7 +53,7 @@ CASES = [
     ("inputs only, another env", A, "none", {}),
     ("inputs only, with the fields the key leaves out", {**A, "id": "test-file:elsewhere", "about": "run a.py", "env": "py",
                                                          "resources": {"cores": 2, "mem_gb": 3, "disk_gb": 4},
-                                                         "timeout_s": 60, "key": None}, "py", {}),
+                                                         "timeout_s": 60, "priority": 3, "key": None}, "py", {}),
 ]
 
 
@@ -99,6 +99,16 @@ def test_keys_reproduce_the_vectors(frozen):
         assert v["key"] == "sha512:" + hashlib.sha512(b"verity-key/v1\n" + v["canonical"].encode()).hexdigest(), v["name"]
 
 
+def test_the_listing_s_keyer_is_the_key(frozen):
+    fd = {f["path"]: f["digest"] for f in frozen["files"]}
+    key = contract.keyer(fd)
+    for v in frozen["keys"]:
+        assert key(v["task"], v["read_digests"], v["env_digest"]) == v["key"], v["name"]
+    for p in fd:
+        t = _task("test-file:x", "test-file", inputs=[p], argv=['"inputs":[', p], vars={"inputs": '"inputs":['})
+        assert key(t, {}, "e") == contract.key(t, fd, {}, "e"), p
+
+
 def test_the_vectors_are_the_cases(frozen):
     """The file is what CASES make: a change to either is a change to the contract, made with `--write`."""
     assert frozen == vectors()
@@ -117,9 +127,10 @@ def test_unicode_paths_sort_by_code_point_not_utf16(frozen):
     assert got == ["tests/\u00fc.py", "tests/\uff21.py", "tests/\U0001f600.py"]
 
 
-def test_the_key_leaves_out_about_resources_timeout_and_id():
+def test_the_key_leaves_out_about_resources_timeout_priority_and_id():
     fd, ed = file_digests(), env_digests()
-    other = {**A, "id": "test-file:b", "about": "x", "resources": {"cores": 9, "mem_gb": 9, "disk_gb": 9}, "timeout_s": 1}
+    other = {**A, "id": "test-file:b", "about": "x", "resources": {"cores": 9, "mem_gb": 9, "disk_gb": 9}, "timeout_s": 1,
+             "priority": 7}
     assert contract.key(A, fd, {}, ed["py"]) == contract.key(other, fd, {}, ed["py"])
     assert contract.key(A, fd, {}, ed["py"]) != contract.key({**A, "vars": {"x": ""}}, fd, {}, ed["py"])
 

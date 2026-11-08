@@ -29,7 +29,7 @@ def good_run(sm: int = 120) -> dict:
         skipped = 0 if name in IP.FLOAT else 3
         lines.append({"check": name, "cases": n - skipped, "skipped": skipped,
                       "subnormal_in": 7 if name in IP.FLOAT else 0,
-                      "subnormal_out": 5 if name in IP.FLOAT and name not in IP.SQRT else 0, "bad": 0, "first": [0] * 4})
+                      "subnormal_out": 5 if name in IP.FLOAT and name not in IP.NORMAL else 0, "bad": 0, "first": [0] * 4})
     return {"exit": 0, "stderr": "", "lines": lines, "lease_uuid": UUID.upper()}
 
 
@@ -87,8 +87,8 @@ def test_a_toolkit_names_its_target_and_a_run_has_one():
 
 
 def test_only_an_sm90_card_runs_the_units_checks():
-    """units.cu's bodies are sm_90a's, so an H200's run must hold all five checks to them, subnormals included, and an
-    RTX PRO 6000's run has none of them."""
+    """units.cu's and hash_decode.cuh's bodies are sm_90a's, so an H200's run must hold all their checks to them, subnormals
+    included (outputs but where none can be), and an RTX PRO 6000's run has none of them."""
     h200 = good_run(90)
     assert IP.UNITS_CASES and set(IP.UNITS_CASES) <= IP.FLOAT and not set(IP.UNITS_CASES) & set(IP.CASES)
     for name in IP.UNITS_CASES:
@@ -98,6 +98,10 @@ def test_only_an_sm90_card_runs_the_units_checks():
     assert any("subnormal outputs" in p for p in IP.judge_run(with_check(h200, "units_soft_one", subnormal_out=0),
                                                               control=False, sm=90))
     assert IP.judge_run(with_check(h200, "units_sqrt", subnormal_out=0), control=False, sm=90) == []
+    for name in ("norm_two", "norm_one"):
+        assert IP.judge_run(with_check(h200, name, subnormal_out=0), control=False, sm=90) == []
+        assert any(f"{name}: 0 subnormal inputs" in p for p in IP.judge_run(with_check(h200, name, subnormal_in=0),
+                                                                            control=False, sm=90))
     sm120 = {**good_run(), "lines": good_run()["lines"] + [ln for ln in h200["lines"] if ln.get("check") == "units_rms_rs"]}
     assert any("unknown checks ['units_rms_rs']" in p for p in IP.judge_run(sm120, control=False))
 

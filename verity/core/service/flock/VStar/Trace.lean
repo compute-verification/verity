@@ -1,8 +1,9 @@
-import Flock.HmRow
-import VStar.In
+module
+
+public import VStar.In
 
 /-!
-# The trace assigner: the witness the deployed C-Flock prover assigns a part's circuit at its port inputs
+# The trace assigner: the witness the deployed Flock prover assigns a part's circuit at its port inputs
 
 `assign c pin mask` is the hidden vector `flock-circuit prove` commits for circuit `c` at the port inputs `pin`
 (`VStar.In.PartIn`, what the stager writes to the part's `inst.bin`), block-major: bit `col` of block `b` at
@@ -25,6 +26,8 @@ import VStar.In
 slot other than a row's (a tail, which `converge` would iterate). `digests` is what the difftest compares
 (`flock-trace`, `vstar-trace`): each block's and each range's SHA-512 of its bits packed eight to a byte, low bit first.
 -/
+
+@[expose] public section
 
 namespace VStar.Trace
 

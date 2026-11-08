@@ -1,12 +1,14 @@
 """The test-file family: on this tree its tasks are the test files `suites.py` runs; on a toy checkout its listing is the same
-bytes from any checkout of the same files, and a test file's inputs are its conftests, the `__init__.py` files their import runs,
-their import closure, what they start, the suite's declared data, the pyprojects above it and the read guard; and its runner's
+bytes from any checkout of the same files, a suite check runs after its Lean steps makes none, and a test file's inputs are its conftests, the `__init__.py` files their import runs,
+their import closure, what they start, the suite's declared data and reads, the pyprojects above it and the read guard; and its runner's
 status is pytest's verdict on the file under the read guard: a pass, a fail when a test or its collection failed, an error when
 the file read outside its inputs or pytest was killed."""
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -14,6 +16,7 @@ import pytest
 from conftest import toy_tree
 
 from verity_graph import ROOT, graph, runners
+from verity_graph.families import build
 from verity_graph.families import test_file as family
 from verity_graph.runners import test_file as runner
 
@@ -140,6 +143,89 @@ def test_a_test_file_s_inputs(tmp_path):
         "import_module(name) is followed only for a constant name"
 
 
+def test_a_suite_check_runs_after_its_lean_steps_makes_no_test_file_task(tmp_path):
+    """A suite `suites.AFTER_LEAN` names, by its name or its path, runs once: as the build family's lean-suites task, after
+    lean-build has built what it runs, never as test-file tasks besides; in a tree without the verifier, which lists no
+    lean-suites task, its files are test-file tasks, as check runs it with the rest there."""
+    pytest_ = '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+    files = {**SUITE, build.SUITES: 'AFTER_LEAN = ("toy-suite", "t")\n',
+             "t/pyproject.toml": f'[project]\nname = "toy-t"\n{pytest_}', "t/tests/test_t.py": "def test_t():\n    pass\n",
+             "u/pyproject.toml": f'[project]\nname = "toy-u"\n{pytest_}', "u/tests/test_u.py": "def test_u():\n    pass\n"}
+    plain = toy_tree(tmp_path / "plain", SPEC, files)
+    assert [t["id"] for t in family.tasks(plain, graph.tracked(plain))] == [
+        "test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py",
+        "test-file:s/tests/test_d.py", "test-file:t/tests/test_t.py", "test-file:u/tests/test_u.py"]
+    assert build.tasks(plain, graph.tracked(plain)) == []
+    lean = {f"{build.LEAN}/lakefile.toml": 'defaultTargets = ["v"]\n[[lean_exe]]\nname = "v"\n', f"{build.LEAN}/V.lean": ""}
+    root = toy_tree(tmp_path / "tree", SPEC, {**files, **lean})
+    assert [t["id"] for t in family.tasks(root, graph.tracked(root))] == ["test-file:u/tests/test_u.py"]
+    assert [t["id"] for t in build.tasks(root, graph.tracked(root)) if t["kind"] == "lean-suites"] == [
+        "lean-suites:toy-suite", "lean-suites:t"]
+
+
+WALKS = {
+    **SUITE,
+    "t/pyproject.toml": ('[project]\nname = "toy-walks"\ndependencies = ["toy-lib"]\n\n[tool.pytest.ini_options]\n'
+                         'testpaths = ["tests"]\n\n[tool.verity.tests]\nuntraced = ["tests/test_m.py"]\n\n[[tool.verity.tests.reads]]\ntests = ["tests/test_w*.py"]\npaths = ["lib/assets", "lib/toy_lib/plugins/*.json"]\n'),
+    "t/tests/__init__.py": "",
+    "t/tests/deep/test_e.py": ('import subprocess\nimport sys\n\n\ndef test_e():\n'
+                               '    subprocess.run([sys.executable, "-c", "import json; from toy_lib import helper\\nimport toy_lib.cli"])\n'),
+    "t/tests/test_m.py": ('import tomllib\nfrom pathlib import Path\n\nROOT = Path(__file__).parents[2]\n\n\ndef test_m():\n'
+                          '    for m in tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]:\n'
+                          '        assert (ROOT / m / "pyproject.toml").is_file()\n'),
+    "t/tests/build.py": "from torch.utils.cpp_extension import load_inline\n",
+    "t/tests/test_native.py": "import build\n\n\ndef test_native():\n    pass\n",
+    "t/tests/test_walk.py": ('from pathlib import Path\n\n\ndef test_walk():\n'
+                             '    assert sorted(Path(__file__).parents[2].glob("lib/**/*.txt"))\n'),
+}
+
+
+def test_what_a_test_file_reads_that_its_source_does_not_name(tmp_path):
+    root = toy_tree(tmp_path / "tree", SPEC, WALKS)
+    by = {t["id"]: set(t["inputs"]) for t in family.tasks(root, graph.tracked(root))}
+    e = by["test-file:t/tests/deep/test_e.py"]
+    assert "t/tests/__init__.py" in e, "pytest imports a Package node's __init__.py above a directory that isn't one"
+    assert {*LIB, "lib/toy_lib/cli.py"} <= e, "the modules the program it hands `python -c` imports"
+    m = by["test-file:t/tests/test_m.py"]
+    assert {"lib/pyproject.toml", "s/pyproject.toml"} <= m, "each member's pyproject for a test that reads the root's members"
+    assert "lib/pyproject.toml" not in e
+    tree = family.Tree(root, graph.tracked(root))
+    assert {*tree.under("lib"), *tree.under("t")} <= m and not m & set(tree.under("s/tests")), \
+        "a file its suite says starts a program the guard can't trace is keyed on the suite's directory and its dependencies'"
+    t = {t["id"]: t for t in family.tasks(root, graph.tracked(root))}
+    assert t["test-file:t/tests/test_m.py"]["vars"] == {"suite": "t", "untraced": "suite"}
+    assert t["test-file:t/tests/deep/test_e.py"]["vars"] == {"suite": "t"} and "lib/assets/a.txt" not in e
+    assert t["test-file:t/tests/test_native.py"]["vars"] == {"suite": "t", "untraced": "compilers"}, \
+        "a file whose closure builds native code may start a compiler"
+    plain = toy_tree(tmp_path / "plain", SPEC, {**WALKS, "t/pyproject.toml": WALKS["t/pyproject.toml"].partition("\n[[")[0]})
+    walked = {"lib/assets/a.txt", "lib/toy_lib/plugins/table.json"}
+    assert not walked & next(set(t["inputs"]) for t in family.tasks(plain, graph.tracked(plain))
+                             if t["id"] == "test-file:t/tests/test_walk.py")
+    assert walked <= by["test-file:t/tests/test_walk.py"] and not walked & e, \
+        "what its suite's [[tool.verity.tests.reads]] declare it reads, for the test files it names alone"
+
+
+def test_built_paths_are_the_expression_s_matches():
+    texts = ['a/"b"', 'x = a.b /\n  "c" / "d"', 'Path(__file__)/"x"', ' / "x"', 'a\u2003/"x"', 'f(a)\t/ \'b\' / "c"',
+             'a / b / "c"', '"q"/"x"', 'a[0].parent/"x"/"y" HERE/"z"', '\u00e9a/"x"', 'a.b.c/"x"a/"y"', "x/'", 'a/"b"/"c"/',
+             'a()/"b"', (ROOT / "tools/verity/graph/tests/test_test_file.py").read_text()]
+    for t in texts:
+        assert [m.span() for m in family._built_paths(t)] == [m.span() for m in family._BUILT_PATH.finditer(t)], t[:60]
+
+
+@pytest.mark.parametrize("reads, refused", [
+    ('tests = ["tests/test_gone.py"]\npaths = ["lib/assets"]\n', "names none of the suite's test files"),
+    ('tests = ["tests/test_walk.py"]\npaths = ["lib/gone"]\n', "is no file or directory of the tree"),
+    ('tests = ["tests/test_walk.py"]\npaths = ["."]\n', "is no file or directory of the tree"),
+    ('tests = "tests/test_walk.py"\npaths = ["lib/assets"]\n', "each a non-empty list of strings"),
+])
+def test_a_reads_entry_that_declares_nothing_is_refused(tmp_path, reads, refused):
+    py = WALKS["t/pyproject.toml"].partition("[[tool.verity.tests.reads]]")[0] + "[[tool.verity.tests.reads]]\n" + reads
+    root = toy_tree(tmp_path / "tree", SPEC, {**WALKS, "t/pyproject.toml": py})
+    with pytest.raises(ValueError, match=refused):
+        family.tasks(root, graph.tracked(root))
+
+
 def test_the_core_completes_them_from_the_table(tmp_path):
     root = toy_tree(tmp_path / "tree", SPEC, SUITE)
     t = next(t for t in graph.listing(root, listers=LISTERS)["tasks"] if t["id"] == "test-file:s/tests/sub/test_b.py")
@@ -151,8 +237,14 @@ def test_the_core_completes_them_from_the_table(tmp_path):
 
 RUNS = {
     **BASE,
-    "s/pyproject.toml": '[project]\nname = "toy-suite"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "s/pyproject.toml": ('[project]\nname = "toy-suite"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                         '[tool.verity.tests]\nuntraced = ["tests/test_git_keyed.py"]\n'),
     "s/notes.txt": "n\n",
+    "s/tests/test_git.py": "import subprocess\n\n\ndef test_git():\n    subprocess.run(['git', '--version'], check=True)\n",
+    "s/tests/test_cc.py": ("import shutil\nimport subprocess\n\nimport pytest\n\n\n"
+                           "@pytest.mark.skipif(not shutil.which('cc'), reason='no C compiler')\ndef test_cc():\n"
+                           "    subprocess.run(['cc', '--version'], check=True)\n    subprocess.run(['git', '--version'], check=True)\n"),
+    "s/tests/test_git_keyed.py": "import subprocess\n\n\ndef test_git():\n    subprocess.run(['git', '--version'], check=True)\n",
     "s/tests/test_ok.py": ('from pathlib import Path\n\n\ndef test_reads_its_env_s_spec():\n'
                            '    assert (Path(__file__).parents[2] / "uv.lock").read_text()\n'),
     "s/tests/test_bad.py": "def test_good():\n    pass\n\n\ndef test_bad():\n    assert False\n",
@@ -162,6 +254,9 @@ RUNS = {
     "s/tests/test_reads.py": ('from pathlib import Path\n\n\ndef test_reads_what_it_did_not_declare():\n'
                               '    where = "else" + "where"\n'
                               '    assert (Path(__file__).parents[2] / where / "notes.txt").read_text() == "n\\n"\n'),
+    "s/tests/test_python3.py": ("import subprocess\nimport sys\n\n\ndef test_python3_is_this_python():\n"
+                                "    out = subprocess.run(['python3', '-c', 'import sys; print(sys.prefix)'], capture_output=True, text=True)\n"
+                                "    assert out.stdout.strip() == sys.prefix\n"),
     "s/tests/test_dies.py": "import os\nimport signal\n\n\ndef test_dies():\n    os.kill(os.getpid(), signal.SIGKILL)\n",
     ".gitignore": ".lake/\n",
     "s/tests/test_lock.py": ('from pathlib import Path\n\n\ndef test_locks_a_build():\n'
@@ -178,6 +273,8 @@ def results(tmp_path_factory) -> dict[str, dict]:
     doc = graph.listing(root, listers=LISTERS)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(runner, "ROOT", root)
+        tools = {Path(w).parent for w in map(shutil.which, ("git", "cc")) if w} - {Path(sys.executable).parent}
+        mp.setenv("PATH", os.pathsep.join(map(str, sorted(tools))))
         return {Path(t["id"]).name: runners.execute(t, doc, work / Path(t["id"]).stem) for t in doc["tasks"]}
 
 
@@ -190,6 +287,7 @@ def test_a_file_whose_tests_pass_passes(results):
     assert r["status"] == "pass" and not r["undeclared_reads"], "a read of its env's spec is declared"
     assert _counts(r) == {"passed": 1, "failed": 0, "skipped": 0, "errors": 0, "exit": 0}
     assert results["test_none.py"]["status"] == "pass" and results["test_none.py"]["detail"]["exit"] == 5
+    assert results["test_python3.py"]["status"] == "pass", "a test's python3 is the runner's Python, as under `uv run`"
 
 
 def test_a_failing_test_or_collection_is_a_fail(results):
@@ -205,6 +303,18 @@ def test_a_read_outside_its_inputs_is_an_error(results):
     r = results["test_lock.py"]
     assert r["status"] == "pass" and not r["undeclared_reads"] and r["detail"]["ignored"] == [".lake/build.lock"], \
         "a file git ignores (a build's lock) is none the graph lists, so no input a key could hold"
+
+
+def test_a_program_the_guard_cannot_trace_is_an_error_unless_the_task_is_keyed_on_its_suite(results):
+    r = results["test_git.py"]
+    assert r["status"] == "error" and r["detail"]["untraced"] == ["git"] and "[tool.verity.tests] untraced" in r["detail"]["error"]
+    r = results["test_git_keyed.py"]
+    assert r["status"] == "pass" and r["detail"]["untraced"] == ["git"]
+    r = results["test_cc.py"]
+    assert r["status"] == "error" and "(cc, git)" in r["detail"]["error"], \
+        "a task whose closure builds native code may start a compiler, and nothing else untraced"
+    assert runner.allowed({"vars": {"untraced": "compilers"}}, {"/usr/bin/g++", "nvcc"})
+    assert not runner.allowed({"vars": {"untraced": "compilers"}}, {"g++", "git"}) and not runner.allowed({"vars": {}}, {"g++"})
 
 
 def test_a_pytest_killed_is_an_error(results):

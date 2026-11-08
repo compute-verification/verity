@@ -1,5 +1,7 @@
-import Proofs.Accounting.Tag.Basic
-import Definitions.Accounting.Guarantees.Tag
+module
+
+public import Definitions.Accounting.Guarantees.Tag
+import Mathlib.NumberTheory.LucasLehmer
 
 /-!
 # A partially read block's words
@@ -8,6 +10,8 @@ import Definitions.Accounting.Guarantees.Tag
 possible block along an unread word holds all `2^32` of its variants, each as likely as the block, so the best guess of
 that word is `2^-32`; along a read word the class is the block alone, so the best guess is `1`.
 -/
+
+@[expose] public section
 
 namespace Accounting.TagProofs
 

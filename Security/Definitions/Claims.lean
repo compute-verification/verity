@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Core.Boolean
-import Definitions.Core.Interaction
-import Definitions.Claims.Hm96
-import Definitions.Claims.Json
+module
+
+public import Mathlib
+public import Definitions.Core.Boolean
+public import Definitions.Core.Interaction
+public import Definitions.Core.Hm96
+public import Definitions.Claims.Json
 
 /-!
 # Claims: Flock's claim statements (frozen before any proof work)
@@ -49,7 +51,7 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
   list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
 * Completeness (`Complete`) is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512
-  with its whole output, and as the random-oracle model draws them; it fixes the length only, so `H` stays a parameter.
+  with its whole output, and as the random-oracle model samples them; it fixes the length only, so `H` stays a parameter.
   Flock's is of the deployed record's reference prover (`Flock.Deploy.P`), not of a prover the claim takes. The form
   first frozen held at an empty tape type for every verifier, and its prover was whatever its discharge chose, so an
   assembled claim's completeness premise was met for free.
@@ -62,16 +64,18 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's), hm96's hiding, `Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`, which the soundness proofs read), and the JSON library's specification, `JsonSpec`
-(`Definitions/Claims/Json.lean`, which only completeness reads). What the claims rest on and no Lean statement can say
-is `trustedBase`.
+The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's) and hm96's hiding, `Hm96Hiding`
+(`Definitions/Core/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
+is `trustedBase`. The texts the canonical printer prints are ASCII without DEL, `Json.Ascii`
+(`Definitions/Claims/Json.lean`), which only completeness reads.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here but `Flock.ZK`, and the shared forms of `Definitions/Core/Interaction.lean` they instantiate, and by
 `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock records each one's text
 under `reads`, so a changed claim is a changed record.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -167,8 +171,8 @@ any number of stages the verifier evaluates, reading wires from earlier outputs,
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
 row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
 (`rowsV1`, `rowsV2OrSeg`) read. A templated statement (`templated`: its unit read from a template, the unit's fields
-those of the unit it unrolls to) only under `--zk`, with hidden outputs, without registered reads and at one table, its
-unit reading one input group and returning the outputs. -/
+those of the unit it unrolls to) only under `--zk`, with hidden outputs and at one table, its unit reading one input
+group and returning the outputs. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
@@ -178,7 +182,7 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg)) ∧
-    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ ¬ s.form.registeredReads ∧ s.form.tables ≤ 1 ∧
+    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ s.form.tables ≤ 1 ∧
       s.form.unitInputGroups = 1 ∧ ¬ s.form.tail)
 
 /-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.

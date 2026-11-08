@@ -1,5 +1,37 @@
-import Proofs.Flock.Claims.ZK.Refine
-import Proofs.Flock.Claims.ZK.Coins
+module
+
+public import Proofs.Flock.Claims.ZK.Refine
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A history the release's coin check passes, at every tape
@@ -8,7 +40,8 @@ The release reads the transport's coin check at the tape's nonce (`LeanRelease.o
 that check is the session's (`LeanRelease.checkIs_coinLayer`, from `LeanRelease.HelloParses` and
 `LeanRelease.ReqsFollow`). Those premises leave the frame rounds a history to be live at: at every tape, past the
 server's `Hello` and the link, there is a history whose answer and first opening the check passes
-(`LeanRelease.opens_coinPass`), so the coins the frame takes there are the frame's own (`answered = frameAnswer`). A
+(`LeanRelease.opens_coinPass`), so where the frame took the link's coins, the coins it takes there are its own
+(`answered = frameAnswer`). A
 premise that asked the openings to pass under every nonce would leave none, since the walk keys every hash with it.
 
 * `ansOf ν p b k`: `Hello`'s answer, `Resp::Coins` of 20 words: the root the opening `b` of the place `p` walks to under
@@ -25,6 +58,8 @@ Whether the frame round there is live reads nothing more of the check: it is the
 (`frameAnswer`) and the round (`Frame.round`). `HelloParses` and `ReqsFollow` are hypotheses here, as
 `Flock.zk_server_lean_coinLayer` takes them; at the session loop both are theorems (`Claims/ZK/SessionLean.lean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.CoinPass
 
@@ -204,8 +239,8 @@ namespace LeanRelease
 the session's `Hello` with the tape's nonce (`HelloParses`), the transport requests the openings at the
 schedule's places (`ReqsFollow`), coin `0`'s place is in the schedule and the protocol has a coin, the check passes
 `Hello`'s answer `ansOf` (the root the opening `b` walks to under the tape's nonce and the key `k`) and the opening
-`openMsg` of coin `0`, at every tape, key with bit 2047 clear and opening that reads back. There the coins the frame
-takes are its own (`frameAnswer`). -/
+`openMsg` of coin `0`, at every tape, key with bit 2047 clear and opening that reads back. There, where the frame took
+the link's coins, the coins it takes are its own (`frameAnswer`). -/
 theorem opens_coinPass (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg)
     (hP : HelloParses nr T L x) (hF : ReqsFollow nr T L x) (hok : (CoinLayer.place nr x 0).ok = true)
@@ -214,6 +249,8 @@ theorem opens_coinPass (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (hbit : k.getD 255 0 &&& 0x80 = 0) :
     L.opens x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k),
         (m₁, CoinPass.openMsg (CoinLayer.place nr x 0) b)] = true ∧
+      ∀ {m : _root_.Flock.Firewall.Frame.Masker},
+      L.answered x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k)] = .ok m →
       L.answered x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k),
           (m₁, CoinPass.openMsg (CoinLayer.place nr x 0) b)] =
         L.frameAnswer x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k),
@@ -228,7 +265,7 @@ theorem opens_coinPass (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     have hi0 : i = 0 := by simpa using hi
     subst hi0
     exact CoinPass.chkAt_open (CoinLayer.place nr x) 0 hok (CoinLayer.nb ν) b k hb hk hbit
-  exact ⟨ho, L.answered_of_opens x (ν, t) _ ho⟩
+  exact ⟨ho, fun hA => answered_append hA (m₁, CoinPass.openMsg (CoinLayer.place nr x 0) b) ho⟩
 
 /-- **`opens_coinPass` at the all-zero key and opening.** -/
 theorem opens_coinPass_zeros (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)

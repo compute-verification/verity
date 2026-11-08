@@ -8,7 +8,20 @@ a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words,
 labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
 read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
 -/
-import Flock.RecCoins
+module
+
+public import Flock.RecCoins
+public import Flock.Sizes
+public import Std.Data.HashMap
+public import Std.Data.HashSet
+public import Std.Data.TreeMap.Raw.Lemmas
+meta import Flock.RecCoins
+meta import Flock.Sizes
+meta import Std.Data.HashMap
+meta import Std.Data.HashSet
+meta import Std.Data.TreeMap.Raw.Lemmas
+
+@[expose] public section
 
 namespace Flock.Test.RecCap
 

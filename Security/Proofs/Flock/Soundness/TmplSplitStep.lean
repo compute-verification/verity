@@ -1,4 +1,13 @@
-import Proofs.Flock.Soundness.TmplSplitVal
+module
+
+public import Proofs.Flock.Soundness.TmplSplitVal
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldRef
+import Std.Data.HashMap.Lemmas
 
 /-!
 # What `walk` reads, against `refVal`
@@ -10,6 +19,8 @@ import Proofs.Flock.Soundness.TmplSplitVal
 - `forIn_list_sumS`, `forIn_range_sumS`, `forIn_array_sumS`, `sv_bind_ok`: `walk`'s loops and binds in `StateT`, each step
   adding a known term while an invariant of the value and the state holds.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

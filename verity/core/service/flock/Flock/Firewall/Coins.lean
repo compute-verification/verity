@@ -18,8 +18,12 @@ coin it hands on: the session's `Hello` (the spec, the link points' count and th
 the key), then each opening in the order the prover asks for them. The first refusal ends the session: nothing after it
 is checked, so no coin after a refused opening is handed on.
 -/
-import Flock.CoinTree
-import Flock.Hm96
+module
+
+public import Flock.CoinTree
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock.Firewall.Coins
 
@@ -28,7 +32,7 @@ open Lean (Json)
 /-- The prefix of a refusal: the prover stops there, before it uses any coin of the round (`coin_tree::Checked`). -/
 def STOP : String := "PROVER-STOPPED: "
 
-/-- The stream of the session's own round: the link points, drawn at `Commit` (`coin_tree::SESSION`). -/
+/-- The stream of the session's own round: the link points, sampled at `Commit` (`coin_tree::SESSION`). -/
 def SESSION : String := "session"
 
 /-- `SHA-512(ν ‖ m)`. -/
@@ -128,7 +132,7 @@ structure Hello where
 /-- **The session's `Hello`**, as the prover sent it: its nonce (`coins.nonce`, 64 lowercase hex digits, `coin_tree::hello_nonce`),
 the tree it names (`CoinTree.ofHello`) and its link points. -/
 def Hello.parse (h : String) : Except String Hello := do
-  let j ← (Json.parse h).mapError (s!"{STOP}Hello is not JSON: {·}")
+  let j ← (JsonParse.parse h).mapError (s!"{STOP}Hello is not JSON: {·}")
   let some n := (j.getObjVal? "coins").toOption.bind (·.getObjValAs? String "nonce" |>.toOption)
     | throw s!"{STOP}Hello carries no coin-tree nonce (coins.nonce)"
   if !CoinTree.isHex 64 n then throw s!"{STOP}Hello's coin-tree nonce is not 64 lowercase hex digits"

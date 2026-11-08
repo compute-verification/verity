@@ -1,23 +1,24 @@
 """The live statements difftest's cases: the arguments of `credit._live_verified`'s `lived` (the Lean
-`PouwCheck.LiveVerified`), a served window's live@<s> statements, its period's committed circuit files, the tables its
-live units read and the verifier of record's answers.
+`PouwCheck.LiveVerified`), a served execution phase's live@<s> statements, its credit period's committed circuit files, the tables its
+live units read and the verifier's answers.
 
 A `live_verified` case is a live Program (`pouw_credit_cases.live_program`, at T of one to four rows, one to three
 rounds, under a prefix or none), its registered entries (each round's slot table and round 0's request table, T rows
-each, `credit._live_roots`', with other values beside them), each step's m_s (at most T), the window Program's digest,
-its open root, its session and its period's committed max_tokens (fewer or more requests than T), one statement a round in a shuffled order (its circuit and public files' paths and one or
-two sessions' directories), the committed circuit files (the live template's among them), and `runs`: null, the first
+each, `credit._live_roots`', with other values beside them), each step's m_s (at most T), the execution phase Program's digest,
+its open root, its session and its credit period's committed max_tokens (fewer or more requests than T), one statement a round in a shuffled order (its circuit and public files' paths and one or
+two sessions' directories), the committed circuit files (the live template's among them, and perhaps a K in the lanes
+form, `lanes_files`), and `runs`: null, the first
 of the Lean's two calls (`credit._lean_live_verified`), or the answers the served path gives: one a statement
 `credit._live_asks` names, in its order, until one the Lean refuses at, each session accepted with its round's unit and
 its registered finding the ``--registered`` file's ports at their values and roots.
 
-Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form, drop the live
-circuit file, break the statements' form, name a round past the window's or one twice, give a descriptor that is no
+Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form or their lanes
+form (``files-lanes``), drop the live circuit file, break the statements' form, name a round past the execution phase's or one twice, give a descriptor that is no
 v2 live Program (``not-live``, a v1 Program among them), and leave a live table unregistered, registered twice or at other than T rows
 (``no-table``). Its mutations of the answers (`RUN_NAMES`) make one statement's verifier fail to run (``error``) or
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
 
-`tests/test_live_verified_difftest.py` draws them for the harness, replaying `runs` as the verifier
+`tests/test_live_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier
 (`pouw_verified_cases.replay`).
 """
 from __future__ import annotations
@@ -27,9 +28,10 @@ import random
 
 import pouw_credit_cases as C
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.pouw import live_reads as LR
 
-PRE_NAMES = ["files-form", "no-live-file", "statements-form", "round-past", "twice", "not-live", "no-table"]
+PRE_NAMES = ["files-form", "files-lanes", "no-live-file", "statements-form", "round-past", "twice", "not-live",
+             "no-table"]
 RUN_NAMES = ["error", "refused", "rejected", "unit-other"]
 NAMES = PRE_NAMES + RUN_NAMES
 
@@ -89,6 +91,8 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
                    "sessions": [f"/w/live-{s}/s{j}" for j in range(rng.randint(1, 2))]} for s in range(steps)]
     rng.shuffle(statements)
     files = {Cr.LIVE: C._hex(rng), **{f"k{k}": C._hex(rng) for k in rng.sample([64, 128, 4096], rng.randint(0, 2))}}
+    if name == "files-lanes" or rng.random() < 0.4:
+        files |= lanes_files(rng)
     entries = _entries(rng, prefix, t, steps)
     case = {"files": files, "statements": statements, "descriptor": C.live_hex(p), "entries": entries,
             "ms": [rng.randint(0, t) for _s in range(steps)], "program": C._hex(rng), "window": C._hex(rng),
@@ -101,6 +105,8 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
         case "files-form":
             case["files"] = rng.choice([[], None, {**files, Cr.LIVE: C._hex(rng).upper()},
                                         {**files, "k32": C._hex(rng)[:-2]}, {**files, "x": 7}])
+        case "files-lanes":
+            case["files"] = broken_lanes(rng, files)
         case "no-live-file":
             del files[Cr.LIVE]
         case "statements-form":
@@ -135,9 +141,31 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
     return case
 
 
-#: each way a period's open commits no circuit files of `credit.committed_files`' form: none, null, empty, a list, a key
-#: that is no template (``k0``, ``k064``, ``K64``, ``x``), or a digest that is none (upper case, short, a number)
-FILES_NAMES = ["honest", "files-none", "files-null", "files-empty", "files-list", "files-key", "files-digest"]
+def lanes_files(rng: random.Random) -> dict:
+    """A K committed in the lanes form (`credit.lanes_files`): ``lane<K>`` and ``combine<K>``, and their leaf
+    Programs' digests in `credit.LEAF_PROGRAMS`, at a K no ``k<K>`` here commits."""
+    k = rng.choice([384, 448])
+    names = [f"lane{k}", f"combine{k}"]
+    return {**{x: C._hex(rng) for x in names}, Cr.LEAF_PROGRAMS: {x: C._hex(rng) for x in names}}
+
+
+def broken_lanes(rng: random.Random, files: dict) -> dict:
+    """`files` (holding the lanes form) not in it: a K's combine dropped, the K also committed as ``k<K>``, its leaf
+    Programs dropped, null, over other files or not digests."""
+    k = next(int(x[len("lane"):]) for x in files if x.startswith("lane"))
+    progs = files[Cr.LEAF_PROGRAMS]
+    return rng.choice([{x: v for x, v in files.items() if x != f"combine{k}"}, {**files, f"k{k}": C._hex(rng)},
+                       {x: v for x, v in files.items() if x != Cr.LEAF_PROGRAMS}, {**files, Cr.LEAF_PROGRAMS: None},
+                       {**files, Cr.LEAF_PROGRAMS: {**progs, "lane32": C._hex(rng)}},
+                       {**files, Cr.LEAF_PROGRAMS: {x: v[:-2] for x, v in progs.items()}},
+                       {**{x: v for x, v in files.items() if x != Cr.LEAF_PROGRAMS}, Cr.LEAF_PROGRAMS: {}}])
+
+
+#: each way a credit period's open commits no circuit files of `credit.committed_files`' form: none, null, empty, a list, a key
+#: that is no template (``k0``, ``k064``, ``K64``, ``x``, ``lane0``), a digest that is none (upper case, short, a
+#: number), or files not in the lanes form (``files-lanes``, `broken_lanes`); ``lanes``, a K in that form
+FILES_NAMES = ["honest", "lanes", "files-none", "files-null", "files-empty", "files-list", "files-key", "files-digest",
+               "files-lanes"]
 
 
 def files_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -149,6 +177,10 @@ def files_instance(rng: random.Random, name: str = "honest") -> dict:
     match name:
         case "honest":
             committed = {Cr.CIRCUIT_FILES: files}
+        case "lanes":
+            committed = {Cr.CIRCUIT_FILES: {**files, **lanes_files(rng)}}
+        case "files-lanes":
+            committed = {Cr.CIRCUIT_FILES: broken_lanes(rng, {**files, **lanes_files(rng)})}
         case "files-none":
             committed = {}
         case "files-null":
@@ -158,7 +190,8 @@ def files_instance(rng: random.Random, name: str = "honest") -> dict:
         case "files-list":
             committed = {Cr.CIRCUIT_FILES: rng.choice([[v], v, 7])}
         case "files-key":
-            committed = {Cr.CIRCUIT_FILES: {**files, rng.choice(["k0", "k064", "K64", "x", "lives", "k", "k1x"]): v}}
+            committed = {Cr.CIRCUIT_FILES: {**files, rng.choice(["k0", "k064", "K64", "x", "lives", "k", "k1x", "lane0",
+                                                                  "combine07", "lanes384"]): v}}
         case "files-digest":
             committed = {Cr.CIRCUIT_FILES: {**files, key: rng.choice([v.upper(), v[:-2], 7, None, [v]])}}
         case _:

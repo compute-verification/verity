@@ -1,0 +1,17 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "replay",
+ "model": "GLM-5.3",
+ "status": "measured",
+ "provisional": true,
+ "source": "a replay re-runs its replay block's whole batch from the block's edge state in the served batch layout, at 0.97-1.02x serving's busy GPU-seconds (measured on Moonlight at 1x H200 and on GLM-5.3 at TP8, mid-traffic); GLM-5.3 replays bit-exact at TP8 with the deterministic DSA top-k, so a sampled request costs its replay block's whole batch unless kernels are batch-invariant",
+ "runs": [
+  "r20261107-125416-f460"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "factor": 1.0,
+  "batch_layout": "served",
+  "deterministic": true
+ }
+}

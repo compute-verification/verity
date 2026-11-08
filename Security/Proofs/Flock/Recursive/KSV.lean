@@ -1,8 +1,41 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
-import Proofs.Flock.Claims.Recursion.RegSetupOpens
+module
+
+public import Proofs.Flock.Claims.Recursion.KSDec
+public import Proofs.Flock.Claims.Recursion.RegSetupOpens
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Recursive.KSStatement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-import Proofs.Flock.Claims.Recursion.KSDec
 
 /-!
 # `RecursiveKSAt` from `DecompBV`
@@ -16,6 +49,8 @@ through the setup's openings (`RecDeploy.bc_eq_of_setup`). The extra calls `layR
 relation (`moreSlotsTrue_deployed`), as in `recursiveKSAt_of`. `recursiveKSAt_ofVD` is the same with each part's check
 read at its decision (`ResLower.showsDec`), which the run supplies (`RecDeploy.stagedB_deployRec_dec`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

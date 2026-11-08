@@ -1,4 +1,6 @@
-import Evaluate.TC.Fp8Atom
+module
+
+public import Evaluate.TC.Fp8Atom
 
 /-!
 # The block-scaled FP4 tensor-core steps: `verity.ml.circuits.silicon.models.BlockScaledAlignAdd`
@@ -10,6 +12,8 @@ where the Python model raises; `Fp4Atom.sumNegative`, the sign the MXFP4 primiti
 transcribed from `prims._block_scaled_sum_negative` (Security: none yet). Each definition names the Security definition it
 must equal, to be proved where the equalities live, since code never requires `Security/`.
 -/
+
+@[expose] public section
 
 namespace Evaluate.TC.Fp4
 

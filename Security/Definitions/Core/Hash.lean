@@ -1,5 +1,8 @@
-import Mathlib.Data.Nat.Size
-import Definitions.Core.Digest
+module
+
+public import Definitions.Core.Digest
+public import Mathlib.Data.Nat.Bits
+public import Mathlib.Data.Nat.Size
 
 /-!
 # Messages, digests, collisions, and the byte encodings (trusted)
@@ -10,7 +13,7 @@ formats below (frame-v3-sha512's ids, leaves and nodes, hm96-sha512's `x`, `b` a
 digests), so a concatenation of digests splits back into them.
 
 A collision of `H` is two different messages with one image (`Collision`), and `H` has one when some pair is
-(`HasCollision`). The claims (`Claims.Collision`) and C-Flock's Merkle trees (`FlockSoundness.Merkle.Collision`) read
+(`HasCollision`). The claims (`Claims.Collision`) and Flock's Merkle trees (`FlockSoundness.Merkle.Collision`) read
 these. A collision *among* a list of inputs (`CollisionIn`) has both inputs in the list, read on a digest's bytes: that is
 how a statement ties a break to the inputs a run itself hashed (every `∃` in a break is bounded by
 something the run carries).
@@ -19,6 +22,8 @@ The encodings are the formats' own: `be k n`, `n` big-endian in `k` bytes (u32be
 the fewest bytes, one byte for 0 (`merkle.py`'s `uint`); `cstr s`, a tag's bytes and its terminating zero byte; and
 `padTo n m`, `m` zero-padded to `n` bytes (a tag block).
 -/
+
+@[expose] public section
 
 namespace Hash
 

@@ -1,5 +1,6 @@
-import Definitions.Pouw.Dimension.Defs
-import Definitions.Pouw.Assumptions.Dimension.Assumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 
 /-!
 # The mixing lemma: Theorem D in AlgM_4090 (trusted statements)
@@ -19,6 +20,8 @@ difference is a representation effect (products that alias through `x² = x` on 
 The mixing lemma is `cost ≥ 16·|B| + c_s·|R|`, `|B| ≥ D − dim W` and `|R| ≥ L(W)`, for `W = T ∩ (span R ⊔ V₀)` and
 `D = dim T` (`MixingLemma`). With A1(c, γ₁) and `c·c_s ≥ 16` it gives `cost ≥ 16·(1 − γ₁)·D` (`AlgBound4090`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

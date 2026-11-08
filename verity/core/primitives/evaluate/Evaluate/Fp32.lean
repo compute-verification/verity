@@ -1,4 +1,6 @@
-import Evaluate.Scalar
+module
+
+public import Evaluate.Scalar
 
 /-!
 # The FP32 and BF16 arithmetic primitives
@@ -17,6 +19,8 @@ GPU's `F32_NAN_PTX`, the FMAs of `_v1` `F32_NAN`, and the `_v1` add, sub, mul an
 Security does not state: the Python computes them in numpy `float32` on x86-64, whose SSE arithmetic returns a NaN operand
 quieted, or `0xFFC00000` for an invalid operation.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Fp32
 

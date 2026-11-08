@@ -1,5 +1,7 @@
-import Mathlib.Data.Nat.Bitwise
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Definitions.Core.Boolean
+import Mathlib.Data.List.GetD
 
 /-!
 # Rows from a gate circuit (`flock-ir-unit/v2`)
@@ -14,6 +16,8 @@ A row's columns are a bitmask, so that the derivation computes with `Nat.xor`, w
 evaluates natively. `psum z m n` is the parity of `z` over the bits of `m` below `n`, and
 `xorSum_eq_psum` relates it to the audit's `xorSum` over a list of columns.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.GateRows
 

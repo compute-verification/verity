@@ -1,5 +1,13 @@
-import Proofs.Properties.Pous.MemoryChallenger.Tree
+module
+
+public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Batteries.Data.List.Basic
+import Batteries.Lean.Except
+import Mathlib.Data.Finset.Attr
 import Mathlib.Data.List.Forall2
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # What the session's hashes read
@@ -9,6 +17,8 @@ import Mathlib.Data.List.Forall2
 and records root (`session_split`), the signed message's input into its record (`signed_split`), a round's value into
 its round (`value_inj`, `rounds_inj`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.Inputs
 

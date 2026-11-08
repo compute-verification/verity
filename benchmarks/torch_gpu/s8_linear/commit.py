@@ -37,8 +37,8 @@ overstates the commit's share of a whole step. The whole step (the model's layer
     by_slot              the same rows slot-major, one table a sequence slot (its every op of every layer as rows) as one
                          subtree each, EMULATED with the kernels as they are: a table takes one row width, so every row has
                          the layer's mean width (value bytes equal to within rounding)
-    need_gbs             the whole step's value bytes over the estimated step time (`STEP_S`), beside their
-                         figures for mha8k: 134 GB/s every op, 93 fused
+    need_gbs             the whole step's value bytes over the estimated step time (`STEP_S`), beside the
+                         estimated rates for mha8k (`NEED_MHA8K_GBS`)
 
     python commit.py --out OUT [--models mqa16k,mha8k] [--ms 64,256,1023,4096] [--sets quantize,fused,every] [--reps 15]
 Writes commit.jsonl (a row per model, set and M) and commit.json; exits 4 when a check fails.
@@ -52,23 +52,28 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
-import fixture as FX  # noqa: E402
-import int_mm as IM  # noqa: E402
 import kbench  # noqa: E402
-import run as R  # noqa: E402
 from verity_vllm.commit import row_tables as RTB  # noqa: E402
 from verity_vllm.commit import row_tables_device as D  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
+import fixture as FX  # noqa: E402
+import int_mm as IM  # noqa: E402
+import run as R  # noqa: E402
+
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))
 SETS = FX.TABLE_SETS
-#: the estimated decode step (s): mha8k 195 ms, mqa16k 1.44 s
+#: each model's estimated decode step (s)
 STEP_S = {"mha8k": 0.195, "mqa16k": 1.44}
 #: the estimated committed-value rates for mha8k (GB/s): every op, fused cuts
 NEED_MHA8K_GBS = {"every": 134.0, "fused": 93.0}
@@ -89,7 +94,8 @@ def est_compressions(widths: list[int], m: int) -> tuple[int, int]:
 class Tables:
     """Tables of M rows each, (op, bytes a row, a scale word), codes random, a quantizer's scales random, other words zero."""
 
-    def __init__(self, tables: list[tuple[str, int, bool]], m: int, seed: int, ids=None):
+    def __init__(self, tables: list[tuple[str, int, bool]], m: int, seed: int,
+                 ids: list[tuple[str, int]] | None = None) -> None:
         g = torch.Generator(device="cuda").manual_seed(seed)
         self.ids = ids or [(f"r{i}", 0) for i in range(m)]
         self.tabs = {}
@@ -126,7 +132,7 @@ def tiny_check() -> dict:
 class Linears:
     """A layer's exact linears at M (weights without special scales), one CUDA graph."""
 
-    def __init__(self, md: FX.Model, m: int):
+    def __init__(self, md: FX.Model, m: int) -> None:
         self.kern = R.kernel()
         self.calls, self.gate = [], {}
         for i, (name, n, k, _q) in enumerate(md.linears):
@@ -152,7 +158,7 @@ class Linears:
             self.graph.replay()
         torch.cuda.synchronize()
 
-    def _f(self):
+    def _f(self) -> None:
         for x, sa, wt, y, cfg in self.calls:
             self.kern.call(x, sa, wt.w, wt.sw, y, cfg)
 
@@ -183,7 +189,7 @@ def linears_once(lin: Linears) -> float:
     return e0.elapsed_time(e1) * 1e3
 
 
-def overlap_once(lin: Linears, outputs: dict, step: int, pre: int, stream=None) -> dict:
+def overlap_once(lin: Linears, outputs: dict, step: int, pre: int, stream: torch.cuda.Stream | None = None) -> dict:
     for _ in range(pre):
         lin.graph.replay()
     e0 = _ev()
@@ -243,7 +249,8 @@ def timed_calls(outputs: dict, step: int, reps: int) -> dict:
             "commit_ms_all": [round(v / 1e3, 3) for v in kern], "host_ms_all": [round(v / 1e3, 3) for v in host]}
 
 
-def measure(md: FX.Model, table_set: str, m: int, a, clock, step: int) -> dict:
+def measure(md: FX.Model, table_set: str, m: int, a: argparse.Namespace, clock: Callable[[], int | None],
+            step: int) -> dict:
     tables = FX.tables(md, table_set)
     widths = [k for _, k, _ in tables]
     lay = Tables(tables, m, seed=md.d + m)
@@ -307,7 +314,8 @@ def measure(md: FX.Model, table_set: str, m: int, a, clock, step: int) -> dict:
     return row
 
 
-def whole(lay: Tables, tables, md: FX.Model, m: int, a, step: int, check: bool) -> dict:
+def whole(lay: Tables, tables: list[tuple[str, int, bool]], md: FX.Model, m: int, a: argparse.Namespace, step: int,
+          check: bool) -> dict:
     copies = max(1, min(md.layers, int(a.whole_gb * 2**30 // lay.value_bytes)))
     bufs = [lay] + [Tables(tables, m, seed=7919 * (i + 1) + m) for i in range(copies - 1)]
     outs = {}
@@ -326,7 +334,8 @@ def whole(lay: Tables, tables, md: FX.Model, m: int, a, step: int, check: bool) 
     return doc
 
 
-def by_slot(tables, md: FX.Model, m: int, a, step: int, check: bool) -> dict:
+def by_slot(tables: list[tuple[str, int, bool]], md: FX.Model, m: int, a: argparse.Namespace, step: int,
+            check: bool) -> dict:
     rows = len(tables) * md.layers
     k = 2 * math.ceil(sum(k for _, k, _ in tables) / len(tables) / 2)
     ids = [(f"u{j}", 0) for j in range(rows)]

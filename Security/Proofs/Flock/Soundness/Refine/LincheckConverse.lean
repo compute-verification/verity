@@ -1,8 +1,14 @@
-import Proofs.Flock.Soundness.Refine.Lincheck
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
-# The lincheck accepts when its checks hold (PROTOCOL.md §10)
+# The lincheck accepts when its checks hold (`Flock.Piop`)
 
 `lincheck_of_checks` is `lincheck_refines`' converse on the executable's side: the verifier's `lincheck`
 (Piop.lean:126–151) returns `.ok`, with the claim it hands on and the transcript it leaves, when
@@ -17,6 +23,8 @@ import Proofs.Flock.Soundness.Refine.Frames
 `lincheck_plays_of_checks` feeds it to `lincheck_refines`: the model's lincheck plays the proof's messages on those
 coins and returns the executable's `ab` claim.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

@@ -1,5 +1,9 @@
-import MemoryChallenger.WipeProtocol
-import Definitions.Accounting.Wipe
+module
+
+public import MemoryChallenger.WipeProtocol
+public import Definitions.Accounting.Wipe
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # An accepted wipe meets the survivor bound it publishes
@@ -36,6 +40,8 @@ condition and the bound fails. Proved from `Pous.Guarantees.StreamedWipeMeetsRea
 * `WipeSurvivorBoundNontrivial`: at one segment (`segmentParams` on `segmentDevice`), a strategy that keeps the whole
   store (`cheat`) fails the bound under a verdict that accepts every run, for every PRF.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties
 

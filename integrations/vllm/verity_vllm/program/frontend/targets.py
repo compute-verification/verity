@@ -32,6 +32,7 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
+from verity.ml.definitions.numerics import fa3_model as FA3
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import fa2_check_inf as F2
 from verity.ml.definitions.registry import attention_vocab
@@ -269,38 +270,20 @@ def check_flash_attn_registered(profile) -> int:
 
 
 def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockN of the FA3 forward vLLM launches (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90`, element_size 2,
-    causal, not local, `paged_kv_non_TMA` = paged KV without TMA, `use_one_mma_wg = (D in {64, 128}) and seqlen_q * qh_per_kvh <= 64`
-    (`hopper/heuristics.h`; `seqlen_q` = the launch's max_seqlen_q under varlen)):  D <= 64: one-MMA-warpgroup 64 x 192 else 192 x 128;
-    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal); D = 256 (qk and v head 256, GLM-5.3's dense MHA prefill): 80, the 128 x 80
-    tile whatever seqlen_q or paging.  The head dims between are not registered."""
-    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    one_wg = D in (64, 128) and seqlen_q * qh <= 64
-    if D <= 64:
-        return 192 if one_wg else 128
-    if D <= 96:
-        return 128
-    if D <= 128:
-        return 128
-    if D == 256:
-        return 80
-    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule")
+    """kBlockN of the FA3 forward vLLM launches (`fa3_model.kblock_n_for`; D = 256 is GLM-5.3's dense MHA prefill), refused at a head
+    dim it has no rule for."""
+    try:
+        return FA3.kblock_n_for(D, seqlen_q, qh_per_kvh)
+    except ValueError as e:
+        raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule") from e
 
 
 def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockM of the FA3 forward tile (the same `tile_size_fwd_sm90` / `use_one_mma_wg` rule as `fa3_kblock_n`): D <= 64: 64 (one MMA
-    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128; D = 256: 128."""
-    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    one_wg = D in (64, 128) and seqlen_q * qh <= 64
-    if D <= 64:
-        return 64 if one_wg else 192
-    if D <= 96:
-        return 192
-    if D <= 128:
-        return 64 if one_wg else 128
-    if D == 256:
-        return 128
-    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule")
+    """kBlockM of the FA3 forward tile (`fa3_model.kblock_m_for`), refused at a head dim it has no rule for."""
+    try:
+        return FA3.kblock_m_for(D, seqlen_q, qh_per_kvh)
+    except ValueError as e:
+        raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule") from e
 
 
 def fa3_check_inf(profile) -> bool:
@@ -352,8 +335,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
                              -> per request step s: every sequence the engine step schedules, its query rows and the position of its
                                 first row (`batch_by_step`); max_seqlen_q follows from it.  Without batch invariance every
                                 token-count-dependent kernel choice reads it (`launch_tokens`, `launch_keys`)
+        dict {"batch": ..., "chunks": [n0, n1, ...]}
+                             -> the same, for a request whose prefill ran in launches of n0, n1, ... rows in turn (`chunks`; the
+                                chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`): its steps are its chunks, then its decodes
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]})."""
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]},
+    + "chunks": [int, ...])."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -377,7 +364,10 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         if spec.get("conflict"):
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
         if "batch" in spec:
-            return _launch_batch(spec["batch"])
+            return _launch_batch(spec["batch"], spec.get("chunks"))
+        if "chunks" in spec:
+            raise ValueError("launch context: prefill chunks without their launch batch (on a batch-invariant target a chunked prefill "
+                             "is the request wrapper's Program)")
         src = spec.get("max_seqlen_q_by_step", spec)
         by = {int(k): int(v) for k, v in src.items()}
     else:
@@ -387,7 +377,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
 
 
-def _launch_batch(steps) -> dict[str, Any]:
+def _launch_batch(steps, chunks=None) -> dict[str, Any]:
     if not isinstance(steps, list) or not steps:
         raise ValueError(f"launch context: batch must be a non-empty list of steps, got {steps!r}")
     batch: dict[int, list[tuple[int, int]]] = {}
@@ -396,8 +386,14 @@ def _launch_batch(steps) -> dict[str, Any]:
         if not seqs or any(n < 1 or p < 0 for n, p in seqs):
             raise ValueError(f"launch context: step {s} schedules {seqs}: every step holds sequences of >= 1 rows at positions >= 0")
         batch[s] = seqs
-    return {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
-            "declared": True}
+    out = {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
+           "declared": True}
+    if chunks:
+        if not isinstance(chunks, list) or len(chunks) < 2 or len(chunks) > len(steps) or any(int(n) < 1 for n in chunks):
+            raise ValueError(f"launch context: chunks must list a prefill's two or more launches of >= 1 rows, one a step of its batch, "
+                             f"got {chunks!r} over {len(steps)} steps")
+        out["chunks"] = [int(n) for n in chunks]
+    return out
 
 
 class LaunchContextInvalid(ValueError):
@@ -446,19 +442,53 @@ def launch_sequences(step: int, launch: dict[str, Any] | None) -> list[tuple[int
     return seqs
 
 
-def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False) -> int:
+def graph_tokens(n: int, capture_sizes: tuple[int, ...] = ()) -> int:
+    """The token count a step of `n` tokens runs its captured kernels at under CUDA graphs captured at `capture_sizes`: the least
+    capture size of at least n, or n past the largest (vLLM's dispatcher runs that step uncaptured); n without graphs."""
+    fits = [s for s in capture_sizes if s >= n]
+    return min(fits) if fits else int(n)
+
+
+def graph_launch(n: int, uniform_decode: bool, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+    """vLLM d9105ea80's CUDA-graph dispatch of a step of `n` tokens under FULL_AND_PIECEWISE (`CudagraphDispatcher.dispatch`):
+    (FULL | PIECEWISE | NONE, the tokens its forward runs at).  Past the largest capture size it runs uncaptured at n; otherwise at
+    its `graph_tokens`, as a FULL graph where it is a uniform decode (one row a sequence) padded to at most `max_num_seqs` (the FULL
+    decode keys are the capture sizes up to it), else as PIECEWISE graphs.  Both modes pad alike, so no launch's token count reads
+    the mode; what does is the attention and DSA indexer, eager breaks on the real batch under PIECEWISE but captured at the padded
+    batch under FULL (`gpu_model_runner`'s `pad_attn`), the padding rows without keys."""
+    sizes = tuple(int(s) for s in capture_sizes)
+    if not sizes or n > max(sizes):
+        return "NONE", int(n)
+    padded = graph_tokens(n, sizes)
+    return ("FULL" if uniform_decode and padded <= max_num_seqs else "PIECEWISE"), padded
+
+
+def launch_graph(own_rows: int, step: int, launch: dict[str, Any] | None, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+    """`graph_launch` of the step a request's `own_rows` run in at its request `step` (the declared batch's sequences, or the request
+    alone without one): its mode and the tokens its forward runs at (`launch_tokens`)."""
+    seqs = launch_sequences(step, launch)
+    rows = [int(own_rows)] if seqs is None else [int(r) for r, _ in seqs]
+    tokens = launch_tokens(own_rows, step, launch, capture_sizes=tuple(capture_sizes))
+    mode, padded = graph_launch(sum(rows), all(r == 1 for r in rows), capture_sizes, max_num_seqs)
+    assert padded == tokens, (padded, tokens)
+    return mode, padded
+
+
+def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False,
+                  capture_sizes: tuple[int, ...] = ()) -> int:
     """The rows of the batched launch that a request's `own_rows` run in at its request `step`: the step's token count (every scheduled
     sequence's query rows), or, for the rows after the logits selection (`sampled`), its sequence count (one logits row per scheduled
     sequence: without chunked prefill every one samples).  Without a declared batch, `own_rows` (a batch of one).  A count below
-    `own_rows` is refused: the launch contains the request."""
+    `own_rows` is refused: the launch contains the request.  Under breakable CUDA graphs captured at `capture_sizes` the forward's
+    kernels run at the step's `graph_tokens`; the logits are computed outside the graphs, at the sequences."""
     own, seqs = int(own_rows), launch_sequences(step, launch)
     if seqs is None:
-        return own
+        return own if sampled else graph_tokens(own, capture_sizes)
     n = len(seqs) if sampled else sum(r for r, _ in seqs)
     if n < own:
         raise LaunchContextInvalid(f"the declared launch batch has {n} {'sequences' if sampled else 'rows'} at step {int(step)} but this request "
                                    f"alone has {own} there: the declaration is another request's context")
-    return n
+    return n if sampled else graph_tokens(n, capture_sizes)
 
 
 def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
@@ -503,8 +533,8 @@ def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
 
 def fp8_block_dot(profile):
     """The e4m3 k32 step the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`) binds on the declared target, as the version 3
-    Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8Block_v1` and its shared-scale form are that step's chain,
-    and the recorded Programs bind them).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
+    Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8BlockSharedScale_v1` is that step's chain, and the
+    recorded Programs bind it).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
     `_C.cutlass_scaled_mm` reaches another blockwise kernel there under the same op and kernel class."""
     gt = gemm_target(profile)
     dot = FP8_DOTS.get(gt.fp8_block_dot) if gt.fp8_block_dot else None
@@ -516,8 +546,8 @@ def fp8_block_dot(profile):
 
 def scaled_mm_fp8_block_spec(profile, K: int, N: int, G: int, scale: str | None = None):
     """The registered Definition of the blockwise FP8 linear on one token row on the declared target, under the scale construction
-    `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` / `ScaledMmFp8Block_v1`
-    on hopper, the version 3 forms `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
+    `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` on hopper, its
+    version 3 form `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
     return fp8_vocab.block_gemm(K, N, G, scale or profile.effective_fp8_scale_construction(), fp8_block_dot(profile))
 
 

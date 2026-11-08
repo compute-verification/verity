@@ -1,8 +1,8 @@
 """`credit`'s lanes form (`leaf_lanes`): at a K the period-open commits as ``lane<K>`` and ``combine<K>``, credit
-still draws the window's leaves, and each drawn leaf is proved as `leaf_lanes.statements` (R/4)(C/8) lanes and the
+still samples the window's leaves, and each sampled leaf is proved as `leaf_lanes.statements` (R/4)(C/8) lanes and the
 combine, each verified against its own one-call leaf Program, a population of one, with the ``--registered`` file credit
 builds at the leaf's served place, its partials ``<prefix>partials@<u>`` held to one produced record under the window's
-draw root. Every refusal of the form is shown here: ``missing``, ``outcome``, ``failed``, ``circuit``, ``proof``,
+sample root. Every refusal of the form is shown here: ``missing``, ``outcome``, ``failed``, ``circuit``, ``proof``,
 ``registration`` and ``lanes-shape``.
 
 The window is `test_circuit_h1window`'s stand-in tile at 8 × 16 (four lanes) and K = 384 and 416, so `credit.LANES_TILES`
@@ -26,7 +26,7 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.ml.circuits import codec
@@ -111,8 +111,8 @@ def _roots(w: dict) -> dict[str, str]:
 
 def prove(w: dict, to: Path, files: dict, units=DRAWN) -> tuple[dict, dict]:
     """The window's lanes evidence as an honest prover delivers it, and what each statement was proved against (by its
-    public file): each tile-form call's statement as `test_pouw_credit_statements.prove`'s, and each drawn lanes-form
-    leaf's partials committed under the draw root and its lanes and combine, each against its leaf Program, its
+    public file): each tile-form call's statement as `test_pouw_credit_statements.prove`'s, and each sampled lanes-form
+    leaf's partials committed under the sample root and its lanes and combine, each against its leaf Program, its
     `leaf_partition_of` query and `h1window.leaf_reads_file`'s served file with `h1window.leaf_known_ports`."""
     prog, digest, layout, shape = w["prog"], w["digest"], w["layout"], w["shape"]
     (r, c), roots, rng = LEAF, _roots(w), random.Random(0)
@@ -171,7 +171,7 @@ def prove(w: dict, to: Path, files: dict, units=DRAWN) -> tuple[dict, dict]:
 
 
 def runner(proved: dict, tamper=None):
-    """The stand-in verifier of record: accepts each session exactly when it was handed the files its statement was
+    """The stand-in verifier: accepts each session exactly when it was handed the files its statement was
     proved against, and reports the program, registered finding, units and openings (each `tamper`ed per statement)."""
     def run(proof: PF.Proof, *, circuit_sha512, program, partition, registered):
         want = proved[str(proof.public)]
@@ -197,9 +197,9 @@ def _leaf_statements(evidence: dict, u: int | None = None) -> list[int]:
 
 
 def test_each_drawn_leaf_proved_as_its_lanes_and_combine_is_one_accepted_outcome(world, lanes, tmp_path):
-    """Every drawn leaf at a lanes-form K, its four lanes and its combine verified against its leaf Programs with credit's
+    """Every sampled leaf at a lanes-form K, its four lanes and its combine verified against its leaf Programs with credit's
     own files, is one accepted outcome under the window's program, its registered finding its statements' reads of the
-    window's tables (each of its tables' values, at the window's roots), which `_proved` holds to the draw. Beside a
+    window's tables (each of its tables' values, at the window's roots), which `_proved` holds to the sample. Beside a
     tile-form K's call statement, verified as before."""
     for files in (files_of(), files_of((384,), (416,))):
         evidence, proved = prove(world, tmp_path / str(len(files)), files)
@@ -250,7 +250,7 @@ def test_a_leaf_with_a_statement_missing_or_no_lanes_evidence_is_refused(world, 
 
 
 def test_leaf_statements_the_draw_did_not_ask_for_are_refused(world, lanes, tmp_path):
-    """A leaf statement proved twice (a retry), one of a unit no drawn leaf, and one that is no lane or combine of the
+    """A leaf statement proved twice (a retry), one of a unit no sampled leaf, and one that is no lane or combine of the
     tile: each refuses the window, whatever its other statements' verdicts."""
     files = files_of()
     evidence, proved = prove(world, tmp_path, files)
@@ -293,7 +293,7 @@ def test_a_leaf_program_other_than_the_committed_one_is_refused(world, lanes, tm
 
 
 def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_path):
-    """Each is ``registration``: a session reporting another root for a read; a produced record under another draw coin
+    """Each is ``registration``: a session reporting another root for a read; a produced record under another sampling coin
     or missing a leaf's partials (its P- codes); a call whose receipts the window doesn't register; a session reporting
     another opening of a partials row, or none (P-shared: a verdict without its openings, as `proofs.Finding` is today,
     fails closed)."""
@@ -333,8 +333,9 @@ def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_
 
 def test_a_drawn_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_path, monkeypatch):
     """At the served proof's reach only: a tile other than 32 × 32 is ``lanes-shape`` before anything is verified (the
-    stand-in's 8 × 16 here), and so is a K the tile check refuses, one below `h1zy.LEAST_K`, a chunked K and a J10-R
-    template, each after building its statement set (J10-R's chunk lanes and combine v2 included)."""
+    stand-in's 8 × 16 here, and a 2 × 4 tile, which has no whole lane), and so is a K the tile check refuses, one below
+    `h1zy.LEAST_K`, a chunked K and a J10-R template, the refusal read off the tile and K alone (J10-R's statement set,
+    chunk lanes and combine v2, is still `leaf_lanes.statements`')."""
     files = files_of()
     evidence, proved = prove(world, tmp_path, files)
     got, why = verified(world, evidence, files, runner(proved))
@@ -342,6 +343,7 @@ def test_a_drawn_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_p
     tile = {"tile": [32, 32]}
     plain, j10r = {"tiles": {k: {"j10r": False} for k in (352, 384, 400, 14336, 4096)}}, {"tiles": {4096: {"j10r": True}}}
     assert Cr.lanes_shape(tile, plain, 384) is None
+    assert "its 0 lanes wait" in Cr.lanes_shape({"tile": [2, 4]}, plain, 384)
     assert "fails PouwWindow.Lanes.Tile.check" in Cr.lanes_shape(tile, plain, 400)
     assert "below LEAST_K = 384" in Cr.lanes_shape(tile, plain, 352)
     assert "chunk lanes each" in Cr.lanes_shape(tile, plain, 14336)

@@ -1,5 +1,43 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.Bridge.Dead
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # One table's masked session after `Commit`, under a live strategy
@@ -14,6 +52,8 @@ openings (`nulOpZ`, `Claims.Bridge.Sim.mapDead`). The simulated `Commit` sends t
 (`simSessZG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share one cap
 (`simAtZ`, `live_le_simAtZ`, `mean_live_le_simAtZ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

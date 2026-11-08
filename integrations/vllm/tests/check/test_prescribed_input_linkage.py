@@ -9,7 +9,7 @@ to their approved source at Commit, independently of whether a random replay sam
     as an unlinked token boundary; a greedy row (no declared seed, constant S) checks nothing and says so, its verdict byte-identical.
 
 Why this is required beside the selector's evaluator: the form-(A) evaluator makes the COMMITTED seed load-bearing, not
-the DECLARED one -- a prover that commits ids drawn with its own seed replays consistently.  The linkage ties the committed word to the
+the DECLARED one -- a prover that commits ids sampled with its own seed replays consistently.  The linkage ties the committed word to the
 workload of record.  Fixtures: a `_Store` of committed words by identity (the stoch test's shape), B=1 and B=3 with staggered arrivals
 so live(s) changes and SplitsFor_v1's S changes with it (142 SMs: live 1..4 -> 32, 5..8 -> 16; 132 SMs on Hopper likewise 1..4 -> 32).
 """
@@ -312,7 +312,7 @@ def test_padrev_m0517_under_the_attested_async_scheduler_the_eos_is_at_the_step_
     assert lk0["result"] is False and lk0["unlinked"][0]["kind"] == "eos" and "sampled id 504 at the EOS step 11 (= last step 11 - lag 0)" in lk0["why"]
     # unattested (the header carries no resolved async_scheduling): refused by name, never defaulted to 0 or 1
     lkn = _lk(store, req, {"r0": None}, {0}, lag=None)
-    assert lkn["result"] is False and lkn["unlinked"][0]["kind"] == "eos" and "async_scheduling unattested, RULING 21" in lkn["why"] and "refuse by name" in lkn["why"]
+    assert lkn["result"] is False and lkn["unlinked"][0]["kind"] == "eos" and "async_scheduling unattested)" in lkn["why"] and "refuse by name" in lkn["why"]
     assert lkn["horizon"]["r0"]["eos_of_record"]["lag"] is None and lkn["horizon"]["r0"]["eos_of_record"]["verified"] is False
     # a lag outside {0, 1}: refused by name
     assert "not in {0, 1}" in _lk(store, req, {"r0": None}, {0}, lag=2)["why"]

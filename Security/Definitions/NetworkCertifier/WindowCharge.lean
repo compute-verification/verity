@@ -1,9 +1,12 @@
-import Definitions.NetworkCertifier.AdviceV1
+module
+
+public import Definitions.NetworkCertifier.AdviceV1
+import Mathlib.Tactic.Finiteness.Attr
 
 /-!
 # Advice v1's whole window charged (`ChargeCount_v2`): decisions, hits and order entries, as `code_v1` codes them
 
-Definitions only. They mirror `verity/core/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
+Definitions only. They mirror `verity/ml/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
 each Python name in its docstring: `ChargeCount_v2{N, H, O}`'s charge, the length of `code_v1._window`'s segment for
 the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
 `arith_encode.py`'s references).
@@ -34,6 +37,8 @@ circuit to the Python reference, and these definitions are held to that referenc
 **Refusals.** The reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
 returns `none` there.
 -/
+
+@[expose] public section
 
 namespace NetTiming.WindowCharge
 

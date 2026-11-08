@@ -5,7 +5,7 @@ The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) 
 answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases) in the clock form or, for a change named `rows-…`, the rows form, and
 `case` a small period of either form aimed at a verdict or at a decoding failure (`KINDS`). This module re-exports
-what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it draws onsite's certifier cases from
+what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's certifier cases from
 `build` and answers them with `reference` (`verity/core/protocols/composition/tests/reference.py`)."""
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
-#: The changes drawn more often than the rest: each form's honest period, the only accepted ones, and its undecided
+#: The changes sampled more often than the rest: each form's honest period, the only accepted ones, and its undecided
 #: answers, the only undecided ones.
 WEIGHTS = {"honest": 4, "rows-honest": 4, "answer-undecided": 2, "audit-undecided": 2, "rows-answer-undecided": 1,
            "rows-audit-undecided": 1}
@@ -126,11 +126,11 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
+    """A link-window missing one of its records' certificates, one the network certifier left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit undrawn, and a scan whose
+    no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit unsampled, and a scan whose
     state is not its wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
@@ -266,17 +266,18 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
 
 
 def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
-    """K charges an audit a scan's `prog` is tied to its free inputs and no faulty term, so the rows form refuses one
-    with a unit undrawn (`rows-tied-undrawn` above), and only such an audit: over honest rows periods, which the mirror
-    accepts, every tied audit draws all its units and some untied audit fewer, and Lean accepts each such period with
-    the mirror's public; and a mirror that skips the draw's refusal accepts what Lean refuses at the draw."""
+    """K charges an audit a scan's `prog` is tied to its free inputs and no term for its incorrect proof blocks, so the
+    rows form refuses one with a unit unsampled (`rows-tied-undrawn` above), and only such an audit: over honest rows
+    periods, which the mirror accepts, every tied audit samples all its units and some untied audit fewer, and Lean accepts
+    each such period with the mirror's public; and a mirror that skips the sample's refusal accepts what Lean refuses at
+    the sample."""
     partial = []
     for n in range(24):
         case = build("rows-honest", n)
         c = json.loads(bytes.fromhex(case["commitment"]))
         out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
-        audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
+        audits, windows = c["audits"], c["windows"]
         for i, f in enumerate(out["public"]["audits"]):
             assert f["drawn"] == f["units"] or not PC._tied_in(audits, windows, i), (n, i, f)
         if any(f["drawn"] < f["units"] for f in out["public"]["audits"]):
@@ -360,10 +361,10 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
-    """A compute audit's faulty bits are its bound times the most bits one of its Program's units commits, read off the
-    Program, not a proof unit's 16-bit public output: over honest clock-form periods whose audits' units commit 8 to
-    320 bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
-    mirror's."""
+    """The bits a compute audit's incorrect proof blocks are charged are its bound times the most bits one of its
+    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
+    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
+    than `16 · b`, and Lean's public is the mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)
@@ -419,7 +420,7 @@ def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
 
 
 def test_a_small_period_reaches_its_verdict(server):
-    """Each change's small period (`build(..., small=True)`, which the composition's difftest draws) gets the change's
+    """Each change's small period (`build(..., small=True)`, which the composition's difftest samples) gets the change's
     verdict from the mirror, and Lean agrees."""
     small = [build(m, n, small=True) for m in MUTATIONS if m != "case" for n in range(2)]
     assert [reference(c)["verdict"] for c in small] == [EXPECT[m] for m in MUTATIONS if m != "case" for _ in range(2)]
@@ -462,10 +463,10 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 
 def test_the_bound_counts_what_it_says():
-    """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
+    """K's terms on a period worked by hand: 10 units, each committing 16 bits, sampled subset:3 at δ = 1/10 with at most
     4 wrong, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps;
-    the same audit with units committing 40 bits, its faulty bits 4 · 40; and eps over audits at δ = 1/10, 1/15 and
-    1/6, and over none (Lean's `#guard`s)."""
+    the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
+    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",
                SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
@@ -484,10 +485,10 @@ def test_the_bound_counts_what_it_says():
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
     bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
-    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances
-    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; at w63's
-    class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs, 8 · 1,136 = 9,088 bits;
-    and eps over the scans' δ alone."""
+    one scan of 20 units (T = 10) sampled at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances
+    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit sampled, no term for incorrect
+    proof blocks; at w63's class with the egress tie (T = 32, every unit sampled), K the tied slot entries' free inputs,
+    8 · 1,136 = 9,088 bits; and eps over the scans' δ alone."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0)])

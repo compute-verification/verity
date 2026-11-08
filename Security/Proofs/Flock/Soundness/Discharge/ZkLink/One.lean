@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # One compiled `--zk` table as `Refine.modelTable`
@@ -9,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Live
 `Cp := Fin 1 → Cap D`, `out := fun caps pend os => [outZC Hs T (caps 0) pend os]`, `acc := acceptedZC [T]`) lands on
 `batchedSessionZC` at the one-table plan (`batchedSessionZC_one`), where the compiled count curves apply.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

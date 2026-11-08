@@ -1,7 +1,12 @@
-import Definitions.Pouw.PearlC.TileCircuit
-import Definitions.Pouw.PearlC.PeelExactP
-import Proofs.Pouw.PearlC.AccumProofs
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Pouw.PearlC.TileCircuit
+public import Proofs.Core.Circuit
+public import Proofs.Pouw.PearlC.AccumProofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.PearlC.PeelExactProofs
 
 /-!
 # The tile unit computes `C̃` and `U` (proofs)
@@ -21,6 +26,8 @@ correct carries them (`tile_correct`, by core's `Verity.Partition.compose`). Thi
   `f32Word` writes as a nonzero word (`f32Word_ne_negZero`), and an exact zero sum is `−0` only for `(−0) + (−0)`.
 * **U** (`tileVal_uFold`): the four K16 steps from `C̃`'s word (`uFold`), on any words.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

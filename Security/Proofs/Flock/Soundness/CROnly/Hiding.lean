@@ -1,6 +1,12 @@
-import Proofs.Flock.Soundness.CROnly.Hm96Defs
+module
+
+public import Definitions.Core.Game
+public import Mathlib.Analysis.Real.Sqrt
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
 import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.Order.Chebyshev
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # hm96 hiding from the universal hash
@@ -14,6 +20,8 @@ $$\mathbb E_k\,\mathrm{gap}(M_k, c)\le\tfrac12\sqrt{|B|\cdot|c(Y)|/|Y|},$$
 by Cauchy–Schwarz over (key, pair) and the collision count `Σ_k Σ_v μ_k(v)² ≤ |K|/|Y| + |K|·Σ_v ν(v)²`. Markov's inequality
 bounds the fraction of keys whose gap exceeds `ε` (`card_hidingGap_gt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

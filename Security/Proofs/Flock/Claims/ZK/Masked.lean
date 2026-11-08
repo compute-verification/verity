@@ -1,5 +1,39 @@
-import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.ZK.MaskedTables
+module
+
+public import Proofs.Flock.Claims.ZK.Session
+public import Proofs.Flock.Claims.ZK.MaskedTables
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # The deployed masked session's zero knowledge
@@ -41,6 +75,8 @@ tables' `zWith` at the base's first component) in `TapeZk.mask`, which `MaskTape
 the three rounds are premises.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims FlockSoundness.Merkle FlockSoundness.ZK
@@ -48,7 +84,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **`Claims.Flock.ZK` at a larger `ε_zk`**, larger at the statements with a witness. -/
 theorem zk_mono {Coin Col T : Type} {H : Msg → Msg} {D : Claims.Flock.ZkDeploy Coin Col T} {ε ε' γ : Msg → ℝ}

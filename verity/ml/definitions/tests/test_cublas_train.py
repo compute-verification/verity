@@ -3,7 +3,8 @@
 route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words, `aligned_bounds` makes the B 8 x S 512
 dW's grid.z slices, and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
 with sm_120's words is the capture's (`cublas_bf16.TRAIN_CAPTURE`); the grid.z dW's is also held here on words of a full-tensor
-dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`)."""
+dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`), and the lf model's s step's routes
+on the capture's words that tell each from every other GEMM route (`fixtures/cublas_train_lf_sm120.npz`)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,7 +16,7 @@ from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry import cublas_bf16 as CB
 
-HOP = "DOT=HopperBF16WgmmaDot16_v2"
+HOP = "DOT=HopperBF16WgmmaDot16_v3"
 FIXTURES = Path(__file__).parent / "fixtures"
 #: the capture's routes other than the unsplit one
 SPLIT = {
@@ -23,6 +24,10 @@ SPLIT = {
     (256, 576, 49152, "dX"): ("CublasSplitKGemmBf16Partials_v2", 49152, 576, 17),
     (4096, 576, 49152, "dX"): ("CublasSerialSplitKGemm_v2", 49152, 576, 7),
     (4096, 576, 49152, "dW"): ("CublasSerialSplitKGemm_v2", 4096, 576, 2),
+    (2048, 512, 512, "dW"): ("CublasSplitKGemmBf16Partials_v2", 2048, 512, 8),
+    (2048, 512, 1408, "dW"): ("CublasSplitKGemmBf16Partials_v2", 2048, 512, 4),
+    (2048, 1408, 512, "dW"): ("CublasSplitKGemmBf16Partials_v2", 2048, 1408, 4),
+    (2048, 512, 32000, "dX"): ("CublasSerialSplitKGemm_v2", 32000, 512, 5),
 }
 #: the grid.z dW routes: (grid.z, the launched cutlass kernel's k-tile)
 ALIGNED = {(4096, 576, 576, "dW"): (7, 32), (4096, 576, 192, "dW"): (12, 64), (4096, 576, 1536, "dW"): (3, 32),
@@ -30,7 +35,8 @@ ALIGNED = {(4096, 576, 576, "dW"): (7, 32), (4096, 576, 192, "dW"): (12, 64), (4
 
 
 def test_train_routes_are_the_capture() -> None:
-    assert set(CB.TRAIN_ROUTES) == {(M, K, N, r) for M in CB.TRAIN_M for K, N in CB.TRAIN_LINEARS for r in ("fwd", "dX", "dW")}
+    assert set(CB.TRAIN_ROUTES) == {(M, K, N, r) for Ms, linears in ((CB.TRAIN_M, CB.TRAIN_LINEARS), (CB.LF_M, CB.LF_LINEARS))
+                                    for M in Ms for K, N in linears for r in ("fwd", "dX", "dW")}
     for key, route in CB.TRAIN_ROUTES.items():
         if key in SPLIT:
             name, K, N, z = SPLIT[key]
@@ -47,7 +53,8 @@ def test_train_routes_are_the_capture() -> None:
 
 
 def test_train_route_refuses_what_the_capture_does_not_cover() -> None:
-    for args in (("fwd", 512, 576, 576), ("dX", 256, 576, 320), ("dW", 16384, 576, 576)):
+    for args in (("fwd", 512, 576, 576), ("dX", 256, 576, 320), ("dW", 16384, 576, 576), ("fwd", 2048, 576, 576),
+                 ("dW", 4096, 512, 512)):
         with pytest.raises(ValueError, match="is not captured"):
             CB.train_linear(*args)
     with pytest.raises(ValueError, match="role 'dY'"):
@@ -73,6 +80,9 @@ def test_aligned_bounds_are_the_capture_slices() -> None:
     assert CB.aligned_bounds(1536, 8, 64) == CB.split_bounds(1536, 8)
     assert [CB.residue_first(0, n, t) for n, t in ((1368, 32), (1360, 32), (592, 32), (544, 32), (344, 64), (312, 64))] == [
         (24, 8), (16, 16), (16, 16), (0, 0), (24, 40), (56, 8)]
+    for z in (8, 4):
+        assert CB.aligned_bounds(2048, z, 8) == CB.split_bounds(2048, z), "the s step's dW is the plain bf16-workspace route"
+        assert all(CB.residue_first(lo, hi, 32) == (0, 0) for lo, hi in CB.split_bounds(2048, z))
 
 
 def test_the_grid_z_dw_is_sm120s_on_the_dump_words() -> None:
@@ -87,6 +97,26 @@ def test_the_grid_z_dw_is_sm120s_on_the_dump_words() -> None:
         whole = -(-max(hi - lo for lo, hi in CB.aligned_bounds(4096, z, 8)) // 16) * 16
         back = int(BC.cublas_aligned_splitk_rows(x, w, z, 8, whole)[0, 0])
         assert back == int(d["back"][i]) and (back != int(d["gpu"][i])) == (i < 4), i
+
+
+def test_the_s_step_routes_are_sm120s_on_its_words() -> None:
+    """Words of the lf model's s step's linears on sm_120 at B 2 x S 1024, per F.linear role: count-probe words (the all-ones row
+    against `splitk_count_probe`'s rows) and the fewest random words that rule out what the capture's random words rule out.  Each
+    role's route gives every word, and every other GEMM route at 2 to 16 slices misses one; the gemv routes are left out, since
+    cuBLAS launches cutlass GEMMs at M 2048.  A split route's model chunks K as its Definition on bits does (`split_bounds`)."""
+    d = np.load(FIXTURES / "cublas_train_lf_sm120.npz")
+    for K, N in CB.LF_LINEARS:
+        for role, (_, _, row) in CB.TRAIN_LINEAR_ROLES.items():
+            route = CB.train_route(role, 2048, K, N)
+            words = [tuple(d[f"{K}x{N}/{role}/{kind}/{a}"] for a in "xwy") for kind in ("random", "probe")]
+            assert all(np.array_equal(BC.cublas_route_rows(route, x, w), y) for x, w, y in words), (K, N, role)
+            k = row(2048, K, N)[0]
+            if "SPLIT_K" in route:
+                chunks = BC._split_cols(k, route["SPLIT_K"], "contiguous")
+                assert [(int(c[0]), int(c[-1]) + 1) for c in chunks] == CB.split_bounds(k, route["SPLIT_K"]), (K, N, role)
+            others = [r for r in BC.cublas_routes_at(list(range(2, min(16, k // 16) + 1))) if r["kernel"] != "gemv" and r != route]
+            fits = [r for r in others if all(np.array_equal(BC.cublas_route_rows(r, x, w), y) for x, w, y in words)]
+            assert not fits, (K, N, role, fits)
 
 
 def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
@@ -105,6 +135,52 @@ def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
 
 ROUTES = [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 4},
           {"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16}]
+
+
+def test_the_training_routes_bind_the_opt_in_step_and_the_served_programs_keep_v2() -> None:
+    """`TRAIN_DOT` is `HopperBF16WgmmaDot16_v3`, ``opt_in``: each route binds it and names the word the served step names, and
+    `boolean_version` of that word, and of a route's word, is still on `HopperBF16WgmmaDot16_v2`, so no served Program moves."""
+    from verity.ml.circuits.boolean.trace import word_of
+    from verity.ml.circuits.ops import prims as P
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.ml.definitions.boolean import boolean_version
+
+    assert CB.TRAIN_DOT is BG.HopperBF16WgmmaDot16V3 and CB.TRAIN_DOT.opt_in
+    assert word_of(CB.TRAIN_DOT) is word_of(BG.HopperBF16WgmmaDot16) is P.HopperBF16WgmmaDot16
+    assert boolean_version(P.HopperBF16WgmmaDot16).id == "HopperBF16WgmmaDot16_v2"
+    for route in ROUTES[:3]:
+        target = CB.route_gemm(route, 64, 3)
+        assert target.bindings["DOT"].id == "HopperBF16WgmmaDot16_v3"
+        assert boolean_version(word_of(target)).id == target.id.replace("_v3}", "_v2}")
+    bmm = CB.attention_bmm("qk", 256, 64)
+    assert boolean_version(word_of(bmm)).id == bmm.id.replace("_v3}", "_v2}")
+
+
+def test_the_training_steps_chain_parts_give_the_served_steps_words() -> None:
+    """`HOPPER_STEP_V3`'s four parts, chained by `GemmF32Out_v2` at K 48 over 3 rows (the first step from +0, then two later
+    ones, x's own gates shared), give `HOPPER_STEP`'s words: on rows of near-1 words, and on rows of uniform or near-1 words
+    with special words (NaNs of several payloads, the infinities, the zeros, subnormals, the largest finite) at a rate of 1,
+    5 or 30%."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as BG
+
+    rng = np.random.default_rng(118)
+    special = np.array([0x7FC0, 0x7F81, 0xFFFF, 0x7F80, 0xFF80, 0x0000, 0x8000, 0x0001, 0x807F, 0x7F7F, 0xFF7F], np.uint16)
+    n, K, N = 4000, 48, 3
+    rate = np.repeat([0.0, 0.01, 0.05, 0.3], n // 4)
+
+    def words(shape):
+        r = rate.reshape(-1, *([1] * (len(shape) - 1)))
+        u = rng.integers(0, 1 << 16, shape).astype(np.uint16)
+        u = np.where(rng.random(shape) < np.where(r == 0, 1.0, 0.5), (u & 0x80FF) | 0x3F00, u).astype(np.uint16)
+        return np.where(rng.random(shape) < r, rng.choice(special, shape), u)
+
+    x, w = words((n, K)), words((n, N, K))
+    got, want = (np.asarray(BS.evaluate_words(bind(CB.GemmF32Out, K=K, N=N, DOT=d), x, w)).astype(np.uint32)
+                 for d in (CB.TRAIN_DOT, BG.HopperBF16WgmmaDot16))
+    assert np.array_equal(got, want)
+    special_out = (got & 0x7F800000) == 0x7F800000
+    assert special_out.sum() > 1000 and (~special_out).sum() > 1000
 
 
 @pytest.mark.parametrize("route", ROUTES, ids=["nosplit", "splitk-bf16", "serialk", "splitk-bf16-align8"])

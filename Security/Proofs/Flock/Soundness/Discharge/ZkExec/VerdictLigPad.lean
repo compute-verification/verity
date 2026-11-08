@@ -1,6 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+public import Flock.ZkLigerito
+public import Proofs.Flock.Soundness.Refine.ArithK
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.NovelBasis
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # Level 0's padded column, as `Zk.ligerito` computes it
@@ -14,6 +34,8 @@ computes the same three at each query `j` of level 0 (`Zk.ligerito`): the fold o
   `X̂_i(ω_p)` (`padFold_inv`, from `X̂_i = X̂_{i − 2^⌊log₂ i⌋}·Ŵ_{⌊log₂ i⌋}`), and `X̂_{2^cols + j} = X̂_j·Ŵ_cols` for
   `j < 2^cols`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
