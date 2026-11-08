@@ -13,8 +13,10 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `span`: one sampled span's units of the stream's template, read from its `Replay` exactly as the serving rows read
   the committed store (`serving_rows.population`, `serving_rows.read_all`).
 * `interior`: the replay sample's spans, each padded to n_rho with copies of its last unit, committed as one window
-  (`ml.windows.rows`, every leaf's salt fresh from the OS) and registered after ``previous``, the boundary registration's
-  digest, under the window ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and
+  (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member, each input port a table of its own
+  Q·n_rho rows and unit i reading row i, so each row a session proves is a registered read of the interior record. It is
+  registered after ``previous``, the boundary registration's digest, under the window
+  ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and
   the replay sample, so every port's domain binds which replay block each n_rho units are; the challenger derives the
   same ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
   replay Definition.
@@ -231,11 +233,12 @@ def interior_run(boundary: str, sample: Sequence[int]) -> str:
 
 def interior_window(member: CS.Member, n_rho: int, boundary: str, sample: Sequence[int]) -> CS.Binding:
     """The window of the replay sample's Q·n_rho units of ``member``'s template, laid out as ``member``'s (its ports and
-    their words), under `interior_run`: what the prover commits and the challenger derives the ports of."""
+    their words), a shared-row member of one table row a unit a port, under `interior_run`: what the prover commits and the
+    challenger derives the ports of."""
     m = len(sample) * int(n_rho)
     program, query = CS.population_program([(SRW.template(member.template).fn, m)])
     return CS.Binding(program, query, {"law": "subset", "k": m}, interior_run(boundary, sample),
-                      (replace(member, n=m, base=0, name=""),))
+                      (replace(member, n=m, base=0, name="", tables=tuple((p, m) for p, _ in member.rows)),))
 
 
 def interior_ports(member: CS.Member, n_rho: int, boundary: str, sample: Sequence[int]) -> dict[str, dict[str, Any]]:
@@ -274,6 +277,7 @@ def interior(spans: Sequence[Span], n_rho: int, boundary: str, sample: Sequence[
     ports = CS.expected_ports(window)
     padded = [s.padded(n_rho) for s in spans]
     data = {kind_: {p: np.concatenate([d[kind_][p] for d in padded]) for p in padded[0][kind_]} for kind_ in ("rows", "outs")}
+    data["refs"] = np.tile(np.arange(window.population, dtype=np.int64)[:, None], (1, len(first.rows)))
     fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
     c = CS.commit(window, [data], salt_key=salt_key, salts_of=fresh)
     provenance = {"row": row, "interior": True, **({"replay": replay} if replay is not None else {})}

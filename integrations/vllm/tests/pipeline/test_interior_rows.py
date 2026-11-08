@@ -2,7 +2,8 @@
 CPU-served world (`tests.check.test_sampled_replay`'s RoPE Program at D = 64, three requests): each request's replay
 reproduces the RoPE heads serving committed, bit for bit, evaluating only its readers' cone; and on a two-stage
 `Stream` over RoPE heads, after a stand-in boundary registration over the three request spans and its first stage, the
-replay sample's interior registration is accepted and the second stage samples k in each sampled span, while a forged
+replay sample's interior registration, one shared-row member whose roots are its word rows', is accepted and the second
+stage samples k in each sampled span, while a forged
 leaf, a wrong `previous`, a wrong population and the spans in another order than the replay sample's are refused by
 name, and spans replayed from two Programs are not committed."""
 
@@ -205,6 +206,22 @@ def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second
                                      "interior": True, "replay": "replay-test"}
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
+
+
+def test_the_interior_is_one_shared_row_member_of_its_word_rows_roots(spans):
+    """The interior's member is a shared-row member, each input port a table of its own Q·n_rho rows and unit i reading row
+    i, so every row a second-stage session proves is a registered read of the interior record. Under the same salts its
+    roots and every row's b || c are the word-row layout's: only the public body, and so the leaf layer, differs."""
+    it = IR.interior([spans["r0"], spans["r2"]], N_RHO, "aa" * 64, [0, 2], row=ROW, salt_key=SALT)
+    w = it.committed.window
+    m, = w.members
+    assert dict(m.tables) == {p: Q * N_RHO for p, _ in m.rows} and m.n == Q * N_RHO
+    assert np.array_equal(it.committed.refs[0], np.tile(np.arange(Q * N_RHO)[:, None], (1, len(m.all_rows))))
+    padded = [spans[r].padded(N_RHO) for r in ("r0", "r2")]
+    data = {k: {p: np.concatenate([d[k][p] for d in padded]) for p in padded[0][k]} for k in ("rows", "outs")}
+    plain = CS.commit(replace(w, members=(replace(m, tables=()),)), [data], salt_key=SALT)
+    assert plain.roots == it.committed.roots and plain.bc == it.committed.bc
+    assert plain.public_body(0) != it.committed.public_body(0)
 
 
 def test_an_interior_registration_is_refused_by_name(world, spans):
