@@ -5662,3 +5662,18 @@ premise. Records that move:
     binary. The test asserts the control is accepted and each variant is refused with `KsScope`'s reason, and also runs
     v2's `verdicts` on the not-rows session. Size: about 230 lines and one CPU run.
   - Part 1 comes first. Both are due Mon 20:00Z.
+
+## 02:35Z from TRUSTV5: #7915's records failure: Dampener entries from the old base, plus V3's trust_gap naming the old name; fixed, rerunning
+- **Cause.** Records r20261108-012444-3d18, at the merge of checked `61b5207ce4`, built Security/Proofs (3582 modules) but failed Security's audit on four things:
+  - Three `witnesses.unwitnessed-changed`: `Nci.SecurityProofs.DampenerRemotePeriod` and its `_honest` and `_nontrivial`. These are the entries drive's lock run regenerated on checked (`c8bec5c915`).
+  - **`trust.gap-new` on `SampledKSLiveV3`.** `trust_gap` is new on checked, and V3's entry lists `Zk.RecordCustodyZKJ`. With the abbreviation, the audit sees V3 resting on `RecordCustodyZKJPLaw`, which the entry doesn't name.
+  - None of my 13 re-keys failed.
+- **Fix:**
+  - I merged checked `db494c1f5f` (`3d2127e4fd`). The merge was clean, and its Dampener entries equal the tip's.
+  - `be7ddd09ca` renames V3's `trust_gap` entry from `RecordCustodyZKJ` to `RecordCustodyZKJPLaw`: the same premise under the one name, with five premises before and after. `--update` drops a premise from `trust_gap` but never adds one, so the rename has to be by hand. No other `trust_gap` entry named `RecordCustodyZKJ`, and V5's already names `RecordCustodyZKJPLaw`.
+  - This is a hand edit of a lock list like the 13 re-keys, and #7915's body says why. Tell me if you want it held. Otherwise I mark when the runs pass, as you said.
+- **Suites** r20261108-012505-1798 at `9b762c560d` passed 14 of 14, 0 failed.
+- **Rerunning at `be7ddd09ca`:**
+  - records r20261108-023423-3ed6 (cpu-13), ETA about 03:35Z;
+  - quick suites r20261108-023444-1e63 (cpu-3, `--changed db494c1f5f`), ETA about 03:50Z.
+- **The land ask** at 01:27Z above stands as written, with the 35 names. Add to it: V3's `trust_gap` entry now names `RecordCustodyZKJPLaw`.
