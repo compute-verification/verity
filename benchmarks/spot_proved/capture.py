@@ -21,7 +21,10 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
   ids, the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
   (FlashMLA's ``_bf16_flash_mla_kernel``, or FA3's ``flash_attn_varlen_func`` in the FlashAttention sparse backend: the
   queries, the global top-k rows, the outputs, and the KV rows those indices read for ``--mla-tokens`` tokens: FlashMLA's
-  first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``).
+  first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``), and
+  each other kernel `PY_KERNELS` lists, launched from Python (GLM-5.3's fused q/kv norm and RoPE with its cache writes, its
+  fused query RoPE and quantization, and the router's GEMM at up to 16 tokens): its arguments by name, a paged cache by
+  shape only, and after the call its returns and the arguments it writes.
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
@@ -266,6 +269,7 @@ def _install() -> None:
     _wrap(pb.PiecewiseBackend, "__call__", pb_call)
     _install_moe()
     _install_mla()
+    _install_py_kernels()
 
 
 def _install_sampler() -> None:
@@ -472,6 +476,52 @@ def _install_mla() -> None:
         return run
 
     _wrap(fa, "flash_attn_varlen_func", varlen)
+
+
+#: kernels the served forward launches from Python, which no dispatcher sees: the module its caller looks the name up in, the
+#: name (also the event's op), its positional arguments' names, the arguments it writes, and the paged caches it writes
+#: whole, recorded by shape only
+PY_KERNELS = (
+    ("vllm.models.deepseek_v32.attention", "fused_norm_rope",
+     ("positions", "q_c", "q_rms_norm_w", "q_rms_eps", "kv_c", "kv_rms_norm_w", "kv_rms_eps", "k_pe", "k_rope_cos_sin_cache",
+      "index_k", "index_k_layer_norm_w", "index_k_layer_norm_bias", "index_k_layer_norm_eps", "index_k_rope_cos_sin_cache",
+      "topk_indices_buffer"),
+     ("q_c_out", "kv_c_out", "k_pe_out", "index_k_out", "topk_indices_buffer"), ("mla_kv_cache", "indexer_k_cache")),
+    ("vllm.models.deepseek_v32.attention", "fused_q",
+     ("positions", "q_pe", "q_pe_cos_sin_cache", "index_q", "index_q_cos_sin_cache", "ql_nope", "q_scale", "index_weights",
+      "index_weights_softmax_scale", "index_weights_head_scale"), (), ()),
+    ("vllm.model_executor.kernels.linear.cute_dsl.ll_bf16", "ll_bf16_gemm", ("hidden_states", "router_weight", "output_dtype"),
+     (), ()),
+)
+
+
+def _py_kernel(op: str, names: tuple[str, ...], written: tuple[str, ...], caches: tuple[str, ...]):
+    def make(orig):
+        def run(*a, **kw):
+            if not S.recording:
+                return orig(*a, **kw)
+            args = {**dict(zip(names, a)), **kw}
+            ins = {k: {"shape": list(v.shape), "dtype": str(v.dtype), "kv_rows": True} if k in caches and v is not None
+                   else _ref(v) for k, v in args.items()}
+            out = orig(*a, **kw)
+            outs = {f"r{i}": _ref(t) for i, t in enumerate(out if isinstance(out, tuple) else (out,))}
+            outs.update({k: _ref(args[k]) for k in written if args.get(k) is not None})
+            _event(op, ins, outs)
+            return out
+        return run
+    return make
+
+
+def _install_py_kernels() -> None:
+    import importlib
+    for mod, name, names, written, caches in PY_KERNELS:
+        try:
+            owner = importlib.import_module(mod)
+        except ImportError as e:
+            _note(f"no {mod} ({e}): {name} is not recorded")
+            continue
+        if hasattr(owner, name):
+            _wrap(owner, name, _py_kernel(name, names, written, caches))
 
 
 def _recorder_base():
