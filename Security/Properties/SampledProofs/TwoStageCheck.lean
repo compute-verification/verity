@@ -63,19 +63,20 @@ def RequestsCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Ty
         ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty →
           servedBits req r = D.S ∧ ReadsCover s Pt d req ρ c.reads r
 
-/-- **A sets' point's bits bound the count**: when `checkTwoStage D` returns `b`, every statement in scope whose first
-stage samples at `D.q` or more and whose replay blocks the classes cover has `Σ_{T admissible at δ} 2^{b(T)} ≤ 2^b`. -/
+/-- **A sets' point's bits bound the count**: when `checkTwoStage` returns `b` at `D` read in the sets' form, every
+statement in scope whose first stage samples at `D.q` or more and whose replay blocks the classes cover has
+`Σ_{T admissible at δ} 2^{b(T)} ≤ 2^b`. -/
 def TwoStageCheckSound : Prop :=
-  ∀ (D : Point) (b : ℚ), checkTwoStage D = some b → D.form = .sets →
+  ∀ (D : Point) (b : ℚ), checkTwoStage { D with form := .sets } = some b →
     ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (cls : ℕ → ℕ), InScopeTwo Pt d s →
       FirstStageAt d D.q → ClassesCover s Pt d D cls →
         ((∑ T ∈ admissibleTwo Pt d D.δ, 2 ^ bitsOf s Pt T : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ)
 
-/-- **A patterns' point's bits bound the patterns' count**: when `checkTwoStage D` returns `b`, every statement in
-scope whose first stage samples at `D.q` or more, whose replay blocks the classes cover and whose requests read as
-they say has the admissible sets' patterns' sum at most `2^b`. -/
+/-- **A patterns' point's bits bound the patterns' count**: when `checkTwoStage` returns `b` at `D` read in the
+patterns' form, every statement in scope whose first stage samples at `D.q` or more, whose replay blocks the classes
+cover and whose requests read as they say has the admissible sets' patterns' sum at most `2^b`. -/
 def TwoStageCheckPatternsSound : Prop :=
-  ∀ (D : Point) (b : ℚ), checkTwoStage D = some b → D.form = .patterns →
+  ∀ (D : Point) (b : ℚ), checkTwoStage { D with form := .patterns } = some b →
     ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R] [DecidableEq R]
       (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ), InScopeTwo Pt d s → FirstStageAt d D.q →
       ClassesCover s Pt d D cls → RequestsCover s Pt d req D cls →
@@ -93,11 +94,11 @@ def ServedCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type
       ∑ r ∈ Finset.univ.filter (fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty),
         servedBits req r ≤ c.N * D.S
 
-/-- **A capped point's bits bound the capped count**: when `checkTwoStage D` returns `b`, every statement in scope
-whose first stage samples at `D.q` or more, whose replay blocks the classes cover and whose requests serve as they say
-has `Σ_{T admissible} 2^{min(b(T), Σ_{r : T_r ≠ ∅} min(b(T_r), |r|))} ≤ 2^b`. -/
+/-- **A capped point's bits bound the capped count**: when `checkTwoStage` returns `b` at `D` read in the capped form,
+every statement in scope whose first stage samples at `D.q` or more, whose replay blocks the classes cover and whose
+requests serve as they say has `Σ_{T admissible} 2^{min(b(T), Σ_{r : T_r ≠ ∅} min(b(T_r), |r|))} ≤ 2^b`. -/
 def TwoStageCheckServedSound : Prop :=
-  ∀ (D : Point) (b : ℚ), checkTwoStage D = some b → D.form = .capped →
+  ∀ (D : Point) (b : ℚ), checkTwoStage { D with form := .capped } = some b →
     ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R] [DecidableEq R]
       (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ), InScopeTwo Pt d s → FirstStageAt d D.q →
       ClassesCover s Pt d D cls → ServedCover s Pt d req D cls →

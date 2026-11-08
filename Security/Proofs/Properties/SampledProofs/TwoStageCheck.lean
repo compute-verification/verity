@@ -221,9 +221,11 @@ end TwoStageCheckProof
 
 open TwoStageCheckProof
 
-/-- **A sets' point's bits bound the count.** -/
-theorem twoStageCheckSound : TwoStageCheckSound := by
-  intro D b hb hform s Pt d cls hs hfirst hcov
+/-- **A sets' point's bits bound the count**, at a point whose form is the sets'. -/
+theorem twoStageCheckSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = some b) (hform : D.form = .sets)
+    (s : AuditStatement) (Pt : Partition) (d : Design.Two) (cls : ℕ → ℕ) (hs : InScopeTwo Pt d s)
+    (hfirst : FirstStageAt d D.q) (hcov : ClassesCover s Pt d D cls) :
+    ((∑ T ∈ admissibleTwo Pt d D.δ, 2 ^ bitsOf s Pt T : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ) := by
   obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
   have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
   have hR := admissibleTwo_rankin s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ hs (firstStage_le hs hq1' hfirst)
@@ -237,9 +239,13 @@ theorem twoStageCheckSound : TwoStageCheckSound := by
     simpa [classFactor, hform] using hv
   exact factorUpperSound c.cells D.params v hv' s Pt d ρ hcv
 
-/-- **A patterns' point's bits bound the patterns' count.** -/
-theorem twoStageCheckPatternsSound : TwoStageCheckPatternsSound := by
-  intro D b hb hform s Pt d R _ _ req cls hs hfirst hcov hreq
+/-- **A patterns' point's bits bound the patterns' count**, at a point whose form is the patterns'. -/
+theorem twoStageCheckPatternsSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = some b)
+    (hform : D.form = .patterns) (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R]
+    [DecidableEq R] (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ) (hs : InScopeTwo Pt d s)
+    (hfirst : FirstStageAt d D.q) (hcov : ClassesCover s Pt d D cls) (hreq : RequestsCover s Pt d req D cls) :
+    ((∑ p ∈ (admissibleTwo Pt d D.δ).image (fun T r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req T r)),
+        2 ^ ∑ r, lightBits s Pt (servedBits req r) (p r) : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ) := by
   obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
   have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
   have hR := admissibleTwo_rankin_patterns s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ R req hs
@@ -256,9 +262,15 @@ theorem twoStageCheckPatternsSound : TwoStageCheckPatternsSound := by
     fun r r' hne => (hreq.2.1 r r' hne).mono (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r)
       (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r')
 
-/-- **A capped point's bits bound the capped count**, at replay block `ρ`'s cap `N_c · S` at its class `c`. -/
-theorem twoStageCheckServedSound : TwoStageCheckServedSound := by
-  intro D b hb hform s Pt d R _ _ req cls hs hfirst hcov hserve
+/-- **A capped point's bits bound the capped count**, at a point whose form is the capped one, at replay block `ρ`'s
+cap `N_c · S` at its class `c`. -/
+theorem twoStageCheckServedSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = some b) (hform : D.form = .capped)
+    (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R] [DecidableEq R]
+    (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ) (hs : InScopeTwo Pt d s) (hfirst : FirstStageAt d D.q)
+    (hcov : ClassesCover s Pt d D cls) (hserve : ServedCover s Pt d req D cls) :
+    ((∑ T ∈ admissibleTwo Pt d D.δ, 2 ^ min (bitsOf s Pt T)
+        (∑ r ∈ univ.filter (fun r => (blocksTo s.prog Pt req T r).Nonempty),
+          min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r)) : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ) := by
   obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
   have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
   obtain ⟨S, hS⟩ : ∃ S : ℕ → ℕ, ∀ ρ, S ρ = if ρ < d.part.blocks.length then
@@ -287,6 +299,18 @@ theorem twoStageCheckServedSound : TwoStageCheckServedSound := by
     simpa [classFactor, hform] using hv
   rw [hcap ρ hρ c hc]
   exact factorUpperCappedSound c.cells (c.N * D.S) D.params v hv' s Pt d ρ hcv
+
+/-- **A sets' point's bits bound the count.** -/
+theorem twoStageCheckSound : TwoStageCheckSound :=
+  fun D b hb => twoStageCheckSound_form { D with form := .sets } b hb rfl
+
+/-- **A patterns' point's bits bound the patterns' count.** -/
+theorem twoStageCheckPatternsSound : TwoStageCheckPatternsSound :=
+  fun D b hb => twoStageCheckPatternsSound_form { D with form := .patterns } b hb rfl
+
+/-- **A capped point's bits bound the capped count.** -/
+theorem twoStageCheckServedSound : TwoStageCheckServedSound :=
+  fun D b hb => twoStageCheckServedSound_form { D with form := .capped } b hb rfl
 
 section Witnesses
 
