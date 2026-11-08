@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-SIZES = ((16, 4), (64, 16))
-
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`SeedBlocks_v1` at a message of one SHA-512 block (a 16-byte coin, a 4-byte id) and of two (a 64-byte coin, a 16-byte
@@ -13,8 +11,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.predict import seed_rule as SR
 
-    return [(f"SeedBlocks_v1:{c}:{r}", lambda c=c, r=r: bind(SR.SeedBlocks, COIN=c, RID=r)) for c, r in SIZES] + [
-        ("SeedSelect_v1", lambda: SR.SeedSelect), ("SeedEqual_v1", lambda: SR.SeedEqual)]
+    return [
+        ("SeedBlocks_v1:16:4", lambda: bind(SR.SeedBlocks, COIN=16, RID=4)),
+        ("SeedBlocks_v1:64:16", lambda: bind(SR.SeedBlocks, COIN=64, RID=16)),
+        ("SeedSelect_v1", lambda: SR.SeedSelect),
+        ("SeedEqual_v1", lambda: SR.SeedEqual),
+    ]
 
 
 def _by_calls_roots() -> list[Any]:
@@ -23,4 +25,4 @@ def _by_calls_roots() -> list[Any]:
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.predict import seed_rule as SR
 
-    return [bind(d, COIN=c, RID=r) for d in (SR.ServedSeed, SR.SeedCheck) for c, r in SIZES]
+    return [bind(d, COIN=c, RID=r) for d in (SR.ServedSeed, SR.SeedCheck) for c, r in ((16, 4), (64, 16))]
