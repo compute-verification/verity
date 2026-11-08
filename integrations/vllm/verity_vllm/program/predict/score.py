@@ -34,7 +34,6 @@ from verity_vllm.config import UsageError, option
 
 from . import inventory as INV
 from .build import Unexpressible, build_program, decoder
-from .common import cyclic_gc_off
 from .phi import Phi
 
 SCHEMA = "verity-predict/score/v1"
@@ -168,7 +167,6 @@ def _workload_task(task: dict) -> dict:
     return out
 
 
-@cyclic_gc_off
 def request_component(r):
     """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
     whose definitions are this process's, so nothing is decoded."""

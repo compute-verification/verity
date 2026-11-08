@@ -511,7 +511,6 @@ class Plan:
                     [d for d in self.discarded if d[1] not in gone], dict(sorted(refused.items())), self.idle)
 
 
-@cyclic_gc_off
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
@@ -532,7 +531,8 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise refuse the session,
     a request whose Program the vocabulary refuses (a launch no capture covers) included.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
-    `Unexpressible` where the naming doesn't reach it."""
+    `Unexpressible` where the naming doesn't reach it. It runs with the cyclic collector off (`common.cyclic_gc_off`, applied at the
+    module's end)."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
 
@@ -794,3 +794,6 @@ def compare(summary: dict, root: str) -> dict:
                     **({} if traced or why is None else {"trace_error": why})})
     n = {k: sum(1 for x in out if x["outcome"] == k) for k in ("equal", "different", "no_trace")}
     return {"schema": SCHEMA + "/comparison", "compiler": summary["compiler"], "units": out, **n, "mismatches": n["different"] + n["no_trace"]}
+
+
+compile_steps = cyclic_gc_off(compile_steps)
