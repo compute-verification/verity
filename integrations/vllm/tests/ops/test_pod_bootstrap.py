@@ -117,10 +117,10 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert checks["torch_cpu"]["value"]["cuda_available"] == rec["cuda_available"]
     assert not {"torch_cuda", "fa2_tap_so", "fa3_tap_so"} & set(checks), "GPU checks must not appear in cpu mode"
     for name in ("python_3_12", "vllm_import", "vllm_commit_d9105ea80", "verity_from_tree", "verity_vllm_from_tree",
-                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree", "numpy_import",
+                 "research_telemetry_from_tree", "spot_from_tree", "distributions_from_tree", "numpy_import",
                  "no_old_tree_on_path"):
         assert name in checks, name
-    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree",
+    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "spot_from_tree", "distributions_from_tree",
                  "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
     assert set(checks["distributions_from_tree"]["value"]) == {"catalog", "kernels", "core"}

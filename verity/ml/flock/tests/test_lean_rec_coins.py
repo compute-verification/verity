@@ -562,7 +562,7 @@ def test_r_openings_zero_row_is_the_one_check_5_computes_and_another_salt_is_not
     registers for R's opening part's `out` is the one the Lean verifier computes (its `#guard`), and the same zero row under
     salt 0 one bit off has another root, which check 5's root comparison refuses. No staged session reaches check 5 at R's
     opening here: its honest sessions are replayed on the pod."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     ss = S.RR.zero_salts(S.RR.ZERO_VALUE, 1)
     commit = lambda salts: RG.Registered.commit("p", S.RR.ZERO_VALUE, [[0] * S.RR.OUT_WORDS], salts=salts).root.hex()
