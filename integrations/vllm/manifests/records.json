@@ -745,17 +745,17 @@
    "record": null,
    "tier": "fast",
    "pinned_from": {
-    "build": "/workspace/research/scratch/neutrality.7GoNQ2/n/qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager",
-    "run": "r20261018-023244-bcd4",
-    "tree": "513dad92fd392bb1bcc35546b46f3c3316979088"
+    "build": "/workspace/tmp/circuits-neutrality/r20261108-091426-d7df/qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager",
+    "run": "r20261108-091426-d7df",
+    "tree": "e5c19917f0d5757193a979aa1a502576e60102cb"
    },
-   "manifest_digest": "0441c1faedf9abcc9fa401fc610a28391752a27ed89663ce76815bc013cf0c1b",
+   "manifest_digest": "1bd6210f4e89ec9671c634b476dc234b569d6e1147773f51745cd3bef9f0761f",
    "programs": {
     "0": {
-     "step": "63fe1cc38ef550226454d9c7bb8f41c89e7aeed6c9c121f086f00f8d373b28d51402bd6fa252e333f7c13adefdbb99fd5c70f82796ae3ae3ee8454bab4d5100c",
-     "workload": "689b560c547e947e6c5ee5f2a271b1de6ead6a16bc7d2ad79f60caea2b60a34481e3e47dc5b0eb9adf13b18e981f755b2fce718ced2b406181823639ee4da3a4",
+     "step": "146d26cbbd1f171763354e6747e606fef42fad1c338d774c181be9b567ffcd30564700447822b019d7921966c776120dceac9b7443c477ed0905a12d27450b5c",
+     "workload": "dde7142f51808ea266369a74dea3825b3a973eb9eb1b55c95bb76cd71c5ed71b6f4582220ca34706f624e1784c9a50e825c65a2fa4cdd85179ef2fe5ea020e47",
      "requests": {
-      "request": "6d989b12c8bff2647f7d78224c1a6997620656bb43b397aaf05be5209a17cebd0c64dffd1aca7e1f9ef8c84e4ec067b854dd941152018653dff337dca7b1a487"
+      "request": "094325c4bc68376476b2130fe5c9f40f6f82bfbf90c27f702fb5c3c0d04785d487b9b55cf8efd634160ad932e1344548c9f3e9a0e31e2bdcb7e8cbf7498930ec"
      }
     }
    }
@@ -764,24 +764,24 @@
    "record": null,
    "tier": "fast",
    "pinned_from": {
-    "build": "/workspace/research/scratch/neutrality.7GoNQ2/n/qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager",
-    "run": "r20261018-023244-bcd4",
-    "tree": "513dad92fd392bb1bcc35546b46f3c3316979088"
+    "build": "/workspace/tmp/circuits-neutrality/r20261108-091446-fb0a/qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager",
+    "run": "r20261108-091446-fb0a",
+    "tree": "e5c19917f0d5757193a979aa1a502576e60102cb"
    },
-   "manifest_digest": "c3c3bc4c787966325c34bec45643f9e890f63d6a68f171fa9898acf5cd01d933",
+   "manifest_digest": "e71d2e77ae18efe2744f255bcd988a8031d192af8e1175fa5f3619b6e1391264",
    "programs": {
     "0": {
-     "step": "396862cc6f547486e6750b20985b803d26f6047d04ba9ea15dee4bc4694513176a48b70c590501a48ce9a9e44d127902914e2f19883b1575c10aa0d3e4ecdd0a",
-     "workload": "f6f67b568e31980768334ebd1815e5eecb7e9e83e45f28992a01fdd000f8c5ed9b123ddfca06eeeaf9e4c723affd5de98ba785745386bb7be2199fb78879e858",
+     "step": "7241b2a88dec6e47ac2855d1df207a95405ad2a86f6baeafe6feabc07af9bf9cee1af315c1fbae0f1aa1b6eb3d6d8cee1932bc421ab44566de1dbeb46d2d4149",
+     "workload": "7744abe0b0f65d30ab9ce33a456ba2539db197bfa35ee318df7401d31f807f9c791f023457eeb71cc8815f6f7615593167b0cbfba34023335ca5ba05ad478ec0",
      "requests": {
-      "build_request_LP256_T31": "524967ba1cfaa69e4eee1ea925f907e079b939858443373ec1829e7f9740dca7672732cdba7a9ea8414e3757f8529d9597e139fecea77ba17e05871ef01199a0"
+      "build_request_LP256_T31": "083955d660c15bf71d909592749d62daf97a6b46c7f5117a497c71e1b72c8f923ca5a344e6ee9db90e5b84a8066778056eea5fc59d923053eb5189445555717b"
      }
     },
     "1": {
-     "step": "f18ceeedaee2eff55303516ada93f21ea74f851da126ca5af48d0c89112887f84a45cc1e0195a7f9cd2bfc863188a5e75a260e6ee5f927a338f48ed4da9503ab",
-     "workload": "2db4ed8b668eb1364912706a9f848a23b27f9fe3cd5756f9e6b324da19af2f55332a297e317dd2db103b5de970aed17919c4f3cffd06597cb5ff82c462c21d71",
+     "step": "54240f97a003de96804c0fd5f8843a5fc118678b649940e7d5f72c06dfef19c4970dd2f72e306663bc60995d3af48a5103213af931c03af6478cf722b26fbd66",
+     "workload": "dab5e119eaf8874604a9bbe256605d366e1fcd70d70f5a89f328625dea035a78cb57297cc47e33820567d0935dffc72e0e69cc1275555cb904338865e66b46f8",
      "requests": {
-      "build_request_LP256_T31": "8be1edd3e3804238f62615ad82d5abddb258875485db933639f30e8f6475836169cc3cb4c245a5e41804ddf97dd2f95023268d2945290e9cf77ee35156f909b4"
+      "build_request_LP256_T31": "57c729134e5edbf7c806ac71cd221369d7504487acfb8ddf8344f7e8f1533b396c6f30a63cfe71903887d7c496c5a88ea75682694ae02b9fa2d2c1cd0b5c7891"
      }
     }
    }
