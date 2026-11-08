@@ -59,10 +59,12 @@ FUSED_K_LOG = 25
 #: at 16 blocks a statement with the cache on; taken for the fixed and the marginal parts alike
 FUSED_CPU = {"w13": 0.75, "w2": 0.59}
 #: their prices measured on one H200 with the statement cache, (fixed seconds a statement, seconds a block): one
-#: prover end to end at 512 and 1024 blocks a statement, and four provers at 128 and 256 blocks, a prover's cycle
-#: over four (the GPU's share)
-FUSED_H200 = {"w13": {"one": (0.7374, 2.8488e-3), "four": (0.4289, 1.5430e-3)},
-              "w2": {"one": (0.6792, 2.9751e-3), "four": (0.4147, 1.8594e-3)}}
+#: prover end to end at 512 and 1024 blocks a statement, and four provers with verify-ahead at 128 and 256 blocks,
+#: from their throughput (the GPU's seconds a statement)
+FUSED_H200 = {"w13": {"one": (0.7374, 2.8488e-3), "four": (128 / 219 - 128 * (256 / 329 - 128 / 219) / 128,
+                                                           (256 / 329 - 128 / 219) / 128)},
+              "w2": {"one": (0.6792, 2.9751e-3), "four": (128 / 217 - 128 * (256 / 307 - 128 / 217) / 128,
+                                                          (256 / 307 - 128 / 217) / 128)}}
 
 #: the Lean verifier (`verify --zk --partition --program`), one core, one statement, setup included: seconds by block
 #: prefix, measured on today's flat statement
