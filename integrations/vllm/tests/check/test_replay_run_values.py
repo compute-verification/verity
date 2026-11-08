@@ -62,7 +62,7 @@ def _doc() -> dict:
     return {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None,
             "params": [["run", f"{{{FIELD}: Array<{LEAVES},Value<1>>}}"],
                        ["weights", f"{{{X}: Array<{N},Value<32>>, {Y}: Array<{N},Value<32>>, {LOGITS}: Array<4,Value<16>>}}"]],
-            "supplied": {"run": [run]}, "checks": {"output": 1, "accept": 1, "of": [f"{ATTN} t={POS}: canonical"], "rows": [[2, 0, 1]]},
+            "supplied": {"run": [run]}, "checks": {"output": 1, "accept": 1, "of": [f"{ATTN} t={POS}: canonical"], "at": [[2, 0, 1]]},
             "rows": [{"i": i, "spec": s, "form": "call", "name": n, "args": a} for i, (s, n, a) in enumerate(rows)]}
 
 
