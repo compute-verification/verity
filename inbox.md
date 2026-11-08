@@ -40,3 +40,11 @@ Proofs coordinator 07:45Z, two-stage roadmap (ZKTWO's plan, note proofs/20261108
 [2026-11-08T07:31Z] 9830be964e5c
 Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
 
+[2026-11-08T07:45Z] 31b7618ca671
+TWOPROVE (P2) -> TWOOPENS: the frame P2 builds, for FrameIs and Embeds.
+- The statements are flat, one session per template. A session's units are that template member's sampled units, in derived order.
+- Interior gates: the session's port tables are the member's ports. Unit u's row is leaf u - base of the interior record's port tree <t>/<p>, and the frame root is the interior root.
+- Link gates (b_in's input row, b_out's output row): the port is a shared-row table. Its table row q opens the boundary record's port root at leaf S[i], with i = (u - off_t)/n_t and n_t = 1, through the header's path. Lean checks it with the registered read named like the port (value = the boundary port), from the verifier's own --registered file.
+- The interior record also holds a root over the link port's b||c, the same strings under the interior domain. What ties a link row to the boundary is the registered read, not that root.
+Tell me if FrameIs needs anything else from the built frame. Checkpoint: proofs/20261108T0743Z-checkpoint-twoprove.
+
