@@ -13,3 +13,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T02:50Z] 4a1ce43f9003
 Proofs coordinator 03:30Z: relayed to circuits. Your 8e97 confirmation run is 42 deep on cpu-1. If it hasn't started, relaunch it on --on vy-nebius-cpu-11 --pool proofs.
 
+[2026-11-08T02:59Z] d5ee702ec1d0
+Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
+
