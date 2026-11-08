@@ -50,21 +50,74 @@ theorem allFrom_eq (f : Nat → Bool) : ∀ k i, allFrom f k i = (List.range' i 
   | zero => intro i; rfl
   | succ k ih => intro i; simp only [allFrom, ih, List.range'_succ, List.all_cons]
 
+/-- `rd32` at `o`, its bytes read with `uget`. -/
+@[inline] def rd32U (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) : Nat :=
+  ((data.uget o (by omega)).toUInt32 |||
+    ((data.uget (o + USize.ofNat 1) (by rw [Sha512.toNat_add_ofNat o 1 (by omega)]; omega)).toUInt32 <<< 8) |||
+    ((data.uget (o + USize.ofNat 2) (by rw [Sha512.toNat_add_ofNat o 2 (by omega)]; omega)).toUInt32 <<< 16) |||
+    ((data.uget (o + USize.ofNat 3) (by rw [Sha512.toNat_add_ofNat o 3 (by omega)]; omega)).toUInt32 <<< 24)).toNat
+
+theorem rd32U_eq (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
+    rd32U data o h hs = rd32 data o.toNat := by
+  rw [← rd32Fast_eq]
+  unfold rd32U rd32Fast
+  rw [Sha512.uget_eq_get! data o o.toNat rfl,
+    Sha512.uget_eq_get! data _ (o.toNat + 1) (Sha512.toNat_add_ofNat o 1 (by omega)),
+    Sha512.uget_eq_get! data _ (o.toNat + 2) (Sha512.toNat_add_ofNat o 2 (by omega)),
+    Sha512.uget_eq_get! data _ (o.toNat + 3) (Sha512.toNat_add_ofNat o 3 (by omega))]
+
+/-- `p` on the `k` entries from byte `o` of `data`, read with `rd32U`. -/
+@[specialize] def rowAllU (data : ByteArray) (p : Nat → Bool) :
+    (k : Nat) → (o : USize) → o.toNat + 4 * k ≤ data.size → o.toNat + 4 * k < USize.size → Bool
+  | 0, _, _, _ => true
+  | k + 1, o, h, hs =>
+    p (rd32U data o (by omega) (by omega)) &&
+      rowAllU data p k (o + USize.ofNat 4) (by rw [Sha512.toNat_add_ofNat o 4 (by omega)]; omega)
+        (by rw [Sha512.toNat_add_ofNat o 4 (by omega)]; omega)
+
+theorem rowAllU_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ (k t : Nat) (o : USize), o.toNat = s + 4 * t →
+    (h : o.toNat + 4 * k ≤ m.data.size) → (hs : o.toNat + 4 * k < USize.size) →
+    rowAllU m.data p k o h hs = rowAllGo m s p k t
+  | 0, _, _, _, _, _ => rfl
+  | k + 1, t, o, ho, h, hs => by
+    rw [rowAllU, rowAllGo, rd32U_eq, ho,
+      rowAllU_eq m s p k (t + 1) _ (by rw [Sha512.toNat_add_ofNat o 4 (by omega), ho]; omega)]
+
+theorem toNat_toUSize (s : Nat) (h : s < USize.size) : s.toUSize.toNat = s := by
+  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
+  rw [Nat.toUSize, USize.toNat_ofNat', Nat.mod_eq_of_lt (by omega)]
+
+/-- `rowAllGo m s p k 0`, with `rowAllU` where the row lies in `m.data` and its offsets fit a `USize`. -/
+@[inline] def rowAll (m : Sparse) (s : Nat) (p : Nat → Bool) (k : Nat) : Bool :=
+  if h : s + 4 * k ≤ m.data.size ∧ (s + 4 * k).toUSize.toNat = s + 4 * k then
+    have := USize.toNat_lt_size (s + 4 * k).toUSize
+    have hs := toNat_toUSize s (by omega)
+    rowAllU m.data p k s.toUSize (by omega) (by omega)
+  else rowAllGo m s p k 0
+
+theorem rowAll_eq (m : Sparse) (s : Nat) (p : Nat → Bool) (k : Nat) : rowAll m s p k = rowAllGo m s p k 0 := by
+  unfold rowAll
+  split
+  · rename_i h
+    have := USize.toNat_lt_size (s + 4 * k).toUSize
+    exact rowAllU_eq m s p k 0 _ (by rw [toNat_toUSize s (by omega)]; omega) _ _
+  · rfl
+
 /-- `portReadsB`, each row's entries read where they lie. -/
 def portReadsBFast (net : Net) : Bool :=
   let n := min (net.inWords * WORD) net.constPos
   let mask := portMask net.inGroups n
   let ok := fun x => decide (x < n → mask.getD x false = true)
-  allFrom (fun i => rowAllGo net.a (net.a.start.getD (n + i) 0) ok (net.a.len.getD (n + i) 0) 0 &&
-    rowAllGo net.b (net.b.start.getD (n + i) 0) ok (net.b.len.getD (n + i) 0) 0) (net.constPos - n) 0
+  allFrom (fun i => rowAll net.a (net.a.start.getD (n + i) 0) ok (net.a.len.getD (n + i) 0) &&
+    rowAll net.b (net.b.start.getD (n + i) 0) ok (net.b.len.getD (n + i) 0)) (net.constPos - n) 0
 
 /-- Compiled code runs `portReadsBFast`; the kernel and every proof see `portReadsB`. `@[csimp]` rewrites only code
 compiled after it, so it stays above `scopeOk`. -/
 @[csimp] theorem portReadsB_eq_fast : @portReadsB = @portReadsBFast := by
   funext net
   unfold portReadsB portReadsBFast
-  simp only [allFrom_eq, rowAllGo_eq, List.range_eq_range', Sparse.row, Array.toList_map, Array.toList_range,
-    List.all_append]
+  simp only [allFrom_eq, rowAll_eq, rowAllGo_eq, List.range_eq_range', Sparse.row, Array.toList_map,
+    Array.toList_range, List.all_append]
 
 /-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
 def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
