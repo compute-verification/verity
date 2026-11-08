@@ -427,6 +427,9 @@ class Mirror:
         self.calls = 0
         self.steps: list[Counter] = [Counter()]
         self.counts: Counter = Counter()
+        self.last_walk: dict[int, int] = {}
+        self.walked: int | None = None
+        self.last_result: dict[int, tuple] = {}
 
     def _pool(self, kv: Any) -> RamPool:
         if self.pool is None:
@@ -441,9 +444,36 @@ class Mirror:
             if where:
                 raise AssertionError(f"call {self.calls}: the RAM pool leaves vLLM's at its {where}")
 
+    def certify(self, p: RamPool, r: Any, n: int, hit: list[int], kw: dict) -> None:
+        """Counts, for a lookup whose allocation is refused, whether a one-unit refusal certificate would do instead of
+        the walk: x, the hit length of the request's last full walk (a function of the history, so the witness stays
+        unique), still a miss (so the hit is at most x), and the blocks needed with at most x hit, not counting
+        evictable ones, already past the free count. The walk's units are what it saves."""
+        h = len(hit)
+        units = min(h + 1, (r.num_tokens - 1) // p.B)
+        x = self.last_walk.get(r.i)
+        held = p.held.get(r.i, 0)
+        wm = p.watermark_blocks if kw["has_scheduled_reqs"] and r.status in (RP._W, RP._P) else 0
+        total = min(r.num_computed + h * p.B, p.L)
+
+        def need_lb(tokens: int) -> int:
+            return max(cdiv(tokens, p.B) - x - held, 0)
+
+        ok = (x is not None and x < (r.num_tokens - 1) // p.B and not p.ram.value(("M", r.block_hashes[x]))[0]
+              and ((kw["full_sequence_must_fit"] and need_lb(min(r.num_tokens, p.L)) + wm > p.nf)
+                   or need_lb(min(total + n, p.L)) + wm > p.nf))
+        if ok:
+            self.counts["certified refusals"] += 1
+            self.counts["lookup units a certificate saves"] += max(units - 1, 0)
+        else:
+            self.last_walk[r.i] = h
+
     def _tally(self, before: Counter) -> None:
+        """Adds a call's operations to its step's; a call with none is one the step machine makes no pool call for."""
         d = self.pool.ops - before
         self.steps[-1].update(d)
+        if any(d[k] for k in SHAPE):
+            self.counts["calls"] += 1
 
 
 @contextmanager
@@ -462,6 +492,13 @@ def mirrored(m: Mirror, K: type = RP._KV, S: type = RP._Sched):
             if got != out:
                 raise AssertionError(f"lookup of request {r.i}: {got}, vLLM {out}")
             m.counts["lookups"] += 1
+            m.walked = r.i
+            if p.caching:
+                res = (tuple(got), p.looked[r.i][1])
+                if m.last_result.get(r.i) == res:
+                    m.counts["repeated walks"] += 1
+                    m.counts["lookup units in repeated walks"] += p.ops["lookup"] - before["lookup"]
+                m.last_result[r.i] = res
         return out
 
     def allocate_slots(self, r, n, hit=(), *, full_sequence_must_fit=False, has_scheduled_reqs=True, dry=False):
@@ -474,6 +511,9 @@ def mirrored(m: Mirror, K: type = RP._KV, S: type = RP._Sched):
         finally:
             m.depth -= 1
         p = m._pool(self)
+        walked, m.walked = m.walked == r.i, None
+        if walked and not ok:
+            m.certify(p, r, n, hit, kw)
         before = Counter(p.ops)
         got = p.allocate_slots(r, n, hit, **kw)
         m._tally(before)
