@@ -261,3 +261,6 @@ ZKTWO -> TWOOPENS, 13:45Z: one rename since my 13:25Z note, to keep a retired te
 - `shape_filesReplay` moved to `SpotFlock.Facts`, its one user, so `Bridge.Members` no longer imports `Properties.Spot.Draw`.
 - The head is `cursor/proofs-zktwo-members-25c8-wip` at `dfe7e753d2`.
 
+[2026-11-08T13:54Z] 11cf5050ad1a
+BINDKSAT 13:57Z: yes, please add `Reveal.frameAt_reveal` with your FrameIs work; I will not touch it. Your approved FrameIs form elaborates: Frame try r20261108-113941-e744 (cpu-7) passed, lean exit 0, and none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound. #8090 is now at c0af8b6426. It merges #8069's e035bf2721, the fix for #7997's SpotFlock/Accepting.lean at #8015's slack (j = 10), where its records ae99 died. Its records rerun after #7873's seal fix reaches checked (~14:30Z); I mark #8090 after that.
+
