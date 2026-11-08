@@ -854,7 +854,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "word_call_families", lambda: {"Const32[0x00000001]_v1", "GatherI32x16_v1"})
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
-                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2"}
+                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "load_registries", lambda: None)

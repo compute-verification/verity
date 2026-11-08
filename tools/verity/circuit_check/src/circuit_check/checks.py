@@ -1135,6 +1135,26 @@ def call_partition(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
     return rec
 
 
+def callee_calls(calls: Iterable[Any], opts: Options) -> dict[str, str]:
+    """`circuit_check.targets.CALLEE_CALLS` as the Calls ``calls`` give it: each family `by_callees` asks of one the partition
+    can't cut whole (its body's over the leaf budget, else each `uncut` Definition's), with the least such Call's family that
+    passes it, and so on through those callees, each a Call; {} when each Call is cut whole."""
+    from .targets import family
+
+    out: dict[str, str] = {}
+    todo, seen = list(calls), set()
+    while todo:
+        fn = todo.pop()
+        if fn.id in seen or isinstance(fn, (PrimitiveDefinition, ScalarReference)):
+            continue
+        seen.add(fn.id)
+        for u in [fn] if over_leaves(fn, opts) is not None else uncut(fn, opts):
+            for c in callees(u):
+                out[family(c)] = min(out.get(family(c), family(fn)), family(fn))
+                todo.append(c)
+    return dict(sorted(out.items()))
+
+
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
 def conformance_of(t: Any) -> str | None:
@@ -1527,7 +1547,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "by_callees", "call_partition", "callees",
+__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "by_callees", "call_partition", "callee_calls", "callees",
            "check_definition", "check_row", "check_subcircuit", "conformance_of", "correspondence", "dead_gates", "is_commit",
            "load_pins", "over_leaves", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
            "target_equivalence", "template_lowering", "uncut", "unit_block", "whole_lowering"]

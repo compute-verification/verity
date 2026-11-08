@@ -681,8 +681,34 @@ def word_call_families() -> set[str]:
 #: spot checks, over `checks.Options.partition_max_gates` or ``partition_max_leaves``, and those it so passes to, in turn) is
 #: partitioned by its callees (`checks.by_callees`), so each family its body calls is a Call here, whatever else makes it one,
 #: and its partition fails by name; the suite derives this from the catalog and the RANGES spots and holds it to that
-#: (`test_every_call_over_the_budget_passes_call_status_to_its_callees`)
-CALLEE_CALLS: dict[str, str] = {}
+#: (`test_every_call_the_suite_checks_is_partitioned`)
+CALLEE_CALLS: dict[str, str] = {
+    "AllReduceMnnvlCoordinate_v1": "AllReduceMnnvl_v1",
+    "AllReduceMnnvl_v2": "AllReduceRmsNormMnnvl_v2",
+    "AllReduceMultimemVector_v1": "AllReduceMultimem_v1",
+    "And2_v1": "MhcFusedSplit_v2",
+    "Bf16AddF2fp_v2": "AllReduceRmsNormMnnvl_v2",
+    "Bf16MulBf16_v2": "AllReduceRmsNormMnnvl_v2",
+    "Bf16ToF32_v2": "AllReduceRmsNormMnnvl_v2",
+    "Const1[0x0]_v1": "MhcFusedSplit_v2",
+    "Const32[0x00000000]_v2": "AllReduceRmsNormMnnvl_v2",
+    "Const32[0x3727c5ac]_v2": "AllReduceRmsNormMnnvl_v2",
+    "Const32[0x43800000]_v2": "AllReduceRmsNormMnnvl_v2",
+    "DsaMqaLogit_v3": "DsaMqaLogits_v3",
+    "DsaMqaLogitsKey_v1": "DsaMqaLogits_v4",
+    "DsaMqaLogitsQ_v1": "DsaMqaLogits_v4",
+    "DsaWaksmanRows_v1": "DsaWaksmanRows_v1",
+    "DsaWaksmanSwap_v1": "DsaWaksmanRows_v1",
+    "F2fpBf16_v2": "AllReduceRmsNormMnnvl_v2",
+    "F32AddFtz_v4": "AllReduceRmsNormMnnvl_v2",
+    "F32MulFtz_v4": "AllReduceRmsNormMnnvl_v2",
+    "MhcFusedSplit_v2": "MhcFusedPostPre_v2",
+    "MhcPreBigFuse_v2": "MhcFusedPostPre_v2",
+    "MufuRcpFtz_v2": "AllReduceRmsNormMnnvl_v2",
+    "Not_v1": "MhcFusedSplit_v2",
+    "RsqrtApprox_v2": "AllReduceRmsNormMnnvl_v2",
+    "Xor2_v1": "MhcFusedSplit_v2",
+}
 
 
 def call_families(found: dict[str, Any] | None = None) -> set[str]:
