@@ -3971,7 +3971,7 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     counts[counts.index(max(counts))] += n - sum(counts)
     templates = [IF.resolve(t) for t, _c in REAL_TEMPLATES]
     program = mixed_population_program(list(zip(templates, counts)))
-    case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instances_query([t.id for t in templates]))}
+    case = {"program": _json(codec.encode_program(program)), "query": _json(PO.template_instances_query(templates))}
     kind, out = pieces.call("unit_gates", case)
     assert kind == "output", out
     gates, walk = json.loads(out)
