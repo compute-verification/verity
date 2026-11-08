@@ -96,15 +96,15 @@ def _interior(m: int, previous: str, row=0, **change) -> tuple[dict, dict]:
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
 
 
-def _lean(accepted=True, reads=None, checked=None) -> dict:
+def _lean(accepted=True, reads=None, checked=None, tables=1) -> dict:
     """The verdict of record, accepted or not, reporting the sessions' registered reads `reads`, and naming what
     `flock-verify verify` names of the session of statement `checked` it checked: its header's and registered reads'
-    digests and its sample (None: no statement's)."""
+    digests, its sample and the `tables` it set it up as (None: no statement's)."""
     v = {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}
     if reads is not None:
         v["registered"] = reads
     if isinstance(checked, dict):
-        v |= FC.checked(checked)
+        v |= FC.checked(checked, tables)
     return {"lean": v}
 
 
@@ -136,18 +136,19 @@ def _reads_of(statements) -> dict | None:
     return out or None
 
 
-def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, checked=None) -> S.Outcome:
+def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, checked=None, tables=1) -> S.Outcome:
     """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
     `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier of record
     reporting the reads `reads` gives of them and naming what it checked of the first one's session, or of the one
-    `checked` gives (a function of the honest statement, None for none)."""
+    `checked` gives (a function of the honest statement, None for none), as `tables` tables."""
     _, second = _stages(stream)
     stream.deliver(second, [SESSION])
     honest = stream.statements(second)[0]
     if callable(statements):
         statements = statements(honest, second)
     first = statements[0] if isinstance(statements, list) and statements else None
-    return stream.outcome(second, _lean(reads=reads(statements), checked=first if checked is None else checked(honest)),
+    return stream.outcome(second, _lean(reads=reads(statements), checked=first if checked is None else checked(honest),
+                                        tables=tables),
                           {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
                           statements=statements)
 
@@ -310,6 +311,16 @@ def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(checked):
     assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-verified"]
 
 
+@pytest.mark.parametrize("tables", [2, None], ids=["two-tables", "no-count"])
+def test_round_two_refuses_a_session_split_across_tables(tables):
+    """The run's own statement, which passes every other check, is refused by name (`second-tables`) when the verdict of
+    record that checked its session set it up as two Flock tables, or names no table count: round 2 reads one session
+    of one table for each part, as it reads one statement for each."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [s], tables=tables)
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-tables"]
+
+
 def test_round_two_reads_no_statement_holding_a_fraction():
     """A statement whose header holds a non-integer number, which Lean's `canon` refuses, is refused (`second-verified`)
     though its verdict names the digest `json.dumps` writes of it: Lean's verifier names no header it can't write."""
@@ -321,7 +332,8 @@ def test_round_two_reads_no_statement_holding_a_fraction():
 def test_only_an_accepted_verdict_of_record_names_what_was_checked():
     v = {"of_record": True, "accepted": True, "public_header_sha512": "ab" * 64, "unit_draw": {"units": [1]}}
     assert SS.verified_of({"lean": v, "upstream": {"of_record": False, "accepted": True}}) == (
-        SS.Checked("ab" * 64, None, {"units": [1]}),)
+        SS.Checked("ab" * 64, None, {"units": [1]}, None),)
+    assert SS.verified_of({"lean": {**v, "session_tables": 2}}) == (SS.Checked("ab" * 64, None, {"units": [1]}, 2),)
     assert SS.verified_of({"a": {**v, "accepted": False}, "b": {**v, "of_record": False},
                            "c": {**v, "public_header_sha512": None}}) == ()
 

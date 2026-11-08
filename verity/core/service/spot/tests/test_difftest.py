@@ -3449,10 +3449,12 @@ def _second_statement(rec: dict, part: SS.Part, q: int, drawn, named: bool, regi
 
 def _checked_names(s) -> dict:
     """What `flock-verify verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
-    its public file's header and its registered reads by the SHA-512 of their canonical JSON, and its sample."""
+    its public file's header and its registered reads by the SHA-512 of their canonical JSON, its sample, and one table,
+    as the verifier of record runs it."""
     if not isinstance(s, dict):
         return {}
-    out = {"public_header_sha512": _sha(codec.canonical_json(s.get("header"))), "unit_draw": s.get("draw")}
+    out = {"public_header_sha512": _sha(codec.canonical_json(s.get("header"))), "unit_draw": s.get("draw"),
+           "session_tables": 1}
     return out if s.get("registered") is None else {**out, "registered_sha512": _sha(codec.canonical_json(s["registered"]))}
 
 
@@ -3590,10 +3592,11 @@ def _restated(ss, x: int):
 #: served units, session roots, second-stage statements (none, not a list, or one changed: `_restated`), links it names
 #: (which the verifier derives, so refuses), a verdict that didn't accept, the reads a verdict reports (the
 #: interior's `x` or the boundary's `x` at their roots, `x` at another or none), and what it names of the session it
-#: checked (another header, none, no registered reads, another sample).
+#: checked (another header, none, no registered reads, another sample, two tables or no table count).
 TWO_STAGE_CHANGES = [
     (_verdict_change(lambda v, c, x: {**v, **[{"public_header_sha512": "00" * 64}, {"public_header_sha512": 5},
-                                              {"registered_sha512": None}, {"unit_draw": None}][(x // 2) % 4]}),
+                                              {"registered_sha512": None}, {"unit_draw": None}, {"session_tables": 2},
+                                              {"session_tables": None}][(x // 2) % 6]}),
      st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "links": [None, [], 5, [{"template": 1, "port": "x", "value": BX}],
                                           [{"template": INTERIOR.templates[0], "port": "y", "value": BX}]][x % 5]}),
@@ -3779,7 +3782,7 @@ def _reported(c: dict, x: int) -> dict:
 
 def _unverified(c: dict, x: int) -> dict:
     """`c` with the verdict of record that checked a statement's session gone, not accepting, not of record, or naming
-    another header, another or no registered reads, or another sample."""
+    another header, another or no registered reads, another sample, two tables or no table count."""
     vs = c["verdicts"] if isinstance(c.get("verdicts"), dict) else {}
     names = sorted(k for k in vs if k.startswith("lean-verify/"))
     if not names or not isinstance(vs[names[x % len(names)]], dict):
@@ -3788,7 +3791,8 @@ def _unverified(c: dict, x: int) -> dict:
     v = vs[name]
     changed = [None, {**v, "accepted": False}, {**v, "of_record": False}, {**v, "public_header_sha512": "00" * 64},
                {**v, "registered_sha512": "00" * 64}, {k: e for k, e in v.items() if k != "registered_sha512"},
-               {**v, "unit_draw": {"law": "subset", "population": 1, "k": 0, "units": []}}][(x // len(names)) % 7]
+               {**v, "unit_draw": {"law": "subset", "population": 1, "k": 0, "units": []}}, {**v, "session_tables": 2},
+               {k: e for k, e in v.items() if k != "session_tables"}][(x // len(names)) % 9]
     return {**c, "verdicts": {k: e for k, e in vs.items() if k != name} if changed is None else {**vs, name: changed}}
 
 
@@ -4982,7 +4986,8 @@ def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):
     over the two-template interior the honest statements pass, and a statement that passes every other check is refused
     when its header names another circuit file than the public file its session was checked against, or its session's
     verdict of record is gone, didn't accept, is not of record, or names another sample, other registered reads or
-    none, or reads where it read none."""
+    none, or reads where it read none. And only as one table (`second-tables`): a verdict of record naming it that set
+    its session up as two tables, or names no table count, is refused, even beside one that names one table."""
     triple = SECOND_MIXED.templates[1]
     sample, drawn = [0, 2], [1, 4, 6, 9]
     honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
@@ -5005,6 +5010,9 @@ def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):
         (verdict(linked, "lean-verify/1", {**v1, "registered_sha512": "00" * 64}), ["second-verified"]),
         (verdict(linked, "lean-verify/1", {k: v for k, v in v1.items() if k != "registered_sha512"}),
          ["second-verified"]),
+        (verdict(honest, "lean-verify/0", {**v0, "session_tables": 2}), ["second-tables"]),
+        (verdict(honest, "lean-verify/0", {k: v for k, v in v0.items() if k != "session_tables"}), ["second-tables"]),
+        (verdict(honest, "lean-verify/split", {**v0, "session_tables": 2}), ["second-tables"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))

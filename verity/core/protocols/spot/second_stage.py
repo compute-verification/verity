@@ -9,7 +9,9 @@ an instance of (its stratum's name under the check's query), its public file's h
 ``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
 where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
 `verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
-``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked.
+``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
+split across Flock tables is refused, as one split across statements is (``second-template``).
 
 The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
 difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
@@ -72,16 +74,23 @@ class Stmt:
 class Checked:
     """What an accepted verdict of record names of the session it checked: the digests of the public file's header and
     of the ``--registered`` file it checked the session against (``public_header_sha512``, ``registered_sha512``, None
-    for none) and the sample it checked it at (``unit_draw``)."""
+    for none), the sample it checked it at (``unit_draw``) and the number of tables it set the session up as
+    (``session_tables``)."""
 
     header: str
     registered: Any
     draw: Any
+    tables: Any
+
+
+#: `SecondStage.ONE_TABLE`: the ``session_tables`` a verdict of record names of a session round 2 reads
+ONE_TABLE = 1
 
 
 def verified_of(verdicts: Mapping[str, Any]) -> tuple[Checked, ...]:
     """`SecondStage.verifiedOf`: what each accepted verdict of record among `verdicts` that names a header names."""
-    return tuple(Checked(v["public_header_sha512"], v.get("registered_sha512"), v.get("unit_draw"))
+    return tuple(Checked(v["public_header_sha512"], v.get("registered_sha512"), v.get("unit_draw"),
+                         v.get("session_tables"))
                  for v in verdicts.values() if isinstance(v, Mapping) and isinstance(v.get("public_header_sha512"), str)
                  and v.get("of_record") and v.get("accepted") is True)
 
@@ -101,11 +110,11 @@ def _sha512(j: Any) -> str | None:
 
 
 def _checked(s: Stmt) -> Checked | None:
-    """`Stmt.checked`: what a verdict of record that checked statement `s`'s session names of it, None when its header
-    or registered reads hold a non-integer number."""
+    """`Stmt.checked`: what a verdict of record that checked statement `s`'s session, as round 2 reads one, names of it
+    (one table), None when its header or registered reads hold a non-integer number."""
     h = _sha512(s.header)
     r = None if s.registered is None else _sha512(s.registered)
-    return None if h is None or (s.registered is not None and r is None) else Checked(h, r, s.draw)
+    return None if h is None or (s.registered is not None and r is None) else Checked(h, r, s.draw, ONE_TABLE)
 
 
 @dataclass(frozen=True)
@@ -397,9 +406,18 @@ def _verified_ok(own: Own, s: Stmt) -> bool:
                                  for v in own.verified)
 
 
+def _tables_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.tablesOk`: every accepted verdict of record that names statement `s`'s header, registered reads and
+    sample set its session up as one table."""
+    c = _checked(s)
+    return c is None or all(not (v.header == c.header and _jeq(v.registered, c.registered) and _jeq(v.draw, c.draw))
+                            or _jeq(v.tables, ONE_TABLE) for v in own.verified)
+
+
 def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
     checks = (("second-verified", _verified_ok(own, s)),
+              ("second-tables", _tables_ok(own, s)),
               ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
