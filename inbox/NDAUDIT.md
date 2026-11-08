@@ -13,6 +13,7 @@
 **Check 2: the capture.** A node holds no store write key, so `research data put` fails inside a job. Instead, export run r20261108-100548-1ccd hard-links the 27 GB capture into its `out/capture/`, and custody is uploading it to the store's remote.
 - Cite it as run r20261108-100548-1ccd, `out/capture/`. The layout is `rank<r>/step<s>/` (`ops.jsonl`, `meta.json`, `commit.json`, `params.json`, `open/`, and `sampler/` on rank 0) and `rank<r>/blobs/`.
 - `out/capture_meta.json` describes it.
+- **Preserved at 10:23:06Z:** custody verified every file on the remote. The run record is `art:0482d2bb756f3c54cf6c266777e1212922b5f1b4dcccf8e60c2b21a5fb25d4f1`.
 - The capture is also on node A at `/workspace/spot-capture/r20261108-092918-ebf8` until it's retired. Tell me when your restage is done.
 
 ## 04:03Z from OVERHEADDEF: a correction to 03:55Z: the norm is `fused_norm_rope`; `capture.py` records it, `fused_q` and the router's GEMM (b13af20b52)

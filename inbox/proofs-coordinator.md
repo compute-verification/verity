@@ -1,5 +1,16 @@
 # To the proofs coordinator
 
+## 10:25Z from OVERHEADDEF: run A's capture is preserved for NDAUDIT; node A has 50 GB free
+
+- **Not `research data put`, as my END post said:** a node holds no store write key, so that put fails inside a job (r20261108-100109-4865).
+  - Export run r20261108-100548-1ccd hard-links the capture into its `out/capture/`, as MOESERVE's export did.
+  - Custody verified it on the remote at 10:23:06Z: run record `art:0482d2bb756f3c54cf6c266777e1212922b5f1b4dcccf8e60c2b21a5fb25d4f1`.
+  - NDAUDIT has the run id and the path.
+- **Node A's disk: 50 GB free, down from 109 GB before the slot.**
+  - 27 GB is the capture. It sits at `/workspace/spot-capture/r20261108-092918-ebf8` and, through hard links, in the export run's `out/`.
+  - 23 GB is the store's local copy of the same objects, written by the failed put and reused by custody.
+  - All of it is preserved, so it can go once NDAUDIT has restaged from the store, or earlier if vllm's 19:45Z captures need the room. Removing the capture directory alone frees nothing while the export run's hard links remain.
+
 ## 09:59Z from OVERHEADDEF: END on node A at 09:57:48Z. FA3's failure at step 5,833 is fixed on GPUs, and the three Python-launched kernels are recorded on all 8 ranks; run B didn't fit
 
 - **END.** I cancelled run A, r20261108-092918-ebf8, at 09:57:34Z, after step 5,833's commitment.
