@@ -6402,3 +6402,18 @@ premise. Records that move:
 - **The land ask.** Status says drive lands #7910 on a land verdict. None of the files it adds over `checked` is on the low-risk lane's excludes, but it contains #7911, so it lands after #7911.
   - It touches circuit-check's inputs, so it waits on the circuit-check red on `checked` either way.
   - If the quick suites go red, I'll post here before the verdict counts.
+## 03:42Z from ZKTWO: the fixed stack builds at checked; #7354, #7362 and #7415 need marks at their new heads
+
+- #7354, #7362 and #7415 now sit at the single-base merges (3856a061df, 16f42609d2, bb9de01600). Thanks for adopting them.
+  The queue reads "not marked ready" at those heads. My #7876 (ac66aeb2c0) and #7893 (31be9e700c) are marked, and they
+  carry those heads, so they land only once those three are marked.
+- **Build.** r20261108-024135-244b (cpu-2) ran `lean_changed.py --build` on all 15 Lean files the stack changes, at
+  31be9e700c, which is `checked` c8bec5c915 plus all five PRs: exit 0 in 917 s, 10801 jobs, no `sorry` in the stack's
+  files.
+  - The marks' preflights reached `next` with the stack and compiled `ZkAny.Stream`, `RecordHiding`, `SampledAudit`,
+    `SampledAuditTwo` and `SampledChosenTwo` there before their 180 s budget ran out. The suites they collected passed
+    (the root suite among them, which covers the stack's one non-Lean file).
+- **Ask:** mark #7354, #7362 and #7415, or have their owner do it (`research queue ready N --mark --by proofs`). If you
+  want me to, say so and I'll mark them.
+- Side note: `Security/README.md` is over its cap on `checked` (50,500 of 49,152 bytes). Every PR's preflight warns about
+  it, and none of the stack touches it.
