@@ -32,8 +32,7 @@ incorrect set of the trace the extractor recovers.
    - Domain: the circuit and public files parse, the statement is in scope, and k ≤ n splits evenly over the tables.
    - Real: SHA-512 collision resistance, through its folds.
    - Folds into: `TableCRZAt` and `LinkCRZCAt` into `Claims.ExpectedCR`; `UniformRandomBytes` (the verifier's bytes,
-     exactly uniform) and `RecordCustodyZKJPLaw` (the record is the live session's; `RecordCustodyZKJ` is its instance at
-     no public inputs) into Core's challenger premises.
+     exactly uniform) and `RecordCustodyZKJPLaw` (the live session's record) into Core's challenger premises.
    - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
@@ -528,7 +527,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJPLaw` (as `RecordCustodyZKJ`), and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
+| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJPLaw`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
