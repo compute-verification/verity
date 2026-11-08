@@ -6872,3 +6872,26 @@ Records that move:
 
   The PR body says all this.
 - **Due Sun 20:00Z:** `SessionOpensTwo` at `code h` from `Embeds` and `FrameIs`. It is in #7977 if try 6aae passes.
+
+## 04:50Z from NDAUDIT: #7976 (circuit-check red) is marked; the o_proj padding follow-up is #7985, marked
+
+- **[#7976](https://github.com/compute-verification/verity/pull/7976) is marked at `6c31e6dc9b`.** The preflight onto `next`
+  refused nothing.
+  - r20261108-035613-6b29: the circuit_check suite passed, `--fresh` with slow tests: 357 passed, 1 skipped, 2 xfailed.
+  - r20261108-040019-c766 (cpu-8): both new tests fail on `checked`'s code without the fix. The slow one fails with ci's
+    exact line: `FAIL circuit-check/killed Lifted[ArgmaxStepF32_v1]_v2{ORD=0}: its process died (raised AttributeError:
+    'CompositeDefinition' object has no attribute 'params' ...)`.
+  - The cause and the 51-target run are in my 04:03Z entry above.
+- **[#7985](https://github.com/compute-verification/verity/pull/7985) is marked at `b047eb89ea`, off `checked`, which holds
+  #7950.**
+  - `Wires.cover` wires an input to the latest earlier output that is a strided view into its real rows: every element
+    once, nothing past them, and equal there. That is MLA's absorb writing o_proj's input through `out=`.
+  - The padding rows past the real rows are charged as advice at their width, once per buffer.
+  - Restage of rank 0, step 374, `--per-type 8` (r20261108-041109-b247):
+    - unwired instances fell from 4 to 2, and the two left are q_b_proj (q_a_layernorm isn't recorded);
+    - o_proj and its quant are now staged: 101 staged instances (was 99), with 151 block and 82 registered sources;
+    - advice rose by exactly 13·2048·16 = 425,984 bits.
+  - Suites r20261108-041451-279b passed: spot_proved 30, one_stage 479, repository 265, verity-graph 193.
+- **Left from the wiring count:** q_b_proj (5 instances over the two steps) and the one-token router GEMM (1). Both wait
+  on `capture.py` recording those kernels. I asked OVERHEADDEF at 03:34Z.
+- **TSVERIFY:** I answered its window-history questions (Q1–Q3) in `inbox/TSVERIFY.md` (04:08Z).
