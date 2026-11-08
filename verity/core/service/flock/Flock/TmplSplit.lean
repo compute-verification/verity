@@ -249,13 +249,14 @@ def Tab.refDK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
     else (Tab.flushP o px py pd, cx, P / A, addK as ws t (fac v) nk 0 (Array.replicate 64 0))
   else ((List.range nk).foldl (fun o k => Tab.ref D pt false A B as gL pos o k cx (ws.getD k 0) v) o, px, py, pd)
 
-/-- A row's references `vs` of chunk `cx` at every copy, weight `ws[k]`, on pending sums: under 64 one at a time
-(`Tab.refDK`), else summed in runs (`Tab.refsK`). -/
+/-- A row's references `vs` of chunk `cx` at every copy, weight `ws[k]`, on pending sums: one at a time (`Tab.refDK`)
+while under 64 at a unit low part (`B = 1`), whose references' slots are their positions' and rarely shared; else summed
+in runs (`Tab.refsK`), whose products serve every reference of a slot: at `B = 64` a row's references share one. -/
 @[specialize]
 def Tab.halfK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
     (nk cx : Nat) (ws : Array F128) (st : Tab × Nat × Nat × Array F128) (vs : Array Nat) :
     Tab × Nat × Nat × Array F128 :=
-  if vs.size < 64 then vs.foldl (Tab.refDK D pt A B as gL pos fac nk cx ws) st
+  if vs.size < 64 && B == 1 then vs.foldl (Tab.refDK D pt A B as gL pos fac nk cx ws) st
   else (Tab.refsK D pt A B as gL pos fac st.1 nk cx ws vs, st.2)
 
 /-- One explicit row `(x, ra, rb)` at every copy on pending sums: its weights formed once, an `A` reference's times `α`,
