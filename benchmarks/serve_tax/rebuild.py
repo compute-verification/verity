@@ -34,8 +34,8 @@ request's counters, the mirror's rows, and each request's K/V root on the GPU), 
 replay matched serving up to S. ``--from-mirror MDIR`` starts a fresh engine at S from that alone (`readd_mirror`):
 outputs through S-1 are those processed by then and the record's for S-1, still in flight under async scheduling, and
 nothing past a computed prefix is filled in. It refuses a step whose rows run a request the step before finished (async
-scheduling's extra row, which the record doesn't keep), and compares from S to the far edge as rebuild.json does, with
-the roots at S against the GPU's.
+scheduling's extra row: the fresh engine would need the finished request back to run it), and compares from S to the
+far edge as rebuild.json does, with the roots at S against the GPU's.
 """
 from __future__ import annotations
 
