@@ -18,7 +18,7 @@ while [ $# -gt 0 ]; do
   [ "$1" = "--" ] && { shift; flags=("$@"); break; }
   ns+=("$1"); shift
 done
-L=$PWD/verity/core/service/sampled_proofs
+L=$PWD/verity/core/service/spot
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
@@ -30,7 +30,7 @@ name = "whole_run_time"
 defaultTargets = ["whole-run-time"]
 
 [[require]]
-name = "core_sampled_proofs"
+name = "core_spot"
 path = "$L"
 
 [[lean_exe]]

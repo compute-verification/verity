@@ -1,4 +1,4 @@
-import SampledProofs
+import Spot
 
 /-!
 `whole-run-time run FILE [--no-whole] [--no-steps]`: the `run` piece (`Pieces.run`, the stream's whole run of one
@@ -15,7 +15,7 @@ One `PHASE {json}` line per step on stdout. `whole_run.sh` builds it against the
 measurement, not a verifier.
 -/
 
-open Lean SampledProofs
+open Lean Spot
 
 def statusKb (field : String) : IO Nat := do
   let s ← IO.FS.readFile "/proc/self/status"

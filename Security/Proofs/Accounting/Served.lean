@@ -11,7 +11,7 @@ public import Proofs.Accounting.Lemmas.Compose
 `Properties.Served.DrawMissesSubset` from two bounds that meet at `C(N − |B|, K)/C(N, K)`, `B` the tiles of `U` below
 `N`:
 
-* **the code** (`Properties.SampledProofs.SecurityProofs.one_bound`): `drawUnits (.subset K) N` from `L` uniform bytes
+* **the code** (`Properties.Spot.SecurityProofs.one_bound`): `drawUnits (.subset K) N` from `L` uniform bytes
   misses `B`'s numbers, and so `U`, with probability at most that ratio;
 * **the model** (`miss_ge`): a uniform permutation's `K`-subset misses `B` with probability at least that ratio (it is
   exactly it), by induction on `K` through `Equiv.Perm.decomposeFin`, as `Budget.miss_le` bounds it from above: the
@@ -141,7 +141,7 @@ theorem drawMissesSubset : DrawMissesSubset := by
   have hU : ∀ u ∈ (tilesOf N U).map Fin.valEmbedding, u ∈ U := fun u hu => by
     obtain ⟨t, ht, rfl⟩ := Finset.mem_map.1 hu
     exact mem_tilesOf.1 ht
-  have hcode := (Properties.SampledProofs.SecurityProofs.one_bound N _ hr L).1 K hK
+  have hcode := (Properties.Spot.SecurityProofs.one_bound N _ hr L).1 K hK
   rw [Finset.card_map] at hcode
   refine le_trans ?_ (hcode.trans ?_)
   · rw [prob_eq_pr]
