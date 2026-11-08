@@ -131,16 +131,18 @@ class Stream(S.Stream):
         """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
         the interior program, its header over the template's slots of the interior registration at its roots (the ports
         `<template>/<port>` there where the record names ports by template), its sample the second stage's units among
-        them, counted from its first, and no registered reads."""
+        them, counted from its first, and its registered reads each value the interior registration registers, under a
+        port of its name (None when it registers none)."""
         e = self._entries[second.registration.order]
         rec = second.registration.record
         named = any("/" in r["port"] for r in rec["roots"])
+        reads = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")} for x in rec.get("registered", [])}
         out = []
         for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query):
             prefix = f"{t}/" if named else ""
             roots = {r["port"].removeprefix(prefix): r for r in rec["roots"] if r["port"].startswith(prefix)}
             units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]
-            out.append({"template": t, "registered": None,
+            out.append({"template": t, "registered": {"ports": reads} if reads else None,
                         "header": {"scheme": rec["scheme"], "instances": hi - lo, "units": {"indices": list(range(lo, hi))},
                                    "frame_v3": {"roots": {p: r["root"] for p, r in roots.items()},
                                                 "domain_ids": {p: r["domain"] for p, r in roots.items()}}},

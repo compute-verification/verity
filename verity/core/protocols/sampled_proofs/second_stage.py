@@ -13,7 +13,7 @@ an instance of (its stratum's name under the check's query), its public file's h
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,6 +27,8 @@ FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interio
 CELLS_WHY = "the interior program's strata are not one range each, of a positive multiple of the replay sample's size"
 STATEMENTS_WHY = ("a two-stage outcome names its second-stage sessions' statements: each one's template, header, draw and "
                   "registered reads")
+REPORTED_WHY = ("the registered reads the verifiers of record report are not the statements' registered reads, value by "
+                "value")
 STMT_KEYS = ["draw", "header", "registered", "template"]
 
 
@@ -55,15 +57,39 @@ class Stmt:
 
 
 @dataclass(frozen=True)
+class Link:
+    """A link of the two-stage design: template `template`'s session port `port` reads the boundary registration's port
+    `value`."""
+
+    template: str
+    port: str
+    value: str
+
+
+def links_of(j: Any) -> tuple[Link, ...]:
+    """`SecondStage.linksOf?`: the design's links from their JSON, none for None, each an object of exactly ``template``,
+    ``port`` and ``value``, strings; ValueError for anything else."""
+    if j is None:
+        return ()
+    if not (isinstance(j, list) and all(isinstance(x, dict) and sorted(x) == ["port", "template", "value"]
+                                        and all(isinstance(s, str) for s in x.values()) for x in j)):
+        raise ValueError("links is a list of {template, port, value}, strings")
+    return tuple(Link(x["template"], x["port"], x["value"]) for x in j)
+
+
+@dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
-    registrations' records, and the second draw's units."""
+    registrations' records, the second draw's units, the design's links, and the ``{value: root}`` the verifiers of
+    record report the sessions read (`audit.session_registered`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
     interior: Any
     boundary: Any
     drawn: tuple[int, ...]
+    links: tuple[Link, ...] = ()
+    reported: Mapping[str, Any] | None = None
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -140,7 +166,8 @@ def _roots_ok(named: bool, rec: Any, t: str, h: Any, reads: Sequence[str]) -> bo
         return e is not None and _jeq(r, _get(e, "root")) and _jeq(_get(_get(fv, "domain_ids"), p), _get(e, "domain"))
     mine = [x for x in reg if not named or x.startswith(t + "/")]
     return (_jeq(_get(h, "scheme"), _get(rec, "scheme")) and all(held(p, r) for p, r in roots)
-            and all(any(_port_of(named, t, p) == x for p, _ in roots) for x in mine))
+            and all(any(_port_of(named, t, p) == x for p, _ in roots) or any(_port_of(named, t, p) == x for p in reads)
+                    for x in mine))
 
 
 def own_draw(q: int, p: Part, drawn: Sequence[int]) -> dict[str, Any]:
@@ -160,33 +187,44 @@ def _same_at(e: Any, x: Any) -> bool:
     return all(_jeq(_get(e, k), _get(x, k)) for k in ("root", "domain", "leaves"))
 
 
-def _reads_ok(own: Own, p: Part, e: Any) -> bool:
-    """Every read of a boundary port's registered-reads entry `e` (slot ``reads_from + k`` reads ``reads[k]``) is none,
-    or a row of the slot's cell's replay block, the slot one of part `p`'s."""
+def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | None]) -> bool:
+    """`SecondStage.rowsOk`: every read of registered-reads entry `e` (slot ``reads_from + k`` reads row ``reads[k]``,
+    None for none) is by one of part `p`'s slots `u`, of a row of the unit ``unit(u)`` names, in a tree of `units` units'
+    rows, ``leaves // units`` each."""
     first = _get(e, "reads_from")
     first = 0 if first is None else first
-    leaves, n, rs = _get(e, "leaves"), _get(own.boundary, "population"), _get(e, "reads")
-    if not (_nat(leaves) and _nat(n) and isinstance(rs, list) and _nat(first)) or n == 0 or leaves % n:
+    leaves, rs = _get(e, "leaves"), _get(e, "reads")
+    if not (_nat(leaves) and isinstance(rs, list) and _nat(first)) or units <= 0 or leaves % units:
         return False
-    rows, q = leaves // n, len(own.sample)
+    r = leaves // units
 
     def read_ok(u: int, x: Any) -> bool:
         if x is None:
             return True
-        if not (_nat(x) and p.holds(q, u)):
-            return False
-        b = own.sample[p.span(u)]
-        return b * rows <= x < (b + 1) * rows
+        b = unit(u)
+        return _nat(x) and b is not None and p.holds(q, u) and b * r <= x < (b + 1) * r
     return all(read_ok(first + k, x) for k, x in enumerate(rs))
 
 
-def _link_ok(own: Own, p: Part, e: Any) -> bool:
-    v = _get(e, "value")
+def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
+    """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: its own
+    port of the interior record, each slot only its own rows; else the boundary port a link names for it, each slot only
+    its cell's replay block's rows; else a value either registration registers. Each at its root, domain and leaves."""
+    v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
         return False
-    b = _by_port(own.boundary).get(v)
+    x, b = _by_port(own.interior).get(v), _by_port(own.boundary).get(v)
+    if x is not None:
+        return (v == _port_of(named, p.template, port) and _same_at(e, x)
+                and _rows_ok(q, p, e, q * p.n, lambda u: u - p.lo))
     if b is not None:
-        return _same_at(e, b) and _reads_ok(own, p, e)
+        m = _get(own.boundary, "population")
+
+        def block(u: int) -> int | None:
+            i = p.span(u)
+            return own.sample[i] if 0 <= i < q else None
+        return (Link(p.template, port, v) in own.links and _same_at(e, b) and _nat(m)
+                and _rows_ok(q, p, e, m, block))
     x = _registered_entry(own.boundary, v)
     if x is None:
         x = _registered_entry(own.interior, v)
@@ -198,12 +236,29 @@ def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
     checks = (("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
-              ("second-link", all(_link_ok(own, p, e) for _, e in reads)))
+              ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)))
     return [code for code, ok in checks if not ok]
 
 
 def _templates(ss: Sequence[Any]) -> list[str]:
     return [s.template for s in map(_stmt, ss) if s is not None]
+
+
+def statement_reads(ss: Sequence[Any]) -> dict[str, Any]:
+    """`SecondStage.statementReads`: the ``{value: root}`` statements `ss` read, merged as `audit.session_registered`
+    merges the verdicts': a value read under two roots maps to None."""
+    out: dict[str, Any] = {}
+    for s in map(_stmt, ss):
+        for _, e in _entries(_get(s.registered, "ports")) if s is not None else ():
+            v = _get(e, "value")
+            if isinstance(v, str):
+                root = _get(e, "root")
+                out[v] = (out[v] if _jeq(out[v], root) else None) if v in out else root
+    return out
+
+
+def _same_dict(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
+    return len(a) == len(b) and all(k in b and _jeq(v, b[k]) for k, v in a.items())
 
 
 def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
@@ -223,6 +278,8 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
     covered = _templates(ss)
     found += [("second-cover", {"template": p.template}) for p in ps
               if p.template not in covered and any(p.holds(q, u) for u in own.drawn)]
+    if not _same_dict(own.reported or {}, statement_reads(ss)):
+        found.append(("second-reported", REPORTED_WHY))
     return found if found or allow else [("two-stage-form", FORM_WHY)]
 
 
@@ -248,4 +305,4 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Own", "Part", "attach", "check", "own_draw", "parts"]
+__all__ = ["FORM", "Link", "Own", "Part", "attach", "check", "links_of", "own_draw", "parts", "statement_reads"]

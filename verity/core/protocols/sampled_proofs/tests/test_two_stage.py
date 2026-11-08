@@ -47,6 +47,9 @@ PUBLIC = (S.Public("population", "structure", "N, the sample's range"),
             for k in ("leaves", "domain")))
 VALUES = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR))
 RULE = S.TwoStage(GRAIN, f"subset:{Q}", K)
+TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY))
+#: The design's one link: PAIR's session port `y`, of no interior root, reads the boundary's `bx`.
+LINK = {"template": TEMPLATE, "port": "y", "value": "bx"}
 
 
 def _spec(selection=RULE, values=VALUES, proof_deadline=60.0) -> S.Spec:
@@ -91,8 +94,9 @@ def _interior(m: int, previous: str, row=0, **change) -> tuple[dict, dict]:
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
 
 
-def _lean(accepted=True) -> dict:
-    return {"lean": {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}}
+def _lean(accepted=True, reads=None) -> dict:
+    v = {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}
+    return {"lean": v if reads is None else {**v, "registered": reads}}
 
 
 def _roots(names) -> dict:
@@ -105,23 +109,34 @@ def _refused(f) -> tuple[str, ...]:
     return e.value.verdict.codes
 
 
-def _stages(stream: S.Stream, row=0) -> tuple[S.Draw, S.Draw]:
+def _stages(stream: S.Stream, row=0, links=None) -> tuple[S.Draw, S.Draw]:
     previous = R.digest(stream._log[-1]) if stream._log else None
     reg = stream.register(*_boundary(row=row, previous=previous))
     first = stream.select(reg)
-    stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, row))
+    stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, row), links=links)
     return first, stream.select(stream._entries[reg.order].interior)
 
 
-def _two_stage_outcome(stream: S.Stream, statements) -> S.Outcome:
-    """The run's outcome with the second-stage statements `statements` gives: a function of the honest prover's one
-    (`fake_challenger.Stream.statements`, PAIR's) and the second stage's sample, or as given."""
-    _, second = _stages(stream)
+def _reads_of(statements) -> dict | None:
+    """What a verifier of record reports the sessions read (`{port: {"value", "root"}}`): the statements' registered
+    reads, None when none reads any."""
+    out = {}
+    for s in statements if isinstance(statements, list) else ():
+        ports = s.get("registered", {}).get("ports") if isinstance(s, dict) and isinstance(s.get("registered"), dict) else None
+        out |= {p: {"value": e["value"], "root": e["root"]} for p, e in (ports or {}).items()}
+    return out or None
+
+
+def _two_stage_outcome(stream: S.Stream, statements, links=(LINK,), reads=_reads_of) -> S.Outcome:
+    """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
+    `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), the design's `links`, and
+    the verifier of record reporting the reads `reads` gives of them."""
+    _, second = _stages(stream, links=list(links))
     stream.deliver(second, [SESSION])
     if callable(statements):
         statements = statements(stream.statements(second)[0], second)
-    return stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
-                          statements=statements)
+    return stream.outcome(second, _lean(reads=reads(statements)), {"statement": "stub"},
+                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
@@ -176,18 +191,27 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
     out = _two_stage_outcome(stream, lambda s, second: [s])
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["ok"] and checks["run"]["codes"] == [V.DISAGREE]
-    assert {"interior", "public", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
+    assert {"interior", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
 
 
 def _link(second: S.Draw, shift: int = 0) -> dict:
-    """Registered reads under a port of no interior root (`y`) of boundary port `bx`, one row a replay block: each slot's
-    of its cell's replay block, or of the one `shift` on."""
+    """Registered reads under the linked port `y` of boundary port `bx`, one row a replay block: each slot's of its cell's
+    replay block, or of the one `shift` on."""
     first = second.replay_sample
     bx, = (r for r in first.registration.record["roots"] if r["port"] == "bx")
     sample = D.proved(first.draw)
     return {"format": "verity/registered-reads/v1", "ports": {"y": {
         "value": "bx", "root": bx["root"], "domain": bx["domain"], "leaves": bx["leaves"], "reads_from": 0,
         "reads": [(sample[u // N_RHO] + shift) % N for u in range(Q * N_RHO)]}}}
+
+
+def _own(second: S.Draw, shift: int = 0) -> dict:
+    """Registered reads under PAIR's port `x` of the interior's own `x`, one row a slot: each slot's own, or the one
+    `shift` on."""
+    x, = (r for r in second.registration.record["roots"] if r["port"] == "x")
+    return {"format": "verity/registered-reads/v1", "ports": {"x": {
+        "value": "x", "root": x["root"], "domain": x["domain"], "leaves": x["leaves"], "reads_from": 0,
+        "reads": [(u + shift) % (Q * N_RHO) for u in range(Q * N_RHO)]}}}
 
 
 def _restated(**change):
@@ -205,6 +229,7 @@ def _frame(key: str, f):
 
 @pytest.mark.parametrize("statements, codes", [
     (lambda s, second: [{**s, "registered": _link(second)}], ["two-stage-form"]),
+    (lambda s, second: [{**s, "registered": _own(second)}], ["two-stage-form"]),
     (None, ["second-statements"]),
     ([], ["second-cover"]),
     (lambda s, second: [s, s], ["second-template"]),
@@ -219,21 +244,49 @@ def _frame(key: str, f):
     (_frame("domain_ids", lambda d: {**d, "out": d["x"]}), ["second-roots"]),
     (_restated(draw=lambda d: {**d, "units": [0, 3] if d["units"] != [0, 3] else [1, 4]}), ["second-sample"]),
     (_restated(draw=lambda d: {**d, "population": N * N_RHO}), ["second-sample"]),
-    (lambda s, second: [{**s, "registered": _link(second, shift=1)}], ["second-link"]),
-    (lambda s, second: [{**s, "registered": {"ports": {"x": _link(second)["ports"]["y"]}}}], ["second-roots"]),
+    (lambda s, second: [{**s, "registered": _link(second, shift=1)}], ["second-read"]),
+    (lambda s, second: [{**s, "registered": _own(second, shift=1)}], ["second-read"]),
+    (lambda s, second: [{**s, "registered": {"ports": {"x": _link(second)["ports"]["y"]}}}], ["second-read"]),
+    (lambda s, second: [{**s, "registered": {"ports": {"y": _own(second)["ports"]["x"]}}}], ["second-read"]),
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
-    """Round 2, by both verifiers, passes the run's own statements, a boundary port read at each slot's cell's replay
-    block included (the form's refusal their one failure), and refuses: none (`second-statements`), none for a template
-    the second stage drew in (`second-cover`), a template twice or one of no part (`second-template`), one that isn't a
-    statement (`second-statement`), and one that isn't the run's: another population of slots (`second-population`), a
-    scheme, root or domain the interior registration's isn't or a port of it it doesn't cover (`second-roots`), another
-    sample (`second-sample`), or a boundary port read at another cell's replay block (`second-link`)."""
+    """Round 2, by both verifiers, passes the run's own statements, its linked port reading the boundary at each slot's
+    cell's replay block or its own port reading each slot's own rows included (the form's refusal their one failure),
+    and refuses: none (`second-statements`), none for a template the second stage drew in (`second-cover`), a template
+    twice or one of no part (`second-template`), one that isn't a statement (`second-statement`), and one that isn't the
+    run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
+    or a port of it it neither roots nor reads (`second-roots`), another sample (`second-sample`), or a read of another
+    cell's replay block, another slot's rows, or a port the design doesn't link or another port's own (`second-read`).
+    Neither audit record refuses the reads of its own ports at their own roots, which round 2 holds."""
     stream = _stream()
     out = _two_stage_outcome(stream, statements)
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
-    assert stream.records[0]["replay_sample"]["audit"]["accepted"]
+    assert "registered" not in checks and stream.records[0]["replay_sample"]["audit"]["accepted"]
+
+
+@pytest.mark.parametrize("links, reads, codes", [
+    ((), _reads_of, ["second-read"]),
+    ((LINK,), lambda ss: None, ["second-reported"]),
+    ((LINK,), lambda ss: {"y": {"value": "bx", "root": "ee" * 64}}, ["second-reported"]),
+    ((LINK,), lambda ss: {**_reads_of(ss), "z": {"value": "bout", "root": "02" * 64}}, ["second-reported"]),
+])
+def test_round_two_reads_only_what_the_design_links_and_the_verdicts_report(links, reads, codes):
+    """A boundary port is read only by the session port the design's links name for it (`second-read`), and the reads
+    the verifier of record reports are exactly the statements' (`second-reported`): none, another root, or one more."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [{**s, "registered": _link(second)}], links, reads)
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == codes
+
+
+def test_an_own_read_at_another_root_fails_the_interior_audit():
+    """The interior audit takes a read of its own port only at that port's root: at another, its `registered` check
+    fails beside round 2's (`second-read`)."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [{**s, "registered": {"ports": {"x": {
+        **_own(second)["ports"]["x"], "root": "ee" * 64}}}}])
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and not checks["registered"]["ok"] and checks["statements"]["codes"] == ["second-read"]
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():

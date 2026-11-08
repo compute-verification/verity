@@ -382,9 +382,9 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
-    (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, and the second-stage sessions' `statements`
-    (`second_stage`); `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record
-    with round 2's `statements` check."""
+    (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`
+    and the design's `links` (`second_stage`); `python` then holds its `{"receipt", "draw", "read", "audit"}` under
+    `interior`, its audit record with round 2's `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs),
@@ -411,7 +411,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "proved_units": None if it["proved_units"] is None else list(it["proved_units"]),
             "instances": it["instances"], "served": None if it["served"] is None else list(it["served"]),
             "session_roots": None if it["session_roots"] is None else dict(it["session_roots"]),
-            "statements": None if it.get("statements") is None else list(it["statements"])}
+            "statements": None if it.get("statements") is None else list(it["statements"]),
+            "links": list(it.get("links") or [])}
     got = lean("run", args)
     for path in (("audit",), ("interior", "audit")):
         at = got
@@ -488,20 +489,27 @@ def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
-                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
+                 own_reads: bool = False) -> dict[str, Any]:
     """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
-    values (`audit.session_registered(verdicts, registration)`): the record of record, with `verifiers` (`{"of_record",
-    "lean", "python", "agree"}`, each side's acceptance and failed checks)."""
+    values (`audit.session_registered(verdicts, registration)`), with `own_reads` (a two-stage run's, whose round 2
+    holds those reads' rows) less the reads of the registration's own ports at their own roots (`Record.lessOwnReads`):
+    the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed
+    checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
+    opened = audit.session_registered(verdicts, registration)
+    if own_reads and opened is not None:
+        roots = {r["port"]: r["root"] for r in registration["roots"]}
+        opened = {v: r for v, r in opened.items() if not (v in roots and roots[v] == r)}
     py = audit.audit_record(registration, receipt, draw, law, list(proved_units), instances, statement, verdicts, delta,
-                            sessions, served, session_roots,
-                            audit.session_registered(verdicts, registration))
+                            sessions, served, session_roots, opened)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("record", {"registration": dict(registration), "receipt": dict(receipt), "draw": dict(draw),
                           "law": dict(law), "proved_units": list(proved_units), "instances": instances,
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
-                          "session_roots": None if session_roots is None else dict(session_roots)})
+                          "session_roots": None if session_roots is None else dict(session_roots),
+                          **({"own_reads": True} if own_reads else {})})
     if isinstance(got, str):
         try:
             got = json.loads(got)
