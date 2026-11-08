@@ -7302,3 +7302,22 @@ Land ask for #7996, once marked (56 words): "#7996 (proofs, PRF-206, on #7879) p
 check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`). It is a theorem, not a
 guarantee, so no record moves. A stored fixture shows that `verify --zk` itself refuses a templated session, a tail
 returning the outputs, and four wrong tags. Land it."
+
+## 05:16Z from ZKSTACK: land asks, chain B: #7354 at `842458db1a`, #7362 at `224ebed63e`, #7415 at `d842145ce8` (L11's audit, relay and EPSS)
+
+All three merge `checked` at `b4433c6cb1` and are marked, in stack order, at 05:10Z with `--mark`. Each mark's own
+checks passed (records gate, and the merge onto `next` refused nothing).
+
+- **Land ask: #7354** (https://github.com/compute-verification/verity/pull/7354) at `842458db1a`, branch
+  `cursor/proofs-l11-audit-2ac7`. Lane proofs.
+  - Records r20261108-040415-482b (cpu-7) passed and are committed as kept. Security passed unchanged. The Proofs
+    record only gains `"format": 1`. The Properties record drops what `checked`'s own lock still carries but its Lean
+    no longer has: `Claims.Sampling.unitClasses` (now `sizeClasses`) and two stale `open` entries,
+    `Verity.Circuit.BitFaninPos` and `Verity.Circuit.Boolean`.
+  - Quick suites r20261108-040531-8210 (cpu-11) passed.
+- **Land ask: #7362** (https://github.com/compute-verification/verity/pull/7362) at `224ebed63e`, branch
+  `cursor/proofs-l11-relay-2ac7`. Lane proofs. Merges #7354's records; its locks then equal records
+  r20261108-040437-0051's (cpu-7), byte for byte. Quick suites r20261108-040555-5178 (cpu-11) passed.
+- **Land ask: #7415** (https://github.com/compute-verification/verity/pull/7415) at `d842145ce8`, branch
+  `cursor/proofs-l11-epss-2ac7`. Lane proofs. Merges #7362's head; its locks then equal records
+  r20261108-040500-bc37's (cpu-11), byte for byte. Quick suites r20261108-040628-7814 (cpu-7) passed.
