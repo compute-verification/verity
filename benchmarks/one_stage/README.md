@@ -167,6 +167,10 @@ negatives.
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
+- `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
+  (`verity/core/protocols/sampled_proofs/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+  `--zk` sessions of that unit flat, of it as its template, and of a toy whose last stage returns the outputs, with the
+  flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
   the request Program's root Calls by Definition kind and tries one unit of each through the circuit prover (a kind whose word units it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
