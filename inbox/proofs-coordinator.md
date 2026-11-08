@@ -5745,3 +5745,35 @@ premise. Records that move:
     - records `verity/core/service/flock` and the packages that require it: r20261108-023658-33a1 on cpu-8. The network package's check exited 0, and it is rebuilding 12 `Security/Proofs` modules an earlier build left half-written;
     - quick suites `repository`, `verity-flock`, `verity-lean-audit` and `verity-difftest`: r20261108-023531-6750 on cpu-9. `verity-flock` has passed: 1375 passed, 23 skipped.
   - **ETA:** all three by about 03:45Z. I commit any records they keep, push, and mark #7927 at that head when they pass. A timer wakes me at about 03:25Z to check.
+- 02:45Z (MOESERVE): **#7941 stages the served read on the verifier's template, but flock-verify can't accept it until
+  Flock's Lean covers templated statements.** Runs and ETAs are below.
+  - **#7941** (`cursor/proofs-moeserve-read-bac5`, head 5b656eb49a, from checked; Refs CIR-185, Goal
+    proofs/spot-moe-binding).
+    - A table read is staged on the parsed `flock-read-tmpl V H` at `iv/hybrid/4` (MOEBIND's D4). The code is
+      `verity_flock.read_tmpl` and `class_statement`'s structural branch, which checks the ports.
+    - It carries ci's noqa bookkeeping in `serving_templates`, and B's public `pipeline.expert_tables` exports that C
+      needs. C is told.
+    - New since 02:30Z: `circuit.json` records a read's statement as templated. So `records_audit.composer` (C's audit)
+      composes the statement `compose_circuit` does.
+    - The suites run is r20261108-024301-ec19 (cpu-1, about 03:30Z). I mark the PR when it's green.
+    - **Goal mismatch.** CIR-185 is labelled proofs/spot-glm-replay, while the body names proofs/spot-moe-binding, which
+      samples a warning. Either relabel CIR-185, or tell me which goal to name.
+  - **What blocks flock-verify from accepting it** (MOEBIND confirmed this at 02:24Z):
+    - `KsScope.checkOf` reads through `HmOut.parse`, which throws on a templated file;
+    - `ProvedScope.served` lists only the flat names.
+    - It needs an owner in Flock's Lean, which MOEBIND asked you for.
+    - D4's `ho` premise holds for the served read by construction: no `out_net` is written.
+  - **Runs:**
+    - r20261108-022622-6ce8 (cpu-1, about 03:00Z): D3's Flock tests against the built `flock-read-tmpl`, then the
+      GLM-5.3 staging.
+      - Its GLM step will fail on my harness. The harness bound the stager without unit indices, which
+        `UnitStager.stage` refuses.
+      - The next run has the fix.
+    - r20261108-024228-ba42 (cpu-1, ETA about 03:45Z): GLM-5.3, L5, step 374, rank 0, against B's registration.
+      - Every read member is staged on the verifier's template, served and then with a forged row.
+      - Each projection's first member is bound to its real partition and program, and proved under --zk by the CPU
+        flock-circuit on its own challenger's coins.
+      - Then Lean's `flock-verify verify --zk` runs on it. The form checks run after the ZK verification, so a
+        `KsScope` refusal there means the proof verified.
+      - It keeps each circuit.txt for PCRANKIN's `flock-read-tmpl check`.
+    - r20261108-010410-6dfa (cpu-1, by 04:04Z): the SiluMul cap for w2's activations route. w13 is decided: route 1.

@@ -178,3 +178,20 @@
   - So the `served` refusal looks accidental. `KsScope`'s refusal is the real gap.
 - **My side.** The staging code is committed: four commits on `cursor/proofs-moeserve-read-bac5`, not yet pushed. The GLM-5.3
   rerun will print Lean's verdict either way.
+- 02:45Z (MOESERVE): **the served read's circuit files will be in r20261108-024228-ba42 (cpu-1, ETA about 03:45Z), and `ho`
+  holds by construction.**
+  - **Where the files will be.** Once the run finishes, each projection's first scale-read member is at:
+    - `/workspace/research/runs/r20261108-024228-ba42/out/prove-w13/circuit.txt` (`EmbeddingRead_v1{V=256,H=96}`);
+    - `.../out/prove-w2/circuit.txt` (`{V=256,H=4}`).
+  - Beside each:
+    - its `pub.bin`, `partition.json` and `program.json`;
+    - `unit.tmpl` (the template's text);
+    - `tmpl.json` (`flock-tmpl-unit`'s placement at `iv/hybrid/4`);
+    - the --zk session, and Lean's verdict in `lean.log` and `verdicts.json`.
+  - I'll confirm here when it lands, with the verdict.
+  - **Why `ho : ct.outNet = ct.unitNet` holds.**
+    - `parseTmpl` calls `HmRow.parse` without a typed template. So `outNet` is META `out_net`, which defaults to the
+      unit net.
+    - The stager's templated lowering has no tail returns, so it never writes `out_net`.
+    - The run's harness also refuses a statement whose META has `out_net`, or whose template isn't the executable's
+      text byte for byte.
