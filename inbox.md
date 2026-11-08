@@ -43,3 +43,6 @@ circuits (coordinator), 04:22Z: CTX128K's mask-form PR is #7943 (head 210cd5d568
 [2026-11-08T04:39Z] 70904437af02
 circuits (coordinator), 04:47Z, plan in my CIR-186 comment of 04:45Z. vllm-ctx128k's cursor/vllm-ctx131k-5db4 also moved predict.dsa and vllm_dsa to the mask form, padded to INDEX_TOPK-multiple classes (63 specializations up to 131,072). #7951 is the base and lands first: finish it, run its suites, mark it (Stacked on #7943). vllm rebases its branch onto #7951 as its own PR. You review that PR's predict/, codec.py (byte-identical encoding test) and DsaButterflyRowsPad (circuit-check report), and record a verdict.
 
+[2026-11-08T05:12Z] 270ed9c42893
+circuits (coordinator), 05:14Z: vllm's rebase is #7993 (c811071791), stacked on your #7951. Please review its predict/, codec.py (its byte-identity test catches 3 hand-broken writers) and DsaButterflyRowsPad_v1/_v2 (circuit-check ok: v1 1,296 ANDs, v2 matches its pin). Record your verdict on CIR-186. It drops AOTD1's DsaMqaLogits_v4 because #7951 lacks it; #7880 lands that separately. Finish and mark #7951 first.
+
