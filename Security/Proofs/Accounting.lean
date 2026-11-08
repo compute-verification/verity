@@ -26,8 +26,20 @@ public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
 public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityBlock
 public import Proofs.Accounting.Pouw
 public import Proofs.Accounting.PouwWork
+public import Proofs.Accounting.PouwWitness
 public import Proofs.Accounting.BandwidthAudit
 public import Proofs.Accounting.RateAudit
+public import Proofs.Accounting.ReadUnit
+public import Proofs.Accounting.ReadUnit.Gates
+public import Proofs.Accounting.ReadUnit.Net
+public import Proofs.Accounting.ReadUnit.Tie
+public import Proofs.Accounting.ReadUnit.Frame
+public import Proofs.Accounting.ReadUnit.Sha
+public import Proofs.Accounting.ReadUnit.RowSeg
+public import Proofs.Accounting.ReadUnit.Leaf
+public import Proofs.Accounting.ReadUnit.Select
+public import Proofs.Accounting.ReadUnit.Check
+public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
 public import Proofs.Accounting.DeclaredCircuit
@@ -96,8 +108,8 @@ public import Proofs.Accounting.Responder.Latency
 public import Proofs.Accounting.HMu
 public import Proofs.Accounting.CoinFlow
 public import Proofs.Accounting.Compose
-public import Proofs.Accounting.ComposePeriod
-public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Accounting.ComposeMonitoringPeriod
+public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Accounting.Served
 public import Proofs.Accounting.Additive
 public import Proofs.Accounting.ServingBlocks
@@ -120,8 +132,8 @@ change to the guarantee, or to a definition it reads, changes its record.
 
 * `Joint`, `CovertResidual`: `Joint.lean`; `JointPerRun`: `PerRunJoint.lean`.
 * `JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`: `JointLive.lean`.
-* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposePeriod.CircuitCreditPeriod`:
-  `ComposePeriod.lean`.
+* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditPeriod`:
+  `ComposeMonitoringPeriod.lean`.
 * `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.
 * `CapacityOfStateBound`: `Capacity.lean`; `Memory.Adds`: `Memory.lean`.
 * `BandwidthOfAudit`: `BandwidthAudit.lean`; `Bandwidth.SecurityProofs.AuditRO`: `Bandwidth/AuditRO.lean`.

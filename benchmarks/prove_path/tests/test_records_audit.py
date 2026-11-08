@@ -40,7 +40,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
@@ -484,6 +484,32 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0", "--pin", f"w={pin['w']}",
                     "--registration", str(got.dir / "registration.json")]) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
+
+
+def test_an_expert_tables_registration_is_a_pin_as_written():
+    """A TP rank's registration of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
+    each table under its rank's program: moved to another rank's program it refuses, and two ranks' registrations name each table
+    twice, so a rank's window pins its own rank's."""
+    from verity_vllm.pipeline import expert_tables as ET
+
+    E, N, K, label = 8, 4, 64, "model.model.layers.3.mlp.experts.w13_weight"
+    fields = [(label, [E, N, K], 8), (label + "_scale_inv", [E, 1, 1], 32)]
+    tables = ET.tables_of(fields, {"w13": 2})
+    rng = np.random.default_rng(4)
+    words = {label: rng.integers(0, 256, (E, N, K), dtype=np.uint8), label + "_scale_inv": rng.random((E, 1, 1), dtype=np.float32)}
+
+    def registration(rank: int) -> dict:
+        prog, nonce = ET.program("test/model", "abc", 2, rank, "model."), ET.nonces(tables, [f for f, _s, _b in fields], rank)
+        values = {p: e for f, shape, _b in fields for p, e in ET.entries(prog, words[f], shape, tables[f], bytes(32), nonce).items()}
+        return json.loads(json.dumps({"schema": ET.SCHEMA, "program": prog, "repo": "test/model", "revision": "abc", "world": 2,
+                                      "rank": rank, "prefix": "model.", "blocks": {"w13": 2}, "values": values, "nonces": nonce}))
+
+    one, zero = registration(1), registration(0)
+    assert set(RA.pinned(one)) == set(one["values"]) and len(one["values"]) == N // 2 + 1
+    with pytest.raises(ValueError, match="another value or domain"):
+        RA.pinned({**one, "program": zero["program"]})
+    with pytest.raises(ValueError, match="pinned twice"):
+        RA.pinned([one, zero])
 
 
 def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_stated_records(tmp_path, capsys):
@@ -1026,7 +1052,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_law({LAW!r}), None)

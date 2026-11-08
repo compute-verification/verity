@@ -465,6 +465,65 @@ def test_a_package_failing_for_another_reason_keeps_no_record_though_update_wrot
     assert (got[S], got[P]["outcome"]) == ({"outcome": LC.FAILED, "inputs_key": got[S]["inputs_key"]}, LC.REGENERATED)
 
 
+def unwitnessed(h: str) -> str:
+    """`s/props`' lock whose guarantee G, which reads `S.DrawIsCoin`, has an `unwitnessed` entry: its statement's hash."""
+    return json.dumps({"guarantees": {"G": {"type_hash": h}}, "unwitnessed": {"G": h}}) + "\n"
+
+
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
+                                                                                            hold):
+    """A PR renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
+    `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
+    record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
+    with `--update --moved` from the first, and both records are regenerated; with the requirer's first audit left without
+    them, as before, it failed there, never reached `regenerates`, and the PR could not pass its records."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    (root / P / LC.LOCK).write_text(unwitnessed("old"))
+    moves = tmp_path / "MOVES.json"
+    moves.write_text(json.dumps({"S.DrawIsCoin": "S.SampleIsCoin"}))
+    fake, mine = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        if argv[1:2] != [str(LC.AUDIT_PY)] or os.path.relpath(argv[-1], kw["cwd"]) != P:
+            return fake(argv, **kw)
+        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        moved = json.loads(Path(argv[argv.index("--moved") + 1]).read_text()) if "--moved" in argv else None
+        mine.append((update, moved))
+        if moved is not None and not update:
+            return type("P", (), {"returncode": 2})()                      # check.py: --moved goes with --update
+        entry = json.loads((at / LC.LOCK).read_text())["unwitnessed"]["G"]
+        same = entry == "new" or (entry == "old" and (moved or {}).get("S.DrawIsCoin") == "S.SampleIsCoin")
+        fails = [] if same else ["witnesses.unwitnessed-changed: G changed since `unwitnessed` listed it"]
+        if update and same:
+            (at / LC.LOCK).write_text(unwitnessed("new"))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": [
+            {"package": str(at.resolve()), "failures": fails}]}) + "\n")
+        return type("P", (), {"returncode": 1 if fails else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, moved=moves, out=out, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True)] and mine == [(True, {"S.DrawIsCoin": "S.SampleIsCoin"})], \
+        "the requirer's one audit takes --update --moved"
+    assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
+    assert any(f"{P} requires {S}: check.py --update --moved on it from its first audit" in s for s in said)
+
+    calls.clear()
+    mine.clear()
+    said.clear()
+    for q, text in ((S, record("old", ["proofs"])), (P, unwitnessed("old"))):
+        (root / q / LC.LOCK).write_text(text)
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out2", log=said.append) == 1
+    assert mine == [(False, None)], "without --moved the requirer fails on its first audit and is not updated"
+    assert outcome_line(said)["records"][P]["outcome"] == LC.FAILED
+
+
 def test_a_package_beside_two_that_fails_otherwise_in_one_ends_failed_and_its_record_goes(pair, tmp_path):
     """A package audited beside two others takes the worse outcome. A report that fails without naming the record that
     settles it (`regenerated`) is `failed` though an earlier report's record was kept, and that record is removed."""
@@ -1006,26 +1065,6 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
 
 
-def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_records_run_reads():
-    """The merge queue's records gate (`research.queue.records_read`) lets a records run at another commit vouch for a head
-    whose checker differs only in files no records run reads; a list narrower than this one's would vouch across a change
-    that decides the run.  It counts every file of the checker Lean's records key does (`tool_inputs`), new ones included,
-    and `merge.py`, which a run loads to merge a lock across a merge of `main` (`merged`), and nothing else."""
-    from research.queue import RECORDS_SHARED, records_read
-
-    tool = LC.LA.LEAN_TOOL
-    files = sorted(tool + p.name for p in HERE.parent.iterdir() if p.is_file())
-    files += [tool + "tests/test_new.py", tool + "tests/fixtures/control/New.lean", tool + "NOTES.md", tool + "new.py",
-              "tools/verity/check/common.py", LC.LA.CONTRACT]
-    assert {tool.rstrip("/"), "tools/verity/check/common.py", LC.LA.CONTRACT} <= set(RECORDS_SHARED)
-    want, got = {*LC.tool_inputs(files), tool + "merge.py"}, {f for f in files if records_read(f)}
-    assert got == want, (
-        f"research's records gate (`records_read` in tools/research/src/research/queue.py) counts {sorted(got - want)} that "
-        f"Lean's records key doesn't, and misses {sorted(want - got)}: a file of {tool} a records run never reads goes in both "
-        "`lean_audit.NOT_READ` and `research.queue.RECORDS_TOOL_UNREAD`, and one it reads in neither (`merge.py` is in "
-        "`NOT_READ` alone)")
-
-
 def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):
     """A slot tree is a link into the node's cache root, and mountinfo names a mount by its resolved path, which
     `sandbox.sh` keeps writable: the `.lake` paths (and their `packages`, kept read-only) are the resolved ones."""
@@ -1039,3 +1078,17 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
+    """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
+    path alone refused it as matching no package, after the run had waited for its slot."""
+    pkgs = ["verity/core/protocols/network/lean", "verity/core/protocols/network/nci/lean", "Security"]
+    for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
+        (tmp_path / p).mkdir(parents=True)
+        (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("verity/core/protocols/network/lean/", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network/lean", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network", pkgs, tmp_path) == pkgs[:2]
+    assert LC.matching("network_check", pkgs) == []

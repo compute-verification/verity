@@ -18,7 +18,7 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 admit and z tables, the a-step,
 admit-step and z-step trees, the round over them, and the receipt trees (with `DitherState.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
+(`spot.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
 salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
@@ -366,7 +366,7 @@ class DitherState:
 
     def before(self, m: int) -> None:
         if m > self.t:
-            raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+            raise RuntimeError(f"a step of {m} tokens in an execution phase of T = {self.t} slots")
         self.phase("before")
         self.m, self.flags, self.cap = m, 0, None
         if self.arms and m == self.arm_m:
@@ -480,7 +480,7 @@ class DitherState:
         self.s += 1
         self.steps += 1
         if self.s + 1 >= DF.ROUNDS:
-            raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
+            raise RuntimeError(f"the execution phase's {DF.ROUNDS} rounds are spent")
 
     def stats(self) -> dict:
         ph, self.phases = self.phases, []

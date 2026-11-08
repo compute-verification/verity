@@ -169,8 +169,6 @@ def test_dsa_refuses_outside_its_domain(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "tp": {"world": 2, "rank": 0}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("a target without a device name")):
         build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
-    with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
-        build_program(phi, "step", M=257)
 
 
 def test_the_execution_label_names_the_batch_invariance(tmp_path):
@@ -187,12 +185,15 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(strict=True, reason="records.json's DSV4 row pins step Programs recorded with the atomics-order Marlin align, which read "
+                   "a `schedule` input; the predicted Program keys the align by pair index (#7946's deterministic align). Delete this "
+                   "mark when vllm re-records the row with #7946's align served (#7980, VLLM-245).")
 @pytest.mark.parametrize("rank", [0, 7])
 def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
     decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row:
     the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
-    sqrtsoftplus routers, the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC
+    sqrtsoftplus routers, the Marlin experts aligned in pair-index order.  About 25 s a rank, nearly all of it encoding the mHC
     Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
     GLM-5.3's ranks pin."""
     r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)

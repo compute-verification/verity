@@ -27,7 +27,7 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly wi
   bound at `τ`, so its value `∑ s g_s x_s` is a harm bound. The greedy fill, strata taken whole in decreasing
   `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
   `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
-  (`verity.core.protocols.sampled_proofs.optimize`).
+  (`verity.core.protocols.spot.optimize`).
 * `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
   `workOf σ w B`.
 * `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration
@@ -334,7 +334,7 @@ theorem audit_exfiltration_stratified {σs : Fin n → Fin m} {k : Fin m → ℕ
     {X : (R : Reg) → Cont (Law.stratified σs k hk) Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
     {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
-    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (b : Fin m → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, b (σs u))
     (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ)

@@ -13,7 +13,7 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
     after    on the device: step s's A tables (`commit.s8_table`'s format, labels a/<s>/<w>), admit tables (the T / 16 words of
              the slots < m, s/<s>/<w>), z tables (each slot row's N int32 LE, z/<s>/<w>, domain 'z-table'), the a-step,
              admit-step and z-step trees and the round over the three ('round'); step s - 1's receipt trees (r/<s-1>/<w>); the
-             round root read back, recorded through `sampled_proofs.challenger.LiveRecord` before its coin opens
+             round root read back, recorded through `spot.challenger.LiveRecord` before its coin opens
              (the execution phase's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
              step s + 1's launches read
 
@@ -239,7 +239,7 @@ class DitherState:
 
     def before(self, m: int) -> None:
         if m > self.t:
-            raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+            raise RuntimeError(f"a step of {m} tokens in an execution phase of T = {self.t} slots")
         self.m = m
         self.flags = 0
         self.cap_step = self.cap_rc = None
@@ -339,7 +339,7 @@ class DitherState:
         self.s += 1
         self.steps += 1
         if self.s == ROUNDS:
-            raise RuntimeError(f"the window's {ROUNDS} rounds are spent")
+            raise RuntimeError(f"the execution phase's {ROUNDS} rounds are spent")
 
     def _side_receipts(self, main, s: int, p: int, salt: bytes) -> None:
         """Step s's seeds, units (`h1r_launch` version 2) and receipt trees on the side stream, after its coin, while the

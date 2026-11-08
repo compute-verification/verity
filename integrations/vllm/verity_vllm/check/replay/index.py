@@ -23,7 +23,9 @@ SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
 SEED_PARAM = "seed"                     # the stochastic Program's seed input (Param name; committed as runner.sampler/seed per (step, request))
 VALUES_PARAM = "values"                 # a `registered_values` Program's registered values (the norms' eps, the attention scale)
-_RUN_PARAM = re.compile(r"^run(_\d+)?$")  # its run values, one parameter per request (the sampler's temperature and top_p, a Philox position)
+#: the values a request's run decides: a `registered_values` Program's per request (the sampler's temperature and top_p, a Philox
+#: position), or a DSA row's top-k order past INDEX_TOPK (`RunInputs`), which the run commits
+_RUN_PARAM = re.compile(r"^run(_\d+)?$")
 
 _CONST_ROW = re.compile(r"^Const(32|64)\[0x([0-9a-fA-F]+)\]_v\d+$")
 
@@ -87,6 +89,18 @@ def parse_struct(type_str: str) -> list[tuple[str, int, list[int], int]]:
             count *= n
         out.append((name.strip(), count, shape, bits))
     return out
+
+
+def _supplied_field(binding: str, f: dict, impl) -> dict:
+    """A supplied field as the replay reads it: one whose bits the build states (a registered value), or a `run` field
+    `<op_path>/<member>` the run commits (`RunInputs.layout`: its `leaves`, no bits), the manifest's `run_values` identity of that
+    name, its op_path the implementation's as the manifest's (`impl`, `Correspondence.implementation_path`)."""
+    if "bits" in f:
+        return dict(f, bits=int(f["bits"], 16), leaves=1)
+    if binding != "run" or "/" not in str(f["name"]):
+        raise ValueError(f"supplied {binding} field {f['name']!r} states no bits and is no `<op_path>/<member>` run value")
+    op, member = str(f["name"]).rsplit("/", 1)
+    return dict(f, leaves=int(f["leaves"]), op_path=impl(op), member=member)
 
 
 #: the query engine whose population addresses a Call's committed output (`addresses.rule` on the record)
@@ -155,13 +169,14 @@ class ProgramIndex:
                 self._v2_ports[cid] = dict(reversed([(m.port, m.member) for m in mem]))      # a port's own member, before a partial on it
                 self._v2_module[cid] = pop.program_path(cid)
         self.correspondence: dict[str, Any] | None = corr.provenance()
+        impl = corr.implementation_path
         del P, corr, pop
         self.params: list[list] = [list(p) for p in inst.get("params", [])]
         self.prefix = RM.wrapper_prefix_of(self.rows, attention_paths or []) if prefix is None else prefix
         # a warm Program's cached-prefix input (`cached_prefix.layout_of`), and per request reading it the producers' rows (`populate`)
         self.kv_prefix: dict[str, Any] | None = CP.layout_of(program_dir)
         self.cached_prefix: dict[str, CP.CachedPrefix] = {}
-        self.segs = RM.segment_steps(self.rows)
+        self.segs = RM.segment_steps(self.rows, inst.get("checks"))
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}
         self.pnames = [p[0] for p in self.params]
@@ -174,7 +189,9 @@ class ProgramIndex:
                 if a >= len(self.pnames) or self.pnames[a] != ent["name"]:
                     raise ValueError(f"supplied {binding} parameter {ent['name']!r} at index {a} is not the Program's parameter "
                                      f"{self.pnames[a] if a < len(self.pnames) else None!r}")
-                self.supplied[a] = (binding, {int(f["offset"]): dict(f, bits=int(f["bits"], 16)) for f in ent.get("fields") or []})
+                self.supplied[a] = (binding, {int(f["offset"]): _supplied_field(binding, f, impl) for f in ent.get("fields") or []})
+        del impl
+        self._supplied_offs = {a: sorted(fields) for a, (_b, fields) in self.supplied.items()}
         for a, n in enumerate(self.pnames):
             if (n == VALUES_PARAM or _RUN_PARAM.match(n)) and a not in self.supplied:
                 raise ValueError(f"parameter {n!r} is a supplied input but the instances header states no layout for it")
@@ -233,6 +250,15 @@ class ProgramIndex:
                     self._ordinal[i] = ords[0]
                 else:
                     self._v2_fault[i] = f"members {[m[0] for m in mem2]} sit at request-local rows {ords}: not one row"
+
+    def supplied_field(self, a: int, lo: int, hi: int) -> dict | None:
+        """The field of supplied parameter `a` that holds leaves [lo, hi), with its leaf offset; None when no one field holds them."""
+        fields, offs = self.supplied[a][1], self._supplied_offs[a]
+        k = bisect.bisect_right(offs, lo) - 1
+        if k < 0 or hi <= lo:
+            return None
+        f = fields[offs[k]]
+        return f if hi <= offs[k] + int(f["leaves"]) else None
 
     @property
     def n_steps(self) -> int:

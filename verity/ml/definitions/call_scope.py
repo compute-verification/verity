@@ -11,7 +11,8 @@ class QueryRuleViolation(ValueError):
 
 def specialization(fam: str, statics: dict[str, Any]):
     """The registered Definition `fam` bound to `statics` (a primitive as it is); function-valued statics (`DOT`, rendered
-    `{"fn": id}` or as the bare id) resolve to the registered Definition they name."""
+    `{"fn": id}` or as the bare id) resolve to the registered Definition they name, a specialized id (`READ`'s
+    `EmbeddingRead_v1{V=256,H=3072}`) to its family bound to its own record."""
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.definitions.registry.catalog import load
     reg, _errors = load()
@@ -26,7 +27,9 @@ def specialization(fam: str, statics: dict[str, Any]):
         try:
             return lookup_primitive(reg, fid)
         except KeyError:
-            return reg.defs[fid] if fid in reg.defs else v
+            if fid in reg.defs:
+                return reg.defs[fid]
+            return specialization(spec_base(fid), spec_statics(fid)) if "{" in fid and spec_base(fid) in reg.defs else v
 
     return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
 

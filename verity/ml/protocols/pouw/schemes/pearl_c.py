@@ -3,7 +3,7 @@ Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on
 
 The design is Pearl's H100 product and its output tickets, plus Pearl v4's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
-and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
+and no part of the clean-up can be skipped at a degenerate input.  The gap rests on the named conjecture TT_OUT(ρ) at the device
 record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl's certificate-v4 code and its ``zk-pow``
 verifier.
@@ -122,7 +122,7 @@ ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 #: the per-row cap at a census k, as a multiple of ρ: there each credited row's debit
-#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; γ rests on
+#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; the gap rests on
 #: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's cap is ρ, (C2)'s
 CENSUS_ROW_CAP = 4
 
@@ -520,7 +520,7 @@ class PearlC:
                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
         self.certificate = Certificate(
             conjecture="tt-out",
-            gamma0=None,
+            gap0=None,
             omega=Fraction(1),
             claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "live-verifier") if hashing == "h0"
             else ("tt-out", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility", "live-verifier"),
@@ -591,7 +591,7 @@ class PearlC:
     def job_cost(self, n: int, k: int) -> int:
         """The weight side of an (n, k) weight, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's
         FP32 FMA chain (r² per row at an add's price).  Neither W_ref nor the credit counts it (`creditDevRev1` leaves it
-        out, which only raises γ)."""
+        out, which only raises the gap)."""
         return (self._forming() * n * k + self._chain_units(n, R, k) + self._chain_units(R, R, k)
                 + self.prices.fadd * n * R * R)
 

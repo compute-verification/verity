@@ -7,8 +7,32 @@ behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system re
 its proof blocks with the challenger's coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW
 states what each execution phase commits, the Program each sampled proof block must pass, and what the outcome credits.
 It carries no policy parameter: it surfaces the ε at δ its sample established. A scheme must leave the useful work at
-least half of the honest prover's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
+least half of the honest developer's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
 every product, is a reference, not an answer.
+
+## Start here
+
+- **The verifier** is Lean (What runs, below): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the subprotocol
+  the onsite and the remote protocol compose. It decides each execution phase by `PouwCheck.check` and credits a closed
+  credit period by `PouwCheck.Credit`; its executable is `pouw-check`, and the Python modules of the same names mirror it.
+- **The top-level guarantees**, stated under `Security/Definitions/` and proved as `SecurityProofs.G` under
+  `Security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
+  miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 units, a layout in the
+  domain D, int7 weight entries) under the Ω_max bound (each unit's reference work at most Ω_max times its matrix
+  products'), with at most 2^64 oracle calls:
+  1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
+     scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
+     (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
+  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
+     as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
+     `Accounting.BudgetAbort`.
+  3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): a credit period's openings
+     fail to bind with probability at most |L|·√(q/2^256 + κ). Assumes `Claims.ExpectedCR`; κ is not yet bounded.
+  4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
+     a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
+     e^{−D/4}. No premise.
+
+  The rest of what is proved, what is open and every named assumption: Security assumptions and guarantees, below.
 
 ## PoUW in the remote protocol
 
@@ -19,7 +43,7 @@ inference-only policy's check (`Core.Remote.components` in `verity/core/protocol
 subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
 names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
-(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
@@ -80,7 +104,7 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/ml/protocols/pouw/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's block-scaled FP4, NVFP4 only.
+  replaced by sm_120's FP4 with scale groups, NVFP4 only.
 - **NCP** (`ncp-v1`, `verity/ml/protocols/pouw/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
@@ -89,18 +113,33 @@ Each scheme module's docstring states its steps and roundings, with pinned vecto
 
 ## Security assumptions and guarantees
 
+PoUW's security property is stated at the adversary's advantage ε, with failure probability δ: what an adversary
+spends is at least the honest work of its correct units over 1 + ε, except with probability δ (the game's and
+Pearl-C's, in `Security/Definitions/Pouw/Advantage.lean`). The proofs carry it as the gap g = ε/(1 + ε), the same
+property: an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g)
+(`Security/Definitions/Pouw/Game/Defs.lean`), and a lemma in `Security/Proofs/Pouw/Advantage.lean` proves the two forms
+equivalent. The honest overhead γ is a cost, never a share of the bound: the honest prover's busy SM-time is at most
+(1 + γ) times the fastest stock time for the same MACs, capped at γ ≤ 10 at each operating point (`GLOSSARY.md`).
+
 Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Proofs/Pouw`, as
 `Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
 reads. Proved:
 
-- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`, through two lemmas in
-  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's γ holds with error η and the sample misses more
-  than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is
-  below (1 − γ)(1 − ε_s)·W with probability at most δ_s + η) and work-weighted sampling.
+- **In ε form:** the audit end to end, `Pouw.SecurityProofs.EndToEndEps` (under TT(g₀) and the bound Ω_max, the
+  protocol's advantage is ε = Ω_max/(1 − g₀) − 1, and an audit of t work-weighted samples accepts while
+  (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
+  NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`; Pearl-C's served point,
+  `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%); and
+  Pearl-C4's at 8192³, `Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192` (ε = 9875013901/1366788186099, 0.723%). Each
+  follows from its gap form below.
+- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
+  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, and the
+  sample misses more than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts
+  while the work done is below (1 − g)(1 − ε_s)·W with probability at most δ_s + δ) and work-weighted sampling.
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
-- **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`; Pearl-C's at the served point,
-  `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
+- **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's at the served point,
+  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
   `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
   are lemmas, in `Security/Proofs/Pouw/Lemmas/PearlC.lean` and `Security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
@@ -109,7 +148,7 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and
+Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.WindowDelta`, and
 `Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`);
 Dither's guarantees (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
 per-model instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole

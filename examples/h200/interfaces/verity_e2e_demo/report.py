@@ -26,7 +26,7 @@ the per-subcircuit bound, with the joint figure labelled unlocked.
 the live coins, never sized to a proving budget; a block that drew another k says so in the caveats.
 
 **Part 3's H and B** are proofs' planner's (``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
-of it: `sampled_proofs.optimize.for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, its plan of
+of it: `spot.optimize.for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, its plan of
 record's ``free_compute`` and ``leak`` at δ = 1%. ``H_POOLED``, ``B_POOLED`` and ``PLANNER`` (the planner, its commit and
 its run) are filled together, each source naming the run.
 Part 3 is circuit size, counted in AND gates, with no FLOP figure or price: each share is
@@ -125,7 +125,7 @@ STUBS = {
                        "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
-PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
+PROTOCOL_NAMES = {"integrity": "SPOT", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
 PERIODS = block_record.PERIODS
 #: retired words, and the old names of the six subprotocols; a code span (a field or a quoted verdict line) is exempt
@@ -155,7 +155,7 @@ RECORD: dict[str, str] = {
     "RECORD_RUN": "run",
     "BLOCK_SERVER": "server",
     "BLOCK_STEPS": "server_time's steps [lo, hi)",
-    "DEMO_A_VERDICT": "sampled proofs', PoUW's and the network certifier's answer.verdict on the block's server",
+    "DEMO_A_VERDICT": "SPOT's, PoUW's and the network certifier's answer.verdict on the block's server",
     "DRAWN_UNITS": "`integrity` › quantity.drawn",
     "UNITS_TOTAL": "`integrity` › quantity.of",
     "LEAN_VERDICT": "`integrity` › answer.verdict (the Lean verifier's audit)",
@@ -191,7 +191,7 @@ MEASURED: dict[str, str] = {
     "EPS_KS": "the bound's knowledge-soundness term for C-Flock --zk at the block's sessions",
     "EPS_BIND": "the bound's binding term for the block's hm96-sha512 commitments",
     "H_A": "the bound (BOUND_CITATION) at δ = 1/100 on the block's draw, harm in ANDs: "
-           "`sampled_proofs.optimize.certify` on the block's sizes and k",
+           "`spot.optimize.certify` on the block's sizes and k",
     "H_B": "the same bound, harm in output bits",
     "BLOCK_ANDS": "the block's circuit: ANDs over all its proof blocks (circuit-check's ANDs a unit × units, per "
                   "subcircuit)",
@@ -203,10 +203,10 @@ MEASURED: dict[str, str] = {
     "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditPeriod`",
     "PROVING_GPU_S": "the prove run: GPU-seconds of proving over every drawn unit's session",
     "BLOCK_GPU_S": "the block run: H200-seconds the block served",
-    "PROVE_S_PER_AND": "the prove run, fitted by `sampled_proofs.costfit`: GPU-seconds of proving per AND",
+    "PROVE_S_PER_AND": "the prove run, fitted by `spot.costfit`: GPU-seconds of proving per AND",
     "REPLAY_GPU_S": "the block run: H200-seconds to replay the block's drawn units (the drawn-unit bundle's builder)",
     "COMMIT_GBPS": "the block run: the commit call's throughput on the H200",
-    "PLANNER_PREDICTED_S": "`sampled_proofs.optimize`'s cost for the block's draw, at the cost model fitted before the "
+    "PLANNER_PREDICTED_S": "`spot.optimize`'s cost for the block's draw, at the cost model fitted before the "
                            "block ran",
     "SERVE_COMMIT_S": "the block run: seconds of commits a step",
     "SERVE_STEP_S": "the block run: seconds a step",
@@ -618,7 +618,7 @@ def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequenc
         if name == "SUBCIRCUITS":
             src = "; ".join(f"{s['name']}: {s['source']}" for s in subcircuits) or \
                   "the block run and the prove run: per subcircuit its units, drawn units, ANDs a unit, " \
-                  "output bits a unit and fixed proving cost per sampling block (`sampled_proofs.costfit`'s " \
+                  "output bits a unit and fixed proving cost per sampling block (`spot.costfit`'s " \
                   "statement_fixed)"
             filled += bool(subcircuits)
             rows.append(f"| ⟨SUBCIRCUITS⟩ | {'filled' if subcircuits else 'unfilled'} | {src} |")
@@ -714,7 +714,7 @@ def vocabulary(text: str) -> None:
     for n, line in enumerate(text.splitlines(), 1):
         if m := BANNED.search(CODE_SPAN.sub("", line)):
             raise ValueError(f"the report says {m[0]!r} (line {n}: {line.strip()!r}): name each of the six "
-                             f"subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, "
+                             f"subprotocols (SPOT, PoUW, PoUS, the bandwidth audit, the network certifier, "
                              f"the wipe), and say 'proof block', 'sampling block', 'server-time block' and 'subcircuit'")
 
 

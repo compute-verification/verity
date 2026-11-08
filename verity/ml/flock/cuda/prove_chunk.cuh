@@ -12,6 +12,7 @@
 
 #include <chrono>
 #include "pure_sha256.cuh"
+#include "zerocheck_fused.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
@@ -50,6 +51,167 @@ __global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long
             o[q] = make_uint4((uint32_t)p[0], (uint32_t)(p[0] >> 32), (uint32_t)p[1], (uint32_t)(p[1] >> 32));
         }
     }
+}
+
+// Zerocheck round 1 (zerocheck_first_round_cpu_structured's outputs) with z folded before its extension. The table kernel's
+// c output is Σ_o eq_o Σ_j γ^j φ8(Σ_k x^k ẑ_λ(o, j, k)), ẑ_λ = Σ_s z_s M[s][λ] the extension of a column's 64 bits, where
+// M[8b + i][λ] = byte λ & 7 of t0[1 << i][(λ >> 3) ^ b]. φ8 embeds GF(2^8) in F128 as a ring, so that is Σ_s φ8(M[s][λ])·w_s
+// with w_s = Σ_o eq_o Σ_j γ^j φ8(v_s), v_s the byte whose bit k is bit s of column k: lane l sums w_s for s = l, l + 32, and
+// zc_round1_combine applies M to the 64 sums once. Only a and b go through the t0 tables, so a warp step builds 128 extension
+// words rather than 192; column k's words of a (b) are row 2k (2k + 1) of wbuf, word w at 2(w & 3) + (w >> 2), and lane l
+// loads byte l & 7 of its words w and w + 4 of each (a quarter-warp's bytes share two banks' words: one wavefront a load).
+// a·b is the table kernel's (clmad on sm_90, the log tables elsewhere).
+// No table read conflicts: a half-warp's eight a lanes and eight b lanes read t0's entry (v, w) from copies on bank pairs w and
+// 8 + w, and a quarter-warp's eight φ8 reads lane l's copy, on bank quad l & 7. The grid is resident (zc_round1_smem bytes a
+// block, two blocks an SM) and its warps stride over the outer chunks, so each block loads the copies once.
+template <int W>
+constexpr size_t zc_round1_smem() { return 256 * 8 * sizeof(F128) + 256 * 16 * 8 + W * (128 + 24) * 8 + 768; }
+
+// p < 2^22 modulo the AES polynomial P (reduce_zerocheck_gf8_wide's residue): with μ = ⌊x^22 / P⌋ = 0x4696,
+// q = ⌊⌊p / x^8⌋·μ / x^14⌋ is ⌊p / P⌋ (Barrett, exact over GF(2)[x]) and p - q·P's low byte the residue
+__device__ __forceinline__ uint8_t zc_gf8_barrett(uint32_t p) {
+    const u64 q = clmad_lo((u64)(p >> 8), 0x4696ull, 0) >> 14;
+    return (uint8_t)(p ^ (uint32_t)clmad_lo(q, 0x11bull, 0));
+}
+
+template <int W>
+__global__ void __launch_bounds__(W * 32, 2) zc_round1_zlin(const uint8_t* __restrict__ a_packed, const uint8_t* __restrict__ b_packed,
+                                                            const uint8_t* __restrict__ z_packed, const F128* __restrict__ eq_out,
+                                                            const u64* __restrict__ t0, const F128* __restrict__ phi, long long n_out,
+                                                            F128* __restrict__ raw_ab, F128* __restrict__ raw_w) {
+    extern __shared__ __align__(16) unsigned char zc_smem[];
+    F128* s_phi = reinterpret_cast<F128*>(zc_smem);   // entry r's copy q at 8r + q
+    u64* s_t0 = reinterpret_cast<u64*>(s_phi + 256 * 8);   // entry (v, w)'s copy c at 16v + 8c + w
+    u64* s_wbuf = s_t0 + 256 * 16;
+    u64* s_scol = s_wbuf + W * 128;
+    uint8_t* s_log = reinterpret_cast<uint8_t*>(s_scol + W * 24);
+    uint8_t* s_antilog = s_log + 256;
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900 && __CUDA_ARCH__ < 1000
+    constexpr bool cl = true;
+#else
+    constexpr bool cl = false;
+#endif
+    for (int i = threadIdx.x; !cl && i < 256; i += blockDim.x) s_log[i] = d_zc_log[i];
+    for (int i = threadIdx.x; !cl && i < 512; i += blockDim.x) s_antilog[i] = d_zc_antilog[i];
+    for (int i = threadIdx.x; i < 256 * 16; i += blockDim.x) s_t0[i] = t0[(i >> 4) * 8 + (i & 7)];
+    for (int i = threadIdx.x; i < 256 * 8; i += blockDim.x) s_phi[i] = phi[i >> 3];
+    __syncthreads();
+
+    const int wid = threadIdx.x >> 5, lane = threadIdx.x & 31, q = lane & 7;
+    u64* scol = s_scol + wid * 24;
+    u64* wbuf = s_wbuf + wid * 128;
+    const int wt = (lane >> 3) & 1, wcol = lane & 7;
+    const unsigned char* t0b = reinterpret_cast<const unsigned char*>(s_t0);
+    uint32_t toff[8];   // the byte offset of entry (0, wcol ^ b)'s copy wt; entry (v, w)'s is 128v more
+#pragma unroll
+    for (int b = 0; b < 8; b++) toff[b] = (uint32_t)(wt * 8 + (wcol ^ b)) * 8;
+    const unsigned char* wb8 = reinterpret_cast<const unsigned char*>(wbuf) + 16 * (lane >> 3) + (lane & 7);
+    F128 pab0{0, 0}, pab1{0, 0}, pw0{0, 0}, pw1{0, 0};
+    for (long long o = (long long)blockIdx.x * W + wid; o < n_out; o += (long long)gridDim.x * W) {
+        const F128 eq_o = eq_out[o];
+        F128 chunk_ab0{0, 0}, chunk_ab1{0, 0}, chunk_w0{0, 0}, chunk_w1{0, 0};
+        for (int j = 15; j >= 0; j--) {
+            const long long base = (o * 128 + j * 8) * 8;
+            if (lane < 24) {
+                const uint8_t* Wt = lane < 8 ? a_packed : lane < 16 ? b_packed : z_packed;
+                scol[lane] = *(const u64*)(Wt + base + (lane & 7) * 8);
+            }
+            __syncwarp();
+#pragma unroll
+            for (int r = 0; r < 4; r++) {
+                const int k = (lane >> 4) + 2 * r;
+                const u64 src = scol[wt * 8 + k];
+                const uint32_t lo = (uint32_t)src, hi = (uint32_t)(src >> 32);
+                u64 word = 0;
+#pragma unroll
+                for (int b = 0; b < 8; b++) {
+                    const uint32_t h = b < 4 ? lo : hi;
+                    const uint32_t v128 = ((b & 3) == 0 ? h << 7 : h >> (8 * (b & 3) - 7)) & 0x7f80u;
+                    word ^= *reinterpret_cast<const u64*>(t0b + (v128 | toff[b]));
+                }
+                wbuf[(2 * k + wt) * 8 + 2 * (wcol & 3) + (wcol >> 2)] = word;
+            }
+            __syncwarp();
+            uint16_t aacc0 = 0, aacc1 = 0;
+            u64 pl = 0, ph = 0;
+            uint32_t v0 = 0, v1 = 0;
+#pragma unroll
+            for (int k = 0; k < 8; k++) {
+                const uint8_t aL = wb8[128 * k], aH = wb8[128 * k + 8], bL = wb8[128 * k + 64], bH = wb8[128 * k + 72];
+                if constexpr (cl) {
+                    const u64 A = ((u64)((uint32_t)aH << k) << 32) | ((uint32_t)aL << k), B = ((u64)bH << 32) | bL;
+                    pl = clmad_lo(A, B, pl);
+                    ph = clmad_hi(A, B, ph);
+                } else {
+                    const uint8_t p0 = s_antilog[(int)s_log[aL] + s_log[bL]] & (uint8_t)(-(int)(aL && bL));
+                    const uint8_t p1 = s_antilog[(int)s_log[aH] + s_log[bH]] & (uint8_t)(-(int)(aH && bH));
+                    aacc0 ^= (uint16_t)p0 << k;
+                    aacc1 ^= (uint16_t)p1 << k;
+                }
+                const u64 zk = scol[16 + k];
+                v0 |= (((uint32_t)zk >> lane) & 1u) << k;
+                v1 |= (((uint32_t)(zk >> 32) >> lane) & 1u) << k;
+            }
+            const uint8_t r0 = cl ? zc_gf8_barrett((uint32_t)pl) : reduce_zerocheck_gf8_polynomial(aacc0);
+            const uint8_t r1 = cl ? zc_gf8_barrett((uint32_t)ph) : reduce_zerocheck_gf8_polynomial(aacc1);
+            chunk_ab0 = f128_add(multiply_zerocheck_value_by_generator(chunk_ab0), s_phi[r0 * 8 + q]);
+            chunk_ab1 = f128_add(multiply_zerocheck_value_by_generator(chunk_ab1), s_phi[r1 * 8 + q]);
+            chunk_w0 = f128_add(multiply_zerocheck_value_by_generator(chunk_w0), s_phi[v0 * 8 + q]);
+            chunk_w1 = f128_add(multiply_zerocheck_value_by_generator(chunk_w1), s_phi[v1 * 8 + q]);
+            __syncwarp();
+        }
+        pab0 = f128_add(pab0, ghash_mul_karatsuba(eq_o, chunk_ab0));
+        pab1 = f128_add(pab1, ghash_mul_karatsuba(eq_o, chunk_ab1));
+        pw0 = f128_add(pw0, ghash_mul_karatsuba(eq_o, chunk_w0));
+        pw1 = f128_add(pw1, ghash_mul_karatsuba(eq_o, chunk_w1));
+    }
+    atomicXor((unsigned long long*)&raw_ab[lane].lo, pab0.lo);
+    atomicXor((unsigned long long*)&raw_ab[lane].hi, pab0.hi);
+    atomicXor((unsigned long long*)&raw_ab[lane + 32].lo, pab1.lo);
+    atomicXor((unsigned long long*)&raw_ab[lane + 32].hi, pab1.hi);
+    atomicXor((unsigned long long*)&raw_w[lane].lo, pw0.lo);
+    atomicXor((unsigned long long*)&raw_w[lane].hi, pw0.hi);
+    atomicXor((unsigned long long*)&raw_w[lane + 32].lo, pw1.lo);
+    atomicXor((unsigned long long*)&raw_w[lane + 32].hi, pw1.hi);
+}
+
+// Round 1's outputs times C_s·C_med, c's from zc_round1_zlin's sums in place: c[λ] = scale·Σ_s φ8(M[s][λ])·w_s. 64 threads.
+__global__ void zc_round1_combine(F128* __restrict__ ab, F128* __restrict__ c, const u64* __restrict__ t0,
+                                  const F128* __restrict__ phi, F128 scale) {
+    __shared__ F128 w[64];
+    const int l = threadIdx.x;
+    w[l] = c[l];
+    __syncthreads();
+    F128 acc{0, 0};
+    for (int s = 0; s < 64; s++)
+        acc = f128_add(acc, ghash_mul_karatsuba(phi[(uint8_t)(t0[(1 << (s & 7)) * 8 + ((l >> 3) ^ (s >> 3))] >> (8 * (l & 7)))], w[s]));
+    ab[l] = ghash_mul_karatsuba(ab[l], scale);
+    c[l] = ghash_mul_karatsuba(acc, scale);
+}
+
+// launch_zerocheck_first_round_cpu_structured's outputs from zc_round1_zlin; FC_ZC_ZLIN=0: from the table kernel
+inline void launch_zc_round1(const uint8_t* d_a, const uint8_t* d_b, const uint8_t* d_z, const F128* d_eq_out, long long n_out,
+                             F128 scale, F128* d_ab, F128* d_c) {
+    static const bool tables = [] { const char* e = std::getenv("FC_ZC_ZLIN"); return e && e[0] == '0'; }();
+    if (tables) {
+        launch_zerocheck_first_round_cpu_structured(d_a, d_b, d_z, d_eq_out, n_out, scale, d_ab, d_c);
+        return;
+    }
+    constexpr int W = 14;   // the table kernel's: two blocks of 448 threads an SM at up to 72 registers a thread
+    constexpr size_t smem = zc_round1_smem<W>();
+    static const int grid = [] {
+        build_zerocheck_logarithm_tables<<<1, 1>>>();
+        cudaFuncSetAttribute(zc_round1_zlin<W>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem);
+        int dev = 0, sms = 1, per = 1;
+        cudaGetDevice(&dev);
+        cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, zc_round1_zlin<W>, W * 32, smem);
+        return sms * (per > 0 ? per : 1);
+    }();
+    cudaMemset(d_ab, 0, 64 * sizeof(F128));
+    cudaMemset(d_c, 0, 64 * sizeof(F128));
+    zc_round1_zlin<W><<<grid, W * 32, smem>>>(d_a, d_b, d_z, d_eq_out, g_zc_t0, g_zc_phi, n_out, d_ab, d_c);
+    zc_round1_combine<<<1, 64>>>(d_ab, d_c, g_zc_t0, g_zc_phi, scale);
 }
 
 // ring_switch_fold_rows_grouped's partials, the same XOR sums at [bit][chunk]: a warp takes a row at a time and lane l its bits
@@ -689,22 +851,29 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     if (pure ? ((C->host_z || C->sha256) ? (C->comp_slots > 256 || k_log < 20 || k_log > 22 || (C->comp_slots << sub_log) > (1 << k_log))
                           : (C->comp_slots > 64 || (k_log != 20 && k_log != 21)))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
+    // the zerocheck's two fold pairs, words per array: on the packed path (zf_packed) round 2's tables are never written, the
+    // tail's first lookahead writes a quarter of them into d_amn/d_bmn, and every later fold into d_am/d_bm reads d_amn/d_bmn
+    // and writes at most half of it; otherwise d_am/d_bm are round 2's tables and the fold after them writes half into d_amn/d_bmn
+    const bool zc_packed = zf_packed(m);
+    const long long zc_out = 1LL << (m - 6), zc_first = zc_packed ? zc_out / 8 : zc_out, zc_next = zc_packed ? zc_out / 4 : zc_out / 2;
+    // the chunk prover's arena peak (the circuit prover sizes its own, arena_bytes.h): the zerocheck's two fold pairs beside 5.5
+    // witness sizes (z, a and b, level 0's codeword and tree), or the lincheck's seven K-length vectors (2^k_log words each,
+    // which dominate at small m) beside 6.5 (the same and z's transpose); half a witness size and 64 MiB over that hold the small
+    // buffers beside them
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
-    // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each)
-    const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes + ((size_t)12 << k_log) * sizeof(F128) + (64ull << 20);
+    const size_t arena_bytes = packed_witness_bytes / 2 * 12 +
+                               std::max(2 * (size_t)(zc_first + zc_next) * sizeof(F128),
+                                        packed_witness_bytes + ((size_t)7 << k_log) * sizeof(F128)) + (64ull << 20);
     CK(device_arena.begin(arena_bytes));
     // ================= witness: host-given compression inputs ================
     F128 *df, *d_a, *d_b; uint8_t* d_zlin;
     CK(ffi_malloc(&df, len * sizeof(F128)));
     CK(ffi_malloc(&d_a, len * sizeof(F128)));
     CK(ffi_malloc(&d_b, len * sizeof(F128)));
-    CK(ffi_malloc(&d_zlin, (size_t)len * 16));
     if (pure && C->host_z) {
         CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
         CK(cudaMemcpy(d_a, C->host_a, len * sizeof(F128), cudaMemcpyHostToDevice));
         CK(cudaMemcpy(d_b, C->host_b, len * sizeof(F128), cudaMemcpyHostToDevice));
-        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
-        CK(cudaGetLastError());
         CK(cudaStreamSynchronize(0));
     } else {
         uint32_t *d_cv, *d_m, *d_blen, *d_flags; b3u64* d_ctr;
@@ -839,9 +1008,6 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
                 ffi_free(d_pa); ffi_free(d_py);
             }
         }
-        const long long n_stripes = (1LL << (m - k_log)) / 8;
-        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
-        CK(cudaGetLastError());
         CK(cudaStreamSynchronize(0));
         ffi_free(d_cv); ffi_free(d_m); ffi_free(d_blen); ffi_free(d_flags); ffi_free(d_ctr);
     }
@@ -901,7 +1067,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     FfiWriter W;
     W.hashes(l0_cap);
 
-    // ================= zerocheck (unchanged) =================================
+    // ================= zerocheck (round 2 from the packed witness: zerocheck_fused.cuh) ====
     vector<F128> zc_r1ab(64), zc_r1c(64), zc_m1s, zc_mis;
     F128 zc_z, zc_fa, zc_fb, zc_fc;
     vector<F128> zc_r(m), mlv_rhos;
@@ -918,8 +1084,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         CK(ffi_malloc(&d_eq, (1LL << (m - 13)) * sizeof(F128)));
         CK(ffi_malloc(&d_r1ab, 64 * sizeof(F128))); CK(ffi_malloc(&d_r1c, 64 * sizeof(F128)));
         CK(ffi_malloc(&d_ft, 8 * 256 * sizeof(F128)));
-        CK(ffi_malloc(&d_am, n_out * sizeof(F128))); CK(ffi_malloc(&d_bm, n_out * sizeof(F128)));
-        CK(ffi_malloc(&d_amn, n_out * sizeof(F128))); CK(ffi_malloc(&d_bmn, n_out * sizeof(F128)));
+        CK(ffi_malloc(&d_am, zc_first * sizeof(F128))); CK(ffi_malloc(&d_bm, zc_first * sizeof(F128)));
+        CK(ffi_malloc(&d_amn, zc_next * sizeof(F128))); CK(ffi_malloc(&d_bmn, zc_next * sizeof(F128)));
         CK(ffi_malloc(&d_p1, ZT_MAX_BLOCKS * sizeof(F128))); CK(ffi_malloc(&d_pinf, ZT_MAX_BLOCKS * sizeof(F128)));
         CK(ffi_malloc(&d_m1d, sizeof(F128))); CK(ffi_malloc(&d_mid, sizeof(F128)));
         const int zt_dfull = m - 7, zt_lobits = zt_dfull > 7 ? zt_dfull - 7 : 0;
@@ -944,9 +1110,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         build_eq_device(d_eq, &zc_r[13], m - 13);
         F128 round1_scale = ONE;
         for (int i = 6; i < 13; i++) round1_scale = MUL(round1_scale, ADD(ONE, zc_r[i]));
-        launch_zerocheck_first_round_cpu_structured((const uint8_t*)d_a, (const uint8_t*)d_b,
-                                   (const uint8_t*)df, d_eq, 1LL << (m - 13),
-                                   round1_scale, d_r1ab, d_r1c);
+        launch_zc_round1((const uint8_t*)d_a, (const uint8_t*)d_b, (const uint8_t*)df, d_eq, 1LL << (m - 13), round1_scale,
+                         d_r1ab, d_r1c);
         CK(cudaGetLastError()); CK(cudaStreamSynchronize(0));
         CK(cudaMemcpy(zc_r1ab.data(), d_r1ab, 64 * sizeof(F128), cudaMemcpyDeviceToHost));
         CK(cudaMemcpy(zc_r1c.data(), d_r1c, 64 * sizeof(F128), cudaMemcpyDeviceToHost));
@@ -984,9 +1149,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         F128 *d_part8, *d_out8;
         CK(ffi_malloc(&d_part8, 8 * ZT_MAX_BLOCKS * sizeof(F128)));
         CK(ffi_malloc(&d_out8, 8 * sizeof(F128)));
-        launch_zerocheck_second_round_fold_with_lookahead((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft,
-                                   d_eqlo, d_eqhi, zt_lobits, n_out, d_am, d_bm,
-                                   S[0], d_part8, d_out8);
+        if (zc_packed)
+            launch_zerocheck_second_round_message((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft, d_eqlo, d_eqhi, zt_lobits, n_out,
+                                                  S[0], d_part8, d_out8);
+        else
+            launch_zerocheck_second_round_fold_with_lookahead((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft,
+                                       d_eqlo, d_eqhi, zt_lobits, n_out, d_am, d_bm,
+                                       S[0], d_part8, d_out8);
         CK(cudaGetLastError());
         auto observe_message = [&](F128 m1, F128 mi) {
             zc_m1s.push_back(m1); zc_mis.push_back(mi);
@@ -1006,9 +1175,14 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         observe_message(interp3(h[2], h[3], h[4], rho0), interp3(h[5], h[6], h[7], rho0));
         int k = 2;
         while (k + 1 <= n_tail && L / 16 > ZT_FINISH_OP) {
-            launch_zerocheck_tail_lookahead(cA, cB, nA, nB, d_eqlo, d_eqhi, k, zt_lobits, L / 16,
-                                mlv_rhos[mlv_rhos.size() - 2], mlv_rhos.back(),
-                                S[k - 1], S[k], d_part8, d_out8);
+            if (k == 2 && zc_packed)
+                launch_zerocheck_tail_lookahead_packed((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft, nA, nB, d_eqlo, d_eqhi, k,
+                                                       zt_lobits, L / 16, mlv_rhos[mlv_rhos.size() - 2], mlv_rhos.back(),
+                                                       S[k - 1], S[k], d_part8, d_out8);
+            else
+                launch_zerocheck_tail_lookahead(cA, cB, nA, nB, d_eqlo, d_eqhi, k, zt_lobits, L / 16,
+                                    mlv_rhos[mlv_rhos.size() - 2], mlv_rhos.back(),
+                                    S[k - 1], S[k], d_part8, d_out8);
             CK(cudaGetLastError());
             { F128* t; t = cA; cA = nA; nA = t; t = cB; cB = nB; nB = t; }
             L /= 4;
@@ -1048,6 +1222,10 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         ffi_free(d_part8); ffi_free(d_out8);
     }
     ffi_free(d_a); ffi_free(d_b);
+    // z's transpose for the lincheck, made once the zerocheck has freed its tables: nothing between the witness and here writes z
+    CK(ffi_malloc(&d_zlin, (size_t)len * 16));
+    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
+    CK(cudaGetLastError());
     W.f128s(zc_r1ab); W.f128s(zc_r1c);
     W.u64(zc_m1s.size());
     for (size_t i = 0; i < zc_m1s.size(); i++) { W.f128(zc_m1s[i]); W.f128(zc_mis[i]); }

@@ -1,4 +1,4 @@
-"""serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit window's H1 window
+"""serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit period's H1 window
 taps the server's own rows-sha512 Commit (its step-input port and the bench row's int8 source) and ties at ROOTS1, on the
 epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor host's
 challenger, which the auditor's ledger opens and ends for it; `CommitWindows` opens the arm once the committer is
@@ -19,7 +19,7 @@ import pytest
 import torch
 
 from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs.challenger import CoinError
+from verity.core.protocols.spot.challenger import CoinError
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC

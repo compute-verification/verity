@@ -96,14 +96,16 @@ class Certificate:
     """What a scheme's guarantee rests on.
 
     ``omega`` is Ω*, the largest W_ref over the work the conjecture credits, across the domain (m·k·n for TT, 3·m·k·n for
-    TT_NCP); ``gamma = 1 − (1 − gamma0)/omega`` is the conservative reduction (Lean `gammaFromTT`, `gammaFromTTNCP`).  A
-    scheme whose conjecture names no target has ``gamma0 = None`` and no gamma.  ``claims`` are `verity.core.claims` ids, or ids
-    in the same format that no render cites yet; ``theorems`` are the Lean theorems it rests on, guarantees the lock pins
-    and the lemmas their proofs use; ``allowances`` are gaps the scheme admits by design; ``parameters`` are the values
-    the theorems are instantiated at, including the domain bounds their γ holds on."""
+    TT_NCP); ``gap = 1 − (1 − gap0)/omega`` is the gap g of the conservative reduction (Lean `gapFromTT`,
+    `gapFromTTNCP`), ``eps = gap/(1 − gap)`` the adversary's advantage ε it carries (Lean `Pouw.Gε`, `EndToEndEps`),
+    and ``gap0`` the conjecture's target gap.  A scheme whose conjecture names no target has ``gap0 = None``, and no gap
+    or ε.  ``claims`` are `verity.core.claims` ids, or ids in the same format that no render cites yet; ``theorems`` are
+    the Lean theorems it rests on, guarantees the lock pins and the lemmas their proofs use; ``allowances`` are gaps the
+    scheme admits by design; ``parameters`` are the values the theorems are instantiated at, including the domain bounds
+    their gap holds on."""
 
     conjecture: str
-    gamma0: Fraction | None
+    gap0: Fraction | None
     omega: Fraction
     claims: tuple[str, ...]
     theorems: tuple[str, ...] = ()
@@ -112,8 +114,13 @@ class Certificate:
     parameters: tuple[tuple[str, int], ...] = ()
 
     @property
-    def gamma(self) -> Fraction | None:
-        return None if self.gamma0 is None else 1 - (1 - self.gamma0) / self.omega
+    def gap(self) -> Fraction | None:
+        return None if self.gap0 is None else 1 - (1 - self.gap0) / self.omega
+
+    @property
+    def eps(self) -> Fraction | None:
+        g = self.gap
+        return None if g is None else g / (1 - g)
 
 
 @runtime_checkable

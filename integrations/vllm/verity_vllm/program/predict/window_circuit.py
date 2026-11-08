@@ -682,9 +682,9 @@ def class_program(registered: Any, cls: WindowClass) -> Any:
 
 
 def stop_ids(registered: Any) -> tuple[int, ...]:
-    """The registered model's stop ids, its config's ``eos_token_id`` (an id, a list or none): outputs end at the first, kept."""
-    e = registered.phi.hf_config.get("eos_token_id")
-    return tuple(sorted({int(x) for x in ([] if e is None else [e] if isinstance(e, int) else e)}))
+    """The registered model's stop ids (`frontend.stop_rule.stop_ids`): outputs end at the first, kept."""
+    from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
+    return of_config(registered.phi.hf_config)
 
 
 @dataclass(frozen=True)

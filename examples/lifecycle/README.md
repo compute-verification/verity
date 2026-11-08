@@ -17,7 +17,7 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
 **The proofs are a stand-in**, answering under the id both composites run for integrity, the one-stage audit
-(`SampledProofs.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
+(`Spot.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
 sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
@@ -149,18 +149,18 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | `Security/Definitions/Core/Site.lean` (`Verity.Site.Sheet`, `Loc`, `Link`, `Verity.Site.Entry`, `Verity.Registration.Entry.site`) |
 | `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `Security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the demo (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
 | `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `Security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the demo doesn't check yet), decidable; no difftest yet |
-| `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the declaration blocks | missing: written in the demo |
+| `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the execution blocks | missing: written in the demo |
 | `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the demo |
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the demo |
 | `operate` | developer | requests, theta, state, tape | `Served` | the integration's (here the toy model) |
 | `declare`, `check_declaration` | developer, verifier | advice, served values, layout, previous record | `Declaration`, `Block` | missing: written in the demo |
-| `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/core/protocols/sampled_proofs/one_stage/registered.py` over `verity.ml.commitments.hm96` |
+| `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/core/protocols/spot/one_stage/registered.py` over `verity.ml.commitments.hm96` |
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.ml.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.ml.circuits.evaluation.evaluate_words` |
-| `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
+| `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/core/protocols/spot/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
-| `sampled_proofs`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
+| `spot`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `inference_only` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as a per-declaration function: written in the example |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
@@ -172,8 +172,8 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 - **The registered circuit has no one digest, and Lean's `RegisteredCircuit` holds one circuit.** Each execution block has its
   own Program digest, and the record chain binds them in order; `codec.program_digest` of B(a_1 ‖ … ‖ a_k) as one Program
-  is not prefix-incremental. `Security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose builder
-  names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
+  is not prefix-incremental. `Security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose `builder`
+  field names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
   appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
   state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
   gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.

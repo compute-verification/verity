@@ -12,18 +12,27 @@ line and then its body up to the end of what the client sends (it shuts its side
   each digest among them, is refused, and nothing is sampled for it. Where the service numbers registrations
   (`core-firewall values`), an epoch opens one session: a commit while the current epoch's session is not yet registered
   is refused, nothing of it answered, so every record counts one session and the stack chooses none to register.
+* `interior J D₀ N₀ S₀ …`, the commit request's form and body: an interior commit, whose values may follow the
+  auditor's sample (a two-stage audit's interior registration). Only once it holds the whole request does the service
+  sample from the operating system the session `s`, each leaf's salt and the session's own key, holding the salts and
+  the key by session while it runs. The tables' tags, and at `register S` the record tag, are under the session's own
+  key, so nothing the service answers of it reads `k`. It answers as a commit does (`Salts.interiorAnswer`) and joins
+  the epoch as one.
 * `salts`, the body a refs file (`Salts.parseRefs`): `ok LEN` and the `LEN` bytes of its rows' salts, every table ref's
-  tag checked (`Salts.saltsAnswer`).
+  tag checked, an interior session's table's under the key held for it and its salts the ones held for it
+  (`Salts.saltsAnswer`).
 * `register S`, no body: the registration of the epoch's session `S`, whole. It closes the epoch, so no session of it
   registers after, takes the next number on the ZK server's record (`Numbering`: `core-firewall values` appends the
-  registration there, its record whole), and answers `ok M LEN` and the `LEN` bytes of its record (`Salts.recordOf`),
-  `be64 n` first, `M` the number of sessions the epoch opened, 1. A session the current epoch did not open is refused,
-  and so is every registration where the service has no record to number it on (`flock-firewall values`), or where its
-  record can't take it (its epoch is closed all the same).
+  registration there, its record whole, and an interior session's own key beside it with that key's tag under `k`,
+  `Salts.keyTagOf`), and answers `ok M LEN` and the `LEN` bytes of its record (`Salts.recordOf`), `be64 n` first, `M`
+  the number of sessions the epoch opened, 1. A session the current epoch did not open is refused, and so is every
+  registration where the service has no record to number it on (`flock-firewall values`), or where its record can't
+  take it (its epoch is closed all the same).
 
-Anything else is answered `err WHY`. `answer` is the whole of it but the socket. The epoch lives only in the process:
-one started again opens a new epoch, in which no earlier session registers. Only the ZK server, under its own OS user,
-starts the service (`zk-server-own-user`).
+Anything else is answered `err WHY`. `answer` is the whole of it but the socket. The epoch and the interior sessions'
+salts and keys live only in the process (a registered interior session's key is on the ZK server's record too): one
+started again opens a new epoch, in which no earlier session registers, and answers no earlier interior session's salts.
+Only the ZK server, under its own OS user, starts the service (`zk-server-own-user`).
 -/
 module
 
@@ -39,40 +48,48 @@ open Std.Net
 open Std.Async
 open Std.Async.TCP
 
-/-- **How a registration is numbered** on the ZK server's record: given its record at each number, the record at the
-number it took, appended to the ZK server's record in the same step, or why the record took none. -/
-abbrev Numbering := (Nat → ByteArray) → IO (Except String ByteArray)
+/-- **How a registration is numbered** on the ZK server's record: given its record at each number, with an interior
+session's own key and that key's tag under the server's key, the record at the number it took, appended to the ZK
+server's record with the key in the same step, or why the record took none. -/
+abbrev Numbering := (Nat → ByteArray × Option (ByteArray × ByteArray)) → IO (Except String ByteArray)
 
-/-- **The answer to one request** `req` (its line, then its body) under the key `k` and the epoch `epoch`, `draw` the
-operating system's bytes, read for a commit's session only once the request is whole and well formed, and `number` the
-ZK server's record, if the service has one: then an epoch opens one session. Each request changes the epoch in one step
-(`IO.Ref.modifyGet`), whatever other requests run beside it, so of commits that run together into an epoch with no
-session, one opens it. -/
-def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.Epoch) (number : Option Numbering)
-    (req : ByteArray) : IO ByteArray := do
+/-- **The answer to one request** `req` (its line, then its body) under the key `k`, the epoch `epoch` and the interior
+sessions' keys and salts `held`, `draw` the operating system's bytes, read for a commit's session and an interior
+commit's salts and key only once the request is whole and well formed, and `number` the ZK server's record, if the
+service has one: then an epoch opens one session. Each request changes the epoch in one step (`IO.Ref.modifyGet`),
+whatever other requests run beside it, so of commits that run together into an epoch with no session, one opens it. -/
+def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.Epoch) (held : IO.Ref (Array Salts.Held))
+    (number : Option Numbering) (req : ByteArray) : IO ByteArray := do
   let line : String → ByteArray := fun s => (s ++ "\n").toUTF8
   let (head, body) := match findByte req 10 with
     | some nl => ((String.fromUTF8? (req.extract 0 nl)).getD "?", req.extract (nl + 1) req.size)
     | none => ((String.fromUTF8? req).getD "?", .empty)
-  match head.splitOn " " with
-  | "commit" :: ws =>
+  let commit (interior : Bool) (ws : List String) : IO ByteArray := do
     match Salts.parseCommit ws with
     | .error e => return line s!"err {e}"
     | .ok ts =>
       if body.size != Salts.commitBody ts then
         return line s!"err a commit body of {body.size} bytes, where its tables' digests are {Salts.commitBody ts} (64 a leaf, and nothing beside them)"
       let s ← draw Salts.SESSION_BYTES
-      let ans := Salts.commitAnswer k s ts body
-      let opened : Salts.Opened := { s, tables := (Array.range ts.size).map fun j => (ts[j]!, ans[j]!.1) }
+      let (lo, n) := Salts.leafOffsets ts
+      let ys ← if interior then draw (Salts.SALT_BYTES * n) else pure .empty
+      let ks ← if interior then draw Salts.KEY_BYTES else pure .empty
+      let ans := if interior then Salts.interiorAnswer ks s ys ts body else Salts.commitAnswer k s ts body
+      let opened : Salts.Opened := { s, tables := (Array.range ts.size).map fun j => (ts[j]!, ans[j]!.1),
+                                     own := if interior then some ks else none }
       let took ← epoch.modifyGet fun e =>
         if number.isSome && !e.opened.isEmpty then (false, e) else (true, { e with opened := e.opened.push opened })
       if !took then
         return line "err the current epoch's session is not yet registered: an epoch opens one commit session (`register S` registers it, and the next commit opens the next epoch's)"
+      if interior then held.modify (·.push { s, key := ks, lo, ys })
       return ans.foldl
         (fun acc (root, tag, bcs) => acc ++ line s!"ok {hexOf root} {hexOf tag} {bcs.size / Salts.BC_BYTES}" ++ bcs)
         (line s!"ok {hexOf s}")
+  match head.splitOn " " with
+  | "commit" :: ws => commit false ws
+  | "interior" :: ws => commit true ws
   | ["salts"] =>
-    match Salts.saltsAnswer k body with
+    match Salts.saltsAnswer k (← held.get) body with
     | .ok b => return line s!"ok {b.size}" ++ b
     | .error e => return line s!"err {e}"
   | ["register", sh] =>
@@ -89,7 +106,8 @@ def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.E
         | none => (none, e)
       match got with
       | some (m, o) =>
-        match ← number fun n => Salts.recordOf k n m o with
+        let recordAt := fun n => let r := Salts.recordOf k n m o; (r, o.own.map fun ks => (ks, Salts.keyTagOf k ks r))
+        match ← number recordAt with
         | .ok r => return line s!"ok {m} {r.size}" ++ r
         | .error e => return line s!"err the ZK server's record took no registration: {e}"
       | none => return line s!"err the session {sh} is none the current epoch opened: a session registers once, in the epoch that opened it"
@@ -117,6 +135,7 @@ def serve (usage : String) (args : List String) (number : Option Numbering) : IO
     | .ok k => pure k
     | .error e => IO.eprintln e; return 2
   let epoch ← IO.mkRef ({} : Salts.Epoch)
+  let held ← IO.mkRef (#[] : Array Salts.Held)
   let srv ← Socket.Server.mk
   srv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := listen.toUInt16 })
   srv.listen 128
@@ -127,7 +146,7 @@ def serve (usage : String) (args : List String) (number : Option Numbering) : IO
       let c ← srv.accept.block
       let _ ← IO.asTask (prio := .dedicated) do
         try
-          let a ← answer k (fun n => IO.getRandomBytes n.toUSize) epoch number (← recvAll c)
+          let a ← answer k (fun n => IO.getRandomBytes n.toUSize) epoch held number (← recvAll c)
           (c.sendAll #[a]).block
         catch e => IO.eprintln s!"values: {e}"
         try (c.shutdown).block catch _ => pure ()

@@ -3,7 +3,7 @@
 The remote protocol audits a datacenter whose auditor has no devices at the site: the developer commits everything its
 hardware computes, and the auditor checks it from outside with live coins and a Lean verifier. It composes three
 subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the registered circuit,
-except on few proof blocks), PoUW (the hardware's time went to the registered work) and the inference-only policy (the
+except on few proof blocks), PoUW (the hardware's time went to the registered circuit) and the inference-only policy (the
 registered circuit is inference, not training).
 
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
@@ -25,7 +25,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
   verifier;
-- `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
+- `RemoteChallenger` (`verity/core/protocols/spot/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
   `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
@@ -56,8 +56,8 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
+| Sampled proofs ([README](../spot/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered circuit's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
@@ -89,8 +89,8 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
-      proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
+      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
+      receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
@@ -99,7 +99,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
+   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
 ## The security argument, end to end
@@ -212,7 +212,7 @@ the whole, and nothing is retried.
 
 - the proof system is sound against the window's check (`Properties.Pouw.PeriodJ10R.TileServiceSound`), a named
   assumption no theorem discharges yet;
-- the published sample is the tile stratum's sample at the coin (`TileDrawIsCoin`), and registration precedes the
+- the published sample is the tile stratum's sample at the coin (`TileSampleIsCoin`), and registration precedes the
   sample (`RegisteredBeforeDraw`);
 - the salt is a live coin (`SaltIsLiveCoin`), which the deployed path doesn't meet;
 - PoUW's per-step receipts bind (`SharedNoiseLucks`: H-μ⁺ with the receipts' and guesses' lucks at J10-R's shared
@@ -224,7 +224,7 @@ The time credit adds the data sheet's rates.
 
 - Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
-- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
+- Sampled proofs: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
@@ -302,7 +302,7 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 **Assumes.** Parts 1 to 4's assumptions.
 
 **Lean.** `Accounting.Guarantees.JointHorizonLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -358,7 +358,7 @@ block can import information, spending its fresh bits, or reconstruct it, spendi
 - So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
   small.
 
-The per-block cap is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
+The inference-block yield is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
 reconstructing that computation would expose updated weights priced above h, the price of fresh weights the description
 premise lets a block hold (not a storage bound), the cap falls to k.
 
@@ -385,7 +385,7 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
-| Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
+| Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`Security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
@@ -415,7 +415,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
   compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
   to `SampledKSLiveV3`'s event.
-- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
+- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
@@ -465,7 +465,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
 - `CoinsConfidential`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
   control, and only after the commitment. A premise about where the challenger runs, stated in prose in
-  `verity/core/protocols/sampled_proofs/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
+  `verity/core/protocols/spot/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
   it as a hypothesis. (Its companion `OneClock` ties the challenger's clock to onsite's network certifiers; remote has
   none.)
 
@@ -473,7 +473,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
 
 - `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
-- `Properties.Pouw.PeriodJ10R.TileDrawIsCoin`: on every accepted window, the proof blocks the check demands proofs of
+- `Properties.Pouw.PeriodJ10R.TileSampleIsCoin`: on every accepted window, the proof blocks the check demands proofs of
   are the tile stratum's sample at the window's coin. A protocol-code fact still to prove.
 - `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the
@@ -534,7 +534,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 | one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
 | the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
 
-- **What the figures mean.** Each figure is the hardware multiple over the reference training algorithm at its MFU,
+- **What the figures mean.** Each figure is the slowdown over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Their status.** Draft. `output-premise` (`draft:E1-Prop6b`) sets them, `reference-remote-h200-pouw`'s and
   `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, contested at its premise
@@ -563,7 +563,7 @@ development run:
   refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+- `verity demo vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
   challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a

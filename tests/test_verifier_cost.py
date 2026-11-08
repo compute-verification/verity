@@ -47,7 +47,7 @@ ALLOWED: dict[str, str] = {
         "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
-    "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
+    "verity/core/service/spot/Spot/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
     "verity/core/service/flock/Flock/RecCoins.lean":
@@ -60,12 +60,14 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
-        "behind Tmpl.unitNet's thunks, built only where a check reads them, which none on the templated statement's "
-        "path does (benchmarks/verifier_cost/flock_tmpl stmt)",
+        "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
+        "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
+        "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
     "verity/core/service/flock/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
-        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT)",
+        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
+        "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
     "verity/core/service/flock/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
     "verity/core/service/flock/Flock/TmplFold.lean":

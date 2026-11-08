@@ -32,6 +32,13 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse it.
+* **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
+  reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
+  ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
+  whose scope the verifier checks on its template and which `verify` refuses last as a
+  version it doesn't serve (`ProvedScope.servedForm`): the sampled audit's knowledge-soundness form (`KsScope.check`)
+  reads only a flat file. The prover reads a templated unit's rows at their positions from ``--tmpl-unit-bin``
+  (`flock-tmpl-unit`, which unrolls the template; no part of the verifier).
 
 The window is a stand-in: the Commit (``retain=host``) kept no values, so these are the Match capture's, an independent
 instrumented run of the same row whose equality to the Commit's committed values rests on the row's oracle comparison and
@@ -70,7 +77,7 @@ from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -625,6 +632,25 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
 
 
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the template and layout
+    mode META holds (``d/unit.tmpl``, ``d/unit.layout``)."""
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("--layout stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text("\n".join(st.meta["template"]) + "\n")
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
+
+
 def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of every instance's first output word flipped before the set is committed."""
     from types import SimpleNamespace
@@ -653,7 +679,7 @@ SLOTS: dict = {"dir": None, "n": {}}
 
 @contextlib.contextmanager
 def slot(phase: str):
-    """With --lock-dir DIR, at most N of the audits sharing DIR in `phase` at once (--slots session=1,lean=3, 1 a phase it
+    """With --lock-dir DIR, at most N of the audits sharing DIR in `phase` at once (--slots session=1,lean=4, 1 a phase it
     doesn't name): a session's prover takes every core, and side by side the sessions' ZK servers and provers, or the Lean
     verifiers, outgrow the host."""
     d = SLOTS["dir"]
@@ -735,7 +761,8 @@ def live(fn, registry):
 
 def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tuple[dict, dict, dict]:
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
-    again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units."""
+    again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units
+    (a kind saved with more loads only those, and says so)."""
     from verity.ml.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
@@ -752,7 +779,9 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
             raise SystemExit(f"{f}: the registry's {unit.id} is not the saved {s['unit']}")
         z = np.load(d / f"{f}.npz")
         n = min(s["n"], per_kind or s["n"])
-        rows_of_kind[f] = {**s, "n": n, "unit": unit, "rows_spec": K.rows_of(unit),
+        if n < s["n"]:
+            print(f"load-values {f}: the first {n} of its {s['n']} saved units (--per-kind {per_kind})", flush=True)
+        rows_of_kind[f] = {**s, "n": n, "saved": s["n"], "unit": unit, "rows_spec": K.rows_of(unit),
                            "rows": {k[2:]: z[k][:n] for k in z.files if k.startswith("i.")},
                            "outs": {k[2:]: z[k][:n] for k in z.files if k.startswith("o.")}}
     return staged, rows_of_kind, {"from": {x: doc.get(x) for x in ("values", "steps", "layers", "per_kind")}, "weights": doc["weights"]}
@@ -769,7 +798,8 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--per-kind", type=int, default=8, help="units staged per kind (at most the statement cap)")
+    ap.add_argument("--per-kind", type=int, default=8, help="units staged per kind (at most the statement cap); with "
+                    "--load-values, each kind's first that many saved units")
     ap.add_argument("--steps", default="1,0", help="steps to take a kind's Call from, in preference order")
     ap.add_argument("--layers", default="0,3")
     ap.add_argument("--only", default=None, help="comma-separated kinds")
@@ -780,6 +810,9 @@ def main() -> int:
     ap.add_argument("--unit-gates", type=int, default=4096)
     ap.add_argument("--full-gates", type=int, default=4_000_000, help="a Call up to this many gates is evaluated whole")
     ap.add_argument("--tamper", default=None, help="the kind whose member is tampered (default: the first staged; none: no tampered member)")
+    ap.add_argument("--layout", default=None, help="a layout mode (iv/hybrid/4): each template a templated statement; default flat")
+    ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit, which places a templated unit's rows for the prover")
+    ap.add_argument("--structural", action="store_true", help="with --layout, struct_lower's template, the flat unit never built")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=0, help="the sessions' base port (default: a free port each)")
     ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
@@ -865,9 +898,11 @@ def main() -> int:
         kv0 = rows_of_kind[tpl["kinds"][0]]
         with K.no_cyclic_gc():
             st = CS.UnitStager(tpl["defn"], f"unit/a11-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
+                               layout=a.layout, structural=a.structural,
                                circuit=sdir / "circuit.txt", bind=bound)
         t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
+        form = templated(st, sdir, a.tmpl_unit_bin)
         salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
@@ -887,7 +922,7 @@ def main() -> int:
             ms = {"tag": f, "dir": d, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name, "lo": lo, "n": n,
                   "cap": cap, "twin": {"agrees": agree, "instances": n, "call": kv["twin"]}, "ands": got["ands"],
                   "unit_nnz": got["unit_nnz"], "seconds": {"build": t_build if lo == 0 else 0.0, "stage": round(time.time() - t1, 1)},
-                  "partition_file": out / "partition.json", "program_file": out / "program.json"}
+                  "partition_file": out / "partition.json", "program_file": out / "program.json", **form}
             members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
                             "header": a0.public_header(d, n), "salt_key": salt_key, "rows": kv["rows"]})
             print(f"A11 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
@@ -1027,14 +1062,16 @@ def main() -> int:
         with K.no_cyclic_gc():
             tst = CS.UnitStager(tdef, f"unit/a11-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
                                 K.out_rows(len(rows_of_kind[tm["kind"]]["outs"])), circuit=tdir / "circuit.txt",
-                                bind={"partition": P.digest(tpart), "program": tpart["program"]})
+                                bind={"partition": P.digest(tpart), "program": tpart["program"]}, layout=a.layout,
+                                structural=a.structural)
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
         stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
         (d / "inst.bin").rename(d / f"inst-{tn}.bin")
         (d / "pub.bin").rename(d / f"pub-{tn}.bin")
         (d / "tables").mkdir(exist_ok=True)
         (d / "circuit.txt").symlink_to("../circuit.txt")
-        tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json"}
+        tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json",
+                 **templated(tst, tdir, a.tmpl_unit_bin)}
         theader = a0.public_header(d, tn)
         tlaw = D.parse_law("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)
@@ -1045,7 +1082,8 @@ def main() -> int:
         tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
         with slot("session"):
             trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
-        tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
+        with slot("lean"):
+            tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
         neg[f"wrong-output-word ({tm['kind']})"] = {
             "refused": a0.lean_refused(tlean) and tm0.get("accepted") is not True, "registration_ok": tcheck.ok,
