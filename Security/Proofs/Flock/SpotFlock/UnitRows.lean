@@ -21,7 +21,6 @@ import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Zero.Uniform
-import Proofs.Flock.SamplingBoundary
 
 @[expose] public section
 
