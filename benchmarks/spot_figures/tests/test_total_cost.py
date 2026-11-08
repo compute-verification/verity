@@ -245,6 +245,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name
     assert "sessions padded to a public cap" in caps["exfiltration"]
+    assert all(f"{f1.ROLES} {f1.TRUST}" in c for c in caps.values())
     served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
     assert served_at and "tokens" not in served_at
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1
@@ -264,4 +265,4 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
                                        "figure1_skipped_work_datacenter_week.png",
                                        "figure1_skipped_work_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (t.stem("world year"), t.stem("world year", "skipped_work")) == ("figure1", "figure1_skipped_work")
+    assert (t.stem("datacenter year"), t.stem("datacenter year", "skipped_work")) == ("figure1", "figure1_skipped_work")

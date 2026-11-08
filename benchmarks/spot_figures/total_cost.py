@@ -190,7 +190,8 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     ticks = {"part": "certified-tick rule", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
-                       "tick on Llama-3.2-1B traces, simulated and validated against them; it makes the advice 0 bits"}
+                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8 it leaves "
+                       "at most 44 bits of advice a 600 s window, the references card's tick line"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
     edge = {"part": "step record, token commits and replay-block edge snapshot",
@@ -447,7 +448,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
                 f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed;")
 
-    head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
+    head = (f"{f1.ROLES} {f1.TRUST} "
+            "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
@@ -753,7 +755,11 @@ def at_budgets(out: dict) -> list[dict]:
     return rows
 
 
-PRIMARY = "world year"
+PRIMARY, SECONDARY = f1.PRIMARY, f1.SECONDARY
+#: the line the headline scope's exfiltration panel also plots over the stretch scope, and its style there
+STRETCH_LINE, STRETCH_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
+#: references closer than this factor stagger their labels: the lowest below its line, the rest alternating sides
+CROWDED = 2.5
 #: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
 #: plotted over another shows; the sets' form thin and dashed; (C) dashed, its tax a lower bound
 CUT, SETS = (0, (7, 2, 1.5, 2)), (0, (3, 2))
@@ -786,6 +792,8 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
 
     p, tax = out["panels"][panel], out["taxes"]
     series = [s for s in p["series"] if s["scope"] == scope]
+    stretch = [s for s in p["series"] if (scope, panel, s["scope"], s["config"])
+               == (PRIMARY, "exfiltration", SECONDARY, STRETCH_LINE)]
     scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
     fmt = _bytes if p["unit"] == "bit" else _power
     xs = [x for s in series for x in s["x"]] + [tax[s["config"]][k] for s in series for k in ("low", "high")]
@@ -802,7 +810,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     refs = _lines(p["references"], scope, scale)
     if panel == "exfiltration":
         refs = sorted(refs + [(out["scopes"][scope]["served_bits"] * scale, "Everything the scope serves", "dotted")])
-    ys = [y * scale for s in series for y in s["y"]]
+    ys = [y * scale for s in series + stretch for y in s["y"]]
     far = [r for r in refs if r[0] > max(ys) * OFF_SCALE]
     refs = [r for r in refs if r not in far]
     lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(ys + [r[0] for r in refs]))) + 1)
@@ -818,10 +826,14 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     ax.yaxis.set_minor_locator(NullLocator())
     ax.grid(which="major", color="#E2E2E2", lw=.45)
     styles = REFERENCE_STYLE | {"dotted": (0, (1.2, 2.4))}
-    for amount, label, style in refs:
+    refs, k = sorted(refs), 0
+    for i, (amount, label, style) in enumerate(refs):
+        k = k + 1 if i and amount < refs[i - 1][0] * CROWDED else 0
+        below = k == 0 and i + 1 < len(refs) and refs[i + 1][0] < amount * CROWDED
         ax.axhline(amount, color="#909090", ls=styles[style], lw=1.3, zorder=1)
-        ax.text(hi_x / 1.3, amount * 1.08, label, ha="right", va="bottom", fontsize=14, color="#555555", zorder=5,
-                bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
+                ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
+                zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
     for s in series:
         color, ls, lw = STYLE[s["config"]]
         t = tax[s["config"]]
@@ -830,9 +842,14 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         ax.plot([t["low"], t["high"]], [y0, y0], color=color, lw=1.4, zorder=3, marker="|", markersize=12)
         ax.plot([t["tax"]], [y0], marker="o", markersize=13, color=color, zorder=4, mew=2.2,
                 markerfacecolor="white" if t["status"] == "priced" else color)
+    for s in stretch:
+        color, ls, lw = STRETCH_STYLE
+        ax.plot(s["x"], [y * scale for y in s["y"]], color=color, ls=ls, lw=lw, zorder=3)
     configs = list(dict.fromkeys(s["config"] for s in series))
-    handles = [plt_line(STYLE[n]) for n in configs]
-    ax.legend(handles, [fill(legend(out, n), 64) for n in configs], loc="lower left", bbox_to_anchor=(0, 1.01),
+    handles = [plt_line(STYLE[n]) for n in configs] + [plt_line(STRETCH_STYLE) for _ in stretch]
+    labels = [legend(out, n) for n in configs] + [f"{legend(out, s['config'])}, over a {SECONDARY} (the stretch scope)"
+                                                  for s in stretch]
+    ax.legend(handles, [fill(label, 64) for label in labels], loc="lower left", bbox_to_anchor=(0, 1.01),
               ncol=2 if len(configs) > 3 else 3, frameon=False, fontsize=14, handlelength=2.6, columnspacing=1.4,
               borderaxespad=0)
 

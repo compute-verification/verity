@@ -129,6 +129,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "Candidate A", "Candidate B"; the `candidate` feature and label keys | the archived proof systems A-GKR, B-Ligero |
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not Flock) |
 | "C-Flock"; the stored candidate label `C-Flock`, backend ids `C-interactive`, `C-fs` | Flock (Succinct's is "upstream Flock") |
+| "sampled proofs", the sampled proof system's name; `sampled_proofs`, `SampledProofs`, `sampled-proofs`, the Lake package `core_sampled_proofs` and the ids under `verity/sampled-proofs/`, until renamed | SPOT (`spot` in paths and Python names, `Spot` in Lean); a sampled proof block's proof keeps its words |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
 | "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's old directory), `verity_flock.backend`, `BACKENDS` | the proof system |
@@ -138,8 +139,9 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | `verity_sp1.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of proof-block obligations, not a statement in this sense; a kind is a subcircuit |
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/verity/lean/Facts.lean`'s facts | guarantee |
 | "law", "draw law"; `law` identifiers and record keys (`parse_law`, `same_law`, `law_object`, a registration's `law`), the Lean's `Law` | sampling design |
-| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a at footprint 1) |
-| "proof unit", "unit class", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block; a unit class is a size class, or Flock's proof-block class |
+| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effAcceptProb` is P̄_a at footprint 1) |
+| "proof unit", "unit class", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block; a unit class is a size class, or Flock's proof-block class |
+| "unit" in the audit record's keys `wrong_units` and `proved_units`, until a format version | proof block |
 | "wrong unit", "incorrect unit", "faulty unit", "faulty proof block", "faulty set"; the Lean's `wrong` | incorrect proof block (and correct); the incorrect set F |
 | "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
 | "verifier of record" | the verifier, whose verdict counts and which the guarantees are proved about; other checking code is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean one replaces it |
@@ -204,7 +206,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
-| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
+| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
 | "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the slowdown lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |

@@ -419,7 +419,7 @@ class _Model:
                     continue
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)))
+                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)), "dsa_topk_switches")
                 order = self.call(self.k("dsa_waksman_order", N=n, TOPK=TOPK), sw.refs)
                 self.checks.append((self.call(self.k("dsa_topk_long_row", N=n, TOPK=TOPK), logits.refs, order.refs),
                                     f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "
@@ -459,7 +459,10 @@ class _Model:
         C, tp, M = self.C, self.net.tp, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
-        w = lambda f: self.w[(L, f)]  # noqa: E731
+
+        def w(f: str):
+            return self.w[(L, f)]
+
         if VH != D:
             _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
         if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):
