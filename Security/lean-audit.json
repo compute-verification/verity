@@ -171,11 +171,6 @@
    "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
    "why": "A separator, the subject of the influence lemma."
   },
-  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
-   "owner": "@proofs",
-   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
-   "why": "`flock-verify --zk --registered` accepts."
-  },
   "Hash.EmbeddingRead.ok": {
    "owner": "@proofs",
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
@@ -1974,6 +1969,12 @@
    "digest": "0305188a9c2c597afd37edf4f5a3a72f56407795cb035aab97f9e84167e2697c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
+   "owner": "@proofs",
+   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
+   "issue": "PRF-471",
+   "due": "2026-11-13"
   },
   "FlockSoundness.Discharge.ZkReg.OwnReadsH": {
    "owner": "@proofs",
