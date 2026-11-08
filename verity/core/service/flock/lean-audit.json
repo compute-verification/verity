@@ -70,6 +70,7 @@
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",
   "Flock.Test.TmplScope",
+  "Flock.Test.TmplSection",
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",

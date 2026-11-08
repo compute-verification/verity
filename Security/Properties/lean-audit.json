@@ -15747,7 +15747,7 @@
    }
   },
   "Flock.HmRow": {
-   "digest": "5dacbf65db0d90b1695a999c55795cf15908846a7a6def3a7cc319f4993a436d",
+   "digest": "5b2045d35fd9a54e0ef3708ea542c04137343d19183f3b04d85391d7836592d5",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -15789,7 +15789,7 @@
     "Flock.HmOut.outSlot": "cc1a58f1168617173cd16041f81539be966b4a7bb989d36d63d3de96da377d0a",
     "Flock.HmOut.parse": "a8532f54bb6c0307a1b3ce213de3fa03fa6c527c6b6fcd413b0a417a70b3f414",
     "Flock.HmOut.parseCommit": "7b92b15930a9c132274efa663ae949636a7b34a60bfb9b42e60bf899d9d8b55b",
-    "Flock.HmOut.parseTmpl": "f3f9dee772cd6996dbf94d005bdb0ad2c51b693f66575b00b01059f1a63be0b0",
+    "Flock.HmOut.parseTmpl": "8e91d48022a214bafd83dfeb85bc0ab92329b40fd031f36203801ea4617b35a9",
     "Flock.HmOut.pinPairs": "4db83aa6b34c95ffd45c0d8bce5622ad120b2a4b7570d89128a4a832a6d14bf3",
     "Flock.HmOut.pinnedFrom": "b2706afdbb3434dfeda6339a7bb4a5723daebd3fd29e7eca43981b27a338cab1",
     "Flock.HmOut.pinnedLinear": "037fe97e64531c65f17bc94e32f83511c5d1972472f944b4492af5d738dda113",
@@ -15861,7 +15861,7 @@
     "Flock.HmRow.outNetEntries": "8a74d9b1cc4223958015e9e9c0ef57a0043a0219892f3888d45638b1eed497d0",
     "Flock.HmRow.padBlock": "8e70252faaf687b1bebbd47bac5a7f624ae6aee50beb7310c91a096baf33670c",
     "Flock.HmRow.padTail": "8d2d799650b1a3f99e3df85f298fc56c9aa1599e97da96c6eeb019bd4cfaa1df",
-    "Flock.HmRow.parse": "045f120eea8b9dfce9c2cc81e3bb290671a118b29333971b6be28302e0e8a09b",
+    "Flock.HmRow.parse": "39f99ca766655a264fc92abb2ae2dfde22c2217624e0b33eb93c5bcb984e5e00",
     "Flock.HmRow.parseTyped": "8cba953197a74b3c2cda5672ddf247455bdc74b85195c77393e78dce4fad96a0",
     "Flock.HmRow.partitionDigest": "68267df95776ed7534942c1d87d043397a2e561e47ee6112402cfb9254e478c0",
     "Flock.HmRow.pin": "481f563737f5431f8cd2e71bec34268c1eb4a4cc3ac008f82da114169c9fa160",
@@ -18271,6 +18271,13 @@
     "Flock.Tmpl.reach": "61a011881fb5c3ea23b973cc0dc328e0c463d06c393f646abb6710a2a2a0dc5e",
     "Flock.Tmpl.selfFlags": "9227835fceba3d7ca1f81600fca18203c60d7fb1fb4a922a547d4d669d75e2c2",
     "Flock.Tmpl.selfRow": "f1d06f07b9e7895740fb85cead3ce97f46bf92536b55d614855eb21256aedceb"
+   }
+  },
+  "Flock.TmplSection": {
+   "digest": "7a7f609dc743ee7d68c0b5b81b279f737ed82c80f4873e4a0291e510d6cf7fb9",
+   "definitions": {
+    "Flock.HmOut.tmplOf": "6086445aaf79a2e2bd0ad796bf1d401de92a9361387eb121a371fbf92e2efb62",
+    "Flock.HmRow.tmplLines": "1c939edb8238b8a756ef514cf0e7f70577216146515c232ed803d49144789270"
    }
   },
   "Flock.TmplSplit": {
