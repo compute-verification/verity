@@ -95,7 +95,9 @@ it a writer row, so no unit copies rows together: a template's port is read at o
 cut that many ways. Every wire and read is stated per node as a pattern (a node's heads, KV groups and slices as digits of
 one) and `interface.coalesce`d, and each allocation's slots sit side by side in its template, so the slots' copies of a
 pattern are one and the circuit's description grows with the class Program's nodes, not its slots or units; so does the
-lowering's own state (a node's output rows are runs).
+lowering's own state (a node's output rows are runs). A template's units are read at every step, so its wires have cycles
+between templates: the circuit states an order of its allocations, the allocations each wire reads in an allocation before
+it (`interface.ordered`, the circuit's ``order``).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
@@ -742,10 +744,13 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     held = () if tables is None else tuple(v for s in range(cls.outputs) for v in (tables.a(s), tables.ids(s)))
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings), values=held)
+    wires = tuple(IF.coalesce(b.wires))
+    starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
-                         wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
-                         blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))))
+                         wires=wires, cuts=b.cuts, registered=reg,
+                         blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))),
+                         order=IF.ordered(b.units, wires, starts) if wires else None)
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 

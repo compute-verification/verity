@@ -185,16 +185,17 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, 88 registered reads (87
-    of the weights, one of the scan state), root reads, openings and 59 inference entries, the 8 Programs 4 times the units.
+    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, the same 159 ranges in
+    their order (`interface.ordered`), 88 registered reads (87 of the weights, one of the scan state), root reads,
+    openings and 59 inference entries, the 8 Programs 4 times the units.
     The scan's wires are a lane's outputs (lane-major, so a lane's slots follow on), each output named for its lane: its
     token, slot, head and the entry's occupancy word (4 at 2 Programs, both lane 0's, and 4 a lane at 8), whatever the
     boundaries."""
     reg = S._registered()
     two, eight = (class_circuit(reg, SLOTS, n, GRAIN, provable=False) for n in (2, None))
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
-              len(c.blocks.inference)) for c in (two, eight)]
-    assert shape == [(122, 88, 2, 1, 59), (134, 88, 2, 1, 59)] and two.ids == eight.ids
+              len(c.blocks.inference), len(c.order)) for c in (two, eight)]
+    assert shape == [(122, 88, 2, 1, 59, 159), (134, 88, 2, 1, 59, 159)] and two.ids == eight.ids
     scan = IF.descriptor_id(next(fn for fn, _ in eight.templates if fn.name == "ScanSlots"))
     assert [sum(w.writer == scan for w in c.wires) for c in (two, eight)] == [4, 4 * SLOTS.lanes]
     assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 5552
