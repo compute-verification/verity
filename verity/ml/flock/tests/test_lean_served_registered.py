@@ -15,7 +15,7 @@ A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stra
 its coins the ones the challenger's release log shows) is accepted on that file too, and refused with the root changed and
 without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
-a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't
+a proved session, which the Python round trip (`verity/core/protocols/spot/tests/test_served.py`) can't
 reach."""
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.sampled_proofs.one_stage.served import register_served
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.spot.one_stage.served import register_served
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -56,7 +56,6 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 @pytest.fixture(scope="module")
 def built():
-    pytest.importorskip("verity_numerical")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
 
 
@@ -173,7 +172,7 @@ def plain(built, tmp_path_factory):
 def test_the_plain_sessions_coins_are_the_challengers(plain):
     """The plain session's coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with
     one of its link points changed, it is refused at them."""
-    from verity.core.protocols.sampled_proofs import challenger as C, remote as R
+    from verity.core.protocols.spot import challenger as C, remote as R
 
     trees = C.coin_trees_of(R.log_lines(plain / "challenger" / R.RELEASES))
     rec = json.loads((plain / "session" / "session.json").read_text())

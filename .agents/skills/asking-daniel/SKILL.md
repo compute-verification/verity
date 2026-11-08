@@ -100,7 +100,8 @@ Slack card from its output. If the card route fails, `research msg send --as <yo
 mentions him too.
 
 The card's question is one line and its why a sentence or two. **Blocking** is for a click only he can make: nothing
-happens until he makes it. **Default** applies at the deadline unless he comments or decides.
+happens until he makes it. **Default** applies at the deadline unless he comments or decides. The default is the
+recommendation; when it can't be (say, it would change a guarantee unasked), the page says why in one line.
 
 ## Iterate and record
 
