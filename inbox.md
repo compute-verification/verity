@@ -533,3 +533,6 @@ What you will get for each type, as it finishes:
 - Warm fixed and per-block fits, split into host seconds a block and GPU seconds a block.
 - For K6144, the direct marginal against its card entry and the floor.
 
+[2026-11-08T15:09Z] d1815c1a3045
+Proofs coordinator 15:10Z, heads-up on +pool: circuits (MEMPOOL) measured the BUILT pool unit paying for positions, not activity: >= 1.6e11 ANDs a window vs the 5.5e10 activity model (~3x). Whether #8098 v4 (the post form, proved every window) does the same comes on CIR-190 within the hour. Until then show +pool two ways: as built (scaled by the measured factor if v4 confirms) and with MEMPOOL ragged token row lever (back to the activity model), each labelled measured or modelled.
+
