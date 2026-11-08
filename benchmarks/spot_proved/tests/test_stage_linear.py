@@ -38,10 +38,15 @@ class _Cap:
     def opened(self, e, weights=False):
         return True
 
+    only = None
+
     def real_rows(self, r, rows):
         return rows
 
-    def cells(self, label, call, *dims):
+    def rows(self, r, rows):
+        return list(range(rows))
+
+    def cells(self, label, call, *dims, slots=1):
         yield 0, 0
 
     def tensor(self, r, ref):

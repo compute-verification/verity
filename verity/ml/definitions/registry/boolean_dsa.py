@@ -12,9 +12,12 @@ The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
-Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.ml.circuits.evaluation.bits.compile`) and its
-gates traced again (`trace.trace`), so a constant operand is folded and a value its calls share (the log2f polynomial's ``t``,
-the scale every quantized element divides by, a row's mean) is computed once (`Q_word`'s no-recompute rule).
+Each composite but `DsaMqaLogits_v4` is one traced circuit (`flat`): its body over those callees, compiled
+(`verity.ml.circuits.evaluation.bits.compile`) and its gates traced again (`trace.trace`), so a constant operand is folded and a value
+its calls share (the log2f polynomial's ``t``, the scale every quantized element divides by, a row's mean) is computed once
+(`Q_word`'s no-recompute rule).  `DsaMqaLogits_v4` is a composite over its keys, one `DsaMqaLogit_v4` call each, so it builds and
+checks at any key count (a traced row of 131,072 keys would be some 10^11 gates).  At N = 1 its lowering is the traced one's, gate
+for gate; past it each key decodes q itself, as the served N = 1 units do (`serving_templates.SLICES`).
 """
 from __future__ import annotations
 
@@ -218,11 +221,11 @@ DsaMqaLogitV4 = flat(
 
 
 def _logits_contracted(B, S, q, w, k, ks):
-    """`DsaMqaLogits_v3`'s body on bits."""
+    """`DsaMqaLogits_v3`'s body on bits, a composite over the N keys: logit[n] = `DsaMqaLogit_v4{H, D}`(q, w, k[n], ks[n])."""
     return B.batch(bind(DsaMqaLogitV4, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
 
 
-DsaMqaLogitsV4 = flat(
+DsaMqaLogitsV4 = EW.on_bits(
     "DsaMqaLogits", 4, ["N", "H", "D"],
     lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
                 ("ks", Array(S.N, F32))), Array(S.N, F32)),

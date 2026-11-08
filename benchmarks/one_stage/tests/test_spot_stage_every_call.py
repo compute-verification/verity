@@ -1,6 +1,6 @@
 """spot_proved's match gate over every call (`stage.py --every-call`) on the fake 8-rank capture of
 `test_spot_stage_allreduce`: one instance of each symm-mem allreduce call is gated, the NCCL-route call is reported as not
-modelled, and the recorded ops no type reads are listed."""
+modelled, and the recorded ops no type gates, the calls a population refused among them, are listed as not gated."""
 from __future__ import annotations
 
 import importlib.util
@@ -32,6 +32,7 @@ def test_every_call_gates_one_instance_of_each_call(tmp_path, monkeypatch):
     assert (t["calls"], t["calls_gated"], t["agree"], t["disagree"], t["errors"]) == (2, 2, 2, 0, 0)
     assert sorted(f["key"][0] for f in t["failures"]) == []
     assert rep["unstaged"][f"AllReduceNccl_W{fake.W}"]["calls"][0]["seq"] == seqs[1]
-    assert rep["gated_ops"] == {"vllm::all_reduce": 3 * fake.W}
-    assert rep["not_gated_ops"] == {"aten::add": fake.W}
+    assert rep["read_ops"] == {"vllm::all_reduce": 2 * fake.W}
+    assert rep["unstaged"]["AtenAdd_other"]["population"] == fake.W
+    assert rep["not_gated_ops"] == {"aten::add": fake.W, "vllm::all_reduce": fake.W}
     assert rep["whole"] is False and rep["layers"] == [fake.LAYER]
