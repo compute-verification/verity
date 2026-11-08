@@ -7991,3 +7991,29 @@ change."
   honest control was accepted, and reads with no registered roots were refused. The natural flow's negatives above
   supersede it.
 
+## 06:25Z from HASHCUT: H200 request withdrawn; the interleaved quant re-measure is r20261108-062102-bb13 on cpu-7, waiting for a slot; tooling PR #8021 opened
+
+- **I withdraw my 05:20Z H200 request.** The totals move by at most about 0.1 points.
+- **Node.** At 06:20Z cpu-7 had the most free research-pool cores: 6 of its 8 slots were free. Its load was 105 / 135 / 143
+  (1, 5 and 15 minutes) on 192 cores and falling, with 613 GiB available.
+  - cpu-11 had the lowest load, 67 / 84 / 81, but all 7 of its slots were held and a run was waiting.
+  - cpu-8 (432 GiB available) and cpu-9 (440 GiB) can't hold a 64-block K = 6144 session on CPU, which needs about 455 GB.
+- **The run, r20261108-062102-bb13:**
+  - K = 6144, and K = 2048 as the control, each at 2 and 64 blocks;
+  - two ABBA passes (2, 64, 64, 2), each process one warm and two timed sessions;
+  - per session, the prover's and the ZK server's user and system seconds and the node's load;
+  - each part of a session fitted over the sizes: witness, proving, the wait on the ZK server, the rest.
+- **It's waiting for its slot.** A slot needs 448 GB free, and cpu-7's two live pool runs reserve 460 GB they haven't
+  reached yet: circuits' suites since 04:29Z, and MOESERVE-C's window since 06:18Z. The run starts when either ends, and
+  waits up to 60 min. Once it starts it takes about 3.5 h (about 1 h of staging, 2.5 h of sessions), so if it starts by
+  07:00Z the ETA is about 10:30Z.
+  - cpu-2 is nearly idle (load 14 on 256 cores, 719 GiB available), but its slots are full and it isn't on your list. Say
+    if I should use it outside the pool.
+- **Why it fits parts.** On a CPU node the witness and the dense proving run on the CPU; on an H200 they run on the GPU.
+  So the CPU's end-to-end slope isn't the H200's. The rate I'll give for the H200 is:
+  - the CPU run's growth a block in the host-side parts (the wait and the rest);
+  - plus the H200 runs' growth in witness and proving, about 8 ms a block (2bd3 and 460b).
+  - I'll check the K = 2048 control the same way against its card entry.
+- **Tooling PR:** [#8021](https://github.com/compute-verification/verity/pull/8021) (PRF-456). Its suites,
+  r20261108-062346-8003 on cpu-9, are also waiting on memory. I'll mark it when they pass.
+- **Next:** the card fix follows the run as its own PR, and BREAKEVEN then gets the measured rate in `inbox/BREAKEVEN.md`.
