@@ -17,8 +17,8 @@ sends to -1, is no expert's. Expert e's c_e pairs are written from ``base[e] = s
 vLLM's kernel at E > 64 (count_and_sort_expert_tokens_kernel) writes the same buffers except the order within an
 expert, which is the order its atomicAdd on the expert's offset hands out slots, so it varies run to run. `reference`
 is the definition in Python, and the Triton kernels (`moe_align_kernels`) compute it with no atomics. A call of at most
-`SMALL_MAX` pairs is one launch (`align_one`); a longer one is three, over chunks of `CHUNK` pairs. Each program ranks
-its pairs by comparing them with each other, `COLS` at a time.
+`SMALL_MAX` pairs is one launch (`align_small`); a longer one is three, over chunks of `CHUNK` pairs. Each program places
+a tile of `TILE` pairs, ranking them by comparing them with each other, `COLS` at a time.
 
 ``VERITY_MOE_ALIGN_LOG=DIR`` writes, per process, ``moe_align.PID.json``: the calls on each path.
 """
@@ -37,11 +37,12 @@ ENV = "VERITY_MOE_ALIGN"
 LOG_ENV = "VERITY_MOE_ALIGN_LOG"
 #: the op this replaces, under ``torch.ops._moe_C``
 OP = "moe_align_block_size"
-#: the most pairs `align_one` takes in one program; a longer call is chunked
-SMALL_MAX = 1024
-#: pairs a chunk of the long path, and the pairs each step of a program's rank compare reads
+#: the most pairs `align_small` takes in one launch; a longer call is chunked
+SMALL_MAX = 4096
+#: pairs a chunk of the long path, pairs a tile (a program), and the pairs each step of a tile's rank compare reads
 CHUNK = 1024
-COLS = 64
+TILE = 128
+COLS = 32
 #: the chunk rows and experts `scan_chunks` reads at a time, and the slots a pad-store loop writes at a time
 SCAN_ROWS = 32
 SCAN_EXPERTS = 64
@@ -142,23 +143,26 @@ def kernels() -> dict[str, Any]:
         import importlib
 
         mod = importlib.import_module("moe_align_kernels")
-        _KERNELS.update({k: getattr(mod, k) for k in ("align_one", "count_chunks", "scan_chunks", "place_chunks")})
+        _KERNELS.update({k: getattr(mod, k) for k in ("align_small", "count_chunks", "scan_chunks", "place_chunks")})
     return _KERNELS
 
 
 def warps(pairs: int) -> int:
-    return 4 if pairs <= 256 else 8 if pairs <= 512 else 16
+    return 4 if pairs <= 512 else 8 if pairs <= 2048 else 16
 
 
 class Align:
     """The op: writes the canonical outputs into vLLM's buffers, on the inputs' device and stream, with no host sync.
     ``fast_launch`` launches a compiled kernel through its handle (`_Launch`)."""
 
-    def __init__(self, small_max: int = SMALL_MAX, chunk: int = CHUNK, cols: int = COLS, fast_launch: bool = True) -> None:
-        for name, v in (("chunk", chunk), ("cols", cols)):
+    def __init__(self, small_max: int = SMALL_MAX, chunk: int = CHUNK, tile: int = TILE, cols: int = COLS,
+                 fast_launch: bool = True) -> None:
+        for name, v in (("chunk", chunk), ("tile", tile), ("cols", cols)):
             if v < 16 or v & (v - 1):
                 raise ValueError(f"{name}: a power of two of at least 16, not {v}")
-        self.small_max, self.chunk, self.cols, self.fast_launch = small_max, chunk, cols, fast_launch
+        if not cols <= tile <= chunk:
+            raise ValueError(f"cols {cols}, tile {tile} and chunk {chunk} must not decrease")
+        self.small_max, self.chunk, self.tile, self.cols, self.fast_launch = small_max, chunk, tile, cols, fast_launch
         self._launch: dict[str, _Launch] = {}
         self.calls = {"one": 0, "chunked": 0}
         #: called every `FLUSH_EVERY` calls outside a CUDA graph's capture (`log_to`)
@@ -189,25 +193,27 @@ class Align:
         if P <= self.small_max:
             self.calls["one"] += 1
             PB = max(next_pow2(P), 16)
-            K["align_one"]((1,), (topk_ids, mp, *bufs), (P, L, NB, E, BM),
-                           {"HAS_MAP": has_map, "PB": PB, "JB": min(self.cols, PB), "EP": EP, "TB": STORE}, warps(PB))
+            T = min(self.tile, PB)
+            K["align_small"]((cdiv(P, T),), (topk_ids, mp, *bufs), (P, L, NB, E, BM),
+                             {"HAS_MAP": has_map, "PB": PB, "T": T, "JB": min(self.cols, T), "EP": EP, "TB": STORE},
+                             warps(PB))
         else:
             self.calls["chunked"] += 1
-            CH = self.chunk
+            CH, T = self.chunk, self.tile
             C, ES = cdiv(P, CH), min(SCAN_EXPERTS, EP)
             ws = torch.empty((2 * C + 1) * EP, dtype=torch.int32, device=topk_ids.device)
             hist, prefix, total = ws[:C * EP], ws[C * EP:2 * C * EP], ws[2 * C * EP:]
             K["count_chunks"]((C,), (topk_ids, mp, hist), (P, E), {"HAS_MAP": has_map, "CHUNK": CH, "EP": EP}, warps(CH))
             K["scan_chunks"]((EP // ES,), (hist, prefix, total), (C,), {"EP": EP, "ES": ES, "CB": SCAN_ROWS}, 4)
-            K["place_chunks"]((C,), (topk_ids, mp, prefix, total, *bufs), (P, L, NB, E, BM),
-                              {"HAS_MAP": has_map, "CHUNK": CH, "JB": min(self.cols, CH), "EP": EP, "TB": STORE},
+            K["place_chunks"]((C, CH // T), (topk_ids, mp, prefix, total, *bufs), (P, L, NB, E, BM),
+                              {"HAS_MAP": has_map, "CHUNK": CH, "T": T, "JB": self.cols, "EP": EP, "TB": STORE},
                               warps(CH))
         if self.on_flush is not None and sum(self.calls.values()) % FLUSH_EVERY == 0 and not _capturing():
             self.on_flush()
 
     def record(self) -> dict[str, Any]:
         return {"pid": os.getpid(), "calls": dict(self.calls), "small_max": self.small_max, "chunk": self.chunk,
-                "cols": self.cols, "fast_launch": self.fast_launch}
+                "tile": self.tile, "cols": self.cols, "fast_launch": self.fast_launch}
 
 
 def _capturing() -> bool:

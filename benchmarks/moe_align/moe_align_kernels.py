@@ -1,14 +1,15 @@
 """The deterministic `moe_align_block_size`'s Triton kernels (`moe_align.Align` launches them). No atomic decides where a
-pair goes: a pair's slot is its expert's padded offset ``base[e]``, plus the expert's pairs in earlier chunks, plus its
-rank in its own chunk: the number of the chunk's earlier pairs with its expert, from a compare against the chunk's pairs
-``JB`` at a time. A pair's ``bin`` is its local expert, or ``E`` for a pair no expert takes. Each program loads its pairs
-once and ranks them all at once.
+pair goes: a pair's slot is its expert's padded offset ``base[e]``, plus the expert's pairs before its tile of ``T``
+pairs, plus its rank in the tile: the number of the tile's earlier pairs with its expert, from a compare against the
+tile's pairs ``JB`` at a time. A pair's ``bin`` is its local expert, or ``E`` for a pair no expert takes. One program
+places one tile.
 
-- `align_one`: one program over the whole call (``PB`` a power of two at least the pair count): the histogram, the
-  padded prefix sum, the pad slots, and each pair's slot.
-- `count_chunks`, `scan_chunks`, `place_chunks`: chunks of ``CHUNK`` pairs, one program each. Each chunk's histogram;
-  then, over slices of the experts, each (chunk, expert)'s pairs in earlier chunks and each expert's total; then each
-  chunk's pairs, the first chunk's program also writing the pad slots.
+- `align_small`: one launch, a program a tile. Each program histograms all ``PB`` pairs (a power of two at least the
+  pair count) for the padded prefix sum, and the pairs before its tile for its offsets; the first also writes the pad
+  slots.
+- `count_chunks`, `scan_chunks`, `place_chunks`: chunks of ``CHUNK`` pairs. Each chunk's histogram; then, over slices
+  of the experts, each (chunk, expert)'s pairs in earlier chunks and each expert's total; then a program a tile, which
+  histograms its chunk's pairs before the tile, the first also writing the pad slots.
 
 Each writes every slot vLLM's kernel writes: a pair's index at its slot, ``numel`` at every other slot of
 ``sorted_token_ids``, each block's expert at ``expert_ids`` up to ``num_tokens_post_pad / BM`` and ``-1`` from there to
@@ -56,33 +57,33 @@ def _pads(sorted_ptr, eids_ptr, ntpp_ptr, cnt, padded, base, P, L, NB, BM, TB: t
 
 
 @triton.jit
-def _rank(ids_ptr, map_ptr, eb, lo, P, E, HAS_MAP: tl.constexpr, PB: tl.constexpr, JB: tl.constexpr):
-    """Each pair's rank among the pairs [lo, lo + PB) with its bin: those before it."""
-    i = tl.arange(0, PB)
-    rank = tl.zeros([PB], tl.int32)
-    for jb in tl.static_range(0, PB, JB):
+def _tile(ids_ptr, map_ptr, sorted_ptr, eids_ptr, nxt, lo, P, L, E, BM, HAS_MAP: tl.constexpr, T: tl.constexpr,
+          JB: tl.constexpr):
+    """Store the pairs [lo, lo + T), ``nxt[e]`` the slot of expert e's first pair at ``lo``."""
+    i = tl.arange(0, T)
+    eb = _bins(ids_ptr, map_ptr, lo + i, P, E, HAS_MAP)
+    rank = tl.zeros([T], tl.int32)
+    for jb in tl.static_range(0, T, JB):
         j = jb + tl.arange(0, JB)
         ej = _bins(ids_ptr, map_ptr, lo + j, P, E, HAS_MAP)
         rank += tl.sum(((ej[None, :] == eb[:, None]) & (j[None, :] < i[:, None])).to(tl.int32), 1)
-    return rank
-
-
-@triton.jit
-def _put(eb, dest, pair, sorted_ptr, eids_ptr, L, E, BM):
+    dest = tl.gather(nxt, eb, 0) + rank
     ok = (eb < E) & (dest < L)
-    tl.store(sorted_ptr + dest, pair, mask=ok)
+    tl.store(sorted_ptr + dest, lo + i, mask=ok)
     tl.store(eids_ptr + dest // BM, eb, mask=ok & (dest % BM == 0))
 
 
 @triton.jit(do_not_specialize=["P", "L", "NB", "E", "BM"])
-def align_one(ids_ptr, map_ptr, sorted_ptr, eids_ptr, ntpp_ptr, P, L, NB, E, BM,
-              HAS_MAP: tl.constexpr, PB: tl.constexpr, JB: tl.constexpr, EP: tl.constexpr, TB: tl.constexpr):
-    i = tl.arange(0, PB)
-    eb = _bins(ids_ptr, map_ptr, i, P, E, HAS_MAP)
-    base, padded, cnt = _base(tl.histogram(eb, EP), E, BM, EP)
-    _pads(sorted_ptr, eids_ptr, ntpp_ptr, cnt, padded, base, P, L, NB, BM, TB)
-    dest = tl.gather(base, eb, 0) + _rank(ids_ptr, map_ptr, eb, 0, P, E, HAS_MAP, PB, JB)
-    _put(eb, dest, i, sorted_ptr, eids_ptr, L, E, BM)
+def align_small(ids_ptr, map_ptr, sorted_ptr, eids_ptr, ntpp_ptr, P, L, NB, E, BM, HAS_MAP: tl.constexpr,
+                PB: tl.constexpr, T: tl.constexpr, JB: tl.constexpr, EP: tl.constexpr, TB: tl.constexpr):
+    t = tl.program_id(0)
+    ia = tl.arange(0, PB)
+    ea = _bins(ids_ptr, map_ptr, ia, P, E, HAS_MAP)
+    base, padded, cnt = _base(tl.histogram(ea, EP), E, BM, EP)
+    if t == 0:
+        _pads(sorted_ptr, eids_ptr, ntpp_ptr, cnt, padded, base, P, L, NB, BM, TB)
+    nxt = base + tl.histogram(tl.where(ia < t * T, ea, E), EP)
+    _tile(ids_ptr, map_ptr, sorted_ptr, eids_ptr, nxt, t * T, P, L, E, BM, HAS_MAP, T, JB)
 
 
 @triton.jit(do_not_specialize=["P", "E"])
@@ -109,15 +110,15 @@ def scan_chunks(hist_ptr, prefix_ptr, total_ptr, C, EP: tl.constexpr, ES: tl.con
 
 @triton.jit(do_not_specialize=["P", "L", "NB", "E", "BM"])
 def place_chunks(ids_ptr, map_ptr, prefix_ptr, total_ptr, sorted_ptr, eids_ptr, ntpp_ptr, P, L, NB, E, BM,
-                 HAS_MAP: tl.constexpr, CHUNK: tl.constexpr, JB: tl.constexpr, EP: tl.constexpr, TB: tl.constexpr):
+                 HAS_MAP: tl.constexpr, CHUNK: tl.constexpr, T: tl.constexpr, JB: tl.constexpr, EP: tl.constexpr,
+                 TB: tl.constexpr):
     c = tl.program_id(0)
+    t = tl.program_id(1)
     ex = tl.arange(0, EP)
     base, padded, cnt = _base(tl.load(total_ptr + ex), E, BM, EP)
-    if c == 0:
+    if c + t == 0:
         _pads(sorted_ptr, eids_ptr, ntpp_ptr, cnt, padded, base, P, L, NB, BM, TB)
-    lo = c * CHUNK
-    i = tl.arange(0, CHUNK)
-    eb = _bins(ids_ptr, map_ptr, lo + i, P, E, HAS_MAP)
-    nxt = base + tl.load(prefix_ptr + c * EP + ex)
-    dest = tl.gather(nxt, eb, 0) + _rank(ids_ptr, map_ptr, eb, lo, P, E, HAS_MAP, CHUNK, JB)
-    _put(eb, dest, lo + i, sorted_ptr, eids_ptr, L, E, BM)
+    ia = tl.arange(0, CHUNK)
+    ea = _bins(ids_ptr, map_ptr, c * CHUNK + ia, P, E, HAS_MAP)
+    nxt = base + tl.load(prefix_ptr + c * EP + ex) + tl.histogram(tl.where(ia < t * T, ea, E), EP)
+    _tile(ids_ptr, map_ptr, sorted_ptr, eids_ptr, nxt, c * CHUNK + t * T, P, L, E, BM, HAS_MAP, T, JB)
