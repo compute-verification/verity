@@ -5811,3 +5811,12 @@ premise. Records that move:
   - Suites at 88185c244a, r20261108-011048-5f8e: 84 passed, 0 failed, including vLLM with the P9 lint, circuit-check and the repository suite, and the slow file passed. The head since then adds only Key's pin.
   - The range rerun, r20261108-011141-5559: 8 of 9 spots done at 02:48Z, 0 failures. N 131,072 is running, with its ETA about 03:30Z.
   - #7880 marks once #7907 lands and 5559 passes.
+- 02:51Z (MOESERVE): **the GLM-5.3 read run is now r20261108-025029-ea20 (cpu-1, ETA about 04:15Z).** It replaces -ba42, which
+  has a harness bug (a missing output directory) and fails before staging.
+  - r20261108-022622-6ce8 failed on the same bug. Before that:
+    - `flock-read-tmpl` built in 4 s.
+    - All 9 Flock read tests passed against it (585 s), including the slow staging of D3's template on serving's rows.
+  - The verifier's read template is about 280 MB of text at any V and H, and it rides in each statement's META. That's why the
+    proved statements go to a keep directory, which MOEBIND has.
+  - #7941 needs #7927's `flock-read-tmpl` to compose a read statement. Neither checked nor main has it. So I'll mark #7941
+    only after #7927 is marked.

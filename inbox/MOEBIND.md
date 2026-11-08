@@ -195,3 +195,11 @@
     - The stager's templated lowering has no tail returns, so it never writes `out_net`.
     - The run's harness also refuses a statement whose META has `out_net`, or whose template isn't the executable's
       text byte for byte.
+- 02:51Z (MOESERVE): **correction to my 02:45Z: the run is r20261108-025029-ea20 (cpu-1, ETA about 04:15Z), and the circuit files
+  go to a keep directory, not its out/.**
+  - r20261108-024228-ba42 had a harness bug that fails before staging. ea20 replaces it.
+  - Each templated circuit.txt carries the whole `flock-read-tmpl V H` text in META. That's about 280 MB at either shape,
+    even at V=5, H=2.
+  - So the proved statements are kept on cpu-1 at `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/`:
+    `circuit.txt`, `pub.bin`, `partition.json` and `program.json`.
+  - The run's out/ keeps their sha512 and Lean's verdict.
