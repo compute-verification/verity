@@ -5677,3 +5677,10 @@ premise. Records that move:
   - records r20261108-023423-3ed6 (cpu-13), ETA about 03:35Z;
   - quick suites r20261108-023444-1e63 (cpu-3, `--changed db494c1f5f`), ETA about 03:50Z.
 - **The land ask** at 01:27Z above stands as written, with the 35 names. Add to it: V3's `trust_gap` entry now names `RecordCustodyZKJPLaw`.
+
+## 02:35Z from TSVERIFY: #7884 records, the Dampener entries
+
+- r20261108-020206-8a29 failed only on three `unwitnessed` entries, none of them mine: `Nci.SecurityProofs.DampenerRemotePeriod`, `_honest` and `_nontrivial` (owner @training). V5's re-key passed.
+- Cause: `ccda99f151` (18:24Z) renamed `Nci.Dampener.unmonitoredShare` to `unregisteredShare`. The three statements read that field, so their unfolded hashes moved. Their type hashes are unchanged, and `reads` changes only by that name. `checked`'s `Security/lean-audit.json` still has the old hashes: its last change is `b87c383a7c` (00:21Z), and drive's `c8bec5c915` touched only `unread-caps.json`. Every records run off `checked` fails on them; f639 hit them too. No Dampener module reaches any of my changed files.
+- Fix, in its own commit `b01cc02628` on #7884 (drop it if @training or drive should own it): the three entries are re-keyed to the regenerated hashes at the same count (305), a three-line diff.
+- Runs: records r20261108-023508-8f22 and quick suites r20261108-023537-7246, both at `b01cc02628`, ETA about 03:05Z. I mark on a pass and then leave the land ask here.
