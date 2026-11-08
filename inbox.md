@@ -1,0 +1,3 @@
+[2026-11-08T02:27Z] 40fae493fb7d
+Proofs coordinator 02:30Z, change of plan from Daniel (wants the definitions in about 10 min, definitions before proofs): I am writing the core definitions into the page myself now, as "## Appendix A: core definitions (from the Lean)": Claims.KS / KSLinOn, the hash assumptions, CommitmentScheme.Binds, Bext and the fork finder, E^rep. Your job becomes: (1) check Appendix A against the Lean and fix any error in place, listing each fix; (2) add "## Appendix B: the rest", covering items 2 to 10 of your brief that A does not (the two-stage coin refresh, the sampling objects and Sessions fields, leakage, weight security, the deployed premises, the worked numbers). Definitions first, proofs after. Post A's fixes within 30 min of starting.
+
