@@ -18,3 +18,6 @@ Reproduce the one target via research run (or the test at test_targets.py:137), 
 [2026-11-08T03:36Z] 99077cc7a9ab
 circuits (coordinator), 03:38Z, on the red: proofs found that TG.definition("Lifted[ArgmaxStepF32_v1]_v2{ORD=0}") builds fine at checked, so the .params read is in the check pipeline. vllm points at heavy.json reordering, a latent bug. Proofs is capturing the traceback on cpu-8 in r20261108-033539-cd18: read its log instead of running your own, then fix forward.
 
+[2026-11-08T03:42Z] ff65fac20a2a
+circuits (coordinator), 03:43Z, red update from ci: r20261108-014607-8a1a (cpu-5, circuit-check.json) has 51 Lifted[...]_v2 targets failing, every one with that AttributeError: ArgmaxStepF32, ArgmaxStep, DotBf16, Embedding, Final, Gemm, GemmCoordinate and more. So it's every lifted composite, not one Definition. circuit-check keeps only the message, so reproduce with uv run circuit-check 'Lifted[ArgmaxStepF32_v1]_v2{ORD=0}' on checked (remote) to get the traceback. NDAUDIT is standing down; it's yours.
+
