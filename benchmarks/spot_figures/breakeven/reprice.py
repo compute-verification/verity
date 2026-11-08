@@ -13,20 +13,22 @@ from dataclasses import replace
 
 from common import SCOPES, c, f1, tc
 
-#: The statement cache on the H200: (fixed after over before, host share of after) by block prefix: quant K2048
-#: measured warm on one H200 (2.04 s a statement at 2 blocks, 0.115 s of it proving, against the card's 47.8 s fixed),
-#: three types priced from their uncached H200 splits and two (quant K1536, combine N5) from their CPU shares.
+#: The statement cache on the H200: (fixed after over before, host share of after) by block prefix: three types
+#: measured warm on one H200 against the card's fixed, quant K6144 (a 2-block statement 8.56 s, 8.30 s of it host,
+#: against 98.16 s), FlashInfer K2048 (5.12 s, 4.95 s of it host, against 112.3 s) and quant K2048 (2.04 s, 0.115 s of
+#: it proving, against 47.8 s); one priced from its uncached H200 split and two (quant K1536, combine N5) from their
+#: CPU shares. "Host" is end to end less GPU proving.
 CACHE = {
-    "Fp8GroupQuantUe8m0_v1{K=6144,": (13.3 / 97.7, 12.8 / 13.3),
-    "FlashInferFp8Linear_v1{K=2048,": (11.1 / 112.3, 10.8 / 11.1),
+    "Fp8GroupQuantUe8m0_v1{K=6144,": (8.56 / 98.16, 8.30 / 8.56),
+    "FlashInferFp8Linear_v1{K=2048,": (5.12 / 112.3, 4.95 / 5.12),
     "AllReduceMultimem_v1{": (3.0 / 42.6, 0.27 / 3.0),
     "Fp8GroupQuantUe8m0_v1{K=2048,": (2.04 / 47.8, (2.04 - 0.115) / 2.04),
     "Fp8GroupQuantUe8m0_v1{K=1536,": (6.3 / 39.6, 6.0 / 6.3),
     "SparseMlaCombine_v1{": (7.7 / 42.7, 7.0 / 7.7),
 }
-#: FlashInfer K2048 warm (`fi_warm`), modeled: CPU's warm session's host parts (2.50 s of 4.3 s, against 170.9 s cold)
-#: and its proving scaled by quant K2048's H200-to-CPU ratio (0.115 s against 0.85 s) to about 0.25 s
-CACHE_FI_WARM = {"FlashInferFp8Linear_v1{K=2048,": (2.75 / 112.3, 2.50 / 2.75)}
+#: seconds a block measured warm on one H200 with the statement cache on, in place of the card's, and the GPU's share
+#: of them (the rest the host's): FlashInfer K2048 at 7.16 ms, 0.18 ms of it GPU proving
+MARGINAL = {"FlashInferFp8Linear_v1{K=2048,": (7.16e-3, 0.18 / 7.16)}
 #: the priced type whose factors a type the cache wasn't priced on takes, by prefix (assumed)
 FAMILY = (("AllReduce", "AllReduceMultimem_v1{"), ("RmsNormMnnvl", "AllReduceMultimem_v1{"),
           ("Fp8GroupQuant", "Fp8GroupQuantUe8m0_v1{K=2048,"), ("FlashInferFp8Linear", "FlashInferFp8Linear_v1{K=2048,"),
@@ -113,21 +115,26 @@ VERIFY_FAST_MEASURED = ("Fused[EmbeddingRead_v1{V=256,H=3072}", "Fused[Embedding
                         "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}",
                         "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}", "DsaMqaLogits_v3{N=1,H=32,D=128}",
                         "ResidualAdd_v1{N=6144}")
-#: the flat column's cut a statement (`verify_cut`): measured on FlashInfer K2048 and quant K6144 and taken for every
-#: other type but the MoE family's, which it leaves unchanged
+#: the verifier's families its end-to-end measurements are taken for: FlashInfer K2048's and RMSNorm v1 N=6144's
+FI_FAMILY = ("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1")
+RMS_FAMILY = ("RMSNorm", "DsaRMSNorm", "ResidualAdd", "RmsNormMnnvl")
+#: the flat column's cut a statement (`verify_cut`): the flat verifier with its file reading cut and the HmOut.delta
+#: twin over the fast column's, one core on the same flat files, by family (FlashInfer K2048 304.3 s against 350.5 s,
+#: RMSNorm v1 N=6144 138.9 s against 214.7 s); every other type at the file reading cut alone, measured on FlashInfer
+#: K2048 and quant K6144 (assumed), but the MoE family's, which keeps its own
+VERIFY_CUT_MEASURED = ((FI_FAMILY, 304.3 / 350.5), (RMS_FAMILY, 138.9 / 214.7))
 VERIFY_CUT = 0.85
 VERIFY_CUT_KEEPS = ("MoeExpertFp8", "Fused[")
-#: the types whose templated session check measured costlier than the flat verifier, which keep the flat
-VERIFY_FLAT_CHEAPER = ("RMSNorm", "DsaRMSNorm", "RmsNormMnnvl")
 #: today's column with the fused blocks at their fast seconds over the MoE GEMM's after over before (assumed), where
 #: the card takes its MoE member's
 VERIFY_TODAY = VERIFY | {p: VERIFY_FAST[p] / 0.577 for p in VERIFY_FAST if p.startswith("Fused[")}
 VERIFY_COLUMNS = {"today": (VERIFY_TODAY, VERIFY_FIXED), "fast": (VERIFY_FAST, min(VERIFY_FAST.values()))}
-#: the templated (structural) session check's whole verify over the flat one's in one run, by family, applied to the
-#: fast column: FlashInfer K2048 149.2 s against 354.3 s, RMSNorm v3 N=6144 1.18x; any other type keeps the flat
-#: (unmeasured)
-TMPL_MEASURED = ((("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1"), 149.2 / 354.3),
-                 (("RMSNorm", "DsaRMSNorm", "ResidualAdd", "RmsNormMnnvl"), 1.18))
+#: the templated (structural) session check's whole verify over the flat one's, one core on the same statements, the
+#: flat with its cut, by family, applied to the fast column: FlashInfer K2048 31.1 s against 304.3 s, RMSNorm v1
+#: N=6144 96.1 s against 138.9 s; any other type keeps the flat (unmeasured)
+TMPL_MEASURED = ((FI_FAMILY, 31.1 / 304.3), (RMS_FAMILY, 96.1 / 138.9))
+#: the families quant K6144's estimate isn't taken for (`goal`), which keep their measured ratio
+TMPL_GOAL_EXCLUDES = ("RMSNorm", "DsaRMSNorm", "RmsNormMnnvl")
 
 #: the long-running proof server on one H200, one prover, the statement cache warm, on the final driver (each session
 #: timed when its verifier files it): (seconds a full statement, its proving share 1 - front/e2e) by block prefix
@@ -210,13 +217,13 @@ def gpu_factor(busy: float, prover: float = 1.0, k: int = 1, front: bool = False
 
 def templated_seconds(x, how: str) -> float:
     """The templated session check's core-seconds a statement of `x`'s type: `measured`, the fast column times its
-    family's measured ratio (TMPL_MEASURED), none for a type outside them; `goal`, quant K6144's estimate over today's
-    for every type but the RMSNorm family, which keeps the flat."""
-    if how == "goal":
-        today = verifier_seconds(x, VERIFY_TODAY, VERIFY_FIXED)[0]
-        return math.inf if x["block"].startswith(VERIFY_FLAT_CHEAPER) else VERIFY_TEMPLATED * today
+    family's measured ratio (TMPL_MEASURED), none for a type outside them; `goal`, the less of that and quant K6144's
+    estimate over today's, which TMPL_GOAL_EXCLUDES' families don't take."""
     ratio = next((r for types, r in TMPL_MEASURED if x["block"].startswith(types)), math.inf)
-    return ratio * verifier_seconds(x, *VERIFY_COLUMNS["fast"])[0]
+    measured = ratio * verifier_seconds(x, *VERIFY_COLUMNS["fast"])[0]
+    if how != "goal" or x["block"].startswith(TMPL_GOAL_EXCLUDES):
+        return measured
+    return min(measured, VERIFY_TEMPLATED * verifier_seconds(x, VERIFY_TODAY, VERIFY_FIXED)[0])
 
 
 def verify_per_and(strata, column="fast") -> float:
@@ -237,20 +244,20 @@ def server_price(x) -> tuple[float, float, float, int] | None:
 
 def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host=1.0, plain=False, verify=0.0,
                  column="fast", tmpl=False, fused_busy=None, verify_other=None, k_gain="measured", dense_k=2,
-                 fi_warm=False, verify_cut=1.0):
+                 verify_cut=False):
     """The strata priced as the long-running proof server proves them, with the statement cache warm: the measured
-    types at their server prices and full statements, the rest at the card with the cache's factor (FlashInfer K2048's
-    warm model with `fi_warm`, quant K6144 at `quant6144` seconds a block when given); then a GPU prover `prover` times
-    faster on proving shares, K provers an H200 on full statements (`k4`: four, `dense_k` on the dense types, one on
+    types at their server prices and full statements, the rest at the card with the cache's factor and MARGINAL's
+    seconds a block (quant K6144 at `quant6144` when given); then a GPU prover `prover` times faster on proving
+    shares, K provers an H200 on full statements (`k4`: four, `dense_k` on the dense types, one on
     ONE_PROVER's, never past K_MAX; at K_GAIN, K_GAIN_MPS with `k_gain="mps"`, each type's own with `"types"`, each
     type's own under MPS with `"mps_types"` (K_MPS over the whole chain, the rest at K_MPS_FLOOR), or the busy-share
     model with `"model"`), the next session's
     front beside this one's device work (`front`), the dense types' host witness `host` times lower, Flock without
-    --zk, and the Lean verifier's core-seconds a statement from `column` times `verify` and `verify_cut` (the MoE
-    family's uncut; the templated check where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`;
-    the assumed types at `verify_other` when given)."""
+    --zk, and the Lean verifier's core-seconds a statement from `column` times `verify`, cut by its family's measured
+    cut with `verify_cut` (VERIFY_CUT_MEASURED, VERIFY_CUT elsewhere, the MoE family's uncut; the templated check
+    where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at `verify_other`
+    when given)."""
     table, floor = VERIFY_COLUMNS[column]
-    cache = CACHE | CACHE_FI_WARM if fi_warm else CACHE
     out = []
     for x in strata:
         fixed, marginal, cap = x["fixed_seconds"], x["seconds_per_block"], x["statement_blocks"]
@@ -263,13 +270,18 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
         else:
             if quant6144 is not None and x["block"].startswith("Fp8GroupQuantUe8m0_v1{K=6144,"):
                 marginal = quant6144
+            host_m = 0.0
+            if m := next((v for p, v in MARGINAL.items() if x["block"].startswith(p)), None):
+                marginal, host_m = m[0], m[0] * (1 - m[1])
             e = expert(x)
-            f, hs, _ = (EXPERT[e]["cache"], 0.0, "") if e else cache_factor(x, cache)
+            f, hs, _ = (EXPERT[e]["cache"], 0.0, "") if e else cache_factor(x)
             fixed *= f
             host_s = hs * fixed
             if host != 1.0 and x["block"].startswith(DENSE):
                 fixed, host_s = fixed - host_s * (1 - 1 / host), host_s / host
-            bf, bm = (1 - host_s / fixed if fixed else 1.0), 1.0
+                marginal, host_m = marginal - host_m * (1 - 1 / host), host_m / host
+            bf = 1 - host_s / fixed if fixed else 1.0
+            bm = 1 - host_m / marginal if marginal else 1.0
         k = 1
         if k4 and not x["block"].startswith(ONE_PROVER):
             k = dense_k if x["block"].startswith(DENSE) else 4
@@ -292,8 +304,8 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
                 v = min(v, templated_seconds(x, "goal" if tmpl is True else tmpl))
             if how == "assumed" and verify_other is not None:
                 v = verify_other
-            if not x["block"].startswith(VERIFY_CUT_KEEPS):
-                v *= verify_cut
+            if verify_cut and not x["block"].startswith(VERIFY_CUT_KEEPS):
+                v *= next((r for types, r in VERIFY_CUT_MEASURED if x["block"].startswith(types)), VERIFY_CUT)
             fixed += verify * v / CORE_PER_GPU
         out.append(x | {"fixed_seconds": fixed, "seconds_per_block": marginal, "statement_blocks": int(cap),
                         "priced": "measured" if sp else x["priced"]})

@@ -51,7 +51,8 @@ MAIN = [
      "measured on one H200 with the cache (512 and 1024 blocks); before the cache, its fixed over the cache's factor",
      "STATIONARY, HILLCLIMB"),
     ("R2", "+ the statement cache (#7875)",
-     "measured on H200 (experts), priced from H200 splits (5 types) and CPU shares (2); the rest assumed ×0.1",
+     "measured on H200 (experts and three dense types), priced from an H200 split (1) and CPU shares (2); the rest "
+     "assumed ×0.1",
      "HILLCLIMB, STATIONARY"),
     ("R3", "+ 4 provers on one H200 with verify-ahead, on the expert types",
      "measured on the fused blocks at 128 and 256 blocks a statement", "STATIONARY"),

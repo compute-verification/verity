@@ -95,8 +95,7 @@ class Case:
     quant6144: float | None = None
     k_gain: str = "measured"
     dense_k: int = 2
-    fi_warm: bool = False
-    verify_cut: float = 1.0
+    verify_cut: bool = False
     column: str = "fast"
     tmpl: bool | str = False
     fused_busy: float | None = None
@@ -137,8 +136,7 @@ def build(case: Case):
                                           quant6144=case.quant6144, host=case.host, plain=case.plain,
                                           verify=case.verify, column=case.column, tmpl=case.tmpl,
                                           fused_busy=case.fused_busy, verify_other=case.verify_other,
-                                          k_gain=case.k_gain, dense_k=case.dense_k, fi_warm=case.fi_warm,
-                                          verify_cut=case.verify_cut)
+                                          k_gain=case.k_gain, dense_k=case.dense_k, verify_cut=case.verify_cut)
         elif per_type:
             strata = reprice.apply(strata, cache=case.cache, overlap=case.overlap, prover=case.prover,
                                    full=case.full, host=case.host, plain=case.plain, verify=case.verify,
@@ -403,12 +401,12 @@ def served_line() -> dict[str, Case]:
     steps["N5"] = steps["N4"] | dict(prover=PROVER_MARKED)
     steps["N5m"] = steps["N1"] | dict(k4=True, k_gain="mps_types", prover=PROVER_MARKED)
     steps["P1"] = steps["N5"] | dict(split=COLS_7979)
-    steps["P2"] = steps["P1"] | dict(fi_warm=True, verify_cut=reprice.VERIFY_CUT)
+    steps["P2"] = steps["P1"] | dict(verify_cut=True)
     steps["P3"] = steps["P2"] | dict(dense_k=4)
     steps["P4"] = steps["P3"] | dict(prover=PROVER_GOAL)
     steps["P5"] = steps["P4"] | dict(tmpl="goal")
     out = {n: Case(**kw) for n, kw in steps.items()}
-    extras = {"7979": dict(split=COLS_7979), "fiwarm": dict(fi_warm=True), "8101": dict(verify_cut=reprice.VERIFY_CUT),
+    extras = {"7979": dict(split=COLS_7979), "flatcut": dict(verify_cut=True),
               "dense4": dict(dense_k=4), "provergoal": dict(prover=PROVER_GOAL),
               "prover2.8": dict(prover=PROVER_OLD_MAIN), "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"),
               "host": dict(host=3.5), "plain": dict(plain=True), "q20": dict(quant6144=0.020),
