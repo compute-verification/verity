@@ -226,6 +226,20 @@ def test_a_collective_over_several_rows_is_a_coordinate_combine_a_word():
     in_order(sites)
 
 
+def test_a_producer_reading_a_combines_output_is_its_producer_units_reading_it():
+    """A call that reads a combine's output and produces a later collective's partial (the LM head reading the last norm) is
+    its producer units alone: per rank and row, the second all-reduce's Gemm coordinates, each with its x wired a word a row
+    from the first all-reduce's combine units, and no unit of the whole call."""
+    b = TB.derive([rank_body(3, r, chain=True) for r in range(3)])
+    sites = TW.sites_circuit([b], "w3")
+    fns = _fns(sites)
+    xs = [w for w in sites.circuit.wires if w.port == "x"]
+    assert sites.unwired == () and sites.consumers == {} and all(fns[w.reader].id.startswith("Gemm_v2{K=16,N=1,") for w in xs)
+    assert {sites.circuit.cuts[w.reader]["x"] for w in xs} == {N} and _bits(sites, xs) == 3 * ROWS * N * N * 16
+    assert peer_bits(sites) == sum(9 * (s.hi - s.lo) * 16 for s in b.sites) == 9 * 2 * ROWS * N * 16
+    in_order(sites)
+
+
 def test_a_combine_of_no_grain_is_refused_by_name():
     """A collective combined by a Definition that isn't an all-reduce or a gather (a top-k sum) has no combine units, and is
     refused by name."""

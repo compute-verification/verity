@@ -9,8 +9,9 @@ units a sample draws), never a free input: `interface.input_count` counts every 
 
 **Units.** A site's units are its producers' units, its combine units (`grain.lower`: one a word at coordinate grain, one a
 row at row grain, none for a gather), the fused all-reduce's norm (one a rank) and its readers: a call of a rank Program
-reading a combine's output is a unit of its own Definition, placed at the last site it reads. A read by another site's
-combine (the fused all-reduce's residual) is that site's combine units' port. Each template's units are allocated in the
+reading a combine's output is a unit of its own Definition, placed at the last site it reads, unless it produces a later
+site's partial (the LM head reading the last norm), whose producer units each read it. A read by another site's combine
+(the fused all-reduce's residual) is that site's combine units' port. Each template's units are allocated in the
 public order (request, then the site's place in its request Program's call order, its step then its layer, then stage:
 producers, combines, norms, readers; then rank, then position), and `Sites.order` lists those ranges in it.
 
@@ -47,8 +48,8 @@ Segment = tuple[int, int, int, str, str, int]
 class Sites:
     """`sites_circuit`'s circuit and where each unit came from: ``units[(request, site, stage, rank)]``, the stage's ranges in
     position order (``stage`` `PRODUCER`, `COMBINE`, `NORM` or `CONSUMER`); ``consumers[(request, rank, node)]``, the unit
-    of a reader call; ``order``, every unit's range in the public order (module docstring), each template's tiling its
-    units; ``unwired``, each read of a combine's output left a free input, and why."""
+    of a reader call that produces no partial; ``order``, every unit's range in the public order (module docstring), each
+    template's tiling its units; ``unwired``, each read of a combine's output left a free input, and why."""
     circuit: I.Circuit
     units: Mapping[tuple[int, int, str, int], tuple[Range, ...]]
     consumers: Mapping[tuple[int, int, int], tuple[str, int]]
@@ -153,8 +154,9 @@ class _Window:
         return segs
 
     def read(self, what: str, target: tuple, off: int, lo: int, hi: int, segs: Sequence[Segment]) -> None:
-        """Wire leaves ``[lo, hi)`` of a combine's output, read into ``target``'s port from its leaf ``off``, from the writer
-        rows ``segs``; a run the grains don't fit is listed unwired."""
+        """Wire leaves ``[lo, hi)`` of a combine's output, read into ``target``'s port from its leaf ``off`` (``("row",
+        template, first unit, port, units)``: each of those units reads them; ``("coord", ranges, port)``: a word a unit),
+        from the writer rows ``segs``; a run the grains don't fit is listed unwired."""
         for slo, shi, w, tw, out, u0 in segs:
             l1, h1 = max(lo, slo), min(hi, shi)
             if l1 >= h1:
@@ -164,14 +166,15 @@ class _Window:
             if (l1 - slo) % w or (h1 - l1) % w:
                 why = f"part of {w}-word rows of {tw}"
             elif target[0] == "row":
-                _, tr, ur, port = target
+                _, tr, ur, port, count = target
                 P = self.words(tr, port)
                 if P % w or dest % w:
                     why = f"{w}-word rows of {tw} into its {P}-word {port} from word {dest}"
                 elif (have := self.cut(tr, port, P // w)) != P // w:
                     why = f"{w}-word rows of {tw}, and {tr}'s {port} is cut {have} ways"
                 else:
-                    self.wires.append(I.Wire(tr, port, tw, out, at=ur, radix=(m,), base=uw, step=(1,), cut=(dest // w, m)))
+                    radix, step = ((m,), (1,)) if count == 1 else ((count, m), (0, 1))
+                    self.wires.append(I.Wire(tr, port, tw, out, at=ur, radix=radix, base=uw, step=step, cut=(dest // w, m)))
             else:
                 _, ranges, port = target
                 if w != 1:
@@ -203,21 +206,28 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
         if b is None:
             continue
         combines = [{s.combine[r][0]: j for j, s in enumerate(b.sites)} for r in range(world)]
+        producing = [{n for s in b.sites for n, _, _ in s.own[r]} for r in range(world)]
         last: dict[tuple[int, int], list[int]] = {}
         for r in rs:
             at: dict[int, int] = {}
             for j, s in enumerate(b.sites):
                 for x, *_ in s.readers[r] if s.readers else ():
-                    if x not in combines[r]:
+                    if x not in combines[r] and x not in producing[r]:
                         at[x] = j
             for x, j in at.items():
                 last.setdefault((j, r), []).append(x)
+        #: (rank, producer node) -> its runs' (site, first position, positions)
+        mine: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
         for j, s in enumerate(b.sites):
             where = f"{name}: request {i}'s collective {s.k} [{s.lo}, {s.hi})"
             low = lowered[i, j] = G.lower(b.fns[0][s.combine[0][0]],
                                           [[(b.fns[p][n], lo, hi) for n, lo, hi in s.own[p]] for p in range(world)], where)
             win.site(i, j, s, low)
             for r in rs:
+                q = 0
+                for (n, _lo, _hi), (*_, m) in zip(s.own[r], low.producers[r]):
+                    mine.setdefault((r, n), []).append((j, q, m))
+                    q += m
                 for x in sorted(last.get((j, r), ())):
                     win.consumers[i, r, x] = win.alloc((i, j, CONSUMER, r), b.fns[r][x], 1)
         for j, s in enumerate(b.sites):
@@ -233,12 +243,22 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
                         if low2.grain == G.COORD and cs:
                             target = ("coord", cs, port)
                         elif len(cs) == 1 and cs[0][2] == 1 and win.words(cs[0][0], port):
-                            target = ("row", cs[0][0], cs[0][1], port)
+                            target = ("row", cs[0][0], cs[0][1], port, 1)
                         else:
                             win.unwired.append(f"{what} reads leaves [{lo}, {hi}): no unit of collective {j2} reads them")
                             continue
+                    elif (r, x) in mine:
+                        P = dict(I.layout(xfn).rows)[port]
+                        for j3, q0, m3 in mine[r, x]:
+                            for _q, _k, tp, up, n in _pieces(win.units[i, j3, PRODUCER, r], q0, m3):
+                                if win.words(tp, port) != P:
+                                    win.unwired.append(f"{what} reads leaves [{lo}, {hi}): its producer unit {tp} has no "
+                                                       f"{P}-word {port}")
+                                else:
+                                    win.read(what, ("row", tp, up, port, n), off, lo, hi, segs)
+                        continue
                     else:
-                        target = ("row", *win.consumers[i, r, x], port)
+                        target = ("row", *win.consumers[i, r, x], port, 1)
                     win.read(what, target, off, lo, hi, segs)
     templates = tuple((fn, win.count[tid]) for tid, fn in win.fns.items())
     circuit = I.Circuit(name, templates, wires=tuple(I.coalesce(win.wires)), cuts=win.cuts)
