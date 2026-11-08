@@ -31,12 +31,16 @@ top-k inputs (`long_rows`).
 * **Wires.** Each value a staged instance reads has a source under the step root (`Wires`): the recorded call that output it
   (or wrote its real rows through a strided view: a padded batch's rows past the step's tokens are in no population, so
   they cost nothing), a parameter held to ``params.json``, or an `ADVICE` input charged at the parts of it staged instances
-  read (of a split's K/V rows, a token's slots past its keys and the rows no staged split reads cost nothing). A MoE pair's
+  read (of a split's K/V rows, a token's slots past its keys and the rows no staged split reads cost nothing). A split's
+  K/V row is wired by its page-table slot (`Wires.gathered`) to the step's cache write that put it there, else to the
+  window's carried cache (`HISTORY_PORT`, counted as history bits, not advice), and stays advice only where neither is
+  established; a token past the top-k's keys adds its selection's settings (selection bits). A MoE pair's
   expert is the router's output (`ROUTERS`), never the align's schedule. An instance that reads anything else is not staged, and its reason names the fix.
   Staging checks the wiring against the committed capture; a11 proves the staged units alone and doesn't read it.
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
   staged labels), ``window.json`` (what the replay block is, how its values link to serving, and the wiring: each staged
-  instance's inputs with their sources, the advice bits, the calls wired to that no population gates, and the unwired) and
+  instance's inputs with their sources, the advice, history and selection bits, the calls wired to that no population gates,
+  and the unwired) and
   ``stage.json`` (populations, samples, the gate's results and every type not staged, with its reason).
 """
 from __future__ import annotations
@@ -886,7 +890,27 @@ SCHEDULE_OPS = {"_moe_C::moe_align_block_size": (
 #: read (`Capture.part`), else at its width: (the recorded op, its argument) -> why
 ADVICE = {("fa3_sparse_mla", "kv_gathered"): (
     "the K/V rows a split reads, which this step's and earlier steps' cache writes put in the paged cache: the step's record "
-    "holds the cache by shape only, and no cache write is a proof block")}
+    "holds the cache by shape only, and no cache write is a proof block"),
+          ("fa3_sparse_mla", "block_table"): (
+    "the global slot each gathered K/V row is read from: the conversion of the indexer's top-k through the request's block "
+    "table into slots is no recorded call")}
+#: `ADVICE` inputs whose rows are gathered from the paged cache through the tap's page table, each row wired to what wrote it
+#: (`Wires.gathered`): the step's cache write, else an earlier step's (the window's `HISTORY_PORT`)
+GATHERS = {("fa3_sparse_mla", "kv_gathered")}
+#: the call that writes the step's K/V cache rows (`capture.py`'s ``PY_KERNELS``): its op, its slot map, and the outputs a cache
+#: row concatenates, in the row's word order
+CACHE_WRITE = ("fused_norm_rope", "slot_mapping", ("kv_c_out", "k_pe_out"))
+#: the paged MLA cache's block size: a request's position p sits at slot b * KV_BLOCK + p % KV_BLOCK of its block b
+KV_BLOCK = 64
+#: the previous record's port that carries the K/V rows earlier steps wrote: the one-stage verifier holds a window's carried
+#: value to it (R7's port-only form)
+HISTORY_PORT = "edge.kv"
+HISTORY_WHY = ("K/V rows an earlier step wrote: the window's carried cache, held to the previous record's port of this name, "
+               "not chosen by the prover")
+SELECTION_WHY = ("a row past the top-k's keys reads its rows through DsaWaksmanRows_v1, whose switch settings are a run input "
+                 "the prover brings: free bits until the settings are proved unique for the checked order")
+#: the indexer's top-k ops, whose shared output each later layer's page table converts
+TOPK_OPS = ("_C::cooperative_topk", "_C::top_k_per_row_prefill")
 #: the candidates (latest first) and the offsets in each that `Wires.view` tries before it calls an input unwired
 VIEW_CANDIDATES, VIEW_OFFSETS = 64, 256
 _EVERY: dict = {}
@@ -922,6 +946,38 @@ def _advice_bits(width: int, shape: list[int] | None, parts: list | None) -> int
     return int(mask.sum()) * (width // int(np.prod(shape[:d], dtype=np.int64)))
 
 
+def _row_parts(cells: list[tuple[int, int]]) -> list[list[list[int]]]:
+    """(token, row) cells as parts (`_part`): one per run of consecutive rows of a token."""
+    out: list = []
+    for i, j in sorted(cells):
+        if out and out[-1][0] == [i, i + 1] and out[-1][1][1] == j:
+            out[-1][1][1] = j + 1
+        else:
+            out.append([[i, i + 1], [j, j + 1]])
+    return out
+
+
+def own_rows(row: np.ndarray, n: int, block: int) -> set[int] | None:
+    """The rows of a page-table row that can hold its token's own position, for a row that reads every key of its token: its
+    ``n`` keys' global slots in any order, then -1. By the paged layout (a request's position p at slot b * block + p % block
+    of its block b) the keys fill whole blocks from residue 0 and at most one block partly, which holds the newest position at
+    its highest residue: the row reading that slot when ``n`` isn't a multiple of ``block``, else every row at a block's last
+    residue. None where the row breaks the layout."""
+    s = row[:n].astype(np.int64)
+    if (row[n:] != -1).any() or (s < 0).any() or len(set(s.tolist())) != n:
+        return None
+    blocks: dict[int, set[int]] = {}
+    for x in s.tolist():
+        blocks.setdefault(x // block, set()).add(x % block)
+    if any(res != set(range(len(res))) for res in blocks.values()):
+        return None
+    part = [b for b, res in blocks.items() if len(res) < block]
+    if len(part) != (1 if n % block else 0):
+        return None
+    hit = s == part[0] * block + n % block - 1 if part else s % block == block - 1
+    return {int(j) for j in np.flatnonzero(hit)}
+
+
 def traced(cap: Capture, args_of, reads: list):
     """``args_of`` with each recorded tensor it reads appended to ``reads`` (`Capture.reads`)."""
     def run():
@@ -937,7 +993,8 @@ class Wires:
     """Where each value an instance reads comes from, under the step's root: a staged unit's input is wired to the recorded call
     that output it (``block`` when a population gates that call's op or one enclosing it, ``call`` when none does: committed
     but not proved), read from a parameter held to ``params.json`` (``registered``), or an `ADVICE` input charged at the parts
-    of it read (``advice``, `of`). An input of a call is wired to the latest earlier call on its rank (one enclosing it excepted, whose outputs
+    of it read (``advice``, `of`), whose gathered rows are wired row by row (`gathered`: the step's cache write, ``history``,
+    ``selection``). An input of a call is wired to the latest earlier call on its rank (one enclosing it excepted, whose outputs
     come after) that output the same bytes, else that output a tensor it is a strided view of (its recorded strides from some
     offset), else whose output is a strided view into its real rows (`cover`: an ``out=`` buffer a later call reads whole);
     an output read is its own call's. Anything else is `Unwired`."""
@@ -978,9 +1035,123 @@ class Wires:
         for k, (r, ref) in order.items():
             s = self.source(r, ref)
             if s["kind"] == "advice" and parts[k] is not None:
+                if (s["op"], s["in"]) in GATHERS:
+                    out += self.gathered(r, s, ref, parts[k])
+                    continue
                 s = {**s, "parts": parts[k], "bits": _advice_bits(s["width"], s["shape"], parts[k])}
             out.append(s)
         return out
+
+    def gathered(self, r: int, adv: dict, ref: dict, parts: list) -> list[dict]:
+        """The sources of the rows ``parts`` read of a `GATHERS` input (rows of a token, ``[[i, i + 1], [lo, hi]]``), each row by
+        the global slot the tap's page table names for it: the step's cache write (`CACHE_WRITE`, ``rows``: [part, row, its
+        row] when the write put it at that slot, its bytes checked), else an earlier step's (``history``, `HISTORY_PORT`); the
+        page-table entries those rows are read through are the tap's ``block_table``'s source, charged at the entries read. A
+        row neither is established for stays ``advice``. Without the step's cache write recorded, a token whose request
+        schedules only it (`single_tokens`) writes only its own position this step, so of a row reading every key of it (fewer
+        than the top-k) the rows that can't hold that position (`own_rows`) are history. With the write's positions recorded, a
+        token past the top-k's keys reads its rows through `DsaWaksmanRows_v1`, whose settings are free (``selection``, once
+        per token and top-k); without them such a token's rows stay advice."""
+        cap, tap = self.cap, self.by_seq[r][adv["seq"]]
+        table, used = tap["in"].get("block_table"), tap["in"].get("seqused_k")
+        if not all(isinstance(x, dict) and cap.kept(r, x) for x in (table, used)):
+            return [{**adv, "parts": parts, "bits": _advice_bits(adv["width"], adv["shape"], parts)}]
+        from verity.ml.definitions.registry.dsa_topk import waksman_switches
+        kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
+        page, used = cap.tensor(r, table), cap.tensor(r, used).astype(np.int64)
+        topk, width = page.shape[1], adv["shape"][-1]
+        write = self.cache_write(r, tap)
+        single = self.single_tokens(r, tap) if write is None else set()
+        read = None
+        wrote: list = []
+        history: list = []
+        left: list = []
+        via: list = []
+        picks: dict = {}
+        for p in parts:
+            (i0, i1), (lo, hi) = p if len(p) == 2 else (p[0], [0, adv["shape"][1]])
+            for i in range(i0, i1):
+                t, n = kept[i], int(used[kept[i]])
+                own = own_rows(page[t], n, KV_BLOCK) if write is None and t in single and n < topk else None
+                for j in range(lo, hi):
+                    s = int(page[t, j])
+                    if s < 0 or j >= n or (write is None and (own is None or j in own)):
+                        left.append((i, j))
+                        continue
+                    via.append((t, j))
+                    if write is None or s not in write[1]:
+                        history.append((i, j))
+                    else:
+                        ev, tw = write[0], write[1][s]
+                        if read is None:
+                            read = cap.tensor(r, ref)
+                        if not np.array_equal(read[i, j], write[3][tw]):
+                            raise Unwired(f"rank {r} {tap['op']} (seq {tap['seq']}) reads {adv['in']}[{i}] row {j} at slot {s}, "
+                                          f"which {ev['op']} (seq {ev['seq']}) wrote from its row {tw}, but not those bytes")
+                        wrote.append([i, j, tw])
+                if write is not None and n >= topk:
+                    keys = write[2]
+                    if keys is None:
+                        raise Unwired(f"rank {r} {tap['op']} (seq {tap['seq']}): token {t} reads {topk} rows, and its keys (the "
+                                      f"cache write's positions) aren't recorded, so whether a selection routes them isn't known")
+                    if keys[t] > topk:
+                        k = self.topk_seq(r, tap)
+                        picks[t] = {"kind": "selection", "rank": r, "seq": k, "token": t,
+                                    "via": f"DsaWaksmanRows_v1{{N={keys[t]},K={topk},W={width},E=16}}",
+                                    "bits": waksman_switches(keys[t], topk), "why": SELECTION_WHY}
+        out = []
+        if wrote:
+            ev = write[0]
+            out.append({**self.call(r, ev["seq"], "+".join(CACHE_WRITE[2])),
+                        "into": {"seq": tap["seq"], "op": tap["op"], "in": adv["in"]}, "rows": wrote})
+        if history:
+            hp = _row_parts(history)
+            out.append({**{k: adv[k] for k in ("rank", "seq", "op", "in", "shape", "width")}, "kind": "history",
+                        "port": HISTORY_PORT, "parts": hp, "bits": _advice_bits(adv["width"], adv["shape"], hp), "why": HISTORY_WHY})
+        if left:
+            lp = _row_parts(left)
+            out.append({**adv, "parts": lp, "bits": _advice_bits(adv["width"], adv["shape"], lp)})
+        if via:
+            src = self.source(r, table)
+            if src["kind"] == "advice":
+                vp = _row_parts(via)
+                src = {**src, "parts": vp, "bits": _advice_bits(src["width"], src["shape"], vp)}
+            out.append(src)
+        return out + list(picks.values())
+
+    def cache_write(self, r: int, tap: dict) -> tuple[dict, dict[int, int], np.ndarray | None, np.ndarray] | None:
+        """The step's cache write of the tap's layer on rank ``r`` (`CACHE_WRITE`, the latest before the tap), with each slot it
+        wrote and the row it wrote it from, each row's keys (its position plus one) when its positions are recorded, and the
+        cache rows it wrote; None when the step's record has no such call with its slot map and rows."""
+        op, slot_name, outs = CACHE_WRITE
+        ev = next((e for e in reversed(self.cap.events[r]) if e["seq"] < tap["seq"] and e["op"] == op
+                   and e.get("layer") == tap.get("layer")), None)
+        if ev is None or not all(self.cap.kept(r, x) for x in [ev["in"].get(slot_name) or {}, *(ev["out"].get(o) or {} for o in outs)]):
+            return None
+        slots: dict[int, int] = {}
+        for t, s in enumerate(self.cap.tensor(r, ev["in"][slot_name]).reshape(-1).tolist()):
+            if s >= 0:
+                if s in slots:
+                    raise Unwired(f"rank {r} {op} (seq {ev['seq']}) writes slot {s} from rows {slots[s]} and {t}")
+                slots[int(s)] = t
+        pos = ev["in"].get("positions")
+        keys = self.cap.tensor(r, pos).reshape(-1).astype(np.int64) + 1 if isinstance(pos, dict) and self.cap.kept(r, pos) else None
+        made = [self.cap.tensor(r, ev["out"][o]) for o in outs]
+        return ev, slots, keys, np.concatenate([x.reshape(x.shape[0], -1) for x in made], axis=1)
+
+    def single_tokens(self, r: int, tap: dict) -> set[int]:
+        """The step's tokens whose request schedules only them: the decode rows of the indexer's top-k, which lead the batch
+        (`long_rows`), when exactly that many of the step's requests schedule one token; else none."""
+        dec = next((e for e in reversed(self.cap.events[r]) if e["seq"] < tap["seq"] and e["op"] == "_C::cooperative_topk"), None)
+        if dec is None:
+            return set()
+        n, counts = int(dec["in"]["lengths"]["shape"][0]), list(self.cap.meta[r]["scheduled"].values())
+        return set(range(n)) if counts.count(1) == n and sum(counts) == self.cap.tokens(r) else set()
+
+    def topk_seq(self, r: int, tap: dict) -> int:
+        """The indexer top-k whose output the tap's page table converts: the latest before it (layers that share a top-k read
+        the last one computed), else the tap itself."""
+        return next((e["seq"] for e in reversed(self.cap.events[r]) if e["seq"] < tap["seq"] and e["op"] in TOPK_OPS), tap["seq"])
 
     def source(self, r: int, ref: dict) -> dict:
         """``ref``'s source, found once per recorded reference (instances of one call read the same ones)."""
@@ -1091,10 +1262,12 @@ class Wires:
 
 def wiring(types: dict) -> dict:
     """``window.json``'s wiring: each staged instance's inputs with their sources (`Wires`), the advice they read (each argument
-    charged once, at the union of the parts staged instances read, or at its width if one read it whole), the calls they're
-    wired to that no population gates, and the drawn instances left unstaged for an unwired input."""
+    charged once, at the union of the parts staged instances read, or at its width if one read it whole), the rows they read of
+    the window's carried cache (history, charged the same way), the selection settings (once per token and top-k), the calls
+    they're wired to that no population gates, and the drawn instances left unstaged for an unwired input."""
     inputs: dict = {}
-    advice: dict = {}
+    charged: dict = {"advice": {}, "history": {}}
+    selection: dict = {}
     unproved: dict = {}
     for label, rec in types.items():
         for g in rec.get("gate", ()):
@@ -1102,14 +1275,18 @@ def wiring(types: dict) -> dict:
                 continue
             inputs.setdefault(label, []).append({"key": g["key"], "sources": g["sources"]})
             for s in g["sources"]:
-                if s["kind"] == "advice":
-                    k = (s["rank"], s["seq"], s["in"])
-                    width, shape, got = advice.get(k, (s.get("width", s["bits"]), s.get("shape"), []))
-                    advice[k] = (width, shape, None if got is None or "parts" not in s else got + s["parts"])
+                if s["kind"] in charged:
+                    k, into = (s["rank"], s["seq"], s["in"]), charged[s["kind"]]
+                    width, shape, got = into.get(k, (s.get("width", s["bits"]), s.get("shape"), []))
+                    into[k] = (width, shape, None if got is None or "parts" not in s else got + s["parts"])
+                elif s["kind"] == "selection":
+                    selection[(s["rank"], s["seq"], s["token"])] = s["bits"]
                 elif s["kind"] == "call":
                     unproved.setdefault(s["op"], set()).add((s["rank"], s["seq"]))
     unwired = {label: [g["unwired"] for g in rec.get("gate", ()) if "unwired" in g] for label, rec in types.items()}
-    return {"inputs": inputs, "advice_bits": sum(_advice_bits(*v) for v in advice.values()),
+    return {"inputs": inputs, "advice_bits": sum(_advice_bits(*v) for v in charged["advice"].values()),
+            "history_bits": sum(_advice_bits(*v) for v in charged["history"].values()),
+            "selection_bits": sum(selection.values()),
             "unproved_calls": {op: len(v) for op, v in sorted(unproved.items())}, "unwired": {k: v for k, v in unwired.items() if v}}
 
 
@@ -1396,9 +1573,10 @@ def main() -> int:
     wired = wiring(report["types"])
     (out / "window.json").write_text(json.dumps({"of": a.of, "link": a.link, "row": a.row, "root": cap.root, **wired}, indent=1))
     kinds_of = [s["kind"] for v in wired["inputs"].values() for g in v for s in g["sources"]]
-    print(f"wires: {', '.join(f'{kinds_of.count(k)} {k}' for k in ('block', 'call', 'registered', 'advice'))} inputs; advice "
-          f"{wired['advice_bits']} bits; calls wired to but not proved {wired['unproved_calls']}; unwired {sorted(wired['unwired'])}",
-          flush=True)
+    shown = ('block', 'call', 'registered', 'history', 'selection', 'advice')
+    print(f"wires: {', '.join(f'{kinds_of.count(k)} {k}' for k in shown)} sources; advice {wired['advice_bits']} bits; history "
+          f"{wired['history_bits']} bits ({HISTORY_PORT}); selection {wired['selection_bits']} bits; calls wired to but not proved "
+          f"{wired['unproved_calls']}; unwired {sorted(wired['unwired'])}", flush=True)
     report["seconds"] = round(time.time() - t0, 1)
     (out / "stage.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str))
     return 0 if staged else 1
