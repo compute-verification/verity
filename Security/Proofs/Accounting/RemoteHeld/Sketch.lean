@@ -3,6 +3,7 @@ module
 public import Mathlib
 public import Definitions.Accounting.Guarantees.RemoteSketch
 public import Proofs.Accounting.RateAudit.DeployedSketchSum
+import Proofs.Pous.Prob
 
 /-!
 # The receipts' sketch bound, derived: the proof
@@ -260,7 +261,7 @@ theorem pr_pass_le {C : ℕ}
 theorem pr_eq_sum_div_fst {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (Finset.univ.filter Q).card = ∑ x, (Finset.univ.filter fun y => Q (x, y)).card := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
     simp only [Finset.card_filter]
@@ -424,7 +425,7 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
       (pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
-    unfold Pouw.pr Claims.Pr Pous.pr
+    unfold Pouw.pr Claims.Pr; simp only [Pous.pr_eq_card]
     rw [ENNReal.toReal_div]
     simp
   unfold SketchBound Trace.Holds

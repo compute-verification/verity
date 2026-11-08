@@ -5577,14 +5577,14 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.Pous": {
-   "imports": ["Mathlib", "Definitions.Pous"],
+   "imports": ["Mathlib", "Definitions.Core.Game", "Definitions.Pous"],
    "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the probability is core's uniform probability (Verity.Game.prCoin, Definitions.Core.Game)"
   },
   "Definitions.Pous.Game": {
-   "imports": ["Mathlib", "Definitions.Pous.Game"],
+   "imports": ["Mathlib", "Definitions.Core.Game", "Definitions.Pous.Game"],
    "except": [],
-   "why": "the probability and oracle model"
+   "why": "the probability and oracle model; the probability is core's (Verity.Game.prCoin)"
   },
   "Definitions.Pous.Model": {
    "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],

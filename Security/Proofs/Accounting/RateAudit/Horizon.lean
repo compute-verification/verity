@@ -40,6 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.AuditRO
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The causal bound over the monitoring period: the proof
@@ -141,18 +142,18 @@ theorem step_le (M g K' a c : ℕ) (hM : 0 < M) :
 
 theorem pr_le_one {Ω : Type} [Fintype Ω] (P : Ω → Prop) : pr P ≤ 1 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   exact ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast Finset.card_le_univ _)
 
 theorem pr_false {Ω : Type} [Fintype Ω] : pr (fun _ : Ω => False) = 0 := by
   classical
-  simp [pr]
+  simp [Pous.pr_eq_card]
 
 /-- `s` uniform items all land in a set of `g` of the `M`: `(g/M)^s`. -/
 theorem pr_sample {M : ℕ} (G : Finset (Fin M)) (s : ℕ) :
     pr (fun I : Fin s → Fin M => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / M) ^ s := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, Bandwidth.AuditRO.card_sample G s]
   simp [div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
 
@@ -161,7 +162,7 @@ holds: at most the first's probability times `ε`. -/
 theorem pr_and_le_mul {X Y : Type} [Fintype X] [Fintype Y] (A : X → Prop) (B : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ x, A x → pr (fun y => B (x, y)) ≤ ε) : pr (fun p : X × Y => A p.1 ∧ B p) ≤ pr A * ε := by
   classical
-  unfold pr at h ⊢
+  simp only [Pous.pr_eq_card] at h ⊢
   rw [Finset.filter_congr_decidable, Finset.filter_congr_decidable]
   rcases Nat.eq_zero_or_pos (Fintype.card Y) with hY | hY
   · have h0 : (Finset.univ.filter (fun p : X × Y => A p.1 ∧ B p)).card = 0 :=

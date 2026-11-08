@@ -36,6 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.TS.Drawn
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pous.Prob
 
 /-!
 # The receipts' binding bound: the proof
@@ -126,7 +127,7 @@ theorem tally_le_held [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
   Accounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
 
 theorem toReal_pr {α : Type} [Fintype α] (P : α → Prop) : (Pous.pr P).toReal = prob P := by
-  unfold Pous.pr prob Claims.Pr
+  unfold prob Claims.Pr; simp only [Pous.pr_eq_card]
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = prob P := by
