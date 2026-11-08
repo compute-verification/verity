@@ -74,7 +74,8 @@ def FrameIs (L : Layout) : Prop :=
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) → ins.registered = some own →
     ∀ g, s.prog.Needs b g → ∃ β j y n q reg, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
-      y < 2 ^ sts[j].c.kLog ∧ L.wire u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧ reg ∈ own ∧
+      y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
+      reg ∈ own ∧
       (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
       ∃ o ∈ h.frame.reveal s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF, o.2.pos = g ∧
         o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧

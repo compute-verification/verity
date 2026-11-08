@@ -12,10 +12,11 @@ holding each checked unit's circuit gates at the layout's wires (`Embeds`), thro
 (`Bridge.Members.SitsAt.correct`).
 
 **The layout** (`Layout`). The session statement's block circuit `C` (`Claims.Flock.Stmt`) runs once per Flock block.
-A layout names the block that holds each checked unit (`blockOf`, read off the session statement, whose sample selects
-the units), and for each program gate, the gate of `C` that holds its value for that unit (`wire`).
+A layout names the block that holds each checked unit (`blockOf`), and for each program gate, the gate of `C` that holds
+its value for that unit (`wire`). Both read the session statement, whose sample places the units: a unit's block and
+its template instance in the block follow from its rank in the sample.
 
-**The decoder** (`decOf`). Unit `u`'s value at program gate `g` is `C`'s value at `wire u g` in `u`'s block, on the
+**The decoder** (`decOf`). Unit `u`'s value at program gate `g` is `C`'s value at its wire in `u`'s block, on the
 inputs Flock's relation gives that block at the witness's hidden values (`valueAt`, as `Claims.Flock.RelS` evaluates
 `C`). It is per unit, as `Dec` is: two units that read one gate read it from their own blocks' inputs.
 
@@ -45,10 +46,10 @@ open Claims Claims.Sampling SamplingDeploy
 
 /-- **A session layout**: the Flock block holding each checked unit (`blockOf x m₁ xS u`, at the run's statement `x`,
 the interior registration `m₁` and the session statement `xS`), and the gate of the session's block circuit holding
-each program gate's value for that unit (`wire u g`). -/
+each program gate's value for that unit there (`wire x m₁ xS u g`). -/
 structure Layout where
   blockOf : Msg → Msg → Msg → ℕ → Option ℕ
-  wire : ℕ → ℕ → ℕ
+  wire : Msg → Msg → Msg → ℕ → ℕ → ℕ
 
 /-- **The block circuit's value at gate `j` of block `β`**, on the inputs Flock's relation gives that block at the
 hidden values `w` (`Claims.Flock.RelS`); `false` past the circuit's gates. -/
@@ -57,16 +58,16 @@ def valueAt (S : Claims.Flock.Stmt) (β : ℕ) (w : Claims.Flock.Wit) (j : ℕ) 
     (S.C.toCircuit.eval (fun g => BitVec.ofBool (Claims.Flock.val S w (S.inp β g.val))) ⟨j, hj⟩).getLsbD 0
   else false
 
-/-- **The decoder at a layout**: unit `u`'s value at program gate `g` is the block circuit's value at `wire u g` in
+/-- **The decoder at a layout**: unit `u`'s value at program gate `g` is the block circuit's value at its wire in
 `u`'s block, on the session witness's hidden values. -/
 def decOf (L : Layout) : Dec := fun x m₁ xS wF u g =>
   match FlockDeploy.parse true _root_.Flock.Readable.relation xS, L.blockOf x m₁ xS u with
-  | some S, some β => valueAt S β wF (L.wire u g)
+  | some S, some β => valueAt S β wF (L.wire x m₁ xS u g)
   | _, _ => false
 
 theorem decOf_eq {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β : ℕ}
     (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
-    (w : Claims.Flock.Wit) (g : ℕ) : decOf L x m₁ xS w u g = valueAt S β w (L.wire u g) := by
+    (w : Claims.Flock.Wit) (g : ℕ) : decOf L x m₁ xS w u g = valueAt S β w (L.wire x m₁ xS u g) := by
   simp only [decOf, hS, hβ]
 
 /-- **At an input gate** the block circuit's value is the input Flock's relation gives it. -/
@@ -90,8 +91,9 @@ theorem valueAt_output {S : Claims.Flock.Stmt} {β j : ℕ} {w : Claims.Flock.Wi
 gives that input in the unit's block. -/
 theorem decOf_input {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β g : ℕ}
     (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
-    (w : Claims.Flock.Wit) (hj : L.wire u g < S.C.N) (hin : (S.C.op ⟨L.wire u g, hj⟩).isInput = true) :
-    decOf L x m₁ xS w u g = Claims.Flock.val S w (S.inp β (L.wire u g)) := by
+    (w : Claims.Flock.Wit) (hj : L.wire x m₁ xS u g < S.C.N)
+    (hin : (S.C.op ⟨L.wire x m₁ xS u g, hj⟩).isInput = true) :
+    decOf L x m₁ xS w u g = Claims.Flock.val S w (S.inp β (L.wire x m₁ xS u g)) := by
   rw [decOf_eq hS hβ, valueAt_input w hj hin]
 
 /-- **A decoded value at an output wire**, under a session witness the verifier's check accepts, is the output's value:
@@ -99,16 +101,18 @@ the hidden or public value the session statement gives that output in the unit's
 theorem decOf_output {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β g : ℕ} {w : Claims.Flock.Wit}
     (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true)
-    (hβS : β < S.nBlocks) (hj : L.wire u g < S.C.N) (ho : (⟨L.wire u g, hj⟩ : Fin S.C.N) ∈ S.C.outputs) :
-    decOf L x m₁ xS w u g = Claims.Flock.val S w (S.out β (L.wire u g)) := by
+    (hβS : β < S.nBlocks) (hj : L.wire x m₁ xS u g < S.C.N)
+    (ho : (⟨L.wire x m₁ xS u g, hj⟩ : Fin S.C.N) ∈ S.C.outputs) :
+    decOf L x m₁ xS w u g = Claims.Flock.val S w (S.out β (L.wire x m₁ xS u g)) := by
   have hR : Claims.Flock.RelS S w := by simpa [Claims.Flock.check, hS] using hck
   rw [decOf_eq hS hβ, valueAt_output hR hβS hj ho]
 
 /-- **A checked unit's values at a layout**: at circuit `C'`'s wire `a`, the block circuit's value in block `β` at the
-hidden values `w`, at the wire the layout gives unit `u`'s program position of `a`, `C'`'s lowering sitting from `o`. -/
-def unitVals (L : Layout) (S : Claims.Flock.Stmt) (β : ℕ) (w : Claims.Flock.Wit) (u o : ℕ)
+hidden values `w`, at the wire the layout gives unit `u`'s program position of `a` at the session statement `xS`,
+`C'`'s lowering sitting from `o`. -/
+def unitVals (L : Layout) (x m₁ xS : Msg) (S : Claims.Flock.Stmt) (β : ℕ) (w : Claims.Flock.Wit) (u o : ℕ)
     (C' : FlockSoundness.Audit.Circuit) (a : Fin C'.N) : Bool :=
-  valueAt S β w (L.wire u (o + _root_.Flock.Bridge.posOf C' a))
+  valueAt S β w (L.wire x m₁ xS u (o + _root_.Flock.Bridge.posOf C' a))
 
 variable (h : Held)
 
@@ -129,8 +133,10 @@ def Embeds (L : Layout) : Prop :=
       _root_.Flock.Bridge.Members.SitsAt s.prog o (_root_.Flock.Bridge.progOf C' κ) ∧
       b = (_root_.Flock.Bridge.blockOf P κ v).map (o + ·) ∧
       ∃ β, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∀ w : Claims.Flock.Wit, Claims.Flock.RelS S w →
-        (∀ a, P.unit a = some v → unitVals L S β w u o C' a = (C'.op a).apply (unitVals L S β w u o C')) ∧
-        ∀ a c, κ a = some c → (∃ g, P.unit g = some v ∧ a ∈ (C'.op g).args) → unitVals L S β w u o C' a = c
+        (∀ a, P.unit a = some v → unitVals L x m₁ (unitStmt h m₂ u) S β w u o C' a =
+          (C'.op a).apply (unitVals L x m₁ (unitStmt h m₂ u) S β w u o C')) ∧
+        ∀ a c, κ a = some c → (∃ g, P.unit g = some v ∧ a ∈ (C'.op g).args) →
+          unitVals L x m₁ (unitStmt h m₂ u) S β w u o C' a = c
 
 /-- **`Decodes` at a layout's decoder** where the session statement holds each checked unit's circuit gates there: the
 unit's lowered gates are correct on the decoded values (`Bridge.correct_unitGates_of`), so is its proof block

@@ -83,7 +83,7 @@ theorem decOf_bitAt {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hc : ins.read.check = .ok ())
     (hβ : L.blockOf x m₁ xS u = some β) (w : Claims.Flock.Wit) {g j y : ℕ} (hj : j < sts.size)
-    (hy : y < 2 ^ sts[j].c.kLog) (hw : L.wire u g = j * 2 ^ sts[j].c.kLog + y) :
+    (hy : y < 2 ^ sts[j].c.kLog) (hw : L.wire x m₁ xS u g = j * 2 ^ sts[j].c.kLog + y) :
     decOf L x m₁ xS w u g = _root_.Flock.InnerRows.bitAt { ins.read with sts } w j β y := by
   have hS' := hS
   unfold FlockDeploy.parse _root_.Flock.Readable.parseOf at hS'
@@ -176,7 +176,8 @@ def FrameRows (L : Layout) : Prop :=
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) → ins.registered = some own →
     ∀ g, s.prog.Needs b g → ∃ β j y n q reg, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
-      y < 2 ^ sts[j].c.kLog ∧ L.wire u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧ reg ∈ own ∧
+      y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
+      reg ∈ own ∧
       (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
       ∃ o ∈ (code h).reveal s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF, o.2.pos = g ∧
         o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
