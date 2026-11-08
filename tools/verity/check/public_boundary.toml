@@ -73,6 +73,8 @@ benchmarks = [
     "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
     "benchmarks/one_stage/{served_overhead,served_compare}.py",
     "benchmarks/one_stage/{pyproject.toml,README.md}",
+    # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
+    "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
 ]
 
 [private]
@@ -108,11 +110,15 @@ protocol_tests = [
     "integrations/vllm/tests/program/test_io_shell.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
+    "integrations/vllm/tests/pipeline/test_serve_remote.py",
+    "integrations/vllm/tests/engine/int8_store_gpu.py",
 ]
-# vLLM's adapter of PoUS, which `verity_vllm.protocols.adapter` loads by name and refuses as not on this tree where it
-# is absent
+# vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
+kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
+# vLLM's adapter of PoUS and driver of the bandwidth audit, which `verity_vllm.protocols.adapter` and `driver` load by name
+# and refuse as not on this tree where they are absent
 adapters = [
-    "integrations/vllm/verity_vllm/protocols/pous.py",
+    "integrations/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
 # vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
 checks = [
