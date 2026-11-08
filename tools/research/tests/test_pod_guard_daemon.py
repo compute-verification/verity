@@ -320,7 +320,7 @@ def test_terminate_fails_when_both_apis_refuse_and_without_a_key_calls_nothing(t
 
 
 def test_daemon_terminates_through_the_real_path_with_the_pod_key(tmp_path):
-    """The 2026-09-24 pod run: with GUARD_TERMINATE_CMD unset the daemon must reach the API with the key from the environ file."""
+    """As on a pod: with GUARD_TERMINATE_CMD unset the daemon must reach the API with the key from the environ file."""
     import sys
 
     api = FakeRunPod()
