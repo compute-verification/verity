@@ -4,7 +4,7 @@ public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
-public import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # TT_OUT's chain-only, chain-cap and U-only forms at W1 are those forms at the cost model `W1.w1Priced`

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The rows link at the compiled `--zk` value layer
@@ -53,7 +54,7 @@ noncomputable def rowsOutZC (wo : vb.Pos → vb.Opening) (c : vb.Pos) (e : Trial
     some (vb.collide (opOfVZC A Hs P planZ tab vb R τ c e (Classical.choose h)) (wo c))
   else none
 
-/-- **`ecr/sha-512` (A2) for the rows finders**: at each registered read `c` that some draw reads, the finder that plays
+/-- **`ecr/sha-512` (A2) for the rows finders**: at each registered read `c` that some sample reads, the finder that plays
 the trial at `c` (`trialGZC`) once and outputs `rowsOutZC`, at the trial's cost `cTZC` (`t'` per run it plays), satisfies
 `Assumptions.SHA512CRExpected`.
 

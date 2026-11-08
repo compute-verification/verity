@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The sharp rate: proof

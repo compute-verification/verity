@@ -3,11 +3,13 @@ module
 public import Definitions.Core.Game.Lock
 public import Definitions.Flock.Game.Expect
 public import Definitions.Flock.Game.Interleave
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# C-Flock's game vocabulary is Core's: `Lock`
+# Flock's game vocabulary is Core's: `Lock`
 
-Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Game.Lock`, so C-Flock's spec and every
+Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Game.Lock`, so Flock's spec and every
 other protocol's read one game library.
 -/
 

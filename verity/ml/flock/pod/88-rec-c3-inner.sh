@@ -3,7 +3,7 @@
 # statement with plain SHA-512 leaves (rec_inner.py stage --plain-leaves), proved on the CPU by the unmodified prover
 # (non-zk, under INNER_COINS) through the relay, which gives the verifier h, the hidden circuit `unit`'s share of the
 # lincheck's fold, in a round of its own after z_partial's, on the rep's one coin stream. Every coin of the session, the
-# relay's sparse and stacked phases' too, is the challenger's coin tree, drawn at Hello and opened round by round
+# relay's sparse and stacked phases' too, is the challenger's coin tree, sampled at Hello and opened round by round
 # (rec_session --coin-tree, from TREE_FROM). Then: the schedule serve held the session to against rec_live --schedule-for
 # --holo's; upstream's replay of the session as the prover ran it (inner/prover); V*'s hashing reference (rec_vstar) over the
 # verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit on the tree (an executable,
@@ -12,8 +12,8 @@
 # rows, each holding); and Lean's reading of the session (flock-verify rec-transcript: every stream of the verifier's record,
 # held to the schedule and to the prover's record, R's top to its registration with STACKED), which test_lean_rec_inner_streams
 # runs on the fixture. Lean's plain verify takes a coin tree of the session's own streams (--coins tree), not one with the
-# relay's sparse and stacked streams added, so the prover's session is not verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The coin server
-# answers Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep.
+# relay's sparse and stacked streams added, so the prover's session is not verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The challenger's live-coin part
+# answers Register with the verifier's full sample (stage/draw.json, rec_live.full_draw: every unit), which both records keep.
 # Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, stage.json, statement.txt,
 # schedule.json, tree-source.txt, session.log, time-prove.txt, prove.txt/.err, inner/ (schedule.json, public.json,
 # private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json, check-fold.json, vstage.json, lean.log,
@@ -25,11 +25,11 @@
 # Launch it through a check slot, which pins it to the slot's cores and holds the slot:
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
-#   TREE_FROM= (the challenger's device, HOST:PORT, the session's coin tree drawn and opened there, rec_session --tree-from;
-#   TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws it, rec_session --tree-test-os, a test's coins,
+#   TREE_FROM= (the challenger's device, HOST:PORT, the session's coin tree sampled and opened there, rec_session --tree-from;
+#   TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples it, rec_session --tree-test-os, a test's coins,
 #   never the challenger's, out/tree-source.txt says which)
 #   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
-#   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
+#   reps, on the challenger's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
 #   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
 #   sparse claims (--points, after the sparse streams, into the same session); rec_vstar checks R's openings and rec_vstage
 #   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold). R's top

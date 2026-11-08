@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Assumptions
-public import Proofs.Flock.Soundness.Game.Prob
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The collision-resistance assumptions have teeth

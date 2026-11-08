@@ -3,7 +3,7 @@ module
 public import Mathlib
 public import Definitions.Core.Boolean
 public import Definitions.Core.Interaction
-public import Definitions.Claims.Hm96
+public import Definitions.Core.Hm96
 public import Definitions.Claims.Json
 
 /-!
@@ -51,7 +51,7 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
   list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
 * Completeness (`Complete`) is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512
-  with its whole output, and as the random-oracle model draws them; it fixes the length only, so `H` stays a parameter.
+  with its whole output, and as the random-oracle model samples them; it fixes the length only, so `H` stays a parameter.
   Flock's is of the deployed record's reference prover (`Flock.Deploy.P`), not of a prover the claim takes. The form
   first frozen held at an empty tape type for every verifier, and its prover was whatever its discharge chose, so an
   assembled claim's completeness premise was met for free.
@@ -65,7 +65,7 @@ Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
 The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's) and hm96's hiding, `Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
+(`Definitions/Core/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
 is `trustedBase`. The texts the canonical printer prints are ASCII without DEL, `Json.Ascii`
 (`Definitions/Claims/Json.lean`), which only completeness reads.
 

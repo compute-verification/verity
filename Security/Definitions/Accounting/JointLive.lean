@@ -1,8 +1,41 @@
 module
 
 public import Definitions.Accounting.JointBlocks
-public import Definitions.Core.Game
+public import Definitions.Accounting.JointPeriod
 public import Definitions.Claims
+public import Definitions.Core.Game
+public import Definitions.Core.Interaction
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
@@ -10,9 +43,9 @@ public import Definitions.Claims
 The one theorem's form:
 
 * **A causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
-  commitment: each device release is a `coin` drawn after the bytes it answers (a `send`), in the device's order, and
-  the evidence is the last `send`. The game ends in the run `O`, what the verifier of record reads. A prover's strategy
-  (`Verity.Game.Strategy`) sees each coin only once it is drawn.
+  commitment: each device release is a `coin` sampled after the bytes it answers (a `send`), in the device's order, and
+  the evidence is the last `send`. The game ends in the run `O`, what the verifier reads. A prover's strategy
+  (`Verity.Game.Strategy`) sees each coin only once it is sampled.
 * **One adversary form.** For every prover `τ`,
   $$\Pr[\text{accept} \wedge \text{the claim fails on } E^\tau\text{'s values}] \le
     \delta + f(\Pr[B^\tau \text{ finds a SHA-512 collision}]),$$
@@ -20,7 +53,7 @@ The one theorem's form:
   period's extractor `E` (`PeriodLive.extract`) reads off the strategy: at most an `ε` share of the circuit's units are
   unbound in it (`unbound`: wrong in it, or with a committed value the commitment doesn't open to its value there).
   Under zero knowledge a run shows no value, so the values a claim reads are an extractor's; the deployed one is
-  C-Flock's plurality over the strategy's runs (`XplurZC`). The break is no event of the run: it is the probability
+  Flock's plurality over the strategy's runs (`XplurZC`). The break is no event of the run: it is the probability
   that the subprotocol's finder `B` (`PeriodLive.finder`), built from the strategy, outputs a collision of the hash
   (`Claims.Finder.Pr`), so `ecr/sha-512` (`Claims.ExpectedCR`, stated of a `Claims.Finder`) is asked of `B` only.
   A subprotocol's error at a strategy is `PeriodLive.error` (`δ` plus its reduction's loss at that probability) or,
@@ -126,7 +159,7 @@ noncomputable def error (H : Claims.Msg → Claims.Msg) (a : Audit) (δ : ℝ≥
   δ + loss (r.collides H a s)
 
 /-- **A subprotocol's per-period guarantee over the causal game**, at certificates `c` and the error `err s` at each
-strategy `s`: at every strategy `s`, the probability over the coins the game draws that subprotocol `a` accepts while
+strategy `s`: at every strategy `s`, the probability over the coins the game samples that subprotocol `a` accepts while
 its claim fails on the extractor's values is at most `err s`. The error is a function of the strategy, as `error` and
 `condError` are: its `δ` may read the strategy's cost, and its finder term the finder built from it. -/
 def Sound (c : Certificates) (a : Audit) (err : Verity.Game.Strategy G → ℝ≥0∞) : Prop :=

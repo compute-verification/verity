@@ -9,11 +9,12 @@ step waits on; the next step's compute does not wait on it.
 
 The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
-roots (`row_table.step_tree`): the row's digests with `ncp2.cuh`'s SHA-512, the hm96 leaf and the frame's leaf, pad and node
-the GPU's one row commitment (`verity.ml.kernels.ROW_COMMIT`).  The host computes the domain ids, the rows' rank order and the tables'
-layout (`plan`).  `host_step` runs the same functions on the CPU (`row_table_host.cpp`, built with the system C++ compiler), the
-twin the CPU tests hold to `row_tables.step_roots` on machines without a GPU.  Builds are keyed by what they compile (sources,
-the shared headers, flags and the compiler's version) under ``~/.cache/verity/row_table``; nvcc is the one on the path.
+roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`verity.ml.kernels.SHA512`, through `ncp2.cuh`),
+the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.ml.kernels.ROW_COMMIT`).  The host
+computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
+(`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
+without a GPU.  Builds are keyed by what they compile (sources, the shared headers, flags and the compiler's version) under
+``~/.cache/verity/row_table``; nvcc is the one on the path.
 """
 from __future__ import annotations
 
@@ -45,8 +46,8 @@ __all__ = ["DeviceLibrary", "Pending", "Plan", "device_lib", "host_lib", "host_s
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
-#: the headers `row_table.cuh` includes by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment): every build
-#: reads them from their directory and is keyed by their bytes
+#: the headers `ncp2.cuh` and `row_table.cuh` include by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment):
+#: every build reads them from their directory and is keyed by their bytes
 SHARED = (SHA512, ROW_COMMIT)
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")

@@ -7,7 +7,7 @@ public import Definitions.Accounting.Assumptions.Compose
 # PoUW's work over a monitoring period of `n` windows (trusted)
 
 `CircuitWork` restated over a monitoring period of `n` windows of one declared circuit, each window with its own live
-coins and its own draw, its words counted on its live tiles only. It changes what the live guarantee says: `ε` is
+coins and its own sample, its words counted on its live tiles only. It changes what the live guarantee says: `ε` is
 quoted per monitoring period, and credited on live tiles up to the first refused window. Its credit in live words is
 `CircuitCreditPeriod`.
 
@@ -28,15 +28,6 @@ An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44%
 is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
 at it (`PeriodTailMax`).
 
-* `PeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
-  `Λ` (`RoundGame.BudgetAt`, which `ServiceBudget` gives per window), whatever the earlier windows did, so does the
-  period's game (`periodGame`). Proved (`Proofs.Accounting.ComposePeriod`): a window's game is one round, and
-  `BudgetAt` over rounds is that condition at each round given the past.
-* `PeriodTailMax`: `budget_tail` at every prefix at once (Ville's inequality, finite form): when `Λ` bounds the play,
-  some prefix of its rounds is accepted with share at least `Λ·t` with probability at most `e^{−t}`. So a prefix
-  that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
-  (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
-  `expect_weight_le` does, with the bound for every threshold `D` in the induction.
 * `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
@@ -44,7 +35,7 @@ at it (`PeriodTailMax`).
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
   `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
-  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
+  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkMonitoringPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
 
@@ -54,33 +45,11 @@ namespace Accounting.Guarantees.ComposePeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **The period's budget from its windows'.** For a period of `n` windows of one circuit of `M` rounds over `N` tiles,
-any play (`WindowPlay`: each window's live tiles and split stages chosen after the earlier windows' coins), share
-weights `w live` at each window's live tiles `live`, costs `a, b` and `K` draws a window: if every window's one round
-(`serviceGame`) has its saving per unit of detection bounded by `Λ` (`RoundGame.BudgetAt`), whatever the past, then so
-has the period's game (`periodGame`). With `budget_tail` at `n` rounds, an accepted period's total share is below
-`Λ·ln(1/δ_s)` except with probability `δ_s`. -/
-def PeriodBudget : Prop :=
-  ∀ {C Ξ : Type} [Fintype C] [Fintype Ξ] {N M n : ℕ} (stg : Fin N → ℕ) (w : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ)
-    (K : ℕ) (Λ : ℝ) (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n),
-    Wp.EveryWindow (fun live W => RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W (w live) a b K)) →
-    RoundGame.BudgetAt Λ (periodGame stg w a b K Wp)
-
-/-- **The budget's tail at every prefix at once** (Ville's inequality, finite form): for any play of `n` rounds on
-coins `Ω` with its saving per unit of detection bounded by `Λ > 0` (`RoundGame.BudgetAt`), the probability that some
-prefix of its rounds passes (`RoundGame.acceptsUpTo`) with share at least `Λ·t` (`RoundGame.deficiencyUpTo`) is at most
-`e^{−t}`. Its last prefix is `budget_tail`. A period credited up to its first failed window, a stopping time the
-cheater may steer, reads it at that window, so it pays `ln(1/δ_s)` once, and neither a fixed `n` nor a rule against
-dropping windows is needed for the tail. -/
-def PeriodTailMax : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {n : ℕ} (g : RoundGame Ω n) (Λ : ℝ), 0 < Λ → RoundGame.BudgetAt Λ g → ∀ t : ℝ,
-    prob (fun x => ∃ j : ℕ, RoundGame.acceptsUpTo g j x ∧ Λ * t ≤ RoundGame.deficiencyUpTo g j x) ≤ Real.exp (-t)
-
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
 declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
 `CircuitWork`'s: the circuit's rounds in order, each round's noise coin live and released after its operands are
-committed, then the service's draw of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
-included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s draw. The
+committed, then the service's sample of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
+included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s sample. The
 cheater's play in each window, its live tiles included, may be any function of every earlier window's coins
 (`WindowPlay`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted
 prefix, of `j = Outcomes.prefixLen` windows. Under:
@@ -93,7 +62,7 @@ prefix, of `j = Outcomes.prefixLen` windows. Under:
   its `zeroCone` is `0`: *Its line*), so a dead tile's `liveCone` is `0`;
 * sampled (I8)'s pieces on the period's proofs, `Declared.layer` in every window (`Declared.periodLayer` at the run's
   `pr`): `Of`'s game clause on every prefix (`PrefixOf`), binding at `δ_bind` in each window (`MovedIn`), proof
-  soundness jointly over each window's draws at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
+  soundness jointly over each window's samples at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
   composes the windows' binding;
 * the four claims: (H-μ), B′ and the guess bound per live credited tile of every window, whatever the past
   (`WindowPlay.EveryWindow` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
@@ -152,7 +121,7 @@ session; one session a root, ever), and the window's place is the ledger's order
 (1 to 2^24) and the circuit are `period-open`'s, signed in its body before window 0's first coin, the circuit as the
 declared circuit's lowercase SHA-512, never a Program's id. A window reads only its own session's coins, and a
 session that never ends is a recorded window, not a dropped one. Each window's first coin is opened after the
-previous window's draw (the challenger's `order_reason` over one family, below). The credit is the prefix, in ledger
+previous window's sample (the challenger's `order_reason` over one family, below). The credit is the prefix, in ledger
 order, before the first refused window: the first whose proof is refused, whose reserve expired before its open
 (`period-close` lists it as `{root: null, complete: false}`), or whose `complete` in `period-close` is otherwise false
 (its session has no `end`, or one that didn't release every family's coins: a client that closes after a round coin
@@ -164,10 +133,10 @@ pays `P·δ_s`, not `δ_s`. A record that credits each window on its own, with n
 refused window, is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
 (`SampledProofs.Challenger.orderReason`) checks one family of an epoch's coins: coin `i` opened once, after the
 `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run over one family
-holding every window's round coins and draw in order, with `n` and the circuit in the epoch's commitment, it is the
+holding every window's round coins and sample in order, with `n` and the circuit in the epoch's commitment, it is the
 period's check.
 
-*One stream.* `WindowPlay` is a sequence: each window's first coin is opened after the previous window's draw. Windows
+*One stream.* `WindowPlay` is a sequence: each window's first coin is opened after the previous window's sample. Windows
 run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a fleet runs one
 period per stream: adding GPUs doesn't shorten a period.
 
@@ -175,7 +144,7 @@ period per stream: adding GPUs doesn't shorten a period.
 `src` at window `w` names a tile of window `w`, `periodLayer_src` by `rfl`, so a late edge stays in its window,
 `late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf`
 and `LayerCommitted`, the service committing each value it writes by its IR cut, or a computed value only its own
-proof block reads by the draw. A window with one salt, opened before its activations are committed, doesn't meet
+proof block reads by the sample. A window with one salt, opened before its activations are committed, doesn't meet
 `LayerCommitted`, so it is out of scope.
 
 *Live coins only.* Every number below is for live windows. A certified window's noise comes from the certifier's
@@ -190,17 +159,17 @@ Its line, with equal rounds (`w_max = 1/M`), `ρ = 1/r` (`F = 1`), `x = K_d/(r·
 `max(a/(M·−ln(p + (1 − p)e^{−x})), b/(M·−ln(p0 + (1 − p0)e^{−x})))`, and the logical term per credited window is
 `Λ·ln(1/δ_s)/(min(a, b)·j)` of a window's declared words, or `/(u·j)` of the gate's credit. The proved line is the
 word credit's (`CircuitCreditPeriod`), best at `a = b = 1`. At `p = 7/8`, `p0 = ½`, `δ_s = 2^-40` and `D₀ = 0`,
-the served H1 window's shape (`M = 18`, `r = 2.87`) with a draw of `K_d = 8` has `Λ = 3.070`
+the served H1 window's shape (`M = 18`, `r = 2.87`) with a sample of `K_d = 8` has `Λ = 3.070`
 (`Λ·ln(1/δ_s) = 85.1`), so `ε(j) = 85.1/(u·j)`, with no `ε_♭` term. With every tile live (`u = 1`) `ε` is below 1%
 from 8,513 credited windows. At one measured served load it is below 1% of the live tiles' words (17/36 of tiles
 live) from 18,026 windows, and of the gate's credit (`u = 119/1152`, 10.3% of rows admitted) from 82,403 windows:
-1,483,254 live rounds, 659,224 drawn tiles, 419 days of one stream at a measured 439 s a window (the masked circuit's
+1,483,254 live rounds, 659,224 sampled tiles, 419 days of one stream at a measured 439 s a window (the masked circuit's
 own). Compose's time line, at the physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%` (the sm_120 sheet,
 `ε_μ = 0`), is `0.571% + 20.65/(u·j)` (`Λ = 0.745`), below 1% from 4,815, 10,195 and 46,604 windows (237 days): that
 is the time credit, which no statement here gives (`CircuitCreditPeriod`), so those numbers are unstated. They are
 all live windows (*Live coins only*). For small `x` the term is about
 `max(a/(1 − p), b/(1 − p0))·r·ln(1/δ_s)/(min(a, b)·u·j·K_d)`, `8r·ln(1/δ_s)/(u·j·K_d)` at `a = b = 1`: the prefix's
-total draws `j·K_d` and its load set it, not how it is cut into windows.
+total samples `j·K_d` and its load set it, not how it is cut into windows.
 
 `D₀ = 0` is an assumption of these numbers, not a computed fact. `zeroCone` is `0` when no tile of no words reaches
 a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, and nothing computes
@@ -234,7 +203,7 @@ cuts them; no period over windows run at once (above); no check that the service
 or kept its periods disjoint (above); nothing of seeded windows (*Live coins only*); and, as `CircuitWork`, nothing
 of a served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
 proved. -/
-def CircuitWorkPeriod : Prop :=
+def CircuitWorkMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
@@ -261,7 +230,7 @@ def CircuitWorkPeriod : Prop :=
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
         δs + n * (δbind + δks)
 
-/-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkPeriod`'s
+/-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkMonitoringPeriod`'s
 premises with `a, b > 0`, an accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its
 prefix's live words fixed right (`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and
 `ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = Outcomes.prefixLen` (`epsPrefix`), except with
@@ -271,14 +240,14 @@ prefix's deficit is at most what the discount takes. `ε` is read at the prefix 
 is priced by `PeriodTailMax`.
 
 It counts words, each one unit, so its best line is at `a = b = 1` (`r(j)/min(a, b)` is homogeneous in `(a, b)` and
-least at `a = b`): `Λ = 3.070` at the served H1 window's shape with a draw of `K_d = 8` (`Λ·ln(1/δ_s) = 85.1`
+least at `a = b`): `Λ = 3.070` at the served H1 window's shape with a sample of `K_d = 8` (`Λ·ln(1/δ_s) = 85.1`
 windows of declared words, `D₀ = 0`, an assumption: *Its line*). Then `ε(j) ≥ 1` up to 85 windows with every tile
 live, 180 at the measured served load's live words (17/36 of tiles) and 824 of the gate's credit (`u = 119/1152`),
 and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows: the proved line. Compose's line is the time credit, at the
 physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where `ε(j) ≥ 1` up to 20, 43 and 201 windows and
 `ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit, `(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live
 words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the period's one `Pl.run` doesn't give, and
-is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
+is not stated. Everything `CircuitWorkMonitoringPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)

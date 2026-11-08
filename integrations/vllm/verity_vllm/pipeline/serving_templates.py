@@ -1,7 +1,8 @@
 """The templates of the serving rows (`pipeline.serving_rows`, whose module text states their rules): a template read through its
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
 itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks, a ``PARTS``
-family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks and a ``SPLITS`` row's split parts and combine)."""
+family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``SPLITS`` row's split parts and combine, and
+an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots)."""
 from __future__ import annotations
 
 import math
@@ -12,8 +13,9 @@ from typing import Any
 CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
-#: word with the row's quantisation of its own; the block-scaled FP8 GEMM, `fp8.ScaledMmFp8BlockSharedScale`, one output word,
-#: ``w[n]`` and ``ws[n // G]``), the ``coord`` layout; each family's E and G where its statics have none
+#: word with the row's quantisation of its own, where its ``PARTS`` quantise the row once; the block-scaled FP8 GEMM,
+#: `fp8.ScaledMmFp8BlockSharedScale`, one output word, ``w[n]`` and ``ws[n // G]``), the ``coord`` layout; each family's E and
+#: G where its statics have none
 COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128},
           "ScaledMmFp8BlockSharedScale_v1": {"E": 1}}
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
@@ -34,20 +36,30 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
           "DsaMqaLogits_v3": (("N",), ((None,), (None,), (0,), (0,))), "EmbeddingShard_v1": (("H",), ((None,), (1,))),
           "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,)))}
 #: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
-#: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j)
-#: and the output members it returns; together they return every output once, and the row computes what they compose to
-#: (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in column blocks, a ``COORDS`` part in coordinates, any
-#: other one whole (the ``part`` layout).  `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its
-#: norm of the committed r.  `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s
-#: (tests/program/test_deepgemm_parts.py).
+#: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j,
+#: ``("mid", name)`` the row's intermediate) and what it returns (``j`` the row's committed output member j, ``name`` an
+#: intermediate: a value the row's Definition computes and serving never stores, which the reader computes by its twin,
+#: `part_rows.MIDS`, and the window wires to every part that reads it, `part_rows.wire`); together they return every output
+#: once, and the row computes what they compose to (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in
+#: column blocks, a ``COORDS`` part in coordinates, any other one whole (the ``part`` layout).
+#: `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its norm of the committed r.
+#: `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s.
+#: `deepgemm.FlashInferFp8Linear`: its quantisation of x once (q, s, which FlashInfer keeps in its workspace), then the same GEMM
+#: of those q and s (tests/program/test_deepgemm_parts.py).
 PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0), ("arg", 1)), (1,)),
                                       ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,))),
          "DeepGemmFp8Linear_v1": (("Fp8GroupQuantUe8m0_v1", (("arg", 0),), (0, 1)),
-                                  ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,)))}
-#: the statics a ``PARTS`` row family's parts take that the row has none of: DeepGEMM's linear quantises and scales in
-#: 128-wide blocks (`deepgemm.FP8_BLOCK`)
-PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}}
-PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
+                                  ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,))),
+         "FlashInferFp8Linear_v1": (("FlashInferFp8Quant1x128_v1", (("arg", 0),), ("q", "s")),
+                                    ("ScaledMmFp8BlockSharedScale_v1", (("mid", "q"), ("mid", "s"), ("arg", 1), ("arg", 2)), (0,)))}
+#: the statics a ``PARTS`` row family's parts take that the row has none of: the block-FP8 linears quantise and scale in 128-wide
+#: blocks (`deepgemm.FP8_BLOCK`)
+PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}, "FlashInferFp8Linear_v1": {"G": 128}}
+#: each part family, by the row families it is a part of
+PART_OF: dict[str, dict[str, tuple]] = {}
+for _row, _ps in PARTS.items():
+    for _p in _ps:
+        PART_OF.setdefault(_p[0], {})[_row] = _p
 #: the chunk families that cut a ``COORDS`` family's coordinate along K (the ``kchunk`` layout, `kchunk_rows`), by the row family:
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
 #: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)
@@ -57,8 +69,19 @@ KCHUNKS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8CoordinateChunk_v1"}
 #: non-empty splits (`sparse_mla_split.SparseMlaSplitPart_v1` and `SparseMlaCombine_v1`: FA3's split kernel and its combine)
 SPLITS = {"SparseMlaSplit_v1": ("SparseMlaSplitPart_v1", "SparseMlaCombine_v1")}
 SPLIT_OF = {f: row for row, fs in SPLITS.items() for f in fs}
+#: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
+#: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
+#: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
+#: id of the token's router row cut into slots (``SLOTS``)
+EXPERTS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8BlockGemm_v3", "MoeExpertFp8GemmW_v1": "MoeExpertFp8BlockGemmW_v3"}
+#: the router row Definitions cut into slots for the per-expert cut, by the row family: the same words, one output a slot's weight
+#: or id (`moe.MoeRouterSigmoidBiasSlots`)
+SLOTS = {"MoeRouterSigmoidBias_v1": "MoeRouterSigmoidBiasSlots_v1"}
+#: the family of the per-expert cut's table reads
+READ = "EmbeddingRead_v1"
 #: a member's layout by the family of its template's word; any other template is the row itself
-LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
+LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8", READ: "read",
+           **dict.fromkeys(EXPERTS.values(), "expert"), **dict.fromkeys(SLOTS.values(), "slots")}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
 PACKED = frozenset((8, 16, 32, 64))
 
@@ -69,9 +92,11 @@ class Template:
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
-    family; else ``"row"``).
-    ``packed``: a row, coordinate, slice, part, K-chunk or split template with a port that is not 16-bit elements, each port's
-    element bits (its parameters', then its return fields'); its ports are committed as their elements' bytes."""
+    family, ``"expert"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, table reads and router slots
+    (``EXPERTS``, ``READ``, ``SLOTS``); else ``"row"``).
+    ``packed``: a row, coordinate, slice, part, K-chunk, split, expert or slots template with a port that is not 16-bit
+    elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
+    bytes. A read's ports are bits (its key, digests, salt and path), committed as Flock's bit rows."""
     id: str
     fn: Any
     word: str
@@ -128,10 +153,10 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
               else LAYOUTS.get(spec_base(word), "row"))
     packed = None
-    if widths != {16} and layout != "s8":
+    if widths != {16} and layout not in ("s8", "read"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
-        if layout not in ("row", "coord", "slice", "part", "kchunk", "split") or any(
+        if layout not in ("row", "coord", "slice", "part", "kchunk", "split", "expert", "slots") or any(
                 len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16 for e, ty in zip(elems, ports)):
             raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                              f"are {sorted(widths)} bits (a row template's port may be elements of one of {sorted(PACKED)} bits, "
@@ -170,8 +195,7 @@ def part(word: str, spec: str) -> tuple | None:
     (the row is ``word``'s own family)."""
     from verity_vllm.query.program_view import spec_base
 
-    hit = PART_OF.get(spec_base(word))
-    return hit[1] if hit is not None and hit[0] == spec_base(spec) else None
+    return PART_OF.get(spec_base(word), {}).get(spec_base(spec))
 
 
 def chunk_widths(K: int, G: int, KB: int) -> list[int]:
@@ -189,10 +213,12 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
     at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also at N = 1), for
     a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), for a ``KCHUNKS`` row family, at
-    each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), and for a
+    each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a
     ``SPLITS`` row family in NS > 1 splits, its part at each split's key count k (`split_keys`; NH times the splits of k keys)
-    and its combine over the non-empty splits (NH).  None when the
-    spec does not bind to exactly its own descriptor id."""
+    and its combine over the non-empty splits (NH), for an ``EXPERTS`` row family, at each block of n rows (`block_rows`), its
+    block family at N = n and the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}`` (N / n of each), and the read of
+    a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of them), and for a ``SLOTS`` row family, its slots
+    family at its statics (one).  None when the spec does not bind to exactly its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -243,8 +269,24 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                     hit += ((descriptor_id(c), ks.count(k) * int(S["NH"])),)
             if (c := _bind(spec, fams[1], NSPLIT=len(ks))) is not None:
                 hit += ((descriptor_id(c), int(S["NH"])),)
+        if (fam := EXPERTS.get(spec_base(spec))) is not None:
+            from verity.ml.commitments.gates.embedding import read
+
+            S = spec_statics(spec)
+            E, K, N, G = (int(S[x]) for x in ("E", "K", "N", "G"))
+            for n in block_rows(N, G):
+                if (c := _bind(spec, fam, N=n)) is not None:
+                    hit += ((descriptor_id(c), N // n), (descriptor_id(read(E, n * K // 2)), N // n))
+            hit += ((descriptor_id(read(E, 2 * K // G)), -(-N // G)),)
+        if (fam := SLOTS.get(spec_base(spec))) is not None and (c := _bind(spec, fam)) is not None:
+            hit += ((descriptor_id(c), 1),)
     _UNITS[spec] = hit
     return hit
+
+
+def block_rows(N: int, G: int) -> list[int]:
+    """The rows n of an ``EXPERTS`` row's blocks: each power of two that divides N and G, so a block's rows are one G-block's."""
+    return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
 
 
 def split_keys(T: int, NS: int, BN: int) -> list[int]:

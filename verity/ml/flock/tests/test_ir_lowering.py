@@ -16,11 +16,11 @@ from verity_flock import ir_lower as IL
 
 P = pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 
-SLICES = Path(__file__).resolve().parents[4] / "benchmarks" / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
+SLICES = Path(__file__).resolve().parents[0] / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}, "silu-mul-v2": {"I": 256}}
 
@@ -109,7 +109,7 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
 
 
 def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_its_word():
-    """A primitive C-Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
+    """A primitive Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
     running that Definition's ``build``: found through core's registry, not imported from its owner."""
     from types import SimpleNamespace
 

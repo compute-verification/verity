@@ -44,9 +44,11 @@ untraced = [
     "tests/test_drive_hold_lift.py",
     "tests/test_drive_lowrisk.py",
     "tests/test_drive_moves.py",
+    "tests/test_drive_policy.py",
     "tests/test_drive_red_fixes.py",
     "tests/test_drive_review.py",
     "tests/test_drive_stale.py",
+    "tests/test_drive_unlandable.py",
     "tests/test_env_credentials.py",
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
@@ -81,6 +83,8 @@ untraced = [
     "tests/test_queue.py",
     "tests/test_queue_drive.py",
     "tests/test_queue_open.py",
+    "tests/test_queue_ported.py",
+    "tests/test_record_driver.py",
     "tests/test_record_result.py",
     "tests/test_remote_adopt.py",
     "tests/test_remote_cwd.py",
@@ -128,7 +132,7 @@ untraced = [
 # tools/verity/check/move_check.py: test_drive_moves commits them into its origin, so the sync regenerates, certifies and
 # restacks a move with the scripts it runs from the tree. tools/verity/graph/tests/key_vectors.json: test_drive_executor holds
 # the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
-# and the files its `--inputs-key` loads (lean_audit.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
+# and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
 # tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
 # into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`).
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
@@ -142,7 +146,7 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra
           "benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
           "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
-          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/check/common.py",
+          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
           "tools/verity/graph/verity_graph/contract.py"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
@@ -192,12 +196,17 @@ tests = [
     "tests/test_drive_red_fixes.py",
     "tests/test_drive_review.py",
     "tests/test_drive_stale.py",
+    "tests/test_drive_unlandable.py",
 ]
 paths = ["tools/verity/check/gates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_cli.py", "tests/test_usage_cli.py"]
 paths = ["infra/cluster/src/cluster"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_drive_policy.py", "tests/test_queue_ported.py"]
+paths = ["tools/verity/check/gates/markdown_caps.py"]
 
 [[tool.verity.tests.reads]]
 tests = [

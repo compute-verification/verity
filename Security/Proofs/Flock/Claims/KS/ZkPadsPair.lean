@@ -1,6 +1,47 @@
 module
 
 public import Proofs.Flock.Claims.KS.ZkClashPads
+public import Proofs.Flock.Claims.KS.ZkFork0
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.KS.ZkPadsLog
+import Proofs.Flock.Claims.KS.ZkStep
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 
 /-!
 # The masked pads fork's two-run clash
@@ -97,7 +138,7 @@ theorem tiedColl_of_padsLogged {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
   rw [e']
 
 /-- **An accepted masked rep logs its pads openings**: where a stream `y` has the coins of the live session's rep
-stream `2j + r` and rep `r`'s proof file decodes to pads openings drawn at the positions `y`'s last round's coins give
+stream `2j + r` and rep `r`'s proof file decodes to pads openings sampled at the positions `y`'s last round's coins give
 (`PadsRep`), the run's verifier opened each of those queries at that position (`zkVerifyRepWith_inner`,
 `verifyInner_logs`), so every input of each opening is in its log. -/
 theorem zk_padsLogged {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
@@ -589,7 +630,7 @@ def ZkPadsAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Reada
 end Gen
 
 /-- **The simulated fork is aligned with the masked fork rounds at the pads**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
+that sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
 `r`'s pads node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `PadsForkEvZ` (`ZkPadsAlignQ`). -/
 def ZkPadsAlign (x : Claims.Msg) : Prop :=
@@ -609,7 +650,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork is aligned with the masked fork rounds at the pads**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
+that sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
 `r`'s pads node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `PadsForkEvZ` (`ZkPadsAlignQ`). -/
 def ZkPadsAlign (x : Claims.Msg) : Prop :=

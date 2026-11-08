@@ -5,10 +5,10 @@ component of onsite Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in 
 is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and audited every period):
 
 1. the prover commits to `W`, the node's `store` padded with zeros to the point's payload (`setup.commit`);
-2. the verifier draws the salt after the commitment, from its live `coins` (`setup.draw_salt`);
+2. the verifier samples the salt after the commitment, from its live `coins` (`setup.draw_salt`);
 3. the prover encodes `C*` (`P2.encode_segment`), and the verifier decodes it and checks `Dec(C*)` against the commitment
    (`setup.verifier_key_from_encoding`, the public-encoder setup; in Lean `verity/pous/p2/v4/setup`), publishing its root;
-4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), draws its `k` indices
+4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), samples its `k` indices
    from `coins` under a session id the auditor designates from them, and runs its timed session against the prover's
    answers (`prover`, by default the honest one that holds `C*`), signed under `signer`;
 5. the verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
@@ -35,9 +35,9 @@ a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's ro
 of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
-`trusted-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
+`trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
-still drawn on the node.
+still sampled on the node.
 """
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ def point_of(doc: Mapping[str, Any]) -> R.Point:
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
-         session: R.Session, setup_of: Mapping[str, Any]) -> dict[str, Any]:
+         session: R.ChallengePhaseRecord, setup_of: Mapping[str, Any]) -> dict[str, Any]:
     """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
     evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
@@ -169,7 +169,7 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
-           digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL, *,
+           digests: bytes, session: R.ChallengePhaseRecord, session_id: bytes, protocol: str = PROTOCOL, *,
            setup_inputs: SetupInputs) -> dict[str, Any]:
     """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
     `run.check_at`, then `certify`."""
@@ -307,7 +307,7 @@ def encode(q: P2.P2Params, salt: bytes, w: bytes, workers: int = 1) -> list[list
 
 
 def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> Store:
-    """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt drawn
+    """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt sampled
     from the verifier's `coins` after the commitment, `C*` encoded in `workers` processes, and the public-encoder check of
     it (`setup.verifier_key_from_encoding`), which raises `ValueError` on a setup it refuses."""
     point = point_for(len(store)) if point is None else point
@@ -342,12 +342,12 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
         challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                          binding=published.root, clock=clock)
         signed = challenger.run(prover(held.blocks))
-        session, key = R.Session(signed, challenger.commitment, challenger.openings()), signer.public_key
+        session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
         got = challenger_party.session(party, challenger_party.request_of(node, point, published.root),
                                        prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
-        session = R.Session.from_json(got["session"])
+        session = R.ChallengePhaseRecord.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
     return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
                       setup_inputs=setup_inputs(held.setup_case)),

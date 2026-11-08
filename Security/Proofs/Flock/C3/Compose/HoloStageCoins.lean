@@ -1,11 +1,21 @@
 module
 
 public import Proofs.Flock.C3.Compose.SparseEnds
-public import Proofs.Flock.C3.Compose.SrcClauses
-public import Proofs.Flock.C3.Compose.Tied
 public import Proofs.Flock.C3.RegLevels.LigWhole
 public import Proofs.Flock.C3.Reps.RepCoins
-public import Proofs.Flock.Recursive.HoloCoins
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `StageCoins` at the guarantee's coin types
@@ -16,7 +26,7 @@ history's rounds as it has coins, at a run whose stages are tied. Each tied stag
 claims (`opening_exact`) and R's Ligerito `ligShape` (`ligeritoC_exact`). So the stages' coins add up to `holoKinds`',
 which `holoCTs` counts after the link points (`coins_total_holo`, the bound `h5`'s rounds read).
 `stageCoins_holo`: `hcoins` at `holoCTs` and the tied source of `repsOfVals`. The reps' two conjuncts
-come from custody's coins half (`repCoins_repsOfVals`) at some of the map's draws (`custody_sel`), and the rest from
+come from custody's coins half (`repCoins_repsOfVals`) at some of the map's samples (`custody_sel`), and the rest from
 `LaterCoins`.
 -/
 
@@ -98,7 +108,7 @@ variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
 
-/-- **Custody at some of the map's draws**: custody's coins half at `m`'s draws holds at any `sel` among them. -/
+/-- **Custody at some of the map's samples**: custody's coins half at `m`'s samples holds at any `sel` among them. -/
 theorem custody_sel {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : FlockSoundness.Assumptions.InnerRecordMap Cm Coin} {sel : ℕ → String → ℕ → Prop}
@@ -107,9 +117,9 @@ theorem custody_sel {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × St
   ⟨fun i e he => ⟨((h t).1 i e he).1, fun _ _ hs => ((h t).1 i e he).2 _ _ (hsel _ _ _ hs)⟩, (h t).2⟩
 
 /-- **`hcoins` at `holoCTs`**, at the tied source of `repsOfVals` whose stages are tied: the reps'
-coins from custody's coins half (`repCoins_repsOfVals` at the map's draws `sel`, `custody_sel`), the link points' and
-the later stages' from `LaterCoins`. The reps' rounds need be encoded (`henc`) and drawn (`hdr`) only at `sel`, some
-of the map's draws (`hsel`): at `holoMap`, its one-round draws (`holoSelOne`, `coinsEncoded_holoMap`), since a sparse
+coins from custody's coins half (`repCoins_repsOfVals` at the map's samples `sel`, `custody_sel`), the link points' and
+the later stages' from `LaterCoins`. The reps' rounds need be encoded (`henc`) and sampled (`hdr`) only at `sel`, some
+of the map's samples (`hsel`): at `holoMap`, its one-round samples (`holoSelOne`, `coinsEncoded_holoMap`), since a sparse
 phase's round of `n > 1` coins is not encoded as one. -/
 theorem stageCoins_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}

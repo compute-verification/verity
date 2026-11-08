@@ -1,4 +1,4 @@
-"""A unit class of any partition as a ``verity/flock-circuit`` statement (`verity_flock.class_statement`): on circuit-check's tiny
+"""A size class of any partition as a ``verity/flock-circuit`` statement (`verity_flock.class_statement`): on circuit-check's tiny
 Serve_v1 under `Q_word`, two table-free classes and the embedding gather compose with one row port per input source, their
 laid-out unit rows agree with the reference on synthetic lanes, a source read by several instances is one shared row (the
 gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`` names a proving build of ``flock-circuit``, a
@@ -620,9 +620,9 @@ def test_the_selftest_swaps_the_tail_that_circuit_stage_forged(monkeypatch, tmp_
     at N = 64, whose tail's eps forges to another circuit (about 30 s to stage). When ``FLOCK_CIRCUIT`` names a selftest
     build (sha512, glue), its `tail_swapped` runs on that statement and passes."""
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     s = InputSet.open(generate(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
     low = FC.lowering_for_set(s)

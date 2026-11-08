@@ -1,13 +1,17 @@
 module
 
+public import Definitions.Core.Game
 public import Proofs.Core.Game.Prob
 public import Definitions.Flock.Game.Prob
+public import Mathlib.Data.Fintype.Pi
 public import Proofs.Flock.Soundness.Game.Union
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
-# C-Flock's game library is Core's: `Prob`
+# Flock's game library is Core's: `Prob`
 
-Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Prob`, so C-Flock's soundness proofs
+Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Prob`, so Flock's soundness proofs
 and every other protocol's read one game library.
 -/
 

@@ -1,6 +1,10 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration
@@ -20,7 +24,7 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
   correct in `X` carries, on each of its committed wires, the circuit's evaluation on `X`'s inputs;
 * `wrong_subset_wrongRegZ`: a unit wrong in `X` is wrong on every registration; `wrongRegZ_congr`: `wrongRegZ` reads the
   registration only through its commit strings;
-* `analysisZCReg`: `analysisZC` with "wrong" `wrongRegZ` at the registration. Its knowledge and link terms are
+* `analysisZCReg`: `analysisZC` with "wrong" `wrongRegZ` at the registration. Its knowledge and binding errors are
   `analysisZC`'s, and its `cover` is the same argument: a satisfying message near the table's oracle that decodes to `X`
   on the unit's wires makes the unit correct in `X` (the lowering) and gives an opening of each of its commit strings
   (`ValueBindingZ.opening_spec`), so the unit is right;
@@ -120,7 +124,7 @@ variable {L : Law n}
 open Classical in
 /-- **The compiled `--zk` audit's analysis, "wrong" measured against the registration** (`analysisZC`'s, with
 `wrongRegZ`). The transcript is the registration with the committed values, so that "wrong" can read the registered
-commit strings; the link term is `analysisZC`'s at the session's own registration, and `⊤` at any other. -/
+commit strings; the binding error is `analysisZC`'s at the session's own registration, and `⊤` at any other. -/
 noncomputable def analysisZCReg
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -186,7 +190,7 @@ theorem zc_knowledgeSound_reg
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k)))
     (tab (L.draw ω) R u)
 
-/-- `analysisZCReg`'s link term is `analysisZC`'s at the committed registration, so the link theorem
+/-- `analysisZCReg`'s binding error is `analysisZC`'s at the committed registration, so the link theorem
 (`zk_linkSoundC`) bounds it. -/
 theorem zk_linkSoundC_reg
     (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
@@ -194,14 +198,14 @@ theorem zk_linkSoundC_reg
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).BindSound
       (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht R τ tgt)
   simp only [analysisZCReg, analysisZC, ↓reduceIte]
 
-/-- `analysisZCReg`'s link term at the value layer of any values `Xv` is `analysisZC`'s at the committed registration,
+/-- `analysisZCReg`'s binding error at the value layer of any values `Xv` is `analysisZC`'s at the committed registration,
 so `zk_linkSoundC_at` bounds it. -/
 theorem zk_linkSoundC_reg_at
     (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ} {Rw : ℕ} (hRw : 1 ≤ Rw)
@@ -210,7 +214,7 @@ theorem zk_linkSoundC_reg_at
     (hj : JointZC A Hs planZ k a)
     (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val) :
     (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).BindSound
       (errBoundZC A Hs P planZ tab vb Xv k Rw ρ) := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))

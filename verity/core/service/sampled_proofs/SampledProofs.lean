@@ -2,6 +2,7 @@ module
 
 public import SampledProofs.Json
 public import SampledProofs.Program
+public import SampledProofs.Bits
 public import SampledProofs.Partition
 public import SampledProofs.PartitionRef
 public import SampledProofs.Draw
@@ -37,5 +38,7 @@ public import SampledProofs.WiresSound
 public import SampledProofs.WiresComplete
 public import SampledProofs.WiresDrawn
 public import SampledProofs.SiteDifftest
+public import SampledProofs.Interval
+public import SampledProofs.FactorUpper
 
 @[expose] public section

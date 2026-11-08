@@ -1,15 +1,31 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.ROpens
-public import Proofs.Flock.C3.RegLevels.SrcUnits
 public import Proofs.Flock.C3.RegLevels.Maps
-public import Proofs.Flock.C3.Reps.SrcOpens
-public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.RegLevels.ROpens
+public import Proofs.Flock.C3.Reps.OpensRead
 public import Proofs.Flock.C3.Reps.ReadSib
+public import Proofs.Flock.C3.Reps.RepsRead
 public import Proofs.Flock.C3.Reps.SrcOK
-public import Proofs.Flock.C3.PubRows.Shape
 public import Proofs.Flock.C3.VStarList.Statements
-public import Proofs.Flock.Soundness.Refine.Seam
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.PubRows.Shape
+import Proofs.Flock.C3.Reps.IoCols
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Pinned
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # n11: R's openings at `pR`, read from the layers (`ROpensOfLayers`, `RRowsPinned`)

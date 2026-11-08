@@ -115,7 +115,9 @@ theorem Port.readAt_eq (p : Port) (u : Nat) : p.readAt u = p.reads[u]? := by
     · rw [if_neg hu, Array.getElem?_append_right (by simp; omega)]
       simp
 
-def ofJson (j : Json) : V (Array Port) := do
+/-- A file's ports, one per entry of its `ports` object in its order, an entry's name repeated as often as the object
+holds it (`ofJson` refuses that). -/
+def portsOf (j : Json) : V (Array Port) := do
   let ctx := "registered reads"
   let format ← J.str j "format" ctx
   if format != FORMAT && format != FORMAT_V0 then throw s!"{ctx}: not a {FORMAT} file (nor a {FORMAT_V0} one)"
@@ -145,6 +147,51 @@ def ofJson (j : Json) : V (Array Port) := do
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom }
+
+/-- The first port of `ps` whose name a later port has. -/
+def dupName? : List Port → Option String
+  | [] => none
+  | p :: ps => if ps.any (·.name == p.name) then some p.name else dupName? ps
+
+theorem dupName?_none {ps : List Port} (h : dupName? ps = none) :
+    ∀ q ∈ ps, ∀ q' ∈ ps, q'.name = q.name → q' = q := by
+  induction ps with
+  | nil => intro q hq; cases hq
+  | cons p ps ih =>
+    simp only [dupName?] at h
+    split at h
+    · cases h
+    · rename_i hany
+      have hne : ∀ x ∈ ps, x.name ≠ p.name := fun x hx he =>
+        hany (List.any_eq_true.mpr ⟨x, hx, by simp [he]⟩)
+      intro q hq q' hq' hn
+      rcases List.mem_cons.mp hq with hq0 | hq1 <;> rcases List.mem_cons.mp hq' with hq0' | hq1'
+      · exact hq0'.trans hq0.symm
+      · exact absurd (hn.trans (congrArg (·.name) hq0)) (hne _ hq1')
+      · exact absurd (hn.symm.trans (congrArg (·.name) hq0')) (hne _ hq1)
+      · exact ih h q hq1 q' hq1' hn
+
+/-- **The verifier's registered reads**: a `FORMAT` (or `FORMAT_V0`) file's ports (`portsOf`), each name naming one port
+(`ofJson_names`). A verdict reports a port by its name (`finding`) and every check of a statement's reads finds a port by
+its name, so a second port of a name would be one neither reads. `flock-verify` refuses a file whose text names a key
+twice (`JsonKeys.dupKey`) and `JsonParse.parse` keeps one of the two, so no file it reads gets here with one; this
+refusal holds for any `Json` the verifier is given. -/
+def ofJson (j : Json) : V (Array Port) := do
+  let own ← portsOf j
+  match dupName? own.toList with
+  | some nm => throw s!"registered reads: port {nm} twice: a verdict reports one port per name, and each check reads a name's port"
+  | none => pure own
+
+theorem ofJson_names {j : Json} {own : Array Port} (h : ofJson j = .ok own) :
+    ∀ q ∈ own, ∀ q' ∈ own, q'.name = q.name → q' = q := by
+  obtain ⟨ps, -, h⟩ := HmNets.bind_ok h
+  cases hd : dupName? ps.toList with
+  | some nm => rw [hd] at h; cases h
+  | none =>
+    rw [hd] at h
+    cases h
+    intro q hq q' hq' hn
+    exact dupName?_none hd q (Array.mem_toList_iff.mpr hq) q' (Array.mem_toList_iff.mpr hq') hn
 
 /-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
 each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
@@ -477,8 +524,8 @@ def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
   roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
-/-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
-stratum draws all of its units (`k_s = n_s`). -/
+/-- Whether every sample by `d`'s law samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
+stratum samples all of its units (`k_s = n_s`). -/
 def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
   match d.law with
@@ -488,16 +535,16 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   | .work _ strata => strata.any (full ·.toStratum)
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
-does not draw in full. -/
+does not sample in full. -/
 def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
   own.findSome? fun p =>
     if roundCommitment p.value then
       ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
     else none
 
-/-- U4 (`Flock.HmRow`): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+/-- U4 (`Flock.HmRow`): a sampled statement samples in full every unit that reads a round's commitment by the verifier's
 own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
-draw proves its whole population. -/
+sample proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
   let d ← Draw.UnitDraw.ofJson j

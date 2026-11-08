@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.RateAuditRemote
 public import Definitions.Accounting.RateAuditHorizon
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The causal horizon bound (trusted)
@@ -17,8 +17,8 @@ coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 * `RateHorizon`: the bound for a chain's passes, with their correct receipts as the good sets.
 * `RateChainSampledRO`, `RateChainSampled`: the route `Sampled`: with `RateChainPaidRO`'s conservation, a window whose
   passes are all accepted read the words of more than `K` correct receipts, except with the two bounds' sum.
-* `RateWindowDraw`: the deployed window's draw, `d` openings pooled over its passes' `P·N` receipts after the last root.
-* `RateSessionDraw`: a session of such windows, each adapting to the earlier windows' draws: the horizon's shortfall and
+* `RateWindowDraw`: the deployed window's sample, `d` openings pooled over its passes' `P·N` receipts after the last root.
+* `RateSessionDraw`: a session of such windows, each adapting to the earlier windows' samples: the horizon's shortfall and
   every window's, at once.
 
 The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditHorizon.lean`): these bound the correct
@@ -46,7 +46,7 @@ is at most `(K / (M·∑ᵢ sᵢ))^(∑ᵢ sᵢ)`.
 **The reading.** At `K = (1 − d̄)·M·∑ᵢ sᵢ`, rounds that fall short of the items by `d̄` on average, weighted by their
 sample counts, all pass with probability at most `(1 − d̄)^(∑ᵢ sᵢ)`: the session pays `ln(1/ε)/d̄` openings in all, as
 one round would, not in each round. The prover may adapt every round to the earlier rounds' samples; it cannot shift
-its shortfall into rounds it already knows were lightly sampled, because each round's sample is drawn after its good
+its shortfall into rounds it already knows were lightly sampled, because each round's sample is sampled after its good
 set is fixed.
 
 Proof: `Accounting.SecurityProofs.HorizonSampling`, by induction on the rounds: round 0's sample lands in its good set
@@ -63,15 +63,15 @@ def HorizonSampling : Prop :=
       ≤ ((K : ℝ≥0∞) / (M * (∑ i, s i : ℕ))) ^ (∑ i, s i)
 
 /-- **A chain's passes are sampled as a whole.** For every chained prover over `P` passes with `r`-bit roots
-(`Rate.Chain`: pass `j`'s interactive device and the root its seed is drawn at, each any function of the earlier
+(`Rate.Chain`: pass `j`'s interactive device and the root its seed is sampled at, each any function of the earlier
 passes' coins, the root also of the store), over a uniform store and each pass's uniform stream, oracle family and
 sample of `s` words: the probability that every pass is accepted at its seed's oracle while the passes' correct
 receipts number at most `K` in all is at most `(K / (P·N))^(s·P)`.
 
 **The reading.** At `K = (1 − d̄)·P·N`, a prover whose passes fall short of the store by `d̄` on average passes all
 `s·P` openings with probability at most `(1 − d̄)^(s·P)`. The passes may be a window's chained passes, or a session's
-windows (with `r = 0`, a fresh oracle a window), each device adapting to every earlier sample. Each pass draws its own
-sample here; a window's single pooled draw over its passes' receipts is `HorizonSampling` with `M = P·N`.
+windows (with `r = 0`, a fresh oracle a window), each device adapting to every earlier sample. Each pass samples its own
+sample here; a window's single pooled sample over its passes' receipts is `HorizonSampling` with `M = P·N`.
 
 Proof: `Accounting.SecurityProofs.RateHorizon`, `HorizonSampling` at each store, with pass `j`'s correct receipts as
 its good set, which the store, the earlier passes' coins and pass `j`'s stream and oracle family fix.
@@ -125,16 +125,16 @@ def RateChainSampled : Prop :=
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ (s * P) +
         (P : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
 
-/-- **A window's pooled draw.** For every chained prover over `P` passes (`Rate.Chain`), over a uniform store, each
-pass's uniform coins and one draw of `d` openings, each a pass and a word, uniform over the window's `P·N` receipts
+/-- **A window's pooled sample.** For every chained prover over `P` passes (`Rate.Chain`), over a uniform store, each
+pass's uniform coins and one sample of `d` openings, each a pass and a word, uniform over the window's `P·N` receipts
 (`Rate.WindowCoins`): the probability that every opening lands on a correct receipt (`Chain.correctAll`) while the
 window holds at most `K` correct receipts is at most `(K / (P·N))^d`.
 
-**The reading.** The deployed window: its passes draw nothing of their own, and one draw from the openings coin, after
+**The reading.** The deployed window: its passes sample nothing of their own, and one sample from the openings coin, after
 the last root, opens `d` of all its passes' receipts. At `K = (1 − d̄)·P·N`, a window short of its receipts by `d̄`
 passes with probability at most `(1 − d̄)^d`, however its shortfall is spread over its passes.
 
-Proof: `Accounting.SecurityProofs.RateWindowDraw`: `HorizonSampling`'s one round at `M = P·N`: the draw is uniform and
+Proof: `Accounting.SecurityProofs.RateWindowDraw`: `HorizonSampling`'s one round at `M = P·N`: the sample is uniform and
 independent of the window's other coins, so at each value of them it lands in the correct receipts with probability
 `(#correct/(P·N))^d`.
 
@@ -145,9 +145,9 @@ def RateWindowDraw : Prop :=
         (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ d
 
-/-- **A session's pooled draws: the horizon and every window.** For every session of `n` chained windows on one store
-(`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their draws among them), each
-closed by its pooled draw of `d` openings: the probability that every window's openings land on correct receipts while
+/-- **A session's pooled samples: the horizon and every window.** For every session of `n` chained windows on one store
+(`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their samples among them), each
+closed by its pooled sample of `d` openings: the probability that every window's openings land on correct receipts while
 either the session holds at most `K` correct receipts in all or some window holds at most `K_w` is at most
 
   `(K / (n·P·N))^(d·n) + (((n − 1)·P·N + K_w) / (n·P·N))^(d·n)`.

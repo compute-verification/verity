@@ -1,12 +1,12 @@
-"""Infra's relay for the control pod's root disk (vy-control-verity's container overlay; when the old pod's 10 GB one filled on 1 Oct,
-the spend guard's state writes failed from 16:12Z). Every 5 minutes, read `df -P /` on the pod. One alert in #agent-alerts when usage
+"""Infra's relay for the control pod's root disk (vy-control-verity's container overlay; when it fills, the
+spend guard's state writes fail). Every 5 minutes, read `df -P /` on the pod. One alert in #agent-alerts when usage
 reaches 90%, another at 95%, one note when it falls back under 85%, and one alert when the pod can't be read for 30 minutes.
 
-The same pass reads the steward's notes clone, whose sync (and the budgets guard's read of budgets.toml) stalled silently from
-9 Oct to 13 Oct on a detached HEAD and a stale index.lock. One alert when the clone's HEAD is detached, its index.lock is older than
+The same pass reads the steward's notes clone, whose sync (and the budgets guard's read of budgets.toml) can stall silently on
+a detached HEAD or a stale index.lock. One alert when the clone's HEAD is detached, its index.lock is older than
 10 minutes, or a change has waited unpushed for an hour (a local commit or an uncommitted file), and one note when it clears.
 
-Since 13 Oct it runs on the pod itself (control_disk.sh, CONTROL_POD_LOCAL=1, reading with `sh -c`); without that it reads the pod
+It runs on the pod itself (control_disk.sh, CONTROL_POD_LOCAL=1, reading with `sh -c`); without that it reads the pod
 over ssh from a machine with the RunPod key.
 
 usage (research importable, $SLACK_BOT_TOKEN set, $RESEARCH_SLACK_REGISTRY when not run from a checkout):

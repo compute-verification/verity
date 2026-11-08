@@ -11,7 +11,7 @@ as it gave it (`{"accepted", "egress_mib", "reasons"}`), as `decide` names:
 
 Each side rejects a session whose batch size the guarantee doesn't cover (`WipeParams.covered`), however it ran.
 `VERDICT` is the default, the one line that switches it. `tests/test_wipe_verdict.py` holds the Lean to the Python on
-drawn sessions, adversarial edits of them and named negative controls; `benchmarks/pous/streamed_wipe/bench.py`'s session
+sampled sessions, adversarial edits of them and named negative controls; `benchmarks/pous/streamed_wipe/bench.py`'s session
 step judges its session here.
 
 The record goes as `to_json` writes its parts, `trusted` as sorted hex and `schemes` by id, each one the port verifies

@@ -46,7 +46,7 @@ T, MX = 64, 72
 
 
 class Calls:
-    """The 128 calls' operands and the A tables' window and step buffers."""
+    """The 128 calls' operands and the A tables' execution-phase and step buffers."""
 
     def __init__(self, lib: H1C, st: Step, dev, mx: int = MX):
         self.lib, self.st, self.L = lib, st, len(st.lin)
@@ -278,7 +278,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", default=None, help="unused (sbench.sh's SBENCH_SCRIPT passes it)")
     ap.add_argument("--reps", type=int, default=9)
-    ap.add_argument("--t", default=str(T), help="the window's slots (each A table's rows), one or more: 64,256")
+    ap.add_argument("--t", default=str(T), help="the execution phase's slots (each A table's rows), one or more: 64,256")
     ap.add_argument("--forms", default="0", help="h1c_a_form values, each gated, then each timed, in this process")
     a = ap.parse_args()
     out = Path(a.out)

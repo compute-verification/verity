@@ -1,6 +1,22 @@
 module
 
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
 public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Exec
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # Ring switching and batching refine the model's opening (`Flock.Opening`)
@@ -195,7 +211,7 @@ theorem oStep_fold (claims : Array Flock.Claim) (rs : Array (Array F128)) (C : �
       rw [List.foldl_cons, h1, h2]
       simp [oStep]
 
-/-- **The model's ring switches** (O3, O5): claim by claim, receive `ŝ` and draw `r''`. -/
+/-- **The model's ring switches** (O3, O5): claim by claim, receive `ŝ` and sample `r''`. -/
 theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) :
     ∀ (cs' : List (Model.Claim 𝔽 m)) (a : ℕ), (∀ i ∈ List.range' a cs'.length, (C i).size = 7) →
       Plays fOf (cs'.mapM fun c => do

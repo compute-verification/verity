@@ -8,7 +8,7 @@ import pytest
 
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
-from verity.ml.commitments.multiproof import multiproof, multiproof_cost, multiproof_from_paths, verify_multiproof
+from verity.ml.commitments.multiproof import multiproof, multiproof_cost, multiproof_from_paths, multiproof_root, verify_multiproof
 from verity.errors import ProtocolError
 
 
@@ -138,6 +138,8 @@ def test_a_corrupted_or_misshaped_proof_is_rejected() -> None:
     proof = multiproof(tree, ranks)
     leaves = leaves_of(domain, values, ranks)
     assert verify_multiproof(root, 16, domain.domain_id, leaves, proof)
+    assert multiproof_root(16, domain.domain_id, leaves, proof) == root
+    assert multiproof_root(16, domain.domain_id, leaves, proof[:-1]) is None
     for at in range(len(proof)):
         corrupted = list(proof)
         corrupted[at] = bytes(byte ^ 1 for byte in corrupted[at])

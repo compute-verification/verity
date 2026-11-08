@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.FinishLevel0
 /-!
 # Level 0's commitment from the views is the loop's table's
 
-At (c.3)'s context, where the loop draws the tape's level 0 (`Loop.Level0Src`), rep stream `k`'s level-0 commitment from
+At (c.3)'s context, where the loop samples the tape's level 0 (`Loop.Level0Src`), rep stream `k`'s level-0 commitment from
 the views (`commitsView`'s `k / 2`-th) has the cap and tree of the one the loop's table keeps (`tb.cm0`, read off the
 loop's `Level0` by `Finish.commitOf`), as `Loop.repCut_eraseZ` asks of the two commitments:
 
@@ -101,7 +101,7 @@ theorem leafAt_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j
     (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1) j hq').trans
     ((swExeOf_inl (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1 j ⟨q, hq'⟩).trans
     ((exeOf_inl PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w t cz j ⟨q, hq'⟩).trans ?_))
-  rw [_root_.Flock.Firewall.Link.rows_eq] <;> rfl
+  rw [rows_linkIn, salt_linkIn x w t j hq, _root_.Flock.Firewall.Link.rows_eq] <;> rfl
 
 end Masked
 
@@ -115,7 +115,7 @@ open _root_.Flock (V F128 Stmt SessionSpec)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **The loop's table keeps the recheck's tree of `linkIn`** where `src` draws the tape's level 0: at rep stream
+/-- **The loop's table keeps the recheck's tree of `linkIn`** where `src` samples the tape's level 0: at rep stream
 `2j + r`, the level-0 commitment of the loop's table (`Loop.realOf`) has the layers `0, …, d − cap` of `Link.layer` over
 `Masked.linkIn`'s leaves at level 0 of table `j`'s `--zk` schedule, and the last as its cap. -/
 theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
@@ -171,7 +171,7 @@ variable (vs : finS.SwVals) (src : Msg → Flock.Wit → Tp → ℕ → V (Array
   (x : Msg) (w : Flock.Wit)
 
 /-- **Level 0's commitment from the views is the loop's table's**: at a statement in the masked scope with a witness,
-where the loop draws the tape's level 0 (`Level0Src`), at the session's schedules, wherever the views' commitments
+where the loop samples the tape's level 0 (`Level0Src`), at the session's schedules, wherever the views' commitments
 return `cms` and rep stream `k`'s table is `tb` (`RepAt`), `cms[k / 2]` has `tb`'s level-0 cap and tree. -/
 theorem cms_cm0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)

@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Circuit
 public import Definitions.Flock.Statement
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The compiled lowering: templates' rows, their placement in a statement, and programs of units
@@ -18,7 +20,7 @@ reading earlier columns and the constant. In the circuit it is one gate, `Op.row
   gates are those rows, read through a wiring of the unit's columns to the circuit's gates, with its `decode`.
 * `Placement`: unit `u`'s rows placed in block `o` of a statement (the block matrices' rows at the unit's computed
   columns read exactly its rows' columns, and its constant's rows read the pin); `PlacedSat`, placed up to the
-  matrices, in a statement every witness of the table satisfies. `UnitPlace` bundles a drawn unit's place in a table:
+  matrices, in a statement every witness of the table satisfies. `UnitPlace` bundles a sampled proof block's place in a table:
   its rows, its instance, its block and its columns.
 * `Prog`: a program of units, each a template's rows appended after the gates it reads, with its circuit
   (`Prog.circuit`), partition and rows, and `Prog.RowsWire`, the wiring that makes each unit an `IsRowsUnit`
@@ -119,7 +121,7 @@ def PlacedSat (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : 
     Placement { S with A₀ := A, B₀ := B } R col ∧
       ∀ z : Witness S.m, S.Satisfies z → ({ S with A₀ := A, B₀ := B } : Statement).Satisfies z
 
-/-- **A drawn unit's place in a table**: its template's rows, its instance in the circuit, and the
+/-- **A sampled proof block's place in a table**: its template's rows, its instance in the circuit, and the
 block and columns where the table's statement holds its rows. The unit's input columns on one gate
 carry one value in every witness satisfying the statement (`aliased`): they copy one source's
 position, or forced-zero rows. -/

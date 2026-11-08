@@ -6,6 +6,7 @@
     circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
+    circuit-check --as-call --ranges SparseMlaSplit_v1              the spots of a family's RANGES rule (`ranges`)
     circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
@@ -20,7 +21,9 @@
     circuit-check --batch                                           batch invariance of the v0 registration's templates
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
-``"mode": "by-calls"`` and names the target each callee relies on.
+``"mode": "by-calls"`` and names the target each callee relies on.  A family a sidecar registers over a range of statics
+(``RANGES``, `ranges`) is checked at that rule's spots when ``--ranges`` names it, and the report's ``ranges`` says whether
+each rule holds: every spot checked, and each passing.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
@@ -37,11 +40,15 @@ report holds the binding's read set and what it read beyond what `READS` declare
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
 its time went (``seconds_by_check``, `checks.spent`).
+
+A run that records builds the C++ models first, in a process of its own (`prebuild`), and exits 2 before any check when
+they don't build.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -53,6 +60,7 @@ from . import ambient as AM
 from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
+from . import ranges as RG
 from . import shard as SH
 from . import sidecars as SC
 from . import structural as ST
@@ -644,9 +652,11 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
     `Killed` for ``fn(item)``, with the peak it reached; the others run on.  With ``weight`` and ``budget`` an item starts only
     while the weights of the items running and its own add up to at most ``budget`` (an item heavier than ``budget`` runs
     alone), taken in the order given, the first that fits; a callable ``budget`` is asked again each time items are admitted.
-    The zygotes end with the iteration."""
+    The zygotes end with the iteration; ``jobs`` under 1, which would start no item and wait forever, is refused."""
     from multiprocessing.connection import wait
 
+    if jobs < 1:
+        raise ValueError(f"parallel: jobs={jobs} starts no item, so none would ever finish: give 1 or more")
     weigh = weight or (lambda _: 0.0)
     limit = (lambda: float("inf")) if budget is None else budget if callable(budget) else (lambda: budget)
     zs = zygote if isinstance(zygote, list) else [zygote or Zygote(fn, initializer, initargs)]
@@ -719,8 +729,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) is listed in `HEAVY`
     with its peak: a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
     less this process's RSS), counting an unlisted target as `HEAVY_GB`; one heavier than that still runs, alone, and the log
-    says it does not fit; the listed targets go first, heaviest first.  The sum counts each listed process's copy of the task
-    list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
+    says it does not fit, or, when the budget is under `HEAVY_GB` and so every target runs alone, says why and what to do
+    (`short_budget`; on stderr without ``log``); the listed targets go first, heaviest first.  The sum counts each listed
+    process's copy of the task list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
     `HEAVY_GB` can still break it: the process it gets killed in is reported as that target's failure (``circuit-check/killed``,
     with its peak), the other targets run on, and its peak belongs in `HEAVY`.  Once ``mem_file`` holds a number of GiB
     (`granted_gb`: check.py writes its slot's mem= there when every step beside circuit-check has ended), that number takes
@@ -1169,13 +1180,20 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         init = (specs, opts, everything, as_call, tracing)
         budget = budget_gb(mem_gb)
         peaks = heavy()
+
+        def weigh(i: int) -> float:
+            return peaks.get(tasks[i][1], HEAVY_GB)
+
         # a by-calls root has no gates, but its check builds the sidecar targets its callees rely on (`by_calls.relied`), which
         # no process it is forked from holds when their bindings were built apart: it starts with the largest
         order = sorted(todo, key=lambda i: (-peaks.get(tasks[i][1], 0), tasks[i][1] not in TG.BY_CALLS, -_gates(tasks[i])))
-        if log:
+        if (short := short_budget(budget, mem_gb, jobs, mem_file is not None and granted_gb(mem_file) is None)) is not None:
+            (log or (lambda s: print(s, file=sys.stderr, flush=True)))(short)
+        elif log:
             for i in order:
-                if peaks.get(tasks[i][1], 0) > budget:
-                    log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
+                if weigh(i) > budget:
+                    log(f"warn {tasks[i][1]} peaked at {weigh(i)} GiB, over the {budget:.1f} GiB budget: it runs alone")
+
         def now() -> float:
             return (budget if (g := granted_gb(mem_file)) is None else budget_gb(g)) - sum(z.grown_gb() for z in zygote or ())
 
@@ -1184,7 +1202,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
 
         owner = _owners(plan, [tasks[i] for i in todo], len(zygote)) if plan is not None and zygote else {}
         for x, got_, peak, start in parallel(_work, _batched(order, tasks), jobs, _init, init, budget=now, zygote=zygote,
-                                             weight=lambda x: max(peaks.get(tasks[i][1], HEAVY_GB) for i in members(x)),
+                                             weight=lambda x: max(weigh(i) for i in members(x)),
                                              route=lambda x: owner.get(_info(tasks[members(x)[0]]).get("via"))):
             each = got_ if isinstance(x, tuple) and not isinstance(got_, Killed) else [got_] * len(members(x))
             for i, g in zip(members(x), each):
@@ -1277,6 +1295,24 @@ def budget_gb(mem_gb: int | None) -> float:
     holds now (its own copy of the task list)."""
     mem_gb = slot_gb() if mem_gb is None else mem_gb
     return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
+
+
+def short_budget(budget: float, mem_gb: int | None, jobs: int, grant: bool = False) -> str | None:
+    """What `run` says before its checks when ``budget`` (`budget_gb` of ``mem_gb``) is under `HEAVY_GB`, what a target with
+    no recorded peak is counted at: each target then runs alone (`admit`), past ``mem_gb`` when the budget is negative.  It
+    names what leaves so little and what to do; ``grant``: a ``--mem-gb-file`` may raise it later.  None when one fits."""
+    if budget >= HEAVY_GB:
+        return None
+    rss, mem = _rss_gb() or 0.0, slot_gb() if mem_gb is None else mem_gb
+    alone = (f"leaves its targets {budget:.1f} GiB, under the {HEAVY_GB} GiB a target with no recorded peak is counted at, "
+             f"so each runs alone" + (", and the run is over its memory before any starts" if budget < 0 else "")
+             + (" (until --mem-gb-file grants more)" if grant else ""))
+    if mem is None or memory_gb() < mem - rss:
+        return f"warn circuit-check: this machine has {memory_gb()} GiB free, which {alone}: free memory or run elsewhere"
+    return (f"warn circuit-check holds {rss:.1f} GiB after building its task list, and --mem-gb (else its check slot's "
+            f"{SLOT_MEM_ENV}) allows circuit-check {mem} GiB in all, which {alone}.  Build the catalog's records first "
+            f"(circuit-check --all --records-only --cache DIR) and run from them (--catalog-units --cache DIR), so this process "
+            f"builds no Definition's body, or raise --mem-gb to {math.ceil(rss) + HEAVY_GB * max(1, jobs)}")
 
 
 def granted_gb(path: Path | None) -> int | None:
@@ -1454,6 +1490,36 @@ def _batch_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if bad else 0
 
 
+#: what `prebuild` runs in a process of its own: every C++ model of `verity.ml.definitions.numerics` (`twins.preload`), then the
+#: registries, which build there whatever else they build on first use
+PREBUILD = ("import json\n"
+            "from verity.ml.definitions.numerics import twins\n"
+            "from circuit_check import targets\n"
+            "built = twins.preload()\n"
+            "targets.load_registries()\n"
+            "print(json.dumps(built))\n")
+
+
+def prebuild(log: Callable[[str], None] | None = print) -> str | None:
+    """`PREBUILD`, before the tracer starts: None once it built every model, else why not, with its exit status and its error's
+    last line.  A model left unbuilt is compiled by the first check that runs it, a program the tracer cannot see, so that
+    check's verdict is never stored (`cache.untraced`).  Everything it writes is written here too."""
+    t0 = time.time()
+    r = subprocess.run([sys.executable, "-c", PREBUILD], cwd=REPO, capture_output=True, text=True)
+    lines = r.stdout.splitlines()
+    if said := lines if r.returncode else lines[:-1]:
+        print("\n".join(said))
+    if r.stderr:
+        sys.stderr.write(r.stderr)
+    if r.returncode:
+        end = r.stderr.strip().splitlines()[-1:] or ["it wrote no error"]
+        return (f"the C++ models' prebuild exited {r.returncode} ({end[0]}; its output is above), so a check would compile them "
+                f"untraced")
+    if log:
+        log(f"circuit-check: the C++ models are built ({time.time() - t0:.1f}s): {', '.join(sorted(json.loads(lines[-1])))}")
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="circuit-check", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
@@ -1482,6 +1548,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="hold a Definition target to the partition invariant as a Call, or not (--no-as-call) (default: when its "
                          "family is a Call of a served Program, `targets.is_call`, which refuses one it can't decide without "
                          "building the whole catalog)")
+    ap.add_argument("--ranges", nargs="*", metavar="FAMILY", default=None,
+                    help="also check the spots of each sidecar's RANGES rule for these families (every rule's when none is "
+                         "named), as named targets (`ranges`); give the targets before it")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
@@ -1544,6 +1613,8 @@ def main(argv: list[str] | None = None) -> int:
         return _batch_main(a, ap)
     if a.combine:
         return _combine_main(a, ap)
+    if a.jobs is not None and a.jobs < 0:
+        ap.error(f"--jobs {a.jobs} would start no target and wait forever: give 1 or more, or 0 for one per core")
     if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
         ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
@@ -1564,6 +1635,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--update-reads writes the read sets of the catalog bindings a run checks from their records: give --all, "
                  "--catalog-units and --cache DIR, and no target, --no-cache, --update-pins, --shard, --records-only or "
                  "--bindings")
+    if a.ranges is not None:
+        try:
+            a.targets = [*a.targets, *(s for s in RG.spots(a.ranges) if s not in a.targets)]
+        except (LookupError, ValueError) as e:
+            ap.error(str(e))
     if not a.targets and not a.all:
         ap.error("give a target or --all")
     shard = None
@@ -1585,11 +1661,9 @@ def main(argv: list[str] | None = None) -> int:
         progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
-        # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
-        prebuild = ("from circuit_check import targets; targets.load_registries()\n"
-                    "try:\n    from verity.ml.definitions.numerics import twins\nexcept ImportError:\n    twins = None\n"
-                    "if twins:\n    twins.preload()        # the three C++ models, which checks otherwise compile on first use\n")
-        subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
+        if (why := prebuild(log=None if a.quiet else print)) is not None:
+            print(f"circuit-check: refused: {why}", file=sys.stderr)
+            return 2
         CC.trace(REPO)
     jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     if a.records_only:
@@ -1708,13 +1782,23 @@ def _cache_lines(rep: dict) -> None:
 
 
 def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what: str | None = None) -> int:
-    """Print the report's verdict, each failure, each warning and a last line counting ``what`` (default: its targets); write the
-    report to ``out``; and return the exit status."""
+    """Print the report's verdict, each failure, each warning, each range rule a spot of which the run checked
+    (`ranges.section`; a shard's report has none, since the rule's other spots may be in other shards) and a last line counting
+    ``what`` (default: its targets); write the report to ``out``; and return the exit status.  A rule that doesn't hold fails
+    nothing itself: a failed spot is its own target's failure, and a run may check only some spots."""
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
+    if "shard" not in rep and (rs := RG.section(rep["targets"])):
+        rep["ranges"] = rs
+        for r in rs:
+            why = [f"{len(r['failed'])} failed"] * bool(r["failed"]) + [f"{len(r['missing'])} not checked"] * bool(r["missing"])
+            skipped = sorted({c for cs in r["unchecked"].values() for c in cs})
+            print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
+                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)")
+                  + (f"; {len(r['unchecked'])} spot(s) passed without running {', '.join(skipped)}" if skipped else ""))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}

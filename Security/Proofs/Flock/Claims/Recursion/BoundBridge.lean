@@ -1,6 +1,47 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
 public import Proofs.Flock.Claims.Recursion.BoundRoute
+public import Proofs.Flock.Claims.Recursion.BoundRun
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The bridge at the bound record (option (d))
@@ -26,7 +67,7 @@ sees what `E^rep` at `IVStar` sees, off the runs that open otherwise (`Bound.Bad
 
 At the deployed bound record `ans` is a coin's bytes, which a decoder inverts, so the bridge holds there at every
 choice the code side makes (`RecDeploy.bridge_bdDeployed`), which `KSBoundRouteCols`' route takes
-(`RecDeploy.ksBoundRoute_of_bridge_cols`, at the deployed outer relation `RecDeploy.ksBoundRouteCols_outer`).
+(`RecDeploy.ksBoundRoute_of_bridge_cols`); no theorem takes it at the deployed outer relation.
 -/
 
 @[expose] public section
@@ -263,8 +304,8 @@ theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Tra
   · rw [ite_eq_right hv, ite_eq_right fun h' => hv ((h d₀).1.2 h')]
     rfl
 
-/-- **An event at some draw `E^rep` reruns at is at most `1 + m·k` times as likely as at one draw** (Wald's identity at
-the event's indicator as the weight), over a tape, the judged draw and the waits' draws. -/
+/-- **An event at some sample `E^rep` reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's identity at
+the event's indicator as the weight), over a tape, the judged sample and the waits' samples. -/
 theorem Pr_exists_rerun_draws {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
     (run : Ω → D → Trace) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
     (Q : Ω → D → Prop) :
@@ -745,7 +786,7 @@ theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : �
 /-- **`E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus
 `N_I` times one run's chance to be bad**: off the bad runs `E^rep` reruns at, it sees at `DE` what it sees at
 `IVStar` (`openRun_rel`, `openRun_seen`), and the judged run is the plurality prover's, accepted; a bad rerun costs
-`N_I` times one draw's (`Pr_exists_rerun_draws`). -/
+`N_I` times one sample's (`Pr_exists_rerun_draws`). -/
 theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (ℕ × Col) → List T)
     (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤

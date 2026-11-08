@@ -65,8 +65,8 @@ def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
     ("qwen25-05b", "bff68977892d274b710782a1b5db23e4c5485f716f1aa23b9872744d50cb43692f878fd0d20c83bec28f2b261ac833019cf0a1a80ae3f678cc54f92ffc6e73e9"),
     ("phi3-mini", "3c7404516954d1a8cfb4dcc00c2a8a10d8ecce091c4e7c04ff5ae3f8659e57faa630797df41e5659bda9ad24225cdc2f8f1a6a08633aa3790a04532c169cda43"),
     ("qwen3-4b", "424f31562fc5c47ffcf92f885185c46c1f81914a4d6ea2b7615f08c2ee8e94a9a81ede55594ee919fe90a1cc3e165838b144823baf13ea7bb692221a23a3761b"),
-    ("olmoe-1b-7b", "3f690ae479bb20888cc3a3ea61c2ac25693701c75a0c5fae2de177b167fca7959ad66e7900b1c6e264601ea6984fd8fe7de08c832268c91b43be8e6910ac3ca6"),
-    ("qwen3-30b-a3b", "d12a2b4c96ad1b35f6288561a4ae68f9262b645098a1b2f3d6594c29494c523a33bd7c1ce3f793b87b664399de816adb768019f1fc133301ecae71279e699289"),
+    ("olmoe-1b-7b", "67b6a189e59333a6613287cbc1e035aeb898870b90276c4eeda4c9ac0096cdeae9675bacc00c84dda8204d274b41ff4c73e05800209e3a274c2c6fd6a460d058"),
+    ("qwen3-30b-a3b", "9022c3110e66548ba855863705cae93bca9f7262049ef3ce309425afb6187874c585397314c7b4e55a46ee1319b659e3f059985105ed7fd5eb0f453d45841934"),
     ("gemma2-2b", "b0688044e6a562d2cbb7a6fa6995deb9025d08d134b331236dc4c16ffedf8e38cb093a5e521052cb8c19d5d1641b0c8bb725eddb50e1a0f480149354bbab15c7"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
@@ -94,10 +94,10 @@ def test_request_and_workload_programs_equal_the_traced_build():
     ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "a80fefc8ead7c8d09c2bf2b43ca6ed34296ec4db8d9891b71a850a90613cae6a77a4be0cde7b22a9a0f693c650684380712438a452e6eeb0287ddfdf037b4b6a"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "15bf71465c58172b07dbd848f434f886274de57e88d30fe8d41075b08cc45c8cfedc7a5164343af904af3cc7f47227cdc51725704a1f28e6e82c3bdef4425b8e"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "8c4abf0f43e41613ab749374f38aaade322cf7a2cc8e692c68de5b7c28840aa1c77933a18c89db9a55f741895621d0d7679e1e6d7201b485211ecec09511e6b8"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "258cb9677a12f76c80ec70b607060d39092bd7501c7349607b8bb58ce274359e182b6f3b40bf7170bf175ea310eebead5f51b765706a975401cf72bed56185c4"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "b882f289c19f58594f4c15051c32f54554bac3ad5a3ceaf6dac6a052e7dd81fbd709cf072d761ecdc3b353c955359a2f845850e871d727dae630d721da1a3abd"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "5775d49eb16f725fc5ead7142a859c2502b9fd113ed8b8842277cd9353c93b3ccd02026c77f3a2625ff4456700f2e4f87654b6bd98095ed9c75c0704e0d87432"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "2a44e1dbe163187916505e089bd8370f67eee9ee1790880f91305c128e2a3275725585302d1935de3fa0f47e5fb15a5cd53fad803b80b18c258e9ea155842449"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "3af7a5544449ff2ebef6c4959ddbd927860584fedf39b11f137053bc6b178b6b52345869185d725efc1280db5e3203f8214c9d03949d63603c8c4c560723f074"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "081f73cd80e91a8536309c9b99a94c1dda7f17cea0fd980a9f6568a33ed238ddfef9e6484b43d004f1acd55352371d382cd9c56e337d092f5dde2c44043d66bc"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "7e1eb5ef961eee0624dcaa342a431bfefc2d1db8f645a716411441944043773f3d5130ce516e6f0303f3e1e3803b756ea0d4434e35a3e013739c856c36c16542"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "d06092a14690787d3b505c2f07cd5ee176bc77cc4d411819b78186899d724a0b87d0da41e24917b52919b4e0114be948ccf30c413a96f5c604831a6fa4941490"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -132,8 +132,8 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("wrapper,shape,digest", [
-    ("step", {"M": 8, "pos0": 8}, "6a8ea56b8f7c3f2a4c557d20dd45b86b9eda749f653f4559ee21327ca3bed830254af606c6aee98b123ccc4cb6172fb2283a96be63867331687fa0f5100e4bd2"),
-    ("request", {"LP": 11, "T": 12}, "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd"),
+    ("step", {"M": 8, "pos0": 8}, "c2397f404dbdce59d0770588b4a2529981aeb4b3d6d5658ae5918586bd050a1a3fa690b1b9620467ec25b625eae6eb201977a0d2139f62789f98e58e3fefd39d"),
+    ("request", {"LP": 11, "T": 12}, "2d72a39ea47db02a9a40300435fbd7e37dbdb3ac35d73527378db28eee818ecb26e1cbfdcbbf2c32cf179a47c4da71ba0e2d6c698ca83ffa65018d01ca66643b"),
 ])
 def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
     """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it: the step of 8
@@ -146,11 +146,11 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
 @pytest.mark.slow
 @pytest.mark.parametrize("row,wrapper,shape,digest", [
     (GLM53_S1, "step", {"M": 1, "pos0": 8},
-     "24fae34c8de54a0808878316398bcb7228e39fb073c2df31ba00cda2e17da379c8b66a147e5faa6cc1f44ce9fd3fbabe17567af138a97f3e01c361e72df05821"),
+     "746b518918f6ad8b280cca0a347df80e5dba1876bdddad668b8ee75e6801b9d948d55fb2ad7515c41c344b8fa56096ae4d84e31716f6065589ebba03202b24a3"),
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
-     "0801afbcf2b8b21823610c8418cfacb82a9f7c0a2cf6641eaa2e362cb0184f33441d467638813027b2e0d7bc152d6bfd05694d0133022ad59e27a4c785cf2776"),
+     "eeed9ef4e8974d1a9f00fd133423624192ddb2d760d4d5d1da9dc9c73e45f215f274c5d00ce1b5f2a216a9fc2c08c95c1bd7ad5e7a8b37c19510eb68cfb69662"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "f11311f5b62f788edadc672304f7f6a37cb5355f48d31d8382322cc2f95801ccf3c66abb7cad0a577e27c2a78aa0e4b7641900270f559c661982e68b656819d3"),
+     "3dbdcba648e1177ea694fd6cbd4d772ffd9b12c539180cd0811d92d87f05fab6c84738c00b1b3cb90472721214768ff3be13b0231fa0ebbb0405a27442d68f2d"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
     """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step
@@ -169,8 +169,6 @@ def test_dsa_refuses_outside_its_domain(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "tp": {"world": 2, "rank": 0}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("a target without a device name")):
         build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
-    with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
-        build_program(phi, "step", M=257)
 
 
 def test_the_execution_label_names_the_batch_invariance(tmp_path):

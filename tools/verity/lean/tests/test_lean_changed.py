@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -77,6 +78,24 @@ def fast(tmp_path, monkeypatch):
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     return root, tree, calls
+
+
+def test_a_slot_tree_linked_to_a_removed_directory_is_made_again(fast, tmp_path, monkeypatch):
+    """A slot's tree that links to a directory removed since (a node's cache moved to a larger volume, then cleaned) is made
+    again at the link's target, where `mkdir` on the link itself raised FileExistsError and failed every run on that slot."""
+    target = tmp_path / "volume" / "lean-records_build-1"
+    link = tmp_path / "cache" / LC.RECORDS / "build-1"
+    link.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(LC, "records_tree", lambda: link)
+
+    def sync(_closure, _files, t):
+        (t / "pkg").mkdir(parents=True, exist_ok=True)
+        (t / "pkg" / "lean-audit.json").write_text(OLD)
+        return 0
+
+    monkeypatch.setattr(LC, "sync", sync)
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out") == 0
+    assert link.is_symlink() and target.is_dir(), "the link stays and its target is made"
 
 
 def test_a_recorded_update_keeps_the_regenerated_record_in_the_run_outputs(fast, tmp_path, monkeypatch):
@@ -444,6 +463,65 @@ def test_a_package_failing_for_another_reason_keeps_no_record_though_update_wrot
     assert not any(f"commit it over {S}/{LC.LOCK}" in s for s in said) and any(f"{S}: its records fail" in s for s in said)
     got = outcome_line(said)["records"]
     assert (got[S], got[P]["outcome"]) == ({"outcome": LC.FAILED, "inputs_key": got[S]["inputs_key"]}, LC.REGENERATED)
+
+
+def unwitnessed(h: str) -> str:
+    """`s/props`' lock whose guarantee G, which reads `S.DrawIsCoin`, has an `unwitnessed` entry: its statement's hash."""
+    return json.dumps({"guarantees": {"G": {"type_hash": h}}, "unwitnessed": {"G": h}}) + "\n"
+
+
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
+                                                                                            hold):
+    """#7831 renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
+    `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
+    record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
+    with `--update --moved` from the first, and both records are regenerated; with the requirer's first audit left without
+    them, as before, it failed there, never reached `regenerates`, and the PR could not pass its records."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    (root / P / LC.LOCK).write_text(unwitnessed("old"))
+    moves = tmp_path / "MOVES.json"
+    moves.write_text(json.dumps({"S.DrawIsCoin": "S.SampleIsCoin"}))
+    fake, mine = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        if argv[1:2] != [str(LC.AUDIT_PY)] or os.path.relpath(argv[-1], kw["cwd"]) != P:
+            return fake(argv, **kw)
+        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        moved = json.loads(Path(argv[argv.index("--moved") + 1]).read_text()) if "--moved" in argv else None
+        mine.append((update, moved))
+        if moved is not None and not update:
+            return type("P", (), {"returncode": 2})()                      # check.py: --moved goes with --update
+        entry = json.loads((at / LC.LOCK).read_text())["unwitnessed"]["G"]
+        same = entry == "new" or (entry == "old" and (moved or {}).get("S.DrawIsCoin") == "S.SampleIsCoin")
+        fails = [] if same else ["witnesses.unwitnessed-changed: G changed since `unwitnessed` listed it"]
+        if update and same:
+            (at / LC.LOCK).write_text(unwitnessed("new"))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": [
+            {"package": str(at.resolve()), "failures": fails}]}) + "\n")
+        return type("P", (), {"returncode": 1 if fails else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, moved=moves, out=out, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True)] and mine == [(True, {"S.DrawIsCoin": "S.SampleIsCoin"})], \
+        "the requirer's one audit takes --update --moved"
+    assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
+    assert any(f"{P} requires {S}: check.py --update --moved on it from its first audit" in s for s in said)
+
+    calls.clear()
+    mine.clear()
+    said.clear()
+    for q, text in ((S, record("old", ["proofs"])), (P, unwitnessed("old"))):
+        (root / q / LC.LOCK).write_text(text)
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out2", log=said.append) == 1
+    assert mine == [(False, None)], "without --moved the requirer fails on its first audit and is not updated"
+    assert outcome_line(said)["records"][P]["outcome"] == LC.FAILED
 
 
 def test_a_package_beside_two_that_fails_otherwise_in_one_ends_failed_and_its_record_goes(pair, tmp_path):
@@ -890,12 +968,13 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
-def test_try_refuses_without_a_build_slot_naming_the_nodes_that_have_them(trying, tmp_path, monkeypatch):
+def test_try_refuses_without_a_build_slot_naming_how_to_list_the_pools(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
-    assert calls["build"] == [] and any("vy-nebius-cpu-1" in s and "nothing ran" in s for s in said)
+    assert calls["build"] == [] and any("lean_slot.py --status" in s and "nothing ran" in s for s in said)
+    assert not any(re.search(r"\b(vy-nebius|cpu-\d)", s) for s in said), "a refusal names no node"
 
 
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):

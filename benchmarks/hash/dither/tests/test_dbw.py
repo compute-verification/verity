@@ -50,7 +50,7 @@ def test_registered_raises_the_sides_error():
 
 
 def side_doc(i: int, t: int, rows: list[dict]) -> dict:
-    """One side's doc over two reps, its on blocks inside their sessions' passes, the dither arm 1.5 times slower on."""
+    """One side's doc over two reps, its on blocks inside their runs' passes, the dither arm 1.5 times slower on."""
     blocks = []
     sessions = {0: {"passes_ns": [[t, t + 20 * MS]], "accepted": True, "failure": None, "pace": None,
                     "memory": {"share": 1.0}, "paced": {}}}

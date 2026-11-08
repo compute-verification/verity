@@ -1,14 +1,27 @@
 module
 
 public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod
-public import Proofs.Flock.EndToEnd.Period
-public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.EndToEnd.Period
+import Proofs.Pouw.Prob
 
 /-!
-# Proof of the integrity audit of a period from C-Flock's integrity audit over a monitoring period
+# Proof of the integrity audit of a period from Flock's integrity audit over a monitoring period
 
-At each value of the other coins, a draw of the sampled audit's own coins on which it accepts while more than `ε` of
-the units are wrong is one on which every sampling block is accepted and the faulty proof blocks total more than
+At each value of the other coins, a sample of the sampled audit's own coins on which it accepts while more than `ε` of
+the units are wrong is one on which every sampling block is accepted and the incorrect proof blocks total more than
 `ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityHorizon` bounds; the realization's `law` carries the
 bound from the period's game to the uniform coins.
 -/
