@@ -10,8 +10,11 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 72c5474e54d5bb12bcc24a332c086602daa066297192e335c66418a754ae7da1  ../../../../../Security/Proofs/lakefile.toml
 ff93ba694c8590e42a4a230477990c192059d3929935f71021592c8eb1217c89  ../../../../../Security/Proofs/lake-manifest.json
 6eb8aa85e0636d2d44525e655924b19b5f2554f378d4db1f9f5966c8a94fea2e  ../../../../../Security/Definitions/Pous.lean
+004fecb2ad265eb15d7e55aef8350790d4eb66fe7e24038153637a8db8a5d066  ../../../../../Security/Definitions/Core/Game.lean
 1f3066f54f873a4ce22cbd07956b486c8cb25d9b9de6785466248c742265b32d  ../../../../../Security/Proofs/Pous/Statements.lean
 3990519592c3bc12d2be58e66bd7f2f053e673be369bd28696f82c0df4495740  ../../../../../Security/Proofs/Pous/Sanity.lean
+a44731c6ea5ffbcbef0449ceeaf6852beb80e9436a42d077917fd53167fe7538  ../../../../../Security/Proofs/Pous/Prob.lean
+21ba83b23b5ac2fca1aad1868fcd32b9311a1724d8d069ce08b15d463bb47d67  ../../../../../Security/Proofs/Core/Game/Basic.lean
 7669d64daa672e7bdab848bfae5934a14cd581ba41e271b57f6352ffb92de738  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
 ffca7c68c71e2231322fb3f157e04bd0f6704cb69fedccf80c661a6467f19ead  ../../../../../Security/Definitions/Pous/Accounting/GradedMeets.lean
 1e194b22d0d75e9d667d3b9f3a034170f4d5b2e21e46ab985e24d23b94736020  ../../../../../Security/Definitions/Pous/Accounting/LemmaA.lean
