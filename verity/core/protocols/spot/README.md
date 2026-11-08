@@ -120,7 +120,7 @@ but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
 soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
 
-**What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has miss probability
+**What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
 stratum `s`, so a subcircuit that is incorrect in every proof block is never missed. Under the work sampling design, incorrect proof blocks
 doing a fraction `ε` of the credited work have miss probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
