@@ -4357,6 +4357,9 @@
    "honest": ["Verity.SecurityProofs.Counting_honest"],
    "nontrivial": "Verity.SecurityProofs.Counting_nontrivial",
    "kind": "exclusion"
+  },
+  "Flock.SecurityProofs.SpotExfilTwo": {
+   "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5407,6 +5410,11 @@
   "Accounting.SecurityProofs.Remote.PooledSample": {
    "type_hash": "ffdcb6b6df33d9e044a1a6d7dc12c82655d3fd9a736b18b5b85e39cfc7346e4b",
    "unfolded_hash": "fac9dbd510da825e1328fe609c26cab7f524a838590ec2e9ec5f497fe134909f"
+  },
+  "Flock.SecurityProofs.SpotExfilTwo": {
+   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
   }
  },
  "witnesses_assumed": {
@@ -5822,7 +5830,7 @@
    "Proofs.Flock.RecGeneric": "the generic recursion's proofs and its instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its round order (`SamplingDeploy.codeTwoAt`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted",
-   "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantee (`Flock.Guarantees.SpotKSTwo`) states KS at SPOT[Flock]'s code record (`SpotFlock.code`, `Held`, `two`, `rs`, `iroots`) and at a session layout's facts (`Layout`, `Embeds`, `FrameIs`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/ (PRF-467), which removes this entry",
+   "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantees (`Flock.Guarantees.SpotKSTwo`, `SpotExfilTwo`) state KS and its exfiltration bound at SPOT[Flock]'s code record (`SpotFlock.code`, `Held`, `two`, `rs`, `iroots`) and at a session layout's facts (`Layout`, `Embeds`, `FrameIs`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/ (PRF-467), which removes this entry",
    "Proofs.Flock.ZkAny": "the session loop's any-values guarantee states its release at the unswitched prover, the deferred release and the held relay (`RefSession.unP`, `RefSession.UnCausal`, the rounds of `LeanRelease.TrustsStop`), still in Proofs; C-Flock is excepted until its spec is extracted"
   }
  },
@@ -15474,6 +15482,23 @@
     ]
    },
    "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
+  },
+  "Flock.SecurityProofs.SpotExfilTwo": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Claims.Sampling.InScopeTwo",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "SpotFlock.Embeds",
+     "SpotFlock.FrameIs"
+    ],
+    "reads": []
+   },
+   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6"
   },
   "Flock.SecurityProofs.SpotKSTwo": {
    "owner": "@proofs",
@@ -26091,7 +26116,8 @@
    "Verity.SecurityProofs.MemoryChecked": "lemma: offline memory checking over an abstract access log (Verity.MemCheck.Checked, Security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Accounting.SecurityProofs.RegisteredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
    "Verity.SecurityProofs.Counting_honest": "completeness: Counting's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, counting the three operation gates at the weights 1, 1 and 2 with the allowance q = 2, its premises hold at c = 2 and its bound is attained: each proof block weighs q, so (c / q) * 4 = 4 = c * B, and the slowdown bound is attained at every T0 > 0. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
-   "Verity.SecurityProofs.Counting_nontrivial": "lemma: Counting's nontrivial lemma: at the same Honest, with gate 3 weighing 3, every premise but the allowance holds at c = 2 and q = 2, the second proof block weighs 3, above q, and the bound fails, (c / q) * 5 = 5 > c * B = 4. A counterexample at an instance, not a property of a Lean function."
+   "Verity.SecurityProofs.Counting_nontrivial": "lemma: Counting's nontrivial lemma: at the same Honest, with gate 3 weighing 3, every premise but the allowance holds at c = 2 and q = 2, the second proof block weighs 3, above q, and the bound fails, (c / q) * 5 = 5 > c * B = 4. A counterexample at an instance, not a property of a Lean function.",
+   "Flock.SecurityProofs.SpotExfilTwo": "frozen (obligation,no-function): exfil_of_ks on SpotKSTwo at SPOT[Flock]'s two-stage code (SpotFlock.code): what an accepted run serves is in the influence set at δ at SpotKSTwo's errors, and that set has at most Σ_{T admissible} 2^{b(T)} members, from the same two facts of a session layout (SpotFlock.Embeds, SpotFlock.FrameIs), open until a built two-stage layout and frame prove them; it reads SpotExfilTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -49398,9 +49424,10 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "3c22a7901c6fc800ac760c7faa9138d8171e12d1c63cee3969fc17f8310e8be5",
+   "digest": "d919361d0f44aaa9c3f7f872c471cc87096bff2cb202f2bad407b4769ab79614",
    "definitions": {
     "Flock.Guarantees.SampledKSTwo": "b2e77b5ff15af3a7d04cc922923581fed00a6caeefa7215686649e00a82fce36",
+    "Flock.Guarantees.SpotExfilTwo": "e500e8102d7bc9b9ea40aae7348365475f2fdbcfd13e16460f3fe5a36d0294b9",
     "Flock.Guarantees.SpotKSTwo": "9ccc9916f4b5b1013fbf0da14a3de1204f7b5accc0669fe5980d63cbd5fb3db4"
    }
   },
