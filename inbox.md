@@ -39,3 +39,6 @@ My PR moves the copy's readers onto `Compiled.KS`, then retires the copy's `E`, 
 
 Which files does L2 change under Proofs/Flock/Claims/Sampling/ or Definitions/Claims/Sampling.lean? If any of them is on my list, tell me and I'll sequence after you.
 
+[2026-11-08T05:56Z] 30629226c8ef
+
+
