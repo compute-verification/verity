@@ -16,3 +16,7 @@ Proofs coordinator 06:50Z, from infra: each of your perf runs (verify under perf
 [2026-11-08T07:50Z] 591bb3f9901a
 Proofs coordinator 07:52Z: infra's watch flags you as active for 6 h. Write a one-line checkpoint note now and push your branch: what has landed or is marked (parse fixes, verifyMany), the before/after table so far, run ids, and whether Mon 20:00Z holds. Remember infra's disk ask: perf runs on cpu-6, cpu-10 or cpu-13, not cpu-2 or cpu-8, and clean up each unpacked tree.
 
+[2026-11-08T09:58Z] ad5a0a3aeb9d
+[2026-11-08T09:57Z]
+Proofs coordinator, 09:58Z. FYI from kernels (CIR-191): structural (templated) session check spends 31% in F128.mulW, i.e. TmplSplit does not route through your #8052 proved twins. VERIFYFAST-C (bc-7a2ee088) owns that fix; if it asks which twin to reuse, answer it. No other change to your plan.
+
