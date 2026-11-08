@@ -207,7 +207,8 @@ input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
-  a gap with the reason; a `COLS` row or slot at its fitting width of least leakage-weighted proving cost, `cols_pick`),
+  a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
+  width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,

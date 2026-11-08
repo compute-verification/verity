@@ -38,7 +38,7 @@ computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circui
 own word.  A Program row holds instances of a template when the template's word is the row's own Definition (its spec), or when the
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
-row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
+row is split into its N coordinates), or for a ``WIDE_COORDS`` family at N = c (its N / c coordinates of c outputs), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
 is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
 is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`) or a split part or the combine of the row's Definition
@@ -72,6 +72,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    -> ``out.<member>``, the row's output
                                    word n (`part_rows.read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
                                    v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
+  ``ScaledMmFp8BlockSharedScale_v1{K=..,N=c,G=..}``  likewise every coordinate j of c outputs (``WIDE_COORDS``, c a power of two
+                                   dividing G and the row's N): ``w[:, jc:(j + 1)c, :]`` and ``ws[:, jc // G, :]`` -> the row's
+                                   output words [jc, (j + 1)c)
   ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``  K-chunks
                                    (``KCHUNKS``) and split parts and combines (``SPLITS``), laid out by `kchunk_rows`, `split_rows`
                                    and `chunk_rows.reads`; always chunked, v2 bit rows, one index entry per row
@@ -91,7 +94,8 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole (``in0`` x -> its q and s: DeepGEMM's committed ``out.<member>``, FlashInfer's intermediates
                                    ``o0``, ``o1``, `part_rows.MIDS`), its GEMM in coordinates as ``COORDS`` (``in0``, ``in1`` q and s,
                                    committed or wired to ``o0``, ``o1``, `part_rows.wire`; ``in2``, ``in3`` ``w[n]``, ``ws[n // 128]``
-                                   -> ``out.<member>``, its y word n); packed ports (`part_rows`); one index entry per row
+                                   -> ``out.<member>``, its y word n; or c outputs wide as ``WIDE_COORDS``); packed ports
+                                   (`part_rows`); one index entry per row
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
@@ -136,7 +140,8 @@ from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS, SLICES,  # noqa: F401
-                                                    SPLITS, Template, _bind, part, template, unit_templates)
+                                                    SPLITS, WIDE_COORDS, Template, _bind, coord_width, part, template,
+                                                    unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
@@ -251,6 +256,8 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     if tp.layout == "cols":
         axis = COLS[spec_base(tp.word)]
         return int(S[axis]) // int(spec_statics(tp.word)[axis])
+    if tp.layout == "coord":
+        return int(S["N"]) // coord_width(tp.word)
     if tp.layout in CHUNKED or tp.layout == "rope":
         return int(S["NHEADS" if tp.layout == "rope" else "N"])
     raise ValueError(f"{t}: a {tp.layout} row's units are its group's, not its own (`grid`)")
