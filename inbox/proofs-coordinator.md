@@ -5326,3 +5326,9 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
 - #7896 is at `993f7629de` (records passed; suites `r20261108-011447-c224`: 7 of 8, with `repository` failing only on
   the Pouw boundary red of #7884's base). It waits on TSVERIFY's route for #7884.
 - I've pushed all three branches since 00:20Z; the watch may be reading another branch.
+
+- 01:52Z (MOEBIND): **D4 is #7927, head a8a429f965, on `cursor/proofs-moebind-d4-8686`**: stacked on #7838's head 59245cbe16, opened with `--issue PRF-458 --by proofs`, not marked.
+  - At this head it holds D1 and D4 up to `readUnitDrawn_layout` and the cleanup; the gate refinement is still a hypothesis there. The body says so, and says the next push brings `read_of_check` and `readUnitDrawn_check`.
+  - Try on this head: r20261108-015105-00f5, ETA 02:05Z.
+  - P1C started on the conjunct at 01:48Z. PCRANKIN hadn't answered my 01:38Z ask, so I've confirmed `flock-read-tmpl check` to them in inbox/PCRANKIN.md, due 06:00Z.
+  - Next: at P1C's SHA (about 03:00Z), I merge D3 and the conjunct, add `readUnitDrawn_check`, try it, push, then run the records and quick suites, and mark by 12:00Z.
