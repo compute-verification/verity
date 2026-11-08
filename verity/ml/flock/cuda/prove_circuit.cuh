@@ -95,21 +95,24 @@ typedef struct {
 // leaves are: a test vector against flock_merkle::hm96::leaf.
 extern "C" int flock_cuda_hm96_leaves(const uint8_t* x, const uint8_t* salts, long long n, const uint8_t* prefixes,
                                       const uint64_t* tables, uint8_t* out) {
-    const size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
+    std::vector<uint32_t> frag(2 * HM96_FRAGS);
+    hm96_fragments(tables, frag.data());
     uint8_t *d_x = nullptr, *d_s = nullptr, *d_pre = nullptr;
-    uint64_t *d_t = nullptr, *d_mid = nullptr;
+    uint32_t* d_f = nullptr;
+    uint64_t* d_mid = nullptr;
     if (cudaMalloc(&d_x, (size_t)n * 64) != cudaSuccess || cudaMalloc(&d_s, (size_t)n * 192) != cudaSuccess ||
-        cudaMalloc(&d_pre, 256) != cudaSuccess || cudaMalloc(&d_t, tb) != cudaSuccess || cudaMalloc(&d_mid, 16 * sizeof(uint64_t)) != cudaSuccess)
+        cudaMalloc(&d_pre, 256) != cudaSuccess || cudaMalloc(&d_f, frag.size() * sizeof(uint32_t)) != cudaSuccess ||
+        cudaMalloc(&d_mid, 16 * sizeof(uint64_t)) != cudaSuccess)
         return 1;
     cudaMemcpy(d_x, x, (size_t)n * 64, cudaMemcpyHostToDevice);
     cudaMemcpy(d_s, salts, (size_t)n * 192, cudaMemcpyHostToDevice);
     cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_t, tables, tb, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_f, frag.data(), frag.size() * sizeof(uint32_t), cudaMemcpyHostToDevice);
     hm96_midstates<<<1, 1>>>(d_pre, d_mid);
-    hm96_finish_leaves<<<(unsigned)((n + 127) / 128), 128>>>(d_x, (const uint32_t*)d_s, 0, n, d_t, d_mid);
+    launch_hm96_finish(d_x, (const uint32_t*)d_s, 0, n, 128, d_f, d_mid);
     cudaError_t e = cudaMemcpy(out, d_x, (size_t)n * 64, cudaMemcpyDeviceToHost);
     cudaMemset(d_s, 0, (size_t)n * 192);
-    cudaFree(d_x); cudaFree(d_s); cudaFree(d_pre); cudaFree(d_t); cudaFree(d_mid);
+    cudaFree(d_x); cudaFree(d_s); cudaFree(d_pre); cudaFree(d_f); cudaFree(d_mid);
     return e == cudaSuccess ? 0 : 2;
 }
 
