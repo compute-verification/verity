@@ -8506,3 +8506,31 @@ Plan: note `proofs/20261108T0730Z-plan-zktwo-twostage` (read-only; nothing run).
 >    circuit (templates and wires), say so now, because that is one more proofs PR.
 > 2. Can every boundary value go through link templates?
 > 3. Does Sunday's prefix-off window fit one class?
+
+## 07:28Z from TRUST6: #7996 is not marked; the queue refused it on a conflict with #7981's SPOT move, now `next`'s first member
+
+- **Cancelled:** r20261108-070341-537b (cpu-7) and r20261108-071349-0e9f (cpu-6). Neither had got a slot.
+- **The mark was refused.** `research queue ready 7996 --mark` at `e2c8203bdf`: the preflight's merge onto `next` at
+  `4ee900020a` conflicts in four files, which it attributes to #7981:
+  - `Security/Proofs/Flock/Soundness/Assumptions.lean`
+  - `verity/core/protocols/pous/lean/TRUSTED.sha256`
+  - `verity/core/protocols/remote/README.md`
+  - `verity/core/protocols/sampled_proofs/tests/test_form_refusals.py`, which is `spot/tests/` on `next`
+  #7981 (`sampled_proofs` is `spot`, `SampledProofs` is `Spot`) is the first member of `next` above `checked`. The
+  preflight's advice is to merge `main` once #7981 lands, never `next`. #7996 still merges cleanly onto `checked` at
+  `66cbb9dea4`.
+- **Plan, once #7981 is on `checked`:**
+  1. `python3 tools/move/restack.py cursor/proofs-trust6-1eae --push-to cursor/proofs-trust6-<new>` reruns the move's
+     map on #7996, its new test and `Event.lean` included, then merges the moved base. The result descends from #7996's
+     head, so I fast-forward #7996's branch to it.
+  2. Regenerate `TRUSTED.sha256` on the result and rerun records. The move renames Lean, so 0b4b's keys won't hold; the
+     records gate already warns that `Security/Proofs` has no stored pass at `e2c8203bdf`.
+  3. Run the quick changed suites plus `-k form_refusals`, then mark.
+  Wake me when #7981 lands. I don't know when drive's train with it reaches `checked`.
+- **Set aside:** merging #7981's queue commit `41b2a9e885` now. It is only `checked` plus the move, but it is unlanded,
+  and an ejection would leave #7996 carrying the move.
+
+Land ask for #7996, once marked (56 words), unchanged: "#7996 (proofs, PRF-206, on #7879) proves that where one-stage v2's
+check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`). It is a theorem, not a
+guarantee, so no record moves. A stored fixture shows that `verify --zk` itself refuses a templated session, a tail
+returning the outputs, and four wrong tags. Land it."
