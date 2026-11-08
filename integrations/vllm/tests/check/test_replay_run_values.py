@@ -1,5 +1,6 @@
-"""The replay of a DSA row past INDEX_TOPK (2,048 keys): its order is a value the run decides, the `run` field
-`<op_path>/topk_switches[t=P]` (a `run_values` identity), and the Program checks it.
+"""The replay of a `run` field: in the relation form of a DSA row past INDEX_TOPK (2,048 keys), the row's order is a value the run
+decides, the `run` field `<op_path>/topk_switches[t=P]` (a `run_values` identity), and the Program checks it.  No Program declares
+`run` now (a row past INDEX_TOPK selects in the mask form, `predict.dsa`), so the tests drive it from the stand-in instances below.
 
 A request's row of 2,050 keys flows end to end: its manifest (`query.required`) names the run value, the collector
 (`commit.committer.run_values`) commits the served order's Waksman settings under that name, the binding map
@@ -13,9 +14,6 @@ No replay row kernel is registered for DsaWaksmanOrder_v1 or DsaTopKLongRow_v1, 
 registry's own references (`dsa_topk.waksman_apply` over the row indices, `dsa_topk.canonical_ok`)."""
 from __future__ import annotations
 
-import gzip
-import hashlib
-import json
 import types
 
 import numpy as np
@@ -23,7 +21,6 @@ import pytest
 import torch
 
 from tests.check.test_commit_verdict_replay_seed_of_record import BASE, ROOT_FORM, RUN_ROOT, SEED_ROOT
-from tests.program.predict import test_dsa_long_rows as DL
 from verity.ml.definitions.numerics import rows as RK
 from verity.ml.definitions.registry.dsa_topk import canonical_ok, topk_set, waksman_apply, waksman_settings, waksman_switches
 from verity_vllm.check.commit_pass import commit_verdict
@@ -33,8 +30,6 @@ from verity_vllm.commit import binding as B
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 from verity_vllm.commit.committer.run_values import RunValues
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.program.compact import expanded_file_args
-from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.manifest.format import RUN_FAMILY
@@ -48,7 +43,6 @@ LEAVES = waksman_switches(N, K)
 FIELD = D.run_field(LAYER, POS)
 X, Y, LOGITS = f"model.layers.{LAYER}.self_attn.indexer.x", f"model.layers.{LAYER}.self_attn.indexer.y", "lm_head.logits"
 RES = {"program": {"digest": "d" * 64, "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}}}
-phi = DL.phi  # the fixture: GLM-5.3 cut to 4 layers, INDEX_TOPK 4
 
 
 def _doc() -> dict:
@@ -208,40 +202,3 @@ def test_fold_keeps_a_failure_and_never_lifts_a_partial():
     assert CK.fold(False, "mismatch", "m", refused) == (False, "mismatch", "m")
     assert CK.fold(True, "complete", None, unevaluated)[:2] == (None, "partial")
     assert CK.fold(None, "not-evaluated", "n", unevaluated) == (None, "not-evaluated", "n")
-
-
-def _trace(r, path) -> str:
-    """A stand-in for the traced derive dir `aot.emit` reads: the predicted Program's own descriptor (no annotations), its digests,
-    and its weights record's fields as the trace's weight leaves."""
-    raw = json.dumps({**r.desc, "annotations": {}}, sort_keys=True).encode()
-    path.mkdir()
-    with gzip.open(path / "descriptor.json.gz", "wb") as f:
-        f.write(raw)
-    (path / "result.json").write_text(json.dumps({"program": {"digest": r.digest, "descriptor_sha256": hashlib.sha256(raw).hexdigest(),
-                                                              "correspondence_digest": None}}))
-    weights = dict(r.program.fn.body.params)["weights"]
-    (path / "derive-report.json").write_text(json.dumps({"provenance": {"weights": [
-        {"field": k, "name": n, "shape": [t.leaves]} for k, (n, t) in enumerate(weights.fields)]}}))
-    return str(path)
-
-
-def test_the_aot_build_writes_its_run_layout_and_each_checks_row(phi, tmp_path):
-    """A step Program whose rows read past INDEX_TOPK, written by `aot.emit`: the header holds the predictor's `run` layout and, for
-    each check in output order, the DsaTopKLongRow_v1 row that computes it, whose order is routed from the `run` field of the same
-    layer and position."""
-    from verity_vllm.program.predict.aot import emit, predict
-    r = predict(phi, "step", M=6, pos0=0)
-    emit(phi, "step", _trace(r, tmp_path / "trace"), str(tmp_path / "out"), M=6, pos0=0)
-    doc = read_instances(str(tmp_path / "out" / "instances.json.gz"), expand=False)
-    assert doc["supplied"]["run"] == [r.run] and {k: doc["checks"][k] for k in ("output", "accept", "of")} == r.checks
-    args = {int(x["i"]): x["args"] for x in doc["rows"]}
-    specs = {int(x["i"]): x["spec"] for x in doc["rows"]}
-    fields = {(int(r.run["param"]), int(f["offset"]), int(f["offset"]) + int(f["leaves"])): f["name"] for f in r.run["fields"]}
-    assert len(doc["checks"]["rows"]) == len(r.checks["of"]) > 0
-    for (i, lo, hi), what in zip(doc["checks"]["rows"], r.checks["of"]):
-        assert specs[i].startswith("DsaTopKLongRow_v1{") and (lo, hi) == (0, 1)
-        ((_n, j, _lo, _hi),) = expanded_file_args(args[i])[1]
-        assert specs[int(j)].startswith("DsaWaksmanOrder_v1{")
-        ((kind, a, flo, fhi),) = expanded_file_args(args[int(j)])[0]
-        name = fields[(int(a), int(flo), int(fhi))]
-        assert kind == "p" and what.startswith(name.replace("/topk_switches[t=", " t=").removesuffix("]") + ":")
