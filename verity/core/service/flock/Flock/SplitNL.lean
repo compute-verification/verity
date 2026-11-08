@@ -1,7 +1,8 @@
 /-
 `String.splitOn s "\n"` (the legacy split every circuit parse starts from) as `List.splitOn '\n'` on `s.toList`
 (`splitOn_nl`), with the byte positions it walks: the model a parse that splits a file's lines elsewhere (in tasks, from
-byte offsets) is held to. `splitTasks` splits them so, reading each row's numbers in the same task (`Net.Row`).
+byte offsets) is held to. `splitTasks` splits them so, reading each row's numbers in the same task (`Net.Row`), and
+compiled code splits an ASCII string's lines off its bytes (`splitOn_eq_fast`).
 -/
 module
 
@@ -159,6 +160,92 @@ theorem splitOn_nl (s : String) : s.splitOn "\n" = (s.toList.splitOn '\n').map S
   rw [if_neg (by decide)]
   have := aux s s.toList [] [] [] (by simp) (by simp)
   simpa [len] using this
+
+theorem len_ascii : ∀ (l : List Char), (∀ c ∈ l, c.utf8Size = 1) → len l = l.length
+  | [], _ => rfl
+  | c :: cs, h => by
+    simp only [len, List.length_cons, h c (by simp), len_ascii cs (fun x hx => h x (by simp [hx]))]
+    omega
+
+/-- The lines of `s` from byte `st`, the current one `[st, i)`, cut at its bytes `10`. -/
+def linesGo (s : String) : Nat → Nat → Nat → Array String → Array String
+  | 0, st, _, acc => acc.push (String.Pos.Raw.extract s ⟨st⟩ ⟨s.utf8ByteSize⟩)
+  | fuel + 1, st, i, acc =>
+    if h : i < s.utf8ByteSize then
+      if Char.ofUInt8 (s.getUTF8Byte ⟨i⟩ (String.Pos.Raw.lt_iff.mpr (by simpa using h))) == '\n' then
+        linesGo s fuel (i + 1) (i + 1) (acc.push (String.Pos.Raw.extract s ⟨st⟩ ⟨i⟩))
+      else linesGo s fuel st (i + 1) acc
+    else acc.push (String.Pos.Raw.extract s ⟨st⟩ ⟨s.utf8ByteSize⟩)
+
+/-- On an ASCII string, `linesGo` from a line's start splits the rest as `List.splitOn '\n'` does (`aux`'s model). -/
+theorem linesGo_eq {s : String} (ha : ∀ c ∈ s.toList, c.utf8Size = 1) : ∀ (rest P cur : List Char) (fuel : Nat)
+    (acc : Array String), s.toList = P ++ cur ++ rest → '\n' ∉ cur → rest.length < fuel + 1 →
+    linesGo s fuel P.length (P.length + cur.length) acc =
+      acc ++ (((cur ++ rest).splitOn '\n').map String.ofList).toArray := by
+  have hsz := Scan.size_ascii ha
+  have hlen : ∀ X : List Char, (∀ c ∈ X, c ∈ s.toList) → len X = X.length := fun X hX =>
+    len_ascii X (fun c hc => ha c (hX c hc))
+  intro rest
+  induction rest with
+  | nil =>
+    intro P cur fuel acc hs hc _
+    have hend : ¬ P.length + cur.length < s.utf8ByteSize := by rw [hsz, hs]; simp
+    have hx : String.Pos.Raw.extract s ⟨P.length⟩ ⟨s.utf8ByteSize⟩ = String.ofList cur := by
+      have := extract_eq P cur [] s (by simpa using hs)
+      rw [hlen P (fun c hc => by simp [hs, hc]), hlen cur (fun c hc => by simp [hs, hc])] at this
+      rw [hsz, hs]; simpa using this
+    cases fuel with
+    | zero => simp [linesGo, hx, List.splitOn_eq_singleton hc]
+    | succ fuel => simp [linesGo, hend, hx, List.splitOn_eq_singleton hc]
+  | cons c rest ih =>
+    intro P cur fuel acc hs hc hf
+    obtain ⟨fuel, rfl⟩ : ∃ k, fuel = k + 1 := ⟨fuel - 1, by simp at hf; omega⟩
+    have hlt : P.length + cur.length < s.utf8ByteSize := by rw [hsz, hs]; simp
+    have hb : Char.ofUInt8 (s.getUTF8Byte ⟨P.length + cur.length⟩ (String.Pos.Raw.lt_iff.mpr (by simpa using hlt)))
+        = c := by
+      rw [String.getUTF8Byte_eq_getElem]
+      have := Scan.byte_ascii ha (P ++ cur) rest c (by simpa using hs) (by simpa [String.size_toByteArray] using hlt)
+      simp only [List.length_append] at this
+      rw [this]
+      exact Scan.ofUInt8_val (ha c (by simp [hs]))
+    simp only [linesGo, hlt, dite_true, hb]
+    by_cases hcn : c = '\n'
+    · subst hcn
+      simp only [beq_self_eq_true, ite_true]
+      have hx : String.Pos.Raw.extract s ⟨P.length⟩ ⟨P.length + cur.length⟩ = String.ofList cur := by
+        have := extract_eq P cur ('\n' :: rest) s (by simpa using hs)
+        rwa [hlen P (fun c hc => by simp [hs, hc]), hlen cur (fun c hc => by simp [hs, hc])] at this
+      have := ih (P ++ cur ++ ['\n']) [] fuel (acc.push (String.ofList cur)) (by simpa using hs) (by simp)
+        (by simp at hf; omega)
+      simp only [List.length_append, List.length_singleton, List.length_nil, Nat.add_zero, List.nil_append] at this
+      rw [hx, this, List.splitOn_append_cons_self_of_not_mem hc]
+      simp
+    · have hb' : (c == '\n') = false := by simpa using hcn
+      simp only [hb', Bool.false_eq_true, ite_false]
+      have := ih P (cur ++ [c]) fuel acc (by simpa using hs) (by simp [hc, Ne.symm hcn]) (by simp at hf; omega)
+      simp only [List.length_append, List.length_singleton, List.append_assoc, List.singleton_append] at this
+      rw [← Nat.add_assoc] at this
+      exact this
+
+/-- `String.splitOn`, with an ASCII string's lines (`sep = "\n"`) cut off its bytes by `linesGo`. -/
+def splitOnFast (s sep : String) : List String :=
+  if sep == "\n" && Scan.ascii s then (linesGo s s.utf8ByteSize 0 0 #[]).toList else s.splitOn sep
+
+/-- Compiled code runs `splitOnFast` for every `String.splitOn` compiled after this; the kernel and every proof see
+`String.splitOn`. `splitOnFast`, compiled before it, still calls the original. -/
+@[csimp] theorem splitOn_eq_fast : @String.splitOn = @splitOnFast := by
+  funext s sep
+  unfold splitOnFast
+  split
+  · rename_i h
+    simp only [Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨rfl, ha⟩ := h
+    have hc := Scan.ascii_chars ha
+    have := linesGo_eq hc s.toList [] [] s.utf8ByteSize #[] (by simp) (by simp)
+      (by rw [Scan.size_ascii hc]; omega)
+    simp only [List.length_nil, Nat.add_zero, List.nil_append, Array.empty_append] at this
+    rw [this, splitOn_nl]
+  · rfl
 
 theorem getAux_found (R : List Char) (i q : Nat) (c : Char) (hc : c ≠ default)
     (h : String.Pos.Raw.utf8GetAux R ⟨i⟩ ⟨q⟩ = c) : ∃ C R', R = C ++ c :: R' ∧ i + len C = q := by

@@ -5,6 +5,7 @@ table), and the text helpers its parser uses.
 module
 
 public import Flock.Comp
+public import Flock.Scan
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -259,6 +260,41 @@ def rowNums (lines : Array String) (i : Nat) : V (Array Nat) :=
 /-- A line's numbers as `parse` reads a row's, `none` when a token isn't one. -/
 def lineNums (s : String) : Option (Array Nat) := (tokens s).mapM String.toNat?
 
+theorem tokens_eq (s : String) :
+    tokens s = (let st := s.toList.foldl Scan.tokStep (#[], ""); if st.2 != "" then st.1.push st.2 else st.1) := by
+  unfold tokens
+  simp only [Id.run]
+  rw [Scan.forIn_tok]
+  rfl
+
+/-- `lineNums`, read off the line's bytes (`Scan.nums`) when it is ASCII decimal digits and whitespace, as a row is, and
+as `lineNums` reads it otherwise. -/
+def lineNumsFast (s : String) : Option (Array Nat) :=
+  if Scan.ascii s then
+    match Scan.nums s (s.utf8ByteSize + 1) 0 false 0 #[] with
+    | some v => some v
+    | none => (tokens s).mapM String.toNat?
+  else (tokens s).mapM String.toNat?
+
+/-- Compiled code runs `lineNumsFast`; the kernel and every proof see `lineNums`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `Row.of`, `look` and `parseWith`. -/
+@[csimp] theorem lineNums_eq_fast : @lineNums = @lineNumsFast := by
+  funext s
+  unfold lineNumsFast lineNums
+  split
+  · rename_i ha
+    split
+    · rename_i v hv
+      have hc := Scan.ascii_chars ha
+      have h := Scan.nums_eq hc s.toList [] (s.utf8ByteSize + 1) false 0 #[] (by simp)
+        (by rw [Scan.size_ascii hc]; omega)
+      rw [List.length_nil] at h
+      rw [h] at hv
+      rw [tokens_eq]
+      exact Scan.numsL_tokens s.toList #[] "" false 0 #[] v (by simp) ⟨rfl, rfl⟩ hv
+    · rfl
+  · rfl
+
 /-- A line and, when read, its numbers (`some (lineNums s)`): read where the file's lines were split
 (`SplitNL.splitTasks`). -/
 structure Row where
@@ -360,6 +396,14 @@ def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
 theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines := by
   unfold parseWith parse
   simp only [rowAt_eq, rowNums]
+
+/-- `parse` reading each row with `lineNums` (`lineNumsFast`): `parseWith` on no rows read beforehand. -/
+def parseScan (lines : Array String) : V Net := parseWith #[] 0 lines
+
+/-- Compiled code runs `parseScan`; the kernel and every proof see `parse`. -/
+@[csimp] theorem parse_eq_scan : @parse = @parseScan := by
+  funext lines
+  exact (parseWith_eq #[] 0 lines).symm
 
 end Net
 
