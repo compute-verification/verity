@@ -12593,3 +12593,19 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
 - #8074 (`36bf46eaed`, spot records, same command): r20261108-162004-2ca1 on cpu-12, in slot p3 since 16:20Z. I cancelled 102a on cpu-7. It had taken slot p8 only seconds before the cancel and did no work there.
 - #8043 (`71a632bb55`, `Security/Properties` records, still with `--moved`): r20261108-162034-726c on cpu-12, in slot p4 since 16:21Z. I cancelled aa47 on cpu-3, which had never started.
 - ETA is about 80 min each, so both should finish around 17:40Z. Then I commit the records, mark #8074 and then #8043, and post the land asks here.
+
+## trust6, 16:25Z: #8097 unparked; the V3 gap's Lean names
+
+- **#8097 (PRF-469):**
+  - Merged checked `84ec105fd8` (it has #8130) cleanly, as `643739d2e0`.
+  - The lock merge driver unioned the grandfathered inline lists, bringing back main-era entries checked renamed (`Cd.atDraw`, `NetTiming.WardenSchedule`) and reordering a trees entry. `24c80914a2` resets `Security/lean-audit.json` to checked's copy plus #8097's two `claims.not` edits.
+  - Records `r20261108-162106-3631`: cpu-12 `--pool proofs`, without `--moved`. It took a Lean slot at 16:21Z; ETA about 17:45Z. I cancelled cpu-1's copy 6051 when 3631 started.
+  - Quick suites `r20261108-162239-ebda` (cpu-12) are waiting for a check slot (all 8 busy); ETA about 17:45Z.
+  - If the witness rule still fires, I'll quote it here.
+- **The V3 gap, for the PRF issue:**
+  - `Flock.Guarantees.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/ScopeGate.lean`) takes `hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D`. Its event is `Flock.Bridge.LiveAcceptsScoped` (same file), which is `Flock.Bridge.LiveAcceptsKS` (`Bridge/Refused.lean`: `LiveAcceptsZK ∧ Flock.PortRoots.check …`) `∧ Flock.KsScope.check …`.
+  - `Flock.PortRoots.check` and `Flock.KsScope.check` run `checkOf` on `Flock.HmOut.parse`'s circuit. `HmOut.parse` (`Flock/HmRow.lean`) throws at `Tags.isTmpl`, and `Flock.Desc.parse` reads the file as it does.
+  - `Flock.ProvedScope.served` now holds `Tags.tmplName`, and `verify --zk` checks `Flock.ProvedScope.circuitOf`'s circuit, which is `HmOut.parseTmpl`'s at templated tags.
+  - So at templated tags V3 has no `D` and says nothing. Those acceptances are bounded only by `Flock.Guarantees.SampledKSLiveV5`, whose event `Flock.Bridge.LiveAcceptsKSP` (`Bridge/V5/Statement.lean`) reads `PortRoots.checkOf` and `KsScope.checkOf` on `ProvedScope.circuitOf`, at `Flock.Desc.parseStmt`.
+  - v2 stays inside V3: `Verity.Sampled.Accepted.flat` requires `isTmpl = false`, which `checkBlobs_event` gets from v2's fixed statement.
+- **#7996:** records `r20261108-160630-3304` (cpu-3) and suites `r20261108-161201-b1bd` (cpu-11) are running; ETA about 17:40Z for both.
