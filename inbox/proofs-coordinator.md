@@ -4139,3 +4139,79 @@ What I read and found sound:
   - **The 35:** I read each record in 6821's regenerated lock.
   - **TRUST6's branches:** `2bbf` (#7844), `800b` (#7879) and `a8ba` touch neither `Zk.lean` nor `ZkP.lean`, and none of them imports `ZkP` alone. #7879 re-keys V3's `unwitnessed` entry too, which I've told TRUST6.
 - V5 stays unwitnessed. No `sorry`, `axiom` or `native_decide`.
+
+## 00:17Z from CLAIMSCHECK: claims ledger r4, 20 claims to drop or reword
+
+The ledger is note:proofs/20261108T0013Z-report-spot-claims-r4. Each of its claims has the post's wording, its evidence
+(run, art or Lean name) and its status. It reads the draft as of Sat 23:28Z, at `main` 0717ef602b and `checked`
+f27b190dea, against Figure 1 v2.6 (art:d8a21de9). The ledger's claim ids are in brackets.
+
+**Drop or reword before the freeze:**
+
+1. **The title and "SPOT preserves … zero-knowledge" [I4].** Daniel ruled that the post makes no ZK claim. Retitle
+   around sampled proofs, and cut ZK from what SPOT preserves.
+2. **The 10% headline [H1].** Not true at today's proof overhead. Today a 10% total bounds 49.1 TB over a datacenter
+   year (130× the 376.7 GB weights) and 53.2 TB over a world year (141×). State 10% as a projection, with today's
+   number beside it.
+   - Over a world year it makes 10% only on paths with a 4× prover plus lifetime replay (9.31%) or an 8× prover
+     (9.34%), PCFACTOR r20261107-232737-3176.
+   - The "FP4 at β ≤ 10%" path is 11.31% once the serve tax is counted.
+3. **"Advice is 0" [L3].** It is 0 only with certified arrivals, and a client stood in for the certifier; the real run
+   is Sun 19:00Z.
+   - It also prices the response length at 0, and no circuit checks the length rule (PRF-461 item 2; StopRule_v1,
+     due Sun 18:00Z).
+   - With the length charged, my estimate is 11–12 TB over a datacenter year and 41–47 PB over a world year.
+4. **The leakage bound "with advice and position bits, Lean-checked" [L1, L2].** Lean checks the position term and
+   the committed-bit term at each plotted point, on open #7877 (stacked on #7845).
+   - `CompiledTwo.Exfil` has no advice term; the advice width is added outside Lean.
+   - The bound with all terms together is ZKSTACK's `TheftAudited`, not yet written.
+5. **Two-stage soundness "with `Evaluates` and `Reveals` open" [T3].** True only with this caveat: at today's code
+   `Reveals` can't hold until the commitment opens under each run's roots (`ownAt`, on a branch, TSVERIFY's call).
+   - `ksTwo_spot` is in no lock and can't yet show that a `Held` exists.
+   - The running two-stage service is Python and skips round 2's checks.
+   - The deployed verifier doesn't require the end-of-window check, and `spot_proved` checks no K/V starting state
+     (PRF-461 item 5).
+6. **"Open source Lean implementations of SPOT, Flock, SPOT-Flock and an optimizer" [I1].**
+   - Flock's prover is C-Flock (Rust, CUDA and Python), unverified and untrusted.
+   - The optimizer is Python, with its output checked in Lean.
+   - The running two-stage verifier is Python.
+7. **"We directly execute the verifier in Lean" [I2].** True for Flock's verifier, not for SPOT's two-stage verifier.
+8. **"No additional trust assumptions" [I5].** Say SPOT adds no cryptographic assumption. Advice at 0 adds the network
+   certifier (`trusted-host`), and weight security adds `HonestUseHard`.
+9. **"No runtime commitments" [R4].** Remove it: serving commits the token ids, the schedule record and the K/V
+   cache.
+10. **"Two approaches to determinism … we benchmark each one" [R3].** For GLM-5.3, vLLM refuses batch-invariant mode
+    on its sparse MLA. Bit-exact replay is shown only on the serving node, at a 40,960-token context.
+11. **"Stock vLLM … at 128k" [S1].** Name the plugin that replaces DSA top-k with a canonical one. 128k replay is
+    pending (OVERHEADDEF, after 02:35Z).
+12. **"6 OOMs, or roughly 10 OOMs" [H5].** I found no source. Use Figure 4's 9.2 orders of magnitude (16-bit blocks,
+    datacenter year).
+13. **"10% compute buys a sufficiently high sampling rate" [H4].** At today's overhead 10% buys q = 5.7e-12, 103×
+    short of the needed 5.85e-10. Leeway appears only at h ≤ 1.4e8.
+14. **Four sentences with no evidence found [D1–D4]:** "outperformed other proof systems by 10–100x", "about $10,000
+    of engineering", "optimal point … around the scale of dot products", and "X bits of security". Cite a run for
+    each or remove it.
+15. **"Proves GLM-5.3 end to end" [V1].** Name the gaps:
+    - prefill attention over 256 rows;
+    - the indexer past 32,533 keys;
+    - the long-row mask path;
+    - the unrecorded LM head and small-batch router.
+16. **The lever path's fused-cut step [C6].** It prices 69.9 MB a token of outputs, while the cut commits about 25 GB
+    a token of openings today. Mark it modeled on an undecided core-model change.
+17. **Weight security [W2].** Say what `WeightSecurity.Theft` turns "safe" into, and that the bridge
+    (`TheftAudited`, PR Monday) is in progress. `Theft`'s three premises are open and past due (PRF-413, 6 Nov).
+18. **The statement cache's gain [C2].** It needs a long-lived proof server. SPOT's proving step starts a fresh
+    prover for each sampled member and doesn't get the gain.
+19. **"One-stage soundness rests only on the trust list" [T1].** Say "the theorem's premises are the trust list". No
+    Lean ties the deployed verdict (`Run.run` plus `verify --zk`) to the event V3 and V5 bound (TRUST6 00:18Z).
+20. **"A phase's starting state is checked" or "sampled at a public rate" [R5].** Neither is enforced: the
+    end-of-window check is skipped when no boundary port is named, and fixed counts are still accepted (PRF-461 items
+    5 and 6).
+
+**Pending at the freeze:**
+- BREAKEVEN's 128k re-solve, at 01:30Z;
+- OPTMODES's world-year render of Figure 1;
+- PLANCHECK's (B) sweep r20261107-232744-c994, at about 00:35Z;
+- PCFACTOR's h rerun.
+
+If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
