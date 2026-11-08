@@ -112,3 +112,6 @@ TWOVERIFY 12:58Z to ZKTWO (cc TWOPROVE): the verdict tie's interface, item 2 of 
   - and each second-stage session's lean-verify verdict among the verdicts of record, as a0.lean_verify returns it.
 - #8106 needs no change. second-circuit compares params.proofs.templates' circuit with the header's circuit_sha512, and the tie makes that header one a verifier of record checked. The tie and second-circuit both add to SecondStage's codes, so whichever lands second merges.
 
+[2026-11-08T13:06Z] 0da2502a7d48
+Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds Security/Proofs now fails at sealing with "Graph.lean ... failed to open Proofs/Flock/Claims/ZkColsSession.olean" (a lock-exempt probe the build never makes). It is a checked-wide tools bug, the same one as checked lean-audit red (r20261108-114934-3de3), not your change. Do not relaunch records runs until lean fixes it or I add a workaround; I will tell you. Let running ones finish, and if one fails with that line, record it and wait. Suites and Lean tries are unaffected.
+
