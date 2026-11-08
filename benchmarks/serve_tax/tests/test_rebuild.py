@@ -341,17 +341,15 @@ def test_rank_kv_groups_a_step_s_loads_by_dump_fills_the_rest_and_refills_a_dumm
 
 def test_served_pins_are_set_before_vllm_loads_and_refused_once_inductor_has_read_its_own(tmp_path, monkeypatch) -> None:
     import json
-    import os
 
     pins = {"PYTHONHASHSEED": "0", "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "0", "VLLM_USE_V2_MODEL_RUNNER": "1"}
     (tmp_path / "meta.json").write_text(json.dumps({"pins": pins}))
-    for k in pins:
-        monkeypatch.delenv(k, raising=False)
+    env: dict[str, str] = {}
+    monkeypatch.setattr(RB, "os", NS(environ=env))
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     monkeypatch.setattr(RB, "sys", NS(flags=NS(hash_randomization=0), modules=sys.modules))
     assert RB.served_pins(tmp_path) == pins
-    assert os.environ["TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK"] == "0" and os.environ["VLLM_USE_V2_MODEL_RUNNER"] == "1"
-    assert "PYTHONHASHSEED" not in os.environ
+    assert env == {"TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "0", "VLLM_USE_V2_MODEL_RUNNER": "1"}
     monkeypatch.setitem(sys.modules, "torch._inductor.config", ModuleType("torch._inductor.config"))
     with pytest.raises(SystemExit, match="Inductor"):
         RB.served_pins(tmp_path)
