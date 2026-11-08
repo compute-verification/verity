@@ -534,9 +534,9 @@ def Efficient (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
     ExtractRunsExpLe H L.E (fun x => 1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nSess x * L.es x)) ∧
     ExtractOwnLe H L.E (fun x => L.kOut x * L.kIn x * L.nPU x * L.openCalls x)
 
-/-- **The opening checks' count**: checking what one session's witness reveals, each opening under its roots, makes at
-most `openCalls` SHA-512 calls, at a statement that parses (`Sampling.OpenCallsLe`, generic). The own-call bounds of
-`Efficient` and `Bits` read it. -/
+/-- **The opening checks' count**: checking what a session's witness reveals for one proof block, each opening under
+its roots, makes at most `openCalls` SHA-512 calls, at a statement that parses (`Sampling.OpenCallsLe`, generic). The
+own-call bounds of `Efficient` and `Bits` read it. -/
 def OpenCallsLe (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ x s, L.parse x = some s → ∀ u v w,
     ((L.reveal s u v w).map fun p => ((L.commit.opens p.1 p.2).eval H).2.length).sum ≤ L.openCalls x
