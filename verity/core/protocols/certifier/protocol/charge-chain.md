@@ -193,6 +193,12 @@ The Lean definitions (`Security/Definitions/NetworkCertifier/WindowCharge.lean`)
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
 
+**What is left.** `ChargeCount_v2` doesn't count the length terms. While advice v1 sends each request's output_len and
+finish (the registration's `send_lengths`, on until a proof holds the length rule), they go as a plain tail after the
+segment of the window the request's body lands in: output_len in ⌈log2(max_tokens + 1)⌉ bits, then finish in 1.
+`ChargeCount_v2`, `reference_window` and the Lean (`WindowCharge.window`) charge the segment alone, so they undercount
+each such window by those bits, about 9 a request, until the length rule is proved and the tail goes.
+
 **The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
 hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.
 A class whose windows send hits or order entries does the following:

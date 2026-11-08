@@ -10,6 +10,12 @@ runs, under the same names in `NetworkCertifier.WindowCharge`, on `NetworkCertif
 core only: a bin is `AdviceV1.bitlen` where the reference reads Mathlib's `Nat.size`, and `charges` takes the windows as
 a list where the reference takes them as a function on `Fin W`. `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`)
 proves `charges` equal to the reference's.
+
+**What is left.** `ChargeCount_v2` doesn't count the length terms. While advice v1 sends each request's output_len and
+finish (the registration's `send_lengths`, on until a proof holds the length rule), they go as a plain tail after the
+segment of the window the request's body lands in: output_len in `⌈log2(max_tokens + 1)⌉` bits, then finish in 1.
+`window` charges the segment alone, so it undercounts each such window by those bits, about 9 a request, until the
+length rule is proved and the tail goes.
 -/
 
 @[expose] public section
