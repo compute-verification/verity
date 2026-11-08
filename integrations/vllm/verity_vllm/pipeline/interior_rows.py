@@ -12,6 +12,9 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   so whatever reads a committed store reads it.
 * `span`: one sampled span's units of the stream's template, read from its `Replay` exactly as the serving rows read
   the committed store (`serving_rows.population`, `serving_rows.read_all`).
+* `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
+  (`write_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out. A
+  replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
 * `interior`: the replay sample's spans, each padded to n_rho with copies of its last unit, committed as one window
   (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member, each input port a table of its own
   Q·n_rho rows and unit i reading row i, so each row a session proves is a registered read of the interior record. It is
@@ -32,21 +35,25 @@ import os
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.compare import _tp_member_alias
-from verity_vllm.check.replay.index import IDS_MEMBER, ProgramIndex, node_runs
+from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.manifest import format as RM
 
 #: the tag `interior_run` hashes under
 RUN_TAG = b"verity-vllm/interior-run/v1\x00"
+#: a sampler capture's index file and format (`write_capture`, `captured`)
+CAPTURE, CAPTURE_FORMAT = "capture.json", "verity-vllm/logits-capture/v1"
 
 Given = Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
 
@@ -225,6 +232,54 @@ def span(inst: dict[str, Any], replay: Replay, template: str, *, program_dir: st
                 {"index_s": round(t1 - t0, 3), "read_s": round(time.perf_counter() - t1, 3)})
 
 
+def write_capture(directory: Path, template: str, spans: Mapping[str, Mapping[str, Any]]) -> Path:
+    """What a replay at the served step shapes took at the sampler for each request ``rid`` of ``spans``, written to
+    ``directory`` for `captured`: its ``logits`` ((n, V) u16, row j the bf16 bits its j-th token was selected from),
+    ``tokens`` (the n ids selected), ``steps`` (the n engine steps) and ``program`` (what fixes its Program: the
+    Program's digest, or its launch's). ``template`` is the token-select row template the rows are units of."""
+    directory.mkdir(parents=True, exist_ok=True)
+    doc = {"format": CAPTURE_FORMAT, "template": template, "spans": {}}
+    for k, (rid, s) in enumerate(spans.items()):
+        a = np.ascontiguousarray(s["logits"], dtype="<u2")
+        if a.ndim != 2 or a.shape[0] != len(s["tokens"]) or len(s["steps"]) != len(s["tokens"]):
+            raise ValueError(f"request {rid}: logits {a.shape}, {len(s['tokens'])} tokens and {len(s['steps'])} steps")
+        (directory / f"{k}.u16").write_bytes(a.tobytes())
+        doc["spans"][rid] = {"file": f"{k}.u16", "sha256": hashlib.sha256(a.tobytes()).hexdigest(), "rows": a.shape,
+                             "tokens": [int(t) for t in s["tokens"]], "steps": [int(t) for t in s["steps"]],
+                             "program": str(s["program"])}
+    path = directory / CAPTURE
+    path.write_text(json.dumps(doc, indent=1))
+    return path
+
+
+def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> Span:
+    """Request ``rid``'s span of the capture's token-select template (`write_capture`): unit j reads logits row j and
+    outputs token j, laid out as `span` reads a token select's units from a Program. ``served``: the ids serving emitted,
+    which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed."""
+    doc = json.loads((directory / CAPTURE).read_text())
+    if doc.get("format") != CAPTURE_FORMAT:
+        raise ValueError(f"{directory / CAPTURE}: not a {CAPTURE_FORMAT} capture")
+    s, t = doc["spans"][rid], doc["template"]
+    params, ret = SRW.template(t).fn.signature()
+    ins, out = [sum(ty.leaf_widths()) // 16 for _n, ty in params], sum(ret.leaf_widths()) // 16
+    if len(ins) != 1 or out != 2 or tuple(s["rows"]) != (len(s["tokens"]), ins[0]):
+        raise ValueError(f"{t}: inputs of {ins} words and an output of {out}, captured rows {s['rows']}: a token select reads "
+                         "one logits row and outputs one 32-bit id")
+    raw = (directory / s["file"]).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != s["sha256"]:
+        raise ValueError(f"request {rid}: {s['file']} is not the capture's ({s['sha256'][:16]})")
+    tokens = np.asarray(s["tokens"], dtype="<u4")
+    if served is not None and [int(x) for x in served] != tokens.tolist():
+        raise ValueError(f"request {rid}: the replay selected {tokens.tolist()[:8]}..., serving emitted {list(served)[:8]}...: "
+                         "it didn't reproduce the span")
+    n = len(tokens)
+    m = CS.Member(t, (("in0", ins[0]),), ((f"out.{SAMPLED_MEMBER}", 2),), n, 0)
+    data = {"rows": {"in0": np.frombuffer(raw, dtype="<u2").reshape(n, ins[0]).astype(np.uint16)},
+            "outs": {f"out.{SAMPLED_MEMBER}": tokens.view("<u2").reshape(n, 2).astype(np.uint16)}}
+    entries = [[j, j + 1, rid, step, None, SAMPLER_OP, SAMPLED_MEMBER, 0, None] for j, step in enumerate(s["steps"])]
+    return Span(rid, m, data, entries, s["program"])
+
+
 def interior_run(boundary: str, sample: Sequence[int]) -> str:
     """The interior window's run: SHA-512 over the boundary registration's digest and the replay sample, in order."""
     body = json.dumps({"boundary": boundary, "replay_sample": [int(u) for u in sample]}, separators=(",", ":"))
@@ -293,4 +348,5 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["Interior", "Replay", "Span", "interior", "interior_ports", "interior_run", "interior_window", "register", "span"]
+__all__ = ["Interior", "Replay", "Span", "captured", "interior", "interior_ports", "interior_run", "interior_window", "register",
+           "span", "write_capture"]

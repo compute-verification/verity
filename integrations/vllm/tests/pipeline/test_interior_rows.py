@@ -5,7 +5,9 @@ reproduces the RoPE heads serving committed, bit for bit, evaluating only its re
 replay sample's interior registration, one shared-row member whose roots are its word rows', is accepted and the second
 stage samples k in each sampled span, while a forged
 leaf, a wrong `previous`, a wrong population and the spans in another order than the replay sample's are refused by
-name, and spans replayed from two Programs are not committed."""
+name, and spans replayed from two Programs are not committed. A sampler capture written from the replays (the GPU
+replay's dry run) reads back as each request's token-select span and registers as a two-stage interior over token
+selects."""
 
 from __future__ import annotations
 
@@ -39,7 +41,7 @@ def world():
     """The CPU-served world: the honest execution of the RoPE Program for the three requests, every member it committed."""
     import tests.check.test_sampled_replay as T
 
-    dh, T.DH = T.DH, 64
+    dh, v, T.DH, T.V = T.DH, T.V, 64, 64       # a token select's logits row then one whole SHA-512 block, as a row needs
     try:
         rng = np.random.default_rng(23)
         inst, woff = T._program(rope=True)
@@ -50,7 +52,7 @@ def world():
         w[lo:hi] = (np.asarray(rng.uniform(-1, 1, hi - lo), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
         return T.Honest(inst, woff, w, PROMPTS)
     finally:
-        T.DH = dh
+        T.DH, T.V = dh, v
 
 
 def _weights(world):
@@ -114,22 +116,20 @@ def test_a_span_pads_to_its_size_class_with_its_last_unit(world):
 UNIT = SRW.template(ROPE).fn
 
 
-def _block(n: int):
-    """The stand-in replay block: ``n`` RoPE heads, a request span at its size class."""
-    params, ret = UNIT.signature()
-    return bind(CompositeDefinition("InteriorRowsTestSpan", 0, (),
-                                    lambda S_: (tuple((p, Array(n, t)) for p, t in params), Array(n, ret)),
-                                    lambda B, S_, *xs: B.batch(UNIT, *xs, axes=(0,) * len(xs)), register=False))
+def _block(n: int, unit=UNIT, name: str = "InteriorRowsTestSpan"):
+    """The stand-in replay block: ``n`` units of ``unit`` (RoPE heads), a request span at its size class."""
+    params, ret = unit.signature()
+    return bind(CompositeDefinition(name, 0, (), lambda S_: (tuple((p, Array(n, t)) for p, t in params), Array(n, ret)),
+                                    lambda B, S_, *xs: B.batch(unit, *xs, axes=(0,) * len(xs)), register=False))
 
 
 BLOCK = _block(N_RHO)
-GRAIN = P.template_instance_query(BLOCK)
 
 
-def _boundary_window(n: int) -> CS.Binding:
+def _boundary_window(n: int, block=BLOCK) -> CS.Binding:
     """The stand-in boundary: ``n`` request spans, each its certified prompt ids in and its sampled tokens out."""
-    return CS.Binding(P.population_program(BLOCK, n), GRAIN, {"law": "subset", "k": Q}, "b0" * 64,
-                      (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), n),))
+    return CS.Binding(P.population_program(block, n), P.template_instance_query(block), {"law": "subset", "k": Q}, "b0" * 64,
+                      (CS.Member(P.template_id(block), (("ingress", 64),), (("egress", 64),), n),))
 
 
 def _ids(ids) -> np.ndarray:
@@ -139,26 +139,29 @@ def _ids(ids) -> np.ndarray:
     return a
 
 
-def _boundary(world) -> tuple[dict, dict, str]:
-    window = _boundary_window(len(PROMPTS))
-    tokens = {rid: [int(world.blocks[k][0]) for k in sorted(world.blocks) if k[1] == rid and k[2] == SAMPLER_OP]
-              for rid in PROMPTS}
+def _tokens(world) -> dict[str, list[int]]:
+    return {rid: [int(world.blocks[k][0]) for k in sorted(world.blocks) if k[1] == rid and k[2] == SAMPLER_OP] for rid in PROMPTS}
+
+
+def _boundary(world, block=BLOCK) -> tuple[dict, dict, str]:
+    window, tokens = _boundary_window(len(PROMPTS), block), _tokens(world)
     c = CS.commit(window, [{"rows": {"ingress": np.stack([_ids(p) for p in PROMPTS.values()])},
                             "outs": {"egress": np.stack([_ids(tokens[r]) for r in PROMPTS])}}], salt_key=SALT)
     rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
     return rec, CS.expected_ports(window), CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
 
 
-def _spec(member: CS.Member) -> S.Spec:
+def _spec(member: CS.Member, unit=UNIT, block=BLOCK, n_rho: int = N_RHO) -> S.Spec:
     names = {}
-    for phase, w in (("serve", _boundary_window(len(PROMPTS))), ("interior", IR.interior_window(member, N_RHO, "00", [0]))):
+    for phase, w in (("serve", _boundary_window(len(PROMPTS), block)), ("interior", IR.interior_window(member, n_rho, "00", [0]))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test prompts"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
               *(S.Public(f"{k}:{p}", "structure", f"{p}'s layout") for p in sorted(names) for k in ("leaves", "domain")))
-    return S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())), S.TwoStage(GRAIN, f"subset:{Q}", K),
-                  S.Check(P.program_digest(Program(UNIT)), P.template_instance_query(UNIT), proof_deadline=60.0),
+    return S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())),
+                  S.TwoStage(P.template_instance_query(block), f"subset:{Q}", K),
+                  S.Check(P.program_digest(Program(unit)), P.template_instance_query(unit), proof_deadline=60.0),
                   public, b"interior-rows-test")
 
 
@@ -178,13 +181,14 @@ def spans(world):
     return {rid: IR.span(world.inst, _replay(world, rid), ROPE) for rid in PROMPTS}
 
 
-def _first(world, spans):
-    """A two-stage stream over RoPE heads, the stand-in boundary registered and its first stage drawn (spans 0 and 2)."""
+def _first(world, spans, unit=UNIT, block=BLOCK, n_rho: int = N_RHO):
+    """A two-stage stream over ``unit`` (RoPE heads), the stand-in boundary registered and its first stage drawn (spans 0
+    and 2)."""
     draws = iter([[0, 2]])
-    stream = S.Stream(_spec(spans["r0"].member), UNIT, replay=BLOCK, budget=1, delta=DELTA, challenger="challenger-test",
-                      clock=_Clock(), sampler=lambda law, n: next(draws) if law["law"] == "subset" else
-                      [i * N_RHO for i in range(len(law["strata"]))])
-    rec, ports, layer = _boundary(world)
+    stream = S.Stream(_spec(spans["r0"].member, unit, block, n_rho), unit, replay=block, budget=1, delta=DELTA,
+                      challenger="challenger-test", clock=_Clock(), sampler=lambda law, n: next(draws) if law["law"] == "subset"
+                      else [i * n_rho for i in range(len(law["strata"]))])
+    rec, ports, layer = _boundary(world, block)
     reg = stream.register(rec, ports, leaf_layer=layer)
     return stream, reg, stream.select(reg)
 
@@ -248,3 +252,36 @@ def test_an_interior_registration_is_refused_by_name(world, spans):
     swapped = IR.interior([spans["r2"], spans["r0"]], N_RHO, reg.digest, [2, 0], row=ROW, salt_key=SALT)
     assert _refused(lambda: IR.register(stream, first, swapped, ports=honest.ports)) == ("R3-domain",)
     assert IR.register(stream, first, honest).record["population"] == Q * N_RHO
+
+
+# --- a token select's span from a sampler capture ------------------------------------------------------------------------
+
+TSEL = "TokenSelect_v1{V=64}"
+TSEL_RHO = 4                      # a request's sampled tokens: 3 (its prefill's and two decodes')
+
+
+def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interior(world, tmp_path):
+    """The GPU replay's dry run: each request's capture, written from its CPU replay's token-select inputs (logits rows,
+    ids, steps), reads back as the span `span` reads from its Program, member and words, and the replay sample's
+    captured spans register as the interior of a two-stage stream over token selects. A capture whose ids are not the
+    ones served, or whose rows changed after it was written, is refused before any commitment."""
+    replayed = {rid: IR.span(world.inst, _replay(world, rid), TSEL) for rid in PROMPTS}
+    served = _tokens(world)
+    IR.write_capture(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
+                                            "program": s.program} for rid, s in replayed.items()})
+    got = {rid: IR.captured(tmp_path, rid, served[rid]) for rid in PROMPTS}
+    for rid, s in replayed.items():
+        assert got[rid].member == s.member and got[rid].program == s.program
+        assert all(np.array_equal(got[rid].data[k][p], a) for k in ("rows", "outs") for p, a in s.data[k].items())
+    with pytest.raises(ValueError, match="didn't reproduce the span"):
+        IR.captured(tmp_path, "r1", served["r1"][:-1] + [served["r1"][-1] + 1])
+    unit = SRW.template(TSEL).fn
+    block = _block(TSEL_RHO, unit, "InteriorRowsTestSelects")
+    stream, reg, first = _first(world, got, unit, block, TSEL_RHO)
+    it = IR.interior([got["r0"], got["r2"]], TSEL_RHO, reg.digest, first.units, row=ROW)
+    assert IR.register(stream, first, it).record["population"] == Q * TSEL_RHO
+    raw = bytearray((tmp_path / "1.u16").read_bytes())
+    raw[0] ^= 1
+    (tmp_path / "1.u16").write_bytes(bytes(raw))
+    with pytest.raises(ValueError, match="is not the capture's"):
+        IR.captured(tmp_path, "r1")
