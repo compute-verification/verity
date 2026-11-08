@@ -81,4 +81,3 @@ def test_the_cut_overflows_are_seen() -> None:
     assert 9.5 <= replay(list(rep_events(m0, "keep")), 1 << 46).live_peak / W < 9.6
     now = replay(list(rep_events(replace(m1, lane_groups=True, keep_ab=False), "keep")), 1 << 46).live_peak / W
     assert now < 7
-
