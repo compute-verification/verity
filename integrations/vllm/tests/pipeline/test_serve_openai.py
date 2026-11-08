@@ -551,10 +551,11 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
 
 
 class Written:
-    """A stream writer that keeps what the server writes."""
+    """A stream writer that keeps what the server writes, and what it had written when it closed."""
 
     def __init__(self) -> None:
         self.raw = b""
+        self.at_close: bytes | None = None
 
     def write(self, data: bytes) -> None:
         self.raw += data
@@ -562,26 +563,43 @@ class Written:
     async def drain(self) -> None:
         pass
 
+    def close(self) -> None:
+        self.at_close = self.raw
+
+    async def wait_closed(self) -> None:
+        pass
+
 
 def failed_stream(protocol: Any, error: str) -> tuple[bytes, so.Server]:
-    """The bytes `Server.completions` writes for a streamed request whose engine sends one token, then fails with ``error``."""
+    """What `Server.handle` writes before it closes the connection, for the network certifier's id request (in cells of
+    140 + 9 bytes) whose engine sends one token, then fails with ``error``."""
     def submit(adm: Admission) -> None:
         adm.deliver(Delta([4853], " w"))
         adm.deliver(Delta([], "", error=error))
     server = so.Server(proto=protocol, served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={"temperature": 1.0},
                        submit=submit, abort=lambda _: None, clock=lambda: 7)
     w = Written()
-    asyncio.run(server.completions(dict(CERTIFIER_BODY), w))
+
+    async def serve() -> None:
+        reader = asyncio.StreamReader()
+        reader.feed_data(id_request(140))
+        reader.feed_eof()
+        await server.handle(reader, w)
+    asyncio.run(serve())
+    assert w.at_close == w.raw
     return w.raw, server
 
 
-def test_under_ids_a_failed_stream_ends_with_the_trailer_alone():
-    """``--protocol ids``: a stream the engine fails mid-way sends its ids so far, then exactly `io_tie.TRAILER`, the same
-    bytes whatever the error says, so no server-chosen text leaves; the reason is in the server's record. Under vLLM's
-    framing (``--protocol vllm``, here its twin `PlainProtocol`) the error event is still sent before ``data: [DONE]``."""
+def test_under_ids_a_failed_stream_stops_unterminated():
+    """``--protocol ids``: a stream the engine fails mid-way sends its ids so far and the connection closes, without
+    `io_tie.TRAILER` or any text, the same bytes whatever the error says: the network certifier then sees an unterminated
+    stream and fails it, where an END before the stop rule's position would read as a valid end. The reason is in the
+    server's record. Under vLLM's framing (``--protocol vllm``, here its twin `PlainProtocol`) the error event is still
+    sent before ``data: [DONE]``."""
     ids = proto.IdsProtocol(True, payload=140, base=proto.PlainProtocol(True))
     raw, server = failed_stream(ids, "RuntimeError: the engine broke")
-    assert raw == IT.id_event(4853, 140) + IT.TRAILER == failed_stream(ids, "the endpoint is stopping: SIGTERM")[0]
+    assert raw == IT.id_event(4853, 140) == failed_stream(ids, "the endpoint is stopping: SIGTERM")[0]
+    assert IT.TRAILER not in raw
     assert server.stream_errors["n"] == 1
     assert server.stream_errors["first"][0] | {"http_id": None, "engine_id": None} == {
         "http_id": None, "engine_id": None, "protocol": "ids", "error": "RuntimeError: the engine broke"}
