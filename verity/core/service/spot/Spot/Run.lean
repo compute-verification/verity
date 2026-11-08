@@ -5,8 +5,8 @@ check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), the window's
-  seed salt read from the challenger's log (`seedSaltOf`: `seed-salt` where its evidence doesn't read), then R1–R7
-  (`Registration.check`) against the challenger's copies and that salt under the sampling design the rule names over that population
+  seed salt read from the challenger's log (`seedSaltOf`: `seed-salt` where its evidence doesn't read, or is missing
+  on a window), then R1–R7 (`Registration.check`) against the challenger's copies and that salt under the sampling design the rule names over that population
   (`Select.Rule.lawOver`, whatever law the copies carry), a `bernoulli` sampling design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
@@ -78,7 +78,7 @@ structure Interior where
   served : Json
   sessionRoots : Json
   circuits : Array (String × String) := #[]
-  /-- the evidence of the interior's window's seed salt (`seedSaltOf`); null when its window has none -/
+  /-- the evidence of the interior's window's seed salt (`seedSaltOf`); null only when its verifier holds no window -/
   seedSalt : Json := Json.null
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
@@ -102,7 +102,7 @@ structure Input where
   served : Json
   sessionRoots : Json
   coins : Json := Json.null
-  /-- the evidence of the window's seed salt (`seedSaltOf`); null when the window has none -/
+  /-- the evidence of the window's seed salt (`seedSaltOf`); null only when the verifier holds no window -/
   seedSalt : Json := Json.null
   interior : Option Interior := none
 
@@ -152,11 +152,14 @@ def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) 
   | _, _ => false
 
 /-- The window's seed salt the run reads from the challenger's log, lowercase hex: from `evidence`, in its coins' form
-with the salt's segment (`Challenger.seedSaltIn`), on the verifier's window `window`; none when the evidence is null,
-and no salt but a refusal when it doesn't read or the verifier holds no window. Never one of the copies. -/
+with the salt's segment (`Challenger.seedSaltIn`), on the verifier's window `window`. A run reads the challenger's
+coins, so a verifier holding a window reads its salt or refuses: null evidence is never a window without a salt. None
+only when the verifier holds no window and the evidence is null, and no salt but a refusal when the evidence doesn't
+read or the verifier holds no window for it. Never one of the copies. -/
 def seedSaltOf (evidence : Json) (window : Option String) : Except String (Option String) :=
   match evidence, window with
-  | .null, _ => .ok none
+  | .null, none => .ok none
+  | .null, some _ => .error "missing: the verifier names a window root, and the run carries no evidence of its seed salt"
   | _, none => .error "a seed salt is read on the window's session: it needs the window's open root (window_root)"
   | ev, some w => (some ∘ Flock.hexOf) <$> Challenger.seedSaltIn ev w
 

@@ -25,7 +25,7 @@ _SERVICE_TESTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/sp
 if str(_SERVICE_TESTS) not in sys.path:
     sys.path.insert(0, str(_SERVICE_TESTS))
 
-from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes  # noqa: E402
+from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes, salted  # noqa: E402
 from test_remote import signer  # noqa: E402,F401  (the challenger key's signer fixture)
 from test_service import DELTA, Clock, _refused  # noqa: E402
 
@@ -41,7 +41,8 @@ def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
               S.Public(f"population:{TEMPLATE}", "structure", "the template's stratum"),
               S.Public("window", "structure", "provenance: served, on test prompts (step 0)"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
-              *(S.Public(f"{k}:{p}", "structure", f"{p}'s layout (step 0)") for p in sorted(ports) for k in ("leaves", "domain")))
+              *(S.Public(f"{k}:{p}", "structure", f"{p}'s layout (step 0)") for p in sorted(ports) for k in ("leaves", "domain")),
+              S.Public(R.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open"))
     check = S.Check((P.program_digest(Program(DEFN)),), mine.query, proof_deadline=60.0)
     return S.Spec(values, S.Law("stratified:2"), check, public, b"row-table-stream-test")
 
@@ -67,12 +68,13 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
         return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock(),
                         sampler=sampler)
 
-    def register(coins, i, window_root):
+    def register(coins, i, window_root, salt):
         rec = CS.registration(c, {"row": 101 + i}, registrar=R)
         roots = {r["port"]: r["root"] for r in rec["roots"]}
         held.append(TB.check_row_tables(mine, publics, roots, live))
         s = stream(spec, coins)
-        return s, s.register(rec, ports, leaf_layer=layer, window_root=window_root, counts={TEMPLATE: UNITS})
+        return s, s.register(salted(s, rec, window_root, salt), ports, leaf_layer=layer, window_root=window_root,
+                             counts={TEMPLATE: UNITS})
 
     outcomes, _ = coin_outcomes(tmp_path, signer, monkeypatch, register, positions=64)
     assert held == [{}] * len(outcomes)

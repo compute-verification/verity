@@ -35,14 +35,15 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   sampled proof blocks' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
   against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
   absent), and `coins` when the parameters name a challenger: the evidence of the sample's coins
-  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); and `seed_salt` when the window has one: the
-  evidence of the window's seed salt in the same form, its segment the salt's; the protocol refuses a sample that
-  carries a `closure` (`evidenceOf`), outside the sampled audit's soundness statement;
+  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); and `seed_salt` whenever they name one and a
+  window root: the evidence of the window's seed salt in the same form, its segment the salt's; the protocol refuses a
+  sample that carries a `closure` (`evidenceOf`), outside the sampled audit's soundness statement;
 * **seed salt** (`seedSaltOf`): with `seed_salt`, the one coin of the seed-salt family that the session the ledger opens
   on the verifier's window under the parameters' challenger key released after the window's open root
-  (`Challenger.seedSaltOf`), refused when it doesn't read or the parameters name no challenger; without it, none. R6
-  holds the record's window to name it, or none (`R6-seed-salt`): the salt comes from the challenger's log, never from
-  the parameters or the record;
+  (`Challenger.seedSaltOf`), refused when it doesn't read or the parameters name no challenger; without it, refused
+  when the parameters name a challenger and a window root (`missing`), and otherwise none. R6 holds the record's
+  window to name it, or none (`R6-seed-salt`): the salt comes from the challenger's log, never from the parameters or
+  the record;
 * **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
@@ -97,7 +98,8 @@ structure Evidence where
   served : Option (Array Nat)
   sessionRoots : Option Json
   coins : Json := Json.null
-  /-- the evidence of the window's seed salt (`seedSaltOf`); null when the window has none -/
+  /-- the evidence of the window's seed salt (`seedSaltOf`); null only where the parameters name no challenger or no
+  window root -/
   seedSalt : Json := Json.null
 
 structure Public where
@@ -399,10 +401,13 @@ def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteAr
       else none
 
 /-- The window's seed salt the verifier reads from the challenger's log (module docstring, **seed salt**), lowercase hex:
-from the evidence's `seed_salt`, under the parameters' challenger key, on the verifier's window; none when the evidence
-carries none. -/
+from the evidence's `seed_salt`, under the parameters' challenger key, on the verifier's window. Parameters naming a
+challenger and a window root read it or refuse, so evidence without it is never a window without a salt; none only
+when the parameters name no challenger or no window root and the evidence carries none. -/
 def seedSaltOf (p : Params) (e : Evidence) : Except String (Option String) :=
   match e.seedSalt, p.challenger, p.verifier.windowRoot with
+  | .null, some _, some _ =>
+    .error "missing: the verifier names a challenger and a window root, and the evidence carries no seed salt"
   | .null, _, _ => .ok none
   | _, none, _ => .error "the evidence carries a seed salt, and the verifier names no challenger it comes from"
   | _, some _, none => .error "a seed salt is read on the window's session: it needs the window's open root (window_root)"

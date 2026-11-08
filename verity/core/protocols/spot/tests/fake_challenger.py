@@ -9,7 +9,7 @@ ends once the sample is read, as a served session's would (`remote.open_session`
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
 coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
 verifier the sample's evidence (a two-stage sample's, both stages'), and the window's seed salt's when the stream drew
-it from a `Challenger` of the seed-salt family (`seed_salt`)."""
+it from a `Challenger` of the seed-salt family (`seed_salt`; at the window's open, unless the test draws its own)."""
 
 from __future__ import annotations
 
@@ -21,35 +21,41 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from verity.core.protocols.spot import challenger as C, coins as T, remote as R, service as S
+from verity.core.protocols.spot.one_stage import registration as G
 from verity.ml.commitments.identity import canonical_json_text
 
 from test_challenger import HOST, entropy
 from test_remote import HOST_PINS, MAIN, SCHEME, WINDOW, Ledger, at, pinned_key
 
 LABEL = "positions"
+#: the window's seed salt as a Spec declares it public, the challenger's coin, which a `Stream` on this challenger's
+#: coins draws at the window's open and names in each registration's window
+SEED_ITEM = S.Public(G.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open")
 
 
 class Challenger(T.ChallengerCoins):
     """The challenger's `label` coins (`coins` of them a session) on entropy seeded from `seed`, one session for each
-    commitment, its files in a directory of its own. One of the seed-salt family opens its session for `WINDOW`'s
-    open root at once, as `T.draw_seed_salt` reads the family's record before it commits."""
+    commitment, its files in a directory of its own, each session one the ledger opens for `window` (`WINDOW` unless
+    given). One of the seed-salt family opens its session for the window's open root at once, as `T.draw_seed_salt`
+    reads the family's record before it commits."""
 
-    def __init__(self, seed: str = "fake", coins: int = 64, label: str = LABEL) -> None:
-        self.seed, self.coins, self.label = seed, coins, label
+    def __init__(self, seed: str = "fake", coins: int = 64, label: str = LABEL,
+                 window: Mapping[str, Any] = WINDOW) -> None:
+        self.seed, self.coins, self.label, self.window = seed, coins, label, dict(window)
         self.directory = Path(tempfile.mkdtemp(prefix="fake-challenger-"))
         weakref.finalize(self, shutil.rmtree, self.directory, True)
         self.sessions: dict[bytes, tuple[R.Session, Ledger, C.LiveRecord]] = {}
         self._evidence: dict[bytes, dict[str, Any]] = {}
         super().__init__(None)
         if label == T.SEED_SALT_FAMILY:
-            self.record = self._session(bytes.fromhex(WINDOW["root"]))
+            self.record = self._session(bytes.fromhex(self.window["root"]))
 
     def _session(self, after: bytes) -> C.LiveRecord:
         sid = f"s-{len(self.sessions) + 1}"
         d = self.directory / sid
         d.mkdir()
         ledger = Ledger(d / "windows.jsonl", at(0, 3))
-        ledger.open(sid, WINDOW, withheld=True)
+        ledger.open(sid, self.window, withheld=True)
         challenger = C.LiveChallenger(SCHEME, 0, [(self.label, self.coins)], entropy(f"{self.seed}/{sid}"))
         session = R.open_session(challenger, pinned_key(), f"{HOST}.{sid}", at(1, 2), d, sid, withhold=True)
         (d / R.HELLOS).write_text("")
@@ -90,15 +96,23 @@ class Stream(S.Stream):
     """A `service.Stream` on a test's own challenger (`coins`, a new `Challenger` unless given; none for a stream
     that reads no coins), driven as a deployment drives it: a registration names `WINDOW`'s root unless it names
     another, a sample's coins are committed to its registration's digest before it is sampled, and an outcome's run is
-    given the sample's evidence unless the test gives its own (`coins`, None for none)."""
+    given the sample's evidence unless the test gives its own (`coins`, None for none). On this challenger's coins,
+    with a Spec that declares the window's seed salt (`registration.SEED_SALT`), the challenger releases `WINDOW`'s
+    salt at the window's open: the stream draws it before the window's first registration (`seed_salt`, from a
+    `Challenger` of the seed-salt family), each registration of the window whose window names no salt names it, and
+    the run is given its evidence, since a run on a live window refuses one without it (`Run.seedSaltOf`). A test of
+    the salt itself draws its own (`seed_salt`) or none (`seeded=False`)."""
 
     _NONE: Any = object()
 
-    def __init__(self, spec: S.Spec, unit: Any, *, coins: T.ChallengerCoins | None = None, **kwargs: Any) -> None:
+    def __init__(self, spec: S.Spec, unit: Any, *, coins: T.ChallengerCoins | None = None, seeded: bool = True,
+                 **kwargs: Any) -> None:
         if coins is None and kwargs.get("sampler") is None and not isinstance(spec.selection, S.All):
             coins = Challenger()
         self.fake = coins if isinstance(coins, Challenger) else None
         self.salted: tuple[Challenger, str] | None = None
+        self._opened: str | None = None
+        self._seeded = seeded and self.fake is not None and any(p.item == G.SEED_SALT for p in spec.public)
         super().__init__(spec, unit, coins=coins, **kwargs)
 
     def seed_salt(self, coins: T.ChallengerCoins, window_root: str) -> bytes:
@@ -107,13 +121,27 @@ class Stream(S.Stream):
             self.salted = (coins, window_root)
         return salt
 
+    def _named(self, record: Mapping[str, Any], window_root: Any) -> Mapping[str, Any]:
+        if self._seeded and window_root == WINDOW["root"] and self.salted is None and \
+                window_root not in self._seed_salts:
+            assert self.fake is not None
+            self._opened = self.seed_salt(Challenger(f"{self.fake.seed}/seed-salt", 2, T.SEED_SALT_FAMILY),
+                                          window_root).hex()
+        window = record.get("window") if isinstance(record, Mapping) else None
+        if self._opened is None or window_root != WINDOW["root"] or not isinstance(window, Mapping) or \
+                G.SEED_SALT in window:
+            return record
+        return {**record, "window": {**window, G.SEED_SALT: self._opened}}
+
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                  **kwargs: Any) -> S.WindowCommitmentRecord:
-        return super().register(record, ports, **{"window_root": WINDOW["root"], **kwargs})
+        kwargs = {"window_root": WINDOW["root"], **kwargs}
+        return super().register(self._named(record, kwargs["window_root"]), ports, **kwargs)
 
     def register_interiors(self, draw: S.Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                            **kwargs: Any) -> S.WindowCommitmentRecord:
-        return super().register_interiors(draw, record, ports, **{"window_root": WINDOW["root"], **kwargs})
+        kwargs = {"window_root": WINDOW["root"], **kwargs}
+        return super().register_interiors(draw, self._named(record, kwargs["window_root"]), ports, **kwargs)
 
     def select(self, registration: S.WindowCommitmentRecord, **kwargs: Any) -> S.Draw:
         if self.fake is not None and bytes.fromhex(registration.digest) not in self.fake.sessions:

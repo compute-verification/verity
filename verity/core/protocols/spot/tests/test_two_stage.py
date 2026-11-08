@@ -45,7 +45,7 @@ INTERIOR = ("x", "out")
 PUBLIC = (S.Public("population", "structure", "N, the sample's range"),
           S.Public("window", "structure", "provenance: served, on test prompts (step 0)"),
           *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k} (step 0)") for v in BOUNDARY + INTERIOR
-            for k in ("leaves", "domain")))
+            for k in ("leaves", "domain")), FC.SEED_ITEM)
 VALUES = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR))
 RULE = S.TwoStage(GRAIN, f"subset:{Q}", K)
 

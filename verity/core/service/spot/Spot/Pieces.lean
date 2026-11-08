@@ -569,7 +569,7 @@ hex source, `check_public`'s values and declared items, the challenger's name an
 (strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
 with the proved units and instances null for the sample's own, the coins' evidence (`coins_reason`'s, which a sample
 that read coins must carry), and `seed_salt`, the evidence of the window's seed salt in the same form (`Run.seedSaltOf`),
-null or absent when the window has none; under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay",
+null or absent only when the parameters name no window root; under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay",
 "values", "record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots",
 "seed_salt"}` in the same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming
 each template's circuit file (`Run.templateCircuits`), and null otherwise. The verifier flips no coins of its own: an

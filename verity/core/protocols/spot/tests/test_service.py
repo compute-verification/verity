@@ -29,11 +29,14 @@ SCHEMA = "hm96-sha512/row/v2"
 RUN = "r-service-test"
 SESSION = "5e" * 64
 DELTA = 2.0 ** -40
-#: What one-stage's record shows besides the salted roots, each declared with its reason.
-RECORD_ITEMS = tuple(S.Public(i, "structure", r) for i, r in (
+SEED_ITEM = FC.SEED_ITEM
+#: What one-stage's record shows besides the salted roots, each declared with its reason, and the window's seed salt,
+#: which every window on the challenger's coins names (`FC.Stream`).
+STRUCTURE_ITEMS = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance: served, on test prompts"),
     ("leaves:x", "x's leaf count"), ("domain:x", "x's served domain"),
     ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain")))
+RECORD_ITEMS = STRUCTURE_ITEMS + (SEED_ITEM,)
 VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 
 
@@ -64,10 +67,10 @@ class _Bytes(T.ChallengerCoins):
         return self._source(n)
 
 
-def _stream(spec=None, budget=2, clock=None, coins=None, sampler=None) -> S.Stream:
+def _stream(spec=None, budget=2, clock=None, coins=None, sampler=None, seeded=True) -> S.Stream:
     coins = coins if coins is None or isinstance(coins, T.ChallengerCoins) else _Bytes(coins)
     return FC.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test", coins=coins,
-                     clock=clock or Clock(), sampler=sampler)
+                     clock=clock or Clock(), sampler=sampler, seeded=seeded)
 
 
 def _ports(n: int) -> dict:
@@ -604,10 +607,6 @@ def test_a_released_salt_is_never_in_the_future_and_is_the_epochs_one_salt():
             _stream().salt_released(b"\x01", at)
 
 
-#: the window's seed salt as the Spec declares it public: the challenger's coin
-SEED_ITEM = S.Public(R.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open")
-
-
 def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
     """The seed-salt family of a challenger of the test's own, whose log the run reads the salt back from."""
     return FC.Challenger(seed, 2, T.SEED_SALT_FAMILY)
@@ -623,7 +622,7 @@ def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_re
     public, of kind `coins`, or a seeded window is refused as undeclared."""
     clock = Clock()
     clock.now = 3.0
-    spec = _spec(public=RECORD_ITEMS + (SEED_ITEM,))
+    spec = _spec()
     stream, root = _stream(spec, clock=clock), FC.WINDOW["root"]
     salt = stream.seed_salt(_seed_coins(), root)
     assert len(salt) == 64
@@ -643,15 +642,35 @@ def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_re
     out = unread.outcome(draw, _lean(), {"statement": "stub"}, seed_salt=None)
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"]
     assert unread.records[-1]["audit"]["checks"]["run"]["codes"] == ["disagree"]
-    late = _stream(spec)
+    late = _stream(spec, seeded=False)
     late.register(rec, _ports(6))
     assert _refused(lambda: late.seed_salt(_seed_coins(), root)) == ("seed-salt-late",) and late.epoch_log == ()
-    assert _refused(lambda: _stream(spec).register(named(salt.hex()), _ports(6))) == ("R6-seed-salt",)
-    undeclared = _stream()
+    assert _refused(lambda: _stream(spec, seeded=False).register(named(salt.hex()), _ports(6))) == ("R6-seed-salt",)
+    undeclared = _stream(_spec(public=STRUCTURE_ITEMS))
     undeclared.seed_salt(_seed_coins(), root)
     assert "undeclared" in _refused(lambda: undeclared.register(named(salt.hex()), _ports(6)))
     with pytest.raises(ValueError, match="of kind 'coins'"):
-        _spec(public=RECORD_ITEMS + (S.Public(R.SEED_SALT, "structure", "the window's seed salt"),))
+        _spec(public=STRUCTURE_ITEMS + (S.Public(R.SEED_SALT, "structure", "the window's seed salt"),))
+
+
+def test_a_live_window_without_its_seed_salt_is_refused_by_name():
+    """On the challenger's coins every window has its seed salt, which the run of record reads from the challenger's
+    log: a stream that drew none (`seeded=False`) takes a registration of its window naming none, and its outcome is a
+    reject failing `run`, the Lean's run refusing at the registration for the salt's evidence missing (`seed-salt`,
+    `Run.seedSaltOf`), never reading it as a window without a salt. So does a stream that drew the salt but whose
+    outcome is handed none. A window naming the salt the stream drew, with its evidence, is accepted."""
+    for stream, given in ((_stream(seeded=False), {}), (_stream(), {"seed_salt": None})):
+        draw = stream.select(stream.register(_record(), _ports(6)))
+        assert stream.deliver(draw, [SESSION]) is None
+        out = stream.outcome(draw, _lean(), {"statement": "stub"}, **given)
+        assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"]
+        lean = stream.records[-1]["audit"]["checks"]["run"]["detail"]["disagree"]["lean"]
+        assert (lean["step"], lean["codes"]) == ("register", ["seed-salt"]), lean
+    honest = _stream()
+    draw = honest.select(honest.register(_record(), _ports(6)))
+    assert R.SEED_SALT in draw.registration.record["window"]
+    assert honest.deliver(draw, [SESSION]) is None
+    assert honest.outcome(draw, _lean(), {"statement": "stub"}).accepted
 
 
 def test_the_stream_stops_at_its_budgeth_failure():

@@ -13,7 +13,7 @@ from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
-from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes
+from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes, salted
 from test_remote import signer  # noqa: F401  (the challenger key's signer fixture)
 from test_service import DELTA, PAIR, RECORD_ITEMS, RUN, SCHEMA, SESSION, VALUES, XOR8, Clock, _lean, _refused
 
@@ -231,10 +231,11 @@ def test_a_windows_draw_from_the_challengers_coins_is_held_to_its_evidence_by_th
         tmp_path, signer, monkeypatch):  # noqa: F811
     """A window's stream on the auditor's challenger's coins: the honest sample's outcome is accepted by the Lean run,
     and each of `coin_outcomes`' negatives is a reject the Lean run refused at its select (`coins`)."""
-    def register(coins, i, window_root):
+    def register(coins, i, window_root, salt):
         stream = _stream(coins=coins)
         counts = {P.template_id(PAIR): 1, P.template_id(TRIPLE): 9 + i}
-        return stream, stream.register(_record(counts), _ports(counts), counts=counts, window_root=window_root)
+        return stream, stream.register(salted(stream, _record(counts), window_root, salt), _ports(counts), counts=counts,
+                                       window_root=window_root)
 
     outcomes, _ = coin_outcomes(tmp_path, signer, monkeypatch, register, positions=64)
     assert_only_honest_coins_accepted(outcomes)

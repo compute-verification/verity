@@ -16,7 +16,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
   window's stream and prover (`R6`); and for a v2 record its registered values (`R7`);
 * **the seed salt**: the record's window names the window's seed salt the verifier read from the challenger's log, in
-  the evidence under its challenger's key, and none when the evidence carries none (`SeedSaltNamed`);
+  the evidence under its challenger's key, which parameters naming a challenger and a window root always read; none
+  only when the parameters name no challenger or no window root and the evidence carries none (`SeedSaltNamed`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
@@ -227,8 +228,9 @@ def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v)
 
 /-- The window's seed salt reads from the challenger's log (`OneStage.seedSaltOf`: the evidence's, under the verifier's
-challenger key, on its window; none when the evidence carries none), and the record's window names it
-(`WindowSeedSalt`): never a salt the parameters or the record supply. -/
+challenger key, on its window, its evidence missing refused where the parameters name a challenger and a window root;
+none only where they don't and the evidence carries none), and the record's window names it (`WindowSeedSalt`): never a
+salt the parameters or the record supply. -/
 def SeedSaltNamed (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   ∃ salt, OneStage.seedSaltOf p e = .ok salt ∧ WindowSeedSalt c.record salt
 

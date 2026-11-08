@@ -96,11 +96,13 @@ log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from
 **The window's seed salt.** `Stream.seed_salt` draws a window's seed salt at its open, before it serves: the one coin of
 the challenger's seed-salt family released after the window's open root (`coins.draw_seed_salt`), a family no sample
 reads, drawn once a window and before any registration of it (`seed-salted`, `seed-salt-late`), and logged
-(`{"event": "seed-salt", "window_root", "seed_salt", "seeded_at"}`). Each registration of that window is held to it by
-both verifiers (`registration.check`'s `seed_salt`, R6-seed-salt): its window names it, a certified input the window's
-circuits read. The run of record (`outcome`, `verifier.run`) and the audit (`OneStage.check`) read it from the
-challenger's log instead (`coins.seed_salt_in`, `coins.seed_salt_of`), from evidence `outcome` is handed, never from the
-stream's copy.
+(`{"event": "seed-salt", "window_root", "seed_salt", "seeded_at"}`); a stream that is one of several registering in
+the window takes the salt the challenger released to it once (`seed_salt_released`). Each registration of that window
+is held to it by both verifiers (`registration.check`'s `seed_salt`, R6-seed-salt): its window names it, a certified
+input the window's circuits read. The run of record (`outcome`, `verifier.run`) and the audit (`OneStage.check`) read it
+from the challenger's log instead (`coins.seed_salt_in`, `coins.seed_salt_of`), from evidence `outcome` is handed, never
+from the stream's copy, and a window on the challenger's coins always has one: with no evidence of it the run refuses
+the registration (`seed-salt`) and the audit refuses the evidence (`registration: seed salt: missing`).
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is sampled once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
@@ -172,7 +174,8 @@ from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Subset
 
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
-from .coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
+from .challenger import COIN_BYTES
+from .coins import SEED_SALT_WINDOW, ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
@@ -1586,7 +1589,8 @@ class Stream:
     def epoch_log(self) -> tuple[dict[str, Any], ...]:
         """The epoch's clock readings, in order: the salt's release, `{"event": "salt", "salt": <hex>, "salted_at"}`
         (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), each window's seed salt,
-        `{"event": "seed-salt", "window_root", "seed_salt": <hex>, "seeded_at"}` (`seed_salt`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
+        `{"event": "seed-salt", "window_root", "seed_salt": <hex>, "seeded_at"}` (`seed_salt`; with `"external": true`
+        from `seed_salt_released`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
         "registration": <digest>, "salted_at", "received_at"}`, or refused as late, `{"event": "late-registration",
         "salted_at", "received_at"}` (`salted_at` null when no salt was issued). A registration refused on what it holds
         is not received, and not logged."""
@@ -1722,17 +1726,43 @@ class Stream:
         window that names another, or none, is refused (`R6-seed-salt`), as is a seed salt where the stream drew none.
         Raises `Refused`: `seed-salted` (the window has its salt: nothing redraws it) or `seed-salt-late` (the stream
         received a registration of the window already); and `CoinError` where the draw fails."""
-        if isinstance(window_root, str) and window_root in self._seed_salts:
-            raise _refuse("seed-salted", {"window_root": window_root})
-        if isinstance(window_root, str) and any(window_root in (*e.copies[8:9], *e.interior_copies[8:9])
-                                                for e in self._entries):
-            raise _refuse("seed-salt-late", {"window_root": window_root})
+        self._unseeded(window_root)
         salt = draw_seed_salt(coins, window_root)
         seeded_at = self._clock()
         self._seed_salts[window_root] = salt
         self._epoch_log.append({"event": "seed-salt", "window_root": window_root, "seed_salt": salt.hex(),
                                 "seeded_at": seeded_at})
         return salt
+
+    def seed_salt_released(self, salt: bytes, window_root: str, released_at: float) -> None:
+        """The window's seed salt when the challenger released it to the window once and this stream is one of several
+        that register in the window (a tensor-parallel step's ranks, one stream each): `salt` is the coin `seed_salt`
+        draws (`coins.draw_seed_salt`'s, read once for the window), `released_at` its release, read on this stream's
+        clock. It is then the window's salt as `seed_salt`'s is, each registration of the window held to it, and the run
+        of record still reads it from the challenger's log, never from this copy. Logged with `"external": true`.
+        Raises `ValueError` for a salt that isn't one coin's bytes, a window root that isn't lowercase hex of 64 bytes or
+        a release that isn't a finite number, and `Refused`: `seed-salted` and `seed-salt-late` (as `seed_salt`), or
+        `released-later` (`released_at` after the clock's reading now: a release is never in the future)."""
+        if not (isinstance(salt, bytes) and len(salt) == COIN_BYTES):
+            raise ValueError(f"a window's seed salt is one coin, {COIN_BYTES} bytes, not {salt!r}")
+        if not (isinstance(window_root, str) and re.fullmatch("[0-9a-f]{128}", window_root)):
+            raise ValueError(SEED_SALT_WINDOW)
+        if not (isinstance(released_at, (int, float)) and not isinstance(released_at, bool) and math.isfinite(released_at)):
+            raise ValueError(f"a seed salt's release is a finite reading of the clock, not {released_at!r}")
+        self._unseeded(window_root)
+        now = float(self._clock())
+        if released_at > now:
+            raise _refuse("released-later", {"released_at": float(released_at), "now": now})
+        self._seed_salts[window_root] = salt
+        self._epoch_log.append({"event": "seed-salt", "window_root": window_root, "seed_salt": salt.hex(),
+                                "seeded_at": released_at, "external": True})
+
+    def _unseeded(self, window_root: str) -> None:
+        if isinstance(window_root, str) and window_root in self._seed_salts:
+            raise _refuse("seed-salted", {"window_root": window_root})
+        if isinstance(window_root, str) and any(window_root in (*e.copies[8:9], *e.interior_copies[8:9])
+                                                for e in self._entries):
+            raise _refuse("seed-salt-late", {"window_root": window_root})
 
     def _seed_salt_of(self, window_root: str | None) -> str | None:
         salt = self._seed_salts.get(window_root) if isinstance(window_root, str) else None
@@ -2123,9 +2153,10 @@ class Stream:
         commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
         `run` too, never a skip. Nor has it the window's seed salt: the Lean's run reads it from `seed_salt`, its evidence
         in the same form (`coins.seed_salt_in`'s; the window's one coin of the seed-salt family, `seed_salt`'s, released
-        after the window's open root), and holds the record's window to name it, so a window that names the salt the
-        stream drew is a reject failing `run` unless `seed_salt` shows that salt in the challenger's log, and one that
-        names none carries none. Raises `Refused` for a second outcome, a verdict of record about
+        after the window's open root), and holds the record's window to name it, so a registration with a window root
+        is a reject failing `run` unless `seed_salt` shows its window's salt in the challenger's log, missing evidence
+        included (the Lean's `seed-salt`), and only one without a window root carries none. Raises `Refused` for a
+        second outcome, a verdict of record about
         other sessions, public outputs the verdicts of record don't report alike, or `coins` for a sample that read no
         coins.
 

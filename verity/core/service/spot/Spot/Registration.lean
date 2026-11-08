@@ -33,8 +33,9 @@ for one prover's stream is refused in any other's.
 
 `check`'s salt is the window's seed salt the verifier read from the challenger's log, never one of its copies: the one coin
 of the seed-salt family released after the window's open root, which the audit and the stream's run read from their
-evidence (`OneStage.seedSaltOf`, `Run.seedSaltOf`). R6 holds the record's window to name it, and to name none when the
-verifier read none (`R6-seed-salt`), so a seed salt the server chose is refused by name.
+evidence (`OneStage.seedSaltOf`, `Run.seedSaltOf`), refusing it missing wherever their parameters name a challenger
+and a window root. R6 holds the record's window to name it, and to name none when the verifier read none
+(`R6-seed-salt`), so a seed salt the server chose is refused by name.
 
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
 declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
