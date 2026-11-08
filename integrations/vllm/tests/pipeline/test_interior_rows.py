@@ -395,18 +395,23 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
 @pytest.mark.parametrize("V,c", [(128, None), (64, 16)])
 def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(tmp_path, V, c):
     """`sampler_capture.piece_rows`, on the device the sampler's logits are on (CPU torch here), lays every piece's rows out
-    word for word as `pieces` does from the captured span, NaN, ±0, ±inf and ties across chunks included; ids the combine
-    doesn't select are refused."""
+    word for word as `pieces` does from the captured span, NaN, ±0, ±inf and ties across chunks included, and padded to a
+    size class as `Span.padded` pads each piece by whole tokens; ids the combine doesn't select are refused."""
     import torch
     for s in _selects(tmp_path, V).values():
         ids = s.data["outs"][f"out.{SAMPLED_MEMBER}"].view("<u4")[:, 0].astype(np.int64)
         logits = torch.from_numpy(s.data["rows"]["in0"].view(np.int16).copy()).view(torch.bfloat16)
-        got = SC.piece_rows(logits, torch.from_numpy(ids), c)
+        got, padded = SC.piece_rows(logits, torch.from_numpy(ids), c), SC.piece_rows(logits, ids, c, pad=s.n + 3)
         for piece in IR.pieces(s, c):
             want = {p: a.tolist() for kind in ("rows", "outs") for p, a in piece.data[kind].items()}
             assert {p: a.numpy().view(np.uint16).tolist() for p, a in got[piece.member.template].items()} == want
+            whole = piece.padded(piece.n // s.n * (s.n + 3))
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in whole[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in padded[piece.member.template].items()} == want
         with pytest.raises(ValueError, match="the chunks and combine select"):
             SC.piece_rows(logits, torch.from_numpy(ids ^ 1), c)
+        with pytest.raises(ValueError, match="don't pad to a size class of 4"):
+            SC.piece_rows(logits, ids, c, pad=4)
 
 
 def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piece(tmp_path):
