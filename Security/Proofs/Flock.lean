@@ -36,6 +36,7 @@ public import Proofs.Flock.SamplingGeneric.Masked
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
+public import Proofs.Flock.SpotFlock.Certified
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.SpotFlock.KS
