@@ -90,7 +90,7 @@ theorem openedPlur_zero (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin 
   have h0 : (fun x => pf.accepted x w i ∧ pf.opened x w i ≠ rows (sess x w i) (sess x w i).Xv) = fun _ => False :=
     funext fun x => propext ⟨fun ⟨ha, hne⟩ => hne (h x w i ha), False.elim⟩
   rw [h0]
-  unfold Pouw.RelativeSecurity.prob
+  unfold Pouw.RelativeSecurity.prob Claims.Pr
   simp
 
 /-- **The proof layer a family of sessions gives**: proof `i` of round `w` is accepted exactly where flock-verify
