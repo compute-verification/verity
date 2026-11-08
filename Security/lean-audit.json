@@ -54073,7 +54073,7 @@
    }
   },
   "SampledProofs.OneStage": {
-   "digest": "fb6e1c2f7c333a5c28f5465b5c8a3ccc39c29e528437e14fea14004c54b640b0",
+   "digest": "bae059c33120c1ebf990272da90ceead062fe0a69b6a207a9a659fc214c570b7",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -54111,7 +54111,7 @@
     "SampledProofs.OneStage.evidenceOf": "6a88106022c8b07ec26d00d29753dfc81f71cc21756b8a4d32802b44a8f14a00",
     "SampledProofs.OneStage.evidenceParsed": "a449e63206bb91d6d937a037002e302dfd38d6ebe6433f7fcedf051f9cd3d644",
     "SampledProofs.OneStage.paramsOfJson": "8c07e90619c62bc765df5580e2f36d3a824e3f4622f4aeaf44d0123eb1832d51",
-    "SampledProofs.OneStage.paramsParsed": "260ee74a2aa2c1db0da09742f6ba0532e00126fcbab28eeae56dc7efec0f6e58",
+    "SampledProofs.OneStage.paramsParsed": "35ed8c64b7b177da355fbd31857f87c9fb6176a16b92f8dc29db93fa45408028",
     "SampledProofs.OneStage.publicJson": "c5221f841fa847941e11d42119a7f08d525f093721671f60d7473358e0c5b8a1",
     "SampledProofs.OneStage.recordChecks": "93e3a5def02fc91a7e8cb18ea34bedd5146aaa1e8d0848540abebb593a87bfe1",
     "SampledProofs.OneStage.rule": "3810df4edcc0f1b3a55f69639f978bc4cff5a60832c7771bcb03741e1d005a6a",
@@ -54310,7 +54310,7 @@
    }
   },
   "SampledProofs.Registration": {
-   "digest": "618b1a5eec3d876100bccd0d709f2b2081209d53dd98160f2fe5da993ec0a69a",
+   "digest": "c32a7d036d93a8160bd149e12c78ed97ff0ef1a4979511edab91671e5e17276e",
    "definitions": {
     "SampledProofs.Registration.Earlier": "a6c800e33087ca1d2e8dcc062c157253cb817fa424a5b9d5500ae0d932b4b596",
     "SampledProofs.Registration.Earlier.casesOn": "dae9b507fab3f140482ee46e5ea4110baad1606f3425e5af88fd2735558cb111",
@@ -54361,6 +54361,7 @@
     "SampledProofs.Registration.earlierRoot": "eb9edbb84265eb1ed9791eeb64ca54543b3527403002ae9252e11f4eae0fed2f",
     "SampledProofs.Registration.fixedOf": "f27dde6217b6b4108fe15bed5b3d0254302c04e585d0bae1135c54ac46cb3dfc",
     "SampledProofs.Registration.heldRoots": "73e7eb418ea5c5331bb43618c42531c701ffc9d982d348371e4685200de2af94",
+    "SampledProofs.Registration.lastDigest": "15ca1b114a1347b463afd4c9d3319ded8c010e3116d7d9da52d2c7be1f8603c0",
     "SampledProofs.Registration.outputPort": "1e2740c224666d57dd8f2bda0b57f2a47e08a8e1e4d251d4cccd1a3519bd1eed",
     "SampledProofs.Registration.outputRoot": "4cfe93e73f52ed0e9541146edbc94c5f381a3807e82d9a27ba679769a1be3017",
     "SampledProofs.Registration.outputValue": "3933b58664f373d336c36939bee14976ba73d73efd3e210373523f8934c4ef14",
