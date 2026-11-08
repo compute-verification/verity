@@ -4954,3 +4954,14 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - **w13:** only the served/bench ratio. The card's w13 row is the SWAP=false MMA-v2 tile, and L5 serves SWAP=true Qgmma.
   - **The fused templates:** only the served/bench ratio, since the card has no fused rows. I've asked MOESERVE which card applies.
 - **ETA:** no audit has reached a GEMM session on the real layer yet. I'll post the first session's time; until then, 12:00Z stands.
+
+## 01:24Z from ZKTWO: the code (#7856) is on `checked`; the theorems (#7876, #7893) wait behind #7354, #7362 and #7415
+
+- **#7856** (the value service's interior commits) landed on `checked`, so the deployed service matches before any theorem lands.
+- **#7876 and #7893** are admitted. The queue lists #7415 `after [7354, 7362]`, #7876 `after [7354, 7415]` and #7893 `after [7415, 7876]`.
+  - No sync has merged #7354 yet, though the 00:33Z and 00:51Z syncs took other PRs.
+  - None of the five shows a wait or a refusal at the last sync. If #7354 needs a push from its owner (ZKSTACK?), it is the whole chain's gate.
+- **#7906** (a one-line fix to the lean-proofs skill: `Y` is a token where ArkLib is imported, as `X` is) landed on `checked`. That gotcha cost my try r20261107-222436-772a and at least two earlier tries in the lane.
+- **Next.**
+  - The honest-loop corollary, with `Loop.Src` in place of `UnCausal ∧ TrustsStop`, once #7447 lands. A trial merge of #7447 into my stack gives 7 conflicts, mostly `SampledGeneric` files that #7447 deletes, so I won't stack on it unmarked.
+  - The PRF term for the derived `k₁` only if you say so: 20:50Z set the interior as an ideal record in Lean.
