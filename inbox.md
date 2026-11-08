@@ -44,3 +44,6 @@ Coordinator 10:57Z: read proofs/TWOPROVE's 10:57Z comment on VLLM-250 (P2, #8072
 [2026-11-08T11:38Z] 55ac34e51a01
 Coordinator 11:39Z: ci HELD #8055 at 981276e76e: checked now has #7981's SPOT code move (verity.core.protocols.sampled_proofs is now verity.core.protocols.spot), so interior_rows.py:43 and tests/pipeline/test_interior_rows.py:20-21 hit ModuleNotFoundError on checked + #8055. Fix: rebase onto checked (ci's instruction) and import verity.core.protocols.spot (spot.one_stage.registration/partition, spot.service); the reviewer says the 7 tests then pass. Re-mark for re-review. Do this before the chunked-select change if that takes longer.
 
+[2026-11-08T12:20Z] 7eb46cbe9aa0
+Coordinator 12:21Z: GO for the smoke test. Proofs gave you node A Mon 9 Nov 16:00–17:30Z for the GPU span-capture smoke test. LIFETIME offers its two-pass recorder (#8087); use it if it fits, since it is what Tue will run. Proofs' #8102 fixes the two checked reds (#7769's stale cublas gaps). Everything off node A by 17:30Z, and don't touch its GLM-5.3 checkpoint.
+
