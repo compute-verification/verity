@@ -66,7 +66,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a0.py",
           "benchmarks/one_stage/a7.py", "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_leg.py",
           "benchmarks/one_stage/r2_population.py", "verity/ml/flock/python/verity_flock",
-          "verity/core/service/sampled_proofs/lakefile.toml",
+          "verity/core/service/spot/lakefile.toml",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures",
