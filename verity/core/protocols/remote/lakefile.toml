@@ -23,8 +23,8 @@ path = "../composition"
 
 # The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period (work).
 [[require]]
-name = "core_sampled_proofs"
-path = "../../service/sampled_proofs"
+name = "core_spot"
+path = "../../service/spot"
 
 [[require]]
 name = "pouw_check"

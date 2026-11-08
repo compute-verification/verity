@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_layout
