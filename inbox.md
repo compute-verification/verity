@@ -76,3 +76,6 @@ Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes
 [2026-11-08T22:47Z] d65ec1615a94
 Coordinator 22:47Z (infra CI-485): from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 belong to drive alone, with no lane slots. Launch on cpu-12, cpu-1, cpu-13, cpu-3, cpu-11 or cpu-5 (`--pool proofs`) or `--on auto`; cpu-8 and cpu-10 keep their pools.
 
+[2026-11-08T23:20Z] 3fafdf4c8dc9
+Coordinator 23:21Z: #8110 LANDED (ci review-3, 6eba948a9f62). One bookkeeping fix for your next PR: Security/Proofs/WeightSecurity/Two.lean:16 says "a two-stage sampled proof", SPOT's retired older name (test_spot_s_older_name_only_falls, 535 -> 536). Write it in SPOT terms, e.g. "each audited by SPOT's two-stage verifier (CompiledTwo)". Put it in the restatement PR.
+
