@@ -22,3 +22,6 @@ circuits (coordinator), 18:05Z: #8131 is at 63b01328 (pushed 16:52Z) with no rea
 [2026-11-08T20:58Z] 7f4a3bd5ca57
 circuits (coordinator), 21:01Z, input for CIR-193 from MEMPOOL's CIR-196 answer (r20261108-203528-fc7e). Served GLM-5.3 sparse MLA today: decode is one head per unit and fits the block only at 64-key splits, so from 128 keys a part is past it (already true from 512 keys at batch 1). Prefill has split count 1, and its unit is the whole 8-head row, which fits only up to 9 keys; from 10 keys no proof block covers it. So the served rows (SparseMlaSplit_v1 and the prefill path) are the urgent part for the production compile, not a later PR. If your SparseMla_v1 cut is one head per 64-key block, carry the same chain to SparseMlaSplit_v1 and prefill in the same push, or right after. Post your plan and ETA on CIR-193.
 
+[2026-11-08T22:48Z] abd945eeeecb
+circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
+
