@@ -1,5 +1,5 @@
-"""`research run --on auto`'s placement (research.auto): a free CPU pool slot first, then node 2's share if it starts the job now. 19 Oct:
-two runs held all 48 of the share's cores for hours while 56 waited, a 4-CPU suite 36th in line, and cpu-1's cores sat idle."""
+"""`research run --on auto`'s placement (research.auto): a free CPU pool slot first, then node 2's share if it starts the job now, so
+small runs never wait behind two that hold all 48 of the share's cores for hours while cpu-1's cores sit idle."""
 from __future__ import annotations
 
 import json
@@ -29,7 +29,7 @@ def pool(*slots: dict, waiters: int = 0) -> dict:
 
 
 def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
-    """24 Oct 02:10Z: node 2's GPUs sat at 0% under CPU work while cpu-5 ran at 8 of 192 (top): CPU jobs go to the pools."""
+    """CPU work must not leave node 2's GPUs idle while the CPU nodes have cores free: CPU jobs go to the pools."""
     target, why = auto.choose({N2: share(free=8), CPU1: pool(slot("r0"))}, 4, 16)
     assert target == (CPU1, "research") and why.endswith("a slot is free there now")
     target, why = auto.choose({N2: share(free=0, waiters=56), CPU1: pool(slot("r0", held=True), slot("r1"))}, 4, 16)
@@ -40,7 +40,7 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
 
 
 def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
-    """INF-281, 27 Oct 03:06Z: cpu-1 had 22 waiting and cpu-5 34 while cpu-3's research pool sat idle, outside SPILL."""
+    """cpu-3's research pool is in SPILL, so it doesn't sit idle while cpu-1's and cpu-5's lines are long."""
     cpu3 = "vy-nebius-cpu-3"
     assert (cpu3, "research") in auto.SPILL
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
@@ -94,7 +94,7 @@ def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job(
 
 
 def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node_2_the_job_is_refused():
-    """26 Oct: node 2 stopped, and a job too big for a pool slot went to its queue, which refused it on a stale admission
+    """With node 2 stopped, a job too big for a pool slot would go to its queue and be refused there on a stale admission
     window."""
     target, why = auto.choose({N2: "exit 255: ssh: connect refused", CPU1: pool(slot("r0"))}, 4, 16)
     assert target == (CPU1, "research") and why.startswith(f"{N2}'s share wasn't read (exit 255: ssh: connect refused); ")
@@ -196,7 +196,7 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
 
 
 def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monkeypatch, capsys):
-    """INF-228: a spill dropped --mem-gb, so a 40-GB research slot held the vllm suite to 2 workers; the slot gets the run's 150."""
+    """A spill keeps --mem-gb, or a 40-GB research slot would hold the vllm suite to 2 workers: the slot gets the run's 150."""
     launched = []
     monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=160))})
     monkeypatch.setattr(remote, "launch", _refusing(launched))

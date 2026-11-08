@@ -1,7 +1,7 @@
 """`research run --cwd clone`: the workload's own checkout of the source root.
 
 `--cwd source` runs a workload in the source root, which on a machine is the shipped tree <root>/src/<sha>/ that every run of the
-commit shares: a cancelled duplicate's EXIT trap there removed `PKG/.lake/packages` under a live Lean audit (proofs, 3 Oct 2026).
+commit shares: a cancelled duplicate's EXIT trap there can remove `PKG/.lake/packages` under a live Lean audit.
 `--cwd clone` (`clone/SUB`: SUB inside it) runs it in a `git clone --shared` of the source root instead, which borrows the
 source's objects and so costs one checkout (about a second for the repository), detached at the source root's HEAD; on a machine
 that must be the commit the run was shipped for.  The clone lives outside the run dir, so custody never reads it:

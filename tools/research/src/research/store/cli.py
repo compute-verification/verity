@@ -431,7 +431,7 @@ def cmd_select(argv: list[str]) -> int:
     `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
     (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
     stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
-    an empty answer would mean nothing, so it exits 1 naming what is missing (a `research run` job's store, 19 Oct)."""
+    an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
     from . import bucket_index as BI  # noqa: PLC0415
 
     ns = _select_parser().parse_args(argv)
