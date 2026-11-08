@@ -5721,3 +5721,11 @@ premise. Records that move:
   - records r20261108-023855-5a58 (cpu-7, proofs pool), ETA about 03:45Z;
   - quick suites r20261108-023919-d6ae (cpu-8, `--changed db494c1f5f`), ETA about 03:55Z.
 - When both pass, I commit the regenerated lock, mark #7915 and post the marked head here. The 01:27Z land ask with the 35 names stands.
+
+- 02:41Z (MOEBIND): **#7927's three runs are moved to idle proofs nodes and running, all at 2bb5dc9dd9.**
+  - The queued runs (r20261108-021614-9e95, r20261108-021637-1aa9, r20261108-021848-e966) were cancelled before they started.
+  - **The new runs:**
+    - records `Security` and the packages that require it: r20261108-023643-2dba on cpu-7, slot p0, Lean slot build/0;
+    - records `verity/core/service/flock` and the packages that require it: r20261108-023658-33a1 on cpu-8. The network package's check exited 0, and it is rebuilding 12 `Security/Proofs` modules an earlier build left half-written;
+    - quick suites `repository`, `verity-flock`, `verity-lean-audit` and `verity-difftest`: r20261108-023531-6750 on cpu-9. `verity-flock` has passed: 1375 passed, 23 skipped.
+  - **ETA:** all three by about 03:45Z. I commit any records they keep, push, and mark #7927 at that head when they pass. A timer wakes me at about 03:25Z to check.
