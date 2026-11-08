@@ -24,23 +24,19 @@ theorem jeq_canonText {a b : Json} (h : jeq a b = true) : canonText a = canonTex
 theorem pinOf_eq_openOf {rec : Json} {v : Registration.Verifier} {p : Registration.Pool} (hp : v.pool = some p)
     (h : PoolChained rec v) : pinOf rec p = openOf rec v p := by
   obtain ⟨e, d, r, he, ho, hd, hr⟩ := h p hp
-  simp only [pinOf, openOf, he, ho, entryKey, jeq_canonText hd, jeq_canonText hr]
+  simp only [pinOf, openOf, he, ho, entryKey, canonPair, jeq_canonText hd, jeq_canonText hr]
+
+theorem poolOpen_of_chains (rec : Json) {v : Registration.Verifier} {p : Registration.Pool}
+    (hc : p.chains v.log (Flock.hexOf v.program.sha512) = true) :
+    Registration.poolOpen rec v p = chainOpen v.log.back? p.pout := by
+  unfold Registration.poolOpen
+  exact (ite_cond_eq_true _ _ (eq_true hc)).trans rfl
 
 theorem openOf_of_chains {rec prev : Json} {v : Registration.Verifier} {p : Registration.Pool}
-    (hc : p.chains v.log (Flock.hexOf v.program.sha512) = true) (hlog : v.log.back? = some prev) {d r : String}
-    (ho : Registration.poolOpen rec v p = some (d, r)) : openOf rec v p = poutOf prev p.pout := by
-  unfold openOf
-  rw [ho]
-  unfold Registration.poolOpen at ho
-  rw [if_pos hc, hlog, Option.map_some] at ho
-  unfold poutOf
-  rcases hreg : getD prev "registered" with _ | _ | _ | _ | es | _ <;> simp only [hreg, reduceCtorEq] at ho ⊢
-  rcases hf : es.reverse.find? (fun e => (e matches .obj _) && jeq (getD e "value") (Json.str p.pout)) with _ | e <;>
-    simp only [hf, reduceCtorEq] at ho ⊢
-  rcases hd : getD e "domain" with _ | _ | _ | d' | _ | _ <;>
-    rcases hr : getD e "root" with _ | _ | _ | r' | _ | _ <;> simp only [hd, hr, reduceCtorEq] at ho
-  cases ho
-  simp only [entryKey, hd, hr]
+    (hc : p.chains v.log (Flock.hexOf v.program.sha512) = true) (hlog : v.log.back? = some prev) :
+    openOf rec v p = poutOf prev p.pout := by
+  unfold openOf poutOf
+  rw [poolOpen_of_chains rec hc, hlog]
 
 end Properties.Spot
 
@@ -52,8 +48,7 @@ theorem periodPoolChained : PeriodPoolChained := by
   rw [pinOf_eq_openOf (hp i) (hR7 i)]
   unfold NetTiming.poolOpen
   split_ifs with hc
-  · obtain ⟨e, d, r, -, ho, -, -⟩ := hR7 i (p i) (hp i)
-    have h := openOf_of_chains (rec := rec i) (v := v i) (p := p i) hc.2 (hlog i hc.1) ho
+  · have h := openOf_of_chains (rec := rec i) (v := v i) (p := p i) hc.2 (hlog i hc.1)
     rw [hout i] at h
     exact h
   · rfl

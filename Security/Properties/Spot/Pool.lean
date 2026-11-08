@@ -35,21 +35,30 @@ def pinOf (rec : Json) (p : Registration.Pool) : Option String × Option String 
   | some e => entryKey e
   | none => (none, none)
 
-/-- The record's last `registered` entry naming `pout`, an object, as `Registration.poolOpen` reads the previous record:
-as canonical texts. -/
-def poutOf (rec : Json) (pout : String) : Option String × Option String :=
-  match getD rec "registered" with
-  | .arr es =>
+/-- The pool a window that carries the previous window's pool opens, from the log's last record `back`
+(`Registration.poolOpen`'s first branch): the domain and root of that record's last `registered` entry, an object, naming
+`pout`; none where there is none. -/
+def chainOpen (back : Option Json) (pout : String) : Option (String × String) :=
+  match back.map (getD · "registered") with
+  | some (.arr es) =>
     match es.reverse.find? fun e => (e matches .obj _) && jeq (getD e "value") (Json.str pout) with
-    | some e => entryKey e
-    | none => (none, none)
-  | _ => (none, none)
+    | some e => match getD e "domain", getD e "root" with
+      | .str d, .str r => some (d, r)
+      | _, _ => none
+    | none => none
+  | _ => none
+
+/-- A pool's domain and root, as canonical texts. -/
+def canonPair : Option (String × String) → Option String × Option String
+  | some (d, r) => (canonText (.str d), canonText (.str r))
+  | none => (none, none)
+
+/-- The pool the record's window leaves for the next window to open (`chainOpen`), as canonical texts. -/
+def poutOf (rec : Json) (pout : String) : Option String × Option String := canonPair (chainOpen (some rec) pout)
 
 /-- The pool the verifier opens the record's window from (`Registration.poolOpen`), as canonical texts. -/
 def openOf (rec : Json) (v : Registration.Verifier) (p : Registration.Pool) : Option String × Option String :=
-  match Registration.poolOpen rec v p with
-  | some (d, r) => (canonText (.str d), canonText (.str r))
-  | none => (none, none)
+  canonPair (Registration.poolOpen rec v p)
 
 /-- **R7 chains a period's pools** (`PeriodPoolChained`). Take a period's `m` records `rec i`, each checked by a verifier
 `v i` with the pool `p i`. All of them name one value `pout` the pool is left in, and each verifier's log after the
