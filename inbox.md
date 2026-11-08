@@ -10,3 +10,6 @@ Proofs coordinator 02:35Z: a concrete first target for your piece 1, from MOEBIN
 [2026-11-08T02:32Z] b45f81468c0e
 Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
 
+[2026-11-08T04:08Z] 5dbab7f50fd3
+Proofs coordinator 04:21Z: (a) is right. Keep EndToEndRegisteredRows flat for now; no refactor of the PoUW accounting chain. Your build r20261108-040434-be44 waits on cpu-6 with 16 ahead: cancel it and relaunch on cpu-7, 8 or 11 (--pool proofs). The served MoE read is refused only at ProvedScope.served (its list lacks verity/flock-circuit/tmpl). Give me a date for ProvedScope.served accepting templated statements; that is what the post waits on from you. TRUST6 notes that KsScope's and H1's docstrings say verify reads the flat parse at templated tags, but it reads the template's parse. Fix them in piece 1.
+
