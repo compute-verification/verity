@@ -683,10 +683,27 @@ def word_call_families() -> set[str]:
 #: checked.  ``test_circuit_check`` holds it to the suite's and the range spots' unchecked Calls, apart from those its
 #: ``OVER_PARTITION_BUDGET`` holds (each with why), which pass nothing
 CALLEE_CALLS: dict[str, tuple[str, ...]] = {
+    "AllReduceMultimemVector_v1": ("AllReduceMultimem_v1",),
+    "And2_v1": ("MhcFusedSplit_v2",),
+    "Bf16AddF2fp_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Bf16MulBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Bf16ToF32_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Const1[0x0]_v1": ("MhcFusedSplit_v2",),
+    "Const32[0x3727c5ac]_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Const32[0x43800000]_v2": ("AllReduceRmsNormMnnvl_v2",),
     "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
     "DsaWaksmanSwap_v1": ("DsaWaksmanRows_v1",),
+    "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "F32AddFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
+    "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
+    "MhcFusedSplit_v2": ("MhcFusedPostPre_v2",),
+    "MhcPreBigFuse_v2": ("MhcFusedPostPre_v2",),
+    "MufuRcpFtz_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Not_v1": ("MhcFusedSplit_v2",),
+    "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Xor2_v1": ("MhcFusedSplit_v2",),
 }
 
 
