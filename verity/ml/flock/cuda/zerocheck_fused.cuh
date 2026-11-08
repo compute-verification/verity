@@ -18,7 +18,7 @@
 #define ZF_TABLE 2
 #endif
 #ifndef ZF_CHUNK
-#define ZF_CHUNK 6
+#define ZF_CHUNK 7
 #endif
 static const int ZF_WORDS = 8 * 256;
 __host__ __device__ constexpr int zf_tab_words(int T, int C) { return T == 1 ? ZF_WORDS : T == 2 ? (63 / C + 1) * (8 << C) : 0; }
