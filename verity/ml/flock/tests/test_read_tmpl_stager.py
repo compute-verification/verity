@@ -6,6 +6,7 @@ without Lean. Where the tree builds the verifier's own executable, a round of ho
 each output the IR reference's."""
 from __future__ import annotations
 
+import hashlib
 import random
 import shutil
 import subprocess
@@ -53,21 +54,44 @@ def _stand_in(tmp_path: Path, body: str) -> Path:
 
 
 def test_the_read_template_is_the_executables_text_parsed_once_a_shape(tmp_path, monkeypatch, fresh):
-    """`read_tmpl.template` runs ``FLOCK_READ_TMPL V H`` once a shape and parses its text; `read_tmpl.of` asks it for a bound
+    """`read_tmpl.template` runs the executable ``V H`` once a shape and parses its text; `read_tmpl.of` asks it for a bound
     ``EmbeddingRead_v1`` at its V and H and for nothing else. A refusal is the executable's own words, and a missing
     executable says how to build it."""
     text = T.write(_tmpl())
     (tmp_path / "t.txt").write_text(text)
-    monkeypatch.setenv("FLOCK_READ_TMPL", str(_stand_in(tmp_path, f"cat {tmp_path / 't.txt'}")))
+    monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, f"cat {tmp_path / 't.txt'}")))
     assert T.write(RT.template(7, 3)) == text
     assert RT.of(E.read(7, 3)) is RT.template(7, 3) and RT.of(TOY) is None and RT.of(PAIR) is None
     assert (tmp_path / "args").read_text() == "7 3\n"
-    monkeypatch.setenv("FLOCK_READ_TMPL", str(_stand_in(tmp_path, "echo 'flock-read-tmpl: the check refuses V = 1, H = 1' >&2; exit 1")))
+    monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, "echo 'flock-read-tmpl: the check refuses V = 1, H = 1' >&2; exit 1")))
     with pytest.raises(ValueError, match="the check refuses V = 1, H = 1"):
         RT.template(1, 1)
-    monkeypatch.setenv("FLOCK_READ_TMPL", str(tmp_path / "missing"))
+    monkeypatch.setattr(RT, "EXE", str(tmp_path / "missing"))
     with pytest.raises(FileNotFoundError, match="lake build flock-read-tmpl"):
         RT.template(2, 1)
+
+
+def test_the_executable_is_the_one_named_else_the_trees_build_else_the_paths(tmp_path, monkeypatch):
+    """`read_tmpl.executable` is `EXE` where it is set, else the tree's build (`BUILT`) where it is built, else
+    ``flock-read-tmpl`` on the path; with none it says how to build it. `read_tmpl.digest` is its bytes' SHA-512."""
+    dirs = {d: tmp_path / d for d in ("named", "built", "path", "empty")}
+    for d in dirs.values():
+        d.mkdir()
+    named, built, on_path = (_stand_in(dirs[d], f"echo {d}") for d in ("named", "built", "path"))
+    monkeypatch.setattr(RT, "EXE", None)
+    monkeypatch.setattr(RT, "BUILT", dirs["empty"] / "flock-read-tmpl")
+    monkeypatch.setenv("PATH", str(dirs["path"]))
+    assert RT.executable() == str(on_path)
+    monkeypatch.setattr(RT, "BUILT", built)
+    assert RT.executable() == str(built)
+    monkeypatch.setattr(RT, "EXE", str(named))
+    assert RT.executable() == str(named)
+    assert RT.digest() == hashlib.sha512(named.read_bytes()).hexdigest() != hashlib.sha512(built.read_bytes()).hexdigest()
+    monkeypatch.setattr(RT, "EXE", None)
+    monkeypatch.setattr(RT, "BUILT", dirs["empty"] / "flock-read-tmpl")
+    monkeypatch.setenv("PATH", str(dirs["empty"]))
+    with pytest.raises(FileNotFoundError, match="lake build flock-read-tmpl"):
+        RT.executable()
 
 
 @pytest.mark.slow
@@ -98,7 +122,7 @@ def verifiers(tmp_path_factory):
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
     subprocess.run(["lake", "build", "flock-read-tmpl"], cwd=LEAN, check=True, capture_output=True)
-    return LEAN / ".lake/build/bin/flock-read-tmpl"
+    return RT.BUILT
 
 
 def _reads(V: int, H: int) -> list[tuple]:
@@ -121,10 +145,12 @@ def _reads(V: int, H: int) -> list[tuple]:
 @pytest.mark.slow
 def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verifiers, tmp_path, monkeypatch, fresh):
     """A structural ``EmbeddingRead_v1{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
-    template ``flock-read-tmpl 5 2`` writes, byte for byte META ``template``, and a round of honest reads, a read under
-    another salt and one past V stages on it, each read's row and verdict the IR reference's (`gates.embedding.reference`)."""
+    template ``flock-read-tmpl 5 2`` writes, the tree's build found with nothing named, byte for byte META ``template``, and a
+    round of honest reads, a read under another salt and one past V stages on it, each read's row and verdict the IR
+    reference's (`gates.embedding.reference`)."""
     V, H = 5, 2
-    monkeypatch.setenv("FLOCK_READ_TMPL", str(verifiers))
+    monkeypatch.setattr(RT, "EXE", None)
+    assert RT.executable() == str(verifiers)
     text = subprocess.run([str(verifiers), str(V), str(H)], capture_output=True, text=True, check=True).stdout
     in_rows, out_rows = IF.unit_rows(E.read(V, H), None)
     st = CS.UnitStager(E.read(V, H), "unit/read", in_rows, out_rows, layout=MODE, structural=True)
