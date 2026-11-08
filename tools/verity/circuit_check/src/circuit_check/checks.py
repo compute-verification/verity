@@ -48,10 +48,11 @@
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin, as is any Definition's that holds one (a served-size binding)
-    block            the witness bits a whole Definition needs as one Flock unit, read off it (its ANDs and port bits,
-                     `verity_flock.circuit.unit_witness`), within Flock's proved range of 2^``K_MAX`` (`block_range`): past
-                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
-                     for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
+    block            the Flock block a whole Definition needs as one unit, read off it before lowering
+                     (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
+                     of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
+                     past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
+                     window's templates each stage one, unless `BLOCK_HELD` says why not
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -1111,29 +1112,33 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     return entry
 
 
-#: the packages whose Definitions are each staged whole as one Flock unit (`verity_flock.class_statement.UnitStager`), so
-#: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
-#: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
-UNIT_OWNERS = ("verity.core.protocols.pouw.",)
+#: Definitions checked whole whose Flock block `block_range` records past the range rather than fails, each with why:
+#: none stages it whole as one unit, or a served one whose calls are moving to a chunked form, named with the PR that
+#: moves them.  It only shrinks (`BLOCK_HELD_MAX`), and a held Definition whose block fits fails ``block/stale-hold``.
+BLOCK_HELD: dict[str, str] = {}
+BLOCK_HELD_MAX = 0
 
 
 def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
-    """`block_range` of ``t``, failed past the range where ``t`` is staged whole as one unit: checked whole (``lower_whole``) and
-    owned under `UNIT_OWNERS` (`sidecars.owner`)."""
-    return block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
+    """`block_range` of ``t``, failed past the range where ``t`` is checked whole (``lower_whole``) and not `BLOCK_HELD`."""
+    return block_range(t, F, applies=lower_whole, held=BLOCK_HELD.get(t.id))
 
 
-def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
-    """The witness bits ``t`` needs as one Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
-    Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
-    subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
-    before lowering."""
+def block_range(t: Any, F: Findings, applies: bool = True, held: str | None = None) -> dict:
+    """The Flock block ``t`` needs as one unit, read off its Definition (`verity_flock.circuit.unit_block`: its rows'
+    sha512x3 and hm96 slots and the mask beside its own slot, as `compose` places them), against Flock's proved range of
+    2^``K_MAX``; past it a failure where ``t`` is checked whole (``applies``: not as a subcircuit whose units are its
+    template's proof blocks) unless ``held`` says why not, and a held one that fits fails as stale."""
     from verity_flock import circuit as FC
 
-    w = FC.unit_witness(t)
-    if applies and (why := FC.past_range(w)) is not None:
-        F.fail("block", "past-range", t.id, why, **w)
-    return {**w, "applies": applies}
+    b = FC.unit_block(t)
+    why = FC.past_block(b)
+    if applies and why is not None and held is None:
+        F.fail("block", "past-range", t.id, why, **b)
+    elif applies and why is None and held is not None:
+        F.fail("block", "stale-hold", t.id, f"its block of 2^{b['k_log']} bits fits 2^{FC.K_MAX}, but it is held ({held}): delete "
+               "its entry from BLOCK_HELD in tools/verity/circuit_check/src/circuit_check/checks.py and lower BLOCK_HELD_MAX", **b)
+    return {**b, "applies": applies, **({"held": held} if held is not None else {})}
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
@@ -1398,7 +1403,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
-           "conformance_of", "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands",
+__all__ = ["BLOCK_HELD", "BLOCK_HELD_MAX", "Findings", "Options", "SCHEMA", "block_range", "check_definition", "check_row",
+           "check_subcircuit", "conformance_of", "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands",
            "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering", "unit_block",
            "whole_lowering"]
