@@ -44,8 +44,8 @@ import Proofs.Flock.Claims.Sampling.Cost
 decoder, from the rerun programs' laws (`Sampling.Cost`):
 
 * `E_runs_le`: **`ExtractRunsLe`** at `1 + K + k·(K + k·n_PU·m′·K′)`. The replay is one rerun; the outer wait holds `K`
-  draws; at each of its at most `k` accepted runs, the inner wait holds `K`; at each of its at most `k`, every one of at
-  most `n_PU` checked units makes Flock's `m′` waits of `K′` draws (`unitExt_runs_le`); checking what a witness reveals
+  samples; at each of its at most `k` accepted runs, the inner wait holds `K`; at each of its at most `k`, every one of at
+  most `n_PU` checked units makes Flock's `m′` waits of `K′` samples (`unitExt_runs_le`); checking what a witness reveals
   reruns nothing (`checkRevealed_runs`).
 * `E_own_le`: **`ExtractOwnLe`** at `k²·n_PU·openCalls`, given `OpenCallsLe`: the waits make no SHA-512 call of their own
   (`NoHash`), so the extractor's own calls are the checks of what each of at most `k·k·n_PU` unit extractions reveals.
@@ -157,7 +157,7 @@ theorem outerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
   exact (flatMapRP_runs_le H run' _ _ _ fun li _ => innerBody_runs_le H D decode x s c jo.1 li run').trans
     (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
 
-/-- **The outer wait and what follows it** rerun at most `K + k·B` times: the wait over `K` draws, and at most `k`
+/-- **The outer wait and what follows it** rerun at most `K + k·B` times: the wait over `K` samples, and at most `k`
 bodies of at most `B` reruns each. Stated at every `k`, so that the kernel never meets the deployed `k`'s
 `List.finRange`. -/
 theorem outer_runs_le {R γ β : Type} (H : Msg → Msg) (run : R → Trace) (k K B : ℕ) (rs : List R)

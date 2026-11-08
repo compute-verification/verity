@@ -2,7 +2,7 @@
 # A templated statement end to end: RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
 # line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
-# covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, drawn (--draw subset:N, every
+# covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, sampled (--draw subset:N, every
 # unit) and verified with the statement's partition and program (tmpl_statement.py's partition.json and program.json),
 # must be accepted, and the m0 one refused as a templated statement without --zk, by Lean and by the live server (its
 # LIVE line) alike. Each session's coin tree is sampled and opened by its own challenger (challenger.sh: serve --tree-from,
@@ -40,7 +40,7 @@ trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$TU_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
 # Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
-# is no part of the verifier of record), built once per source, while the prover builds
+# is no part of the verifier), built once per source, while the prover builds
 LSHA=$( (cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum;
   cat $REPO/verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit

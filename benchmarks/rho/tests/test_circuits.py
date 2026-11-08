@@ -128,4 +128,4 @@ def test_periods_sets_the_step_beside_the_flop_model_and_evaluates_with_its_desi
         assert x["slowdown"] == analysis.result(at.override(periods.choices(name, x["fleet"], x["period"])), name).lo
         # the measured design takes remote to the floor, 1, which no premise dropped can lower
         assert x["slowdown"] == 1.0
-        assert all(r["at"][1] >= r["at"][0] for r in x["ranking"] if r["kind"] == "named premise")
+        assert all(r["at"][1] >= r["at"][0] for r in x["ranking"] if r["kind"] == "assumption")

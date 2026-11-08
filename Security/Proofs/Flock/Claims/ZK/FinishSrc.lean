@@ -37,23 +37,23 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The firewall's rep against the rep from a source
+# The ZK server's rep against the rep from a source
 
 `flock-firewall finish`'s rep (`repFwC`) computes what it sends from the passed values and the rep's pads; the session's
 rep from a source (`FlockComplete.repCut`) reads the same messages from the source. Here both run on the session's sends
-(`asksCut`), and where the source holds what the firewall computes, they run alike up to what only the final message
+(`asksCut`), and where the source holds what the ZK server computes, they run alike up to what only the final message
 reads (`eraseZ`):
 
-* **The PIOP** (`piopFw`, `piopCut_fw`): the firewall's zerocheck, lincheck and ring switch are the source's where the
+* **The PIOP** (`piopFw`, `piopCut_fw`): the ZK server's zerocheck, lincheck and ring switch are the source's where the
   source's masked values are `vals + h` below `zp 64`, the only ones they read
   (`FlockComplete.CutEq.zerocheckCut_eqAt`, `lincheckCut_eqAt`),
-  and its switched vectors `switchVec g` at the claims, and where the rank check, which the firewall leaves to the
+  and its switched vectors `switchVec g` at the claims, and where the rank check, which the ZK server leaves to the
   frame, passes (`ringSwitchCut_congr`, `rankCheck_pass_go`).
 * **Ligerito** and **the inner proof**: the session's hybrids, `FlockComplete.LigLock.ligeritoCut_alike` at `LigHyp`
-  and `FlockComplete.SimInner.innerCut_alike` at `InnerSrc`, at the firewall's run. Its inner proof stops on a failing
+  and `FlockComplete.SimInner.innerCut_alike` at `InnerSrc`, at the ZK server's run. Its inner proof stops on a failing
   batched constraint, so where it returns, that constraint held (`innerP_batched`).
-* **`repCut_fw`**: where the firewall's rep returns, the rep from the source, at level 0's commitment erased, returns the
-  same transcript and log, and a proof equal to the firewall's up to `eraseZ`.
+* **`repCut_fw`**: where the ZK server's rep returns, the rep from the source, at level 0's commitment erased, returns the
+  same transcript and log, and a proof equal to the ZK server's up to `eraseZ`.
 -/
 
 @[expose] public section
@@ -85,7 +85,7 @@ section
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **The firewall's PIOP**: `repFwC`'s zerocheck, lincheck and ring switch, sending the masked values `mk` and the
+/-- **The ZK server's PIOP**: `repFwC`'s zerocheck, lincheck and ring switch, sending the masked values `mk` and the
 switched vectors of `g` at the claims. -/
 def piopFw (io : FlockComplete.Asks M) (st : Setup) (lay : Zk.PadLayout) (g : Array F128) (mk : ℕ → F128)
     (cap root : ByteArray) (extras : Array Claim) :
@@ -218,9 +218,9 @@ theorem eraseL_eraseL' (lg : LigeritoProof) : FlockComplete.eraseL (FlockComplet
 
 /-! ## The PIOP -/
 
-/-- **The source's PIOP is the firewall's**: answered by `asksCut`, from a source whose masked values below `zp 64` are
-the firewall's `mk`, where at the firewall's zerocheck and lincheck the rank check passes and the source's switched
-vectors are the firewall's at the claims, `piopCut` returns what `piopFw` returns. -/
+/-- **The source's PIOP is the ZK server's**: answered by `asksCut`, from a source whose masked values below `zp 64` are
+the ZK server's `mk`, where at the ZK server's zerocheck and lincheck the rank check passes and the source's switched
+vectors are the ZK server's at the claims, `piopCut` returns what `piopFw` returns. -/
 theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (g : Array F128)
     (mk : ℕ → F128) (src : FlockComplete.RepSrc) (cap root : ByteArray) (extras : Array Claim)
     (prior : Array (List F128)) (words : List ℕ) (hm14 : 14 ≤ st.m) (hm : st.m - 6 ≤ lay.nMlv)
@@ -272,14 +272,14 @@ theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Z
 
 /-! ## The rep -/
 
-/-- **The rep from the source is the firewall's up to `eraseZ`**: answered by `asksCut` from the log `l`, where the
-firewall's rep returns a proof `p`, the rep from a source that holds what the firewall computes returns, at level 0's
+/-- **The rep from the source is the ZK server's up to `eraseZ`**: answered by `asksCut` from the log `l`, where the
+ZK server's rep returns a proof `p`, the rep from a source that holds what the ZK server computes returns, at level 0's
 commitment erased, the same transcript and log and a proof `p'` with `eraseZ p' = eraseZ p`. The source holds: the
-masked values `vals + h` below `zp 64`, the PIOP's (`hmk`, where the fold's `kLog` is the setup's: the firewall's
-passed values are those `zp 64` words); at the firewall's zerocheck and lincheck, a passing rank check and its switched
+masked values `vals + h` below `zp 64`, the PIOP's (`hmk`, where the fold's `kLog` is the setup's: the ZK server's
+passed values are those `zp 64` words); at the ZK server's zerocheck and lincheck, a passing rank check and its switched
 vectors (`hpiop`); at its PIOP, level 0's opening (`hlig`, `LigHyp`), whose masked values from `zp 64` to `h_ab` are
-the firewall's own; and at its Ligerito and constraints, the inner proof's (`hinner`, `InnerSrc`), where the batched
-constraint held, as the firewall's own inner proof checks (`innerP_batched`). -/
+the ZK server's own; and at its Ligerito and constraints, the inner proof's (`hinner`, `InnerSrc`), where the batched
+constraint held, as the ZK server's own inner proof checks (`innerP_batched`). -/
 theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)

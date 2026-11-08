@@ -18,15 +18,15 @@ DIR``).
    adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest run
    doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, then the salt, which the memory challenger draws after it from its own host's OS and logs under
+   commitment to ``W``, then the salt, which the memory challenger samples after it from its own host's OS and logs under
    the window's binding (`binding`; `challenger_party.salt`, the gate's ``challenger_party`` verb on a salt request),
    ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory challenger's table and the root. Setup's own
-   inputs are kept as it sent them, for the tie. A challenger that draws no salt leaves the period undecided.
+   inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
    indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_party.session`). The request names the window's
    binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
-   commitment it was drawn after, and runs one session a binding, under the id derived from them
+   commitment it was sampled after, and runs one session a binding, under the id derived from them
    (`challenger_party.session_id`).
 4. **The verdict**: the run protocol's case (`period.case`: setup's published outputs, the session, the table and setup's
    own inputs) under the session id the verdict derives itself from the window's binding and what setup published,
@@ -175,7 +175,7 @@ class NoSalt(Exception):
 
 
 def _salt_source(party: Side, audit: bytes):
-    """The salt's source: drawn by the memory challenger on ``party`` once the commitment exists, and logged there under
+    """The salt's source: sampled by the memory challenger on ``party`` once the commitment exists, and logged there under
     the window's binding ``audit`` (`challenger_party.salt`)."""
 
     def source(commitment: bytes) -> bytes:
@@ -477,7 +477,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--hf-home", type=Path, required=True, help="the HF cache the serve read its snapshot from")
     ap.add_argument("--p2-lib", help="libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--node", help="the prover's node, as the session names it (default: this host's name)")
+    ap.add_argument("--node", help="the developer's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")
     ap.add_argument("--rounds", type=int, default=ROUNDS, help=f"the session's challenges (default {ROUNDS})")
     ap.add_argument("--challenger-host", default=CHALLENGER_HOST)
