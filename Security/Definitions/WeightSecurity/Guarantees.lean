@@ -95,7 +95,7 @@ trace's outputs at its bucket, and the dataflow, that the trace is honest outsid
 cones. Neither layer reads the other. -/
 def TheftServed : Prop :=
   ∀ {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
-    [DecidableEq O] [Fintype V] [DecidableEq V] [Fintype Tick] [Inhabited Tick]
+    [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
     (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L E M : ℕ) (δ : ℝ≥0∞)
     (run : Θ → R → Verity.Game (List (Served O V Tick Adv))),

@@ -93,7 +93,7 @@ theorem sum_wrongAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w ∈ 
       have ih := sum_wrongAt_le_lead l fun ⟨v, hv, hva⟩ => h ⟨v, List.mem_cons_of_mem _ hv, hva⟩
       have hs : ∀ n, wrongAt (w :: l) (n + 1) = wrongAt l n := fun n => by simp [wrongAt]
       have h0 : wrongAt (w :: l) 0 = w.wrong := by simp [wrongAt]
-      simp only [accLen, lead, if_pos ha, if_neg hd]
+      simp only [accLen, lead, ite_eq_left ha, ite_eq_right hd]
       rw [sum_range_succ', h0]
       simp only [hs]
       omega
@@ -137,7 +137,7 @@ theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Ou
                   exact mem_Ico.2 ⟨hn.2, hn.1⟩
             _ ≤ L + 1 := by rw [Nat.card_Ico]; omega
 
-variable [DecidableEq O] [Fintype V] [DecidableEq V] [Fintype Adv] [Inhabited Adv] [Fintype Tick] [Inhabited Tick]
+variable [DecidableEq O]
 
 /-- The values a run's releases changed through the halt, by window and slot: the overwrite of its covert string. -/
 noncomputable def overwrite (C : Θ → Q × Adv → O → V) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
@@ -157,13 +157,15 @@ theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (E M : ℕ)
         · have hp' : overwrite C Ou L θ r l T p ≠ none := (mem_filter.1 hp).2
           have hc : p.1.val < count L l ∧ p.2 ∈ changed C Ou L θ r l p.1.val := by
             by_contra hc
-            exact hp' (if_neg hc)
+            exact hp' (ite_eq_right hc)
           exact mem_sigma.2 ⟨mem_range.2 hc.1, hc.2⟩
         · simp only [Sigma.mk.inj_iff, heq_eq_eq] at h
           exact Prod.ext (Fin.ext h.1) h.2
     _ = ∑ n ∈ range (count L l), (changed C Ou L θ r l n).card := card_sigma _ _
     _ ≤ E * lead l + (L + 1) * Fintype.card O := sum_card_changed_le C E Ou L θ r l hloc hacc
-    _ ≤ E * M + (L + 1) * Fintype.card O := by gcongr; exact hlead.le
+    _ ≤ E * M + (L + 1) * Fintype.card O := by have := hlead.le; gcongr
+
+variable [Fintype V] [Fintype Adv] [Inhabited Adv] [Fintype Tick] [Inhabited Tick]
 
 /-- **A local run that doesn't escape is the served channel's deviation with its own covert string**: each window's
 advice and bucket, the run's overwrite and its halt. -/
@@ -178,26 +180,31 @@ theorem view_eq_resp (C : Θ → Q × Adv → O → V) (E M : ℕ) (Ou : Outside
     ⟨min (count L l) T, Nat.lt_succ_of_le (min_le_right _ _)⟩), ?_⟩
   refine Outsider.view_congr Ou r _ _ T fun n hn => ?_
   have hlen := Outsider.view_length Ou r (fun h _ => reply L l h.length) n
+  have hv : view Ou L r l n = Ou.view r (fun h _ => reply L l h.length) n := rfl
+  generalize Ou.view r (fun h _ => reply L l h.length) n = V at hlen hv ⊢
+  subst hlen
   simp only [Channel.resp, servedChannel]
-  rw [hlen, reply]
-  by_cases hnc : n < count L l
-  · have hw : l[n]? = some l[n] := List.getElem?_eq_getElem (lt_of_lt_of_le hnc hcl)
-    rw [if_pos hnc, dif_pos ⟨lt_min hnc hn, hn⟩, dif_pos hn]
+  rw [reply]
+  by_cases hnc : V.length < count L l
+  · have hw : l[V.length]? = some l[V.length] := List.getElem?_eq_getElem (lt_of_lt_of_le hnc hcl)
+    rw [ite_eq_left hnc, dite_eq_left ⟨lt_min hnc hn, hn⟩, dite_eq_left hn]
     simp only [hw, Option.map, Option.getD]
     refine congrArg some (Prod.ext (funext fun o => ?_) rfl)
-    by_cases ho : o ∈ changed C Ou L θ r l n
+    by_cases ho : o ∈ changed C Ou L θ r l V.length
     · simp [overwrite, hnc, ho, hw]
-    · have he : l[n].egress o = C θ ((Ou.query r (view Ou L r l n)).1, l[n].adv) o := by
+    · have he : l[V.length].egress o = C θ ((Ou.query r (view Ou L r l V.length)).1, l[V.length].adv) o := by
         simpa [changed, hw] using ho
+      rw [hv] at he
       simp only [overwrite, hnc, ho, and_false, ↓reduceIte, Option.getD_none]
       exact he
-  · rw [if_neg hnc, dif_neg fun h => hnc (lt_of_lt_of_le h.1 (min_le_left _ _))]
+  · rw [ite_eq_right hnc, dite_eq_right fun h => hnc (lt_of_lt_of_le h.1 (min_le_left _ _))]
 
 end Served
 
 namespace SecurityProofs
 
-open Verity.Game
+open Verity.Game WeightSecurity.Assumptions
+open scoped ENNReal
 
 open Classical in
 theorem avg_indicator {α : Type} [Fintype α] (P : α → Prop) :
@@ -221,23 +228,23 @@ theorem avg_le_const {α : Type} [Fintype α] (x : ℝ≥0∞) : avg (fun _ : α
   · simp [avg]
   · exact (avg_const x).le
 
-theorem value_const_le {α : Type} (P : Prop) [Decidable P] (g : Game α) :
+theorem value_const_le {α : Type} (P : Prop) [Decidable P] (g : Verity.Game α) :
     value (fun _ => P) g ≤ if P then 1 else 0 := by
   by_cases hP : P
-  · rw [if_pos hP]
+  · rw [ite_eq_left hP]
     exact value_le_one _ _
-  · rw [if_neg hP]
+  · rw [ite_eq_right hP]
     exact (value_mono (q := fun _ => False) (fun _ h => hP h) g).trans_eq (value_false g)
 
 theorem ite_exists_le_sum {ι : Type} [Fintype ι] (P : ι → Prop) [Decidable (∃ i, P i)] [DecidablePred P] :
     (if ∃ i, P i then (1 : ℝ≥0∞) else 0) ≤ ∑ i, if P i then 1 else 0 := by
   by_cases h : ∃ i, P i
   · obtain ⟨i, hi⟩ := h
-    rw [if_pos ⟨i, hi⟩]
-    calc (1 : ℝ≥0∞) = if P i then 1 else 0 := (if_pos hi).symm
+    rw [ite_eq_left ⟨i, hi⟩]
+    calc (1 : ℝ≥0∞) = if P i then 1 else 0 := (ite_eq_left hi).symm
       _ ≤ ∑ i, if P i then 1 else 0 :=
         single_le_sum (f := fun i => if P i then (1 : ℝ≥0∞) else 0) (fun _ _ => zero_le) (mem_univ i)
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     exact zero_le
 
 /-- **The leakage lemma over a game of coins.** Every party's run is a game `g z` at the weights' and outsider's coins
@@ -247,7 +254,7 @@ covert strings with `HonestUseHard` for each. -/
 theorem value_leak {Ω R Θ X Y M Θ' α : Type} [Fintype Ω] [Fintype R] (C : Θ → X → Y) (gen : Ω → Θ)
     (Stolen : Θ → Θ' → Prop) (q : ℕ) (A : Set (Outsider R X Y Θ')) (p : ℝ) (O : Outsider R X M Θ')
     (ch : Channel R X Y M) (hhon : HonestUseHard C gen Stolen q A p) (hsim : Simulable A O ch)
-    (g : Ω × R → Game α) (Win Bad : Ω × R → α → Prop)
+    (g : Ω × R → Verity.Game α) (Win Bad : Ω × R → α → Prop)
     (hcov : ∀ z a, Win z a →
       Bad z a ∨ ∃ s : ch.S, Stolen (gen z.1) ((O.withString ch s).model z.2 (honest C (gen z.1)) q)) :
     avg (fun z => value (Win z) (g z)) ≤
@@ -282,7 +289,7 @@ theorem value_leak {Ω R Θ X Y M Θ' α : Type} [Fintype Ω] [Fintype R] (C : �
 /-- **The served channel's covert strings**: advice and a bucket per window, an overwrite of at most `K` of the `T · |O|`
 values, and the halt. -/
 theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O] [DecidableEq O] [Fintype V]
-    [DecidableEq V] [Nonempty V] [Fintype Tick] (T K : ℕ) :
+    [Nonempty V] [Fintype Tick] (T K : ℕ) :
     Fintype.card (servedChannel R Q Adv O V Tick T K).S ≤
       Fintype.card Adv ^ T * Fintype.card Tick ^ T *
         ((∑ j ∈ range (K + 1), (T * Fintype.card O).choose j) * Fintype.card V ^ K) * (T + 1) := by
@@ -300,14 +307,14 @@ theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O
       funext p
       by_cases hp : d.1 p = none
       · have : p ∉ (img d).1 := by simp [img, hp]
-        rw [dif_neg this, hp]
+        rw [dite_eq_right this, hp]
       · have hm : p ∈ (img d).1 := by simp [img, hp]
-        rw [dif_pos hm]
+        rw [dite_eq_left hm]
         obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.1 hp
         simp [img, hv]
     rw [← card_univ]
     refine card_le_card_of_injOn img (fun d _ => ?_) (fun d _ d' _ h => ?_)
-    · simp only [Population.Exfil.devBall, mem_sigma, mem_filter, mem_univ, true_and, and_true]
+    · simp only [Finset.mem_coe, Population.Exfil.devBall, mem_sigma, mem_filter, mem_univ, true_and, and_true]
       exact d.2
     · exact Subtype.ext ((hrec d).symm.trans ((congrArg (fun D : Population.Exfil.Dev (Fin T × O) V =>
         fun p => if h : p ∈ D.1 then some (D.2 ⟨p, h⟩) else none) h).trans (hrec d')))
@@ -324,7 +331,7 @@ theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O
     _ = _ := by ring
 
 theorem TheftServed : Guarantees.TheftServed := by
-  intro Ω R Θ Q Adv O V Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen A p Ou T L E M δ run hhon hsim hesc
+  intro Ω R Θ Q Adv O V Tick Θ' _ _ _ _ _ _ _ _ _ C gen Stolen A p Ou T L E M δ run hhon hsim hesc
   classical
   have hcov : ∀ (z : Ω × R) (l : List (Served O V Tick Adv)),
       Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)) →
@@ -364,6 +371,8 @@ open WeightSecurity.ToyServed
 
 theorem card_W : Fintype.card (W × Unit) = 256 := by simp [W]
 
+theorem honest_C (θ : W) : honest C θ = honest C (0, 0) := rfl
+
 /-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
 theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
     Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 := by
@@ -372,9 +381,13 @@ theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
   rw [card_W]
   have h1 : (univ.filter fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)).card ≤ 1 := by
     refine card_le_one.2 fun a ha b hb => ?_
-    simp only [mem_filter, mem_univ, true_and, Stolen, gen, id] at ha hb
-    have hab : a.1 = b.1 := ha.symm.trans hb
-    exact Prod.ext hab (Subsingleton.elim _ _)
+    obtain ⟨a1, ⟨⟩⟩ := a
+    obtain ⟨b1, ⟨⟩⟩ := b
+    have ha' : P.model () (honest C (gen a1)) 2 = gen a1 := (mem_filter.1 ha).2
+    have hb' : P.model () (honest C (gen b1)) 2 = gen b1 := (mem_filter.1 hb).2
+    rw [honest_C] at ha' hb'
+    have hab : gen a1 = gen b1 := ha'.symm.trans hb'
+    rw [show a1 = b1 from hab]
   have : ((univ.filter fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)).card : ℝ) ≤ 1 := by
     exact_mod_cast h1
   rw [Nat.cast_ofNat]
@@ -386,7 +399,7 @@ theorem TheftServedHonest : Guarantees.TheftServedHonest := by
   classical
   refine ⟨fun P _ => ToyServed.guess_le P, fun _ => Set.mem_univ _, fun θ r => le_of_eq ?_⟩
   unfold WeightSecurity.ToyServed.honestRun
-  rw [value_ret, if_neg]
+  rw [value_ret, ite_eq_right]
   rintro (⟨w, hw, -, hd⟩ | h)
   · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw
     rcases hw with rfl | rfl <;> exact hd
@@ -401,7 +414,7 @@ theorem TheftServedNontrivial : Guarantees.TheftServedNontrivial := by
       (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 1 := by
     intro z
     unfold WeightSecurity.ToyServed.leakRun
-    rw [value_ret, if_pos]
+    rw [value_ret, ite_eq_left]
     simp [WeightSecurity.ToyServed.Stolen, WeightSecurity.ToyServed.gen, WeightSecurity.ToyServed.thief, Served.view,
       Served.reply, Served.count, Outsider.view]
   have hloc : ∀ z : WeightSecurity.ToyServed.W × Unit, value (fun l => ¬ Served.Local WeightSecurity.ToyServed.C 1
@@ -409,10 +422,15 @@ theorem TheftServedNontrivial : Guarantees.TheftServedNontrivial := by
       (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 0 := by
     intro z
     unfold WeightSecurity.ToyServed.leakRun
-    rw [value_ret, if_neg (not_not.2 ?_)]
+    rw [value_ret, ite_eq_right (not_not.2 ?_)]
     intro n _ w hw
     have hwr : w.wrong = 1 := by
-      rcases n with _ | _ | n <;> simp_all
+      rcases n with _ | _ | n
+      · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
+        rw [← hw]
+      · simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hw
+        rw [← hw]
+      · simp at hw
     rw [hwr, mul_one]
     exact (card_le_univ _).trans_eq Fintype.card_unit
   simp only [hsteal, hloc, avg_const, add_zero] at h

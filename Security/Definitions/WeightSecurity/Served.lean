@@ -96,13 +96,12 @@ def Local [Fintype O] (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider
 
 end Served
 
-open Classical in
 /-- **The served channel** over `T` windows. A covert string is each window's advice and timing bucket, an overwrite of
 at most `K` of the `T · |O|` released values, and how many windows release before the halt. With it the datacenter
 serves the outsider's `n`-th query with the `n`-th advice and, for the windows before the halt, tells it the honest
 answer with the overwrite applied, at the `n`-th bucket; after the halt it tells it nothing. -/
 noncomputable def servedChannel (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O] [DecidableEq O] [Fintype V]
-    [DecidableEq V] [Fintype Tick] (T K : ℕ) : Channel R (Q × Adv) (O → V) (Option ((O → V) × Tick)) where
+    [Fintype Tick] (T K : ℕ) : Channel R (Q × Adv) (O → V) (Option ((O → V) × Tick)) where
   S := (Fin T → Adv) × (Fin T → Tick) ×
     {d : Fin T × O → Option V // (Finset.univ.filter fun p => d p ≠ none).card ≤ K} × Fin (T + 1)
   ask s _ h x := (x.1, if hn : h.length < T then s.1 ⟨h.length, hn⟩ else x.2)
