@@ -3,8 +3,9 @@ registration of N spans, the first stage's sample S of Q replay blocks after it,
 S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
 * **The stream** (`stream_of`): the challenger's `service.Stream` over the toy's design (`toy.spec`), its `TwoStage` drawing
-  both stages with Lean (`Select.select`, `Select.selectSecond`) on a development challenger's coins, each opened after its
-  registration's digest.
+  both stages with Lean (`Select.select`, `Select.selectSecond`) on one challenger session's coins (`StageCoins`): a
+  development session on this machine (`a5_coins.start`'s ``local``, on `ROOT`, pinned on ``--main``), withheld, each
+  stage one sample of it after its registration's digest. Its samples show the path, not an auditor's coins.
 * **The boundary** (`toy.boundary`): N replay blocks' ingress and egress rows under fresh salts, registered on the stream
   (`Stream.register`, held to the challenger's own window), and the first stage's sample S of Q of them.
 * **The interior** (`toy.interior`): S replayed from the boundary's ingress rows, committed template-major and wired as the
@@ -19,26 +20,31 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them). Each
   session's statement as round 2 takes it (`statements`) is held to round 2's check (`second_stage.check`) where the tree
   has it.
+* **The outcome** (`outcome_of`): the sessions delivered to the stream and its outcome on what the interior's audit
+  record took, with both stages' coin evidence once the session has ended: the boundary's audit record over the replay
+  sample and the interior's over the second sample, and the run of record over both.
 * **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off, so b_in's row and b_out's output
   are not the boundary's at S[0], every circuit and wire holding: Lean's registered reads refuse both link members ("does not
   open"), the fold and flips accepted.
 
-Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record accepted or refusing
-only the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
-alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else. ``--out`` holds both
-windows (``boundary/``, ``interior/``, their private files too), a5's records (``audit/``), the sessions' statements
-(``statements.json``) and ``summary.json`` (both stages' registrations, laws and draws among it). The stream's outcome
-(`Stream.deliver`, `Stream.outcome`) is not taken: it needs the coins' evidence from a pinned challenger session.
+Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record and the outcome
+accepted or refusing only the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads
+of earlier values alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and
+the outcome refused. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files too), a5's records
+(``audit/``), the challenger session's records (``challenger/``), the sessions' statements (``statements.json``) and
+``summary.json`` (both stages' registrations, laws and draws, and the outcome, among it).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--altered]
+      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
+        --out DIR [--altered]
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
-import secrets
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -46,13 +52,15 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
+import a5_coins as AC  # noqa: E402
 import toy as T  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
-#: the development challenger's layout: one family, the coins both stages' samples read
-DEV_SCHEME, DEV_FAMILY, DEV_COINS = "verity/two-stage/toy/dev-draw/v1", "draw", 8
+#: the run root the run's challenger session opens on, which both registrations name
+ROOT = hashlib.sha512(b"verity/two-stage/toy/run/v1").hexdigest()
+CHALLENGER = "two-stage toy: a development challenger session on this machine (a5_coins local)"
 
 
 def composer(defn, member: T.CS.Member, name: str):
@@ -83,21 +91,73 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
     return {m.key: c.public_body(k) for k, m in enumerate(c.window.members)}
 
 
-def stream_of(a: argparse.Namespace) -> tuple[S.Stream, CC.ChallengerCoins]:
-    """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell), on a
-    development challenger's coins: an in-process `LiveChallenger` on its own entropy, committed before any coin opens,
-    whose coins each stage's sample reads after its registration's digest. They show the path, not an auditor's coins."""
-    ch = Ch.LiveChallenger(DEV_SCHEME, 0, [(DEV_FAMILY, DEV_COINS)], secrets.token_bytes)
-    coins = CC.ChallengerCoins(Ch.LiveRecord(ch, DEV_FAMILY))
+class StageCoins(CC.ChallengerCoins):
+    """Both stages' coins of the run's one challenger session (``draws``, `a5_coins.Draws`' proxy) as the stream reads
+    them: the first stage's rank 0's, the second's rank 1's, each committed to its registration's digest in turn."""
+
+    def __init__(self, draws) -> None:
+        self.stages, self.at = (AC.RankCoins(draws, 0), AC.RankCoins(draws, 1)), -1
+
+    def commit(self, after: bytes) -> None:
+        self.at += 1
+        self.stages[self.at].commit(after)
+
+    def __call__(self, n: int) -> bytes:
+        return self.stages[self.at](n)
+
+
+def needs(stream: S.Stream, n: int, q: int) -> tuple[int, int]:
+    """The most coins each stage's sample reads, known before the session opens (`a5_coins.need`'s rule): the first stage's
+    subset of ``q`` of the ``n`` spans, and the second's cells of ``q`` replay blocks, whichever the first stage samples."""
+    w, reads = T.boundary_window(n, q), []
+
+    def zeros(k: int) -> bytes:
+        reads.append(k)
+        return bytes(k)
+    S.select_second(list(range(q)), stream.cells, stream.counts, zeros)
+    return AC.need(f"subset:{q}", w.program, w.query, n), -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
+
+
+def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
+    """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell) on the
+    run's challenger session, which opens once both stages have planned the coins their samples read (each plan
+    returns only then, so the two plan at once)."""
     stream = S.Stream(T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES)), list(T.TEMPLATES), replay=T.REPLAY,
-                      budget=1, delta=a.delta, challenger="two-stage toy: development challenger", coins=coins)
-    return stream, coins
+                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
+    with ThreadPoolExecutor(len(coins.stages)) as ex:
+        list(ex.map(lambda c, n: c.plan(n), coins.stages, needs(stream, a.n, a.q)))
+    return stream
 
 
-def drawn(stream: S.Stream, coins: CC.ChallengerCoins, registration: S.WindowCommitmentRecord) -> S.Draw:
-    """The stream's one sample of ``registration``, on the coins opened after its digest."""
+def drawn(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
+    """The stream's one sample of ``registration``, on the coins opened after its digest, and their segment (which ends
+    the stage's turn on the session's client)."""
     coins.commit(bytes.fromhex(registration.digest))
-    return stream.select(registration)
+    try:
+        draw = stream.select(registration)
+    finally:
+        segment = coins.stages[coins.at].drawn()
+    return draw, segment
+
+
+def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None]) -> dict:
+    """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
+    `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
+    sessions, with both stages' coin evidence: accepted, and the checks each stage's audit record failed."""
+    sessions = handed["sessions"]
+    verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in handed["verdicts"].items()}
+    given = {x: handed[x] for x in ("proved_units", "instances", "served", "session_roots")}
+    try:
+        o = stream.deliver(second, sessions) or stream.outcome(second, verdicts, handed["statement"], coins=evidence[0],
+                                                               interior_coins=evidence[1], **given)
+    except (S.Refused, S.Pending) as e:
+        return {"accepted": False, "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
+    body = stream.records[-1]
+
+    def failed(audit: dict | None) -> list[str] | None:
+        return None if audit is None else sorted(k for k, c in audit["checks"].items() if not c["ok"])
+    return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"], "interior": failed(body["audit"]),
+            "replay_sample": failed((body.get("replay_sample") or {}).get("audit"))}
 
 
 def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
@@ -182,23 +242,28 @@ def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window
     return s, ok, record, got
 
 
-def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None) -> bool:
+def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None,
+             o: dict | None) -> bool:
     """Honest: every check before the sample passed, every Lean verdict accepted, the sessions' registered reads the
     verifier's own, every negative refused, the record accepted or refusing only the reads of the interior's own
-    ports (`own_reads_only`), and round 2 ``r2`` accepting the statements where the tree has it. ``--altered``: every
-    check before the sample passed, Lean's verify refused both link members (m0, m3) by `ALTERED` and accepted the fold
-    and flips, and round 2 refuses the statements where the tree has it."""
+    ports (`own_reads_only`), round 2 ``r2`` accepting the statements where the tree has it, and the stream's outcome
+    ``o`` accepted or refusing only where the record does, the replay sample's audit record accepting. ``--altered``:
+    every check before the sample passed, Lean's verify refused both link members (m0, m3) by `ALTERED` and accepted
+    the fold and flips, round 2 refuses the statements where the tree has it, and the outcome refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
     before = all((s.get("checks_before_draw") or {}).values())
     if not a.altered:
         refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
+        own = own_reads_only(record, window, s.get("draw") or [])
         return (before and audit.get("complete") is True and audit.get("registered_reads") is True
                 and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
-                and (ok or own_reads_only(record, window, s.get("draw") or [])) and (r2 is None or r2.get("ok") is True))
+                and (ok or own) and (r2 is None or r2.get("ok") is True) and o is not None
+                and (o.get("accepted") is True or (own and o.get("interior") == ["registered"] and o.get("replay_sample") == [])))
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
     return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
-            and all((audit.get("verdicts") or {}).get(x) is True for x in rest) and (r2 is None or r2.get("ok") is False))
+            and all((audit.get("verdicts") or {}).get(x) is True for x in rest) and (r2 is None or r2.get("ok") is False)
+            and o is not None and o.get("accepted") is False)
 
 
 def main(argv=None) -> int:
@@ -216,26 +281,39 @@ def main(argv=None) -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=0, help="the sessions' first port (0: a free block)")
     ap.add_argument("--session-timeout", type=float, default=3600)
+    ap.add_argument("--main", required=True, help="the verifier's copy of main's first-parent history (`git rev-list "
+                    "--first-parent origin/main`), which the challenger session's pin is held to")
     a = ap.parse_args(argv)
-    out = a.out
-    out.mkdir(parents=True, exist_ok=True)
-    stream, coins = stream_of(a)
-    summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "k": a.k, "altered": a.altered,
+    a.out.mkdir(parents=True, exist_ok=True)
+    manager, draws, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main)
+    try:
+        return run(a, a.out, StageCoins(draws), draws)
+    finally:
+        for rank in (0, 1):
+            draws.skip(rank)
+        finisher.join()
+        manager.shutdown()
+
+
+def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
+    """Both stages on the stream, the second stage's sessions, and the stream's outcome on the session's evidence."""
+    stream = stream_of(a, coins)
+    summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "k": a.k, "altered": a.altered, "root": ROOT,
                "stream": {"digest": stream.digest, "cells": list(stream.cells), "counts": list(stream.counts)}}
 
-    def refused(stage: str, e: S.Refused) -> int:
-        summary[stage] = {"refused": list(e.verdict.codes), "detail": e.verdict.detail}
+    def refused(stage: str, e: Exception) -> int:
+        summary[stage] = {"refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-        print("TWO " + json.dumps({f"{stage}_refused": list(e.verdict.codes)}, default=str))
+        print("TWO " + json.dumps({f"{stage}_refused": summary[stage]["refused"]}, default=str))
         return 1
     bc = T.boundary(T.ingress(a.n), a.q)
     brec = T.write(bc, out / "boundary", {"toy": "two-stage boundary"})
     try:
-        reg = stream.register(brec, T.CS.expected_ports(bc.window), leaf_layer=T.CS.leaf_layer(publics(bc)))
-        first = drawn(stream, coins, reg)
-    except S.Refused as e:
+        reg = stream.register(brec, T.CS.expected_ports(bc.window), leaf_layer=T.CS.leaf_layer(publics(bc)), window_root=ROOT)
+        first, segment = drawn(stream, coins, reg)
+    except (S.Refused, Ch.CoinError) as e:
         return refused("first_stage", e)
-    bd, sample = reg.digest, first.units
+    bd, sample, segments = reg.digest, first.units, [segment]
     summary.update(boundary=bd, first_stage=stage_of(reg, first))
     replayed = None
     if a.altered:
@@ -247,10 +325,11 @@ def main(argv=None) -> int:
                    registered=it.registered)
     try:
         ireg = stream.register_interiors(first, irec, T.CS.expected_ports(it.window),
-                                         leaf_layer=T.CS.leaf_layer(publics(it.committed)))
-        second = drawn(stream, coins, ireg)
-    except S.Refused as e:
+                                         leaf_layer=T.CS.leaf_layer(publics(it.committed)), window_root=ROOT)
+        second, segment = drawn(stream, coins, ireg)
+    except (S.Refused, Ch.CoinError) as e:
         return refused("second_stage", e)
+    segments.append(segment)
     summary["second_stage"] = stage_of(ireg, second)
     sets = {m.template: (composer(t, m, "two-stage-toy"), t) for m, t in zip(it.window.members, T.TEMPLATES)}
     s, ok, record, got = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec, irec,
@@ -262,11 +341,17 @@ def main(argv=None) -> int:
                              "links": T.links(it.window)},
                    sample=sample, **got)
     summary["record"]["own_reads_only"] = own_reads_only(record, it.window, s.get("draw") or [])
-    summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"))
+    published = draws.evidence()
+    summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
+    if "handed" in s:
+        summary["outcome"] = outcome_of(stream, second, s["handed"], [AC.evidence(published, g) for g in segments])
+    summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"), summary.get("outcome"))
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    r2 = summary.get("round_two")
+    r2, o = summary.get("round_two"), summary.get("outcome") or {}
     print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")},
-                               "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")}}, default=str))
+                               "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
+                               "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "refused")}},
+                              default=str))
     return 0 if summary["as_expected"] else 1
 
 

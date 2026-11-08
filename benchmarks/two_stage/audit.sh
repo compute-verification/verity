@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The two-stage toy's audit on a CPU node (audit.py): flock-circuit, flock-verify and the sampled-proofs verifier (the
 # stream's draws) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
-# (never a circuit, a prover file or a private body).
+# (never a circuit, a prover file, a private body, or a challenger's key or secret: its *-work/).
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
 #     bash benchmarks/two_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
@@ -30,15 +30,22 @@ sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
+# the challenger session's pin is held to main's first-parent line: a run's clone has the shipped tree as its origin, which
+# holds main as its own main or origin/main
+UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+{ git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
+    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } > "$O/fetch-main.log" 2>&1 \
+  && git rev-list --first-parent refs/remotes/origin/main > "$O/main.txt" || { tail -5 "$O/fetch-main.log"; exit 4; }
 rc=0
 for c in ${TWO_CASES:-honest altered}; do
   flags=(); [ "$c" = altered ] && flags=(--altered)
   # shellcheck disable=SC2086
   PYTHONPATH=$M0PATH uv run --no-sync python benchmarks/two_stage/audit.py --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-    --out "$W/$c" "${flags[@]}" ${TWO_ARGS:-} > "$O/$c.log" 2>&1 || rc=1
+    --main "$O/main.txt" --out "$W/$c" "${flags[@]}" ${TWO_ARGS:-} > "$O/$c.log" 2>&1 || rc=1
   grep '^TWO ' "$O/$c.log" || tail -20 "$O/$c.log"
   mkdir -p "$O/$c"
   (cd "$W/$c" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' \
-     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$O/$c/")
+     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' -print0 \
+     | xargs -0 -r -I{} cp --parents {} "$O/$c/")
 done
 exit $rc
