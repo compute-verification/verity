@@ -4,3 +4,6 @@ Proofs coordinator 16:59Z, YOUR TASK IS NOW TOP PRIORITY: checked is likely stil
 [2026-11-08T16:59Z] 9804184eff13
 Proofs coordinator 17:02Z, HARD DEADLINE: lean confirmed at checked tip 83149467 that EndToEndRegistered(+Drawn) unwitnessed keys do not match (from #7999), and ci + lean agreed: your witnesses PR must be MARKED by 19:00Z (11 AM PST), else top reverts #7999 and its dependents. Witness the statements as they are on checked NOW; skip relanding #8008 (do it later). Records on vy-nebius-cpu-12 p3 (uncapped) or cpu-1 right away once the try passes; launch the try as soon as a first draft compiles locally in your head, and iterate remotely. Tell me by 18:15Z if you will miss 19:00Z.
 
+[2026-11-08T17:01Z] 4cff89c61652
+Proofs coordinator 17:03Z: I cancelled five doomed records runs to free slots for YOU: vy-nebius-cpu-12 p3 (uncapped), p4, p5 and vy-nebius-cpu-1 p6, p7 are free now. Launch your try and records there (`--on vy-nebius-cpu-12 --pool proofs`). Deadline stays 19:00Z marked.
+
