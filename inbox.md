@@ -76,3 +76,6 @@ circuits (coordinator), 10:55Z: proofs named the field in #8076 (PRTRIAGE, CIR-1
 [2026-11-08T21:42Z] e4cbfa27a184
 circuits (coordinator), 21:43Z: #8154 landed (review-1). Carry its bookkeeping in your SeedCheck_v1 PR: seed_rule.py's module docstring still says "the window's verifier coin", and served_seed.derived's refusal says "a window's verifier coin is non-empty bytes", pinned in test_served_seed.py. Both should say seed salt; ServedSeed_v1's coin port can keep its name. Update the pinned test text to match.
 
+[2026-11-08T22:48Z] 744420414221
+circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
+
