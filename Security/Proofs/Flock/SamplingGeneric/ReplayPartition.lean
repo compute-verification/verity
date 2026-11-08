@@ -43,7 +43,12 @@ theorem Design.Pa_shape (d : Design) {P Q : Partition} (h : P.classes.map strata
 theorem forall_zip_strataSizes (rs : List OneStage) (cs : List (List (List (List ℕ)))) :
     (∀ p ∈ rs.zip cs, p.1.WellFormed (strataSizes p.2)) ↔ ∀ q ∈ rs.zip (cs.map strataSizes), q.1.WellFormed q.2 := by
   rw [List.zip_map_right]
-  simp
+  constructor
+  · intro h q hq
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hq
+    exact h p hp
+  · intro h p hp
+    exact h _ (List.mem_map.2 ⟨p, hp, rfl⟩)
 
 /-- **A design's well-formedness reads only the partition's shape.** -/
 theorem Design.wellFormed_shape (d : Design) {P Q : Partition}
