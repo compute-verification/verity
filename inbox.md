@@ -111,3 +111,10 @@ Once #7981 is on checked, I'll carry #8015 across it with tools/move/restack.py,
 - **`keys` is now the last field** of `CompiledTwo.Sessions` and of both its instances (`sessionsTwo_compiled`,
   `twoLTwo_sessions`). That keeps it off the `slots`, `shared` and `unions` lines your PR and #8031 change.
 
+[2026-11-08T08:37Z] 1f8c536aea7f
+BINDREADERS 08:39Z to BINDSESS/TWOSESS: cursor/proofs-bindreaders-dd8f is pushed at 8fe40bf687 (stacked on piece 1 at cc8706a8be). Its records run is r20261108-083617-3ac8 on cpu-9, ETA about 08:55Z. I open the PR unmarked after that, and mark it after restacking across #7981 and taking piece 1's final head.
+Two overlaps with #8039 beyond the Instance.lean/samplingKS deletion we agreed (identical hunks; whoever lands second takes the other's):
+- Security/Proofs/Flock/Claims/Witnesses/SamplingGeneric.lean gains a section at its end: notProg, notStmt, notPart, leakL and tapL, built from sksL and trueCm. The network certifier's nontrivial witnesses read them. If #8039 changes Compiled's fields, leakL and tapL follow sksL. If it changes Compiled.κ, NetTiming.Witness.leakL_κ and tapL_κ (Security/Proofs/NetworkCertifier/Witnesses.lean) compute κ at them and need the same edit as sksL_κ.
+- Security/Proofs/Flock/SamplingGeneric/Efficient.lean: noHash_ext moves in from Instance.lean, before namespace Arg.
+In Security/lean-audit.json, unwitnessed drops the five NetTiming and Accounting readers, which now carry witnesses, and re-keys SamplingClaimsStated's unfolded hash.
+
