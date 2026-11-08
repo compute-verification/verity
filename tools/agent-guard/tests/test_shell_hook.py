@@ -219,6 +219,9 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
         assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
     for command in passes:
         assert verdict(command, **gate) == "allow", command
+    (tmp_path / "vmstat").write_text(f"balloon_inflate {3 * 2**20}\nballoon_deflate {2**20}\n")     # 8 GiB in the balloon
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow", \
+        "memory the balloon holds is available: the VM gets it back as it asks"
 
 
 def cgroup_gate(tmp_path: Path, stat: str | None) -> dict[str, str]:

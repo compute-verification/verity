@@ -50,8 +50,14 @@ import json
 import os
 import statistics
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import torch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -87,13 +93,13 @@ def emit(obj: dict) -> None:
 
 
 class Cuda:
-    def __init__(self):
+    def __init__(self) -> None:
         self.lib = C.CDLL(os.environ.get("ATTN_LIBCUDA", "libcuda.so.1"))
         for f, a in CUDA.items():
             getattr(self.lib, f).argtypes, getattr(self.lib, f).restype = a, i32
         self("cuInit", 0)
 
-    def __call__(self, f: str, *args):
+    def __call__(self, f: str, *args: object) -> None:
         r = getattr(self.lib, f)(*args)
         if r:
             s = C.c_char_p()
@@ -149,7 +155,7 @@ class Attn:
     """The cubin's kernels over one set of device buffers: Q, P [B, H, *, *], K, V [B, Hkv, *, *] bf16, lens and nq [B] int32,
     and PV's least K (z["kpv"])."""
 
-    def __init__(self, cu: Cuda, funcs: dict, z: dict):
+    def __init__(self, cu: Cuda, funcs: dict, z: dict) -> None:
         self.cu, self.funcs = cu, funcs
         self.kpv = int(z["kpv"])
         self.D = z["Q"].shape[-1]
@@ -178,7 +184,7 @@ class Attn:
                     (C.c_int64 * 3)(*strides(kvs)), (C.c_int64 * 3)(*strides(os_)), self.B, self.H, self.Mq, self.Lcap,
                     self.gshift, self.kpv)
 
-    def kernel(self, op: str, tiling: str):
+    def kernel(self, op: str, tiling: str) -> vp:
         return self.funcs[attn.kernel(op, self.D, tiling)]
 
     def launch(self, op: str, tiling: str, warps: int, Y: int = 0) -> None:
@@ -366,10 +372,10 @@ def api_case(path: str, Bp: int = 0) -> dict | None:
     Hkv, Lcap = z["K"].shape[1], z["K"].shape[2]
     kpv, lens = int(z["kpv"]), z["lens"]
 
-    def dev(a: np.ndarray):
+    def dev(a: np.ndarray) -> torch.Tensor:
         return torch.from_numpy(np.ascontiguousarray(a).view(np.int16)).cuda().view(torch.bfloat16)
 
-    def host(x) -> np.ndarray:
+    def host(x: torch.Tensor) -> np.ndarray:
         torch.cuda.synchronize()
         return x.view(torch.int16).cpu().numpy().view(np.uint16)
 
@@ -452,7 +458,7 @@ def timing_at(cu: Cuda, funcs: dict, reps: int, z: dict) -> dict:
     e0, e1 = cu.event(), cu.event()
     ms = C.c_float()
 
-    def ours(op, tiling, warps, Y=0):
+    def ours(op: str, tiling: str, warps: int, Y: int = 0) -> float:
         cu("cuEventRecord", e0, None)
         a.launch(op, tiling, warps, Y)
         cu("cuEventRecord", e1, None)
@@ -488,14 +494,14 @@ def timing_at(cu: Cuda, funcs: dict, reps: int, z: dict) -> dict:
         ev0, ev1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         gqa = {"enable_gqa": True} if Hkv != H else {}
 
-        def tt(fn):
+        def tt(fn: Callable[[], object]) -> float:
             ev0.record()
             fn()
             ev1.record()
             ev1.synchronize()
             return ev0.elapsed_time(ev1)
 
-        def sdpa():
+        def sdpa() -> torch.Tensor:
             return F.scaled_dot_product_attention(q, k, v, **gqa)
 
         try:
@@ -506,7 +512,7 @@ def timing_at(cu: Cuda, funcs: dict, reps: int, z: dict) -> dict:
         try:
             from torch.nn.attention import SDPBackend, sdpa_kernel
 
-            def flash():
+            def flash() -> torch.Tensor:
                 with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
                     return sdpa()
 
@@ -526,12 +532,12 @@ def timing_at(cu: Cuda, funcs: dict, reps: int, z: dict) -> dict:
         arms["api_qk_lens"] = lambda: tt(lambda: attn.qk(q3, k3, tl, check_lens=False))
         arms["api_pv_lens"] = lambda: tt(lambda: attn.pv(p3, v3, tl, check_lens=False))
 
-        def steps():
+        def steps() -> None:
             for T in range(1, L + 1):
                 attn.qk(q3, k3[..., :T, :])
                 attn.pv(p3[..., :T], v3[..., :T, :])
 
-        def sdpa_steps():
+        def sdpa_steps() -> None:
             for T in range(1, L + 1):
                 F.scaled_dot_product_attention(q, k[:, :, :T], v[:, :, :T], **gqa)
 
