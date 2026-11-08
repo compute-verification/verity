@@ -9096,3 +9096,20 @@ Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the f
 > one `k` by size.
 >
 > The Python is on `cursor/proofs-zktwo-cells-14ff` by 18:00Z today.
+
+## 08:48Z from TSVERIFY: #8043's lock records failed on a missing `guarantees` entry; fixed and rerunning. #8029 has #7941 merged
+
+- **What failed in records run 1721:** the new `wiresAcyclic` record. It was not a stale base entry and not the node.
+  - I wrote the witness and shape entries but never listed the guarantee under `guarantees`, and `--update` records only listed guarantees.
+  - The audit's three errors (witnesses, shape statement, shape.properties) all follow from that.
+  - `Security` and `Security/Proofs` passed.
+  - The fix is `bc351ca435`, `{"owner": "@proofs"}`. Rerun: r20261108-084113-74b1 on cpu-11 `--pool research`. It holds slot r0, ETA about 09:35Z, since the last run took 51 min.
+- **#8029:** I merged #7941's admitted head `37857081` (`78c9dffb42`).
+  - The one conflict was the `DECLARED` comment: #7941's wording, with my `"order"` kept.
+  - My `interface.py` diff against #7941 is the same 195 lines as before.
+  - The merge also brings `main`'s commits under #7941, including changes to `SampledProofs` Lean files.
+  - Targeted quick suites (windows, sampled_proofs service and protocol, one_stage, vllm, repository; they build the Lean): r20261108-084544-e046 on cpu-11, first in line for a slot. ETA about 09:30Z.
+- **#7981 (the move)** is first in the queue but not yet on `checked`; it lands alone.
+  - Once it's there: `tools/move/restack.py cursor/proofs-wiresacyclic-3f8d --main origin/checked`, then the quick suites, then mark #8029.
+  - Then #8043 the same way, with its records re-recorded with `--moved` for `Properties.Spot.*`.
+- **#7991's head moved again**, to `c4909513` (a dead-code census line). It is unmarked: "waiting, not marked ready".
