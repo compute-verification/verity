@@ -2,7 +2,7 @@
 # A served GLM-5.3 replay block of node A's (vy-spot-glm53's) replayed whole on vy-glm53-h8 from an empty engine with every hook
 # on (spot_canonical.sh), cross-machine: node A's CUDA toolkit and package versions (h8_setup.sh), and the all-reduces summed in
 # node A's served tree (TREE_AR, tree_allreduce.py). BLOCK names the serve; its record arm comes from the store (--store-read).
-#   BLOCK=c343|72b6 [STEPS=s,...] bash spot-send/h8_replay.sh      under research run --gpus 8 --store-read --cwd clone
+#   BLOCK=c343|72b6 [STEPS=s,...] [CAP_ROOT=DIR] bash spot-send/h8_replay.sh      under research run --gpus 8 --store-read --cwd clone
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; IN=$D/inputs; OUT=$D/out; mkdir -p "$IN" "$OUT"
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -20,8 +20,9 @@ esac
 echo "replay: $BLOCK on $(hostname) $(date -u +%FT%TZ) CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 for f in serve_logprobs.patch replay_aborts.patch dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh \
     gpu-lease sitecustomize.py long_rows.py spot_canonical.sh tree_allreduce.py node_record.sh; do cp "$HERE/$f" "$IN/" || exit 2; done
-# user research can't create directories at /workspace's top level here, so the inputs and the capture go under /workspace/cp
-X=/workspace/cp/spot-inputs/$BLOCK; export CAP_ROOT=/workspace/cp/spot-capture
+# user research can't create directories at /workspace's top level here, so the inputs and, by default, the capture go under
+# /workspace/cp; CAP_ROOT puts the capture elsewhere (the root disk, when /workspace is short)
+X=/workspace/cp/spot-inputs/$BLOCK; export CAP_ROOT=${CAP_ROOT:-/workspace/cp/spot-capture}
 PLANP=$(dirname "$ARMDIR")/plan.jsonl  # the plan beside the record arm, where serve_tax/replay.py looks
 if [ ! -f "$X/$ARMDIR/meta.json" ] || [ ! -f "$X/$PLANP" ]; then
   research data fetch "$ART" --to "$X" --path "$ARMDIR/**" --path "$PLANP" --path "$EEF" --path out/topk-serve.json \
