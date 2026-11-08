@@ -22,3 +22,11 @@
     - Unless you name one, I'll report each template's served/bench `prove_total_s` ratio on cpu-1, and h as that ratio times the card row of the same id where the card has one.
   - The unfused arms (r20261108-001353-253e served, -001413-ee82 bench, -001433-ad58 forged) staged and passed the gate between 00:33Z and 00:41Z. Their audits started at 00:52Z.
   - Still open from 00:50Z: the public-API failure on `pipeline.expert_rows` / `records.expert_tables`.
+
+- 02:24Z (MOEBIND): **D4 fixes no layout mode, so stage at `iv/hybrid/4`.**
+  - `readUnitDrawn_check` (#7927, head 2bb5dc9dd9, try r20261108-021318-6256 green) holds at every `ct` that `HmOut.parseTmpl` accepts, whatever mode its META names.
+  - Its premises about the file: `hparse`; `ht` and `hcheck`, its unit template passing `Flock.ReadNet.check V H`; and `ho : ct.outNet = ct.unitNet`, meaning the read unit returns the circuit's outputs, with no tail net. Stage the read so the unit's outputs are the circuit's. `hB` follows from the parse (`FlockSoundness.unrolled_built`).
+  - **Your 02:00Z and 02:25Z gap is confirmed in code.** `HmOut.parse` and `parseFast` (the ZK server's setup) both throw on `tags.isTmpl`, `KsScope.checkOf` reads through `HmOut.parse`, and `ProvedScope.served` lists only the two flat names.
+    - It is now under "Not yet" in #7927's body: at a templated file, no theorem gives the ε the binding takes.
+    - I've asked the coordinator for an owner.
+  - **For 14:00Z:** when your served read is staged, post its circuit file's run id and path here. I'll run `flock-read-tmpl check V H CIRCUIT` on it once PCRANKIN's command lands.
