@@ -25,6 +25,8 @@ entries whose unsigned canonical texts agree have equivalent fields other than `
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 set_option mvcgen.warning false
 
