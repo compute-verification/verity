@@ -61,6 +61,17 @@ Both Qwen rows reproduce their old pins at this branch's base, `8c7321cd7c` (r20
 
 Every heavy row that moves is re-pinned and re-switched, and DeepSeek-V4-Pro reproduces its pins.
 
+**Neutrality at the merged head, without `--update`.** After circuits merged `checked` in (`c314a1fca7f`), each re-pinned row was rebuilt and compared with its pins by `verity-vllm neutrality ROW --tier heavy` (the re-pins' script with `--update` dropped). Every one is NEUTRAL: build rc 0, no differences on any rank's step, workload or request Program, and `manifests/records.json` unchanged.
+
+| row | run | ranks | verdict |
+| --- | --- | --- | --- |
+| GLM-5.3 b1 greedy | r20261108-154630-9af5 | 8 (1 request shape each) | NEUTRAL |
+| GLM-5.3 b8 greedy | r20261108-155521-6f08 | 8 (8 request shapes each) | NEUTRAL |
+| GLM-5.3 b8 stochastic | r20261108-154630-b66d | 8 (8 request shapes each) | NEUTRAL |
+| GLM-5.3 b32 | r20261108-154723-2b01 | 8 (32 request shapes each) | NEUTRAL |
+| Qwen3-0.6B RTX PRO 6000 TP1 | r20261108-154630-b7f8 | 1 | NEUTRAL |
+| Qwen3-14B RTX PRO 6000 TP2 | r20261108-154630-ea33 | 2 | NEUTRAL |
+
 ## circuit-check
 
 The circuit-check run of record is r20261108-100423-cf70.
