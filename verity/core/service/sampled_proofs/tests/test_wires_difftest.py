@@ -359,11 +359,7 @@ def _orders(draw, templates: dict, wires: list):
         return {i for i, (s, a, b) in enumerate(ranges) if s == t and max(a, lo) < min(b, hi)}
 
     need = {i: set() for i in range(len(ranges))}
-    for w in wires:
-        try:
-            w = _wire(w)
-        except D.Reject:
-            continue
+    for w in map(_wire, wires):
         for r, (t, a, b) in enumerate(ranges):
             if t == w["reader"] and (got := read_in(w, a, b - a)) is not None:
                 need[r] |= meet(w["writer"], max(got[0], 0), max(got[1], 0) + 1)
@@ -378,7 +374,8 @@ def _orders(draw, templates: dict, wires: list):
     if how == 0:
         order[draw(st.integers(0, len(order) - 1))][2] = 0
     elif how == 1:
-        order[draw(st.integers(0, len(order) - 1))][1] += draw(st.sampled_from([-1, 1]))
+        o = order[draw(st.integers(0, len(order) - 1))]
+        o[1] += 1 if o[1] == 0 else draw(st.sampled_from([-1, 1]))
     elif how == 2:
         order.insert(draw(st.integers(0, len(order))), ["Z", 0, 1])
     elif how == 3:
