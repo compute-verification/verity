@@ -894,7 +894,7 @@ def _wait_state(tmp_path, want: str, states: list[str]) -> subprocess.CompletedP
               'printf \'{"status": {"state": "%s"}}\\n\' "$s"; }; '
               f"wait_state computeinstance-x {want} 20")
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                          env={"PATH": os.environ["PATH"], "SEQ": str(seq), "XDG_RUNTIME_DIR": str(tmp_path), "NEBIUS_POLL_S": "0"})
+                          env={**os.environ, "SEQ": str(seq), "XDG_RUNTIME_DIR": str(tmp_path), "NEBIUS_POLL_S": "0"})
 
 
 def test_wait_state_ends_when_a_refused_start_goes_back_to_stopped(tmp_path):

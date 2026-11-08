@@ -33,9 +33,9 @@ served int8 linear call as its own Program on bits, which `verity.ml.protocols.p
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
-* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and A table of
-  each K are the Commit's values, its record bound into `calls_root` before `draw_root` and held to them by core's
-  credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
+* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap, or what ``commit_record`` names): each round's input-ids
+  table ``ids@<s>`` and A table of each K are the Commit's values, its record bound into `calls_root` before `draw_root`
+  and held to them by core's credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
@@ -327,7 +327,8 @@ class H1Run:
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
                  coin_source: str = "in-process", opener: Opener | None = None, served: Any = None,
-                 prover: str | None = None, session: str | None = None, graphs: Sequence[int] = ()) -> None:
+                 prover: str | None = None, session: str | None = None, graphs: Sequence[int] = (),
+                 commit_record: CT.CommitRecord | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
             raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
         if (salt is None) == (opener is None):
@@ -350,7 +351,7 @@ class H1Run:
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
-        self.draw, self.admission, self.coin_source = draw, admission, coin_source
+        self.draw, self.admission, self.coin_source, self.commit_record = draw, admission, coin_source, commit_record
         #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
@@ -761,14 +762,12 @@ class H1Run:
         return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(), CT.record_of(self))
 
     def finish(self) -> None:
-        """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
-        manifest, the last round's receipts and every round's root and coin, so sampling follows all of them."""
+        """Close the window, bind its Commit record (`pouw_h1_commit.bind`) and manifest, then open ``draw``'s coin after
+        `pouw_h1_requests.draw_root` over the manifest, the last round's receipts and every round's root and coin."""
         self.close()
         if not self.commit or self._unopened is not None:
             return
-        commit = CT.record_of(self)
-        if commit is not None:
-            self.commits["commit"] = commit
+        refused = CT.bind(self)
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
         if self.served is not None:
@@ -776,22 +775,23 @@ class H1Run:
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
-            self.commits["draw"] = {"root": root.hex(), "receipts": receipts.hex(), "coin": None}
+            self.commits["draw"] = {"root": root.hex(), "receipts": receipts.hex(), "coin": None, **({"refused": refused} if refused else {})}
             try:
-                coin = self.draw.record(root) if self.draw is not None else None
+                coin = self.draw.record(root) if self.draw is not None and refused is None else None
             except CoinError as e:
                 self.commits["draw"]["refused"] = str(e)
             else:
                 self.commits["draw"]["coin"] = coin.to_json() if coin else None
             self.commits.update({"draw_session": s} if (s := getattr(self.draw, "session", None)) is not None else {})
         if self.transcript_dir:
-            d = Path(self.transcript_dir)
-            d.mkdir(parents=True, exist_ok=True)
+            (d := Path(self.transcript_dir)).mkdir(parents=True, exist_ok=True)
             (d / CALLS_FILE).write_text(json.dumps({"schema": RECORD, "entry": self.entry, "commitment": self.commits,
                                                     "public": {"rows": self.rows, "steps": self.steps,
                                                                "shapes": [list(s) for s in self.shapes_]},
                                                     "details": {k: v for k, v in self.details.items() if k != "refused"},
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
+        if refused is not None:
+            raise ValueError(refused)
 
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM", "PROGRAM_META", "RECORD", "SALT_TAG",
