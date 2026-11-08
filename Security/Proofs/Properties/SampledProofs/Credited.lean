@@ -4,7 +4,6 @@ public import Proofs.Properties.SampledProofs
 public import Proofs.Properties.SampledProofs.Units
 public import Proofs.Properties.Nci.ReadsExact
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
-public import Proofs.Properties.Pous.MemoryChallenger.Header
 public import Proofs.Properties.Accounting.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
@@ -393,6 +392,11 @@ theorem toString_ofNat (n : ℕ) : toString (Int.ofNat n) = toString n := by
   rw [Int.toString_eq_repr, Int.repr_eq_ite, Nat.toString_eq_repr]
   simp
 
+theorem toString_inj {n n' : ℕ} (h : toString n = toString n') : n = n' := by
+  have e := congrArg String.toList h
+  rw [Nat.toString_eq_repr, Nat.toString_eq_repr, Nat.toList_repr, Nat.toList_repr] at e
+  rw [← Nat.ofDigitChars_ten_toDigits (n := n), e, Nat.ofDigitChars_ten_toDigits]
+
 theorem eq_of_nat? {y : Json} {b : ℕ} (h : nat? y = some b) : y = .num ⟨Int.ofNat b, 0⟩ := by
   cases y with
   | num n =>
@@ -413,7 +417,7 @@ theorem eq_of_nat? {y : Json} {b : ℕ} (h : nat? y = some b) : y = .num ⟨Int.
 theorem eq_of_jeq {a b : ℕ} (h : jeq (.num ⟨Int.ofNat a, 0⟩) (.num ⟨Int.ofNat b, 0⟩) = true) : a = b := by
   simp only [jeq, canon_ofNat, beq_iff_eq] at h
   rw [toString_ofNat, toString_ofNat] at h
-  exact MemoryChallenger.Properties.SecurityProofs.Header.toString_inj h
+  exact toString_inj h
 
 /-- **v2 holds the record's population to the public file's.** Where v2 accepts at the coins `ξ`, at the parameters'
 public file on the blobs (`pubB`) and any load of it (`P`), the record names the population `P.n`, the instances the
