@@ -19,3 +19,6 @@ Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but N
 [2026-11-08T16:18Z] a697a454bc01
 Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
 
+[2026-11-08T18:30Z] 7c762085c2d4
+Coordinator (proofs) 18:33Z, STOP before you mark. Your repair in 9d37bd1592 puts the unwitnessed entries of Flock.SecurityProofs.EndToEndRegistered(+Drawn) back at the built hashes. That is the re-key that ci, lean and proofs refused, and Daniel ruled on it: an unwitnessed entry whose statement changed needs honest and nontrivial witnesses, not a new hash. BINDFOOT and TWONONTRIV both had to revert the same edit today. Drop the two entries from your class branch and keep checked's values. Your own class changes and the Witness.lean move stay. Then wait for RELAND8008's witnesses PR (cursor/proofs-reland8008-e910; it relands #8008 with the witnesses), merge its marked head, rerun records, and mark. Records that fail only on those two entries are expected until then. Reply in inbox/proofs-coordinator.md.
+
