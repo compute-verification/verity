@@ -26,9 +26,9 @@ from a tape each, so the agreement here is the subset sampling design's, which a
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit
@@ -265,4 +265,4 @@ theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : 
   obtain ⟨dr, hdr, hsub⟩ := select_subset_runOS rule hne d query table n named k hn hnamed hk (t ω) draw proved read hs
   exact ⟨dr, hdr, fun u hu hud => hm u hu (hsub _ hud)⟩
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

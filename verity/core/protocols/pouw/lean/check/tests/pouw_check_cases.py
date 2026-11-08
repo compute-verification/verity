@@ -20,7 +20,7 @@ import pouw_rounds_cases as RC
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.crypto import lms
 
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]

@@ -251,7 +251,7 @@ def test_a_rename_carries_the_trust_with_it_and_changes_nothing_of_it():
         d = _trust(_doc({g: _g("G", "h1")}), [g], {g: [p, "A.Assumptions.Kept"]}, {p: "a trusted bound"}, {g: {p: "a ruling"}})
         return d | {"assumptions": {p: {"digest": "d1"}, "A.Assumptions.Kept": {"digest": "d2"}}}
 
-    old, new = doc("A.SampledProofsSound", "A.Assumptions.SampledHash"), doc("A.SpotSound", "A.Assumptions.SpotHash")
+    old, new = doc("A.SpotSound", "A.Assumptions.SampledHash"), doc("A.SpotSound", "A.Assumptions.SpotHash")
     kinds = [k for k, _ in spec._entries(old, new)]
     assert not TRUST_KINDS & set(kinds), spec.changes(old, new)
     assert sorted(kinds) == ["assumed", "unassumed"]
