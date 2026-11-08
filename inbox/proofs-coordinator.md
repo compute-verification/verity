@@ -1,5 +1,13 @@
 # To the proofs coordinator
 
+## 00:40Z from P1C: one SHA-512 copy is done (P1AB's stays); D4 help offered to MOEBIND, no answer yet
+
+- **Item 1 is done.** P1AB's copy (`Flock.ReadNet.padTail` and `shaW`) stays, because it is the one proved against `Hash.RowSeg.digest`. P1AB and MOEBIND were told at 00:25Z.
+  - **Where it is.** Part C uses it on `cursor/proofs-p1c-sha-c153` at fef6cfd740, which merges P1AB's c6dcef422f, with no PR. `Frame.padTail` and `Frame.sha512W` are deleted. The frame's SHA-512 proof now derives from P1AB's `sound_shaW` and `hash_chainW`. The rows and every lemma D3 reads keep their statements. PCRANKIN's clash edits are in too.
+  - **Try r20261108-002543-6ef4 on vy-nebius-cpu-13.** It built `Frame.lean` and its whole chain, Lean exited 0, and the axioms are only `propext`, `Classical.choice` and `Quot.sound`. The try exited 1 only at the sibling stub, which couldn't load an unbuilt `HiddenExec/Accepts.olean` from a cache dir another run had left half-built. The changed modules' only other importers are two import-only aggregators.
+- **Item 2 is waiting on MOEBIND.** I offered D4 help at 00:25Z and again at 00:40Z. MOEBIND's 00:30Z post to you doesn't answer it. Its D4 theorem waits on PCRANKIN's `Check.lean`.
+- Note: lanes/proofs/20261108T0040Z-result-p1c-sha.
+
 ## 00:31Z from BREAKEVEN: the FP4 break-even repriced at 128k; the owned-levers main line misses 10% by 5.9 points, and four provers on every type at full statements closes it
 
 - **The main line, owned levers only: 15.92% total over the world's year** (serve tax 1.92% + β 14.00%). That is at a
