@@ -1,5 +1,49 @@
 # To the proofs coordinator
 
+## 05:29Z from VERIFYFAST-B: piece 1 is #7999 and piece 2 is #7998, both open; (a) needs witnesses its frozen guarantees lack
+
+- **Piece 1 is [#7999](https://github.com/compute-verification/verity/pull/7999)**, opened today: `cursor/proofs-verifyfast-b1-986b` at 754e32e1b8, not yet marked.
+  - Passed: its records (r20261108-043143-2a4c, committed as f81baafdb9), its suites (r20261108-043218-e8d2, 62 of 62) and
+    the templated MoE GEMM session `verify` refused at `servedForm` (r20261108-043443-310a, `"accepted":true`).
+  - Only `reads` move, with no statement hash. V5's `LiveAcceptsKSP` is read by `SampledKSLiveV5` and the three Joint V5
+    guarantees, and `KsScope`'s definitions by 2 guarantees in Security and 25 in Properties. The body lists them.
+  - Still running: suites over its two lock-only commits, r20261108-052744-fe08 on cpu-12 (about 05:45Z).
+  - It carries #7998's and #7896's commits, so I'll mark it only after #7998 is marked.
+- **Piece 2 is [#7998](https://github.com/compute-verification/verity/pull/7998)**: `cursor/proofs-verifyfast-b-592a` at d9669b4d11, not yet marked.
+  - d9669b4d11 re-keys the Dampener's three `unwitnessed` entries, which #7884's renames left stale, to #7896's values.
+    Its first records run, 5667, failed on that alone.
+  - The rerun r20261108-051411-90a6 is rebuilding Security on cpu-12 (about 05:50Z). When it passes I commit its records,
+    mark #7998, then mark #7999.
+- **(a) stops at the witnesses rule; your call.** Its records run r20261108-045258-190a (cpu-12, done) shows two failures
+  in Security that `--update` can't settle.
+  - **Witnesses.** `EndToEndRegistered` and `EndToEndRegisteredDrawn` are on `unwitnessed`, and frozen. A changed statement
+    loses that entry and must carry `_honest` and `_nontrivial` witnesses. No ZK registered Flock guarantee has an honest
+    witness today: it needs an honest deployed instance with `Built`, `TagsOkZHJ`, `LinkCRZC` and `SessCRZ`, the way
+    `RecDeploy.HonestFixture` serves the recursive path.
+  - **The premise.** Their new premise `Desc.parseStmt … = .ok D` is a new inline hypothesis. The flat `Desc.parse` one it
+    replaces was grandfathered in `shape.inline`. It belongs under `domain`, but a `domain` entry needs that same honest
+    witness.
+  - **I haven't hand-edited the lock.** After landing, drive's lock run would treat both as bookkeeping: it re-lists the two
+    guarantees under `unwitnessed` and puts the premise under `open`. But the PR's own check fails, and re-keying by hand
+    would grandfather a statement that really changed. Properties fails only on reads.
+  - **Options:**
+    1. Prove the four witnesses: a ZK registered honest fixture, a sizeable piece.
+    2. Land the restatements as `…St` theorems in `Proofs/` beside the unchanged flat guarantees, saying the templated
+       binding is proved but not listed.
+    3. Hold (a).
+  - **I recommend 3**, unless the post needs templated `--registered` sessions' registered-reads binding as a listed
+    guarantee; then 1. V5 already covers their knowledge soundness at `own` (#7999). The branch,
+    `cursor/proofs-verifyfast-b1r-c126` at e601978b0d, builds (r20261108-044739-d4cf), and its suites passed
+    (r20261108-043307-daf0).
+- **A second session of me** ran 05:08–05:15Z, woken by a timer set before the VM restarted. Its one commit, piece 1's
+  records (f81baafdb9), was right and is in #7999. Its note is in `inbox/VERIFYFAST-B.md`.
+- **Merge driver.** Merging #7998 into piece 1, `merge.py` put back two `shape.inline` entries that #7896's records had
+  dropped as stale; it unions hand-written entries. I redid the merge with piece 1's lock. A branch that merges #7896's
+  lock with an older one gets them back too, until a records run drops them again.
+
+Runs now: r20261108-051411-90a6 (#7998's records, cpu-12, about 05:50Z) and r20261108-052744-fe08 (#7999's suites,
+cpu-12, about 05:45Z). Done: 2a4c, 310a, e8d2, daf0, d4cf and 190a. Cancelled: 3b90, which was stuck in cpu-9's line.
+
 ## 05:18Z from NDAUDIT: step 374's 151 Mbit of advice is all one layer's sparse-MLA K/V tap; 98.6% of it is rows no staged unit reads, and none of it is inherent
 
 **Task 1, the advice breakdown.** It's in the audit note, `lanes/proofs/20261108T0200Z-report-nondeterminism-audit`, section "The staged advice at step 374, by source".
