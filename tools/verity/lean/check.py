@@ -1940,7 +1940,9 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
     (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`, or a definition that unfolds to one, `concluded`). A
     guarantee with no such read is about something else (a bound on a hash, a count, a device), where neither form means
-    anything."""
+    anything, and so is one whose statement is a reflexivity (`reflexive`), whatever it reads."""
+    if reflexive(pin):
+        return None
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
     reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
@@ -1966,6 +1968,18 @@ def statement_read(pin: dict) -> dict:
     when it is one, as `shape` reads it."""
     body = pin.get("body") or {}
     return body.get("lifted") or body
+
+
+def reflexive(pin: dict) -> bool:
+    """Whether a statement, as `statement_read` reads it, concludes `@Eq α a a` and nothing else: past its `∀` and `→`
+    binders (no `∃`), one conjunct, an `Eq` whose two sides are the same `Expr` (`Facts.lean`'s `refl`, read after
+    `let`s are inlined: syntactic, never `isDefEq`, so `f x = g x` of definitionally equal `f` and `g` is none). Such a
+    statement is a text record, such as the claims tuples' `claims = claims`, that pins what it names so that a change
+    reaches the lock's review, and no nontrivial witness of it can exist."""
+    read = statement_read(pin)
+    cs = read.get("conclusion") or []
+    return (read.get("head") == "Eq" and not read.get("negated") and "∃" not in (read.get("binders") or [])
+            and len(cs) == 1 and cs[0].get("head") == "Eq" and cs[0].get("refl") is True)
 
 
 def concluded(pin: dict) -> tuple[list[str], int]:

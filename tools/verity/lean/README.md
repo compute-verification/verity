@@ -111,7 +111,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
 - a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses of the form `witness_failures`
   states, or an `unwitnessed` entry, which only shrinks (`witness_failures`); `nontrivial` is one theorem or a list,
-  each past the first in the exclusion form and dropping a premise no earlier one drops;
+  each past the first in the exclusion form and dropping a premise no earlier one drops. A guarantee whose statement,
+  its definition unfolded once, concludes `a = a` with the same `Expr` on both sides (`reflexive`: a text record such
+  as `claims = claims`) needs none;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
