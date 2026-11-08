@@ -7,8 +7,9 @@ the statement binds the given partition and program digests. Run in the circuit 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
 ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a
 ``SPLITS`` split part or combine, or a row template the partition's ``chunk_cap`` names), composed by Flock's `UnitStager` on
-the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is
-read. ``--reads slots``: `UnitStager`'s ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
+the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`) as the template's statement (`chunk_rows.statement`:
+a table read's is the templated statement of the verifier's read template), bound to the partition and program; no input set
+is read. ``--reads slots``: a flat statement's `UnitStager` ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
 (``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the
 circuit (``tables/``); a unit reading none keeps its flat circuit. The default is the template's own (`chunk_rows.reads`), the
 circuit a5 composes: slots for a ``SPLITS`` part of whole blocks (`verity_vllm.pipeline.split_rows`) and for a whole attention
@@ -37,7 +38,7 @@ UNREAD = ("tests", "__pycache__")
 #: a package's files no compose reads: bytecode and docs (a suite's inputs leave markdown out too)
 UNREAD_SUFFIXES = (".pyc", ".md")
 #: the ``FLOCK_*`` variables that name where things are, not how a circuit is lowered: every other one is in the key
-PLACES = ("FLOCK_WORK", "FLOCK_STAGE_CACHE", "FLOCK_CIRCUIT")
+PLACES = ("FLOCK_WORK", "FLOCK_STAGE_CACHE", "FLOCK_CIRCUIT", "FLOCK_READ_TMPL")
 _CHUNK = 1 << 26
 _HEX = frozenset("0123456789abcdef")
 
@@ -214,19 +215,24 @@ def template(a: argparse.Namespace) -> int:
         raise SystemExit("--template binds the statement: give --partition and --program")
     bind = {"partition": a.partition, "program": a.program}
     tp = SRW.template(a.template)
-    reads = a.reads or CR.reads(tp)
+    stmt = CR.statement(tp)
+    if a.reads:
+        if "reads" not in stmt:
+            raise SystemExit(f"--reads lays out a flat statement's table reads, and {a.template}'s statement is templated: {stmt}")
+        stmt = {**stmt, "reads": a.reads}
 
     def compose(out: Path) -> dict:
         in_rows, out_rows = CR.unit_rows(tp)
-        st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, reads=reads)
-        if reads == "slots":
+        st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, **stmt)
+        if stmt.get("reads") == "slots":
             FC.IL.write_tables(out.parent / "tables")
         return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"],
                 "meta": st.meta}
 
     out = Path(a.out)
     if a.cache:
-        made = cached(Path(a.cache), cache_key(["unit/serving-rows", a.template, reads]), out, bind, compose)
+        form = stmt.get("reads") or json.dumps(stmt, sort_keys=True)
+        made = cached(Path(a.cache), cache_key(["unit/serving-rows", a.template, form]), out, bind, compose)
     else:
         out.unlink(missing_ok=True)
         made = compose(out)
@@ -243,8 +249,9 @@ def main() -> int:
     ap.add_argument("--program", default=None)
     ap.add_argument("--cache", default=None, help="with --template: this machine's composed circuits (`cached`), one entry per "
                     "template and tree (`cache_key`), so that its ranks compose each template once")
-    ap.add_argument("--reads", choices=("inline", "slots"), default=None, help="with --template: UnitStager's reads, a "
-                    "pinned MUFU table's reads inline or in lookup slots (default: the template's own, chunk_rows.reads)")
+    ap.add_argument("--reads", choices=("inline", "slots"), default=None, help="with --template: a flat statement's "
+                    "UnitStager reads, a pinned MUFU table's reads inline or in lookup slots (default: the template's own, "
+                    "chunk_rows.statement); a table read's templated statement takes none")
     a = ap.parse_args()
     if bool(a.input_set) == bool(a.template):
         ap.error("give either --input-set or --template")

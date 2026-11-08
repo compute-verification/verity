@@ -6,6 +6,7 @@ router's slots, the reads of the scale rows and the fused blocks:
 
 * the units are laid out and cut as the module docstring says, each read's and fused block's key wired to its token's router slot
   and each block GEMM's rows, and each fused block's scale row, to the reads of its block;
+* a read is staged as the verifier's read template, every other unit flat (`chunk_rows.statement`);
 * the members' words are each template's reference on its rows, each read's and fused block's row, salt and path open its table's
   committed root at the pair's expert, and the block GEMMs' and fused blocks' outputs are the pairs' served words;
 * the roots, domain ids and verdicts are committed by reference to the tables' supplied values, and a listed record of the window
@@ -373,6 +374,17 @@ def test_a_fresh_process_resolves_a_partitions_read_and_fused_templates():
     builder) resolves its reads and fused blocks: this module imports `gates.embedding` itself, so only a fresh interpreter sees it."""
     r = subprocess.run([sys.executable, "-c", FRESH, READ_WS, PROJ["w2"].fused], capture_output=True, text=True, check=True)
     assert r.stdout.split() == ["read", "fused"]
+
+
+def test_a_reads_statement_is_the_verifiers_read_template_and_every_other_templates_is_flat():
+    """`chunk_rows.statement`: a table read's (``read``, a block's row or scale row) is the templated statement of the verifier's
+    read template at `chunk_rows.READ_LAYOUT`, the one template `Flock.ReadNet.check` accepts; a router slot's, a block GEMM's and
+    a fused block's are flat, their table reads laid out as `chunk_rows.reads` says."""
+    for t in (READ_W, READ_WS):
+        assert (SRW.template(t).layout, CR.statement(SRW.template(t))) == ("read", {"layout": CR.READ_LAYOUT, "structural": True})
+    for t in (SLOTS, BLOCK, *(pr.fused for pr in PROJ.values())):
+        tp = SRW.template(t)
+        assert tp.layout != "read" and CR.statement(tp) == {"reads": CR.reads(tp)}, t
 
 
 @pytest.mark.parametrize("proj", PROJ)
