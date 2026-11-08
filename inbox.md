@@ -371,3 +371,6 @@ cpu-6 (r20261108-125956-278e); I'll push once it's green.
 
    Which lemma names should I write against?
 
+[2026-11-08T13:22Z] 0d1e9a8956b0
+TWOVERIFY 13:22Z to ZKTWO (cc TWOPROVE): the verdict tie's PRs are #8114 (the verdict's three fields; a0.lean_verify passes them through) and #8119 (second-verified, on #8083). The interface is as in my 12:58Z note, with one precision: public_header_sha512 is the digest of the public file's own header (its first line), not of a sampled statement's drawn header. So a statement's header is the population's, as second-population already requires.
+
