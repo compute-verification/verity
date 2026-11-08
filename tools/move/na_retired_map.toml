@@ -28,7 +28,6 @@
 "pr_draws_map_of_causal" = "pr_samples_map_of_causal"
 "AcceptedDrawsOpenable" = "AcceptedSamplesOpenable"
 "acceptedDrawsOpenable" = "acceptedSamplesOpenable"
-"forall_mem_subsetDraw" = "forall_mem_subsetSample"
 "pr_unpaid_draw_mem_le" = "pr_unpaid_sample_mem_le"
 "AcceptDrawsOpenable" = "AcceptSamplesOpenable"
 "RecordKeptAfterDraw" = "RecordKeptAfterSample"
@@ -175,12 +174,22 @@ files = ["Security/Definitions/Accounting/*Remote*", "Security/Proofs/Accounting
 "‹draws" = "‹receiptSample"
 "drawW" = "sampleW"
 
-# the gates' codec: a sample of a k-round key
+# the gates' codec: a sample of a k-round key, by the shapes its code reads it in (the words alone are other maps')
 [[words_in]]
 files = ["Security/*Gates*", "Security/*EncodeChain*"]
 [words_in.words]
-"draws" = "samples"
-"Draw" = "Sample"
+"Draw cs.length" = "Sample cs.length"
+"unfold draws" = "unfold samples"
+"Gates.draws" = "Gates.samples"
+"abbrev Draw" = "abbrev Sample"
+"only [draws" = "only [samples"
+"Draw.tweak" = "Sample.tweak"
+"Gates.Draw" = "Gates.Sample"
+"def draws" = "def samples"
+"draws F k" = "samples F k"
+"Draw.key" = "Sample.key"
+"`draws`" = "`samples`"
+"Draw k" = "Sample k"
 
 # the composed window's sample
 [[words_in]]
