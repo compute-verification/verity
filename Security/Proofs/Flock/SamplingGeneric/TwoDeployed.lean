@@ -34,6 +34,9 @@ that replay block.
   the contract (`compilerKSTwo` over `flockArgKS`).
 * `ksTwo_masked`: at Flock's masked record and SHA-512, with Flock's KS, the list bound and the binding proved
   (`MaskedKS`, `listWithin_deployZk`, `commit_binds`), as `ks_masked`.
+* `compiledTwoOne`, `sessionsTwo_one`, `ksTwo_one`: one session a run. At a code whose session doesn't read the unit,
+  every slot of a sample has one key (`skey = 0`, `n_sess = 1`), so the extractor runs Flock's once a run, and
+  `compiledTwo`'s contract gives the contract and KS there.
 -/
 
 @[expose] public section
@@ -119,6 +122,29 @@ theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
   Claims.SamplingGeneric.compilerKSTwo FlockDeploy.Coin _ _ H (Claims.SamplingGeneric.flockArgKS H F hKS hlist) hB
     (sessionsTwo_compiled F c iroots two rs H hrd hsd hr hi hf hruns hnum hopens)
 
+/-- **The deployed two-stage verifier with one session a run**: `compiledTwo` with one key for every slot of a sample,
+so its extractor runs Flock's once a run (`n_sess = 1`). -/
+noncomputable abbrev compiledTwoOne :
+    Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin (Claims.SamplingGeneric.Arg.ofFlock F) :=
+  { compiledTwo F c iroots two rs with skey := fun _ _ _ => 0, nSess := fun _ => 1 }
+
+/-- **The contract with one session a run**: at a code whose session doesn't read the unit, `compiledTwo`'s contract
+is `compiledTwoOne`'s, every slot showing the run's one session (`shared`) and a sample holding one key (`keys`). -/
+theorem sessionsTwo_one (H : Msg → Msg) (hS : (compiledTwo F c iroots two rs).Sessions H)
+    (hone : ∀ x u u' v, c.session x u v = c.session x u' v) : (compiledTwoOne F c iroots two rs).Sessions H where
+  replayDraws := hS.replayDraws
+  secondDraws := hS.secondDraws
+  slots := hS.slots
+  shared x _ _ _ _ _ _ u u' _ _ _ _ := hone x u u' _
+  unions := hS.unions
+  refuses := hS.refuses
+  interior := hS.interior
+  fixed := hS.fixed
+  runs := hS.runs
+  opens := hS.opens
+  keys _ _ := (Finset.card_le_card (Finset.image_subset_iff.2 fun _ _ => Finset.mem_singleton_self 0)).trans
+    (Finset.card_singleton 0).le
+
 end CompiledTwo
 
 /-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512**:
@@ -138,5 +164,19 @@ theorem ksTwo_masked (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
   ksTwo_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots two rs FlockDeploy.sha512
     _root_.Flock.SecurityProofs.MaskedKS (Claims.Sampling.listWithin_deployZk _) (commit_binds c _) hrd hsd hr hi hf
     hruns (innerNumbers_deploy _ c hnum) hopens
+
+/-- **The deployed two-stage verifier with one session a run is knowledge sound at SHA-512**, at Flock's masked record
+and a code whose session doesn't read the unit: `compilerKSTwo` at `sessionsTwo_one`, with Flock's KS, the list bound
+and binding as in `ksTwo_masked`. -/
+theorem ksTwo_one (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
+    (two : AuditStatement → Option Claims.Sampling.Design.Two)
+    (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ)
+    (hS : (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots two rs).Sessions
+      FlockDeploy.sha512)
+    (hone : ∀ x u u' v, c.session x u v = c.session x u' v) :
+    (compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots two rs).KS FlockDeploy.sha512 :=
+  Claims.SamplingGeneric.compilerKSTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
+    (Claims.SamplingGeneric.flockArgKS FlockDeploy.sha512 _ _root_.Flock.SecurityProofs.MaskedKS
+      (Claims.Sampling.listWithin_deployZk _)) (commit_binds c _) (sessionsTwo_one _ c iroots two rs _ hS hone)
 
 end SamplingDeploy

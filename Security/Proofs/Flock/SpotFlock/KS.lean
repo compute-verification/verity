@@ -5,6 +5,7 @@ public import Proofs.Flock.SpotFlock.Sessions
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.NumbersDeploy
+import Proofs.Flock.SamplingGeneric.TwoKSAt
 
 /-!
 # SPOT[Flock]'s two-stage verifier: the compiler's premises at its code
@@ -18,6 +19,10 @@ public import Proofs.Flock.Claims.NumbersDeploy
   session's statement has its shapes, so its `N₀` is the code's;
 * `ksTwo_spot`: `CompiledTwo.KS` at Flock's masked record and SHA-512, from A3 at the coins' bytes (`CallsUniform`)
   and the sessions' openings (`SessionOpensTwo`); the sessions' runs are `SpotFlock.sessionRuns`.
+* `sessionsTwo_spot`: the two-stage contract at the same premises (`sessionsTwo_atOrder`).
+* `ksTwo_spot_one`, `efficient_spot_one`: one session a run. The session doesn't read the unit (`SpotFlock.session`),
+  so every slot of a sample has one key (`SamplingDeploy.compiledTwoOne`) and the extractor runs Flock's once a run:
+  KS there, and its reruns, at most `1 + k_out + k_out·k_in·(1 + e_s)` in expectation, from the opening checks' count.
 -/
 
 @[expose] public section
@@ -58,5 +63,39 @@ theorem ksTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinB
     iroots hA hA (regMatchesTwo_code h) (refusesTwo_code h _) (interiorFixed_code h _)
     (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
     hopens
+
+/-- **SPOT[Flock]'s two-stage contract at its code**: `sessionsTwo_atOrder` at `ksTwo_spot`'s premises. -/
+theorem sessionsTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
+      (rs h)).Sessions FlockDeploy.sha512 :=
+  SamplingDeploy.sessionsTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
+    (fun _ => coinByte) iroots hA hA (regMatchesTwo_code h) (refusesTwo_code h _) (interiorFixed_code h _)
+    (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h) hopens
+
+/-- **SPOT[Flock] with one session a run is knowledge sound**: its session doesn't read the unit
+(`SpotFlock.session`), so every slot of a sample has one key and the extractor runs Flock's once a run (`ksTwo_one`
+at `sessionsTwo_spot`). -/
+theorem ksTwo_spot_one (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
+    (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
+      (rs h)).KS FlockDeploy.sha512 :=
+  SamplingDeploy.ksTwo_one (code h) iroots (two h) (rs h) (sessionsTwo_spot h hA hopens) fun _ _ _ _ => rfl
+
+/-- **SPOT[Flock]'s extractor with one session a run**: at most `1 + k_out + k_out·k_in·(1 + e_s)` reruns in
+expectation and `k_out·k_in·n_PU·openCalls` own SHA-512 calls, from the opening checks' count
+(`compilerEfficientTwo` at `sessionsTwo_one`). -/
+theorem efficient_spot_one (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
+    (hopen : (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
+      (two h) (rs h)).OpenCallsLe FlockDeploy.sha512) :
+    (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
+      (rs h)).Efficient FlockDeploy.sha512 :=
+  Claims.SamplingGeneric.compilerEfficientTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
+    (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) _ (sessionsTwo_spot h hA hopens)
+      fun _ _ _ _ => rfl) hopen
 
 end SpotFlock
