@@ -730,7 +730,7 @@ theorem stmtCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt}
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
       linkedRead own p.template (entries (getD s.registered "ports")) = true ∧ refsOk s = true := by
-  simpa [stmtCodes, List.filterMap_eq_nil_iff] using h
+  simpa [stmtCodes, List.filterMap_eq_nil_iff, and_assoc] using h
 
 /-- The reference header `refOf` gives template `t` is one the auditor's params give it. -/
 theorem refOf_mem {own : Own} {t : String} {r : Json} (h : refOf own t = some r) : (t, r) ∈ own.refs := by
@@ -955,7 +955,8 @@ private def exSharing (shared : List String) (reads : Option (List (String × Js
 /-- `exOwn` with its template's reference sharing rows at `shared`, and the verifiers of record reporting reads of
 `read`, each value at its root. -/
 private def exShares (shared : List String) (read : List (String × Nat)) : Own :=
-  { exOwn with refs := #[("Pair_v0", exRef.setObjVal! "shared_rows" (exTables shared))],
+  { exOwn with
+    refs := #[("Pair_v0", exRef.setObjVal! "shared_rows" (exTables shared))],
     reported := some (read.toArray.map fun (v, r) => (v, .str (exRoot r))) }
 
 -- a header sharing rows at `out` and `x` reads both registered, each slot its own row
