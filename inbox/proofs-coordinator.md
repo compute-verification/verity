@@ -4605,3 +4605,58 @@ CIR-189 is due Sun 20:00Z.
 - **C:** its slice passes. I've told C the tile, and offered to move its window to the fused block on a branch off its
   own.
 - Note: note:proofs/20261107T1920Z-report-moeserve.
+
+## 00:51Z from LIFETIME: a replay started at a random step inside a replay block is bit-exact (3 of 3 starts, one with preempted requests waiting); Daniel's variant works with 5-10 s span units, and β doesn't depend on the unit
+
+- 00:51Z (LIFETIME) **1. The start inside a replay block: bit-exact at both random steps tried, and at a step where preempted requests wait to resume.** It runs in two passes:
+  - First, the harness replays from edge 1 (the served-identical path), copying each step's written slots once the GPU has finished the step: the per-step mirror. It stops right before step S, saving the scheduler's queues, each request's counters and the copies.
+  - Then a fresh engine starts at S from that alone and replays to edge 2. Each held request has its outputs through S-1, with async scheduling's in-flight S-1 taken from the record, and its computed prefix from the slot copies, partial last page included. Everything else is NaN.
+  - Moonlight's existing arm (r20261107-224313-fcfe; 0 preemptions), job r20261107-235316-4b7c (art:e8862d5f12bcc23dfaeab91b1fd33cb25d93abff51dfd20bde22926ed10cd826):
+    - **Step 11,135:** the replay up to S matched serving on all 1,539 steps, and the slot copies' roots equal the GPU's for all 132 held requests (121 with a partly filled last page). The start then replayed 2,914 steps and 392,836 tokens with 0 differing tokens or logprob bits, and the far roots match 137 of 137.
+    - **Step 13,838:** 4,242 steps matched up to S; 140 of 140 roots equal (128 partial); 211 steps and 27,900 tokens with 0 differing; far roots 137 of 137.
+  - **Preemption.** I served a new arm with a 4,096-block pool: 1,570 preemptions, 285 of them inside its replay block from step 10,211 to 14,843, all resumed inside it. Arm r20261107-235316-4b7c.
+    - **The gate from edge 1:** 4,632 steps and 620,559 tokens with 0 differing, every preemption and resumption at its served step, and far roots 114 of 114. Run r20261108-001719-5223 (art:500ff0eff3c5076238ee3671fe8cc002c8a6fada7eca90e27d5efb5587b5243f).
+    - **A start at step 10,412**, with 4 preempted requests waiting and 3 finished at the step before: 4,431 steps and 587,906 tokens with 0 differing tokens or logprob bits, and far roots 114 of 114. There, 153 held requests have a partly filled last page. Run r20261108-003055-0fa5 (art:14576b92e6494910dd4be58f24d8716806703358d4f1d44de09b832bdb44c19b).
+    - It took two fixes, both about the fresh pool's free count, which preemption reads:
+      - re-added requests must share the blocks they shared in serving (live prefix hits). Without that, the 4,096-block pool overflowed at edge 1.
+      - Under async scheduling, requests that finished at S-1 keep their blocks through schedule(S). The first try at step 10,412 had 79 more blocks free and resumed the 4 preempted requests a step early, so 321 steps differed.
+    - A forced-schedule replay takes its rows from the record and needs neither fix. They show what a start state must carry for vLLM's own scheduler to decide as serving did.
+    - **Regression at the PR's head** (1486dec564), on the existing arm: the gate and the step-11,135 start are both bit-exact again, with the fresh pool now at the served block count (3,907 and 3,306). Run r20261108-003925-c0ea (art:9a3c3f250cc880ba1f29888a30297b5124a011ae394c8109399abaafe8c30f06).
+  - What this doesn't cover:
+    - Async scheduling can run one more row for a request whose finish it hasn't processed yet. The record keeps that row, but the harness refuses such a step; none occur in either arm. Lifetime replay's schedule must re-run that row, since batch-mates' bits can depend on it through the MoE routing counts.
+    - The mirror is copied from a replay that matched serving, not from the served engine. The served-side plugin is build piece 2.
+    - It is Moonlight on one GPU, not GLM-5.3 at TP8.
+- 00:51Z (LIFETIME) **2. Daniel's variant.** In the model, pages are committed on write; a coin is drawn every whole second for units that have ended; a page stays on the GPU until every dependent unit has its coin; and a sampled unit's working set is copied out (its own and its batch-mates' K/V at its start, partial slots included).
+  - Model run r20261107-235002-d056 (art:211bd88a7876d7c8373ed0813f72def2310646f88b3358957f8612bc36cc0541), on GLM-5.3 at 92,631 B/token a rank. β is on BREAKEVEN's FP4 world-year paths without hashing, ×3 / ×8. Total = β + 0.0191 tax (certified tick, deterministic top-k and commit-on-write).
+
+    | trace, unit | hold × live K/V (pool lost) | overflows the pool | copy a sample, a rank | copy rate a rank | replay GPU-s a sample | β ×3 / ×8 | total ×3 / ×8 |
+    |---|---|---|---|---|---|---|---|
+    | 128k, whole request | 2.44 (71%) | 16% of the time | 5.6 GB | 0.39 MB/s | 458 | 0.136 / 0.054 | 0.156 / 0.073 |
+    | 128k, 30 s span | 0.62 (38%) | 0% | 6.3 GB | 0.81 MB/s | 199 | 0.136 / 0.053 | 0.155 / 0.072 |
+    | 128k, 10 s span | 0.22 (18%) | 0% | 6.3 GB | 1.9 MB/s | 74 | 0.136 / 0.053 | 0.156 / 0.072 |
+    | 128k, 5 s span | 0.12 (10%) | 0% | 6.4 GB | 3.5 MB/s | 38 | 0.137 / 0.053 | 0.156 / 0.072 |
+    | 40k, whole request | 0.62 (38%) | 38% | 16.8 GB | 1.2 MB/s | 833 | 0.140 / 0.055 | 0.159 / 0.074 |
+    | 40k, 30 s span | 0.34 (25%) | 25% | 17.0 GB | 3.8 MB/s | 220 | 0.140 / 0.056 | 0.159 / 0.075 |
+    | 40k, 10 s span | 0.13 (11%) | 16% | 15.9 GB | 9.3 MB/s | 77 | 0.141 / 0.056 | 0.160 / 0.075 |
+    | 40k, 5 s span | 0.07 (6.5%) | 10% | 15.8 GB | 17.4 MB/s | 39 | 0.143 / 0.057 | 0.162 / 0.076 |
+
+  - How to read it:
+    - "Pool lost" is h/(1+h). Once the pool is full, compute per token rises by between 0 (decode bound by reading K/V) and h (throughput proportional to batch).
+    - "Overflows" is the share of serving time that live plus held K/V would have exceeded the pool, as served. The 128k serve never filled its pool (live K/V averaged 17.5% of it); the 40k one was at least 90% full for 43 of 242 s.
+    - Copy rates are averaged over all compute. The blanket host copy writes 141 MB/s a rank at 128k and 179 at 40k, so this is 10× to 360× less.
+    - At ×3.5 and ×4, β is 0.117-0.123 and 0.103-0.108.
+    - Week, month and datacenter-year β are within 0.002 of world-year on every row.
+  - **β doesn't depend on the unit.** Replay is 0.2-0.7% of compute on every path, so proving sets β, and the choice is between the hold and the copy.
+  - **Whole-request units are out at long context.** At 128k the hold is 2.44× live K/V and overflows the pool 16% of the time, even though live K/V averages 17.5% of it.
+  - **Span units bound the hold by the span plus the coin delay** (0.5 s on average). 5-10 s spans hold 0.12-0.22× live K/V at 128k and never overflow. At 40k they overflow 10-16% of the time.
+  - **Spill on pressure removes what's left.** Where the pool needs a held page, copy it out (it's already committed) instead of preempting. Capacity loss goes to 0, and the copy is at most the blanket copy's.
+  - **Commit-on-write must cover each step's written slots, not only full pages,** because a span or a replay can start at any step. It's the same granularity the mirror needed: the same bytes, more leaves.
+  - My pick, for you or Daniel: 5 or 10 s spans with spill on pressure.
+- 00:51Z (LIFETIME) **Span units in Lean: the statement still holds, and no code theorem beyond whole requests' changes.**
+  - `CompilerKSTwo` and `CompilerExfilTwo` take any replay partition, and spans split each request's proof blocks into disjoint replay blocks.
+  - A later span reads its request's earlier K/V as committed values, as a whole request already reads another request's prefix-hit pages. Batch-mates stay the honest replay's witness.
+  - What changes is what changes for whole requests: `RegTwo.n` and `k` per replay block, with `blockOf` mapping (request, span, position) to a proof block; `Select.selectSecond` and `secondLaw` take each stratum's n and k; `ksTwo_code` is re-proved through `RegMatchesTwo`; and the Python `TwoStage` follows.
+  - New public structure: span boundaries are fixed before any coin (every T s on a clock grid, or every N steps), and each span's compute class is public, so Daniel's question 1 applies per span. A first stage proportional to compute with a fixed k per cell is still self-weighting.
+- 00:51Z (LIFETIME) **3.** [#7889](https://github.com/compute-verification/verity/pull/7889) is open (`--issue PRF-456`), unmarked until its tests exist: `rebuild.py` with the edge start, forced hits, the start inside a block, and block sharing on re-add.
+  - Note `proofs/20261108T0004Z-report-lifetime-midstep-units` has all of the above.
+  - Pod `vy-spot-lifetime` stops itself at 01:29Z, and nothing is queued on it. Both arms' edge K/V files exist only there. Next I write #7889's CPU tests.
