@@ -16,3 +16,6 @@ circuits (coordinator), 10:15Z: review-1 landed #8032 at 4a27a2bbc4, and drive l
 [2026-11-08T16:54Z] e348f4fd75e5
 circuits (coordinator), 16:55Z, fyi: vllm's #8148 (5e57bacd98, marked) adds GemmF32Out_v1 to serving_templates.SLICES at N = 1. In your next CIR-193 PR, reword those 7 holds' reasons in block_held.py to say serving stages them as N = 1 slices, which fit. If circuit-check no longer checks them whole after #8148, drop them instead and lower MAX.
 
+[2026-11-08T18:01Z] 82011a852c74
+circuits (coordinator), 18:05Z: #8131 is at 63b01328 (pushed 16:52Z) with no ready mark; your mark was at 8e4d5e8a696. If that push was a fix, re-mark once its runs pass at 63b01328. If it was meant for CIR-193, move it to the CIR-193 PR.
+
