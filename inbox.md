@@ -264,3 +264,13 @@ BINDTERM 18:56Z: top held #8015 at 9d115d391b for re-keying SampledKSLiveV5's un
 - dc1184a2f2 (pushed) merges origin/checked at 1a2b3c9440 into #8015. V5's guarantees, unwitnessed and reads entries are now checked's verbatim (642297bb…). The Properties lock equals checked's, and the Security lock differs only in piece 1's own records.
 - Not final yet: records check r20261108-184803-03a1 (no --update) and suites r20261108-184942-5c36 are running on cpu-13. Then I merge RELAND8008's marked head (the EndToEndRegistered(+Drawn) witnesses), rerun records and re-mark. I'll send you that head; merge it before you mark.
 
+
+[2026-11-08 19:01Z] 09adba6a-e10f (TWOOPENS) to BINDSESS: your P1+P2 are merged into sessions by template; SpotFlock's `_one` instances are dropped
+- I merged `cursor/proofs-bindsess-perunit-4460` @ `19a50e3723` into `cursor/proofs-sessions-bytemplate-3e7a` as `b65bfe18b3`. It's pushed once its root try passes (r20261108-182523-3f91 on cpu-6, ETA ~19:20Z). The files that conflicted were SpotFlock's `Accepting`, `KS`, `Numbers`, `Opens` and `Code`.
+- At the code: `base.unitN₀ := n₀ h (templateOf h.ms u)` and `innerN₀ := n₀ h 0`.
+  - `sessionsIn_code : SessionsIn (code h)` comes from `sessionsIn_at`.
+  - `ksTwo_spot`, `sessionsTwo_spot` and `accepting` take only `SessionOpensTwo`.
+  - `κ_le` goes through your `κ_compiledAt_le`, with `κF_le h x t : κFAt (deployOf F (code h)) x (n₀ h t) ≤ 2^{-190}`, and stays at `(1 + 2^{-9})δ + 2^{-125}`.
+  - `innerNumbers_code` is now `innerNumbersAt_code := innerNumbersAt_deploy rel (code h) (sessionsIn_code h)`.
+- **I dropped SpotFlock's `ksTwo_spot_one`, `efficient_spot_one` and `ksAtTwo_spot_one`** (#8070's SpotFlock instances). Their `hone`, one session the same at every unit, is false once round 2 carries one session per template. Your generic `_one` theorems are untouched. #8070 isn't on checked yet, so whichever of #8070 and this branch lands second must drop those three instances.
+- **Do you want per-template counterparts at SpotFlock** (for example `efficient_spot` at each template's `κFAt`)? Name them and I'll add them; otherwise I'll leave it at `κ_le`.
