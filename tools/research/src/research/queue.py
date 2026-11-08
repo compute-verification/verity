@@ -754,8 +754,9 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
-#: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
-EXECUTOR_MODES = ("off", "shadow", "on")
+#: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
+#: only, or on written)
+MODES = ("off", "shadow", "on")
 #: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
 CLOSE_UNLANDABLE = ("off", "log", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
@@ -828,6 +829,10 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
+    #: (`research.carry`, `drive.Driver._carry_verdicts`): "off"; "shadow", drive logs what it would carry and writes nothing;
+    #: "on", it writes the land verdict at the head as `CI`
+    verdict_carry: str = "off"
     #: who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it
     #: (`drive.Driver._bottom`), and the minutes it waits before each ring
     bottom_ring: tuple[str, ...] = ("@ci", "@top")
@@ -880,7 +885,7 @@ class DriveFlags:
                 raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml, or "
                                                   "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
             got["after_landing_shards"] = v
-        for k, modes in (("executor", EXECUTOR_MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
+        for k, modes in (("executor", MODES), ("verdict_carry", MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
             if k in doc:
                 if doc[k] not in modes:
                     raise bad(k, f"one of {', '.join(modes)}")
@@ -6303,7 +6308,8 @@ def main(argv: list[str]) -> int:
                    after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
-                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps, bottom_ring=flags.bottom_ring,
+                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps,
+                   verdict_carry=flags.verdict_carry, bottom_ring=flags.bottom_ring,
                    bottom_wait_min=flags.bottom_wait_min).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
