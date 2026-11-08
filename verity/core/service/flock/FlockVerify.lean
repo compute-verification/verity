@@ -833,13 +833,15 @@ ports of one published domain, or two ports whose published roots are one root u
 is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
 tags, files and a sample outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
 without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
-reading several input groups or a tail stage returning the outputs is; a shared-row public file, with or without
+reading several input groups or a tail stage returning the outputs is, and a templated statement's outside
+`ProvedScope.scopeOkT`, read off its template (`KsScope.unitWhy`); a shared-row public file, with or without
 `--registered F`, outside the form `Flock.Guarantees.SampledKSLiveV5` covers (`KsScope.sharedWhy`: one whose circuit's
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
 under different domains); at more than one table a sample that does not parse or a subset sample whose `k` the tables don't
 divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
-them), and last a statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`
-(`ProvedScope.served`: every `+seed-injection` version and every superseded one) and a plain session on seed coins
+them), and last a statement version other than `verity/flock-circuit`, `verity/flock-circuit+plain-leaves` and
+`verity/flock-circuit/tmpl` (`ProvedScope.served`: every `+seed-injection` version and every superseded one; a templated
+statement passes the form check only at one `--zk` table, `ProvedScope.scopeOkT`) and a plain session on seed coins
 (a plain session without `--coins tree`; `ProvedScope.servedForm`: the verifier reads coins only from a challenger's
 log), all after every
 check has passed (so the reason is the refusal only when nothing else
@@ -1096,9 +1098,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
 
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
 (`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample, as one
-line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit is read as `HmOut.parse` reads
-it, which refuses it: what passing the check establishes (`KsScope.check_ok`) is stated at that parse only. It accepts no
-session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held to. -/
+line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit carries its template
+(`ProvedScope.circuitOf`), and the check reads its form off the template (`KsScope.unitWhy`); what passing establishes is
+`KsScope.checkOf_ok`'s. It accepts no session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held
+to. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -1110,8 +1113,7 @@ def ksFormCmd (args : List String) : IO UInt32 := do
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
-  let ksParsed := if tags.hiddenOutputs && !tags.isTmpl then ProvedScope.circuitOf tags circuitB tables
-    else HmOut.parse tags circuitB tables
+  let ksParsed := if tags.hiddenOutputs then ProvedScope.circuitOf tags circuitB tables else HmOut.parse tags circuitB tables
   match KsScope.checkOf ksParsed tags pubB count none with
   | .ok () => IO.println "KS-FORM ok"; return 0
   | .error why => IO.println s!"KS-FORM {why}"; return 1

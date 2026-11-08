@@ -434,9 +434,9 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
 
 
 def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
-    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement, the
-    one the Lean verifier accepts; ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated
-    one at it, and anything else refused by name."""
+    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement,
+    ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated one at it, and anything else
+    refused by name."""
     monkeypatch.delenv("H1_TMPL", raising=False)
     assert U.layout() is None
     for value, want in (("", None), ("flat", None), ("structural", U.LAYOUT), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):

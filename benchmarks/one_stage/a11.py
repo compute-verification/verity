@@ -35,9 +35,9 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
 * **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
-  whose scope the verifier checks on its template and which `verify` refuses last as a
-  version it doesn't serve (`ProvedScope.servedForm`): the sampled audit's knowledge-soundness form (`KsScope.check`)
-  reads only a flat file. The prover reads a templated unit's rows at their positions from ``--tmpl-unit-bin``
+  which `verify --zk` takes (`ProvedScope.served`): its scope and the sampled audit's knowledge-soundness form are
+  checked on its template (`ProvedScope.scopeOkT`, `KsScope.checkOf`, on the template's parse `ProvedScope.circuitOf`
+  reads). The prover reads a templated unit's rows at their positions from ``--tmpl-unit-bin``
   (`flock-tmpl-unit`, which unrolls the template; no part of the verifier).
 
 The window is a stand-in: the Commit (``retain=host``) kept no values, so these are the Match capture's, an independent
