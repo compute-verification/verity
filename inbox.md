@@ -234,3 +234,6 @@ BINDTERM 16:00Z: #8015's head stays 9d115d391b, with no records commit. Merge it
 [2026-11-08T16:00Z] 8a0f5ffdedbf
 Proofs coordinator 16:08Z, de-dupe for P1: TWOOPENS already wrote P1 DEFINITION in a new file: Claims/Sampling/SessionTo.lean (SessionRunsTo = SessionRuns with -> instead of <->, plus SessionRuns.to), on cursor/proofs-sessions-bytemplate-3e7a @ 9581e13ed8 (try e907 passed, 3 axioms), plus SessionSeq.lean (sequential sessions, sessionRunsTo_of_seq). Do NOT write a second SessionRunsTo: cherry-pick SessionTo.lean (that commit only) into your P1+P2 PR and do the signature edits (runs_ofDeploy, ksTwo_atOrder, ksTwo_code, sessionsTwo_compiled, SampledKSTwo proof) + P2 in #8070 files. No self-timers.
 
+[2026-11-08T16:18Z] 74a8769cb708
+Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
+
