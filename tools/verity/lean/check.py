@@ -543,7 +543,9 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
             try:
                 if give is not None:
                     give(line)
-            except Exception:                           # the pipe must still be drained, or the build blocks on it
+            except (AttributeError, TypeError, ValueError, LookupError, RuntimeError) as e:
+                # a bug in the callback must not stop the drain, or the build blocks on a full pipe: record it and read on
+                got["on_line_error"] = f"{type(e).__name__}: {e}"
                 give = None
         got[k] = "".join(lines)
     readers = [threading.Thread(target=read, args=(k, f), daemon=True) for k, f in (("out", p.stdout), ("err", p.stderr))]
@@ -568,7 +570,8 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
     _peak.bytes = max(getattr(_peak, "bytes", 0), usage.ru_maxrss * 1024)          # Linux reports it in KiB
     text = got.get("out", "") + got.get("err", "")
     if log is not None:
-        log.write_text(text)
+        log.write_text(text if (err := got.get("on_line_error")) is None else
+                       f"{text}\ncheck: the build-output callback was disabled after an error: {err}\n")
     if expired.is_set():
         raise subprocess.TimeoutExpired(argv, timeout, output=text)
     return p.returncode, text
@@ -4112,14 +4115,17 @@ def store_replay(replay_cache: Path, key: str, module: str) -> None:
     os.replace(tmp, replay_cache / f"{key}.json")
 
 
-def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> None:
+def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
     """Mark the entries of ``modules`` used now, so the cache's eviction (`lean_audit.prune_replays`, by mtime) keeps what
-    every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored."""
+    every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored. Returns how many
+    a concurrent prune had already dropped since this replay read and reused them (nothing is lost; they are not re-touched)."""
+    evicted = 0
     for m in modules:
         try:
             os.utime(replay_cache / f"{keys[m]}.json")
-        except OSError:                                # evicted since it was read: this replay already reused it
-            pass
+        except OSError:                                # a concurrent prune_replays dropped it since it was read and reused
+            evicted += 1
+    return evicted
 
 
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
@@ -4146,9 +4152,10 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        evicted = 0
         if keys:
             fresh = {*facts["modules"], *deps_checked}
-            touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
+            evicted = touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
         rc, text = run([*prefix, *([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),
@@ -4163,7 +4170,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
-             "phases": doc.get("seconds", {})}
+             "phases": doc.get("seconds", {}), "evicted": evicted}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
                             "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
@@ -4261,8 +4268,8 @@ class Pipeline:
             if stop and self.pid is not None:
                 try:
                     os.kill(int(self.pid.read_text()), signal.SIGKILL)
-                except (OSError, ValueError):                  # not started yet, or already gone
-                    pass
+                except (OSError, ValueError) as e:             # not started yet, or already gone: nothing to kill
+                    self.log(f"lean: the running batch's replay was already gone when the build failed ({type(e).__name__})")
 
     def _go(self) -> bool:
         if self.ended:
@@ -4315,8 +4322,8 @@ class Pipeline:
                     "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]}
             if "closure" in stats:
                 rec["closure_checked"] = stats["closure"]["checked"]
-        except Exception as e:                                  # a batch only saves work: the final replay decides
-            rec["error"] = f"{type(e).__name__}: {e}"[:500]
+        except (OSError, ValueError, LookupError, RuntimeError, subprocess.SubprocessError) as e:
+            rec["error"] = f"{type(e).__name__}: {e}"[:500]     # a batch only saves work: the final replay decides
         finally:
             with self.cond:
                 self.pid = None
