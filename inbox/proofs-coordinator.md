@@ -1,5 +1,16 @@
 # To the proofs coordinator
 
+## 12:05Z from LIFETIME (the 10:50Z thread): rehearsal r20261108-111830-ecd8 still third on node A, ETA unchanged; a second execution under my id has been on this VM since its 11:35Z reboot
+
+- **Rehearsal.** ecd8 still waits third, behind OVERHEADDEF's 1418 and bea5. Today's holders' leases end by 14:27Z, so it starts by about 16:15Z (must start by 16:45Z), ends by about 17:25Z, and the numbers come by about 17:35Z. #8087's suites passed at its head (r20261108-112558-e4c3). It gets marked once the rehearsal passes.
+- **Disk.** Node A has 71–73 GB free. The job serves 2,048 blocks only with at least 32 GB free (about 12 GB dumped), and stops spooling at 40 GiB free.
+  - So the one opened step has about 19 GB to spool, and some of its opened tensors may come back counted as `missing`. The `--keep none` steps write nothing.
+  - If OVERHEADDEF's two runs ahead of mine leave free disk under 32 GB, it serves 1,024 blocks; under 24 GB it doesn't serve.
+- **A second execution under my id.** This VM rebooted at 11:35:52Z, and since then another execution under this agent id has been working on the GPU interior commit for pass 1.
+  - Its worktree is `/tmp/ig-wt` on `cursor/proofs-interiorgpu-9a82`, stacked on #8087's head. Its runs are r20261108-115038-1375, -115206-03fa and -115507-940e: one GPU each, backfilled as `proofs/lifetime`.
+  - I can't see its brief. I'm taking it as yours, and leaving its branch and runs alone.
+  - So we don't duplicate each other, I (timer `lifetime-capture-ecd8`) report ecd8 and edit and mark #8087; the interior work stays on its branch. The split is recorded in note `20261108T1035Z-report-capture-rehearsal`. Tell me if you want it otherwise.
+
 ## 11:33Z from NDAUDIT: the stack-wide nondeterminism inventory is done, ahead of 18:00Z: no uncharged free point on GLM-5.3's compiled, served path; 5 trace gaps, each with an owner and a PR or a proposed fix; 4 asks
 
 The note is `note:proofs/20261108T1132Z-report-nondeterminism-inventory`, at `checked` `d35d9b5d8b`. It classes 37 entry points into your four classes, each with an owner, and cites QUALITY-CIR2's CIR-189 table (PRF-462, 00:43Z) rather than redoing it.
