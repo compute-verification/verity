@@ -26,9 +26,12 @@ the decode kernels; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNV
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
-select: `common.select_token`).  A row of more than INDEX_TOPK keys selects its top-k as the `vllm_dsa` rule does, in the circuit:
-DsaTopKMask marks the logits' top-TOPK set, DsaButterflySettings sets the concentrator for it, and both kinds of layer read the TOPK
-rows DsaButterflyRows routes at those settings, in ascending index order (the row `VERITY_DSA_TOPK=canonical` serves).  A fact outside it raises
+select: `common.select_token`).  A row of more than INDEX_TOPK keys selects its top-k as the `vllm_dsa` rule does, in the circuit,
+at the row's class (`vllm_dsa.long_row_keys`: its keys rounded up to a multiple of INDEX_TOPK, the logits past its own `PAD_SCORE`
+and their history rows zero): DsaTopKMask marks the logits' top-TOPK set, DsaButterflySettings sets the concentrator for it, and
+both kinds of layer read the TOPK rows DsaButterflyRows routes at those settings, in ascending index order (the row
+`VERITY_DSA_TOPK=canonical` serves); below its class through DsaButterflyRowsPad, the history and its pad two arguments, so a
+row's history is the row before's plus one part in the descriptor.  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -223,6 +226,7 @@ class _Model:
         self.logs: dict[int, dict[str, PartLog]] = {}
         self.topk: dict = {}
         self._kinds: dict[tuple, object] = {}
+        self._pads: dict[tuple[int, int], Refs] = {}
         C = self.C
         self.H, self.EPS, self.G = int(C["H"]), float(C["EPS"]), int(C["FP8_BLOCK"])
 
@@ -234,6 +238,12 @@ class _Model:
 
     def call(self, fn, *refs: Refs) -> Coll:
         return self.B.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs)))
+
+    def pad(self, w: int, bits: int, words: int, count: int) -> Refs:
+        """``count`` words of ``bits``: a slice of the Program's one block of them (`vllm_dsa.pad_words`), as `vllm_dsa` pads."""
+        if (w, bits) not in self._pads:
+            self._pads[(w, bits)] = self.B.batch(self.k("const", W=w, BITS=bits), axes=(), n=words).refs
+        return self._pads[(w, bits)].slice(0, count)
 
     def open_with(self, prefix: list[Coll], C: int) -> None:
         """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
@@ -374,7 +384,8 @@ class _Model:
     def attention(self, L: int, x: list[Refs], pos0: int) -> list[Refs]:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
-        from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY
+        from verity_vllm.program.frontend.rules.vllm_dsa import (DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY, PAD_SCORE,
+                                                                 long_row_keys, pad_words)
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -421,8 +432,10 @@ class _Model:
                     continue
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                mask = self.call(self.k("dsa_topk_mask", N=n, TOPK=TOPK), logits.refs)
-                self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=n, TOPK=TOPK), mask.refs)
+                N = long_row_keys(n, TOPK)
+                scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs
+                mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
+                self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
@@ -432,7 +445,12 @@ class _Model:
         for i, n in enumerate(keys):
             kv = logs["latent"].cut(n)
             if n > TOPK:
-                kv = self.call(self.k("dsa_butterfly_rows", N=n, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
+                N = long_row_keys(n, TOPK)
+                if N > n:
+                    kv = self.call(self.k("dsa_butterfly_rows_pad", T=n, N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv,
+                                   self.pad(16, 0, pad_words(TOPK, KVL + R), (N - n) * (KVL + R))).refs
+                else:
+                    kv = self.call(self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))

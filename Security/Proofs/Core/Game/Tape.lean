@@ -118,7 +118,7 @@ theorem prob_eq_prCoin (p : α → Prop) : ∀ (g : Game α) (s : Strategy g),
 theorem pr_eq_toReal_prCoin {C : Type} [Fintype C] (p : C → Prop) : Claims.Pr p = (prCoin p).toReal := by
   classical
   rw [prCoin_eq_card, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   congr 2
 
 /-- `prCoin` is `Claims.Pr`'s. -/

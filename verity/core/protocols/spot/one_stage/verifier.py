@@ -230,7 +230,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
-            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
+            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
+            seed_salt: str | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -256,6 +257,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
     if day is not None or declarations is not None:
         p["day"] = day
         p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
+    if seed_salt is not None:
+        p["seed_salt"] = seed_salt
     return p
 
 
@@ -267,15 +270,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`."""
+          declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`, and
+    R6's seed salt when it passes `seed_salt`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
-                 day=day, declarations=declarations)
+                 day=day, declarations=declarations, seed_salt=seed_salt)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs, day, declarations),
+                                                  window_root, held, outputs, day, declarations, seed_salt),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -368,11 +372,11 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
-        interior: Mapping[str, Any] | None = None) -> Verdict:
+        interior: Mapping[str, Any] | None = None, seed_salt: str | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
-    log registered first), `check_public`'s values and declared items, the receipt's challenger and place in
+    log registered first, ``seed_salt`` its window's seed salt), `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
@@ -381,7 +385,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
-    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
+    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, and its window's `seed_salt`
+    when it has one), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
     (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
     and `proofs`, the auditor's params naming each template's circuit file and reference header
@@ -391,7 +396,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                              registered, supplied, pinned, binding, schemas, window_root, held, value_outputs),
+                              registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
+                              seed_salt=seed_salt),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
@@ -406,7 +412,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \
             it["copies"]
         i_params = _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None, None,
-                           i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs)
+                           i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs,
+                           seed_salt=it.get("seed_salt"))
         if it.get("proofs") is not None:
             i_params["proofs"] = it["proofs"]
         args["interior"] = {

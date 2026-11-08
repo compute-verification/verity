@@ -52,7 +52,7 @@ namespace Accounting.SecurityProofs.Bridge
 theorem pr_le_pr_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E : A → Prop} {F : X → Prop}
     (h : ∀ a, E a → F (e a)) : Pouw.pr E ≤ Pouw.pr F := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   rw [Fintype.card_congr e]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hmap : ((Finset.univ.filter E).map e.toEmbedding) ⊆ Finset.univ.filter F := by

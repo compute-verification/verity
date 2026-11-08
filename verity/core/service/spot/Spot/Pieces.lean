@@ -8,6 +8,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
+* `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
+  walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
@@ -63,6 +65,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`ChallengerCoins`): `read_reason`, the bytes a sample read against its segment, `coins_reason`, against the segment
   and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
   sizes the evidence holds against v2's limits.
+* `challenger_seed_salt`: a window's seed salt as the verifier reads it from the challenger's log (`seed_salt_of`,
+  `Challenger.seedSaltOf`): the one coin of the seed-salt family released after the window's open root.
 * `challenger_coin_trees`, `challenger_session_trees`, `challenger_sample_link_first`: a `--zk` session's coins
   (`ChallengerTrees`): the coin trees a release log shows the challenger sampled and opened (`coin_trees_of`), an
   audit's session records, each on its tables with their `root_B` lengths, held to them, one tree a session
@@ -162,6 +166,16 @@ def committedBits (j : Json) : V Json := do
     out := out.push (Json.arr #[Json.str (p.prog.defs[c.d]!).key, Lean.toJson (Partition.committedBits c.c.gates units),
       Lean.toJson (← Partition.committedBitsRef p.prog c.d units)])
   return Json.arr out
+
+/-- `{"program", "query"}`, a program object and a query, to `[gates, gates by walk]`: each unit's gates `[lo, hi)` in
+root gates (`Partition.unitGates`, a template query's instances a range at a time) and the same unit by unit
+(`Partition.unitGatesRef`, the walk it replaced); refused where the query is. -/
+def unitGates (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let q := getD j "query"
+  let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
+  return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
 /-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
@@ -686,7 +700,8 @@ def templateCircuits (j : Json) : V Json := do
   return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h) => Json.arr #[Json.str t, Json.str c, h]))]
 
 def table : List (String × (Json → V Json)) :=
-  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
+  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
+   ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),
@@ -707,6 +722,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
+   ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),
