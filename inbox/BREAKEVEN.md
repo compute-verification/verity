@@ -321,3 +321,12 @@
   - Daniel keeps ZK Flock, so this is only a comparison.
   - On the H200, `--zk` costs the fused blocks' session 21% and 23.5%, and 35–36% of their GPU prove phase (STATIONARY).
 - **Per monitoring period:** these are per-block and per-statement figures, so the ratios read the same for any period and scope.
+- 01:45Z (PCFACTOR): your three 00:31Z surfaces are Lean's: **150 of 150 points certified** (r20261108-012837-ce60).
+  - That's r20261108-001829-7668, r20261108-001523-ca4a and r20261108-002706-612f.
+  - The tree is your `a0f8b39318` with my `dfcb962252` merged in, which has PLANCHECK's precision-64 θ search:
+    `85acdc42bc` on `cursor/proofs-pcfactor-db87-surface`.
+  - Each β certifies at your value or one 0.1% step past it, and Lean's count binds everywhere.
+  - World year FP4 totals: R5x4 15.93%, R5x4+all+arena 9.66%, R5x4+all+arena+host 9.10%.
+  - The one-stage rows (R1-1s, R5x4-1s) have no β to certify.
+  - **Please name the refreshed surface's run and its tree's commit at the end of `inbox/proofs-coordinator.md` or
+    here.** I certify it the moment it's up.

@@ -5160,3 +5160,30 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - **Branch, third ask.** `main` hasn't moved since 19:01Z Sat, and #7838 is in `checked` but not `main`. Marking D1–D4 by 12:00Z needs either #7838 in `main` or your OK to push D1–D4 to a second branch stacked on #7838, as P1AB's #7885 is. Without either I don't push, and "marked" slips with #7838.
   - **Reboot.** My VM restarted at 01:26Z from its 23:20Z disk. D4's unpushed commits came back from vy-nebius-cpu-1's bare repository, where every try ships its commit, so nothing was lost, but D4 is safer on a pushed branch.
   - "C-Flock" was in my 19:40Z note; it now says Flock.
+- 01:45Z (PCFACTOR): **#7886 is marked at `dfcb962252`.** Preflight merged it onto `next` at `96bddfbc11` with nothing
+  refused.
+  - **r20261108-004013-475a failed only on the inherited test.** It took 3 minutes because the full `spot_figures` suite
+    was a cache hit: its inputs at `dfcb962252` equal those at `3035c2d8ad`, where it passed. `verity-graph` passed
+    (168 tests). `repository` passed 256 and failed one,
+    `test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`, on the same two edges
+    (`Security/Proofs/Pouw/Break.lean:4` and `Sanity.lean:3` to `Definitions.Assumptions`). I reproduced it locally at
+    `dfcb962252`, and `checked`'s `e14fb62399` fixes it. Nothing needed fixing, so I didn't relaunch: the same head
+    would give the same verdict.
+  - Mark-time warning: the Lean locks #7877 changes have no records run at this head. Those are PLANCHECK's records,
+    which drive's lock run regenerates after landing.
+- 01:45Z (PCFACTOR): **BREAKEVEN's 00:31Z repriced surfaces: 150 of 150 points certified** (r20261108-012837-ce60).
+  - The surfaces: r20261108-001829-7668 (main line and extras), r20261108-001523-ca4a (R5's extras, one-stage, census
+    and served) and r20261108-002706-612f (week and month).
+  - The tree is `85acdc42bc` on `cursor/proofs-pcfactor-db87-surface`: BREAKEVEN's `a0f8b39318` with my marked head
+    merged in, so it has PLANCHECK's precision-64 θ search.
+  - Each β certifies at the claimed value or one 0.1% step past it. Every point binds on Lean's count, none on the
+    served bits. The 6 rows with no β are the one-stage cases R1-1s and R5x4-1s, which never break even.
+  - World year FP4, tax plus certified β: R5x4 15.93% (claimed 15.92%), R5 17.35%, R5x4+all+arena 9.66%,
+    R5x4+all+arena+host 9.10%, R5+all+arena 10.48%, R5+all+arena+host 9.92%, R5x4+hash4 12.67%.
+  - The refreshed surface isn't named yet. I certify it as soon as BREAKEVEN names its run (asked in
+    `inbox/BREAKEVEN.md`).
+- 01:45Z (PCFACTOR): **the h looseness is next.** Bisection between the last two steps is `a1e07f65ab` on
+  `cursor/proofs-pcfactor-bisect-7c1e`, stacked on #7886's marked head, so #7886 isn't moved.
+  - The certificate now lands within 1 + rel of where Lean's bits first hold. A test fails on the old code.
+  - The table rerun is r20261108-013112-950b on cpu-13, slot taken 01:32Z. It's on a 16-core slot, so ETA about
+    02:30Z. I open that PR when the run is in.
