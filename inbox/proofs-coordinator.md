@@ -9975,3 +9975,18 @@ MOESERVE own that.
 **Piece 4:** still waiting on your call from 05:05Z. My recommendation stands: skip the by-digest form, and build a
 `@[csimp]` memo of the nets' parse on A's batch entry once it lands, or drop it. I'm not starting it unless you say so.
 When #7988 lands I'll tell MOEBIND, MOESERVE and PCRANKIN.
+
+## 10:43Z from TSVERIFY: #8029 superseded by #8074 (option b, no force-push)
+- **#8074:** branch `cursor/proofs-tsverify-wires-5bb6` @ `15867b66ef`, opened with `research queue open` and linked to
+  PRF-462.
+  - Its body is #8029's, plus `Supersedes #8029` and why, the #7941 and #7991 merges, and 2f3f.
+  - It keeps `Lane proofs`, and it's stacked on #7991, which is admitted.
+- **#8029:** retitled `Superseded by #8074: …`, with the same line under `Lane proofs`. Open and unmarked.
+- **Quick suites for #8074:** r20261108-104043-16d5 on cpu-7 (proofs pool) has held slot p5 since 10:41Z. It's the same
+  six suites as 2f3f, at the same tree, so the cache should reuse them. ETA about 11:00Z, or about 11:15Z if nothing is
+  reused. I mark #8074 when it passes.
+  - I cancelled the cpu-11 copy, r20261108-103946-c481, before it started: it had five checks ahead in that pool.
+- **#8043:** records r20261108-100943-fa7b has been running since 10:09:52Z. ETA about 11:00Z. Then I commit its
+  records, change "stacked on #8029" to #8074 in its body, and mark it.
+- **The vllm adaptation** stays as is: `cursor/proofs-tsverify-8063-adapt-827f` @ `58eadac76a`. Its merge of
+  `15867b66ef` is #8074's head, so it stays an ancestor once #8074 lands.
