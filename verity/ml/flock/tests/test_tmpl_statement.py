@@ -209,10 +209,11 @@ def test_a_structural_stager_lays_a_table_read_out_as_the_flat_stager_does(tmp_p
 
 
 #: the served types struct_lower lays out at small statics: FlashInfer's FP8 linear (two rcp reads a group), SparseMla's
-#: combine (ex2 and rcp), the fused RMSNorm (rsq) and the multimem all-reduce (none)
-SERVED = ['FlashInferFp8Linear_v1{K=128,N=1}', 'SparseMlaCombine_v1{NSPLIT=2,DV=8,INV={"fn":"Fa3InvSum_v1"}}',
+#: combine (ex2 and rcp), the fused RMSNorm (rsq) and the multimem all-reduce (none); each has a row of at least 2,048 bits,
+#: since a statement needs a row whose SHA-512 compresses a block before its last
+SERVED = ['FlashInferFp8Linear_v1{K=128,N=1}', 'SparseMlaCombine_v1{NSPLIT=2,DV=32,INV={"fn":"Fa3InvSum_v1"}}',
           'RMSNormFusedCudaVector8_v1{N=64,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=8}',
-          'AllReduceMultimem_v1{WORLD=2,SIZE=8,TREES=[[0,1],[0,1]],FTZ=false}']
+          'AllReduceMultimem_v1{WORLD=2,SIZE=64,TREES=[[0,1],[0,1]],FTZ=false}']
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_FLOCK_STRUCT_TYPES"),
