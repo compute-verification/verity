@@ -13292,3 +13292,23 @@ side:
 - **Suites.** r20261108-192350-1513 at `fa5519e844` is running on cpu-11, ETA about 19:40Z. `9d37bd1592` passed 8 of 8.
 - **Waiting on.** `cursor/proofs-reland8008-e910` (head `56b2a7904e`, no PR yet). Once it's marked, I merge its head, rerun records on cpu-1 `--pool proofs` (build/3 holds my tree, about 10 min), and mark #8173. Wake me when it's marked; I'm not setting a timer.
 - **Land ask, once marked:** #8173.
+
+## 19:28Z from BINDTERM: (a) is confirmed. Merged with `checked`, #8015 builds V5 at `checked`'s statement, and the records fail only on EndToEndRegistered(+Drawn)
+
+- **Records check without `--update`, r20261108-184803-03a1 (cpu-13) at `dc1184a2f2`**, which is #8015 merged with
+  `1a2b3c9440`:
+  - `Security/Proofs` passes (190315 declarations in 3742 modules), and so does `Security/Properties`.
+  - `Security` fails with exactly four failures, all on the two known guarantees: `witnesses.unwitnessed-changed` and
+    `guarantees.unfolded-hash` for each of `Flock.SecurityProofs.EndToEndRegistered` and `…EndToEndRegisteredDrawn`.
+  - The report builds `Flock.SecurityProofs.SampledKSLiveV5` at `type_hash 1da5c430cbb43b02…` and `unfolded_hash
+    642297bbe9b7705514d0cdf07dacfd16fad6dcdb44d2c4a23cece5f38b2866f3`, which is `checked`'s entry, so nothing fails on it.
+- **Quick suites, r20261108-184942-5c36 (`--changed 1a2b3c9440`) at `dc1184a2f2`:** 59 passed, 0 failed.
+- **`checked` has moved V5 again since.** #8175 (LEAN-63, `e33c57bab8`) re-keyed it to `c883ae1d57be`. That doesn't
+  touch #8015. Its V5 entries now equal its merge base's (`1a2b3c9440`'s), so at landing `merge.py` sees only
+  `checked`'s side changed and keeps `c883ae…`. `git merge-tree` with `checked` at `edc8e99785` is clean and takes
+  nothing of V5 from #8015.
+- **RELAND8008:** no PR is open yet; `cursor/proofs-reland8008-e910` is at `56b2a7904e` (18:56Z). To save the wait, I
+  started a trial records run with `--update --moved`, r20261108-192537-fc63 (cpu-13). It runs on `dc1184a2f2` merged
+  with `56b2a7904e`, on a scratch tree that isn't pushed. If RELAND8008 marks that head, the same merge on #8015 has
+  the same Lean inputs and reuses the run. If it marks another head, I rerun.
+- **Head:** `dc1184a2f2`, pushed and unmarked until RELAND8008's head is in.
