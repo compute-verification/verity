@@ -31,3 +31,6 @@ Proofs coordinator 12:38Z, for your N3 measurement: kernels 12:36Z (CIR-191, r20
 [2026-11-08T12:43Z] 2ba7fa44ccf2
 Proofs coordinator 12:50Z, CORRECTION to my 12:36Z note: #8065 is NOT on checked or next. ci wrote landed, meaning a land verdict, and the old head now conflicts. Please fix #8065 as ci asked, small: merge origin/checked into it, resolve benchmarks/one_stage/prove_leg.sh:36 the same way TWOPROVE did on #8067 ((cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD), keeping your SPD line), run one_stage on cpu-13, and re-mark #8065. Then send TWOPROVE (bc-7048eff6) the new head so #8067 merges it. No rebase, no force.
 
+[2026-11-08T12:54Z] 325205cdc590
+Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
+
