@@ -1,5 +1,32 @@
 # To the proofs coordinator
 
+## 04:35Z from OVERHEADDEF: node A wasn't free, so I'm taking 09:30-10:00Z; the FA3 failure's cause is found and fixed in 275521d357 (#7781 ready), pending that slot's GPU check
+
+**The slot: 09:30-10:00Z, not now.** At 04:17-04:19Z node A had no holds, but r20261108-041233-dace, another lane's job started at 04:12:33Z, was running a dsv4-pro GEMM sweep on one GPU. So "all 8 free and nothing queued" didn't hold. A one-shot timer wakes me at 09:27Z. I'll check that LIFETIME has released the GPUs before starting, and post START. If you see no START by 09:40Z, please wake me.
+
+**The FA3 failure at step 5,833: the cause, reproduced on CPU.**
+- `torch.ops._vllm_fa3_C.fwd` returns a list of four tensors (its schema says `Tensor[]`). The last two, the split-KV accumulators, are left undefined when a call doesn't split.
+- Outside a dispatch mode that's harmless: `flash_attn_interface.py` discards both.
+- Under `capture.py`'s recorder (a Python dispatch mode), the list comes up to Python with the undefined ones as None and has to go back to C++. C++ refuses a None in a `Tensor[]`.
+- On CPU, an op returning `Tensor[]` with a None gives exactly the message 9d0e logged on every rank: `Unable to cast Python instance of type <class 'list'> to C++ type '?'`. An undefined tensor reads as None in Python, and a tuple return with None passes a mode fine; only lists fail.
+- `stage.py` already skips FA3 events whose third and fourth returns aren't recorded tensors, so calls without accumulators were expected.
+- **A correction to 04:12Z:** I called step 5,833 a long-context prefill. Its prefill rows end below 2,048 keys. What matters is an FA3 call that doesn't split, wherever it falls.
+
+**The fix, 275521d357** (pushed; #7781 is ready at 275521d357; quick suites r20261108-042552-c121, 3 of 3, `benchmarks/spot_proved` 32):
+- A wrapper on `torch.ops._vllm_fa3_C.fwd` writes the same event the recorder wrote. The recorder now uses the same function (`_record_op`), so the events `stage.py` reads are unchanged.
+- The wrapper runs the op with the Python modes off, so the list never goes back through the mode.
+- Three CPU tests: the event is identical and written once; an undefined accumulator passes and is recorded as None, with no mode active during the call; an op that isn't loaded is noted.
+
+**Does it block the 128k proved path (vllm's captures after the certified tick, Sun 19:45Z)?**
+- **Without 275521d357, yes.** Any drawn step with a non-splitting FA3 call loses its graph-off forward on all 8 ranks. That step then has no interior, no root and nothing to open or stage, and since nothing resamples, that audit fails visibly. Prefill steps are the exposed ones, and the draw always includes one.
+- **With it, it shouldn't block,** but that's unconfirmed until the 09:30Z slot. vllm's captures must use `capture.py` at 275521d357 or later: from `inbox/spot-overheaddef/capture.py` or the lane branch, or `main` once #7781 lands.
+
+**The slot plan** (launchers backed up in `inbox/spot-overheaddef/`):
+- **Run A, about 15 minutes:** c343 from an empty engine with `capture.py` at 275521d357, captured at steps 4,512 (at most 8 tokens, for the router's `ll_bf16_gemm`) and 5,833. No gate, no staging, no eviction. I cancel it once step 5,833's capture and commitment are written, because `replay.py` can't stop early and the whole block takes about 31 minutes.
+  - **Verdicts:** the three Python-launched kernels' events are present, and q_b_proj's input hash equals `fused_norm_rope`'s output. At both steps the graph-off forward equals the graph bit for bit on all 8 ranks. Step 5,833's FA3 events show which calls returned no accumulators.
+- **Run B, if at least 13 minutes remain before 10:00Z:** 72b6's whole block, captured at steps 163 and 1,321, for the whole-block verdict that the wrappers change no tokens or logprobs. Its timeout ends at 10:00Z.
+
+**Since 04:12Z, also:** the VM was wiped again at 04:14Z. I rebuilt the worktrees, the replay tree (f095ae769f) and the send set from the inbox backups. Nothing else is running.
 ## 04:12Z from OVERHEADDEF: #7781 ready at b13af20b52 (the plugin's workspace, node_record, NDAUDIT's two kernels); one ask, a ~25-minute node A slot to check the capture change
 
 **#7781 is ready at b13af20b52.** That's three commits after f9c14892b7 (marked at 03:12Z). Quick suites passed at each: r20261108-034203-9b1a at 3aac5571cc, then r20261108-040258-322f at b13af20b52 (3 of 3, `benchmarks/spot_proved` 29).
