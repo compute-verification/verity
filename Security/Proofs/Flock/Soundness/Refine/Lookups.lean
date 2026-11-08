@@ -31,8 +31,7 @@ variable {T T' : List (String × ByteArray)}
 
 /-- **A circuit `HmRow.parse` reads with `T` it reads with `T'`.** -/
 theorem parse_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) (tmpl : Option Typed.Template)
-    (pre : Array (String × Net)) (from_ : ℕ) :
-    OkLe (HmRow.parse tags bytes T tmpl pre from_) (HmRow.parse tags bytes T' tmpl pre from_) := by
+    (pre : Array (String × Net)) : OkLe (HmRow.parse tags bytes T tmpl pre) (HmRow.parse tags bytes T' tmpl pre) := by
   unfold HmRow.parse
   ok_le_walk
   split
@@ -68,13 +67,13 @@ theorem hmOutParse_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteAr
     OkLe (HmOut.parse tags bytes T) (HmOut.parse tags bytes T') := by
   unfold HmOut.parse
   ok_le_walk
-  all_goals first | exact parse_okLe hext _ _ _ _ _ | exact read_okLe hext _ _
+  all_goals first | exact parse_okLe hext _ _ _ _ | exact read_okLe hext _ _
 
 theorem parseTmpl_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) :
     OkLe (HmOut.parseTmpl tags bytes T) (HmOut.parseTmpl tags bytes T') := by
   unfold HmOut.parseTmpl
   ok_le_walk
-  exact parse_okLe hext _ _ _ _ _
+  exact parse_okLe hext _ _ _ _
 
 /-- **A circuit `HmOut.parseCommit` reads with `T` it reads with `T'`.** -/
 theorem parseCommit_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) :
@@ -94,7 +93,7 @@ theorem setupH_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {c
   · rename_i hc
     rw [ht] at hc
     cases hc
-  · exact okLe_back hp (parse_okLe hext _ _ _ _ _)
+  · exact okLe_back hp (parse_okLe hext _ _ _ _)
 
 /-- `setupHidden` with `T'` sets up what it sets up with `T`, where its circuit parses with `T`. -/
 theorem setupHidden_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {c : Circuit}

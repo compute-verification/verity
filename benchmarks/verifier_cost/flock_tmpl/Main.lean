@@ -27,7 +27,7 @@ must agree. `flock-tmpl checks-at TMPL [--mode MODE]`: the layout's checks (`Tmp
 `Tmpl.identOk`, `Tmpl.outsAt`) and all of `Tmpl.unrollOk`, `Tmpl.unrollAt`'s success, at `layoutM`'s layouts (default
 `iv/hybrid/4`), timed one at a time.
 `flock-tmpl stmt CIRCUIT`: a templated statement's circuit read as `HmOut.parseTmpl` reads it, a stage at a time (META off
-its own line, `HmOut.metaOf`; its template lines, `HmOut.tmplLines`; `Tmpl.parse`, `layoutM`, `unrollOk`, `TmplUnit.read`, `HmRow.parse`, and
+its own line, `HmOut.metaOf`; its template lines, `Tmpl.parse`, `layoutM`, `unrollOk`, `TmplUnit.read`, `HmRow.parse`, and
 `HmRow.parse`'s own work timed apart: its SHA-512, UTF-8 check, line split and META parse, the file's sections' `Net.parse`
 and `HmNets.check`'s comparison with the verifier's `sha512x3` and `hm96` nets, which `HmRow.parse` built (what is left of
 it is their build); then `checkRows`), then what decides
@@ -322,7 +322,7 @@ def main (args : List String) : IO UInt32 := do
     let .ok mj := HmOut.metaOf bytes | report "meta" t0 [("error", Json.str "refused")]; return 1
     report "meta" t0
     let t0 ← IO.monoNanosNow
-    let .ok (k, lines) := (do let k ← J.nat mj "template" "META"; return (k, ← HmOut.tmplLines bytes k) : V (Nat × Array String))
+    let .ok lines := (do (← J.arr mj "template" "META").mapM fun x => J.asStr x "template line" : V (Array String))
       | report "template_lines" t0 [("error", Json.str "refused")]; return 1
     report "template_lines" t0 [("lines", toJson lines.size)]
     let some mode := (J.str mj "layout" "META").toOption.bind Tmpl.modeOf | IO.eprintln "META: no layout"; return 1
@@ -338,8 +338,7 @@ def main (args : List String) : IO UInt32 := do
     let .ok tu := TmplUnit.read t mode | report "unit_read" t0 [("error", Json.str "refused")]; return 1
     report "unit_read" t0 [("useful", toJson tu.net.useful), ("unit_log", toJson tu.net.unitLog)]
     let t0 ← IO.monoNanosNow
-    let .ok c := HmRow.parse tags bytes [] (pre := #[("unit", tu.net)]) (from_ := 2 + k)
-      | report "hmrow_parse" t0 [("error", Json.str "refused")]; return 1
+    let .ok c := HmRow.parse tags bytes [] (pre := #[("unit", tu.net)]) | report "hmrow_parse" t0 [("error", Json.str "refused")]; return 1
     report "hmrow_parse" t0
     let t0 ← IO.monoNanosNow
     report "hmrow_sha" t0 [("digest", toJson (Sha512.hash bytes).size)]
@@ -353,7 +352,7 @@ def main (args : List String) : IO UInt32 := do
     let mj := Json.parse ((lines.getD 1 "").trimAsciiEnd.toString.drop 5).toString
     report "hmrow_meta" t0 [("ok", toJson (mj matches .ok _))]
     let t0 ← IO.monoNanosNow
-    let mut at_ := 2 + k
+    let mut at_ := 2
     let mut parsed := 0
     while at_ < lines.size do
       let n := ((tokens lines[at_]!).getD 2 "").toNat?.getD 0

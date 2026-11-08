@@ -67,9 +67,8 @@ theorem unrolled_g (c : Circuit) : (HmOut.unrolled c).g = c.g := by
 
 /-- `HmRow.parse` reads no identity, whatever nets it is given first. -/
 theorem parsePre_identity (tags : Tags) (x : Lean.Json) (b : ByteArray) (t : List (String × ByteArray))
-    (p : Array (String × Net)) (from_ : ℕ) :
-    HmRow.parse { tags with identity := x } b t (pre := p) (from_ := from_) =
-      HmRow.parse tags b t (pre := p) (from_ := from_) := by
+    (p : Array (String × Net)) :
+    HmRow.parse { tags with identity := x } b t (pre := p) = HmRow.parse tags b t (pre := p) := by
   kernel_rfl
 
 /-- `HmOut.parseTmpl` reads no identity. -/

@@ -181,14 +181,13 @@ def sectionsLoop (tags : Tags) (lines : Array String) (s : Array (String × Net)
       return .yield (nets.push (h[1]!, net), at_ + 1 + n)
     else return .done (nets, at_)
 
-/-- `parse` after the class digest, which takes nothing from the oracle: the sections from line `from_`, the lookups, rows,
+/-- `parse` after the class digest, which takes nothing from the oracle: the sections after META, the lookups, rows,
 ranges, wires and leaf scheme, from the circuit's digest `sha`, its lines, its name, META and its class digest. -/
 def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
-    (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) (from_ : Nat := 2) :
-    V Circuit := do
+    (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) : V Circuit := do
   let __s ← sectionsLoop tags lines ((match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
-    | none => pre), from_)
+    | none => pre), 2)
   let mut nets := __s.1
   for k in Circuit.FORBIDDEN do
     if J.has mj k then throw s!"META: {k} (a verifier-evaluated part of the computation); the verifier only checks proofs"
@@ -307,7 +306,7 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
 
 /-- `parse` through the oracle. -/
 def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) (from_ : Nat := 2) : M Circuit := do
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : M Circuit := do
   let sha ← hs.sha512 bytes
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
@@ -333,7 +332,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
         throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
       classOfWith hs bytes head mj
     else pure ByteArray.empty
-  parseRest tags tables tmpl pre sha lines name mj classSha from_
+  parseRest tags tables tmpl pre sha lines name mj classSha
 
 /-- `parseTyped` through the oracle. -/
 def parseTypedWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
@@ -680,11 +679,11 @@ def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : Li
     M Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
-  let k ← J.nat mj "template" ctx
+  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
-  let tu ← TmplUnit.read (← Tmpl.parse (← tmplLines bytes k)) mode
-  let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)]) (from_ := 2 + k)
+  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
+  let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)])
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
   if HmOut.recUnit tu.net.name then

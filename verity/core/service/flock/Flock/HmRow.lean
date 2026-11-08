@@ -610,10 +610,9 @@ def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no sound
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
-template's block (`tmpl`, item 1e) brings its root and placed layouts' circuits; its wiring is derived. The sections start
-at line `from_`: right after META, unless a templated file's template lines come first (`HmOut.parseTmpl`). -/
+template's block (`tmpl`, item 1e) brings its root and placed layouts' circuits; its wiring is derived. -/
 def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) (from_ : Nat := 2) : V Circuit := do
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
   let sha := Sha512.hash bytes
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
@@ -642,7 +641,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := from_
+  let mut at_ := 2
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -772,7 +771,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
 rows from the tasks `ts` (`SplitNL.splitTasks`). Not inlined: the compiler sinks a `Task.spawn` bound in a body down to
 the branch that reads it, which here is the last. -/
 @[noinline] def parseFastLines (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net)) (from_ : Nat)
+    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
     (ts : List (Task (Array String × Array Net.Row))) : V Circuit := do
   let lines0 := SplitNL.linesOf ts
   let rows := SplitNL.rowsOf ts
@@ -799,7 +798,7 @@ the branch that reads it, which here is the last. -/
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := from_
+  let mut at_ := 2
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -927,26 +926,26 @@ the branch that reads it, which here is the last. -/
 
 /-- `parseFastLines` over the file's lines split in tasks between `'\n'` cuts. -/
 @[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[])
-    (from_ : Nat := 2) : V Circuit := do
+    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
+    V Circuit := do
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
     | none => throw "circuit: not UTF-8"
-  parseFastLines sha tags bytes tables tmpl pre from_ (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
+  parseFastLines sha tags bytes tables tmpl pre (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
 
 /-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
 (`Net.parseWith`) and the file hashed in a task beside them,
 `parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
 `flock-verify` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) (from_ : Nat := 2) : V Circuit :=
-  parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre from_
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
+  parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre
 
 set_option maxRecDepth 20000 in
 -- `rfl` compares the two whole bodies of `parse`, as `With.parseWith_std` does
 set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
-  funext tags bytes tables tmpl pre from_
+  funext tags bytes tables tmpl pre
   unfold parse parseFast parseFastFrom parseFastLines
   simp -zeta only [Net.parseWith_eq, classOf_eq_task, bind_map_left, SplitNL.linesOf_splitTasks]
   try rfl
@@ -1778,20 +1777,6 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
-/-- A templated file's template: its `k` lines right after META, `HmRow.parse`'s lines `2` to `k + 1`, read off the
-bytes between their newlines; the file's later lines are not read. -/
-def tmplLines (bytes : ByteArray) (k : Nat) : V (Array String) := do
-  let some n1 := findByte bytes 10 | throw "circuit: no META line"
-  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no template after META"
-  let mut at_ := n2 + 1
-  let mut lines : Array String := #[]
-  for _ in [0:k] do
-    let some e := findByte bytes 10 at_ | throw "circuit: the template's lines end before META's template count"
-    let some l := String.fromUTF8? (bytes.extract at_ e) | throw "circuit: not UTF-8"
-    lines := lines.push l
-    at_ := e + 1
-  return lines
-
 /-- **A recursion unit's name** (`RecOpen.params`, `RecOpen.stackedParams`, `RecResiduals.params`, `RecSparse.params`,
 `RecOpening.params`): `parseTmpl` refuses a template whose unit carries one, since the recursion's claims read such a
 unit as a flat net. -/
@@ -1799,22 +1784,21 @@ def recUnit (name : String) : Bool :=
   (RecOpen.params name).isSome || (RecOpen.stackedParams name).isSome || (RecResiduals.params name).isSome ||
     (RecSparse.params name).isSome || (RecOpening.params name).isSome
 
-/-- A templated file (`Tags.templated`): a `flock-ir-tmpl/v2` template's lines right after META, as many as META's
-`template` says (`tmplLines`), and META's `layout`, its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`:
-well-formed, laid out, passing `Tmpl.unrollOk`; its net `Tmpl.unitNet`, whose rows are built only when read), parsed as
-the file's `unit` circuit where a flat file's `CIRCUIT unit` section is (`HmRow.parse`'s `pre`, its sections from the
-line after the template's), and carried on the circuit (`Circuit.tmpl`). META is read off its own line first (`metaOf`),
-a small header whatever the template's size, and the template off its own lines. The file's pin and class are over its
-bytes, the template's lines included. A file that carries a unit's or a root's rows itself is refused: none of the nets
-`HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit is a recursion unit (`recUnit`). -/
+/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
+its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
+net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
+`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
+line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
+itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit
+is a recursion unit (`recUnit`). -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
-  let k ← J.nat mj "template" ctx
+  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
-  let tu ← TmplUnit.read (← Tmpl.parse (← tmplLines bytes k)) mode
-  let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) (from_ := 2 + k)
+  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
+  let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)])
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
   if recUnit tu.net.name then

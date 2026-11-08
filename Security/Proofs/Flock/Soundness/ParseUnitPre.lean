@@ -26,8 +26,8 @@ open Flock
 namespace FlockSoundness
 
 /-- **The unit given ahead of the file is the circuit's unit**: the first net, named `unit`. -/
-theorem unit_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {n : Net} {from_ : ℕ}
-    {c : Circuit} (h : HmRow.parse tags bytes tables (pre := #[("unit", n)]) (from_ := from_) = .ok c) :
+theorem unit_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {n : Net}
+    {c : Circuit} (h : HmRow.parse tags bytes tables (pre := #[("unit", n)]) = .ok c) :
     c.unitNet = 0 ∧ c.nets.getD 0 default = ("unit", n) ∧ c.unit = n := by
   obtain ⟨-, ⟨more, hm, -⟩, hu, -, -⟩ := parse_factsPre_nets h
   have hm' : c.nets.toList = ("unit", n) :: more := hm

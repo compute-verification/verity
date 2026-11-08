@@ -139,18 +139,17 @@ theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
 /-- Every `HmRow.parse`, untyped or a template's, ends with `HmRow.check`. `rw [HmRow.parse.eq_def]` keeps the body's
 join points as `let`s, and `ret_walk` walks each once. -/
 theorem hm_parse_check_any {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {t : Option Typed.Template} {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
-    (h : HmRow.parse tags bytes tables t pre from_ = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
+    {t : Option Typed.Template} {pre : Array (String × Net)} {c : Circuit}
+    (h : HmRow.parse tags bytes tables t pre = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
   revert c
-  show Ret (HmRow.parse tags bytes tables t pre from_) fun c => ∃ ls, HmRow.check c tags ls = .ok ()
+  show Ret (HmRow.parse tags bytes tables t pre) fun c => ∃ ls, HmRow.check c tags ls = .ok ()
   rw [HmRow.parse.eq_def]
   ret_walk [HmRow.check]
   all_goals exact ⟨_, by with_reducible assumption⟩
 
 /-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
-    (h : HmRow.parse tags bytes tables none pre from_ = .ok c) :
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables none pre = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_check_any h
 
@@ -163,8 +162,7 @@ theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (St
 /-- An untyped `HmRow.parse` with nets `pre` first (a templated file's unit net, `HmOut.parseTmpl`) ends with
 `HmRow.check`. -/
 theorem hm_parse_checkPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
-    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_check_none h
 

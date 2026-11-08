@@ -328,7 +328,7 @@ def lower(args) -> int:
     def meta_captured(text):
         m = meta_of(text)
         tl = m.get("template")
-        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": tl if m.get("format") == FC.TMPL_FORMAT else None,
+        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None,
                        "program_sha512": m.get("program_sha512"), "partition": m.get("partition")}
         return m
 

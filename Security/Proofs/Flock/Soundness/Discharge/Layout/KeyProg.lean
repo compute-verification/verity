@@ -86,8 +86,7 @@ theorem netOK_ofPre {tags : Tags} {pre : Array (String × Net)} {c : Flock.Circu
 unit net), when `pre`'s nets fit their slots: message bit `b < 8` of byte `byte` of row port `p` at template instance
 `g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
 theorem msgCol_lt_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {from_ : ℕ} {c : Flock.Circuit}
-    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c)
+    {pre : Array (String × Net)} {c : Flock.Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
     (hpre : ∀ x ∈ pre.toList, NetOK x.2 ∧ 7 ≤ x.2.unitLog ∧ (x.2.unitLog ≤ 32 → ConstRow x.2)) {g : ℕ} (hg : g < c.g)
     {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
   have P := (parse_factsPre_nets h).1

@@ -37,8 +37,7 @@ set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse` keeps the tags' leaf scheme** (no template, nets `pre` first): it refuses a `leaf_scheme` id other
 than `tags.merkleLeaf`. -/
 theorem parse_leafScheme_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
-    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     c.leafScheme = tags.merkleLeaf := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h

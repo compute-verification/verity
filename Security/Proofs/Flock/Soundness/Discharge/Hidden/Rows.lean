@@ -130,7 +130,7 @@ set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse`'s rows are `HmRow.rowPorts`'** of some META, and its output rows' runs cover its output ports but the
 pinned ones (META `pinned_outputs`, `HmRow.pinnedCount`). -/
 theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {from_ : ℕ} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
+    {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     (∃ mj typed, HmRow.rowPorts mj typed = .ok c.ports) ∧
       c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size - HmRow.pinnedCount c.metaJ := by
   unfold HmRow.parse at h
@@ -360,9 +360,8 @@ theorem unpinned_of_v1 {c : Circuit} (hc : HmOut.checkRows c = .ok ()) (hv1 : �
 /-- **Output rows whose runs cover every output port pin none** (`parse_rowPorts`: the runs cover all but the pinned
 ports, at most all of them). -/
 theorem unpinned_of_sum {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {from_ : ℕ} {c : Circuit} (hp : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c)
-    (hc : HmOut.checkRows c = .ok ()) (h : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) :
-    HmRow.pinnedCount c.metaJ = 0 := by
+    {c : Circuit} (hp : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) : HmRow.pinnedCount c.metaJ = 0 := by
   have h2 := (parse_rowPorts hp).2
   by_contra hk
   have hle := (pinned_facts (checkPinned_of_checkRows hc) (Nat.pos_of_ne_zero hk)).1
@@ -370,9 +369,8 @@ theorem unpinned_of_sum {tags : Tags} {bytes : ByteArray} {tables : List (String
 
 /-- **One output row per output port pins no output** (`unpinned_of_sum`). -/
 theorem unpinned_of_rep {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {from_ : ℕ} {c : Circuit} (hp : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c)
-    (hc : HmOut.checkRows c = .ok ()) (h : c.outRowPorts = Array.replicate c.outPorts.size 1) :
-    HmRow.pinnedCount c.metaJ = 0 :=
+    {c : Circuit} (hp : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : c.outRowPorts = Array.replicate c.outPorts.size 1) : HmRow.pinnedCount c.metaJ = 0 :=
   unpinned_of_sum hp hc (by rw [h, foldl_replicate_one])
 
 /-- **Output rows each of one port are one per output port.** -/
@@ -413,8 +411,8 @@ theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.ou
 `2 · words = 128 · chunks` bytes (`ParseFacts.portWords`): a `sha512/row/v1` row is no bit row, so each output row is a
 padded lone port (`checkRows_out`). -/
 theorem out_rows_v1Pre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {from_ : ℕ} {c : Circuit} (hp : HmRow.parse tags cf tables (pre := pre) (from_ := from_) = .ok c)
-    (P : ParseFactsPre tags pre c) (hc : HmOut.checkRows c = .ok ()) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
+    {c : Circuit} (hp : HmRow.parse tags cf tables (pre := pre) = .ok c) (P : ParseFactsPre tags pre c)
+    (hc : HmOut.checkRows c = .ok ()) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
     (∀ p ∈ c.ports.toList, p.segs = none) ∧ c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
       ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
         2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks := by

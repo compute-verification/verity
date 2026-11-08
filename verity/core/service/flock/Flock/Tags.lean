@@ -424,9 +424,9 @@ def find? (name : String) : Option Tags := all.find? (·.name == name)
 /-- The templated statement's name (`circuitTmpl`, `isTmpl`). -/
 def tmplName : String := "verity/flock-circuit/tmpl"
 
-/-- `verity/flock-circuit/tmpl`: `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template, its
-lines right after META, and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds from the
-template (`Stmt.partialRangesT`). The identity and the statement digest's leading tag name it, with its own Σ tag and domain. -/
+/-- `verity/flock-circuit/tmpl`: `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template
+and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds from the template
+(`Stmt.partialRangesT`). The identity and the statement digest's leading tag name it, with its own Σ tag and domain. -/
 def circuitTmpl : Tags :=
   { circuit with
     name := tmplName, statement := "verity/flock-circuit/tmpl", fileFormat := "flock-circuit/tmpl",

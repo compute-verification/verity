@@ -7,10 +7,10 @@ executable, built beside `flock-verify` by `pod/90-tmpl-unit.sh` (`lean_exe floc
 
     flock-tmpl-unit TMPL --layout MODE [--out F]
 
-A `flock-ir-tmpl/v2` template read at layout `MODE` (`Tmpl.modeOf`) as the verifier reads a templated statement's
-template (`HmOut.parseTmpl`, `TmplUnit.read`). One `TMPL` line: the logical and committed sizes and the slot's log. With
-`--out`, the committed net's `flock-ir-unit/v2` rows, then an `ORDER` line, `Tmpl.posMap`: the prover's unit, committed
-where the verifier folds it (`flock-circuit --tmpl-unit F`).
+A `flock-ir-tmpl/v2` template read at layout `MODE` (`Tmpl.modeOf`) as a templated statement's META reads it
+(`TmplUnit.read`). One `TMPL` line: the logical and committed sizes and the slot's log. With `--out`, the committed net's
+`flock-ir-unit/v2` rows, then an `ORDER` line, `Tmpl.posMap`: the prover's unit, committed where the verifier folds it
+(`flock-circuit --tmpl-unit F`).
 -/
 
 open Flock

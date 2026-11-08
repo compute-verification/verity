@@ -95,8 +95,7 @@ set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse` reads the tags' leaf scheme off the META line** (no template, nets `pre` first): it refuses a file whose
 META `leaf_scheme` id (`metaLeaf`) is not `tags.merkleLeaf`. -/
 theorem parse_metaLeaf {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {from_ : ℕ} {c : Circuit}
-    (h : HmRow.parse tags bytes tables (pre := pre) (from_ := from_) = .ok c) :
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     metaLeaf bytes = some tags.merkleLeaf := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
@@ -249,7 +248,7 @@ theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables :
   refine ⟨?_, hleaf⟩
   unfold ProvedScope.circuitOf at hc
   split at hc
-  · obtain ⟨pre, c₀, ⟨_, hp⟩, -⟩ := Hidden.parseCommit_untyped htyped hc
+  · obtain ⟨pre, c₀, hp, -⟩ := Hidden.parseCommit_untyped htyped hc
     exact parse_metaLeaf hp
   · exact parse_metaLeaf hc
 

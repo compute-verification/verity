@@ -159,7 +159,7 @@ theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteAr
   · rw [FlockSoundness.parseCommit_flat hi] at h
     exact hmOut_g h hr hk hcnt
   · rw [FlockSoundness.parseCommit_tmpl hi] at h
-    obtain ⟨tu, c₀, ⟨_, hp⟩, -, -, rfl⟩ := FlockSoundness.TmplValue.parseTmpl_cases h
+    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := FlockSoundness.TmplValue.parseTmpl_cases h
     obtain ⟨ls, hls⟩ := hm_parse_check_any hp
     exact g_of_range (c := c₀) hls hr hk hcnt
 

@@ -634,8 +634,8 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
 
 def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
     """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
-    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the file's template and
-    META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the template and layout
+    mode META holds (``d/unit.tmpl``, ``d/unit.layout``)."""
     if st.meta.get("statement") != FC.TMPL_STATEMENT:
         return {}
     if not tmpl_unit_bin:
@@ -643,7 +643,7 @@ def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
     placed = d / "unit.placed"
     if not placed.exists():
         d.mkdir(parents=True, exist_ok=True)
-        (d / "unit.tmpl").write_text(FC.template_of(st.text))
+        (d / "unit.tmpl").write_text("\n".join(st.meta["template"]) + "\n")
         (d / "unit.layout").write_text(st.meta["layout"])
         p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
         if p.returncode:

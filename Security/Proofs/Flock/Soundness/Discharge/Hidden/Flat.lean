@@ -51,8 +51,7 @@ abbrev flatTwin (st : Stmt) : Stmt :=
 /-- **What the copy positions read, with nets `pre` first**, for a statement whose circuit `HmRow.parse` accepted with
 nets `pre` ahead of the file, whose unit's rows end at its useful rows, and whose Δ is `HmRow.delta`'s. -/
 theorem unitFacts_ofPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
-    {pre : Array (String × Net)} {from_ : ℕ} {st : Stmt}
-    (hp : HmRow.parse tags cf tables (pre := pre) (from_ := from_) = .ok st.c)
+    {pre : Array (String × Net)} {st : Stmt} (hp : HmRow.parse tags cf tables (pre := pre) = .ok st.c)
     (hrows : st.c.unit.a.rows ≤ st.c.unit.useful ∧ st.c.unit.b.rows ≤ st.c.unit.useful)
     (hda : st.da = (HmRow.delta st.c st.pin).1) : Aliased.UnitFactsPre tags pre st := by
   obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_factsPre_nets hp
@@ -72,7 +71,7 @@ theorem unitFacts_ofPre {tags : Tags} {cf : ByteArray} {tables : List (String ×
 `Built`): for a statement whose circuit `HmRow.parse` accepted with `n` first, whose Δ is `HmRow.delta`'s, when `n`'s
 rows end at its useful rows. -/
 theorem unitFacts_of_parsePre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {n : Net}
-    {from_ : ℕ} {st : Stmt} (hp : HmRow.parse tags cf tables (pre := #[("unit", n)]) (from_ := from_) = .ok st.c)
+    {st : Stmt} (hp : HmRow.parse tags cf tables (pre := #[("unit", n)]) = .ok st.c)
     (hrows : n.a.rows ≤ n.useful ∧ n.b.rows ≤ n.useful) (hda : st.da = (HmRow.delta st.c st.pin).1) :
     Aliased.UnitFactsPre tags #[("unit", n)] st :=
   unitFacts_ofPre hp ((unit_of_parsePre hp).2.2 ▸ hrows) hda
