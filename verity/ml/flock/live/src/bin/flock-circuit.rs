@@ -1254,6 +1254,30 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
     (t_level0, reps)
 }
 
+/// The salt trees a device session's table samples, in order, as (tree id, leaves): level 0, then each rep's Ligerito levels 1
+/// to R, a level's tree 2^(its message columns + its rate) leaves; under M1 each rep's pads tree comes first (`zk_prepare`'s ids).
+fn salt_trees(st: &Stmt, lig: LigeritoProfile, level0: u64) -> Vec<(u64, usize)> {
+    let pcs = pcs_of(st, lig);
+    let cfg = pcs.ligerito_prover_config().expect("Ligerito config");
+    let (r, pads) = (cfg.recursive_steps as u64, is_zk(st) as u64);
+    let mut trees = vec![(level0, pcs.n_leaves())];
+    for rep in 0..2 {
+        let first = level0 + 1 + rep * (pads + r) + pads;
+        trees.extend((0..cfg.recursive_steps).map(|i| (first + i as u64, 1usize << (cfg.recursive_log_msg_cols[i] + cfg.log_inv_rates[i + 1]))));
+    }
+    trees
+}
+
+#[cfg(feature = "gpu")]
+fn pin_salts(b: &Arc<Vec<u8>>) -> Option<flock_live::gpu_circuit::Pinned> {
+    flock_live::gpu_circuit::Pinned::new(b)
+}
+
+#[cfg(not(feature = "gpu"))]
+fn pin_salts(_: &Arc<Vec<u8>>) -> Option<()> {
+    None
+}
+
 /// A table's level-0 root before any stream opens, in a session of several tables (whose one `Commit` carries every table's
 /// root): the commitment the table's reps compute again, from its witness, its level-0 hiding and its level-0 salts.
 fn level0_root(st: &Stmt, wt: &WitData, lig: LigeritoProfile, level0: Option<&flock_core::pcs::ligerito::zk::Level0Zk>,
@@ -3789,6 +3813,24 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
+    // the device's trees' salts read beside the witness build and page-locked for its copies, not inside its timed phases
+    // (FC_SALTS_AHEAD=0: each tree's where the device builds it); not under the ZK server, whose Lean draws them
+    let salts_ahead = (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
+        && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0"))
+    .then(|| {
+        let tables: Vec<_> = salts_t.iter().map(|s| {
+            let s = s.lock().unwrap_or_else(PoisonError::into_inner);
+            (s.ahead(), salt_trees(st, lig, s.level0_id()))
+        }).collect();
+        flock_live::spawn(move || {
+            let t0 = Instant::now();
+            let mut pinned = Vec::new();
+            for (a, trees) in &tables {
+                a.draw(trees, &mut |b| pinned.extend(pin_salts(b)));
+            }
+            (tables, pinned, t0.elapsed().as_secs_f64())
+        })
+    });
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
@@ -4205,6 +4247,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    if let Some(h) = salts_ahead {
+        let (tables, pinned, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
+        let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
+        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": pinned.len(),
+                                            "untaken": untaken}));
+        flock_live::spawn(move || drop(pinned));
+    }
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
                 prove_s, buckets, tp0 })
 }
