@@ -32,6 +32,17 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     assert r["mismatches"] == r["compared"] and [f["code"] for f in F.failures] == ["word-mismatch"]
 
 
+def test_a_static_free_word_definition_is_compared_bound():
+    """`ArgmaxStep_v2`'s word Definition, `ArgmaxStep_v1`, is a composite with no statics, which `word_of` returns unbound: the
+    word view sizes its vectors by the bound Definition's gates."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import sampling_boolean as SB
+
+    F = CK.Findings()
+    r = CK.word_view(bind(SB.ArgmaxStep), CK.Options(vectors=8), F)
+    assert r["via"] == "word:ArgmaxStep_v1" and r["compared"] and r["mismatches"] == 0 and not F.failures
+
+
 def _xor_bits(word: bool):
     """x ^ y on four bits, with ``x ^ y`` on 4-bit words as its word Definition when ``word``."""
     from verity.ml.circuits import boolean as BL

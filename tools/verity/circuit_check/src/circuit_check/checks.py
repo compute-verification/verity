@@ -83,7 +83,7 @@ from verity.ml.circuits.evaluation import ScalarReference, evaluate, kernels, se
 from verity.ml.circuits.evaluation.reference import resolve, signature_of, standalone_call
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import is_boolean
-from verity.ml.circuits.defs import PrimitiveDefinition, conformance_label
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, conformance_label
 
 from . import bodies as BD
 from . import sidecars as SC
@@ -184,7 +184,9 @@ def _where(prim: str, scope: str) -> str:
 # --- correspondence ---------------------------------------------------------------------------------------------------------
 
 def _gates(t: Any) -> int:
-    return 1 if isinstance(t, (PrimitiveDefinition, ScalarReference)) else int(t.gates)
+    if isinstance(t, (PrimitiveDefinition, ScalarReference)):
+        return 1
+    return int((bind(t) if isinstance(t, CompositeDefinition) else t).gates)
 
 
 def _n_vectors(t: Any, opts: Options, lazy: int | Iterable[int] = ()) -> int:
