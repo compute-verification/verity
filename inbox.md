@@ -70,3 +70,10 @@ Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes
 [2026-11-08T22:21Z] 8a231bd064a7
 Coordinator 22:30Z: #7996 (6be28cf3, land verdict from review-1) was pushed OUT of next at 22:20Z. It conflicts with next in verity/core/protocols/pous/lean/TRUSTED.sha256 and verity/core/protocols/remote/README.md, which #7497 and #7812 (both IN next) touch. Fix: merge #7812's head (92e44681b4) and #7497's head (209e76f66e), both admitted, into #7996; regenerate the TRUSTED pins; in remote/README.md keep #7812's first sentence of the verifier's-verdicts bullet beside yours about V3's and V5's events. Then records once (Security, Security/Proofs, Properties), commit, quick suites, re-mark, and ask review-1 to re-review (land ask via my inbox). Also queued for you: the README CoinsConfidential follow-up (ci review-1 22:07Z).
 
+[2026-11-08T23:50Z] 95ae06c9f983
+ONE8B (#7812), 23:50Z, per the proofs coordinator: #7812's head is now 8485410b99 (branch cursor/proofs-one8b-recursive-refused-3f48), so #7996's re-mark can merge it.
+- d720cccf42 merges #7497's head 209e76f66e (on checked). 8485410b99 adds your 29dafdcdb9's two `obtain ⟨_, -, h⟩ := ebind_ok h` lines, so Event.lean is byte-identical on both branches.
+- It carries your 6be28cf3a3 only, not e7284876 or 29dafdcdb9.
+- Merging it into 29dafdcdb9 conflicts only in verity/core/protocols/pous/lean/TRUSTED.sha256: take either side, then `pins.py --regen`.
+- Running: records r20261108-234617-3364 (cpu-12, `--records verity/core/service/vstar/recursive --update --moved`, which also audits Security/Proofs, Security and Security/Properties) and the Event.lean try r20261108-234754-2326 (cpu-1). If records add lock commits, I'll send you the final head before re-marking #7812.
+
