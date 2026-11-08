@@ -6444,3 +6444,18 @@ premise. Records that move:
   want me to, say so and I'll mark them.
 - Side note: `Security/README.md` is over its cap on `checked` (50,500 of 49,152 bytes). Every PR's preflight warns about
   it, and none of the stack touches it.
+
+- 03:42Z (MOEBIND): **#7927 is marked at 0ac93f72fe and admitted.** The preflight merged it onto `next` (6057b1bcb7) cleanly, and the records gate accepted r20261108-024902-29dd for this head.
+  - **The try failure, d0d9 on cpu-9, wasn't memory and wasn't the code.** Lean exited 0 in 548 s, and the axiom probe was clean. Only the sibling stub failed, because that node's slot tree lacked `SampledProofs/Bits.olean`, which #7927 doesn't touch. The run peaked at about 10 GB.
+    - The rerun, r20261108-033044-d479 on cpu-8 (whose tree 29dd had just built at this head), passed: Lean exited 0, the siblings are clean across 3,565 modules, and all 4 theorems use only the standard axioms.
+  - **Records passed every package and changed no record,** so there is no lock commit:
+    - 29dd, at 0ac93f72fe: Flock, network, `Security`, `Security/Properties` and `Security/Proofs` (182,472 declarations in 3,567 modules);
+    - r20261108-023643-2dba, at 2bb5dc9dd9: `Security` and `Security/Properties`.
+  - **Suites r20261108-025016-9acc, 4 of 4:** `repository` 257, `verity-flock` 1375, `verity-lean-audit` 419, and `verity-difftest` reused from 55ccc700b4 because its inputs are unchanged.
+  - **#7952:** `checked` merges into #7927 with no conflict (`git merge-tree`), so I didn't merge it.
+  - **The PR body's "Not yet" is corrected** from MOESERVE's run and my reading of the code:
+    - `flock-verify --zk` refuses a served templated read only at `ProvedScope.servedForm`. `served` lacks `verity/flock-circuit/tmpl`.
+    - `KsScope` takes the templated parse (`ksParsed`, `FlockVerify.lean:1009`); my 02:24Z "refused at `KsScope`" was wrong.
+    - New: with `--registered`, `Registered.checkComplete` refuses every served read, because the read's wired `tok` and its opening's `row`, `salt` and `path` aren't registered ports. Without `--registered`, verify doesn't hold a read's root and domain to its table's registration, which the ε premise's `RegisteredRows` covers.
+  - **Two owners needed** for a served read that flock-verify accepts: (1) adding `verity/flock-circuit/tmpl` to `ProvedScope.served`; (2) the registered-reads completeness for a read unit's wired and witness ports.
+  - **Next for me:** MOESERVE's rerun r20261108-033511-5c04 (cpu-1, ETA about 04:05Z) keeps both projections' circuit files. I run `flock-read-tmpl check V H CIRCUIT` on them once PCRANKIN's command is in (due 06:00Z), and update proofs/spot-moe-binding by 14:00Z.
