@@ -15,17 +15,21 @@ ALL_SCOPES = ("world week", "world month", "world year", "datacenter week", "dat
 COMPILE = ("3.8", "14.0")
 #: the served line's levers, statuses and owners, which OPTMODES reads too
 PATH = json.loads((Path(__file__).parent / "reprice_path.json").read_text())
-#: the memory-checked KV pool beside a step: sampled like the other units, as built (every position paid for) and with
-#: the ragged token row, each walked and with the head-of-line memo (not built); and proved every window for comparison
-POOL = [("sampled", "built walked", "sampled like the other units, as built, every lookup walking (at least)"),
-        ("sampled", "built memo", "sampled like the other units, as built with the head-of-line memo (at least)"),
-        ("sampled", "ragged walked", "sampled like the other units, with the ragged token row, every lookup walking"),
-        ("sampled", "ragged memo", "sampled like the other units, with the ragged token row and the memo"),
-        ("every", "built walked", "proved every window, as built (superseded)"),
-        ("every", "ragged walked", "proved every window, with the ragged token row (superseded)")]
-#: the two pool readings a total takes until the pool's unit is settled
-TOTAL_POOLS = (("sampled", "built walked", "the pool sampled as built"),
-               ("sampled", "ragged walked", "the pool sampled with the ragged row"))
+#: the per-window pool unit beside a step, its pool side and compile window: proved every window, as one pool per
+#: window needs, as built (every position paid for), with the ragged token row alone and with the planned v5, each
+#: walked and with the head-of-line memo (not built); and sampled like the other units, which is unsound as drafted
+POOL = [("every", "built walked", "proved every window, as built, every lookup walking"),
+        ("every", "built memo", "proved every window, as built with the head-of-line memo"),
+        ("every", "ragged walked", "proved every window, with the ragged token row alone"),
+        ("every", "ragged memo", "proved every window, with the ragged token row and the memo"),
+        ("every", "v5 walked", "proved every window, v5 planned: the ragged row and carried request numbers"),
+        ("every", "v5 memo", "proved every window, v5 planned, with the memo"),
+        ("sampled", "built walked", "sampled like the other units, as built (unsound as drafted)")]
+#: the pool readings a total takes until the pool's unit is settled: every case as built, the last step and the path's
+#: end also with the ragged row and with v5
+TOTAL_POOLS = (("every", "built walked", "the pool proved every window as built"),
+               ("every", "ragged walked", "the pool proved every window with the ragged row"),
+               ("every", "v5 walked", "the pool proved every window at v5 (planned)"))
 #: each theorem form a row is priced under, as the table names it
 FORM = {"v5": "V5 per block: one-stage proof only", "tk": "T·K_δ: two-stage, proved",
         "v5-1s": "V5 per block: one-stage, proved"}
@@ -155,13 +159,14 @@ def entries(rows, data, items, head, title):
         print(f"| {case} | {x['label']} | {x['status']} | {x['owner']} | {FORM[x['form']]} | " + " | ".join(c) + " |")
 
 
-def totals(rows, data, cases, what=""):
+def totals(rows, data, cases, every=()):
+    """Each case's totals: with the pool as built, and with each other reading for the cases in `every`."""
     for case in cases:
-        for how, load, name in TOTAL_POOLS:
+        for how, load, name in TOTAL_POOLS if case in every else TOTAL_POOLS[:1]:
             t = total(rows, case, (how, load))
             data[f"{case} total, {name}"] = {"case": case, "compile_core_h": COMPILE[0], "pool": f"{how} {load}",
                                              "cells": t}
-            print(f"| {case} total | {case}{what} + compiling at {COMPILE[0]} core-h + {name} | | | {FORM['v5']} | "
+            print(f"| {case} total | {case} + compiling at {COMPILE[0]} core-h + {name} | | | {FORM['v5']} | "
                   + " | ".join(pct(t[s]) if s in t else "–" for s in ALL_SCOPES) + " |")
 
 
@@ -184,19 +189,21 @@ def served(rows, data):
               f"{FORM['v5']} | " + " | ".join(c) + " |")
     for how, load, what in POOL:
         c = [pct(rows[(last, s)]["pool"][how][load]) if "pool" in rows.get((last, s), {}) else "–" for s in ALL_SCOPES]
-        print(f"| pool | + the memory-checked KV pool, {what} | measured ANDs, --zk rate; verifier assumed | MEMPOOL | "
-              f"{FORM['v5']} | " + " | ".join(c) + " |")
+        print(f"| pool | + the per-window pool unit (its pool side and compile window), {what} | ANDs measured at the "
+              f"class (v5's planned), --zk rate; verifier assumed | MEMPOOL | {FORM['v5']} | " + " | ".join(c) + " |")
     for delta in PATH["deltas"]:
         print(f"| delta | {delta['label']}: points on {delta['base']}, not in the totals | {delta['status']} | "
               f"{delta['owner']} | {FORM[delta['form']]} | "
               + " | ".join(f"{delta['delta'][s] * 100:+.2f} pt" for s in ALL_SCOPES) + " |")
     measured = PATH["served_measured"][0]["cases"]["two-stage"]
-    totals(rows, data, [last, measured] + [x["cases"]["two-stage"] for x in PATH["path"]])
+    path = [x["cases"]["two-stage"] for x in PATH["path"]]
+    totals(rows, data, [last, measured] + path, every=(last, path[-1]))
     entries(rows, data, PATH["path"], head, f"The path from {last} to 10% (total FP4; each step adds to the one above "
             "it):")
     entries(rows, data, PATH["pool_window"], head, "One pool per window: the hits it loses recomputed (total FP4 before "
             "compiling and the pool):")
-    totals(rows, data, [x["cases"]["two-stage"] for x in PATH["pool_window"]])
+    windows = [x["cases"]["two-stage"] for x in PATH["pool_window"]]
+    totals(rows, data, windows, every=windows[:2])
     entries(rows, data, PATH["extras"], head, f"Extras on {last}, each alone (total FP4 before compiling and the pool):")
     entries(rows, data, PATH["zk"], head, "The per-window budget form, T windows of K_delta (total FP4):")
     print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)
