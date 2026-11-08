@@ -106,7 +106,7 @@ theorem hmOut_parseCommit_mask {tags : Tags} {bytes : ByteArray} {tables : List 
   · rw [parseCommit_flat hi] at h
     exact hmOut_parse_mask h
   · rw [parseCommit_tmpl hi] at h
-    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    obtain ⟨tu, c₀, ⟨_, hp⟩, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
     obtain ⟨_, hls⟩ := hm_parse_checkPre hp
     exact hm_check_mask hls
 

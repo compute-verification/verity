@@ -373,7 +373,7 @@ theorem keysRow_of_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String ×
   have hkc := srcKey_tmpl hT C x
   unfold Layout.RowKey
   rw [heu] at hkc ⊢
-  obtain ⟨tu, c₀, hp0, -, -, he⟩ := TmplValue.parseTmpl_cases hT
+  obtain ⟨tu, c₀, ⟨_, hp0⟩, -, -, he⟩ := TmplValue.parseTmpl_cases hT
   subst he
   rw [srcKey_withTmpl c₀ (some tu) x] at hkc
   have hnd : (portBits c₀.unit.inGroups).Nodup := by
@@ -457,7 +457,7 @@ theorem Committed.msgCol_lt (hty : tags.typed = false) (h : Committed tags cf ta
     {p : ℕ} (hp : p < cs.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol cs g p byte b < 2 ^ cs.kLog := by
   rcases h with h | h
   · exact Layout.msgCol_lt_of_parse (parse_untyped hty h).1 hg hp byte b hb
-  · obtain ⟨tu, c₀, h0, -, -, he⟩ := TmplValue.parseTmpl_cases h
+  · obtain ⟨tu, c₀, ⟨_, h0⟩, -, -, he⟩ := TmplValue.parseTmpl_cases h
     rw [he] at hg hp ⊢
     exact Layout.msgCol_lt_of_parsePre h0 (fun x hx => by
       obtain rfl : x = ("unit", tu.net) := by simpa using hx

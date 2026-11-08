@@ -42,11 +42,13 @@ open Flock Flock.Tmpl FlockSoundness.Audit
 
 namespace FlockSoundness.TmplValue
 
-/-- **A templated file's circuit** is `HmRow.parse`'s with the read unit's committed net first, named `unit`, passing
-`HmOut.checkRows`, with no net named `unit` or `root` after it, and the unit carried on it. -/
+/-- **A templated file's circuit** is `HmRow.parse`'s with the read unit's committed net first, named `unit`, its
+sections from some line on (the line after the template's), passing `HmOut.checkRows`, with no net named `unit` or
+`root` after it, and the unit carried on it. -/
 theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) :
-    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) = .ok c₀ ∧
+    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit),
+      (∃ n, HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) (from_ := n) = .ok c₀) ∧
       HmOut.checkRows c₀ = .ok () ∧
       (c₀.nets.extract 1 c₀.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") = false ∧
       c = { c₀ with tmpl := some tu } ∧ HmOut.recUnit tu.net.name = false := by
@@ -55,9 +57,9 @@ theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List 
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
-  obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   split at h
   · obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
+    obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
     obtain ⟨tu, -, h⟩ := Flock.TmplOrder.bind_ok h
     obtain ⟨c₀, hc₀, h⟩ := Flock.TmplOrder.bind_ok h
     split at h
@@ -68,12 +70,13 @@ theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List 
       · rename_i hr
         obtain ⟨_, hu, h⟩ := Flock.TmplOrder.bind_ok h
         simp only [pure, Except.pure, Except.ok.injEq] at h
-        exact ⟨tu, c₀, hc₀, hu, Bool.eq_false_iff.mpr hb, h.symm, Bool.eq_false_iff.mpr hr⟩
+        exact ⟨tu, c₀, ⟨_, hc₀⟩, hu, Bool.eq_false_iff.mpr hb, h.symm, Bool.eq_false_iff.mpr hr⟩
   · cases h
 
 theorem parseTmpl_cases {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) :
-    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) = .ok c₀ ∧
+    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit),
+      (∃ n, HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) (from_ := n) = .ok c₀) ∧
       HmOut.checkRows c₀ = .ok () ∧
       (c₀.nets.extract 1 c₀.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") = false ∧
       c = { c₀ with tmpl := some tu } :=
@@ -86,7 +89,7 @@ theorem parseTmpl_facts {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
     (h : HmOut.parseTmpl tags bytes tables = .ok c) :
     ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), ParseFactsPre tags #[("unit", tu.net)] c₀ ∧ HmOut.checkRows c₀ = .ok () ∧
       c = { c₀ with tmpl := some tu } ∧ c₀.unitNet = 0 ∧ c₀.nets.getD 0 default = ("unit", tu.net) := by
-  obtain ⟨tu, c₀, hp, hck, -, he⟩ := parseTmpl_cases h
+  obtain ⟨tu, c₀, ⟨_, hp⟩, hck, -, he⟩ := parseTmpl_cases h
   obtain ⟨P, ⟨more, hm, -⟩, hu, -, -⟩ := parse_factsPre_nets hp
   have hm' : c₀.nets.toList = ("unit", tu.net) :: more := hm
   have h0 : c₀.nets.findIdx? (·.1 == "unit") = some 0 := by

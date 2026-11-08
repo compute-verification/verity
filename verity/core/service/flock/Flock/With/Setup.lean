@@ -680,11 +680,11 @@ def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : Li
     M Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
-  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let k ← J.nat mj "template" ctx
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
-  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
-  let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)])
+  let tu ← TmplUnit.read (← Tmpl.parse (← tmplLines bytes k)) mode
+  let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)]) (from_ := 2 + k)
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
   if HmOut.recUnit tu.net.name then

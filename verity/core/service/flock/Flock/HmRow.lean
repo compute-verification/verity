@@ -1778,6 +1778,20 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
+/-- A templated file's template: its `k` lines right after META, `HmRow.parse`'s lines `2` to `k + 1`, read off the
+bytes between their newlines; the file's later lines are not read. -/
+def tmplLines (bytes : ByteArray) (k : Nat) : V (Array String) := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no template after META"
+  let mut at_ := n2 + 1
+  let mut lines : Array String := #[]
+  for _ in [0:k] do
+    let some e := findByte bytes 10 at_ | throw "circuit: the template's lines end before META's template count"
+    let some l := String.fromUTF8? (bytes.extract at_ e) | throw "circuit: not UTF-8"
+    lines := lines.push l
+    at_ := e + 1
+  return lines
+
 /-- **A recursion unit's name** (`RecOpen.params`, `RecOpen.stackedParams`, `RecResiduals.params`, `RecSparse.params`,
 `RecOpening.params`): `parseTmpl` refuses a template whose unit carries one, since the recursion's claims read such a
 unit as a flat net. -/
@@ -1785,21 +1799,22 @@ def recUnit (name : String) : Bool :=
   (RecOpen.params name).isSome || (RecOpen.stackedParams name).isSome || (RecResiduals.params name).isSome ||
     (RecSparse.params name).isSome || (RecOpening.params name).isSome
 
-/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
-its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
-net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
-`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
-line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
-itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit
-is a recursion unit (`recUnit`). -/
+/-- A templated file (`Tags.templated`): a `flock-ir-tmpl/v2` template's lines right after META, as many as META's
+`template` says (`tmplLines`), and META's `layout`, its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`:
+well-formed, laid out, passing `Tmpl.unrollOk`; its net `Tmpl.unitNet`, whose rows are built only when read), parsed as
+the file's `unit` circuit where a flat file's `CIRCUIT unit` section is (`HmRow.parse`'s `pre`, its sections from the
+line after the template's), and carried on the circuit (`Circuit.tmpl`). META is read off its own line first (`metaOf`),
+a small header whatever the template's size, and the template off its own lines. The file's pin and class are over its
+bytes, the template's lines included. A file that carries a unit's or a root's rows itself is refused: none of the nets
+`HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit is a recursion unit (`recUnit`). -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
-  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let k ← J.nat mj "template" ctx
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
-  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
-  let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)])
+  let tu ← TmplUnit.read (← Tmpl.parse (← tmplLines bytes k)) mode
+  let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) (from_ := 2 + k)
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
   if recUnit tu.net.name then

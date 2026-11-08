@@ -61,10 +61,11 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
 /-! ## The committed circuit -/
 
 /-- **`parse_untyped`'s `HmOut.parseCommit` form**: an untyped committed circuit is `HmRow.parse`'s with nets `pre`
-first (none for a flat file, the template's unit net for a templated one), with its `ParseFactsPre`, then
-`HmOut.checkRows`, and carries the template a templated file read. -/
+first (none for a flat file, the template's unit net for a templated one), its sections from some line on (the line
+after META, or after a templated file's template), with its `ParseFactsPre`, then `HmOut.checkRows`, and carries the
+template a templated file read. -/
 theorem parseCommit_untyped (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
-    ∃ pre c₀, HmRow.parse tags cf tables (pre := pre) = .ok c₀ ∧ ParseFactsPre tags pre c₀ ∧
+    ∃ pre c₀, (∃ n, HmRow.parse tags cf tables (pre := pre) (from_ := n) = .ok c₀) ∧ ParseFactsPre tags pre c₀ ∧
       HmOut.checkRows c₀ = .ok () ∧ c = { c₀ with tmpl := c.tmpl } ∧
       ((tags.isTmpl = false ∧ pre = #[] ∧ c.tmpl = none) ∨
         ∃ tu, tags.isTmpl = true ∧ pre = #[("unit", tu.net)] ∧ c.tmpl = some tu) := by
@@ -72,10 +73,10 @@ theorem parseCommit_untyped (ht : tags.typed = false) (h : HmOut.parseCommit tag
   · rw [parseCommit_flat hi] at h
     obtain ⟨hp, hc⟩ := parse_untyped ht h
     have P := (parse_factsPre_nets hp).1
-    exact ⟨#[], c, hp, P, hc, rfl, .inl ⟨rfl, rfl, P.tmpl⟩⟩
+    exact ⟨#[], c, ⟨_, hp⟩, P, hc, rfl, .inl ⟨rfl, rfl, P.tmpl⟩⟩
   · rw [parseCommit_tmpl hi] at h
-    obtain ⟨tu, c₀, hp, hc, -, rfl⟩ := TmplValue.parseTmpl_cases h
-    exact ⟨_, c₀, hp, (parse_factsPre_nets hp).1, hc, rfl, .inr ⟨tu, rfl, rfl, rfl⟩⟩
+    obtain ⟨tu, c₀, ⟨_, hp⟩, hc, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    exact ⟨_, c₀, ⟨_, hp⟩, (parse_factsPre_nets hp).1, hc, rfl, .inr ⟨tu, rfl, rfl, rfl⟩⟩
 
 /-- **A committed untyped circuit passed `HmRow.check`.** -/
 theorem parseCommit_check (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
@@ -98,7 +99,7 @@ theorem parseCommit_leafScheme (h : HmOut.parseCommit tags cf tables = .ok c) : 
   · rw [parseCommit_flat hi] at h
     exact parse_leafScheme h
   · rw [parseCommit_tmpl hi] at h
-    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    obtain ⟨tu, c₀, ⟨_, hp⟩, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
     have := Exec.parse_leafScheme_pre hp
     exact this
 
@@ -109,7 +110,7 @@ theorem parseCommit_slots (h : HmOut.parseCommit tags cf tables = .ok c) :
   · rw [parseCommit_flat hi] at h
     exact parse_slots h
   · rw [parseCommit_tmpl hi] at h
-    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    obtain ⟨tu, c₀, ⟨_, hp⟩, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
     obtain ⟨_, hls⟩ := hm_parse_checkPre hp
     have := hm_check_slots hls
     exact this
@@ -324,7 +325,7 @@ theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partit
 committed net, first and named `unit`, whose rows end at its useful rows, the constant's the last (`tmpl_net_rows`). -/
 theorem unitFacts_tmpl (hT : HmOut.parseTmpl tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
     Aliased.UnitFacts tags st := by
-  obtain ⟨tu, c₀, hp, -, -, he⟩ := TmplValue.parseTmpl_cases hT
+  obtain ⟨tu, c₀, ⟨_, hp⟩, -, -, he⟩ := TmplValue.parseTmpl_cases hT
   obtain ⟨P, -, -, hsn, hhn⟩ := parse_factsPre_nets hp
   obtain ⟨hu0, h0, hun⟩ := unit_of_parsePre hp
   obtain ⟨ls, hcheck⟩ := P.check
@@ -388,7 +389,7 @@ theorem Committed.unpinned_of_rep (ht : tags.typed = false) (hC : Committed tags
   rcases hC with hC | hC
   · obtain ⟨hp, hc⟩ := parse_untyped ht hC
     exact FlockSoundness.Discharge.Hidden.unpinned_of_rep hp hc h
-  · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases hC
+  · obtain ⟨tu, c₀, ⟨_, hp⟩, hck, -, rfl⟩ := TmplValue.parseTmpl_cases hC
     exact FlockSoundness.Discharge.Hidden.unpinned_of_rep (c := c₀) hp hck h
 
 /-- **An untyped hidden statement of one output row per output port pins no output** (`Committed.unpinned_of_rep`). -/
@@ -498,7 +499,7 @@ theorem Committed.outRows (hty : tags.typed = false) (h : Committed tags cf tabl
   rcases h with h | h
   · obtain ⟨hp, hc⟩ := parse_untyped hty h
     exact out_rows_v1 hp hc hv1
-  · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
+  · obtain ⟨tu, c₀, ⟨_, hp⟩, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
     have h := out_rows_v1Pre hp (parse_factsPre_nets hp).1 hck hv1
     exact h
 

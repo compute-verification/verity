@@ -249,7 +249,7 @@ theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables :
   refine ⟨?_, hleaf⟩
   unfold ProvedScope.circuitOf at hc
   split at hc
-  · obtain ⟨pre, c₀, hp, -⟩ := Hidden.parseCommit_untyped htyped hc
+  · obtain ⟨pre, c₀, ⟨_, hp⟩, -⟩ := Hidden.parseCommit_untyped htyped hc
     exact parse_metaLeaf hp
   · exact parse_metaLeaf hc
 

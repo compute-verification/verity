@@ -120,14 +120,21 @@ BINDING_KEYS = ("partition", "program_sha512", "program_digests")
 
 _COMPACT = json.JSONEncoder(sort_keys=True, separators=(",", ":"))
 _HASH_CHUNK = 1 << 24
-#: compose's stand-in for META ``template``, whose lines it serializes on their own: a template's META is most of the file
-_SPLICE = "\0template\0"
 
 
 def meta_of(text: str) -> dict:
     """The circuit file's META (its second line), parsed without copying the rest of the file."""
     i = text.index("\n") + 1
     return json.loads(text[i + 5:text.index("\n", i)])
+
+
+def template_of(text: str) -> str:
+    """A templated circuit file's template (`compose`'s ``layout``): the META ``template`` lines right after META."""
+    i = text.index("\n") + 1
+    j = at = text.index("\n", i) + 1
+    for _ in range(json.loads(text[i + 5:j - 1])["template"]):
+        at = text.index("\n", at) + 1
+    return text[j:at]
 
 
 def _sha512(pieces) -> hashlib._Hash:
@@ -634,9 +641,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     (:data:`TMPL_STATEMENT`, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
     the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit` of the flat unit, or a structural lowering's own template,
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
-    META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
-    ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
-    the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
+    the template's lines right after META, META ``template`` their number and ``layout`` the mode, in place of the
+    ``CIRCUIT unit`` section and the flat META ``template``. The verifier unrolls the template and commits its columns at the
+    layout's positions (`tmpl.layout`), so the unit's range and ``unit_log`` are that net's slot. A size class's
+    ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
     (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
@@ -786,18 +794,14 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if pinned_outputs and any(meta["dummy"]["outputs"][sum(w for _, w in outs[:len(outs) - k_pin]):]):
         raise ValueError(f"{low.name}: the all-zero instance's pinned outputs are not zero (it pads every block)")
     if template is not None:
-        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=_SPLICE, layout=layout)
+        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=tmpl_text.count("\n"), layout=layout)
     if extra_meta:
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
 
-    def serialized() -> list[str]:
-        meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
-        if template is not None:
-            a, b = meta_json[0].split(json.dumps(_SPLICE))
-            meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
-        return meta_json
+    def serialized() -> str:
+        return json.dumps(meta, sort_keys=True, separators=(",", ":"))
 
     meta_json = serialized()
     head = f"{meta['format']} {low.name}\nMETA "
@@ -806,23 +810,24 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
     sections = lambda texts: (s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))  # noqa: E731
     if out is None:
-        return "".join([head, *meta_json, "\n", *sections(([] if template is not None else [("unit", unit)]) + texts)])
+        return "".join([head, meta_json, "\n", tmpl_text or "", *sections(([] if template is not None else [("unit", unit)]) + texts)])
     _put(out, head)
     at = out.tell()
-    for s in [*meta_json, "\n"]:
-        _put(out, s)
-    if template is None:
+    _put(out, meta_json + "\n")
+    if template is not None:
+        _put(out, tmpl_text)
+    else:
         lines = 1 + low.layout.useful
         _put(out, f"CIRCUIT unit {lines}\n")
         unit_sha256, got = _write_netlist(low, out)
         if got != lines:
             raise AssertionError(f"{low.name}: the unit's netlist has {got} lines, not the {lines} its section names")
-        stand_in = "".join(meta_json).encode()
+        stand_in = meta_json.encode()
         cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
         if not partition:
             meta["partition"]["digest"] = partition_digest(cover)
         meta_json = serialized()
-        if len(b := "".join(meta_json).encode()) != len(stand_in):
+        if len(b := meta_json.encode()) != len(stand_in):
             raise AssertionError(f"{low.name}: META is {len(b)} bytes, its stand-in {len(stand_in)}")
         end = out.tell()
         out.seek(at)
@@ -830,7 +835,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         out.seek(end)
     for s in sections(texts):
         _put(out, s)
-    return "".join([head, *meta_json, "\n"])
+    return "".join([head, meta_json, "\n"])
 
 
 def compose_to(path: Path, low: IL.Lowering, sub, **kw) -> dict:

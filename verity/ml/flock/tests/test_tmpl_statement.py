@@ -1,6 +1,6 @@
 """The templated statement (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``): the flat statement with its unit given as
-the unit's ``flock-ir-tmpl/v2`` template, META ``template`` its lines and ``layout`` the mode, and no ``CIRCUIT unit``
-section, which the Lean verifier reads with ``HmOut.parseTmpl``.
+the unit's ``flock-ir-tmpl/v2`` template, its lines right after META (META ``template`` their number, ``layout`` the mode),
+and no ``CIRCUIT unit`` section, which the Lean verifier reads with ``HmOut.parseTmpl``.
 
 `tmpl.layout`, the mirror of ``Tmpl.layoutM`` that puts the unit's range at its committed slot, is held to
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
@@ -47,7 +47,8 @@ def _map(t: T.Tmpl, mode: str) -> tuple[int, list[int]]:
 
 
 def _sections(text: str) -> dict[str, list[str]]:
-    lines, out, at = text.split("\n"), {}, 2
+    meta = FC.meta_of(text)
+    lines, out, at = text.split("\n"), {}, 2 + (meta["template"] if meta["format"] == FC.TMPL_FORMAT else 0)
     while at < len(lines) and lines[at]:
         _c, name, n = lines[at].split(" ")
         out[name] = lines[at + 1:at + 1 + int(n)]
@@ -92,10 +93,10 @@ def test_a_layout_mode_is_one_the_verifier_reads():
 @pytest.mark.slow
 def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(monkeypatch):
     """The toy's templated statement: format and statement the templated ones, META the flat statement's but for ``format``,
-    ``statement``, ``template`` (the unit's template, which `tmpl.unroll` takes to the flat file's unit section line for line)
-    and ``layout``; its sections the flat file's but the unit's; its unit range's slot the laid-out unit's (a layout one
-    column past the flat unit's slot moves ``unit_log`` and the range to the next); and a size class's ``definition`` is
-    refused."""
+    ``statement``, ``template`` (the number of the unit's template's lines, which follow META and which `tmpl.unroll` takes
+    to the flat file's unit section line for line) and ``layout``; its sections the flat file's but the unit's; its unit
+    range's slot the laid-out unit's (a layout one column past the flat unit's slot moves ``unit_log`` and the range to the
+    next); and a size class's ``definition`` is refused."""
     args, _rows, _kw = _toy(0)
     flat, tm = CS.UnitStager(*args), CS.UnitStager(*args, layout=MODE)
     assert tm.text.split("\n", 1)[0] == f"{FC.TMPL_FORMAT} {args[1]}" and flat.text.split("\n", 1)[0] == f"{FC.FORMAT} {args[1]}"
@@ -103,8 +104,8 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == ["format", "layout", "statement", "template"]
     sections = _sections(flat.text)
     assert _sections(tm.text) == {k: v for k, v in sections.items() if k != "unit"}
-    t = T.parse("\n".join(tm.meta["template"]) + "\n")
-    assert T.flat_lines(T.unroll(t)) == sections["unit"]
+    t = T.parse(FC.template_of(tm.text))
+    assert tm.meta["template"] == FC.template_of(tm.text).count("\n") and T.flat_lines(T.unroll(t)) == sections["unit"]
     size = T.layout(t, MODE)[t.root].size
     unit = [r for r in tm.meta["ranges"] if r["net"] == "unit"]
     assert tm.meta["unit_log"] == FC._slot_log(size) and [r["slot_log"] for r in unit] == [FC._slot_log(size)]
@@ -127,19 +128,19 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
 
 
 def test_the_pin_and_class_hash_the_file_a_chunk_at_a_time(monkeypatch):
-    """`circuit.digest` and `circuit.class_digest`, which hash a templated file's META (most of the file) in chunks rather
+    """`circuit.digest` and `circuit.class_digest`, which hash a templated file's template (most of the file) in chunks rather
     than whole copies, are SHA-512 of the file and of the file with META's binding keys removed and re-serialized, across
     chunk boundaries anywhere, a non-ASCII section included."""
     import hashlib
 
-    meta = {"format": FC.TMPL_FORMAT, "template": [f"{i} 1 {i} 1 {i + 1}" for i in range(50)], "partition": {"digest": "p"},
-            "program_sha512": "q", "z": "é"}
-    text = f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(meta)}\nCIRCUIT hm96 1\nÿ 0\n"
+    body = "".join(f"{i} 1 {i} 1 {i + 1}\n" for i in range(50))
+    meta = {"format": FC.TMPL_FORMAT, "template": 50, "partition": {"digest": "p"}, "program_sha512": "q", "z": "é"}
+    text = f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(meta)}\n{body}CIRCUIT hm96 1\nÿ 0\n"
     kept = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
     want = (hashlib.sha512(text.encode()).hexdigest(),
             hashlib.sha512((f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(kept, sort_keys=True, separators=(',', ':'))}\n"
-                            "CIRCUIT hm96 1\nÿ 0\n").encode()).hexdigest())
-    assert FC.meta_of(text) == meta
+                            f"{body}CIRCUIT hm96 1\nÿ 0\n").encode()).hexdigest())
+    assert FC.meta_of(text) == meta and FC.template_of(text) == body
     for chunk in (1, 7, 64, 1 << 24):
         monkeypatch.setattr(FC, "_HASH_CHUNK", chunk)
         assert (FC.digest(text), FC.class_digest(text)) == want
@@ -147,19 +148,20 @@ def test_the_pin_and_class_hash_the_file_a_chunk_at_a_time(monkeypatch):
 
 @pytest.mark.slow
 def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_template(tmp_path):
-    """`UnitStager`'s ``structural`` on the toy: META ``template`` is `struct_lower`'s template on the stager's ports (the
+    """`UnitStager`'s ``structural`` on the toy: the file's template is `struct_lower`'s template on the stager's ports (the
     flat unit never built), ordered, its unit range that template's slot; the outputs a round stages and META ``dummy`` are
-    the flat stager's, from the template (`TmplLowering.evaluate`); META is the emitted templated statement's but for the
+    the flat stager's, from the template (`TmplLowering.evaluate`); the file is the emitted templated statement's but for the
     template, the unit's slot and the pins that read them; and a structural stager without a layout is refused."""
     args, rows, _kw = _toy(0)
     flat, tm = CS.UnitStager(*args, layout=MODE), CS.UnitStager(*args, layout=MODE, structural=True)
     assert tm.low.circuit is None and isinstance(tm.low, CS.TmplLowering)
-    t = T.parse("\n".join(tm.meta["template"]) + "\n")
+    t = T.parse(FC.template_of(tm.text))
     assert T.write(t) == T.write(tm.low.template) and T.ordered(t)["ok"]
     assert tm.meta["unit_log"] == FC._slot_log(T.layout(t, MODE)[t.root].size)
     assert tm.meta["dummy"] == flat.meta["dummy"]
     diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
-    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"} and "template" in diff
+    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"}
+    assert FC.template_of(tm.text) != FC.template_of(flat.text)
     a, b = flat.stage(rows, tmp_path / "flat", b"k" * 32), tm.stage(rows, tmp_path / "struct", b"k" * 32)
     assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
     assert (tmp_path / "struct" / "circuit.txt").read_text() == tm.text
