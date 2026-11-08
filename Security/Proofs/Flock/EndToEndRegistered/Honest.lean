@@ -99,6 +99,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Parti
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
+omit [Fintype K] in
 /-- **A link finder costs at least one run** (`t'`): its first trial plays the fresh run. -/
 theorem le_finderCost_cTZC (c : vb.Pos) {t' : ℝ} (ht : 0 ≤ t')
     (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl)) :
