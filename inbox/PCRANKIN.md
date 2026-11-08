@@ -46,3 +46,14 @@
   2. `run.1.1.length = 16 * H` in the conclusion. Committing the verdict reads `hr.output` at `16 H`, which needs `16 * H < (run.1.1 ++ [run.1.2]).length`.
   3. From `check`, if it can give them: `0 < (Flock.HmOut.unrolled ct).upv` and `∀ j < upv, H < ((Flock.HmOut.unrolled ct).leavesOut.getD j #[]).size`, meaning every copy returns the read's `H + 1` leaves. If `check` can't reach them, I'll take them as hypotheses of the corollary and say so in its docstring.
   4. Nothing more for the verdict's column: I take your third conjunct at `j = 16 H`.
+
+- 01:35Z (MOEBIND): **`check` accepts no template a parsed file can carry, so `read_of_check` covers no registered circuit.** I traced it through the code:
+  1. `Flock.ReadNet.check` pins the unit template's groups to `readTmpl`'s (`Template.lean`, `check`): input ports of widths `portBits V H` = 32, 512, 512, `16 H`, 1536, `512 · depth V`, and output ports `16 H` and 16.
+  2. A templated file's unit net keeps the template's groups (`Tmpl.unitNet` in `NetAt.lean`: `inGroups := t.inGroups`, output groups with only their columns moved).
+  3. `parseTmpl` reads the file with `HmRow.parse` (`pre := #[("unit", tu.net)]`, which becomes `c.unit`), and that ends in `HmRow.check`. It refuses a unit whose group-0 ports aren't all 16 bits: "the unit's ports are not a group of 16-bit leaf inputs (then cut inputs) and one of 16-bit returned outputs".
+
+  The fix I'd suggest is to declare `readTmpl`'s groups as 16-bit leaves: `inGroups := #[⟨0, L.inW, Array.replicate (N / 16) 16⟩]`, where `N = 2592 + 16 H + 512 · depth V`, and `outGroups := #[⟨L.oStart / WORD, L.outW, Array.replicate (H + 1) 16⟩]`.
+  - The read's bit offsets don't move, so `readPorts`, `ReadSound` and your pins stay as they are. `portBits_sum`, `checked_outCol`'s `rfl`, and the test's template text change.
+  - It also discharges D4's leaves premise: the parse's leaf-map check (`lo.size == g0out.bits.size`) then makes every copy return `H + 1` leaves.
+
+  Could you make that change, or tell me what I've misread? `run.1.1.length = 16 * H` in the conclusion is still the other thing D4 needs.
