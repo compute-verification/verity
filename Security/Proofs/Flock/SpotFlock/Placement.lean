@@ -36,7 +36,7 @@ open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Dischar
 
 /-- **Every wire a rows unit computes or reads is one of its columns'**: the unit's own gates are its computed
 columns' (`onto`), and each of them reads only its columns' wires (`op`). -/
-theorem exists_wire {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : FlockSoundness.Rows}
+theorem exists_wire {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : FlockSoundness.Rows}
     (I : P.IsRowsUnit u R) {x : Fin C.N} (hx : P.unit x = some u ∨ ∃ g, P.unit g = some u ∧ x ∈ (C.op g).args) :
     ∃ c, I.wire c = x := by
   rcases hx with hx | ⟨g, hg, hx⟩
@@ -44,7 +44,7 @@ theorem exists_wire {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u :
     exact ⟨_, rfl⟩
   · obtain ⟨i, rfl⟩ := I.onto g hg
     rw [I.op i] at hx
-    simp only [Audit.Op.args, List.mem_append, List.mem_map] at hx
+    simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hx
     rcases hx with ⟨c, -, rfl⟩ | ⟨c, -, rfl⟩ <;> exact ⟨c, rfl⟩
 
 /-- **Member `t`'s units are its template's**: the unit `unitBase ms t + k` of a member's own range has template `t`. -/

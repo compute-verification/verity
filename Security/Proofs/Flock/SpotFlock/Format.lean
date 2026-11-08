@@ -23,7 +23,7 @@ inputs Flock's relation gives that block at the witness's hidden values (`valueA
 **What the statement must hold** (`Embeds`). Each checked unit's proof block is a unit `v` of a circuit `C'` as
 Bridge lowers it at constants `κ` (`Bridge.blockOf`), and that lowering sits in the statement's program from some
 position `o` (`SitsAt`). At every hidden-value list Flock's relation accepts, `C`'s values at the wires the layout gives
-the positions of `C'`'s wires (`unitVals`) hold each of `v`'s gates (`Audit.Op.apply`) and carry `κ` wherever `v` reads
+the positions of `C'`'s wires (`unitVals`) hold each of `v`'s gates (`Op.apply`) and carry `κ` wherever `v` reads
 it. These are `C'`'s gates, not the lowered program's: no value is asked at a row's two XORs, which no wire of `C`
 holds and `Prog.Correct` never reads. It holds of every accepted list, not of one witness, whatever the run's public
 values: whether it holds turns only on the unit's session statement's circuit, which the verifier's check fixes to its
@@ -111,7 +111,7 @@ theorem decOf_output {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u �
 hidden values `w`, at the wire the layout gives unit `u`'s program position of `a` at the session statement `xS`,
 `C'`'s lowering sitting from `o`. -/
 def unitVals (L : Layout) (x m₁ xS : Msg) (S : Claims.Flock.Stmt) (β : ℕ) (w : Claims.Flock.Wit) (u o : ℕ)
-    (C' : FlockSoundness.Audit.Circuit) (a : Fin C'.N) : Bool :=
+    (C' : Verity.Boolean.Circuit) (a : Fin C'.N) : Bool :=
   valueAt S β w (L.wire x m₁ xS u (o + _root_.Flock.Bridge.posOf C' a))
 
 variable (h : Held)
@@ -128,7 +128,7 @@ def Embeds (L : Layout) : Prop :=
     stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
     FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h m₂ u) = some S →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
-    ∃ (C' : FlockSoundness.Audit.Circuit) (κ : Fin C'.N → Option Bool) (n : ℕ)
+    ∃ (C' : Verity.Boolean.Circuit) (κ : Fin C'.N → Option Bool) (n : ℕ)
       (P : FlockSoundness.Audit.Partition C' n) (v : Fin n) (o : ℕ),
       _root_.Flock.Bridge.Members.SitsAt s.prog o (_root_.Flock.Bridge.progOf C' κ) ∧
       b = (_root_.Flock.Bridge.blockOf P κ v).map (o + ·) ∧

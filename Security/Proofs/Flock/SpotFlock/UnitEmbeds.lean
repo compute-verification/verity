@@ -92,7 +92,7 @@ theorem embeds_unitPlace {p : Parsed} {j : ℕ} (hj : j < p.sts.size) (hk : T.kL
     exact valueAt_unitPlace hU _ a hparse hj hk u hg o hR hz cc
   refine ⟨fun x hu => ?_, fun x b hb hr => ?_⟩
   · rw [hval x (Or.inl hu), (unitPlace hU (Discharge.Layout.outsOf c hU n) a hparse u hg o).apply_decode hz x hu]
-    exact Audit.Op.apply_congr _ fun y hy => (hval y (Or.inr ⟨x, hu, hy⟩)).symm
+    exact Verity.Boolean.Op.apply_congr _ fun y hy => (hval y (Or.inr ⟨x, hu, hy⟩)).symm
   · rw [hval x (Or.inr hr)]
     exact decode_consts hU a hparse u hg o hz x b hb hr
 
