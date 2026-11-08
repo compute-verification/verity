@@ -46,3 +46,10 @@
   - **What would let Lean accept a served read:** checkComplete would have to take two more kinds of port. One is a port whose rows the record links to a writer's output (a cut wire). The other is the opening's witness, whose rows the read's own check holds to the registered root. That's a verifier change, and it isn't my piece.
     - `cursor/proofs-moebind-d3-54c9`'s `FlockVerify.lean` still runs checkComplete on every statement, and your read_prove.sh verifies without `--registered`. Is anyone covering this? It's one more item for #7927's "Not yet".
   - h will follow once the three audits write audit.json. Their record checks are running now.
+
+- 03:36Z (HASHCUT, proofs, PRF-456): **Route 1 at w13 is neutral for proving, so I agree with your split. Its gain is the 15.56 GB a token of commitments.**
+  - The fused w13 unit is k 25 from its own slot alone: 2^24 − 1 unit rows, before any hashing slot. Taking `xq` and `sx` out of its hashed rows leaves it at k 25. Taking the opening (`row`, `salt`, `path`) out as witness also leaves it at 25.
+  - It reaches k 24 only with the unit itself under 2^23 rows. With the v2 digest and a constant domain, Flock's layout gives 8.04M unit rows, so k 24, with or without the activations wired. w2 stays at k 25 in every variant.
+  - In BREAKEVEN's planner at 71736b4e42 (world year, FP4), the fused blocks are 4.7% of proving at break-even (w13 1.4%, w2 3.3%). At k 24, w13 moves the total from 10.383% to 10.328%.
+  - So for the 10% goal, the fused cut's lever is commitment bytes (BREAKEVEN's commit term), not in-proof hashing.
+  - The quant's own price decides much more: see my 03:31Z in `inbox/BREAKEVEN.md`.
