@@ -123,11 +123,11 @@ VERIFY_FLAT_CHEAPER = ("RMSNorm", "DsaRMSNorm", "RmsNormMnnvl")
 #: the card takes its MoE member's
 VERIFY_TODAY = VERIFY | {p: VERIFY_FAST[p] / 0.577 for p in VERIFY_FAST if p.startswith("Fused[")}
 VERIFY_COLUMNS = {"today": (VERIFY_TODAY, VERIFY_FIXED), "fast": (VERIFY_FAST, min(VERIFY_FAST.values()))}
-#: the templated (structural) session check over the flat one, both before the flat verifier's proved twins, by family:
-#: Lean verify's CPU-seconds under --zk with the Program on FlashInfer K2048 (1,382 against 1,751) and RMSNorm v3
-#: N=6144 (454.9 against 713.5); any other type the smaller ratio (assumed)
-TMPL_MEASURED = ((("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1"), 1382.0 / 1751.0),
-                 (("RMSNorm", "DsaRMSNorm", "ResidualAdd", "RmsNormMnnvl"), 454.9 / 713.5))
+#: the templated (structural) session check's whole verify over the flat one's in one run, by family, applied to the
+#: fast column: FlashInfer K2048 149.2 s against 354.3 s, RMSNorm v3 N=6144 1.18x; any other type keeps the flat
+#: (unmeasured)
+TMPL_MEASURED = ((("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1"), 149.2 / 354.3),
+                 (("RMSNorm", "DsaRMSNorm", "ResidualAdd", "RmsNormMnnvl"), 1.18))
 
 #: the long-running proof server on one H200, one prover, the statement cache warm, on the final driver (each session
 #: timed when its verifier files it): (seconds a full statement, its proving share 1 - front/e2e) by block prefix
@@ -163,15 +163,30 @@ ONE_PROVER = ("SparseMlaSplitPart_v1",)
 #: node A; four under MPS; the dense types fit two provers a GPU in host memory today (`dense_k`)
 K_GAIN = {2: 0.768 / 0.570, 4: 0.903 / 0.570}
 K_GAIN_MPS = 1.77
-#: each type's own statements a second at K provers over one's on the final driver, by block prefix or expert
-#: (`k_gain="types"`; the rest at K_GAIN); the fused blocks' K = 4 the mean of two runs
+#: each type's own statements a second at K provers over one's without MPS on the final driver, by block prefix or
+#: expert (`k_gain="types"`; the rest at K_GAIN); fr-w13 and rmsnorm-v8 in the same run, fr-w2's K = 4 the mean of two
 K_GAIN_TYPES = {"ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": {2: 1.04, 4: 1.10},
                 "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": {2: 1.17, 4: 1.16},
                 "DsaMqaLogits_v3{N=1,H=32,D=128}": {2: 1.10, 4: 1.13},
                 "ResidualAdd_v1{N=6144}": {2: 1.09, 4: 1.20},
-                "RMSNormFusedCudaVector8_v1{N=6144,": {2: 1.48, 4: 2.60},
+                "RMSNormFusedCudaVector8_v1{N=6144,": {2: 1.60},
                 "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": {2: 1.02, 4: 1.00},
-                "w13": {2: 1.13, 4: 1.37}, "w2": {2: 1.17, 4: 1.45}}
+                "w13": {2: 1.20, 4: 1.34}, "w2": {2: 1.17, 4: 1.45}}
+#: the most provers one H200's device memory holds, in every mode: rmsnorm-v8's four need all of its 140 GiB, and the
+#: all-reduce's four come within 1 GiB of it
+K_MAX = {"RMSNormFusedCudaVector8_v1{N=6144,": 2, "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": 2}
+#: each type's statements a second at K provers under MPS over one prover's without it, both in one run on one H200
+#: (`k_gain="mps_types"`), never capped by the device's share: MPS overlaps device work, and the device-bound types
+#: gain most; fr-w2, which has no MPS row, at its own without MPS
+K_MPS = {"AllReduceMultimem_v1{WORLD=8,SIZE=3072,": {2: 1.76, 4: 2.99},
+         "ResidualAdd_v1{N=6144}": {2: 1.58, 4: 2.38},
+         "DsaMqaLogits_v3{N=1,H=32,D=128}": {2: 1.16, 4: 1.69},
+         "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": {2: 1.17, 4: 1.30},
+         "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": {2: 1.22, 4: 1.29},
+         "RMSNormFusedCudaVector8_v1{N=6144,": {2: 1.71},
+         "w13": {2: 1.29, 4: 1.50}, "w2": K_GAIN_TYPES["w2"]}
+#: under MPS, a type without a row of its own: the GEMM rows' lowest, sm-fp8's (assumed)
+K_MPS_FLOOR = {2: 1.17, 4: 1.29}
 #: the busy-share model K provers' gain is held to as its goal: chains overlapping at the light types' statements a
 #: second at K = 4 over K = 1 (2.87) over 4, on an earlier driver
 OVERLAP_EFFICIENCY = 2.87 / 4
@@ -194,15 +209,14 @@ def gpu_factor(busy: float, prover: float = 1.0, k: int = 1, front: bool = False
 
 
 def templated_seconds(x, how: str) -> float:
-    """The templated session check's core-seconds a statement of `x`'s type: `measured`, today's column times its
-    family's measured ratio (TMPL_MEASURED); `goal`, quant K6144's estimate over today's for every type but the
-    RMSNorm family, which keeps the flat."""
-    today = verifier_seconds(x, VERIFY_TODAY, VERIFY_FIXED)[0]
+    """The templated session check's core-seconds a statement of `x`'s type: `measured`, the fast column times its
+    family's measured ratio (TMPL_MEASURED), none for a type outside them; `goal`, quant K6144's estimate over today's
+    for every type but the RMSNorm family, which keeps the flat."""
     if how == "goal":
+        today = verifier_seconds(x, VERIFY_TODAY, VERIFY_FIXED)[0]
         return math.inf if x["block"].startswith(VERIFY_FLAT_CHEAPER) else VERIFY_TEMPLATED * today
-    ratio = next((r for types, r in TMPL_MEASURED if x["block"].startswith(types)),
-                 min(r for _, r in TMPL_MEASURED))
-    return ratio * today
+    ratio = next((r for types, r in TMPL_MEASURED if x["block"].startswith(types)), math.inf)
+    return ratio * verifier_seconds(x, *VERIFY_COLUMNS["fast"])[0]
 
 
 def verify_per_and(strata, column="fast") -> float:
@@ -228,8 +242,9 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
     types at their server prices and full statements, the rest at the card with the cache's factor (FlashInfer K2048's
     warm model with `fi_warm`, quant K6144 at `quant6144` seconds a block when given); then a GPU prover `prover` times
     faster on proving shares, K provers an H200 on full statements (`k4`: four, `dense_k` on the dense types, one on
-    ONE_PROVER's; at K_GAIN, K_GAIN_MPS with `k_gain="mps"`, each type's own with `"types"`, or the busy-share model
-    with `"model"`), the next session's
+    ONE_PROVER's, never past K_MAX; at K_GAIN, K_GAIN_MPS with `k_gain="mps"`, each type's own with `"types"`, each
+    type's own under MPS with `"mps_types"` (K_MPS over the whole chain, the rest at K_MPS_FLOOR), or the busy-share
+    model with `"model"`), the next session's
     front beside this one's device work (`front`), the dense types' host witness `host` times lower, Flock without
     --zk, and the Lean verifier's core-seconds a statement from `column` times `verify` and `verify_cut` (the MoE
     family's uncut; the templated check where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`;
@@ -258,10 +273,16 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
         k = 1
         if k4 and not x["block"].startswith(ONE_PROVER):
             k = dense_k if x["block"].startswith(DENSE) else 4
-        gain = (None if k_gain == "model" or k == 1 else K_GAIN_MPS if k_gain == "mps" and k == 4
-                else (k_gain == "types" and type_gain(x, k)) or K_GAIN[k])
-        fixed *= gpu_factor(bf, prover, k, front, gain)
-        marginal *= gpu_factor(bm, prover, k, front, gain)
+            k = min(k, next((m for p, m in K_MAX.items() if x["block"].startswith(p)), k))
+        if k_gain == "mps_types" and k > 1:
+            g = mps_gain(x, k)
+            fixed *= (bf / prover + 1 - bf) / g
+            marginal *= (bm / prover + 1 - bm) / g
+        else:
+            gain = (None if k_gain == "model" or k == 1 else K_GAIN_MPS if k_gain == "mps" and k == 4
+                    else (k_gain == "types" and type_gain(x, k)) or K_GAIN[k])
+            fixed *= gpu_factor(bf, prover, k, front, gain)
+            marginal *= gpu_factor(bm, prover, k, front, gain)
         if plain:
             p = 1 - share(PLAIN, x)
             fixed, marginal = fixed * p, marginal * p
@@ -282,6 +303,17 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
 def type_gain(x, k: int) -> float | None:
     key = expert(x) if x.get("kind") == "fused" else next((p for p in K_GAIN_TYPES if x["block"].startswith(p)), None)
     return K_GAIN_TYPES.get(key, {}).get(k)
+
+
+def mps_key(x) -> str | None:
+    """The K_MPS row `x`'s type is priced by, None for one at K_MPS_FLOOR."""
+    key = expert(x) if x.get("kind") == "fused" else next((p for p in K_MPS if x["block"].startswith(p)), None)
+    return key if key in K_MPS else None
+
+
+def mps_gain(x, k: int) -> float:
+    key = mps_key(x)
+    return K_MPS[key][k] if key and k in K_MPS[key] else K_MPS_FLOOR[k]
 
 
 def expert(x) -> str | None:

@@ -47,8 +47,13 @@ HITS_WINDOW_BITS = 5181.0
 #: compiling one sampled request's Programs on 8 ranks, core-hours, by 135 s a Program a rank over a 256-step span
 COMPILE_CORE_H = (3.1, 3.8)
 #: the memory-checked KV pool (CacheStep_v3 on MemCheck_v1 and BlockKey_v1): a window's ANDs at its public budget of
-#: access slots, which the busiest window sets, with every lookup walking and with the head-of-line memo
-POOL_WINDOW_ANDS = {"walked": 55259987182.0, "memo": 40859057390.0}
+#: access slots, which the busiest window sets, with every lookup walking and with the head-of-line memo, on the chat
+#: class: as built, which pays for every position (at least these), and with the ragged token row (the activity model)
+POOL_WINDOW_ANDS = {"built walked": 1.73e11, "built memo": 1.59e11, "ragged walked": 5.41e10, "ragged memo": 3.96e10}
+#: the share of the FLOPs the 128k plan computes that a pool per window recomputes, the hits on blocks only an earlier
+#: window computed, by window seconds: the expectation over a uniformly random phase from the 128k trace's reuse
+#: distances, all 60-300 s and 189 s on average a saved FLOP, so 189 s / W of the 13.86% its hits save
+POOL_WINDOW_LOST = {600: 0.04367, 1200: 0.02184, 1800: 0.01456, 3600: 0.00728}
 #: GPU-seconds an AND under --zk on the H200: 1.0e12 ANDs take a tenth of a machine's window
 ZK_GPU_S_PER_AND = 0.10 * MACHINE_GPUS * WINDOW / 1.0e12
 TAX_ONE_STAGE = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("every_block",))["every_block"]["tax"]
@@ -95,6 +100,7 @@ class Case:
     fused_busy: float | None = None
     advice_window_bits: float = 0.0
     prefix_off: bool = False
+    pool_window_s: int = 0
     compile_core_h: float = 0.0
     budget_form: str = ""
     split: tuple[tuple[str, int], ...] = ()
@@ -102,13 +108,15 @@ class Case:
     def tax(self) -> float:
         """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
         length, or none when the replay reads the edge's state live; every full K/V page hashed when written if
-        `commit_write`; the prefill a prefix-cache hit would have skipped if `prefix_off`.  The one-stage design's
-        is the every-block line's, hashing every block's outputs."""
+        `commit_write`; the prefill a prefix-cache hit would have skipped if `prefix_off`, or only the hits a pool per
+        window of `pool_window_s` loses.  The one-stage design's is the every-block line's, hashing every block's
+        outputs."""
         if self.form == "one-stage":
             return TAX_ONE_STAGE
         edge = 0.0 if self.live else EDGE_PAUSE / (self.edge_s or WINDOW)
         return (PARTS["certified-tick rule"] + PARTS["deterministic top-k"] + edge
-                + (COMMIT_WRITE if self.commit_write else 0.0) + (PREFIX_OFF if self.prefix_off else 0.0))
+                + (COMMIT_WRITE if self.commit_write else 0.0) + (PREFIX_OFF if self.prefix_off else 0.0)
+                + (POOL_WINDOW_LOST[self.pool_window_s] if self.pool_window_s else 0.0))
 
 
 def build(case: Case):
@@ -379,36 +387,38 @@ PROVER_GOAL = reprice.PROVE_MAIN / reprice.PROVE_TARGET
 
 def served_line() -> dict[str, Case]:
     """(A′) at 128k priced as the long-running proof server proves it (`N0`..`N5`): today's measured server prices,
-    main's verifier and #8103's card, then each lever in turn; the measured levers alone (`N5m`); the extras on `N5`,
-    the path from it (`P1`..`P5`), the per-window budget form on both, and the advice charged two ways."""
+    main's verifier and the quant card, then each lever in turn; the measured levers alone (`N5m`); the extras on `N5`,
+    the path from it (`P1`..`P5`), a pool per window's lost hits and the per-window budget form on both, and the advice
+    charged two ways."""
     life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
     n0 = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K, fuse=True, fused=FUSED, server=True,
               verify=1.0, column="today", compile_core_h=1.0)
     steps = {"N0": n0}
     steps["N1"] = steps["N0"] | dict(column="fast")
     steps["N2"] = steps["N1"] | life
-    steps["N3"] = steps["N2"] | dict(k4=True)
+    steps["N3"] = steps["N2"] | dict(k4=True, k_gain="mps_types")
     steps["N4"] = steps["N3"] | dict(front=True)
     steps["N5"] = steps["N4"] | dict(prover=PROVER_MARKED)
-    steps["N5m"] = steps["N1"] | dict(k4=True, prover=PROVER_MARKED)
-    goals = dict(k_gain="model", dense_k=4, prover=PROVER_GOAL)
+    steps["N5m"] = steps["N1"] | dict(k4=True, k_gain="mps_types", prover=PROVER_MARKED)
     steps["P1"] = steps["N5"] | dict(split=COLS_7979)
     steps["P2"] = steps["P1"] | dict(fi_warm=True, verify_cut=reprice.VERIFY_CUT)
-    steps["P3"] = steps["P2"] | dict(k_gain="mps")
-    steps["P4"] = steps["P2"] | goals
+    steps["P3"] = steps["P2"] | dict(dense_k=4)
+    steps["P4"] = steps["P3"] | dict(prover=PROVER_GOAL)
     steps["P5"] = steps["P4"] | dict(tmpl="goal")
     out = {n: Case(**kw) for n, kw in steps.items()}
     extras = {"7979": dict(split=COLS_7979), "fiwarm": dict(fi_warm=True), "8101": dict(verify_cut=reprice.VERIFY_CUT),
-              "mps": dict(k_gain="mps"), "dense4": dict(dense_k=4), "kgoal": dict(k_gain="model"),
-              "provergoal": dict(prover=PROVER_GOAL), "prover2.8": dict(prover=PROVER_OLD_MAIN),
-              "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"), "host": dict(host=3.5),
-              "plain": dict(plain=True), "q20": dict(quant6144=0.020),
+              "dense4": dict(dense_k=4), "provergoal": dict(prover=PROVER_GOAL),
+              "prover2.8": dict(prover=PROVER_OLD_MAIN), "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"),
+              "host": dict(host=3.5), "plain": dict(plain=True), "q20": dict(quant6144=0.020),
               "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True),
               "ktypes": dict(k_gain="types")}
     for e, kw in extras.items():
         out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
     out["N5m+ktypes"] = Case(**(steps["N5m"] | dict(k_gain="types")))
     for s in ("N5", "P5"):
+        for w in POOL_WINDOW_LOST:
+            if s == "P5" or w == 600:
+                out[f"{s}+poolwin{w}"] = Case(**(steps[s] | dict(pool_window_s=w, scale=1 + POOL_WINDOW_LOST[w])))
         out[f"{s}+zk"] = Case(**(steps[s] | dict(budget_form="zkstack")))
         out[f"{s}+zkmachine"] = Case(**(steps[s] | dict(budget_form="zkstack-machine")))
     return out

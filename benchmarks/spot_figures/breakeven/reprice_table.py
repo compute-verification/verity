@@ -1,6 +1,7 @@
 """The repriced break-even's tables from sweep.py's surfaces: the served line step by step over all six scopes with
-each line's status and owner from `reprice_path.json`, its totals, the path from it, its extras, the per-window budget
-form and the advice, then the earlier main line, its extras, the one-stage and plain columns.
+each line's status, owner and the theorem form that prices it from `reprice_path.json`, its totals, the path from it, a
+pool per window's lost hits, its extras, the per-window budget form and the advice, then the earlier main line, its
+extras, the one-stage and plain columns.
 
     python benchmarks/spot_figures/breakeven/reprice_table.py SURFACE.json... [--json OUT]
 """
@@ -14,11 +15,25 @@ ALL_SCOPES = ("world week", "world month", "world year", "datacenter week", "dat
 COMPILE = ("3.8", "14.0")
 #: the served line's levers, statuses and owners, which OPTMODES reads too
 PATH = json.loads((Path(__file__).parent / "reprice_path.json").read_text())
-#: the memory-checked KV pool beside a step: sampled like the other units (as built, or with the head-of-line memo),
-#: and proved every window for comparison
-POOL = [("sampled", "walked", "sampled like the other units, every lookup walking (as built)"),
-        ("sampled", "memo", "sampled like the other units, with the head-of-line memo (not built)"),
-        ("every", "walked", "proved every window, as built (superseded)")]
+#: the memory-checked KV pool beside a step: sampled like the other units, as built (every position paid for) and with
+#: the ragged token row, each walked and with the head-of-line memo (not built); and proved every window for comparison
+POOL = [("sampled", "built walked", "sampled like the other units, as built, every lookup walking (at least)"),
+        ("sampled", "built memo", "sampled like the other units, as built with the head-of-line memo (at least)"),
+        ("sampled", "ragged walked", "sampled like the other units, with the ragged token row, every lookup walking"),
+        ("sampled", "ragged memo", "sampled like the other units, with the ragged token row and the memo"),
+        ("every", "built walked", "proved every window, as built (superseded)"),
+        ("every", "ragged walked", "proved every window, with the ragged token row (superseded)")]
+#: the two pool readings a total takes until the pool's unit is settled
+TOTAL_POOLS = (("sampled", "built walked", "the pool sampled as built"),
+               ("sampled", "ragged walked", "the pool sampled with the ragged row"))
+#: each theorem form a row is priced under, as the table names it
+FORM = {"v5": "V5 per block: one-stage proof only", "tk": "T·K_δ: two-stage, proved",
+        "v5-1s": "V5 per block: one-stage, proved"}
+
+
+def form_of(case: str) -> str:
+    """The earlier main line's rows: the one-stage design's under V5's form, which it proves, the rest two-stage."""
+    return FORM["v5-1s" if case.endswith("-1s") else "v5"]
 #: the advice when it is not closed: every prefix-cache hit sent whole, or caching off
 ADVICE = [
     ("hits", "+ the prefix-cache hits as advice, 5,181 bits a machine's window", "measured on 2k traces"),
@@ -115,7 +130,7 @@ def cells(rows, case, scopes=SCOPES, beta=True):
     return out, data
 
 
-def total(rows, case, pool=("sampled", "walked"), delta=None):
+def total(rows, case, pool=TOTAL_POOLS[0][:2], delta=None):
     """Each scope's total FP4 compute at `case`: serve tax + proving + verifying + compiling at COMPILE[0] + the pool,
     plus `delta`'s points where given; None where the case never breaks even, and no entry where it wasn't run."""
     out = {}
@@ -136,17 +151,29 @@ def entries(rows, data, items, head, title):
     for x in items:
         case = x["cases"]["two-stage"]
         c, d = cells(rows, case, ALL_SCOPES, beta=False)
-        data[case] = d | {k: x[k] for k in ("label", "status", "owner", "note")}
-        print(f"| {case} | {x['label']} | {x['status']} | {x['owner']} | " + " | ".join(c) + " |")
+        data[case] = d | {k: x[k] for k in ("label", "status", "owner", "form", "note")}
+        print(f"| {case} | {x['label']} | {x['status']} | {x['owner']} | {FORM[x['form']]} | " + " | ".join(c) + " |")
+
+
+def totals(rows, data, cases, what=""):
+    for case in cases:
+        for how, load, name in TOTAL_POOLS:
+            t = total(rows, case, (how, load))
+            data[f"{case} total, {name}"] = {"case": case, "compile_core_h": COMPILE[0], "pool": f"{how} {load}",
+                                             "cells": t}
+            print(f"| {case} total | {case}{what} + compiling at {COMPILE[0]} core-h + {name} | | | {FORM['v5']} | "
+                  + " | ".join(pct(t[s]) if s in t else "–" for s in ALL_SCOPES) + " |")
 
 
 def served(rows, data):
-    """The served line's tables over all six scopes, as total FP4 compute: each step, the measured levers alone, what
-    sits beside the line (compiling, the pool, #8086's delta) and the totals today; the path from the last step and its
-    total; the extras on the last step, the per-window budget form and the advice."""
-    head = ("| case | lever | status | owner | " + " | ".join(ALL_SCOPES) + " |\n|---|---|---|---|"
+    """The served line's tables over all six scopes, as total FP4 compute, each row named by the theorem form that
+    prices it: each step, the measured levers alone, what sits beside the line (compiling, the pool, #8086's delta) and
+    the totals today, with the pool's two readings; the path from the last step and its total; a pool per window's lost
+    hits and their totals; the extras on the last step, the per-window budget form and the advice."""
+    head = ("| case | lever | status | owner | form | " + " | ".join(ALL_SCOPES) + " |\n|---|---|---|---|---|"
             + "---:|" * len(ALL_SCOPES))
     last = PATH["served"][-1]["cases"]["two-stage"]
+    print("Forms: " + "; ".join(f"{FORM[k]}: {v}" for k, v in PATH["forms"].items()) + ".")
     entries(rows, data, PATH["served"] + PATH["served_measured"], head,
             "Served line, total FP4 compute (serve tax + proving + verifying; FP4 weights 376.7 GB):")
     for h in COMPILE:
@@ -154,30 +181,30 @@ def served(rows, data):
              for s in ALL_SCOPES]
         print(f"| compile | + compiling each sampled request's Programs, {h} core-h on 8 ranks, at {last}'s plan | "
               f"{'measured a step; span modeled' if h == COMPILE[0] else 'upper reading'} | @vllm, @circuits | "
-              + " | ".join(c) + " |")
+              f"{FORM['v5']} | " + " | ".join(c) + " |")
     for how, load, what in POOL:
         c = [pct(rows[(last, s)]["pool"][how][load]) if "pool" in rows.get((last, s), {}) else "–" for s in ALL_SCOPES]
         print(f"| pool | + the memory-checked KV pool, {what} | measured ANDs, --zk rate; verifier assumed | MEMPOOL | "
-              + " | ".join(c) + " |")
+              f"{FORM['v5']} | " + " | ".join(c) + " |")
     for delta in PATH["deltas"]:
         print(f"| delta | {delta['label']}: points on {delta['base']}, not in the totals | {delta['status']} | "
-              f"{delta['owner']} | " + " | ".join(f"{delta['delta'][s] * 100:+.2f} pt" for s in ALL_SCOPES) + " |")
+              f"{delta['owner']} | {FORM[delta['form']]} | "
+              + " | ".join(f"{delta['delta'][s] * 100:+.2f} pt" for s in ALL_SCOPES) + " |")
     measured = PATH["served_measured"][0]["cases"]["two-stage"]
-    for case in [last, measured] + [x["cases"]["two-stage"] for x in PATH["path"]]:
-        t = total(rows, case)
-        data[f"{case} total"] = {"case": case, "compile_core_h": COMPILE[0], "pool": "sampled walked", "cells": t}
-        print(f"| {case} total | {case} + compiling at {COMPILE[0]} core-h + the pool sampled, as built | | | "
-              + " | ".join(pct(t[s]) if s in t else "–" for s in ALL_SCOPES) + " |")
+    totals(rows, data, [last, measured] + [x["cases"]["two-stage"] for x in PATH["path"]])
     entries(rows, data, PATH["path"], head, f"The path from {last} to 10% (total FP4; each step adds to the one above "
-            "it, but P3 and P4 each add to P2):")
+            "it):")
+    entries(rows, data, PATH["pool_window"], head, "One pool per window: the hits it loses recomputed (total FP4 before "
+            "compiling and the pool):")
+    totals(rows, data, [x["cases"]["two-stage"] for x in PATH["pool_window"]])
     entries(rows, data, PATH["extras"], head, f"Extras on {last}, each alone (total FP4 before compiling and the pool):")
     entries(rows, data, PATH["zk"], head, "The per-window budget form, T windows of K_delta (total FP4):")
     print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)
     for e, lever, label in ADVICE:
         case = f"{last}+{e}"
         c, d = cells(rows, case, ALL_SCOPES, beta=False)
-        data[case] = d | {"label": lever, "status": label}
-        print(f"| {case} | {lever} | {label} | | " + " | ".join(c) + " |")
+        data[case] = d | {"label": lever, "status": label, "form": "v5"}
+        print(f"| {case} | {lever} | {label} | | {FORM['v5']} | " + " | ".join(c) + " |")
 
 
 def main(argv=None):
@@ -194,27 +221,28 @@ def main(argv=None):
         if out_json:
             out_json.write_text(json.dumps(data, indent=1) + "\n")
         return
-    head = "| case | lever | priced | owner | world year β | total | datacenter year β | total |\n|---|---|---|---|---:|---:|---:|---:|"
+    head = ("| case | lever | priced | owner | form | world year β | total | datacenter year β | total |\n"
+            "|---|---|---|---|---|---:|---:|---:|---:|")
     print("\nMain line (FP4, 376.7 GB; total = serve tax + β):\n" + head)
     for case, lever, label, owner in MAIN:
         c, d = cells(rows, case)
-        data[case] = d | {"lever": lever, "priced": label, "owner": owner}
-        print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
+        data[case] = d | {"lever": lever, "priced": label, "owner": owner, "form": form_of(case)}
+        print(f"| {case} | {lever} | {label} | {owner} | {form_of(case)} | " + " | ".join(c) + " |")
     for name, lever, label, owner in UNPRICED:
         data[name] = {"lever": lever, "priced": label, "owner": owner}
-        print(f"| {name} | {lever} | {label} | {owner} | – | – | – | – |")
+        print(f"| {name} | {lever} | {label} | {owner} | – | – | – | – | – |")
     for base in ("R6", "R6x4"):
         print(f"\nExtras on {base}:\n" + head)
         for e, lever, label, owner in EXTRAS:
             case = f"{base}+{e}"
             c, d = cells(rows, case)
-            data[case] = d | {"lever": lever, "priced": label, "owner": owner}
-            print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
+            data[case] = d | {"lever": lever, "priced": label, "owner": owner, "form": form_of(case)}
+            print(f"| {case} | {lever} | {label} | {owner} | {form_of(case)} | " + " | ".join(c) + " |")
     print("\nSensitivities, columns and comparisons:\n" + head)
     for case, what, label, owner in SIDE:
         c, d = cells(rows, case)
-        data[case] = d | {"lever": what, "priced": label, "owner": owner}
-        print(f"| {case} | {what} | {label} | {owner} | " + " | ".join(c) + " |")
+        data[case] = d | {"lever": what, "priced": label, "owner": owner, "form": form_of(case)}
+        print(f"| {case} | {what} | {label} | {owner} | {form_of(case)} | " + " | ".join(c) + " |")
     if out_json:
         out_json.write_text(json.dumps(data, indent=1) + "\n")
 
