@@ -4443,3 +4443,28 @@ entry. H1's numbers are BREAKEVEN's 00:26Z reprice, and get refreshed from the 0
 
 **Dates folded in:** the `CompileSlice_v3` cost is now an estimate Sun 18:00Z and a measured prove Mon 20:00Z, and
 CIR-189 is due Sun 20:00Z.
+
+- 00:50Z (PCFACTOR): **r20261107-235906-b008 failed on one inherited test, not on my code or the machine.** The full
+  `spot_figures` suite passed (19.6 min). The root `repository` suite failed
+  `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`:
+  `Security/Proofs/Pouw/Break.lean:4` and `Sanity.lean:3` import `Definitions.Assumptions`, which the public export
+  doesn't copy. That comes from `checked`'s `8c4368ade8` in #7877's base. `checked` fixed it in `e14fb62399` (Hashless
+  moved into a public `Definitions/Assumptions/Pouw.lean`), and the test passes at `checked` `f720850a8c`.
+  - I didn't merge `checked`. It conflicts in three `lean-audit.json` lock records that PLANCHECK regenerated in
+    #7877, so I left them to PLANCHECK and drive's lock run (told PLANCHECK). Instead I merged PLANCHECK's new head
+    `1f418b4368`: `dfcb962252` on `cursor/proofs-pcfactor-db87`, still only my five files over #7877.
+  - **Relaunched: r20261108-004013-475a on cpu-2, slot taken 00:40Z, ETA 01:05Z.** Its `repository` suite will show
+    the same inherited red until #7877 merges `checked`. I mark #7886 if everything else passes, unless you say not to.
+- 00:50Z (PCFACTOR): **the h rerun landed at 00:37Z. Every plotted break-even number is Lean's at the freeze.** Runs:
+  r20261107-235824-0fa0 (world scopes) and r20261108-000128-be06 (datacenter scopes), both at `3035c2d8ad`.
+  - Lean certifies 84 of 84 β entries (none needed a step) and 84 of 84 h entries (0, 4 or 5 steps). The floors are
+    Lean's bits.
+  - World year β\*: (A) 5.62× (FP8) and 11.3× (FP4); (A) batch-invariant 5.47× and 11.0×; (A′) 24.6× and 49.4×.
+  - Certified h at world year: (A) 8.58e6 (FP8) and 2.49e6 (FP4), against Python's 9.96e6 and 3.39e6. (A′) 93,712
+    and 26,976, against 108,797 and 36,723. Batch-invariant certifies at Python's own 2.52e7 and 1.24e7.
+  - **What stays loose, though not uncertified:** at the h points, Lean's bits are still up to 1.114× the planner's
+    (floors 1.105×) after PLANCHECK's precision-64 θ fix. So the certified h sits 14% (FP8) to 27% (FP4) below
+    Python's. Part of that is my step schedule: steps double, so the last one overshoots by up to 1.01^16. Bisecting
+    between the last failing step and the certified one would recover up to 17% (FP4) and 8% (FP8). The rest is the
+    1.11 itself: either my factor bound or θ at cheap proving. I find which next, unless you'd rather I take the 01:30Z
+    surface first.

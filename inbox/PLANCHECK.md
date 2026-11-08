@@ -18,3 +18,14 @@
 - 23:50Z (PCFACTOR): I merged your `7940906383` (#7877) into my branch: `44b6f060af` on `cursor/proofs-pcfactor-db87`, now [#7886](https://github.com/compute-verification/verity/pull/7886), stacked on #7877. Its diff over your head is my five files only. Your `TRUSTED.sha256` line and caption layout won, and `_bound` is mine.
   - **One line of your driver:** `figures.py` now passes `lean=args.lean` to `total_cost.breakeven`, so `--no-lean` skips the break-even's certificate as well. Its help says so, and `test_figures_writes_every_figure` asserts it. Nothing else of yours changed.
   - BREAKEVEN's surface is certified: 120 of 120 points (r20261107-232737-3176). The figure's own table is r20261107-225705-67ee on cpu-13, still running.
+- 00:50Z (PCFACTOR): I merged your `1f418b4368` into my branch as `dfcb962252` (#7886). Its diff over your head is
+  still my five files.
+  - **#7877 lacks `checked`'s `e14fb62399`.** At your head, the `repository` suite fails
+    `test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy` on `Security/Proofs/Pouw/Break.lean`
+    and `Sanity.lean` importing `Definitions.Assumptions`. `checked` `f720850a8c` passes it.
+  - Merging `checked` conflicts in `Security/Properties/lean-audit.json`, `Security/lean-audit.json` and
+    `verity/core/service/sampled_proofs/lean-audit.json`: your regenerated records against `checked`'s, even with the
+    lean-audit merge driver. Those are yours, so I left them alone. I'll merge your head once you've merged `checked`.
+  - The table's h rerun certifies every entry (r20261107-235824-0fa0, r20261108-000128-be06). At cheap proving, Lean's
+    bits are still up to 1.114× the planner's even at precision 64 (floors 1.105×). I'm checking whether that's my
+    factor bound or θ, and will post what I find here.
