@@ -59,6 +59,33 @@ def code_bits(w: torch.Tensor) -> float:
     return float(-(p * p.log2()).sum())
 
 
+FP4_LEVELS = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
+FP4_ENTRY_BITS = 4 + 8 / 16  # an E2M1 code and its share of a 16-entry block's E4M3 scale
+
+
+def nvfp4(w: torch.Tensor, block: int = 16) -> tuple[torch.Tensor, torch.Tensor]:
+    """w fake-quantized to NVFP4: E2M1 codes in blocks of `block` along the last dimension, each block's scale its amax
+    / 6 in FP8 E4M3 under one fp32 scale for the tensor; and the sorted grid of values an entry can take."""
+    x = w.float().reshape(-1, block)
+    g = float(x.abs().max()) / (6 * 448)
+    s = ((x.abs().amax(1, keepdim=True) / 6) / g).to(torch.float8_e4m3fn).float()
+    s = torch.where(s > 0, s, torch.ones_like(s)) * g
+    q = x / s
+    levels = torch.tensor(FP4_LEVELS)
+    out = levels[torch.bucketize(q.abs(), (levels[1:] + levels[:-1]) / 2)] * q.sign() * s
+    e4m3 = torch.arange(256, dtype=torch.uint8).view(torch.float8_e4m3fn).float()
+    e4m3 = e4m3[torch.isfinite(e4m3) & (e4m3 > 0)]
+    pos = (levels[1:, None] * (e4m3 * g)[None]).flatten()
+    return out.reshape(w.shape), torch.cat([-pos, torch.zeros(1), pos]).unique()
+
+
+def snap(x: torch.Tensor, grid: torch.Tensor) -> torch.Tensor:
+    x = x.float().contiguous()
+    i = torch.searchsorted(grid, x).clamp(1, len(grid) - 1)
+    lo, hi = grid[i - 1], grid[i]
+    return torch.where((x - lo).abs() <= (hi - x).abs(), lo, hi)
+
+
 def prefix(lm: LM, tok, text: str) -> tuple[Cache, torch.Tensor, int]:
     ids = torch.tensor([tok.encode(text).ids])
     t0 = ids.shape[1] - 1
@@ -76,6 +103,7 @@ def part_final(lm: LM, tok, a) -> dict:
     E = lm.E.float()
     V, d = E.shape
     var = E.var(0)
+    grid = getattr(lm, "fp4_grid", None)
     cols = torch.randperm(d, generator=torch.Generator().manual_seed(a.seed))[:a.columns].tolist()
     out = []
     for pi in range(a.prompts):
@@ -89,28 +117,37 @@ def part_final(lm: LM, tok, a) -> dict:
                         lp = served_logprobs(z, prec)
                         for k in a.ks:
                             top = lp.topk(k, -1)
-                            est = top.values.double() / float(torch.tensor(sign * amp).to(torch.bfloat16))
+                            sa = float(torch.tensor(sign * amp).to(torch.bfloat16))
+                            est = top.values.double() / sa
                             tru = E.double()[top.indices, torch.tensor(cs)[:, None]]
                             err = est - tru
                             err = err - err.mean(1, keepdim=True)
                             ratio = (err.pow(2).sum(1) / max(k - 1, 1)) / var.double()[cs]
+                            hit = torch.full((len(cs),), float("nan"))
+                            if grid is not None and k > 1:
+                                rel = (top.values.double() - top.values.double()[:, :1]) / sa + tru[:, :1]
+                                hit = (snap(rel, grid) == tru.float())[:, 1:].float().mean(1)
                             for b, i in enumerate(cs):
-                                out.append((pi, amp, sign, prec, k, i, float(ratio[b])))
+                                out.append((pi, amp, sign, prec, k, i, float(ratio[b]), float(hit[b])))
     groups = {}
-    for pi, amp, sign, prec, k, i, r in out:
-        groups.setdefault((amp, prec, k), []).append(r)
+    for pi, amp, sign, prec, k, i, r, h in out:
+        groups.setdefault((amp, prec, k), []).append((r, h))
     cap = code_bits(lm.E)
     rows = []
     for (amp, prec, k), rs in sorted(groups.items()):
-        r = sum(rs) / len(rs)
+        r = sum(x for x, _ in rs) / len(rs)
         rd = rd_bits(k - 1, r)
         bits = min(rd, (k - 1) * cap)
         obs = k * (math.log2(V) + LOGPROB_BITS)
-        rows.append({"amp": amp, "precision": prec, "k": k, "faults": len(rs), "mse_over_var": r,
-                     "rd_bits_per_fault": rd, "capped": rd > bits, "bits_per_fault": bits,
-                     "bits_per_entry": bits / max(k - 1, 1),
-                     "observed_bits_per_fault": obs, "bits_per_observed_bit": bits / obs})
-    return {"part": "final", "columns": len(cols), "code_bits": cap, "rows": rows}
+        row = {"amp": amp, "precision": prec, "k": k, "faults": len(rs), "mse_over_var": r,
+               "rd_bits_per_fault": rd, "capped": rd > bits, "bits_per_fault": bits,
+               "bits_per_entry": bits / max(k - 1, 1),
+               "observed_bits_per_fault": obs, "bits_per_observed_bit": bits / obs}
+        if grid is not None:
+            ex = sum(h for _, h in rs) / len(rs)
+            row.update({"exact_fraction": ex, "fp4_bits_per_fault": ex * (k - 1) * FP4_ENTRY_BITS})
+        rows.append(row)
+    return {"part": "final", "columns": len(cols), "code_bits": cap, "fp4": grid is not None, "rows": rows}
 
 
 def honest_states(lm: LM, tok, prompts: int, new: int) -> torch.Tensor:
@@ -284,6 +321,9 @@ def main() -> int:
     ap.add_argument("--amps", type=float, nargs="+", default=[2.0 ** 6, 2.0 ** 10, 2.0 ** 14, 2.0 ** 20, 2.0 ** 40])
     ap.add_argument("--ks", type=int, nargs="+", default=[2, 5, 20])
     ap.add_argument("--precisions", nargs="+", default=["bf16", "fp32"])
+    ap.add_argument("--fp4", action="store_true",
+                    help="serve the unembedding (tied: and the embedding) fake-quantized to NVFP4; final: count the "
+                         "entries a fault reads exactly, snapped to NVFP4's grid")
     ap.add_argument("--n-over-d", type=float, nargs="+", default=[1.1, 1.5, 2.0])
     ap.add_argument("--layers", type=int, nargs="+", default=list(range(-12, 0)))
     ap.add_argument("--units", type=int, default=16, help="rows: hidden units per layer")
@@ -300,13 +340,16 @@ def main() -> int:
         torch.set_num_threads(a.threads)
     a.out.mkdir(parents=True, exist_ok=True)
     lm = LM(a.model)
+    if a.fp4:
+        q, lm.fp4_grid = nvfp4(lm.E)
+        lm.E.copy_(q)
     tok = lm.tokenizer()
     t = time.time()
     res = {"final": part_final, "honest": part_honest, "rows": part_rows}[a.part](lm, tok, a)
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": lm.spec.vocab, "d": lm.spec.d,
                 "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
                 "seconds": time.time() - t})
-    (a.out / f"extract-{a.part}.json").write_text(json.dumps(res, indent=1))
+    (a.out / f"extract-{a.part}{'-fp4' if a.fp4 else ''}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res, indent=1))
     return 0
 
