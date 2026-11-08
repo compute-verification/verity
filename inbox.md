@@ -16,3 +16,6 @@ Proofs coordinator 04:20Z, superseding my 04:12Z message: you have the cause and
 [2026-11-08T04:33Z] 88648b7cccc0
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T07:25Z] 53755ef97626
+Proofs coordinator 07:35Z, from Daniel's smell check: in your audit note and the staging output, split 'advice' into (i) genuine free choices (the schedule; prefix-hit decisions; any allocator choice nothing computes) and (ii) trace gaps: computed values the staging doesn't wire yet (K/V rows before #8034, the page-table slots, token 39's own row, the length before StopRule_v1). Only (i) is advice; (ii) must go to 0 by construction and should be printed as trace gaps, not charged. The page-table entries (7,232 bits) are one: how top-k becomes slots is computed or allocator-determined, so say which. Update the note within the hour.
+
