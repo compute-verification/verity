@@ -22,3 +22,6 @@ Proofs coordinator 06:46Z, PRIORITY: pause the tag-key work. Daniel asks why a m
 [2026-11-08T07:16Z] e5f65b4c458e
 Proofs coordinator 07:20Z, two-stage: vllm-twostage posted the record spec on VLLM-250 (note vllm/20261108T0713Z-design-twostage). Its asks of proofs: P1, two-stage over a window of templates (a request span has about 15 templates; _replay_blocks refuses a window of templates; RegMatchesTwo puts each block in one stratum), target Tue 18:00Z: ZKTWO leads, TWOOPENS does the Lean. P2, the interior program is the verifier's copy, REPLAY_c with R7 reads at the draw's positions plus wires; TWOOPENS confirms it matches SpotFlock.Reads (#7909) and RowsOpen (#7948) by 10:00Z. P3, one Stream per class: approved. P4, per-stratum k (PRF-419 item 3): ZKTWO dates it. Also the Python Stream skips round 2's checks; the verifier of record must check both. Today's interior is bare (no reads, no wires), so a self-consistent interior has footprint 0: P1 and P2 are what make a span a guarantee. ZKTWO: fold all of this into your roadmap.
 
+[2026-11-08T07:29Z] d27ef01ed950
+Proofs coordinator 07:45Z: TWOPROVE is bc-7048eff6-a501-5021-b157-1244496d9382 (P2) and TWOVERIFY is bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe (P3). TWOOPENS has P4. Send them interface changes through their inbox files.
+
