@@ -1,7 +1,7 @@
 /-
 The straight-line `Sha512.compress` against the three loops it replaced (`compressLoops`, kept here as the test's
 reference only) on 200 chained blocks, on blocks at unaligned offsets and on one running past the data's end, and
-`Sha512.hash` on the FIPS 180-4 "abc" digest.
+`Sha512.hash` on the FIPS 180-4 "abc" digest and on messages of every length below 300 bytes.
 -/
 module
 
@@ -84,5 +84,14 @@ def agreeChained : Bool := Id.run do
     Flock.Sha512.compress h data off == compressLoops h data off
 
 #guard Flock.hexOf (Flock.Sha512.hash "abc".toUTF8) == "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+
+/-- `n` bytes, byte `i` being `i % 251`. -/
+def ramp (n : Nat) : ByteArray := ⟨(Array.range n).map fun i => (i % 251).toUInt8⟩
+
+-- The digests of `ramp n` for every `n` below 300, so a message ends at every offset of its last block, hashed again
+-- (19,200 bytes): Python's `hashlib.sha512`.
+#guard
+  let ds := (List.range 300).foldl (fun acc n => acc ++ Flock.Sha512.hash (ramp n)) ByteArray.empty
+  Flock.hexOf (Flock.Sha512.hash ds) == "5876909c163eee9aa8e3e0dbbe23ff09a3b1c1690c50ecab0cf75109b7ea093180f3b1db84ac4671a35db7394d95e9b645b20209761dc874ec013385e1db7916"
 
 end Flock.Test.Sha512

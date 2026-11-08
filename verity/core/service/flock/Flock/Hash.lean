@@ -530,7 +530,7 @@ def compressFast (h : Array UInt64) (data : ByteArray) (off : Nat) : Array UInt6
   else compress h data off
 
 /-- Compiled code runs `compressFast`; the kernel and every proof see `compress`. `@[csimp]` rewrites only code compiled
-after it, so `hash` is compiled again below it (`hash_eq_fast`). -/
+after it, so `hash` is compiled again below it (`hash_eq_from`). -/
 @[csimp] theorem compress_eq_fast : @compress = @compressFast := by
   funext h data off
   unfold compressFast
@@ -541,22 +541,177 @@ after it, so `hash` is compiled again below it (`hash_eq_fast`). -/
     simp only [wordU_eq, hb.1]
   · rfl
 
-/-- `hash`, compiled below `compress_eq_fast`. -/
-def hashFast (msg : ByteArray) : Digest := Id.run do
-  let len := msg.size
-  let mut data := msg.push 0x80
+/-- `hash`'s padding after `d`, the last bytes of a message of `len` bytes: `0x80`, zeros to 112 mod 128, and `len` in
+bits. -/
+def padOnto (d : ByteArray) (len : Nat) : ByteArray := Id.run do
+  let mut data := d.push 0x80
   for _ in [0:(112 + 128 - data.size % 128) % 128] do data := data.push 0
   let bits := len * 8
   for i in [0:16] do
     data := data.push ((bits >>> (8 * (15 - i))) % 256).toUInt8
-  let mut h := iv
-  for blk in [0:data.size / 128] do
-    h := compress h data (128 * blk)
-  -- the state's eight words, big-endian: 64 bytes whatever the loops computed (`Sha512.hash_size`)
-  return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
+  return data
 
-/-- Compiled code runs `hashFast`, which runs `compressFast`; the kernel and every proof see `hash`. -/
-@[csimp] theorem hash_eq_fast : @hash = @hashFast := rfl
+/-- `n` blocks of `data`, the first at `off`, compressed into `h`. -/
+def blocks (h : Array UInt64) (data : ByteArray) (off : Nat) : Nat → Array UInt64
+  | 0 => h
+  | n + 1 => blocks (compress h data off) data (off + 128) n
+
+/-- The state `h`'s eight words, big-endian. -/
+def digestOf (h : Array UInt64) : Digest :=
+  ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
+
+theorem foldl_blocks (h : Array UInt64) (data : ByteArray) : ∀ (n s : Nat),
+    (List.range' s n).foldl (fun h blk => compress h data (128 * blk)) h = blocks h data (128 * s) n := by
+  intro n
+  induction n generalizing h with
+  | zero => intro s; rfl
+  | succ n ih =>
+    intro s
+    rw [List.range'_succ, List.foldl_cons, ih, blocks]
+    congr 1
+
+theorem hash_eq_blocks (msg : ByteArray) :
+    hash msg = digestOf (blocks iv (padOnto msg msg.size) 0 ((padOnto msg msg.size).size / 128)) := by
+  unfold hash padOnto
+  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.forIn_pure_yield_eq_foldl,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, bind_pure_comp, map_pure, pure_bind]
+  rw [foldl_blocks]
+  rfl
+
+theorem get!_eq (a : ByteArray) (i : Nat) : a.get! i = a.data[i]! := by cases a; rfl
+
+theorem get!_append_left (A B : ByteArray) (i : Nat) (h : i < A.size) : (A ++ B).get! i = A.get! i := by
+  have hA : i < A.data.size := h
+  have hAB : i < (A.data ++ B.data).size := by rw [Array.size_append]; omega
+  rw [get!_eq, get!_eq, ByteArray.data_append, getElem!_pos (A.data ++ B.data) i hAB, getElem!_pos A.data i hA,
+    Array.getElem_append_left hA]
+
+theorem get!_append_right (A B : ByteArray) (i : Nat) : (A ++ B).get! (A.size + i) = B.get! i := by
+  rw [get!_eq, get!_eq, ByteArray.data_append]
+  by_cases h : i < B.data.size
+  · have hAB : A.size + i < (A.data ++ B.data).size := by rw [Array.size_append]; exact Nat.add_lt_add_left h _
+    rw [getElem!_pos (A.data ++ B.data) _ hAB, getElem!_pos B.data i h,
+      Array.getElem_append_right (by exact Nat.le_add_right _ _)]
+    simp [ByteArray.size_data]
+  · have hAB : ¬ A.size + i < (A.data ++ B.data).size := by
+      rw [Array.size_append]; have : A.data.size = A.size := rfl; omega
+    rw [getElem!_neg (A.data ++ B.data) _ hAB, getElem!_neg B.data i h]
+
+theorem get!_extract (a : ByteArray) (s e i : Nat) (h : s + i < e) (he : e ≤ a.size) :
+    (a.extract s e).get! i = a.get! (s + i) := by
+  have hi : i < (a.data.extract s e).size := by rw [Array.size_extract]; have : a.data.size = a.size := rfl; omega
+  have ha : s + i < a.data.size := by have : a.data.size = a.size := rfl; omega
+  rw [get!_eq, get!_eq, ByteArray.data_extract, getElem!_pos (a.data.extract s e) i hi, getElem!_pos a.data _ ha,
+    Array.getElem_extract]
+
+theorem word_congr (D D' : ByteArray) (o o' : Nat) (hw : ∀ m < 8, D.get! (o + m) = D'.get! (o' + m)) :
+    word D o = word D' o' := by
+  unfold word
+  rw [hw 0 (by omega), hw 1 (by omega), hw 2 (by omega), hw 3 (by omega), hw 4 (by omega), hw 5 (by omega),
+    hw 6 (by omega), hw 7 (by omega)]
+
+theorem compress_congr (h : Array UInt64) (D D' : ByteArray) (off off' : Nat)
+    (hb : ∀ i < 128, D.get! (off + i) = D'.get! (off' + i)) : compress h D off = compress h D' off' := by
+  have hw : ∀ j < 16, word D (off + 8 * j) = word D' (off' + 8 * j) := fun j hj =>
+    word_congr _ _ _ _ fun m hm => by rw [Nat.add_assoc, Nat.add_assoc]; exact hb _ (by omega)
+  rw [compress_eq_W, compress_eq_W, hw 0 (by decide), hw 1 (by decide), hw 2 (by decide), hw 3 (by decide),
+    hw 4 (by decide), hw 5 (by decide), hw 6 (by decide), hw 7 (by decide), hw 8 (by decide), hw 9 (by decide),
+    hw 10 (by decide), hw 11 (by decide), hw 12 (by decide), hw 13 (by decide), hw 14 (by decide), hw 15 (by decide)]
+
+theorem blocks_congr (D D' : ByteArray) : ∀ (n : Nat) (h : Array UInt64) (off off' : Nat),
+    (∀ i < 128 * n, D.get! (off + i) = D'.get! (off' + i)) → blocks h D off n = blocks h D' off' n := by
+  intro n
+  induction n with
+  | zero => intro h off off' _; rfl
+  | succ n ih =>
+    intro h off off' hb
+    rw [blocks, blocks, compress_congr h D D' off off' (fun i hi => hb i (by omega))]
+    apply ih
+    intro i hi
+    rw [Nat.add_assoc, Nat.add_assoc]
+    exact hb _ (by omega)
+
+theorem blocks_add (D : ByteArray) : ∀ (m n : Nat) (h : Array UInt64) (off : Nat),
+    blocks h D off (m + n) = blocks (blocks h D off m) D (off + 128 * m) n := by
+  intro m
+  induction m with
+  | zero => intro n h off; simp [blocks]
+  | succ m ih =>
+    intro n h off
+    rw [Nat.add_right_comm, blocks, blocks, ih]
+    congr 1
+    omega
+
+theorem push_append (A B : ByteArray) (x : UInt8) : (A ++ B).push x = A ++ B.push x := by
+  apply ByteArray.ext
+  simp only [ByteArray.data_push, ByteArray.data_append, Array.append_push]
+
+theorem foldl_push_append (A : ByteArray) (f : Nat → UInt8) : ∀ (l : List Nat) (X : ByteArray),
+    l.foldl (fun b a => b.push (f a)) (A ++ X) = A ++ l.foldl (fun b a => b.push (f a)) X := by
+  intro l
+  induction l with
+  | nil => intro X; rfl
+  | cons a l ih => intro X; rw [List.foldl_cons, List.foldl_cons, push_append, ih]
+
+theorem size_foldl_push (f : Nat → UInt8) : ∀ (l : List Nat) (X : ByteArray),
+    (l.foldl (fun b a => b.push (f a)) X).size = X.size + l.length := by
+  intro l
+  induction l with
+  | nil => intro X; rfl
+  | cons a l ih => intro X; rw [List.foldl_cons, ih, ByteArray.size_push, List.length_cons]; omega
+
+theorem padOnto_eq (d : ByteArray) (len : Nat) : padOnto d len =
+    (List.range' 0 16).foldl (fun b a => b.push (((len * 8) >>> (8 * (15 - a))) % 256).toUInt8)
+      ((List.range' 0 ((112 + 128 - (d.size + 1) % 128) % 128)).foldl (fun b _ => b.push 0) (d.push 128)) := by
+  unfold padOnto
+  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.forIn_pure_yield_eq_foldl,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, bind_pure_comp, map_pure, pure_bind, ByteArray.size_push]
+  rfl
+
+theorem padOnto_append (A B : ByteArray) (len : Nat) (hA : A.size % 128 = 0) :
+    padOnto (A ++ B) len = A ++ padOnto B len := by
+  rw [padOnto_eq, padOnto_eq, push_append]
+  have hz : ((A ++ B).size + 1) % 128 = (B.size + 1) % 128 := by rw [ByteArray.size_append]; omega
+  rw [hz, foldl_push_append A (fun _ => 0), foldl_push_append]
+
+theorem size_padOnto (d : ByteArray) (len : Nat) : (padOnto d len).size % 128 = 0 := by
+  rw [padOnto_eq, size_foldl_push, size_foldl_push (fun _ => 0), ByteArray.size_push, List.length_range',
+    List.length_range']
+  omega
+
+/-- `hash`, reading `msg`'s whole blocks where they lie: only its last, partial block is copied, to be padded. -/
+def hashFrom (msg : ByteArray) : Digest :=
+  let m := msg.size / 128
+  let t := padOnto (msg.extract (128 * m) msg.size) msg.size
+  digestOf (blocks (blocks iv msg 0 m) t 0 (t.size / 128))
+
+/-- Compiled code runs `hashFrom`, which runs `compressFast`; the kernel and every proof see `hash`. -/
+@[csimp] theorem hash_eq_from : @hash = @hashFrom := by
+  funext msg
+  rw [hash_eq_blocks]
+  unfold hashFrom
+  dsimp only
+  generalize hm : msg.size / 128 = m
+  have hm128 : 128 * m ≤ msg.size := by rw [← hm]; exact Nat.mul_div_le msg.size 128
+  have hmsg : msg.extract 0 (128 * m) ++ msg.extract (128 * m) msg.size = msg := by
+    rw [ByteArray.extract_append_extract, Nat.zero_min, Nat.max_eq_right hm128, ByteArray.extract_zero_size]
+  have hA : (msg.extract 0 (128 * m)).size = 128 * m := by rw [ByteArray.size_extract]; omega
+  have hpad : padOnto msg msg.size =
+      msg.extract 0 (128 * m) ++ padOnto (msg.extract (128 * m) msg.size) msg.size := by
+    rw [← padOnto_append _ _ msg.size (by rw [hA]; omega), hmsg]
+  have hk := size_padOnto (msg.extract (128 * m) msg.size) msg.size
+  rw [hpad, ByteArray.size_append, hA,
+    show (128 * m + (padOnto (msg.extract (128 * m) msg.size) msg.size).size) / 128 =
+      m + (padOnto (msg.extract (128 * m) msg.size) msg.size).size / 128 by omega,
+    blocks_add, blocks_congr _ msg m iv 0 0 (fun i hi => by
+      simp only [Nat.zero_add]
+      rw [get!_append_left _ _ i (by omega), get!_extract msg 0 (128 * m) i (by omega) hm128, Nat.zero_add])]
+  congr 1
+  apply blocks_congr
+  intro i _
+  have := get!_append_right (msg.extract 0 (128 * m)) (padOnto (msg.extract (128 * m) msg.size) msg.size) i
+  rw [hA] at this
+  rw [Nat.zero_add, Nat.zero_add, this]
 
 end Sha512
 
