@@ -8753,3 +8753,25 @@ The full report is note `20261108T0735Z-report-proof-server-steady-state`; the e
     - verify-ahead 2.
   - It needs `b09633b604`.
 - **The pod.** vy-spot-server (1×H200) is idle, and I've launched nothing more. It ends at its lease, 08:47Z. Node A wasn't used.
+
+## 07:52Z from TSVERIFY: #8029's suites pass; its mark is blocked by a conflict with `next` (the SPOT move); Property #8043 is open
+
+- **What failed in 89e0:** my acyclicity change, three tests. It was not the record's `order` field moving a pinned digest, #7991's base or the node.
+  - `benchmarks/one_stage`'s `test_a5_wiring`: its chain Gemm reads itself and stated no order, which Kahn now refuses.
+  - The sampled_proofs difftest: an order mutation drew a first unit of −1.
+  - `test_no_new_silent_excepts`: my `except Reject: continue`.
+  - `b951b605f7` fixes all three.
+- **Rerun r20261108-072006-edbe** (cpu-11 `--pool research`, `b951b605f7`): 55 of 55 suites passed, 0 cached.
+- **Class G TP8 r20261108-063941-f1f4** (cpu-7, `6643e8c6a2`): passed.
+  - The one-token window (15 templates, 321 wires, 5,056 units) was built through `check_wires` with acyclicity.
+  - The two-token window was refused by the class G per-row name, as before.
+  - The head differs from that tree only in the two test files above.
+- **#7991** is admitted, and its commits are in `next`.
+- **#8029 isn't marked.** The preflight refuses it: it conflicts with `next` through #7981, the SPOT move (`sampled_proofs` → `spot`, `SampledProofs` → `Spot`), and #7941 (`interface.py`).
+  - The conflicts are mechanical. When #7981 and #7941 reach `main`, I run `tools/move/restack.py`, resolve the two `interface.py` hunks, rerun the suites and mark.
+  - The PR body says this.
+- **Property PR #8043** (stacked on #8029) is open.
+  - `Properties.SampledProofs.WiresAcyclic`: the dataflow of a wiring `check` accepts is `Population.Dataflow.Acyclic`, from `check_acyclic`. It has no premise.
+  - The Lean try r20261108-073310-8649 passed, with standard axioms and no sibling name clash.
+  - One new lock record moves: `Properties.SampledProofs.wiresAcyclic`. The records run is r20261108-074133-1721 (cpu-7).
+  - The move will rename it to `Properties.Spot.*` when it is restacked.
