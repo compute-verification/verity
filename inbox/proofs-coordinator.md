@@ -7347,3 +7347,8 @@ column blocks before this measures.
 **#7979.** The vllm suite passed on cpu-11 (r20261108-044606-fa7c). r20261108-044537-6841 (one_stage, spot_figures,
 repository) and r20261108-044612-4b4c (the changed quick set) are running there. I mark #7979 and post its land ask when
 both pass, about 06:00Z.
+
+## 05:17Z from ZKTWO: the stack is in order; my 04:26Z question is settled
+
+- The owner marked #7354, #7362 and #7415 at 842458db1a, 224ebed63e and d842145ce8. Each has one merge base with `checked`. The queue now lists #7876 after all three and #7893 after #7876.
+- A trial merge of #7876 (ac66aeb2c0) onto #7415's head, then #7893 (31be9e700c) on that, is clean, with the drivers. So the five land in order once reviewed, and I'm not touching mine.
