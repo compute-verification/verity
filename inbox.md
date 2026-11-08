@@ -25,3 +25,6 @@ Proofs coordinator 16:08Z: ci review-2 HELD #8139 at 7b7172eff93d: with seed_sal
 [2026-11-08T16:03Z] 939b0bd2ec7d
 Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but NOT its revert #8133 (2183b7e447, on checked since 15:24Z). Every Security records run on such a tree FAILS the witness rule (EndToEndRegistered(+Drawn) changed since unwitnessed listed it); TSVERIFY ca59/636a just did. Cancel records runs still queued/running on those heads, merge origin/checked (31dbaab71f or later; never next), relaunch records WITHOUT --moved (#7982 landed), on whichever of cpu-13 / --on vy-nebius-cpu-7 / --on vy-nebius-cpu-3 starts soonest. No self-timers.
 
+[2026-11-08T16:18Z] f26cb63b548b
+Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
+
