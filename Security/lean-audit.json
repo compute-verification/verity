@@ -3566,6 +3566,10 @@
     "fails": "Claims.Sampling.KSLinOn_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    },
+   "Claims.Sampling.KSAt": {
+    "fails": "Claims.Sampling.KSAt_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
    "Claims.ZKmalRx": {
     "fails": "Claims.ZKmalRx_fails",
     "meets": [
@@ -3668,6 +3672,15 @@
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
    },
+   "Claims.SamplingGeneric.Compiled.KSAt": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSAt_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
    "Claims.SamplingGeneric.Compiled.Efficient": {
     "fails": "Claims.SamplingGeneric.Compiled.Efficient_fails",
     "meets": [
@@ -3723,6 +3736,7 @@
    "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim",
    "Claims.Rel.L": "a helper the claims read: a relation's language",
    "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
+   "Claims.Sampling.BextAtCostLe": "a helper the claims read: `B_ext` at a time budget costs at most a bound in expectation, which `Compiled.KSAt` reads",
    "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
    "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
    "Claims.Sampling.ExtractOwnLe": "a helper the claims read: an extractor's own calls, at most a bound, which the sampling `Efficient` reads",
@@ -3799,6 +3813,7 @@
    "Claims.SamplingGeneric.CompilerKSCount": "Claims.SamplingGeneric.compilerKSCount",
    "Claims.SamplingGeneric.CompilerKSReg": "Claims.SamplingGeneric.compilerKSReg",
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
+   "Claims.SamplingGeneric.CompilerKSAt": "Claims.SamplingGeneric.compilerKSAt",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
@@ -3910,6 +3925,10 @@
   "Claims.SamplingGeneric.compilerBits": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerBits_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSAt": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSAt_nontrivial"
   },
   "Claims.SamplingGeneric.compilerEfficient": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
@@ -11163,6 +11182,9 @@
    },
    "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
   },
+  "Claims.Sampling.KSAt_fails": {
+   "owner": "@proofs"
+  },
   "Claims.Sampling.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11348,6 +11370,9 @@
    },
    "type_hash": "8b4447eafda61dd5722e06a5b51506edd2ae4c1dbe18221a1857effe96a1ff55"
   },
+  "Claims.SamplingGeneric.Compiled.KSAt_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.Compiled.Complete_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11503,6 +11528,9 @@
    "type_hash": "0756a23edb48f7898b0c73ca9bcb93401f9a30471687eb7a3939c7e2f007a497",
    "unfolded_hash": "ab8a2d5b464114b5d5257dddc7db6947da2a646b76465d529e7e65e8ce249203"
   },
+  "Claims.SamplingGeneric.compilerKSAt": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.compilerBits_honest": {
    "owner": "@proofs",
    "signature": [
@@ -11533,6 +11561,9 @@
     "reads": []
    },
    "type_hash": "5f1392987eae7a0f888368b92c32e59035b9f4b88177f2c17f3c6c2c7918ab1e"
+  },
+  "Claims.SamplingGeneric.compilerKSAt_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerComplete": {
    "owner": "@proofs",
