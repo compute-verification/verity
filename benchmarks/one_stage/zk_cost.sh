@@ -21,8 +21,9 @@
 #      FlashInfer K=2048 a size, off a shared disk)
 #      ZK_NEED_GB, ZK_WORK_GB (this run's peaks under ZK_SCRATCH, with the stagers' memory where it is a tmpfs, and under
 #      FLOCK_WORK, the CUDA unpack and the builds; given, staging waits until ZK_SCRATCH's filesystem, and memory for a
-#      tmpfs, has its peak + ZK_MARGIN_GB=30 free, and the builds until FLOCK_WORK's has theirs, each plus the GB of
-#      each ZK_HOLD="RUN_ID:GB ..." run not yet done, failed or cancelled; ZK_GATE_UNTIL, a UTC time, gives up a wait)
+#      tmpfs, has its peak + ZK_MARGIN_GB=30 free, and the builds, which start beside the staging, until FLOCK_WORK's
+#      has theirs + ZK_WORK_MARGIN_GB (ZK_MARGIN_GB), each plus the GB of each ZK_HOLD="RUN_ID:GB ..." run not yet done,
+#      failed or cancelled; ZK_GATE_UNTIL, a UTC time, gives up a wait)
 #      ZK_LAST_START (a UTC time no point starts at or after: one granted later gives its GPU back unproved)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server; with ZK_UNITS and no fw
 #      arm, no Lean build either: nothing then reads flock-verify or the ZK server's Lean frame)
@@ -46,11 +47,11 @@ free_gb() {
   fi
   echo "$f"
 }
-# each PATH:GB given: wait until its filesystem has GB + ZK_MARGIN_GB free, with memory for a tmpfs, plus each ZK_HOLD
-# run's room while that run is live
+# each PATH:GB[:MARGIN] given: wait until its filesystem has GB + MARGIN (ZK_MARGIN_GB) free, with memory for a tmpfs,
+# plus each ZK_HOLD run's room while that run is live
 room() {
-  local h st held d f n ok msg said= runs=${RESEARCH_RUN_DIR:-/workspace/research/runs/-}
-  local -A need at
+  local h st held p r g m d f n ok msg said= runs=${RESEARCH_RUN_DIR:-/workspace/research/runs/-}
+  local -A need at mar
   while :; do
     held=0
     for h in ${ZK_HOLD:-}; do
@@ -58,12 +59,13 @@ room() {
         "${runs%/*}/${h%%:*}/status.json" 2> /dev/null)
       case $st in done | failed | cancelled) ;; *) held=$((held + ${h##*:})) ;; esac
     done
-    need=() at=() ok=1 msg=
+    need=() at=() mar=() ok=1 msg=
     for h in "$@"; do
-      d=$(stat -c %d "${h%:*}"); at[$d]=${h%:*}; need[$d]=$((${need[$d]:-0} + ${h##*:}))
+      p=${h%%:*} r=${h#*:}; g=${r%%:*} m=${ZK_MARGIN_GB:-30}; [ "$r" = "$g" ] || m=${r#*:}
+      d=$(stat -c %d "$p"); at[$d]=$p; need[$d]=$((${need[$d]:-0} + g)); mar[$d]=$((m > ${mar[$d]:-0} ? m : ${mar[$d]:-0}))
     done
     for d in "${!need[@]}"; do
-      f=$(free_gb "${at[$d]}"); n=$((need[$d] + ${ZK_MARGIN_GB:-30} + held))
+      f=$(free_gb "${at[$d]}"); n=$((need[$d] + mar[$d] + held))
       msg="$msg ${at[$d]}: $f GB free, $n needed;"; [ "$f" -ge "$n" ] || ok=0
     done
     [ "$ok" = 1 ] && { log "zk-cost: room ($held GB held):$msg"; return 0; }
@@ -91,50 +93,60 @@ keep() {
   (cd "$Z" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
     \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/")
 }
-# a served type stages on CPUs alone (stage.py, no Lean), before the builds
+# Lean only where a step reads it: A6's staging draws, the verify step, and the ZK server's frame for an fw arm
+NEED_LEAN=1
+if [ -n "${ZK_UNITS:-}" ] && [ "${ZK_VERIFY:-1}" = 0 ] \
+  && ! echo ",${ZK_ARMS:-fw,nofw},${ZK_DRAWS:-}," | tr ':+' ',,' | grep -q ',fw,'; then NEED_LEAN=0; fi
+# CUDA 13.3 and the builds, once FLOCK_WORK has their room, beside a served type's staging, which reads neither; the
+# toolkit's path left in $S/cuda
+builds() {
+  [ -z "${ZK_WORK_GB:-}" ] || room "$FLOCK_WORK:$ZK_WORK_GB:${ZK_WORK_MARGIN_GB:-${ZK_MARGIN_GB:-30}}" || return 75
+  for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
+    [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
+  done
+  # else its packages unpacked under FLOCK_WORK without root, as 71-gemm-slowdown.sh does (an R580 driver runs 13.3)
+  if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
+    local CR=$FLOCK_WORK/cuda-root todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3" seen= q
+    while [ -n "$todo" ]; do
+      set -- $todo; q=$1; shift; todo="$*"
+      case " $seen " in *" $q "*) continue ;; esac
+      seen="$seen $q"
+      todo="$todo $(apt-cache show "$q" 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
+        | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
+    done
+    (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || {
+      mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
+        echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) \
+        && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done; }) > "$O/cuda-unpack.log" 2>&1
+    [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$CR/usr/local/cuda-13.3
+  fi
+  [ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; return 1; }
+  local C13=${CUDA_TK:-/usr/local/cuda-13.3}; echo "$C13" > "$S/cuda"
+  export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+  log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK$([ "$NEED_LEAN" = 1 ] \
+    && echo " and $PT_WORK" || echo " (no Lean: nothing reads it)")"
+  OUT=$O/build nice -n "${ZK_NICE:-0}" bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" \
+    > "$O/build.txt" 2>&1 &
+  [ "$NEED_LEAN" = 1 ] && OUT=$O/lean nice -n "${ZK_NICE:-0}" bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 \
+    PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
+  wait
+}
+B=
+[ "${ZK_STAGE_ONLY:-0}" = 1 ] || { builds & B=$!; }
+# a served type stages on CPUs alone (stage.py, no Lean)
 if [ -n "${ZK_UNITS:-}" ]; then
   : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
   log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
   nice -n "${ZK_NICE:-0}" "$PY" benchmarks/one_stage/zk_cost.py stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" \
     --draws "$ZK_DRAWS" --out "$Z" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
   rc=${PIPESTATUS[0]}
-  if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
+  if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then
+    keep; log "zk-cost: staged only, rc $rc"; [ -z "$B" ] || wait "$B"; exit "$rc"
+  fi
 fi
-[ -z "${ZK_WORK_GB:-}" ] || room "$FLOCK_WORK:$ZK_WORK_GB" || { keep; exit 75; }
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-# else its packages unpacked under FLOCK_WORK without root, as 71-gemm-slowdown.sh does (an R580 driver runs 13.3)
-if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
-  CR=$FLOCK_WORK/cuda-root
-  todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
-  while [ -n "$todo" ]; do
-    set -- $todo; q=$1; shift; todo="$*"
-    case " $seen " in *" $q "*) continue ;; esac
-    seen="$seen $q"
-    todo="$todo $(apt-cache show "$q" 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
-      | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
-  done
-  (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || {
-    mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
-      echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) \
-      && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done; }) > "$O/cuda-unpack.log" 2>&1
-  [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$CR/usr/local/cuda-13.3
-fi
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
-C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
-
-# Lean only where a step reads it: A6's staging draws, the verify step, and the ZK server's frame for an fw arm
-NEED_LEAN=1
-if [ -n "${ZK_UNITS:-}" ] && [ "${ZK_VERIFY:-1}" = 0 ] \
-  && ! echo ",${ZK_ARMS:-fw,nofw},${ZK_DRAWS:-}," | tr ':+' ',,' | grep -q ',fw,'; then NEED_LEAN=0; fi
-log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK$([ "$NEED_LEAN" = 1 ] \
-  && echo " and $PT_WORK" || echo " (no Lean: nothing reads it)")"
-OUT=$O/build nice -n "${ZK_NICE:-0}" bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" \
-  > "$O/build.txt" 2>&1 &
-[ "$NEED_LEAN" = 1 ] && OUT=$O/lean nice -n "${ZK_NICE:-0}" bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 \
-  PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
-wait
+if [ -n "$B" ]; then wait "$B"; brc=$?; else builds; brc=$?; fi
+if [ "$brc" != 0 ] || [ ! -s "$S/cuda" ]; then keep; log "zk-cost: no CUDA or builds, rc $brc"; exit $((brc ? brc : 1)); fi
+C13=$(cat "$S/cuda"); export CUDA_TK=$C13 LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 BINS=("$BIN")
 if [ "$NEED_LEAN" = 1 ]; then
