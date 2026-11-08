@@ -65,8 +65,8 @@ builds. The top statement rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's sample reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).
-- `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
-  sample file is the one `flock-verify draw` printed for the verifier's own sample.
+- `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`): the record `flock-verify --zk` reads is the one the challenger
+  wrote for the live session, and its sample file is the one `flock-verify draw` printed for the verifier's own sample.
 - `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `Security/Definitions/Assumptions/Flock.lean`:
   SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
   `LinkCRZCAt`, which unfold to them).
