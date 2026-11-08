@@ -1,4 +1,4 @@
-"""Store honing (2026-09-23): eviction, partial fetch / listing, labels durability, catalog schema versions, vocabulary hygiene,
+"""Store honing: eviction, partial fetch / listing, labels durability, catalog schema versions, vocabulary hygiene,
 tar-streamed pulls, dead-pod errors, multipart upload, parallel `where`.  Temp stores and an `FsRemote` directory only; no network."""
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def test_evict_store_only_verified_blobs_largest_first_and_honest_presence(store
 
 
 def test_evict_keeps_every_blob_a_registry_artifact_holds(store, fs_remote, tmp_path, capsys):
-    """Node 1's runs fetch fixtures only from the public export, which lacked rec-coins on 11 Oct: a blob any artifact of the
+    """Node 1's runs fetch fixtures only from the public export, which can lack a fixture: a blob any artifact of the
     registry holds stays, even when another, unlisted artifact shares it."""
     from research.store import evict as EV
 
@@ -224,8 +224,8 @@ def test_evict_runs_on_a_vm_counts_a_tree_found_on_the_remote_that_its_catalog_n
 
 
 def test_evict_runs_takes_the_files_of_a_preserved_tree_output_from_under_its_tree_path(store, fs_remote, tmp_path, capsys):
-    """Node 1's dispatcher runs (2026-10-02): 465 GB of Build, verdict and slim-replay outputs, every artifact verified on the
-    remote, and none evictable, because only the `run_files` tree was matched against the run dir."""
+    """A dispatcher run's Build, verdict and slim-replay outputs (hundreds of GB), every artifact verified on the remote, are
+    evictable: not only the `run_files` tree is matched against the run dir."""
     from research.store import evict as EV
 
     runs = tmp_path / "runs"
@@ -424,7 +424,7 @@ def test_catalog_schema_version_forward_migration_and_refusal_of_newer(env, tmp_
 
     p = tmp_path / "store" / "catalog.sqlite"
     p.parent.mkdir(parents=True)
-    db = sqlite3.connect(p)                                                                     # a v0 catalog as the 2026-09-22 code left it
+    db = sqlite3.connect(p)                                                                     # a v0 catalog as older code left it
     db.executescript(IX.SCHEMA.replace("CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location));",
                                        "CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, verified TEXT, PRIMARY KEY(id, location));"))
     db.execute("INSERT INTO replicas VALUES ('art:a', 'remote', '2026-09-22T00:00:00Z', 'fs:x', 'etag-md5')")

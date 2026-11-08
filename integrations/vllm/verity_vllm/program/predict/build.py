@@ -636,8 +636,7 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
-    collective order, `schedule_words(rows)` (when it has one) the schedule words a pass reads, `model(B, W, peers)` the forward and
-    the sampler."""
+    collective order, `model(B, W, peers)` the forward and the sampler."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
     ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
     if ff.get("arch") == "dsa-moe":
@@ -686,7 +685,7 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = ()) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -694,7 +693,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
     the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
     traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
-    before the prefill's last, which no sample reads.
+    before the prefill's last, which no sample reads. `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
@@ -724,9 +723,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
-    words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
-    if words:
-        params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
     history = len(params)
     if C:
         params += net.prefix_params(C)   # `vllm_meta.prefix_input`
@@ -742,8 +738,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
-    ids, W, schedule = inputs[0], inputs[-1], inputs[history - 1] if words else None
-    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank, schedule)
+    ids, W = inputs[0], inputs[-1]
+    peers = _Peers(inputs[n_user:n_user + n_peers], world, rank)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
@@ -762,9 +758,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
                  last=inputs[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
-    if peers.n != len(peers.inputs) or peers.k != words:
-        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
-    params, (out, checks) = finish_run(run, params, B), with_checks(model, out)
+    if peers.n != len(peers.inputs):
+        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
+    params, (out, checks) = finish_run(run, params, B), with_checks(model, out, B, stop)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None
@@ -775,12 +771,12 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C and dense else WRAPPERS[(wrapper, kind)]
     if world > 1:
-        src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
+        src_class = f"verity-vllm/with-peers/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
-                                                                  **({"history": C} if C and not dense else {})})).hexdigest()[:16]}
+                                                                  **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",

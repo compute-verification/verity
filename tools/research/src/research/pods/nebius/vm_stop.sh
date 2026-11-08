@@ -3,7 +3,7 @@
 # `shutdown` inside the VM is not a stop: Nebius treats it as a failure, restarts the VM and keeps billing it.  The token is the
 # attached service account's, from the metadata service; it lives in a private directory only for this call.
 # vy-nebius-stop --probe INSTANCE_ID reads the instance with that token instead, and fails when the account can't: an account
-# with no rights in the VM's project (vy-vm-self-stop in us-central1, 13 Oct) refuses every stop, so lease and deadline fail open.
+# with no rights in the VM's project refuses every stop, so lease and deadline fail open.
 set -eu
 probe=
 [ "${1:-}" = --probe ] && { probe=1; shift; }

@@ -154,7 +154,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
@@ -639,15 +639,18 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
     """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
-    ``in_rows``, ``out_rows`` and ``reads``), bound to the window's partition and program: a5's composer for its members."""
+    ``in_rows``, ``out_rows`` and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``), bound to the
+    window's partition and program: a5's composer for its members."""
+    form = {"layout": st["layout"], "structural": bool(st["structural"])} if st.get("layout") else {"reads": st["reads"]}
+
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
         from verity_flock import circuit as FC
         from verity_flock.class_statement import UnitStager
 
         s = UnitStager(fn, "unit/window", [(p, sc, int(b), list(ps)) for p, sc, b, ps in st["in_rows"]],
                        [(sc, tuple(ix)) for sc, ix in st["out_rows"]], circuit=Path(out),
-                       bind={"partition": partition, "program": program}, reads=st["reads"])
-        if st["reads"] == "slots":
+                       bind={"partition": partition, "program": program}, **form)
+        if form.get("reads") == "slots":
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
     compose.inputs = ["unit/window", st]  # a5's compose cache keys a composer by these (a5.compose_key), else never caches it

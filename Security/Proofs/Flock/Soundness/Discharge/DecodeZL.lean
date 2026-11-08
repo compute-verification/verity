@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 
 /-!
-# R11b's message half: the per-Kind decoder, the chunk lemmas, and `DecodesOn` at the headline
+# The decoder premise's message half: the per-Kind decoder, the chunk lemmas, and `DecodesOn` at the headline
 
 * `Wire.lean`: the decoder (`Wire`, `decRound`, `decOf`) and the chunk lemma's shape (`Carries`, `Carries.append`).
 * `Statements.lean`: the frozen statements.

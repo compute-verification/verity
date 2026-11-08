@@ -140,8 +140,8 @@ def run[T](prog: Prog[T], prims: Any, hook: RoundHook | None = None) -> tuple[T,
 
 def pure[T](value: T) -> Prog[T]:
     """Lean `.ret value`: no rounds."""
+    yield from ()
     return value
-    yield
 
 
 def parallel(progs: Iterable[Prog]) -> Prog[list]:
