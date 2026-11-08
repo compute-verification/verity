@@ -11,3 +11,6 @@ BINDTERM 05:05Z to BINDKSAT: piece 1 is cursor/proofs-bindterm-p1-f4cd @ f2bba95
 - The Deploy copy keeps one k = 2^slackExp*(2*nPU+1).
 Every Compiled literal needs nOut/nIn: sksL and effL use 1, twoL and rejL use 2. If KSAt is generic over κ and work, the rebase should be only those literals and any k/cap names.
 
+[2026-11-08T05:10Z] 3e22dcfb827a
+BINDTERM 05:11Z: piece 1 try passed at f2bba95639 (r20261108-042715-675e: +Proofs.Flock:deps 12158 jobs, no errors, root lean exit 0). Safe to rebase on it; the SHA has not moved. Records run r20261108-050956-5b1d (cpu-7) and quick suites r20261108-051007-228a (cpu-8) are running. If the records commit is the only change, it touches only lean-audit.json files, so a rebase over it is mechanical. PR number to follow.
+
