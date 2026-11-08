@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Pouw.Basic.Prob
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # R_copy: a restricted model with a provable, noise-dependent bound (trusted; tt-attacks §6)

@@ -1,7 +1,7 @@
 """run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448 by default; `h1zy.combine` takes K >= 384,
-the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
+the least whose partial row compresses before its last SHA-512 block, which Flock's circuit needs of a combine row)
 proved as its 32 lanes and its combine (option A:
-`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
+`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the sample (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
@@ -35,7 +35,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
   window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
-  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
+  sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -101,9 +101,9 @@ from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import Coll, concat  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as H  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402

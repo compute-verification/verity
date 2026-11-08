@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Recursion.LastBindsEC
 /-!
 # (P4) at the deployed bound record
 
-`Bound.LastBindsEC`, (P4) modulo what `E*` reads (card ef47c02e), at the deployed bound record: `RecDeploy.bdDeployed`
+`Bound.LastBindsEC`, (P4) modulo what `E*` reads, at the deployed bound record: `RecDeploy.bdDeployed`
 at the deployed plain verifier's steps and columns and the deployed rows' digest input. It comes down to the deployed
 plain verifier binding its own last message.
 
@@ -39,8 +39,7 @@ pair that refuted (P4) as first stated before S0 is refused (`LastGap.check_spac
 parse differently can still give the same accepted decision, with calls that are the same set but not the same list:
 `Record.decodeWith` hashes the rounds in the record's own stream order, and the digest of a table's empty publics only
 when the record lists it. So the calls are compared as sets throughout: with them compared as lists,
-`PlainLastBinds` is false at this record decoder, whatever `decodeProof` does
-(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
+`PlainLastBinds` is false at this record decoder, whatever `decodeProof` does.
 
 `PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
 its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half

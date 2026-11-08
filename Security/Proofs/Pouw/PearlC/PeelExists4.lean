@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.TileCheck4Words
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.PeelExists
+import Proofs.Pouw.PearlC.RowStats
 
 /-!
 # The FP4 peel's rows exist (proofs)

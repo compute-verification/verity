@@ -1,10 +1,12 @@
 module
 
 public import Properties.NetworkPeriod
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
+public import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
@@ -86,7 +88,7 @@ theorem rowsKBoundsCount : RowsKBoundsCount := by
   simp only [AuditTerms.bits, Scan.terms, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
-/-! ## A tied audit draws every unit -/
+/-! ## A tied audit samples every unit -/
 
 theorem firstFinding_none {fs : List (Option (Core.Verdict × String))} (h : firstFinding fs = none) :
     ∀ f ∈ fs, f = none := by
@@ -151,7 +153,7 @@ theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer
         by_cases c2 : g.units = a.units <;> by_cases c3 : g.drawn = g.units <;>
           simp_all [refuse, pure, Except.pure]
 
-/-- The refusal refuses no audit drawn whole: one passes the tied check as it passes the untied one. -/
+/-- The refusal refuses no audit sampled whole: one passes the tied check as it passes the untied one. -/
 theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
     (h : auditCheck i a reg x = .ok f) (hd : f.drawn = f.units) : auditCheck i a reg x true = .ok f := by
   unfold auditCheck at h ⊢

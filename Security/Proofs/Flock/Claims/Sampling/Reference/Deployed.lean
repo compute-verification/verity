@@ -13,8 +13,8 @@ over the statements of the reference prover's sessions at `x` (`Reference.sessEr
 
 * `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `ZkTables.honestPR` at `ZkTables.δc H`.
 * `DrawFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.DrawLaw`), the sampled verifier's, as for KS: the
-  checked units' sessions are in the second stage and the draw doesn't read them; the draw is `Slots.select`'s, so it
-  checks at most the statement's proof units (`checkedLe_of_slots`).
+  checked units' sessions are in the second stage and the sample doesn't read them; the sample is `Slots.select`'s, so it
+  checks at most the statement's proof blocks (`checkedLe_of_slots`).
 * `Framed`: the reference prover's router (`step`) reads the sampled verifier's framing: at coins that check `u`, a
   prover whose messages, at the histories where the router puts the run in the session under `u`'s session's
   statement, are a Flock prover's at the session's history has `u`'s session be that Flock prover's run, on `u`'s
@@ -23,13 +23,13 @@ over the statements of the reference prover's sessions at `x` (`Reference.sessEr
   when every checked unit's session accepts; the sampled verifier's.
 * `SessionsScope`: on a statement in scope, at a run whose coins check `u`, `u`'s session's statement passes the
   deployed `--zk` scope check, so it is in Flock's masked scope (`FlockDeploy.scopeMatches_zk`); the code's.
-* `SessionWit`: with no faulty unit in the trace, at a run whose coins check `u`, openings that pass the commitment's
+* `SessionWit`: with no incorrect proof block in the trace, at a run whose coins check `u`, openings that pass the commitment's
   check, are the committed values and cover what `u`'s session reads under its statement make a Flock witness (`wit`)
-  in that statement's relation; the code's. The session's statement may be several drawn units', as in the one-stage
-  audit, whose one session proves every drawn unit.
+  in that statement's relation; the code's. The session's statement may be several sampled proof blocks', as in the one-stage
+  audit, whose one session proves every sampled proof block.
 * `SessionSlots`: on a statement in scope, every checked unit's session is the session of the unit checked at a slot
-  below `c.sessions x`; the code's. One session that proves every drawn unit has it at `sessions = 1`
-  (`Reference.DeployedCode`'s `sessionSlots_of_one`); one session per unit at the proof units' count, from `DrawSlots`
+  below `c.sessions x`; the code's. One session that proves every sampled proof block has it at `sessions = 1`
+  (`Reference.DeployedCode`'s `sessionSlots_of_one`); one session per unit at the proof blocks' count, from `DrawSlots`
   (`sessionSlots_units`).
 
 What is proved here: the reference prover's session messages are `ZkTables.honestPR`'s on what it reveals
@@ -79,7 +79,7 @@ def SessionsScope (H : Msg → Msg) : Prop :=
       c.session x u (run H P c.V x ω r).seen = some (xS, vS) → FlockDeploy.scopeCheck true xS = true
 
 /-- **An honest unit's openings make a Flock witness in its session's relation**: on a statement in scope with no
-faulty unit, at any run whose coins check `u` and whose `u` session has statement `xS`, openings that pass the
+incorrect proof block, at any run whose coins check `u` and whose `u` session has statement `xS`, openings that pass the
 commitment's check under the roots, are the committed values `Wit.val` reads, and cover every position the session
 reads under `xS` that has a committed value, encode (`wit`) a witness in `xS`'s relation. -/
 def SessionWit (H : Msg → Msg) : Prop :=
@@ -93,8 +93,8 @@ def SessionWit (H : Msg → Msg) : Prop :=
           Claims.Flock.R (FlockDeploy.deployZk rel).parse xS (c.wit s xS os)
 
 /-- **The run's sessions are its first `sessions x` slots'**: on a statement in scope, at any run, every checked unit's
-session is the session of the unit checked at a slot below `c.sessions x`. One session that proves every drawn unit has
-it at `sessions = 1`, and one session per unit at the proof units' count (`sessionSlots_units`). -/
+session is the session of the unit checked at a slot below `c.sessions x`. One session that proves every sampled proof block has
+it at `sessions = 1`, and one session per unit at the proof blocks' count (`sessionSlots_units`). -/
 def SessionSlots (H : Msg → Msg) : Prop :=
   ∀ x, (∃ s Pt, c.parse x = some s ∧ c.partition s = some Pt ∧ InScope Pt s) →
     ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) u, u ∈ c.checked x r →
@@ -135,9 +135,7 @@ theorem acceptsSessions_deploy (H : Msg → Msg) (haccept : AcceptsFramed c H) :
   exact haccept x (Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w) ω r hx
     (fun hist m h => refP_say H FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w h ω) hsess
 
-theorem nPU_deploy (x : Msg) : nPU (deploy rel c) x = units c x := rfl
-
-/-- **At one session per unit, the proof units' count bounds the slots**: the draw checks at most them (`DrawSlots`). -/
+/-- **At one session per unit, the proof blocks' count bounds the slots**: the sample checks at most them (`DrawSlots`). -/
 theorem sessionSlots_units (H : Msg → Msg) (hslots : DrawSlots (deploy rel c)) (hn : ∀ x, units c x ≤ c.sessions x) :
     SessionSlots c H := by
   intro x hx Ω P ω r u hu

@@ -14,7 +14,7 @@ runs in two windows or more. Its state passes from window to window as the compi
 - The replay is I1's (`_replay`) from the carried state, and a request may end the window unfinished. `close` is the state the
   window leaves: every request with outputs still to keep (the next window must carry it) and every request whose last kept
   output is in the window's last step (async scheduling may run one row past it there, so the next window may carry it).
-  `follows` holds a window to the last one's close.
+  `follows` holds a window to the last one's close, and refuses one that doesn't by name (`NotFollowing`, `FOLLOWS`).
 
 A request's Program is its whole request's, in every window it runs in (`predict.steps`): each window places its own rows.
 
@@ -285,24 +285,46 @@ def close(advice: Advice) -> tuple[Close, ...]:
     return _replay(advice.carried, advice.requests, advice.steps).close
 
 
-def follows(last: Advice, advice: Advice) -> None:
+#: what `NotFollowing` names, in the order `follows` checks a carried request: not one the last window left, in its order; a
+#: request it left with outputs to keep and this window doesn't carry; its record; and each counter of its state
+FOLLOWS = ("order", "dropped", "record", "C", "computed", "kept", "made")
+
+
+class NotFollowing(MalformedAdvice):
+    """`follows`'s refusal: ``code`` names what doesn't follow (`FOLLOWS`), ``request`` the request's id."""
+
+    def __init__(self, code: str, request: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code, self.request = code, request
+
+
+def follows(last: Advice, advice: Advice) -> list[tuple[int, int]]:
     """Refuse ``advice`` unless it opens where ``last``, the window before it, closed: its carried requests are ``last``'s
-    `close` in order, each with the record and state it left with, every one that must carry among them."""
+    `close` in order, each with the record and state it left with, every one that must carry among them (`NotFollowing`,
+    by name). -> each carried request's (index here, index in ``last``)."""
     left = list(close(last))
+    pairs: list[tuple[int, int]] = []
     for k, (q, c) in enumerate(zip(advice.requests, advice.carried)):
         while left and last.requests[left[0].request].id != q.id:
             if left[0].must:
-                raise MalformedAdvice(f"request {last.requests[left[0].request].id!r} ends the last window with outputs still to keep, "
-                                      f"and this window doesn't carry it")
+                i = last.requests[left[0].request].id
+                raise NotFollowing("dropped", i, f"request {i!r} ends the last window with outputs still to keep, and this "
+                                                 f"window doesn't carry it")
             left.pop(0)
         if not left:
-            raise MalformedAdvice(f"carried request {k} ({q.id!r}) isn't one the last window left, in its order")
+            raise NotFollowing("order", q.id, f"carried request {k} ({q.id!r}) isn't one the last window left, in its order")
         was = left.pop(0)
-        if (last.requests[was.request], was.state) != (q, c):
-            raise MalformedAdvice(f"carried request {k} ({q.id!r}) opens as {q}, {c}, not as the last window left it: "
-                                  f"{last.requests[was.request]}, {was.state}")
+        had = last.requests[was.request]
+        if had != q:
+            raise NotFollowing("record", q.id, f"carried request {k} ({q.id!r}) opens as {q}, not as the last window left it: {had}")
+        if bad := next((f for f in FOLLOWS[3:] if getattr(c, f) != getattr(was.state, f)), None):
+            raise NotFollowing(bad, q.id, f"carried request {k} ({q.id!r}) opens with {bad} {getattr(c, bad)}, not as the last "
+                                          f"window left it: {bad} {getattr(was.state, bad)} ({c}, not {was.state})")
+        pairs.append((k, was.request))
     if must := [last.requests[x.request].id for x in left if x.must]:
-        raise MalformedAdvice(f"request {must[0]!r} ends the last window with outputs still to keep, and this window doesn't carry it")
+        raise NotFollowing("dropped", must[0], f"request {must[0]!r} ends the last window with outputs still to keep, and this "
+                                               f"window doesn't carry it")
+    return pairs
 
 
 class _Widths(NamedTuple):

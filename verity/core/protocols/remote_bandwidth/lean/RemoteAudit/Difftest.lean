@@ -229,8 +229,8 @@ def registerFn (j : Json) : V Json := do
     (← hex j "nonce")
   pure (Json.mkObj [("codec_seed", hexJ r.codecSeed), ("digest", hexJ r.digest)])
 
-/-- A call on the registry. A session names its registration as one drawn earlier in the case, by its place among
-those drawn, or as one given in full. -/
+/-- A call on the registry. A session names its registration as one sampled earlier in the case, by its place among
+those sampled, or as one given in full. -/
 inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
@@ -597,7 +597,7 @@ private def seenOf (j : Json) : V Line.Seen := do
 "per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives
 it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn` at the
 record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its draws, `Line.ofSummaryAt`),
-or why it has none: none for a record drawn more than one window a coin at one window in flight, which no property
+or why it has none: none for a record sampled more than one window a coin at one window in flight, which no property
 covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
 registration's (`Line.lineOfRegistered`). `clock`, if given, says
 whose clock the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or
@@ -664,7 +664,7 @@ private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
 
-private def blockOf (j : Json) : V Schedule.Block := do
+private def blockOf (j : Json) : V Schedule.Chunk := do
   match j with
   | .null => pure none
   | v =>

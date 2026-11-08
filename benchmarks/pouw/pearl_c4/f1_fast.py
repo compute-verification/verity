@@ -1,6 +1,6 @@
 """Pearl-C4's F1′ for the verifier, vectorised (numpy), beside the reference's pure-Python rule (`pearl_c4.tile_debit`).
 
-`row_law` is the exact noise law of a row, the law `pearl_c4.noise_law` convolves, by one FFT per row sized to the row's
+`row_law` is the exact noise distribution of a row, the sampling design `pearl_c4.noise_law` convolves, by one FFT per row sized to the row's
 own support: n = Σ_r (2E_r)(2F_r), F uniform over the 16 E2M1 codes, so its characteristic function is a product of
 powers of one sample's, per |E| magnitude.  It agrees with the reference to float rounding (about 1e-16; a test).
 
@@ -24,8 +24,8 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import numpy as np
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 MAGS = (1, 2, 3, 4, 6, 8, 12)                      # |2·value| of the nonzero E2M1 magnitudes
 SLACK = F.F1_EPS

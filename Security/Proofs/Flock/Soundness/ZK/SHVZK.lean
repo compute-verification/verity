@@ -3,6 +3,9 @@ module
 public import Definitions.Flock.ZK.SHVZK
 public import Proofs.Flock.Soundness.ZK.Blocks
 public import Proofs.Flock.Soundness.ZK.Dist
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Tactic.Abel
+import Mathlib.Tactic.FieldSimp
 
 /-!
 # Zero knowledge of one masked table: Lemmas A and B, and `table_shvzk`
@@ -41,7 +44,7 @@ open Finset
 -- and group instances exceed instance search's default size.
 set_option synthInstance.maxSize 100000
 
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- the time instance search takes on those products
 
 namespace Table
 

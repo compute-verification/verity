@@ -21,11 +21,11 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 
 **Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs:
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
-and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
+and otherwise by ``--draws`` work-weighted samples, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
 derived from ``--fresh-source`` (recorded OS randomness taken after the pass, fixed in the command), so that the trials
-are independent draws of the input's rate itself (`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and
+are independent samples of the input's rate itself (`HonestTileCapRate`'s oracle, salt and sample, the activations fixed) and
 Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestCap.lean`'s
 fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
 
@@ -86,7 +86,7 @@ from verity.core.protocols.pouw.audit import (ROW_SCHEMA, activation_binding, op
 from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
 from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
@@ -224,8 +224,8 @@ _JOB: dict = {}
 
 
 def one(item) -> dict:
-    """One tile's line (`item` a tile id, or a fresh trial's (tile id, matmul, draw, salt)), on the batch forms when they are
-    installed; every `cross_check`-th tile id (a fresh trial: draw) is replayed again on the scalar reference, and any field
+    """One tile's line (`item` a tile id, or a fresh trial's (tile id, matmul, sample, salt)), on the batch forms when they are
+    installed; every `cross_check`-th tile id (a fresh trial: sample) is replayed again on the scalar reference, and any field
     that differs is recorded (``cross_check_failed``), which fails the run."""
     out = _measure(item)
     every = _JOB.get("cross_check", 0)
@@ -259,9 +259,9 @@ def _openings_ok(job: dict, opened) -> bool:
 
 
 def _measure(item) -> dict:
-    """A tile id: the tile as the audit checks it under the pass's salt.  A fresh trial (tile id, matmul, draw, salt): the
-    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileCapRate` draws one: the noise,
-    the encoding and the tile rule (admissibility is the work law's, `_TileRuleView`'s), with no digest (the prover committed
+    """A tile id: the tile as the audit checks it under the pass's salt.  A fresh trial (tile id, matmul, sample, salt): the
+    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileCapRate` samples one: the noise,
+    the encoding and the tile rule (admissibility is the work sampling design's, `_TileRuleView`'s), with no digest (the prover committed
     to none under this salt)."""
     j = _JOB
     scheme, view, epoch, transcript, verifier, records = (j[x] for x in ("scheme", "view", "epoch", "transcript", "verifier", "records"))
@@ -378,7 +378,7 @@ def measure(path: Path, per: int, seed: int, jobs: int, out_dir: Path, opts: dic
 
 
 def line_key(t: dict):
-    """A line's key: its tile id, or a fresh trial's (matmul, draw)."""
+    """A line's key: its tile id, or a fresh trial's (matmul, sample)."""
     return t["tile"] if "draw" not in t else (t["matmul"], t["draw"])
 
 
@@ -469,7 +469,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
 def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: int) -> list[dict]:
     """Per-input mode: `per_linear` seeded inputs (one matmul each, one linear's GEMM in the pass) of each (k, n), each with
     its tiles' weights.  An input of at most `census_max` tiles is measured in full; a larger one by `draws` work-weighted
-    draws with replacement, as the audit draws.  A tile's weight is its area (rows × cols): within one input every tile has
+    samples with replacement, as the audit samples.  A tile's weight is its area (rows × cols): within one input every tile has
     the same k, so its share of the input's `W_ref` is its share of the cells."""
     groups: dict[tuple[int, int], list[int]] = {}
     for pos, rec in enumerate(job["records"]):
@@ -491,9 +491,9 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
 
 
 def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[int, int, int, bytes]]:
-    """An input's fresh trials, (tile id, matmul, draw, salt): `draws` work-weighted draws of its tiles with replacement,
+    """An input's fresh trials, (tile id, matmul, sample, salt): `draws` work-weighted samples of its tiles with replacement,
     each under a salt of its own, both derived from `source` (recorded OS randomness taken after the pass, so independent
-    of its activations) under a domain naming the table and a context naming the input.  Draw d is `key.uniform(W, d)`
+    of its activations) under a domain naming the table and a context naming the input.  Sample d is `key.uniform(W, d)`
     over the tiles' cumulative credited cells, as `clear_work.draw` maps it: within one input every cell weighs the
     same `W_ref`, so the sample is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
     ctx = {"manifest": job["sha256"], "matmul": row["matmul"]}
@@ -543,11 +543,11 @@ def input_bound(row: dict, delta: float) -> tuple[float, str]:
     tiles' noise) at a simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail
     independently (each tile's noise is the oracle at points of its own).  With a = w_max/W:
     - a census with no failure: ln(1/δ)·a (P[none fail] = Π(1 - p_g) <= exp(-p/a));
-    - n work-weighted draws with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
+    - n work-weighted samples with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
       Clopper–Pearson on the samples would bound the realized X, not p;
     - a census with failures: Bernstein on the weighted sum;
-    - draws with failures: no bound here (1): such an input must be measured in full;
-    - fresh trials (``--fresh-draws``: each a work-weighted draw under a salt of its own, so independent Bernoulli trials of
+    - samples with failures: no bound here (1): such an input must be measured in full;
+    - fresh trials (``--fresh-draws``: each a work-weighted sample under a salt of its own, so independent Bernoulli trials of
       p itself): Clopper–Pearson, with or without failures."""
     if row["method"] == "fresh":
         return clopper_pearson_upper(row["failures"], row["drawn"], delta), "fresh-salt draws, Clopper–Pearson"

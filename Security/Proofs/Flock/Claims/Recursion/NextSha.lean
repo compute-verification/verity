@@ -1,7 +1,38 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.NextP
-public import Proofs.Flock.VBridge.Family.Encode
+public import Proofs.Flock.Claims.Complete.Json.Record
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The record's proof digests written from the proofs' files (`decisionAtS`)
@@ -13,9 +44,9 @@ the honest prover writes (`shaArr_honest`). The digests are the oracle's (`dgWit
 computes.
 
 Nothing else reads `proof_{dk}`. In the decision only the verdict's decoder does (`Record.decodeJWith`, into
-`RunRecord.proofSha`, which S17 alone reads); custody (`liveOfJ`) reads the link and the streams, the draw check
+`RunRecord.proofSha`, which S17 alone reads); custody (`liveOfJ`) reads the link and the streams, the sample check
 `unit_draw`. Outside it, check 5 (`RecCoins.Inner.load`) and the inner transcript's checks (`RecVStar.innerCommits`,
-`RecVStar.innerLink`) read the inner record's streams, link points and draw. The rec-coins file's `record_sha512` binds
+`RecVStar.innerLink`) read the inner record's streams, link points and sample. The rec-coins file's `record_sha512` binds
 the record's whole text, but only on `--rec-inner-coins`' path, which candidate 3's session refuses
 (`RecCoins.checkAtC3`), and what it binds (`Inner.load`'s values) reads no `proof_{dk}`.
 

@@ -1,19 +1,53 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundRouteCols
-public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Recursion.VCallsAt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Recursion.BoundRoute
+import Proofs.Flock.Claims.Recursion.DeployFacts
 
 /-!
-# The inner verifier's calls at the draw's coins
+# The inner verifier's calls at the sample's coins
 
 The deployed record's `innerCalls` are the inner verifier's own calls on the inner messages the outer witnesses give, at
-the coins it is handed (`innerCallsOf`), so at a draw's coins they are its inner run's calls, each with `H`'s answer:
+the coins it is handed (`innerCallsOf`), so at a sample's coins they are its inner run's calls, each with `H`'s answer:
 every call of an accepted inner run is among those `Deploy.callsAt` lists, by construction, at any steps `nextE`
 (`callsLogCollAt_deployRec`).
 
 * `callsLogCollAt_deployRec`: `CallsLogCollAt` at `deployRec`, from nothing.
 * `callsLogCollAt_C`, `forksBindAt_C_pick_setup`, `forksBindAt_C_setup`: `callsLogColl_C` and `forksBindAt_C_pick`
-  with the inner verifier's calls searched at each draw's coins, the forks binding over the draws' evaluations
+  with the inner verifier's calls searched at each sample's coins, the forks binding over the samples' evaluations
   (`ForksBindAtV`), where an inner view's rejection escapes to a collision with the compiled verifier's own.
 * `innerAcceptsCollAtV_C`: `innerAcceptsCollAt_C` with that escape.
 -/
@@ -33,7 +67,7 @@ section Readers
 variable (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
   (DO : Claims.Flock.Deploy Coin Col T)
 
-/-- The inner view's run at `deployRec` is the inner verifier's run of the readers' messages at the draw's coins. -/
+/-- The inner view's run at `deployRec` is the inner verifier's run of the readers' messages at the sample's coins. -/
 theorem innerRun_deployRec (x : Msg) (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit) :
     Claims.Recursion.innerRun H (deployRec I.V ivScope b) I x r ws =
       run H (replay (b.rd.msgs x ws)) I.V (xIOf x) () fun i => coinSeq r i.val := by
@@ -43,7 +77,7 @@ theorem innerRun_deployRec (x : Msg) (r : Fin ((deployRec I.V ivScope b).V.k x) 
   rw [run_replay_seen]
 
 /-- **`CallsLogCollAt` at `deployRec`, by construction**: an inner run's calls are the inner verifier's own at the
-draw's coins (`innerCallsOf`), each with `H`'s answer (`Claims.run_logs`). -/
+sample's coins (`innerCallsOf`), each with `H`'s answer (`Claims.run_logs`). -/
 theorem callsLogCollAt_deployRec : Claims.Recursion.CallsLogCollAt H (deployRec I.V ivScope b) I DO := by
   intro decO x Ω P ω r c ws _
   left
@@ -56,7 +90,7 @@ end Readers
 
 section Cols
 
-/-- **`callsLogColl_C` at each draw's coins**: the representative's calls are the deployed record's as a set, and the
+/-- **`callsLogColl_C` at each sample's coins**: the representative's calls are the deployed record's as a set, and the
 calls searched are the same at both records. -/
 theorem callsLogCollAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
@@ -91,9 +125,9 @@ theorem innerAcceptsCollAtV_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Ms
   · exact Or.inl ((innerView_C H Bd ivScope b hCF x r ws).1.trans h)
   · exact Or.inr h
 
-/-- **`forksBindAt_C_pick` with the inner verifier's calls searched at each draw's coins**: its argument, with
+/-- **`forksBindAt_C_pick` with the inner verifier's calls searched at each sample's coins**: its argument, with
 `IVStar`'s calls among those `callsAt` lists (`hL`), and the collisions it finds among the recorded ones, or among
-them and the compiled verifier's own evaluations (`hA`), found among the draws' evaluations (`forkCollV`). -/
+them and the compiled verifier's own evaluations (`hA`), found among the samples' evaluations (`forkCollV`). -/
 theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')

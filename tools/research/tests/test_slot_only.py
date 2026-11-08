@@ -198,8 +198,9 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
-    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate and units to it
-    alone; the nodes' shared peers file and the cluster's description name no auditor host."""
+    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate to it alone (the
+    challenger's and certifier's units also go to vy-auditor-2, which runs a certifier); the nodes' shared peers file and the
+    cluster's description name no auditor host."""
     import tomllib
     from pathlib import Path
 
@@ -216,9 +217,10 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     assert "--auditor --marker /etc/vy/auditor" in (nebius / "vy-auditor-only.service").read_text()
     gate = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/challenger/" in e.get("src", "")
             and not e["src"].endswith("/11-vy-admin.conf")}
-    assert gate == {p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
-                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
-                                                     "/etc/systemd/system/vy-certifier@.service")}
+    assert gate == {**{p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
+                                                        "/usr/local/sbin/vy-challenger-pin")},
+                    **{p: ["vy-challenger-1", "vy-auditor-2"] for p in ("/etc/systemd/system/vy-challenger@.service",
+                                                                        "/etc/systemd/system/vy-certifier@.service")}}
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
     assert verifier == {p: ["vy-auditor-1", "vy-auditor-2"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",

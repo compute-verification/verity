@@ -30,9 +30,9 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 from verity.core.protocols.pouw import grind as GR
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import hashes as H
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import hashes as H
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs.one_stage import partition as OP
 
@@ -657,7 +657,7 @@ def _grind_pct(rows, dots):
 def test_qk_grind():
     """A seed group's QKᵀ carries GRIND's grind term, `grind.visible_premium` over its distinct rows (a Q row
     k + 320 bits read by its keys, a K row k bits read by the query heads on it) over its dots, and over 0.1% the group is
-    refused, pointing to a live window's per-round coin. Four heads on their own keys are 4 Q rows and 8 K rows; four on shared keys
+    refused, pointing to a live execution phase's per-round coin. Four heads on their own keys are 4 Q rows and 8 K rows; four on shared keys
     (GQA) are 4 Q rows and 2 K rows read 4 times each, one row however many query heads read it."""
     e = _refused("cover", Program(bind(HEADS, H=4, N=2)))
     assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (8, 64, 1)], 8) in str(e)

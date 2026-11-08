@@ -1,5 +1,5 @@
 """A recursive session's inner statement whose private circuit's description is registered (`verity_flock.inner_registered`,
-PROTOCOL.md §16.16), on a plain-leaves hidden-output RoPE d64 statement shaped as a private circuit's: its ``cs`` port one
+`Tags.withPlainLeaves`), on a plain-leaves hidden-output RoPE d64 statement shaped as a private circuit's: its ``cs`` port one
 table row every instance reads (the description, which the developer registers), ``x`` a row per instance. `register`
 takes the table's rows and salts as the registration (and ``x``'s and ``out``'s as the prover's own), so the statement's
 ``b || c`` and frame-v3 roots are unchanged, and writes the header's ``registered`` and the verifier's own reads file,
@@ -33,9 +33,9 @@ STATEMENT = "verity/flock-circuit+plain-leaves"
 def staged(tmp_path_factory):
     """The plain-leaves circuit, the instances' x rows, the description row and another of the class's width."""
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     d = tmp_path_factory.mktemp("inner-registered")
     s = InputSet.open(generate(TM.rope_head(64), N, 20261009, d / "set")["path"])

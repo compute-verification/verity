@@ -2,12 +2,51 @@ module
 
 public import Proofs.Flock.Claims.Witnesses.Flock
 public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Refutation witnesses: the sampling compiler's claims
 
 Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at a toy deployment. The statement is
-`toyStmt`: one input gate, returned, drawn `all`, its partition `toyPart` one proof unit `{0}`, in scope
+`toyStmt`: one input gate, returned, sampled `all`, its partition `toyPart` one proof block `{0}`, in scope
 (`inScope_toy`), so the witnesses hold whether or not `KS`, `KSCount` and `Bits` are read on the scope only.
 
 * `sksD`: the verifier accepts after one round, and no opening passes (`rejCm`), so every unit is faulty and no
@@ -85,7 +124,7 @@ def rejCm : CommitmentScheme Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []�
 /-- One input gate, returned. -/
 def toyProg : Prog := ⟨[.input], [0]⟩
 
-/-- The program, drawn `all`. -/
+/-- The program, sampled `all`. -/
 def toyStmt : AuditStatement := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
 /-- One class of one stratum of one proof block, `{0}`. -/

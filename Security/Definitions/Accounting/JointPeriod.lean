@@ -16,14 +16,14 @@ A period is one window of one node's run, over one circuit (`Verity.Circuit`, co
 * PoUB, the bandwidth audit, on bandwidth: the bandwidth account read at least `Q` bits from device memory;
 * the network certifier, on communication: what the network certifiers saw the node move is within `K` bits.
 
-The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit draws
+The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit samples
 its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed transcript are
 functions of all of them, and so is each verdict.
 
 Each audit's per-period guarantee (`PeriodRun.Sound`) is stated in the shape of `Accounting.Run.ComputeSoundPerRun`:
 at any value of the other coins, the probability over the audit's own coins that it accepts while its claim fails on
 that run is at most its error. That is the form each protocol's own per-period guarantee is to give for a run that
-realizes its audit: `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod` for PoUW, `Bandwidth.Guarantees.AuditRO`
+realizes its audit: `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` for PoUW, `Bandwidth.Guarantees.AuditRO`
 for PoUB, `Pous.Guarantees.ContinuousAudit` for PoUS, the network certifier's leak over a period of sampled audits for
 communication, and the sampled audit's live knowledge soundness for integrity.
 
@@ -76,7 +76,7 @@ structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Ve
   units : ℕ
   /-- the partition of the circuit's computed gates into units -/
   parts : Verity.Partition C units
-  /-- the coordinate of the coins an audit draws -/
+  /-- the coordinate of the coins an audit samples -/
   own : Audit → I
   /-- the account a resource is charged to -/
   acct : Resource → α

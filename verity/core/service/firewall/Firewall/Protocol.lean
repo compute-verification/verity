@@ -1,14 +1,14 @@
 /-
-# The firewall's release as a core protocol (`verity/firewall-release/v0`)
+# The ZK server's release as a core protocol (`verity/firewall-release/v0`)
 
 One outer session's release decision, through `Core.Protocol`:
 
 * `params`: the verifier's public input, `verity/firewall-public/v0` (`Flock.Firewall.Contract.PublicInput.ofJson`), which
   the contract holds the session's release log to;
-* `commitment`: the firewall's record before the session (`record.jsonl`, `Firewall.Record`), bound by the SHA-512 of its
+* `commitment`: the ZK server's record before the session (`record.jsonl`, `Firewall.Record`), bound by the SHA-512 of its
   bytes;
 * `evidence`: canonical JSON `{"now_ms", "part", "session", "transcript"}`: the outer session asked for (recursive session
-  and statement), the firewall's clock when its proofs are ready, and the session's release log
+  and statement), the ZK server's clock when its proofs are ready, and the session's release log
   (`verity/firewall-transcript/v0`, `ReleaseLog.ofJson`);
 * `check`: `decide` with the send check `Contract.run`: take the slot, admit the session, hold the release log to the
   contract, then the release time. It accepts with the session, its statement and stream and when its proofs leave
@@ -17,15 +17,15 @@ One outer session's release decision, through `Core.Protocol`:
   It is never undecided.
 
 The record events the session appends (its `slot`, a dead holder's stop, a refusal or a stop) are not in the outcome: an
-`Outcome` carries a verdict and a reason, and nothing of the firewall's state after it. `Firewall.Loop` records them on
-the firewall's state directory.
+`Outcome` carries a verdict and a reason, and nothing of the ZK server's state after it. `Firewall.Loop` records them on
+the ZK server's state directory.
 -/
 module
 
 public import CoreProtocol.Cli
-public import Flock.Firewall.Contract
-public import Flock.Hash
+public import CoreProtocol.Protocol
 public import Firewall.Release
+public import Flock.Firewall.Contract
 
 @[expose] public section
 

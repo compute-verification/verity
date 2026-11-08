@@ -1,19 +1,58 @@
 module
 
-public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.FramePlan
 public import Proofs.Flock.Claims.ZK.FrameRho
-public import Proofs.Flock.Claims.ZK.FrameReal
-public import Proofs.Flock.Claims.ZK.FrameInner
-public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.L0PinRec
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameRankFault
+import Proofs.Flock.Claims.ZK.FrameTaken
+import Proofs.Flock.Claims.ZK.L0PinBind
+import Proofs.Flock.Claims.ZK.L0PinLive
 
 /-!
 # Level 0 at the session loop
 
 `L0PinChain`'s `l0_chain` at the loop's release (`ofLoop`): on a live history of `refK x` openings whose last coins the
 frame takes, at a rep's binding round `J` (past its algebraic phase and ring switch), the sent rounds from `J` through
-level 0's are the binding and level 0's bodies at the rep's own table and draws (**`LeanRelease.ofLoop_l0`**).
+level 0's are the binding and level 0's bodies at the rep's own table and samples (**`LeanRelease.ofLoop_l0`**).
 
 * The loop's counts there: `z`'s `n` (under `64` at every `--zk` schedule, `Count.sched_n`), then level 0's `1, 1, 2, …`
   (`Count.openList_l0`, `Count.repPlan_l0`).
@@ -321,11 +360,13 @@ theorem answered_ok_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Wor
   | error e => rw [hA] at hp; cases hp
   | ok m => exact ⟨m, rfl⟩
 
+-- one proof of a few hundred lines down `FlockComplete.piopRoundsZk`'s unfolded rounds, `rw` and `omega` on the round
+-- indices
 set_option maxHeartbeats 2000000 in
 /-- **The loop's level-0 messages**: at a `Live` statement the loop serves, on a live history of `refK x` openings
 whose last coins the frame takes, whose messages are the release's own and whose tables are the loop's (`RealTabs`),
 table `j`'s rep `r`'s binding round `J` (past its algebraic phase and ring switch) sends the binding at its table's cap
-and `z`'s squeeze of `n`, and its level-0 rounds `J + i` send level 0's bodies at its table, its draws' pads and the
+and `z`'s squeeze of `n`, and its level-0 rounds `J + i` send level 0's bodies at its table, its samples' pads and the
 opened coins from the binding's on, each tagged `0`. -/
 theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit

@@ -1,6 +1,39 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkPadsPair
+public import Proofs.Flock.Claims.KS.ZkFork0
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ZkLock
+import Proofs.Flock.Claims.KS.ZkPadsPair
 
 /-!
 # The masked simulator's fork bound at `τ`, from its alignment and its clash
@@ -211,7 +244,7 @@ def ZkTauAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readab
 end Gen
 
 /-- **The simulated fork is aligned with the masked fork rounds at `τ`**: at every masked statement in scope that sets
-up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
+up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
 against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of `TauForkEvZ`
 (`ZkTauAlignQ`). -/
 def ZkTauAlign (x : Claims.Msg) : Prop :=
@@ -231,7 +264,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork is aligned with the masked fork rounds at `τ`**: at every masked statement in scope that sets
-up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
+up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
 against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of `TauForkEvZ`
 (`ZkTauAlignQ`). -/
 def ZkTauAlign (x : Claims.Msg) : Prop :=
@@ -248,7 +281,7 @@ def ZkTauAlign (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a draw, every prover
+/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a sample, every prover
 and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's coins
 whose decoded live outcomes have `TauForkEvZ` collide among the verifier's calls in the two. -/
 def ZkTauClash (x : Claims.Msg) : Prop :=
@@ -281,7 +314,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a draw, every prover
+/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a sample, every prover
 and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's coins
 whose decoded live outcomes have `TauForkEvZ` collide among the verifier's calls in the two. -/
 def ZkTauClash (x : Claims.Msg) : Prop :=

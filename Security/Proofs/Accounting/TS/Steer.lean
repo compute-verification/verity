@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.Steer
 public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.TS.Steer
 
 /-!
 # Steering under one σ: proofs
@@ -182,7 +182,7 @@ theorem segUntouched_single (seg : Fin m → Fin G) (act : Finset (Fin m)) (i : 
     Finset.mem_erase, Finset.notMem_empty, IsEmpty.forall_iff, implies_true, and_true]
   exact ⟨fun ⟨h, hne⟩ => ⟨Ne.symm hne, h⟩, fun ⟨hne, h⟩ => ⟨h, Ne.symm hne⟩⟩
 
-/-- `s` coordinates drawn independently, each landing in its own event: the probability is the product. -/
+/-- `s` coordinates sampled independently, each landing in its own event: the probability is the product. -/
 theorem prob_pi_mem {B : Type} [Fintype B] [Nonempty B] (S : Finset (Fin G)) (q : Fin G → B → Prop) :
     prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = ∏ g ∈ S, prob (q g) := by
   classical

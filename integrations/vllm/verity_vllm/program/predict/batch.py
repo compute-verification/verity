@@ -11,21 +11,42 @@ tables, constants), never on its batch-mates. The batch reaches a Program two wa
   max_seqlen_q, FA2's guard `MASKED_FROM` from the launch's causal flag on cc 12.0).
 
 So Inputs are labelled by provenance (`OWN_GROUPS` own, the registration's shared, any other request-local group `BATCH`), and a
-role's launch statics are held to (b) across the launch shapes the registration allows (`templates`).
+role's launch statics are held to (b) across the launch shapes the registration allows (`templates`). In class G (`steps.CLASS_G`,
+no batch invariance) every token-count-dependent kernel choice reads the launch, so no template holds its statics to (b): each
+request's Program is built at its launch context, which the advice fixes, and the rules below hold its values to its own inputs.
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 
 - R3: a derived split count. The served engine runs every top-p launch at the registered split count, so the compiler emits the
   constant form ("splits": registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)) at any top_p.
-- R2: a request whose unit (LP, T, policy, seed, id, C), rows or discarded rows differ when its advice is compiled alone (its rows
-  renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
+- R2: a request whose unit (LP, T, policy, seed, id, C, prefill chunks, carried out, edge), rows or discarded rows differ when its advice is compiled
+  alone (its rows renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
   request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
-  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused.
+  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused. In class G a
+  unit also holds its launch context, the advice's schedule of the steps its rows ran in, never a batch-mate's value: R2 is then
+  the request compiled alone at the same launch context, so the unit is compared apart from its launch (alone each row is a launch
+  of its own), with its prefill chunks, its rows (each chunk one) and its discarded rows. A request a Commit window carries in
+  keeps its carried state alone (the history its Program reads, C, and its last token), and one it carries out is left alone
+  with outputs to keep too, so its unit is the one its own rows in the window make: split at a window, it makes the calls it
+  makes whole.
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
-  separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
+  separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a history behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request.
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
+  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
+  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
+  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
+  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it). A shared
+  prefix page is no other request's computed value in GP-01: no wire runs from the request that computed it, and every request
+  that reads it reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that
+  computed it (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the
+  request's own certified inputs: a hit whose tokens R2 checked equal to its prompt through every run (the KV at a position reads
+  every token up to it). A request a window carries in reads its history from the edge's registered values (`workload.Edge`), its
+  own fields of them by position: its own rows and last token at the open, the last window's output ports, which R7 binds to that
+  window's Program (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the last
+  window left it in, whose hit, if any, was checked there; each field is held by its request, and so is each field of the edge it
+  leaves. Any other history is the batch's, and refused.
 """
 
 from __future__ import annotations
@@ -43,6 +64,9 @@ from .phi import Phi
 
 #: the request-local Input groups a request's own certified body fixes; any other request-local group is the batch's
 OWN_GROUPS = ("prompt", "seed")
+#: the Input groups of a request's history (`build.build_program`'s C: every layer's rows of its first C positions, and a resumed
+#: request's last token), its own where R2 checks it (`workload_labels`)
+HISTORY_GROUPS = ("prefix", "prefix_ik", "prefix_iks", "last_token")
 
 
 class BatchDependent(Unexpressible):
@@ -69,19 +93,26 @@ def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
 
 
 def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
-    """GP-01's parameters by holder: its shared Input batches `SHARED`; each request's own groups (`OWN_GROUPS`) held by its index,
-    and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); a tensor-parallel rank's `peers_<k>` held by its
+    """GP-01's parameters by holder: its shared Input batches `SHARED`; a Commit window's edge values field by field, each held by
+    its request (`workload.Edge`); each request's own groups (`OWN_GROUPS`) held by its index, and its history (`HISTORY_GROUPS`)
+    too where R2 checked it (``checked``: a hit whose tokens are checked equal); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
-    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank; any other request-local group (`splits`, an
-    unchecked `prefix`, `schedule`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
-    labels: list[Any] = [SHARED] * len(wl.shared_by_request[0])
+    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
+    other request-local group (`splits`, an unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each
+    request's outputs held by its index, then the edge it leaves field by field."""
+    from verity_vllm.program.workload import edge_ports
+    edge = wl.edge.static() if getattr(wl, "edge", None) is not None else {"in": [], "out": []}
+    ports = {side: [Fields(tuple(own(edge[side][m][0]) for m in ms)) for _, _, _, ms in edge_ports(edge[side])] for side in edge}
+    carried = {i: {g for g, _, _ in gs} for i, gs in edge["in"]}
+    labels: list[Any] = [SHARED] * len(wl.shared_by_request[0]) + ports["in"]
     for r, sh in zip(wl.requests, wl.shared_by_request):
         groups = r.component.groups
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
-        mine = OWN_GROUPS + ("prefix",) * (r.index in checked)
-        labels += [own(r.index) if g in mine or g.startswith("peers_") else BATCH for j, g in enumerate(groups) if j not in set(sh)]
-    return tuple(labels), Fields(tuple(own(r.index) for r in wl.requests))
+        mine = OWN_GROUPS + HISTORY_GROUPS * (r.index in checked)
+        labels += [own(r.index) if g in mine or g == "run" or g.startswith("peers_") else BATCH for j, g in enumerate(groups)
+                   if j not in set(sh) and g not in carried.get(r.index, ())]
+    return tuple(labels), Fields((*(own(r.index) for r in wl.requests), *ports["out"]))
 
 
 def _workload(phi: Phi, shapes: list[tuple[int, int]], policy: dict) -> Any:
@@ -113,7 +144,8 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy, at the registered split count, and under a derived one."""
     tp, C = phi.target_profile(), model_shape(phi.model["hf_config"])
     if not tp.batch_invariant:
-        raise Unexpressible(f"{phi.execution!r}: the request-major compiler serves batch-invariant targets only")
+        raise Unexpressible(f"{phi.execution!r}: templates hold a batch-invariant registration's launch statics; without batch "
+                            f"invariance each request's Program is built at its launch context (`steps.CLASS_G`)")
     specs = cache(lambda M: _Specs(C, tp, M=M))
     S1 = specs(1)
     rows = _grid(1, max_tokens, 2, 64, 128, 256)
@@ -234,7 +266,7 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, i
 
 
 def _unit(u: Any) -> tuple:
-    return (u.LP, u.T, u.policy, u.seed, u.id, u.C)
+    return (u.LP, u.T, u.policy, u.seed, u.id, u.C, u.chunks, u.carried_out, u.edge)
 
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
@@ -268,7 +300,8 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
             checked.add(r)
         a = alone.requests[k]
         if _unit(a) != _unit(u):
-            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C) = {_unit(a)}, in its batch {_unit(u)}")
+            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, chunks, carried out, edge) = {_unit(a)}, "
+                                 f"in its batch {_unit(u)}")
         mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
         theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
         if mine != theirs:

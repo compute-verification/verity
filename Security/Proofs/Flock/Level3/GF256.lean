@@ -1,5 +1,5 @@
 /-
-Level 3, L3-F: the executable's GF(2^256) (`Flock.F256`, PROTOCOL.md §2.4) is the field GF128[Y]/(Y^2 + Y + x⁻¹): an element
+Level 3, L3-F: the executable's GF(2^256) (`Flock.F256`, `Flock.Field`) is the field GF128[Y]/(Y^2 + Y + x⁻¹): an element
 `c0 + c1·u` is the residue class of `c0 + c1·Y`, and `F256.mul` (three products, `p0 + x⁻¹·p1`, `p2 + p0`) is the quotient
 ring's product. `Y^2 + Y + x⁻¹` is irreducible because the trace of `x⁻¹` is 1 (Artin–Schreier: the trace vanishes on every
 `y^2 + y`), computed by the kernel with the executable's multiplication. The field is transported onto the synonym `GF256`,
@@ -7,9 +7,11 @@ whose `+` and `*` are the executable's.
 -/
 module
 
-public import Proofs.Flock.Level3.GF128Field
 public import Mathlib.Algebra.Polynomial.SpecificDegree
-public import Mathlib.Algebra.CharP.Lemmas
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.RingTheory.LocalRing.Basic
 
 @[expose] public section
 

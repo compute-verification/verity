@@ -1,9 +1,9 @@
-"""The protocol's commitments and epoch, the same for every `PoUWScheme` (``PROTOCOL.md``, "Lifecycle"): what the served
+"""The protocol's commitments and execution phase, the same for every `PoUWScheme` (Lean `PouwCommit.Bindings`, `PouwCommit.Rows`, `PouwCommit.Draws`): what the served
 path's prover commits and its verifier reads.
 
-0. **Coins.**  Before the epoch the challenger publishes its coin commitment over the epoch's coins (`coins`).
+0. **Coins.**  Before the execution phase the challenger publishes its coin commitment over the execution phase's coins (`coins`).
 1. **Weights.**  Each weight is committed as its rows along k; `weights_root` binds every weight root.
-2. **Salt.**  The challenger opens the epoch's salt coin after it recorded the weights' root, and the salt is
+2. **Salt.**  The challenger opens the execution phase's salt coin after it recorded the weights' root, and the salt is
    ``derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": root, "weights": weights_root})`` (`Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows, bound to the salt and the index
    (`activation_binding`, `commit_rows`).
@@ -11,11 +11,11 @@ path's prover commits and its verifier reads.
    (`tile_refs`).
 
 The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
-reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
-record, the Lean (`lean/check`, `core_check`).
+reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served execution phases are checked by PoUW's verifier, the Lean (`lean/check`, `core_check`).
 
-Commitments are `verity.ml.commitments.merkle` trees, framed SHA-256 unless a scheme names another frame hash:
-``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
+Commitments are `verity.ml.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
+hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
+``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
 over its 64-byte digest itself; the prover's salts are a ChaCha20 stream under its own key (`hm96_salt`), and an opening's
 value carries its salt, so `opened_value` strips it before a scheme reads the value.
@@ -112,7 +112,7 @@ def opened_value(hash: str, value: bytes) -> bytes:
     return value[:-HM96_SALT] if hash == HM96 else value
 
 
-def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256", digests: bool = False) -> CommitmentDomain:
+def rows_domain(binding: bytes, owner: int, count: int, hash: str = HM96, digests: bool = False) -> CommitmentDomain:
     if hash == HM96:
         return Hm96Domain(binding, owner, RangeIndexedDomain(count), hash="sha512", digests=digests)
     return CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
@@ -126,13 +126,20 @@ def activation_binding(salt: bytes, index: int) -> bytes:
     return tagged(domains.POUW_ACTIVATION_ROWS, salt, index)
 
 
-def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
-                nonce: int = 0, digests: bool = False) -> MerkleTree:
-    """`rows` in one tree; under `HM96` each value is followed by its salt, `hm96_salt(salt_key, nonce, i)`."""
+def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = HM96, salt_key: bytes | None = None,
+                nonce: int = 0, digests: bool = False, public: bool = False) -> MerkleTree:
+    """`rows` in one tree.  Values are committed hiding, under `HM96` with the committer's 32-byte run key `salt_key`: each
+    value is followed by its salt, `hm96_salt(salt_key, nonce, i)`, so no one without the key recomputes the root from
+    candidate values.  A plain ``sha256`` or ``sha512`` tree is not hiding, and is refused unless ``public``, the caller's
+    statement that its rows need no hiding: rows the protocol makes public, or a plain format's tree (h0's) that a reference
+    tool or a recorded run replays, which no served commitment is."""
     if hash == HM96:
         if salt_key is None:
             raise ProtocolError(f"an {HM96} tree takes the prover's salt key")
         rows = [r + hm96_salt(salt_key, nonce, i) for i, r in enumerate(rows)]
+    elif not public:
+        raise ProtocolError(f"a plain {hash} tree is not hiding: values are committed under {HM96} with the committer's "
+                            "salt key, and public=True is for rows the protocol makes public")
     return MerkleTree(rows_domain(binding, owner, len(rows), hash, digests), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
 
 
@@ -160,8 +167,8 @@ class Workload:
 
 @dataclass(frozen=True, slots=True)
 class Epoch:
-    """The committed weights, the salt sampled after them, and the challenger's coin commitment the epoch's coins open
-    against (None for an `unverified` epoch's salt with no sampling coin)."""
+    """The committed weights, the salt sampled after them, and the challenger's coin commitment the execution phase's coins open
+    against (None for an `unverified` execution phase's salt with no sampling coin)."""
 
     workload: Workload
     weight_roots: Mapping[int, bytes]
@@ -175,8 +182,8 @@ class Epoch:
     @classmethod
     def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], coins: CoinCommitment, opening: CoinOpening
               ) -> Epoch:
-        """The epoch whose salt is the challenger's salt coin: `opening` must be epoch `coins.epoch`'s salt coin, opened
-        against `coins` (the commitment the challenger published before the epoch) after it recorded the weights' root."""
+        """The execution phase whose salt is the challenger's salt coin: `opening` must be execution phase `coins.epoch`'s salt coin, opened
+        against `coins` (the commitment the challenger published before the execution phase) after it recorded the weights' root."""
         _check_weights(workload, weight_roots)
         root = weights_root(weight_roots)
         reason = coin_reason(coins, opening, "salt", root)
@@ -187,9 +194,9 @@ class Epoch:
     @classmethod
     def unverified(cls, workload: Workload, weight_roots: Mapping[int, bytes], seed: bytes,
                    coins: CoinCommitment | None = None) -> Epoch:
-        """The epoch whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
+        """The execution phase whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
         instances, replays of recorded runs, and integrations whose salt claims nothing.  `coins`, when given, is the
-        commitment the epoch's sampling coin opens against."""
+        commitment the execution phase's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
@@ -197,10 +204,10 @@ class Epoch:
     @classmethod
     def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
                   reveal: bytes, stream: bytes, prover: bytes, coins: CoinCommitment | None = None) -> Epoch:
-        """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
+        """The execution phase of PoUW execution phase p, the network certifier's execution phases `windows` with k per PoUW execution phase (p·k … p·k + k − 1,
         refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
         `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
-        `coins`, when given, is the commitment the epoch's sampling coin opens against."""
+        `coins`, when given, is the commitment the execution phase's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 
@@ -211,7 +218,7 @@ def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> Non
 
 
 def salt_of(coins: CoinCommitment, coin: bytes, weights_root: bytes) -> bytes:
-    """The epoch's 32-byte salt from its opened salt coin.  A live window's salt coin opens after the window's open root
+    """The execution phase's 32-byte salt from its opened salt coin.  A live execution phase's salt coin opens after the execution phase's open root
     (`salt.window_open_root`), and its salt is still keyed by `weights_root`, the weights' root: the coin and `coins` are
     its own session's."""
     return derive(coin, EPOCH_SALT_DOMAIN, {"epoch": coins.epoch, "coins": coins.root, "weights": weights_root}
@@ -239,7 +246,7 @@ def transcript_binding(epoch: Epoch) -> bytes:
     return tagged(domains.POUW_TRANSCRIPT, epoch.salt, epoch.weights_root)
 
 
-def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
+def transcript_domain(epoch: Epoch, count: int, hash: str = HM96) -> CommitmentDomain:
     return rows_domain(transcript_binding(epoch), -1, count, hash, digests=True)
 
 
