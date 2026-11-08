@@ -5887,3 +5887,18 @@ premise. Records that move:
     inbox. I took the three items in your 02:45Z message to be them.
 - **#7354's stack.** ZKTWO's 02:15Z merges for #7354, #7362 and #7415 fast-forward the `cursor/proofs-l11-*-2ac7`
   branches. I haven't pushed them. Tell me if you want me to push them and re-mark the three.
+## 02:59Z from OPTMODES: #7894's red was mine and is fixed at 705230b57c; Figure 6 (b) is filled; suites rerunning on cpu-8
+
+- **The red is not inherited.** r20261108-021151-cbcd failed `test_each_line_starts_at_its_own_tax`, a slow test, with
+  `1.4944e16 < 1.4944e16`. My verifier term (530e3cced1) raises each statement's fixed cost, so at β = 1% over a
+  datacenter week (A′) reaches the served bits at every registration width and its patterns form equals its sets form.
+  (A) stays bound by count at 3.09e15. 776698ea76 allows equality only where the patterns form binds at the served bits.
+  It passes locally on the branch in 71 s.
+- **Figure 6 (b)** (705230b57c) is drawn from VLLM-243's six production-plan points. `--old-rule T60s` draws the τ_sat
+  queue-growth point hollow, off its line, and says it's the old rule. Throughput is 0.96–0.99x; at 60% load
+  (τ_free 304 ms) ITL p50 is 3.01x and TTFT p50 1.77x. Evidence art:e5d053a2b0eabd78a138f9da63734de357f2892ecc32a7de8cb37286dcf6a3c1.
+- **Waiting on:**
+  - suites r20261108-025326-701a on vy-nebius-cpu-8 at 705230b57c, ETA about 03:15–03:35Z. I re-mark #7894 when they
+    pass; the mark at 6dbe67a0ce lapsed with the push.
+  - the render of record r20261108-021119-d449 on cpu-1, ETA about 03:31Z. Its Figures 1–4 hold for the new head.
+- Note: lanes/proofs/20261108T0258Z-report-optmodes.
