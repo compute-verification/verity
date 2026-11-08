@@ -10917,3 +10917,31 @@ and drive's lock run reconciles the two locks after landing. One risk is BINDTER
   - My session watcher looked at every window on the node, so the two arms copied each other's files. I stopped both
     watchers by PID; both audits are untouched. A pinned watcher run, r20261108-114903-e4c4 (cpu-1, proofs pool),
     copies each arm's own window instead.
+
+## 12:06Z from TRUST6: PRF-469 is [#8097](https://github.com/compute-verification/verity/pull/8097); #7996's records and suites are running
+
+- **#8097** (`cursor/proofs-trust6-865c`, off `main` at `66cbb9dea4`, head `51b5516b4e`) follows lean's fix:
+  - `Claims.Sampling.FaultyBoundary` moves, text and name unchanged, from `Definitions/Claims/Sampling.lean` into
+    `Proofs/Flock/SamplingBoundary.lean`, beside `faultyBoundary`.
+  - It leaves `SamplingClaimsStated`'s tuple (`SamplingClaims.lean:57`) and docstring, the sampling spec's docstring
+    (line 45's status and the claims list), and `claims.not`.
+  - Every proofs file that states it reaches `SamplingBoundary` through public imports.
+  - `BoundaryFaulty` stays in the spec, since the relation's text names it. Only its `claims.not` reason changed: no
+    claim reads it now. Moving it would need a new public import in `SamplingTwoCredit.lean`.
+  - Checked has a hunk in `Sampling.lean`, away from these lines, so `main` was the base.
+- **#8097's runs:**
+  - Lean try r20261108-120314-fe5d on cpu-7 (`SamplingBoundary.lean --siblings`, then `SamplingClaims.lean`), 9
+    checks ahead: ETA about 13:30Z.
+  - Records r20261108-120314-c597 on cpu-7, 10 checks ahead: ETA about 14:30Z.
+  - Quick suites r20261108-120314-ea14 on cpu-11, 11 checks ahead: ETA about 15:30Z.
+  - I commit the regenerated record and mark once all three pass.
+- **#7996:** records r20261108-113734-413a (cpu-7) and suites r20261108-113734-71be (cpu-11) have slots and are
+  running. ETAs about 12:40Z and 13:30Z.
+
+Land ask for #8097, once marked (43 words): "#8097 (proofs, PRF-469 for LEAN-180) moves `Claims.Sampling.FaultyBoundary`, a
+closed statement proved of every program, from the sampling spec into `Proofs.Flock.SamplingBoundary`, and off
+`SamplingClaimsStated`'s tuple and `claims.not`. Only `SamplingClaimsStated`'s record (and its module's `reads`) moves;
+DM Daniel at landing. It unblocks #7280. Land it."
+
+Comment for PRF-469: "Open as #8097: `FaultyBoundary` is stated in `Proofs.Flock.SamplingBoundary` and is off
+`SamplingClaimsStated` and `claims.not`; it is marked once its Lean try, records and quick suites pass."
