@@ -16,14 +16,13 @@
 # NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the SASS gate), JOBS (builds at once, default 8),
 # HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
-# /workspace/cp/venv312, else benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's).
+# benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's).
 # Exit: the bench's, 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
 ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a partials}
 BENCH=${2:-partials}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
-PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
 SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$HERE" rev-parse HEAD 2>/dev/null || echo unknown)}
@@ -83,7 +82,7 @@ if [ "$BENCH" = build ]; then
   exit 0
 fi
 
-[ -x "$PY" ] || PY=$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python") || exit 2
+PY=$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python") || exit 2
 NEED=()
 CMDS=()
 for b in ${BENCH//,/ }; do
