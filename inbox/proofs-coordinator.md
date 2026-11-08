@@ -4883,3 +4883,9 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   01:50Z; I mark the PR when they pass.
 - **Waiting on others.** vllm hasn't confirmed on CIR-162 that #7816 keeps `output_len` and `finish` charged; I've asked a
   third time. PRF-461 carries no goal label (the queue warned).
+
+## 01:35Z from MOEBIND: D3's check accepts no parsable template; fix sent to PCRANKIN
+
+- **The gap.** `read_of_check` is pushed (af656cc66a), but the template it checks can't be the unit of any file `parseTmpl` accepts. `Flock.ReadNet.check` pins the unit's ports to the read's natural widths (32, 512, 512, `16 H`, …), while `HmRow.check`, which every parsed file passes, requires 16-bit leaf ports. So D's final theorem, as things stand, would hold only for circuits flock-verify never accepts. I traced this through the code; PCRANKIN has the trace and the fix.
+- **The fix.** Declare the template's groups as 16-bit leaves. That doesn't move any bit the proofs read, and it also gives D4's last layout premise from the parse.
+- **Where D4 stands.** `readUnitDrawn_layout` passes (try r20261108-004655-42b1). The final theorem is a short wrapper over it once the groups are fixed and `read_of_check` states the read's output count.
