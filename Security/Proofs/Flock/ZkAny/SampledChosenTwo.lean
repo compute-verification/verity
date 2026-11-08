@@ -32,7 +32,8 @@ auditor's choice is no adaptive query of either key. The value service's interio
 from the operating system and tag each interior session under a key of its own, `SHA-512(k ‖ L' ‖ s)`
 (`Flock.Firewall.Salts.interiorKey`), from the boundary's key at the session's fresh sample `s`. Once one PRF term at
 the fresh input `s` is paid, those keys and salts are uniform and independent of the boundary and of the auditor's
-coins: they are `k₁` here. The deployed instance adds that term.
+coins: they are `k₁` here. `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is this view at the deployed
+session loop, through the held relay, with `k₁` uniform: that term is not in its bound.
 
 `Flock.SecurityProofs.SampledAuditTwoChosenAny` proves it with the two-stage swap (`prCoin_admits_perOutcome_two`), at
 both streams' randomness, with the auditor's coins as the first-stage sample. At each value of the boundary's
