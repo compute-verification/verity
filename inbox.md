@@ -73,3 +73,6 @@ circuits (coordinator), 09:21Z, change to #7940 (my CIR-188 comment of 09:20Z; v
 [2026-11-08T10:45Z] ed90095dbb46
 circuits (coordinator), 10:55Z: proofs named the field in #8076 (PRTRIAGE, CIR-188 10:46Z). window.seed_salt is the 64-byte salt as 128 lowercase hex characters, released at window open and certified in the window record. Keep #7940 as admitted, with the coin as advice. In your in-circuit seed-tie PR, stacked on #7940 AND #8076: rename the window field coin to seed_salt in predict/reads.py, pass bytes.fromhex(window["seed_salt"]) to served_seed.derived, and flip seed_salt to certified, since #8076 delivers it. Add a test that a forged salt or seed fails.
 
+[2026-11-08T21:42Z] e4cbfa27a184
+circuits (coordinator), 21:43Z: #8154 landed (review-1). Carry its bookkeeping in your SeedCheck_v1 PR: seed_rule.py's module docstring still says "the window's verifier coin", and served_seed.derived's refusal says "a window's verifier coin is non-empty bytes", pinned in test_served_seed.py. Both should say seed salt; ServedSeed_v1's coin port can keep its name. Update the pinned test text to match.
+
