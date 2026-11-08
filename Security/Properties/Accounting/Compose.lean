@@ -2,43 +2,74 @@ module
 
 public import Definitions.Accounting.Compose
 public import Properties.SampledProofs.Draw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A declared circuit's proof units, commit coins, seed preimages and draw are the service's (`SampledProofs.Slots.layout`, `Select.select`)
+# A declared circuit's proof blocks, commit coins, seed preimages and sample are the service's (`SampledProofs.Slots.layout`, `Select.select`)
 
-`Accounting.Compose.Declared` gives each gate its proof unit (`Declared.unit`), each value its commit coin
+`Accounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
-(`Definitions.Accounting.Guarantees.Compose`) draws, proves and charges tiles by them, its draw `Pouw.Window.subsetDraw`
+(`Definitions.Accounting.Guarantees.Compose`) samples, proves and charges tiles by them, its sample `Pouw.Window.subsetDraw`
 (`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
 program `p` and query:
-* **units**: the service draws and proves the units of the verifier's own partition of its program
+* **units**: the service samples and proves the units of the verifier's own partition of its program
   (`SampledProofs.Slots.layout`: the population's proof blocks, each its unit and its gates, then the input
   class). Every gate of `Cd` that is not an input lies in the gates of the proof block that is its own unit, every
   input slot's gate is an input of `Cd`, and every population unit is one of `Cd`'s. It reads `Cd`'s gate `i` as `p`'s
   root gate `i`, and a `Q_word` unit's span may hold another unit's gates (`Partition.unitGates`), so it bounds each
   gate inside its own unit's span, not the span inside the unit;
-* **commit coins**: the code's schedule. PoUW's coins are one salt a window and the draw (`PouwCommit.LABELS`): the
-  salt is opened after the weights' root (`PouwCommit.epochSalt`), and the draw after the transcript's
+* **commit coins**: the code's schedule. PoUW's coins are one salt a window and the sample (`PouwCommit.LABELS`): the
+  salt is opened after the weights' root (`PouwCommit.epochSalt`), and the sample after the transcript's
   (`PouwCommit.drawCoin` at `PouwCommit.drawAfter`). So a registered input is committed before coin `0`, and every
-  other value the prover writes before the draw, coin `rounds`. Under that schedule `Accounting.Compose.LayerCommitted`
-  fails wherever a value's IR cut is before the draw and it isn't a computed value only its own unit reads (every run
+  other value the prover writes before the sample, coin `rounds`. Under that schedule `Accounting.Compose.LayerCommitted`
+  fails wherever a value's IR cut is before the sample and it isn't a computed value only its own unit reads (every run
   input any gate reads, `Properties.Served.SeededScheduleNotLive`), which is why the live statements credit nothing
   on today's code;
-  the seeded statements' binding layer (`Declared.atDraw`) cuts every value at the draw, no earlier than this;
+  the seeded statements' binding layer (`Declared.atDraw`) cuts every value at the sample, no earlier than this;
 * **seed preimages**: what the code's seeds name (`Declared.seedNames`). Each unit's seed is `seeds.PouwSeed` of the
   salt, its position and its seed group's `pouw.roots` slot; the salt's derivation reads the weights' root
   (`PouwCommit.saltOf`), and `pouw.roots` is a Program input that no check ties to the unit's operand rows. So a
   seed names a value exactly when it is a registered input, and `Accounting.Compose.SeedNamed` fails wherever a
   seeded round reads an activation (a run input or an earlier round's output), which is why the seeded statements
   credit nothing on today's code either;
-* **the draw**: the code's draw under the `subset:K_d` law, from `L` uniform bytes (`Select.select`, its drawn units
-  then its closure, `Properties.SampledProofs.bytesOf`), is accepted and draws no unit of a set `U` no more often than
+* **the sample**: the code's sample under the `subset:K_d` law, from `L` uniform bytes (`Select.select`, its sampled proof blocks
+  then its closure, `Properties.SampledProofs.bytesOf`), is accepted and samples no unit of a set `U` no more often than
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
 open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
-its leaf under the weights' or the transcript's root is the extractor's too. The draw conjunct is over the code alone
-and could be proved first (`Select.select`'s subset draw from bytes, `Draw.drawUnits`), beside
+its leaf under the weights' or the transcript's root is the extractor's too. The sample conjunct is over the code alone
+and could be proved first (`Select.select`'s subset sample from bytes, `Draw.drawUnits`), beside
 `Properties.SampledProofs.DrawMisses`.
 -/
 
@@ -52,10 +83,10 @@ namespace Properties.Compose
 /-- **`Cd` is the service's** on program `p` under `query`, wherever the layout is defined: each of `Cd`'s non-input
 gates lies in the proof block that is its own unit, each input slot's gate is an input of `Cd`, each
 population unit is one of `Cd`'s `units`; each value `Cd` writes is committed before coin `0` when it is a registered
-input and before the draw (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedule; each round's seed names a value
+input and before the sample (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedule; each round's seed names a value
 `Cd` writes exactly when it is a registered input (through the salt, which names the weights' root); and where the
-population is `N_p` units, the code's `subset:K_d` draw from `L` uniform bytes is accepted and misses a set `U` of
-units with probability at most the model's draw's (`Pouw.Window.subsetDraw K_d` of a uniform permutation of
+population is `N_p` units, the code's `subset:K_d` sample from `L` uniform bytes is accepted and misses a set `U` of
+units with probability at most the model's sample's (`Pouw.Window.subsetDraw K_d` of a uniform permutation of
 `Fin N_p`). -/
 def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program)
     (query : Json) : Prop :=

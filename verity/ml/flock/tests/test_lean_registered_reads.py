@@ -1,8 +1,8 @@
-"""Registered reads (PROTOCOL.md §16.10, `verity/core/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (`Flock.HmRow`, `verity/core/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
-circuit (§16.13, the default `verity/flock-circuit`) composed for the `RegisteredRoPE` program and its `Q_template_instance`
+circuit (`HmOut`, the default `verity/flock-circuit`) composed for the `RegisteredRoPE` program and its `Q_template_instance`
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
 with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
 set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
@@ -50,7 +50,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 def _program() -> tuple[Program, dict]:
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
     (_, xt), (_, ct) = template.signature()[0]
@@ -74,9 +74,9 @@ def stage(d: Path) -> SimpleNamespace:
     """The hidden-output circuit bound to the program and its partition, the registered cs table, x rows and output
     rows, the verifier's own reads file (its program's reads of cs and x, and the output rows), and the statement's
     bindings, under `d`."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
@@ -156,7 +156,7 @@ def test_an_honest_registered_statement_is_accepted_and_reports_its_roots(staged
                                   "x": {"value": "x", "root": staged.xreg.root.hex()},
                                   "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
     assert line["partition_check"]["units"] == "derived"
-    assert json.loads(line["identity"])["outputs"].startswith("hidden"), "the statement hides its outputs (§16.13)"
+    assert json.loads(line["identity"])["outputs"].startswith("hidden"), "the statement hides its outputs (`HmOut`)"
 
 
 def test_registered_reads_need_the_verifiers_own_roots(staged):
@@ -356,7 +356,7 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
-    """`verify` sets up every table's statement through the same check (§16.12): with two tables, table 1's drawn statement
+    """`verify` sets up every table's statement through the same check (`Stmt.setupTables`): with two tables, table 1's sampled statement
     (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes, so the
     verifier goes on to read the (empty) session's proofs, which it names by the tables it set up."""
     sess = staged.dir / "session"
@@ -380,11 +380,11 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
 
 @pytest.mark.parametrize("value", ["rec-top-L0", "rec-top-stacked-L0"])
 def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
-    """U4 (§16.10, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
+    """U4 (`Flock.HmRow`, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
     when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:
     `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
-    has no sample). The full draw passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
+    has no sample). The full sample passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
     verifier holds no inner transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this
     checks that `verify` calls it."""
     c = G.Registered.commit(P.program_digest(staged.program), value,
@@ -443,7 +443,7 @@ def _hexes(bs: list[bytes]) -> list[str]:
 
 
 def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], points=LINK_POINTS) -> Path:
-    """The coin server's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
+    """The challenger's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
     absorbing one `c_k` and its round 1 committing its level-1 top `tops[x]`, and the link points, flat."""
     rounds = [r for x in (0, 1) for r in (
         {"stream": f"circuit/rep{x}", "k": 0, "tops": [], "level0": 0, "commits": _hexes([bytes([0xC0 + x]) * 128]), "n": 1,
@@ -460,10 +460,10 @@ def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], po
 @pytest.mark.parametrize("level", [0, 1])
 def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     """`RecVStar.checkTopRows`: a statement whose `out` reads the circuit table's level-`l` tops `rec-top-L<l>` (V*'s levels'
-    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
+    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the challenger recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a
+    the inner transcript recording them the full sample passes setup (to the session's proof files, which it has none of); a
     transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
     inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about

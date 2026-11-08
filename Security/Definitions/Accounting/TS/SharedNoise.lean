@@ -1,6 +1,37 @@
 module
 
 public import Definitions.Accounting.TS.Receipt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # One noise seed a call: the call's coin and a tile's own part of it (trusted)
@@ -38,7 +69,7 @@ What changes is the scope of those three claims (one seed a call, rows shared al
 That scope is approved, with the same values, and served only once the gain is measured.
 
 **The bits.** `CallCoin` fixes what is shared, not how it is derived. `h1tile.banded_noise`
-(`verity/core/protocols/pouw/circuit/h1tile.py`) is the bit-exact derivation. Bands are g ≤ 64 column tiles, cut from
+(`verity/ml/protocols/pouw/circuit/h1tile.py`) is the bit-exact derivation. Bands are g ≤ 64 column tiles, cut from
 column tile 0. Tile `(I, J)` reads its rows' noise from the seed at the position of its band's first tile, and its
 columns' noise and its fold keys from its own position. A call is then one `CallCoin 1 g` per row block and band, each
 from its own seed.

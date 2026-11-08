@@ -1,4 +1,4 @@
-"""V*'s hold of each Ligerito level's committed tops (`RecCap`, lane rec-v0): at level 0 one statement over the ``2^cap₀``
+"""V*'s hold of each Ligerito level's committed tops (`RecCap`): at level 0 one statement over the ``2^cap₀``
 nodes of ``root_B``, instance ``i`` reading node ``i`` of ``rec-top-L0`` (`rec_outer.TopValue` at level 0) as its row
 ``top``, whatever the coins select; at each later level ``l`` one over both reps' ``2 · 2^cap_l`` nodes of ``rec-top-L<l>``
 (rep 0's level-``l`` top, then rep 1's), instance ``i`` reading row ``i``.
@@ -9,7 +9,7 @@ query reaches were held by no V* statement. RecCap holds every one at a fixed ro
 its node, then zeros, which V* registers as all-zero rows ``rec-cap-zero`` under public salts (`rec_residuals.zero_salts`),
 as it registers every unit's outputs. So the statement holds only if every held row is a node's, and its ``b || c`` is the
 ZK server's: the verifier holds each table row of ``top`` to its node of ``root_B``, or of the reps' level-``l`` tops, in
-the coin server's record (``Flock/RecVStar.lean``'s ``checkTopRows``) and ``top`` to the registration the level's ``out``
+the challenger's record (``Flock/RecVStar.lean``'s ``checkTopRows``) and ``top`` to the registration the level's ``out``
 reads (``checkShared``, `rec_vstage.shared_rows`). The unit has no AND.
 
 The Lean statement is ``VStar.capUnit`` (``VStar/Cap.lean``): the later levels' caps, then level 0's, last in V*'s

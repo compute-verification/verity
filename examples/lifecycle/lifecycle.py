@@ -18,14 +18,14 @@ The phases, each a function here:
    blocks before are unchanged) and places it (`placement`: its units on device leaves, theta on a memory leaf, naming
    the layout's head); the block's values are committed; and its record binds the previous record and that placement.
 5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`, `inference_only`): live coins after the
-   commitment, sampled proofs' draw at PoUW's size K', each sampled proof block proved behind the ZK server and
+   commitment, sampled proofs' sample at PoUW's size K', each sampled proof block proved behind the ZK server and
    checked by the verifier; and the inference-only policy's check of the execution block, which reads no coins.
 6. **Accounting** (`compose`, `account`): each declaration's composite verdict by the composition's rule, the monitoring
    period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
    projection of the layout (`Layout.accounting`).
 
 `prove` and `verify` are a stand-in for Flock behind the ZK server: the proof is the sampled proof block's opening, which `verify`
-checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
+checks against the commitments and re-evaluates in the clear. It is sound for the demo and not zero-knowledge.
 """
 
 from __future__ import annotations
@@ -814,7 +814,7 @@ def coin_bytes(k: int, n: int) -> int:
 
 
 def draw(coins: bytes, blk: Block) -> list[int]:
-    """Sampled proofs' draw (`sampled_proofs.coins.draw_first`) on the verifier's live coins."""
+    """Sampled proofs' sample (`sampled_proofs.coins.draw_first`) on the verifier's live coins."""
     buf = bytearray(coins)
 
     def read(n: int) -> bytes:
@@ -891,7 +891,7 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
 IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
        **{n: parties.SUBPROTOCOLS["verity/onsite/v0"][n] for n in ("bandwidth", "sampled-proofs")}}
 """Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
-`verity/sampled-proofs/v1`, one-stage v1's audit or the recursive audit) in both, so is the work, PoUW's period,
+`verity/sampled-proofs/v1`, one-stage v2's audit or the recursive audit) in both, so is the work, PoUW's period,
 onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
 
 
@@ -1033,9 +1033,9 @@ PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 def pooled(lines: Sequence[Mapping[str, Any]]) -> tuple[Fraction, int, int]:
-    """The period's pooled bound, from its declarations' draws: (q, N, W). A wrong unit escapes a subset:K' draw of n with
-    probability at most q = 1 - K'/n, and w wrong units in one block escape together with at most q^w, so on independent
-    coins W wrong units escape every sample with probability at most q_max^W. N is the period's credited units and
+    """The period's pooled bound, from its declarations' samples: (q, N, W). An incorrect proof block escapes a subset:K' sample of n with
+    probability at most q = 1 - K'/n, and w incorrect proof blocks in one block escape together with at most q^w, so on independent
+    coins W incorrect proof blocks escape every sample with probability at most q_max^W. N is the period's credited units and
     W = ceil(eps N): a share eps of the credited work wrong escapes with probability at most q_max^W."""
     q = max((Fraction(x["draw"]["population"] - x["draw"]["k"], x["draw"]["population"]) for x in lines),
             default=Fraction(1))
@@ -1276,7 +1276,7 @@ class Developer:
 
 
 class Verifier:
-    """The verifier: checks each hardware registration, the registration, and each declaration; draws on its live coins
+    """The verifier: checks each hardware registration, the registration, and each declaration; samples on its live coins
     after the commitment; checks the sampled proof blocks' proofs; runs PoUW's window check; composes each declaration's verdict
     with the subprotocols the composite lists (onsite: network certification and the memory challenger's report); and
     accounts for the monitoring period. Its outcome is every phase's public output."""
@@ -1431,22 +1431,22 @@ class Verifier:
         return None
 
 
-# --- the example's inputs ----------------------------------------------------------------------------------------------
+# --- the demo's inputs ----------------------------------------------------------------------------------------------
 
 def theta_of(seed: int) -> Theta:
-    """A model's weights for the example, from a seed."""
+    """A model's weights for the demo, from a seed."""
     rng = np.random.default_rng(seed)
     return Theta(tuple(int(v) for v in rng.integers(-128, 128, D * D)), tuple(int(v) for v in rng.integers(-128, 128, D * D)))
 
 
 def load_of(seed: int, sizes: Sequence[int]) -> list[list[list[int]]]:
-    """The example's requests: one list an execution phase, each request D int8 codes."""
+    """The demo's requests: one list an execution phase, each request D int8 codes."""
     rng = np.random.default_rng(seed)
     return [[[int(v) for v in rng.integers(-128, 128, D)] for _ in range(n)] for n in sizes]
 
 
 SIZES = (3, 4, 2)
-"""Requests in each execution phase of the example's monitoring period."""
+"""Requests in each execution phase of the demo's monitoring period."""
 PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
 CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")

@@ -25,8 +25,8 @@ capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It compo
 `ε` is the period's own: an accepted period's credit (`creditPrefix`) depends on its prefix, so the bound reads
 `ε(x) C = max(0, C − (p · creditPrefix(x) − Σ_w lam_w) + β K)`.
 
-**Non-vacuity rests on the fixed model.** `ServedWork`'s `SAKServed` is false on 𝓜 as written, so this statement says
-something only on a model that charges the free register reductions that falsify it.
+**Non-vacuity is open,** as `ServedWork`'s: whether its `SAKServed` holds on 𝓜 as written, which prices register
+reductions, is open.
 
 **The coins stay in the boundary.** `OutsourceWithinEgressServed` is claimed where a window's salt
 reaches a machine outside the registered devices only through a bit their programs exchange (`CoinsConfidential`).
@@ -120,7 +120,7 @@ def ServedFreed : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

@@ -1,15 +1,10 @@
 module
 
-public import Mathlib.Tactic.LinearCombination
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
-public import Mathlib.Tactic.GCongr
-public import Definitions.Pouw.PearlC.Defs
 public import Proofs.Pouw.PearlC.Peel
 public import Definitions.Pouw.PearlC.SaltDead
-public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Mathlib.Tactic.LinearCombination
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # P3: Pearl-C's forming credit (staging, nothing pinned)
@@ -591,8 +586,8 @@ function: if every element below `8·δ·ρ_i` is salt-live and the liveness rul
 `fs·m·k` of `creditOf` exceeds the salt-live elements' credit by at most `ρ_D·fs·m·k`, with `ρ_D = 1/64`. -/
 theorem rhoD_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ}
-    (hcov : ∀ i l, |X i l| < 8 * Params.pi.δ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live v S α β X).card ∧ rhoD = 1 / 64 :=
   ⟨formingCredit fs hcov hlive, rfl⟩
 
@@ -604,13 +599,13 @@ theorem rhoD_exact_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hpair : ∀ i, ∃ (e f : Fin Params.pi.r → Code) (c : ℚ), (negLine e, f) ∈ S ∧ (e, f) ∈ S ∧ 8 / 15 ≤ c ∧ c ≤ 4 ∧
       β i * ∑ t, codeVal (e t) * codeVal (f t) = c * (α i * ρ i))
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤
       fs * (live (FormChain.exact Params.pi.r).value S α β X).card := by
   refine (rhoD_pi fs s ?_ hlive).1
   intro i l hx
   obtain ⟨e, f, c, hp, hq, hc, hc4, hN⟩ := hpair i
-  have hδ : Params.pi.δ = 1 := rfl
+  have hδ : Params.pi.σ = 1 := rfl
   rw [hδ] at hx
   have hρ : 0 < ρ i := by
     by_contra h
@@ -627,11 +622,11 @@ theorem rhoD_rel_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Suppor
     (herr : ∀ i l, PairErr v (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i)) (hα : ∀ i, 0 < α i)
     (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hc : ∀ i, 8 * (1 + 17 * ε) ≤ (15 - 17 * ε) * c i) (hc4 : ∀ i, c i ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live v S α β X).card := by
   refine (rhoD_pi fs s ?_ hlive).1
   intro i l hx
-  have hδ : Params.pi.δ = 1 := rfl
+  have hδ : Params.pi.σ = 1 := rfl
   rw [hδ] at hx
   have hρ : 0 < ρ i := by
     by_contra h
@@ -651,7 +646,7 @@ theorem rhoD_atomMix_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β 
     (herr : ∀ i l, PairErr FormChain.atomMix.value (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i))
     (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hc : ∀ i, 8 * (1 + 17 * ε) ≤ (15 - 17 * ε) * c i) (hc4 : ∀ i, c i ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live FormChain.atomMix.value S α β X).card :=
   rhoD_rel_pi fs s hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive
 
@@ -664,7 +659,7 @@ theorem rhoD_bf16_pi (fs : ℕ) (s : Shape) {noise : (Fin Params.pi.r → ℚ) �
     (hq : ∀ i, |noise (fun t => β i * codeVal ((q i).1 t)) (fun t => codeVal ((q i).2 t)) - c i * (α i * ρ i)| ≤ η i)
     (hη : ∀ i, η i ≤ c i * (α i * ρ i) / 256) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 648 / 943 ≤ c i) (hc4 : ∀ i, c i ≤ 4)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live (FormChain.bf16 Params.pi.r noise).value S α β X).card := by
   refine rhoD_rel_pi fs s (ε := 1 / 64) (c := c) hpS hqS (fun i l => ?_) hα hfloor hsat
     (fun i => by linarith [hc i]) hc4 (by norm_num) (by norm_num) hlive
@@ -864,8 +859,8 @@ theorem formCredit_noFlags (hn : 0 < n) (fs : ℕ) (v : ValueFn r) (S : Support 
 /-- **(i) at Π's parameters**, any value function: with no flags, `formCredit ≥ (1 − ρ_D)·fs·m·k`, `ρ_D = 1/64`. -/
 theorem formCredit_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Params.pi.r} {S : Support Params.pi.r}
     {α β ρ : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
-    (hcov : ∀ i l, |X i l| < 8 * Params.pi.δ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs v S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [(rhoD_pi fs s hcov hlive).1]
 
@@ -875,7 +870,7 @@ theorem formCredit_exact_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support P
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hpair : ∀ i, ∃ (e f : Fin Params.pi.r → Code) (c : ℚ), (negLine e, f) ∈ S ∧ (e, f) ∈ S ∧ 8 / 15 ≤ c ∧ c ≤ 4 ∧
       β i * ∑ t, codeVal (e t) * codeVal (f t) = c * (α i * ρ i))
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (1 - rhoD) * fs * s.m * s.k ≤
       formCredit fs (FormChain.exact Params.pi.r).value S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [rhoD_exact_pi fs s hα hfloor hsat hpair hlive]
@@ -887,7 +882,7 @@ theorem formCredit_rel_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Par
     (herr : ∀ i l, PairErr v (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i)) (hα : ∀ i, 0 < α i)
     (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hc : ∀ i, 8 * (1 + 17 * ε) ≤ (15 - 17 * ε) * c i) (hc4 : ∀ i, c i ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs v S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [rhoD_rel_pi fs s hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive]
 
@@ -898,7 +893,7 @@ theorem formCredit_atomMix_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support
     (herr : ∀ i l, PairErr FormChain.atomMix.value (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i))
     (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hc : ∀ i, 8 * (1 + 17 * ε) ≤ (15 - 17 * ε) * c i) (hc4 : ∀ i, c i ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs FormChain.atomMix.value S α β X (noFlags : Flags s.m s.n) :=
   formCredit_rel_pi fs s hn hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive
 
@@ -911,7 +906,7 @@ theorem formCredit_bf16_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n)
     (hq : ∀ i, |noise (fun t => β i * codeVal ((q i).1 t)) (fun t => codeVal ((q i).2 t)) - c i * (α i * ρ i)| ≤ η i)
     (hη : ∀ i, η i ≤ c i * (α i * ρ i) / 256) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 648 / 943 ≤ c i) (hc4 : ∀ i, c i ≤ 4)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs (FormChain.bf16 Params.pi.r noise).value S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [rhoD_bf16_pi fs s hpS hqS hp hq hη hα hfloor hsat hc hc4 hlive]
 
@@ -988,8 +983,8 @@ theorem formDebit_le (fs : ℕ) {v : ValueFn r} {S : Support r} {α β : Fin m �
 /-- **(ii) at Π's parameters**: `formDebit ≤ ρ_D·fs·m·k + (32·fs/n)·(flagged atoms)`, `ρ_D = 1/64`. -/
 theorem formDebit_pi (fs : ℕ) (s : Shape) (hk : 32 ∣ s.k) (hn : 0 < s.n) {v : ValueFn Params.pi.r}
     {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (flag : Flags s.m s.n)
-    (hcov : ∀ i l, |X i l| < 8 * Params.pi.δ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     formDebit fs v S α β X flag ≤ rhoD * fs * s.m * s.k + 32 * fs * flagCount s.k flag / s.n :=
   formDebit_le fs flag hk hn (by linarith [(rhoD_pi fs s hcov hlive).1])
 

@@ -7,7 +7,7 @@ public import Definitions.Core.Blocks
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
 In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
-drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
+sampled after the bytes it answers and the evidence last; its claims are read off the run it ends in
 (`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
 (`PeriodLive.finder`, `PeriodLive.collides`).
@@ -76,34 +76,6 @@ def JointPeriodLiveECR : Prop :=
       Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤
         ∑ a, (δ a s + loss a (ENNReal.ofReal (q a s / 2 ^ (256 : ℝ))))
 
-/-- **The honest prover meets every claim.** On any device and any period of a causal game `G`, at a strategy `s`
-whose extractor reads an evaluation of the circuit on every run (the honest prover commits the circuit's evaluation on
-its inputs) which the commitment opens at every gate, whose run computes at least `W` gates after their coin, whose
-world holds `S` bits on average and reads `Q` bits, and whose network certifiers see at most `K` bits on every run, at
-a nonnegative integrity share `ε`: every subprotocol's claim holds on every run, so the probability that some
-subprotocol accepts while its claim fails is `0`. -/
-def JointPeriodLive_honest : Prop :=
-  ∀ (ι α : Type) [Fintype α] (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
-    (r : PeriodLive d α C G) (c : Certificates) (s : Verity.Game.Strategy G),
-    0 ≤ c.ε →
-    (∀ o, ∃ x : C.Transcript, r.extract s o = C.eval x) →
-    (∀ o g, r.opens g (r.extract s o g)) →
-    (∀ o, c.W ≤ (C.size (r.computed s o) : ℝ)) →
-    (∀ o, c.S * (r.world s o).win.len ≤
-      ((r.world s o).schedule.held (r.world s o).win ((r.world s o).acct .capacity) : ℝ)) →
-    (∀ o, c.Q ≤ ((r.world s o).schedule.read (r.world s o).win ((r.world s o).acct .bandwidth) : ℝ)) →
-    (∀ o, (r.world s o).commWithin c.K) →
-    (∀ a o, r.Holds c s a o) ∧
-      Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s = 0
-
-/-- **The bound is not vacuous**: on some device, for some period of some causal game over a circuit, at some
-certificates and strategy, a subprotocol accepts while its claim fails with positive probability, at an extractor
-whose transcript is wrong at every unit. -/
-def JointPeriodLive_nontrivial : Prop :=
-  ∃ (ι α : Type) (_ : Fintype α) (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
-    (r : PeriodLive d α C G) (c : Certificates) (s : Verity.Game.Strategy G),
-    0 < Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s
-
 /-- **The joint guarantee over a horizon of periods played as one causal game.** On any device, for any `m` periods
 read off the run of one causal game `G`, period `j` over the circuit `C j` (each period's parameters and commitment sent
 after the coins of the periods before it, so a period may adapt to them), whose subprotocols have their per-period
@@ -135,7 +107,7 @@ holds there, the seed and the spot reads on the run's outcome, with the strategy
   and `StreamedWipeMeetsFamily`);
 * at every strategy `s` the run's coins at boundary `b` are the wipe's (`Verity.Wipe.OfRun.Preserves`): on the run,
   the foreign content the device holds there, the seed and the spot reads are uniform and independent, as the wipe's
-  game draws them;
+  game samples them;
 * over `G` at every strategy `s`, block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory
   exceeds `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with
   probability at most `δ_PoUS b s`.
@@ -147,7 +119,7 @@ $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{Wipe},b}(s) 
 `ε_Wipe,b(s)` the survivor bound's error at the run's moves at boundary `b`. On the run, the wipe's event at a fraction
 `f`, more than `f · fill + 2λ` bits plus the unfilled state kept, is inside that event wherever
 `foreignBits b ≤ f · fill + 2λ` (`Accounting.SecurityProofs.Live.prob_survives_of_survivorBound`).
-**Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that draws its foreign content with
+**Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that samples its foreign content with
 the wipe's coins meets it at every strategy (`Verity.Wipe.OfRun.drawn_preserves`); a run whose foreign content is the
 prover's, a function of what came before the boundary, does not. The state a block carries across a wipe (the KV cache,
 committed before the wipe and re-read after it) is outside the integrity bound. -/

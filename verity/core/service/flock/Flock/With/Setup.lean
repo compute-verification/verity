@@ -1,5 +1,5 @@
 /-
-§16.10–§16.13's setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
+`Flock.HmRow`, `HmOut`'s setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
 digest of what the session brings taken from the oracle, in a verdict monad `M`. Run in `V` with `Hashes.ofSha512 Sha512.hash`
 it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' text; what hashes nothing is the compiled
 verifier's own, lifted.
@@ -23,7 +23,6 @@ module
 
 public import Flock.With.Hashes
 public import Flock.HmRow
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -562,7 +561,7 @@ def workLawWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) (ta
 
 /-- `checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != Pinned.rowKey then
@@ -613,7 +612,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
   let pub ← match draw with
     | some d => HmRow.drawnWith hs c pop d
     | none => pure pop
-  -- a stratified draw's strata are the verifier's own, from its program and query, when it holds both
+  -- a stratified sample's strata are the verifier's own, from its program and query, when it holds both
   if let some d := draw then
     if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
         ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
@@ -835,7 +834,7 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (publicInputs : Option ByteArray := none) : M (SessionSpec × Array Stmt) := do
-  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
     if let .ok u := Draw.UnitDraw.ofJson d then
       if let .work .. := u.law then
@@ -845,7 +844,7 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
             throw "U3: the draw's closure is not the verifier's own (its closure map)"
         | none =>
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
-  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some K) := (partition, program, stratified)
@@ -854,7 +853,7 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
       let (law, _) ← HmRow.stratifiedLawWith hs obj prog K
       if law != Draw.Law.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
-  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some (K, table)) := (partition, program, work)
@@ -882,13 +881,13 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the draw's law and count are refused before the circuit is read
+  -- the sample's law and count are refused before the circuit is read
   let u? ← (draw.mapM Draw.UnitDraw.ofJson : V _)
   if let some u := u? then
     match u.law with
     | .subset _ | .stratified .. => splits u.units.size
     | _ => throw Draw.TABLES_LAW
-  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  -- without a sample, the population's units (`setupH` checks a sample's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
     | none => do

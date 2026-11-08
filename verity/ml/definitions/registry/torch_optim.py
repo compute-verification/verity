@@ -74,6 +74,7 @@ from verity.ml.circuits.boolean.forms import NOT, OR, and_reduce, const_bits, mu
 from verity.ml.circuits.ops.boolean.elementwise import specialized
 from verity.ml.circuits.ops.boolean.sqrt import f32_sqrt_rn
 from verity.ml.definitions.registry import host_f64 as H
+from verity.ml.definitions.registry.torch_train import _flag
 
 __all__ = ["AdamWForeach", "AdamWScalars", "SCALARS", "SgdForeach", "TorchAdamBiasCorrection", "TorchAdamScalarsOut",
            "TorchPowHalf", "TorchSgdScalar", "adam_bias_corrections", "adam_scalars_out", "adamw_element", "lerp", "pow_half",
@@ -133,13 +134,6 @@ def sgd_element(C, p, g, nlr, fused: bool):
     if fused:
         return fp.f32_fma(C, nlr, g, p, nan_word=NAN)
     return fp.f32_add(C, p, fp.f32_mul(C, nlr, g, nan_word=NAN), nan_word=NAN)
-
-
-def _flag(S: Any, k: str) -> bool:
-    v = getattr(S, k)
-    if v not in (0, 1) or isinstance(v, bool):
-        raise ValueError(f"{k} is 0 or 1, not {v!r}")
-    return bool(v)
 
 
 def _n(S: Any) -> int:

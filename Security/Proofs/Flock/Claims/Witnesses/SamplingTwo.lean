@@ -1,22 +1,55 @@
 module
 
-public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.Claims.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The two-stage compiler's statement says something
 
-`CompilerKSTwo` is a guarantee that the lock's `claims.generic` names, held to two witnesses: an honest one, whose
-conclusion is its premises holding together at one instance with two sampled sessions, and a nontrivial one, at which
-its conclusion fails. Each is at coins `Bool` and the hash SHA-512 (`FlockDeploy.sha512`), on the toys of
-`Witnesses.SamplingGeneric`; the claim `CompiledTwo.KS` they read has its `fails` witness here too.
+`CompilerKSTwo` and `CompilerExfilTwo` are guarantees that the lock's `claims.generic` names, each held to two
+witnesses: an honest one, whose conclusion is its premises holding together at one instance with two sampled sessions
+(both read `compilerKSTwo_honest`: they have the same premises), and a nontrivial one, at which its conclusion fails.
+Each is at coins `Bool` and the hash SHA-512 (`FlockDeploy.sha512`), on the toys of `Witnesses.SamplingGeneric`; the
+claims `CompiledTwo.KS` and `CompiledTwo.Exfil` they read have their `fails` witnesses here too.
 
 * `sksLTwo`: `sksL` (accepts after one round, samples nothing, opens nothing) with the two-stage design `toyTwo` (its
   replay partition the proof-block partition `{0}`, its first stage `all`, `k = 1`). Its one proof block is incorrect at
-  any interior values, so its footprint is at least `1`, the cell's escape `0` and `P̄_a = 0`: no witness is in the
-  relation at `δ = 0`, and `CompiledTwo.KS` fails (`compiledTwoKS_fails`).
+  any interior values, so its footprint is at least `1` at every interior, the cell's escape `0` and `P̄_a = 0`: no witness is in the
+  relation at `δ = 0`, and `CompiledTwo.KS` fails (`compiledTwoKS_fails`). Its influence set is then empty, so no
+  witness is in the influence relation either, and `CompiledTwo.Exfil` fails (`compiledTwoExfil_fails`).
 * `twoLTwo`: `twoL` (both proof blocks of `twoStmt` sampled, block `u`'s session at round `u`) with the design `twoTwo`
   (replay blocks the proof blocks `{0}`, `{1}`, first stage `all`, `k = 1`), sampling both replay blocks. It meets
   `CompiledTwo.Sessions` at every hash (`twoSessionsTwo_meets`): the first stage misses a set only when it is empty, and
@@ -62,9 +95,9 @@ theorem toy_wrongIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bo
   rw [rejCm_val] at hb
   cases hb
 
-theorem toy_footprint (H : Msg → Msg) (w : Claims.Sampling.Wit) :
-    1 ≤ footprint H rejCm toyStmt toyPart toyPart w 0 0 :=
-  le_ciInf fun ι => Finset.card_pos.2 ⟨0, toy_wrongIn H w ι⟩
+theorem toy_footprint (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → ℕ → Bool) :
+    1 ≤ footprint H rejCm toyStmt toyPart toyPart w ι 0 0 :=
+  Finset.card_pos.2 ⟨0, toy_wrongIn H w (ι 0)⟩
 
 theorem escCell_one_one {m : ℕ} (hm : 1 ≤ m) : escCell 1 1 m = 0 := by
   simp [escCell, Nat.sub_eq_zero_of_le hm]
@@ -101,12 +134,12 @@ theorem toyTwo_Pa {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : toyTwo.Pa toyP
 theorem sksLTwo_noR {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
     ¬ Claims.Sampling.RTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition (sksLTwo Coin).two 0
       x w := by
-  rintro ⟨s, Pt, d, hs, hPt, hd, hM⟩
+  rintro ⟨s, Pt, d, hs, hPt, hd, ι, hM⟩
   obtain rfl : s = toyStmt := (Option.some.inj hs).symm
   obtain rfl : Pt = toyPart := (Option.some.inj hPt).symm
   obtain rfl : d = toyTwo := (Option.some.inj hd).symm
-  have hlt : (0 : ℝ) < toyTwo.Pa toyPart (footprint H rejCm toyStmt toyPart toyPart w) := hM
-  rw [toyTwo_Pa (toy_footprint H w)] at hlt
+  have hlt : (0 : ℝ) < toyTwo.Pa toyPart (footprint H rejCm toyStmt toyPart toyPart w ι) := hM
+  rw [toyTwo_Pa (toy_footprint H w ι)] at hlt
   exact lt_irrefl _ hlt
 
 /-- **`CompiledTwo.KS` fails** at `sksLTwo`, at `δ = 0`. -/
@@ -117,6 +150,28 @@ theorem compiledTwoKS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
   have hb := sksL_bound_fails (Coin := Coin) H
     (Claims.Sampling.RTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition (sksLTwo Coin).two 0)
     ((sksL Coin).κ 0 []) [] (sksLTwo_noR H []) (by linarith [sksL_κ (Coin := Coin) []])
+  exact hb h1
+
+/-- No witness is in `sksLTwo`'s influence relation at `δ = 0`: a served output in the influence set is some boundary
+trace's in `RTwo`, and there is none. -/
+theorem sksLTwo_noRInfl {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
+    ¬ Claims.Sampling.RInflTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition
+      (sksLTwo Coin).two 0 x w := by
+  classical
+  rintro ⟨s, Pt, d, hs, hPt, hd, hy⟩
+  unfold Claims.Sampling.influenceTwo at hy
+  obtain ⟨w', _, ⟨ι, hM⟩, _⟩ := (Finset.mem_filter.1 hy).2
+  exact sksLTwo_noR H x w' ⟨s, Pt, d, hs, hPt, hd, ι, hM⟩
+
+/-- **`CompiledTwo.Exfil` fails** at `sksLTwo`, at `δ = 0`: its knowledge-soundness half does. -/
+theorem compiledTwoExfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ¬ (sksLTwo Coin).Exfil H := by
+  intro h
+  have h1 := (h 0 le_rfl).1 [] (sksLTwo_scope []) Unit silentP
+  have hb := sksL_bound_fails (Coin := Coin) H
+    (Claims.Sampling.RInflTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition
+      (sksLTwo Coin).two 0)
+    ((sksL Coin).κ 0 []) [] (sksLTwo_noRInfl H []) (by linarith [sksL_κ (Coin := Coin) []])
   exact hb h1
 
 /-! ## Two sampled sessions meet the two-stage contract -/
@@ -243,4 +298,116 @@ theorem compilerKSTwo_honest :
 /-- **`CompilerKSTwo`'s conclusion fails** at `sksLTwo`, which accepts with an empty relation. -/
 theorem compilerKSTwo_nontrivial : ¬ (sksLTwo Bool).KS FlockDeploy.sha512 := compiledTwoKS_fails _
 
+/-- **`CompiledTwo.Exfil` fails** at some compiled two-stage verifier. -/
+theorem CompiledTwo.Exfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.Exfil H :=
+  ⟨_, _, compiledTwoExfil_fails H⟩
+
+/-- **`CompilerExfilTwo`'s conclusion fails** at `sksLTwo`, which accepts with an empty influence relation. -/
+theorem compilerExfilTwo_nontrivial : ¬ (sksLTwo Bool).Exfil FlockDeploy.sha512 := compiledTwoExfil_fails _
+
 end Claims.SamplingGeneric
+
+/-! ## The patterns' form says something -/
+
+namespace Claims.Witness.SamplingGeneric
+
+open Claims.Sampling
+
+/-- **`InfluenceTwoPatterns`'s premise holds** at the two-session toy: it is in the two-stage scope, the scope its
+compiled two-stage verifier checks. -/
+theorem influenceTwoPatterns_honest : InScopeTwo twoPart twoTwo twoStmt ∧ (twoLTwo Bool).Scope [] :=
+  ⟨inScopeTwo_two, twoLTwo_scope []⟩
+
+/-- A commitment scheme under which every opening opens. -/
+def openCm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
+
+/-- A statement whose one gate, an empty `and`, is returned; no gate is an input. -/
+def openStmt : AuditStatement := ⟨[], ⟨[.and []], [0]⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
+
+/-- The partition with no proof blocks: it partitions no gate of `openStmt`, which is outside the two-stage scope. -/
+def noPart : Partition := ⟨[]⟩
+
+/-- The two-stage design over no replay blocks, with no first-stage rule and no stratum. -/
+def noTwo : Design.Two := ⟨noPart, ⟨[]⟩, []⟩
+
+/-- The witness that opens the returned gate at `b`. -/
+def openW (b : Bool) : Wit := ⟨[⟨0, b, []⟩]⟩
+
+/-- Over no replay blocks the first stage samples nothing and the second stage misses nothing: `P̄_a = 1`. -/
+theorem noTwo_Pa (fp : ℕ → ℕ → ℕ) : noTwo.Pa noPart fp = 1 := by
+  have hl : noTwo.part.blocks.length = 0 := rfl
+  unfold Design.Two.Pa
+  rw [hl, Finset.range_zero, Finset.powerset_empty, Finset.sum_singleton]
+  simp only [Finset.prod_empty, Finset.sdiff_self, mul_one]
+  rfl
+
+theorem admissibleTwo_noTwo : admissibleTwo noPart noTwo 0 = {∅} := by
+  ext T
+  have hl : noPart.blocks.length = 0 := rfl
+  simp only [admissibleTwo, Finset.mem_filter, Finset.mem_powerset, Finset.mem_singleton, hl, Finset.range_zero,
+    Finset.subset_empty]
+  refine ⟨fun h => h.1, fun h => ⟨h, ?_⟩⟩
+  show (0 : ℝ) < noTwo.Pa noPart _
+  rw [noTwo_Pa]
+  exact one_pos
+
+theorem inputsOf_open (b : Bool) : inputsOf id openCm openStmt (openW b) = fun _ => none := by
+  funext g
+  have h : openStmt.prog.gates[g]? ≠ some .input := by
+    match g with
+    | 0 => simp [openStmt]
+    | n + 1 => simp [openStmt]
+  simp [inputsOf, h]
+
+theorem served_open (b : Bool) : served id openCm openStmt (openW b) = fun _ => b := by
+  funext ⟨k, hk⟩
+  match k, hk with
+  | 0, _ => cases b <;> rfl
+  | n + 1, hk => exact absurd hk (by simp [openStmt])
+
+/-- Two witnesses serve `true` and `false` on no inputs, each at a footprint in `M̄_0`. -/
+theorem two_le_card_influence_open : 2 ≤ (influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card := by
+  classical
+  have hmem : ∀ b, (fun _ => b) ∈ influenceTwo id openCm openStmt noPart noTwo 0 (fun _ => none) := by
+    intro b
+    unfold influenceTwo
+    refine Finset.mem_filter.2 ⟨Finset.mem_univ _, openW b, inputsOf_open b, ⟨fun _ _ => false, ?_⟩, served_open b⟩
+    show (0 : ℝ) < noTwo.Pa noPart _
+    rw [noTwo_Pa]
+    exact one_pos
+  have hne : (fun _ => true : Fin openStmt.prog.outs.length → Bool) ≠ fun _ => false := by
+    intro h
+    have := congrFun h ⟨0, Nat.zero_lt_one⟩
+    simp at this
+  calc 2 = ({fun _ => true, fun _ => false} : Finset (Fin openStmt.prog.outs.length → Bool)).card :=
+        (Finset.card_pair hne).symm
+    _ ≤ _ := Finset.card_le_card fun y hy => by
+        rcases Finset.mem_insert.1 hy with rfl | hy
+        · exact hmem true
+        · rw [Finset.mem_singleton.1 hy]
+          exact hmem false
+
+/-- The admissible sets are `{∅}`, whose one pattern touches no request: the patterns' sum is `2^0`. -/
+theorem patterns_noTwo :
+    ∑ p ∈ (admissibleTwo noPart noTwo 0).image
+        (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
+          (blocksTo openStmt.prog noPart (fun _ => ()) T r)),
+      2 ^ ∑ r, lightBits openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r) (p r) = 1 := by
+  rw [admissibleTwo_noTwo, Finset.image_singleton, Finset.sum_singleton]
+  simp [blocksTo, lightOf, lightBits]
+
+/-- **`InfluenceTwoPatterns`'s conclusion fails** outside the two-stage scope: at `openStmt` over the partition with no
+proof blocks, two witnesses serve different outputs at footprints in `M̄_0`, so the influence set has two members, and
+the patterns' sum is `1`. -/
+theorem influenceTwoPatterns_nontrivial :
+    ¬ ((influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card ≤
+      ∑ p ∈ (admissibleTwo noPart noTwo 0).image
+          (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
+            (blocksTo openStmt.prog noPart (fun _ => ()) T r)),
+        2 ^ ∑ r, lightBits openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r) (p r)) := by
+  rw [patterns_noTwo]
+  have := two_le_card_influence_open
+  omega
+
+end Claims.Witness.SamplingGeneric

@@ -1,6 +1,6 @@
 """a5's coins: a window's `service.Stream` samples only from the auditor's challenger's coins (`a5_coins.RankCoins`, or
 `Replay` of an honest sample's bytes for the negatives), refusing any other source (`service.NO_OWN_COINS`): the verifier
-samples no coins of its own. A sample on the challenger's bytes with no evidence is rejected by the Lean verifier of record's
+samples no coins of its own. A sample on the challenger's bytes with no evidence is rejected by the Lean verifier's
 whole run (`Run.run`) at its select (`coins`). A toy window of two templates; and the session's connect."""
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def stream_of(coins) -> S.Stream:
     return S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 test, challenger", coins=coins, clock=Clock())
 
 
-def register(stream: S.Stream) -> S.Registration:
+def register(stream: S.Stream) -> S.WindowCommitmentRecord:
     return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
 
 

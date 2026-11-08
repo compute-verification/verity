@@ -1,17 +1,31 @@
 module
 
 public import Proofs.Flock.Recursive.Sessions
-public import Proofs.Flock.Recursive.Private
-public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
-public import Proofs.Flock.Recursive.OuterAbort
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
+import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # Recursion: V*'s outer sessions are zero knowledge, (ii)'s `_hOuter`
 
 (ii) of `RecursiveAudit` takes V*'s sessions' zero knowledge as `_hOuter`: a simulator reading the owed outputs, the
-registration's view, the auditor's tape and the firewall's commitments, within `ε_o` of the auditor's view of V*'s
+registration's view, the auditor's tape and the ZK server's commitments, within `ε_o` of the auditor's view of V*'s
 sessions at every honest context. Here that view, its simulator and `ε_o`, at V*'s outer sessions as
 `Proofs.Flock.Recursive.Sessions` defines them (`Sessions`: the prover registers `R₂`, `n₂` hm96 commit strings under
 fresh salts, and runs `S` sessions, each one `--zk` table at the coin vector the auditor's tape fixes, Goldreich–Kahan's
@@ -30,14 +44,14 @@ committed coins, which read the tape and what was public before the session).
   ideal ones (`ZK.ideal_leaves_swap`); the sessions read `R₂`'s salts only through their witnesses, which the
   simulator doesn't read, so the second step follows the first.
 * `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at a table of `verify --zk`'s
-  hidden-output session of the session's data at a draw, where it sets that table up (`coinedOf_setup_of`; every such
+  hidden-output session of the session's data at a sample, where it sets that table up (`coinedOf_setup_of`; every such
   setup avoids the mask slot, `FailClosed.DrawSetupZHJ.avoidsMask`).
-* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = errAt δ`, at the firewall's
+* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = errAt δ`, at the ZK server's
   commitments under live inner coins (`firewallCommits`); `Flock.SecurityProofs.RecursiveFirewallPrivate`
   (`Proofs.Flock.Recursive.FirewallZK`) takes it at `proverExe` and the pinned key's hiding gap, with no hypothesis on
   the abort.
 
-Left to the instance at V*'s staging: that each session's table is `coinedOf` at a table of its data and draw (with a
+Left to the instance at V*'s staging: that each session's table is `coinedOf` at a table of its data and sample (with a
 `ZkHidden.DrawSetupZHJ` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses
 (`Honest`, which (ii)'s `honest` carries).
 -/
@@ -50,7 +64,7 @@ open Game Composed ZkView Model Flock ZkEveryCoin ZkLink
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **Under the abort interface, the honest prover is `outExe`.** -/
 theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : CoinedSetup}
@@ -192,7 +206,7 @@ end Sessions
 /-! ## V*'s tables, and (ii) -/
 
 /-- **V*'s session tables pass `CoinedOK`** where each is `coinedOf` at a table of `verify --zk`'s hidden-output session
-of the session's data at a draw, where `verify --zk` sets that table up (`coinedOf_setup_of`); every such setup is a
+of the session's data at a sample, where `verify --zk` sets that table up (`coinedOf_setup_of`); every such setup is a
 `MaskSetup` (`ZkHidden.maskSetup_of_setupHidden`) and avoids the mask slot (`FailClosed.DrawSetupZHJ.avoidsMask`). -/
 theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigProver) (Vs : Fin V.S → VStmt)
     {Reg' : Type} (D : Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → (j : Fin V.S) → (Vs j).OuterD Reg')
@@ -214,8 +228,8 @@ theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigPro
 
 /-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = errAt δ` at any hm96 hiding bound `δ`: the view
 `Sessions.view` at the honest context, the simulator `Sessions.sim` at the public context `pubS` reads (the owed
-outputs, the registration's view, the auditor's tape and the firewall's commitments), which is the honest context's
-(`hpub`). The honest witnesses (`hH`) and `hpub` are needed only at the firewall's own commitments (`hctxAt`,
+outputs, the registration's view, the auditor's tape and the ZK server's commitments), which is the honest context's
+(`hpub`). The honest witnesses (`hH`) and `hpub` are needed only at the ZK server's own commitments (`hctxAt`,
 `firewallCommits`: the inner coins live). -/
 theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)

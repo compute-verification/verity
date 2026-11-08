@@ -51,7 +51,7 @@ def test_each_members_references_give_its_verdicts():
 
 
 def test_the_provers_known_rows_are_the_verifiers_exactly_where_the_reference_accepts():
-    """Every port of the statement is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): its
+    """Every port of the statement is one of the verifier's registered reads (Flock's `Registered.checkComplete`): its
     file names ``wit`` at the warden's root and ``pub`` and ``o0`` at known content, and the prover's rows of those
     (`n2_tie_zk.known`) have the verifier's roots exactly where its ``pub`` rows are the verifier's and every output
     word is 1, so Lean's registered reads refuse each window the reference refuses: carried's window 1 at ``pub``,
@@ -84,9 +84,9 @@ def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_hone
 
 
 def test_a_warden_runs_release_is_its_cells_and_its_forged_row_is_the_registered_reads_to_refuse():
-    """`warden_link`'s reading of a warden's cells (`_released`) gives the release and prompt lengths the warden's own
-    ingress served, and `forge`'s row, an id request of the same prompt length, keeps every output word 1 while the
-    registered read refuses it, in its window alone."""
+    """`warden_link`'s reading of a network certifier's cells (`_released`) gives the release and prompt lengths the
+    network certifier's own ingress served, and `forge`'s row, an id request of the same prompt length, keeps every
+    output word 1 while the registered read refuses it, in its window alone."""
     tie = _tie()
     link = tz.served(tz.SPAN, tz.ARRIVALS, tz.RATES)
     cells = [tz.WR.Cells.of(tz.LINK, tz.Direction.INGRESS, rec, tz.PARAMS, tz.SESSION) for rec in link.records]

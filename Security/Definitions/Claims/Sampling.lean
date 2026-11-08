@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.IndexedTapes
+public import Definitions.Claims
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
@@ -13,20 +13,20 @@ the code side's.
 1. **Statement** (`AuditStatement`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
    the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
    committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
-   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant and
+   descriptor and gates (`Deploy.partition`), gives the proof blocks (sets of gates of `C`, every gate but a constant and
    an unread input in exactly one, the other input gates included; a constant is public and in one or in none, and so is
    an input that no gate reads and `C` doesn't return), the strata and the classes. `x` is the canonical bytes of what
-   the verifier reads before it draws, and `parse` is its own.
+   the verifier reads before it samples, and `parse` is its own.
 2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
-3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
+3. **Relation** (`R δ`): the set of incorrect proof blocks of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
    inputs, or a value it reads or writes is unopened: one is faulty unless some interior makes it correct, which on a
    topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
-   ordered program; a partition of all its gates but constants and unread inputs into proof units, each a set of gates
-   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
+   ordered program; a partition of all its gates but constants and unread inputs into proof blocks, each a set of gates
+   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`sizeClasses`: powers of two from 16 to
    262,144); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
-   `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
+   `Complete` hold on it, and it excludes every design whose `P_a` is not its sample's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
    `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
 5. **Named pieces**: the commitment scheme (`CommitmentScheme`, `CommitmentScheme.Binds`, and its published leaf layer
@@ -169,12 +169,12 @@ def Prog.Correct (C : Prog) (ref : ℕ → Option Bool) (u : List ℕ) : Prop :=
     (∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → C.read ref i ≠ none) ∧
       (C.Boundary u g = true → ∃ b, ref g = some b ∧ C.runIn ref u g = some b)
 
-/-- **The values proof unit `u` reads and writes**: a gate of `u` whose value `u`'s boundary doesn't commit has its
+/-- **The values proof block `u` reads and writes**: a gate of `u` whose value `u`'s boundary doesn't commit has its
 interior value `ι`; every other, its committed value `val`. -/
 def Prog.refIn (C : Prog) (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ → Bool) (g : ℕ) : Option Bool :=
   if g ∈ u ∧ C.Boundary u g = false then some (ι g) else val g
 
-/-- The values proof unit `u` of `C` commits: its gates that `C.Boundary` commits. -/
+/-- The values proof block `u` of `C` commits: its gates that `C.Boundary` commits. -/
 def committed (C : Prog) (u : List ℕ) : ℕ := (u.filter fun g => C.Boundary u g).length
 
 /-- **An unread input** of `C`: an input gate that `C` doesn't return and no gate of `C` reads. No gate's value and no
@@ -185,40 +185,40 @@ def Prog.Unread (C : Prog) (g : ℕ) : Prop :=
 instance instDecidableUnread (C : Prog) (g : ℕ) : Decidable (C.Unread g) :=
   inferInstanceAs (Decidable (C.gates[g]? = some .input ∧ g ∉ C.outs ∧ ∀ x ∈ C.gates, g ∉ x.reads))
 
-/-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its proof units (each
+/-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its proof blocks (each
 a set of gates in layout order), in population order. -/
 structure Partition where
   classes : List (List (List (List ℕ)))
 
-/-- **The proof blocks**: the proof units, slot by slot. -/
+/-- **The proof blocks**: the proof blocks, slot by slot. -/
 def Partition.blocks (P : Partition) : List (List ℕ) := P.classes.flatten.flatten
 
-/-- The gates of all of `P`'s proof units. -/
+/-- The gates of all of `P`'s proof blocks. -/
 def Partition.gates (P : Partition) : List ℕ := P.blocks.flatten
 
-/-- **The widest public size class** of a proof unit's outputs, in bits: 262,144, provisional. Setting it to `16` makes
-`unitClasses` `[16]`, the former literal limit. -/
+/-- **The widest public size class** of a proof block's outputs, in bits: 262,144, provisional. Setting it to `16` makes
+`sizeClasses` `[16]`, the former literal limit. -/
 def unitClassMax : ℕ := 262144
 
-/-- **The public size classes** `w_c` of a proof unit's outputs, in bits: the powers of two from `16` up to
+/-- **The public size classes** `w_c` of a proof block's outputs, in bits: the powers of two from `16` up to
 `unitClassMax`, ascending (`[16, 32, …, 262144]`). -/
-def unitClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
+def sizeClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
 
-/-- **A proof unit's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
+/-- **A proof block's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
 function of the program and the unit, both public; `none` when no class does. -/
-def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
+def unitClass (C : Prog) (u : List ℕ) : Option ℕ := sizeClasses.find? fun w => decide (committed C u ≤ w)
 
-/-- **`P` partitions `C`**: no gate is in two proof units, and every gate of `C` but a constant and an unread input is
+/-- **`P` partitions `C`**: no gate is in two proof blocks, and every gate of `C` but a constant and an unread input is
 in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
-(`Prog.Unread`), on which no gate's value and no returned value depends. Every proof unit has a gate of `C`, and each
-proof unit `u` has a public size class `c(u)` whose width holds the values it commits, its gates that `Boundary`
-commits: `|out(u)| ≤ w_{c(u)}`. A proof unit is a set of gates, so a unit's gates may interleave with another's. -/
+(`Prog.Unread`), on which no gate's value and no returned value depends. Every proof block has a gate of `C`, and each
+proof block `u` has a public size class `c(u)` whose width holds the values it commits, its gates that `Boundary`
+commits: `|out(u)| ≤ w_{c(u)}`. A proof block is a set of gates, so a unit's gates may interleave with another's. -/
 def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ (∀ g ∈ P.gates, g < C.gates.length) ∧
     (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates) ∧
     (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
 
-/-! ## Proof units and the universal unit -/
+/-! ## Proof blocks and the universal unit -/
 
 /-- A size class `(G, N_IN, N_OUT)`: `G` gates over `N_IN` inputs, and `N_OUT` output bits. -/
 structure SizeClass where
@@ -293,11 +293,11 @@ noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     strataPa ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W)))) 0 B
 
-/-- A class's strata sizes, in proof units. -/
+/-- A class's strata sizes, in proof blocks. -/
 def strataSizes (c : List (List (List ℕ))) : List ℕ := c.map List.length
 
-/-- **The sampling design**: one rule per class of the partition, each a one-stage design over the class's proof units,
-the classes drawn independently; the input stratum is a class drawn `all`. -/
+/-- **The sampling design**: one rule per class of the partition, each a one-stage design over the class's proof blocks,
+the classes sampled independently; the input stratum is a class sampled `all`. -/
 structure Design where
   rules : List OneStage
 
@@ -347,23 +347,23 @@ structure Wit where
 def Wit.val (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) (g : ℕ) : Option Bool :=
   (w.vals.find? fun o => o.pos == g && Cm.Opens H s.roots o).map (·.val)
 
-/-- **A faulty unit** at slot `v` of the partition `P` under `w`: unless some interior values make the proof unit there
+/-- **An incorrect proof block** at slot `v` of the partition `P` under `w`: unless some interior values make the proof block there
 correct on its committed values: its committed outputs differ from its gates applied to its committed inputs, or a
 value it reads or writes is unopened. -/
 def Faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ u, P.blocks[v]? = some u ∧ ∃ ι : ℕ → Bool, s.prog.Correct (s.prog.refIn u (w.val H Cm s) ι) u
 
-/-- **A faulty unit, on the boundary trace** (the glossary's form): the proof unit's committed boundary outputs differ
+/-- **An incorrect proof block, on the boundary trace** (the glossary's form): the proof block's committed boundary outputs differ
 from its gates applied to its committed boundary inputs. -/
 def BoundaryFaulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ u, P.blocks[v]? = some u ∧ s.prog.Correct (w.val H Cm s) u
 
 open Classical in
-/-- **The faulty set** of the trace `w`'s openings define. -/
+/-- **The incorrect set** of the trace `w`'s openings define. -/
 noncomputable def faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) : Finset ℕ :=
   (Finset.range P.blocks.length).filter (Faulty H Cm s P w)
 
-/-- **The sampling relation** at `δ`, on a parsed statement and its partition: the faulty set is in `M_δ`. -/
+/-- **The sampling relation** at `δ`, on a parsed statement and its partition: the incorrect set is in `M_δ`. -/
 def RelS (H : Msg → Msg) (Cm : CommitmentScheme Bool) (δ : ℝ) (s : AuditStatement) (P : Partition) (w : Wit) : Prop :=
   faulty H Cm s P w ∈ s.design.M P δ
 
@@ -399,11 +399,11 @@ def Design.WellFormed (d : Design) (P : Partition) : Prop :=
   d.rules.length = P.classes.length ∧ ∀ p ∈ d.rules.zip P.classes, p.1.WellFormed (strataSizes p.2)
 
 /-- **The sampling scope, readable**, at the statement's partition: a topologically ordered program, partitioned into
-proof units (sets of gates, constants and unread inputs in one or in none) whose committed values fit their public size
+proof blocks (sets of gates, constants and unread inputs in one or in none) whose committed values fit their public size
 classes, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
-`w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
+`w_{c(u)}` (`sizeClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 
@@ -416,9 +416,9 @@ private circuit's description), and the Flock verifier its sessions run (`flock`
 parser, the opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is
 read as a witness.
 
-The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the draw (the sessions), so runs that
-keep the other rounds make the same draw and see the same interior commitments; `checked` is the slots of the proof
-units the run checks; `rounds` is each one's session's rounds; `session` is its Flock statement and what its session
+The sample is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the sample (the sessions), so runs that
+keep the other rounds make the same sample and see the same interior commitments; `checked` is the slots of the proof
+blocks the run checks; `rounds` is each one's session's rounds; `session` is its Flock statement and what its session
 showed; `reveal` is what its Flock witness reveals: committed values, each with the roots it is committed under (the
 statement's, or the interior roots the run showed).
 
@@ -497,7 +497,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- The session's `E^rep` waits for `k′ = ⌈4·N₀/e⌉` accepted reruns. -/
 noncomputable def Deploy.innerK (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.innerN₀ x / Real.exp 1⌉₊
 
-/-- The proof units at `x`, `0` on a statement that doesn't parse. -/
+/-- The proof blocks at `x`, `0` on a statement that doesn't parse. -/
 def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
   match D.parse x with
   | some s => (D.part s).blocks.length
@@ -714,7 +714,7 @@ noncomputable def work (D : Deploy Coin Col T) (x : Msg) : ℝ :=
 
 /-- **The sampling scope, on the statement's bytes**: it parses, its query evaluates, and the partition and statement are
 in scope (`InScope`). `KS`, `KSCount`, `Bits` and `Complete` hold on it. It excludes every design whose `P_a` is not its
-draw's miss probability (`Design.WellFormed`): `subset K` with `K > N` (`P_a = 0` at every set, so no witness is in `R`),
+sample's miss probability (`Design.WellFormed`): `subset K` with `K > N` (`P_a = 0` at every set, so no witness is in `R`),
 a Bernoulli rule with `den = 0` or `num > den`, a stratified rule outside `1 ≤ K ≤ N` or with an empty stratum, a work
 rule whose weights or floors don't match its strata, with a zero floor or with no work. That the verifier refuses what
 is out of it is `ScopeMatches`. -/
@@ -747,7 +747,7 @@ def Universal (D : Deploy Coin Col T) : Prop :=
   ∀ (c : SizeClass) (n : PrivateCircuit) (x : List Bool), n.Fits c → x.length = c.nIn →
     (D.universal c).eval (n.args c ++ x) = n.eval x
 
-/-- **Sampling: the faulty set is the boundary form's**: on a topologically ordered program, a proof unit of distinct
+/-- **Sampling: the incorrect set is the boundary form's**: on a topologically ordered program, a proof block of distinct
 gates is faulty exactly when its committed boundary outputs differ from its gates applied to its committed boundary
 inputs. -/
 def FaultyBoundary : Prop :=
@@ -756,12 +756,12 @@ def FaultyBoundary : Prop :=
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
-the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference
+the sample that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference
 prover. It is of the deployed record's reference prover (`D.P`), at the deployed error (`D.δc H`). -/
 def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   Claims.Complete H D.V D.P (Rhon H D.commit D.parse D.partition) (Scope D) (D.δc H)
 
-/-- **Sampling: the readable scope is the verifier's**: the scope check the sampled verifier runs before it draws is
+/-- **Sampling: the readable scope is the verifier's**: the scope check the sampled verifier runs before it samples is
 `Scope`, so `KS`, `KSCount` and `Bits`, which hold on `Scope`, cover every statement it takes. Binding `scopeCheck` to
 the compiled sampled verifier is the code side's, and open. -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck

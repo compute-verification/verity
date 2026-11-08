@@ -4,6 +4,7 @@ public import Definitions.Pouw.Guarantees.Game
 public import Proofs.Pouw.Sampling
 public import Proofs.Pouw.Theorem1
 public import Proofs.Pouw.Reduction
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # Proofs of the game's guarantees
@@ -22,4 +23,4 @@ theorem EndToEnd : Pouw.Guarantees.EndToEnd := Pouw.Proofs.endToEnd
 
 end Pouw.SecurityProofs
 
-theorem Pouw.SecurityProofs.GammaFromTT : Pouw.Guarantees.GammaFromTT := @Pouw.Proofs.gammaFromTT
+theorem Pouw.SecurityProofs.GapFromTT : Pouw.Guarantees.GapFromTT := @Pouw.Proofs.gapFromTT

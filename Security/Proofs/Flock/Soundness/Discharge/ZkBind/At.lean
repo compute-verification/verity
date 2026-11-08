@@ -1,29 +1,46 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-public import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 
 /-!
 # The sites, the layout and the rows at the `--zk` tables
 
 `zk_flock_countC_execOS_keyProg` takes the sites `si`, the parse `hparse`, the layout `lay`, the rows `rs` and
-`HmRowComputes` `hHm`. Here they are built at item 3's `--zk` tables (`ZkLink.tablesAtZK dj y₀`: at each draw `S` the
-table of a `DrawSetupZK` at the challenger's draw `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
+`HmRowComputes` `hHm`. Here they are built at item 3's `--zk` tables (`ZkLink.tablesAtZK dj y₀`: at each sample `S` the
+table of a `DrawSetupZK` at the challenger's sample `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
 `rsAt` and `rsAt_computes` are at the public path's `tablesAt`:
 
-* `tableSh`: the public table (`Integrate.Table`) at the same draw: the `DrawSetupZK`'s `DrawSetup` at `zkInputs I` and
+* `tableSh`: the public table (`Integrate.Table`) at the same sample: the `DrawSetupZK`'s `DrawSetup` at `zkInputs I` and
   its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's (`tableAtZK_S`: `Layout.model` of setupH's
   statement is `stmtOf` of it, `Integrate.model_eq_stmtOf`).
-* `sitesZAt`: the `--zk` sites, each drawn unit at its rank in the draw's proved units (`sitesZAt_at`), and
+* `sitesZAt`: the `--zk` sites, each sampled proof block at its rank in the sample's proved units (`sitesZAt_at`), and
   `sitesZAt_parse` from the session's one circuit file.
 * `layZAt`, `rsZAt`: e2e-layout's `keyedLayout` and `keyedRowsOuts` at `tableSh`'s sites, moved to the `--zk` tables
   (`LayoutZ.ofShadow`, `HmRowsZ.ofShadow`), the decoders agreeing (`decAgreeAt`); `rsZAt_computes` is e2e-hm's
   `keyedRowsOuts_computes` moved along.
 
-None of them takes a draw premise: like `tablesAtZK` they are defined at every draw. `sitesZAt_at` reads the draw's own
-`DrawSetupZK`, which item 3 gives from `AcceptsZK` and `DrawOkZK I dj mPts S` at the session's own draw `S`.
+None of them takes a sample premise: like `tablesAtZK` they are defined at every sample. `sitesZAt_at` reads the sample's own
+`DrawSetupZK`, which item 3 gives from `AcceptsZK` and `DrawOkZK I dj mPts S` at the session's own sample `S`.
 -/
 
 @[expose] public section
@@ -47,13 +64,13 @@ theorem zkTyped (ht : I.tags.typed = false) : (zkInputs I).tags.typed = false :=
 include ht dj y₀
 
 open Classical in
-/-- **The public table at the `--zk` table's draw**: the draw's `DrawSetupZK`'s table, or `y₀`'s refused one. -/
+/-- **The public table at the `--zk` table's sample**: the sample's `DrawSetupZK`'s table, or `y₀`'s refused one. -/
 noncomputable def tableSh (S : Finset (Fin n)) : Integrate.Table mPts S :=
   if h : Nonempty (DrawSetupZK I mPts S (dj S)) then (Classical.choice h).x.table (zkTyped ht)
   else y₀.x.refusedC (zkTyped ht) S
 
 /-- **The `--zk` table's statement is the accepted model statement** (`stmtOf st` is `Layout.model` of setupH's
-statement at its regions, `Integrate.model_eq_stmtOf`), at every draw. -/
+statement at its regions, `Integrate.model_eq_stmtOf`), at every sample. -/
 theorem tableAtZK_S (S : Finset (Fin n)) : (tableAtZK dj y₀ S).S = (tableSh ht dj y₀ S).T.S := by
   unfold tableAtZK tableSh
   split_ifs with h
@@ -63,11 +80,11 @@ theorem tableAtZK_S (S : Finset (Fin n)) : (tableAtZK dj y₀ S).S = (tableSh ht
 /-- The one-table `--zk` plan: `tablesAtZK`. -/
 noncomputable abbrev planZAt : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) := fun S R => [tablesAtZK dj y₀ S R]
 
-/-- Every drawn unit is in the plan's one table. -/
+/-- Every sampled proof block is in the plan's one table. -/
 abbrev tabZAt : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZAt (Reg := Reg) dj y₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- The public plan at the same draws. -/
+/-- The public plan at the same samples. -/
 noncomputable abbrev planSh : Finset (Fin n) → Reg → List (TabSpec mPts) := fun S _ => [(tableSh ht dj y₀ S).T]
 
 abbrev tabSh : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planSh (Reg := Reg) ht dj y₀ S R).length :=
@@ -84,7 +101,7 @@ noncomputable def sitesSh : Placed.Sites (planSh (Reg := Reg) ht dj y₀) (tabSh
   hvu S _ u h := (tableSh ht dj y₀ S).hvu u h
   o S _ u h := (tableSh ht dj y₀ S).o u h
 
-/-- **The `--zk` sites**: each drawn unit's acceptance, template instance and block are its draw's public table's. -/
+/-- **The `--zk` sites**: each sampled proof block's acceptance, template instance and block are its sample's public table's. -/
 noncomputable def sitesZAt : SitesZ (planZAt (Reg := Reg) dj y₀) (tabZAt dj y₀) where
   acc S R u _ := recastAcc (tableSh ht dj y₀ S).acc (planZAt_S ht dj y₀ S R u).symm
   vu S _ u h := (tableSh ht dj y₀ S).vu u h
@@ -117,8 +134,8 @@ theorem sitesSh_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   · rw [dite_eq_left_of_eq_true (eq_true hS)]; exact hc
   · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact hc
 
-/-- **Each drawn unit's site at its draw's `DrawSetupZK`**: at a draw `S` that `verify --zk` sets up (`y`), each drawn
-unit's acceptance is setupH's statement at `dj S`, its block and template instance its rank `r` among the draw's proved
+/-- **Each sampled proof block's site at its sample's `DrawSetupZK`**: at a sample `S` that `verify --zk` sets up (`y`), each sampled
+proof block's acceptance is setupH's statement at `dj S`, its block and template instance its rank `r` among the sample's proved
 units: block `r / c.g`, template instance `r % c.g`. -/
 theorem sitesZAt_at {S : Finset (Fin n)} (y : DrawSetupZK I mPts S (dj S)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     ((sitesZAt (Reg := Reg) ht dj y₀).acc S R u h).st = y.x.st ∧
@@ -202,7 +219,7 @@ noncomputable abbrev rsZAt : HmRowsZ (layZAt (Reg := Reg) ht dj y₀ hc hU (pub 
       (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
 
 /-- **`hHm` at the `--zk` tables' rows** (e2e-hm's `keyedRowsOuts_computes`, moved along): in a satisfying witness of a
-drawn unit's `--zk` table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under
+sampled proof block's `--zk` table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under
 the salt at its `hm96` slot. -/
 theorem rsZAt_computes : (rsZAt (Reg := Reg) ht dj y₀ hc hU hpub hpt hscope).Computes :=
   HmRowsZ.ofShadow_computes (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU) _

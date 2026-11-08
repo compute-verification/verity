@@ -54,12 +54,6 @@ theorem Pr_prod {α β : Type} [Fintype α] [Fintype β] (P : α → β → Prop
   simp only [Pr_eq_Ex]
   rfl
 
-theorem Pr_le_of_forall {α β : Type} [Fintype α] [Nonempty α] [Fintype β] (P : α → β → Prop) {ε : ℝ}
-    (h : ∀ a, Pr (P a) ≤ ε) : Pr (fun p : α × β => P p.1 p.2) ≤ ε := by
-  rw [Pr_prod]
-  calc _ ≤ Ex fun _ : α => ε := Ex_mono h
-    _ = ε := Ex_const (α := α) ε
-
 theorem Pr_not {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (fun a => ¬ p a) = 1 - Pr p := by
   have := Classical.decPred p
   rw [Pr_eq_card, Pr_eq_card, Fintype.card_subtype_compl]
@@ -141,8 +135,6 @@ variable {α β : Type} [Fintype α] [DecidableEq β] (g h : α → β)
 /-- `α` as each value's fiber under `g`, indexed. -/
 noncomputable def fibers : α ≃ Σ b, Fin (Fintype.card {a // g a = b}) :=
   (Equiv.sigmaFiberEquiv g).symm.trans (Equiv.sigmaCongrRight fun _ => Fintype.equivFin _)
-
-theorem fibers_fst (a : α) : (fibers g a).1 = g a := rfl
 
 theorem fibers_symm (x : Σ b, Fin (Fintype.card {a // g a = b})) : g ((fibers g).symm x) = x.1 :=
   ((Fintype.equivFin {a // g a = x.1}).symm x.2).2
@@ -398,7 +390,7 @@ theorem sim_opnSeq [Add B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty
   rw [T.sim_opn dec σ _ j hne (by simp), hlast, hdec]
 
 /-- **The hm96 coin tree hides at distance `2 k δ₁`** against its simulator, where each leaf hides at `δ₁`
-(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: draw the simulator's tape
+(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: sample the simulator's tape
 `(r', y', t)`; the tree's salts `y_j = rematch j (r' j) (r j) (y' j)` are uniform for every `r'`, and round `j`'s leaf
 at `(r j, y_j)` is the simulator's at `(r' j, y' j)` but with probability `2 δ₁` (`rematch_le`: `Hm96Hiding` one way,
 its complement the other), so the two root-and-openings differ with probability at most `2 k δ₁`. -/

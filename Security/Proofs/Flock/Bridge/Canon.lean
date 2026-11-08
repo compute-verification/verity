@@ -4,8 +4,37 @@ public import Proofs.Flock.Bridge.Targets
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.RightRegZc
-public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-public import Proofs.Flock.Soundness.Assumptions.Finders
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The bridge's targets with canonical openings (targets, not proved)
@@ -19,7 +48,7 @@ targets read them:
 * `Bridge.canonOpen rows g v y`: `canonRow rows g v`, and the salt `y` has `saltLen` bytes;
 * `Bridge.canonAt rows κ g bt v y`: at a constant wire (`κ g = some b`) the opening's bit `bt` is `b`, at any other
   `canonOpen rows g v y`. A constant wire has no row: `progOf` reads it as `.const`, with no opening;
-* `Bridge.OpeningsCanonTarget`: at `EndToEndHidden`'s session, a drawn unit's openings are canonical (`OpeningsCanon`
+* `Bridge.OpeningsCanonTarget`: at `EndToEndHidden`'s session, a sampled proof block's openings are canonical (`OpeningsCanon`
   at `canonAt` and the circuit's constants `Bridge.constsOf`), the conjunct `zk_flock_countC_regC` takes;
 * `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `wrongRegZc` at `canonAt`. It implies `EndToEndHidden`
   (`wrongRegZ_subset_wrongRegZc`), and follows from `EndToEndHidden`'s argument at `zk_flock_countC_regC` and
@@ -27,8 +56,8 @@ targets read them:
 * `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings of the wires that aren't constants only;
 * `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
   `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
-* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier of record reads, each a
-  `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which C-Flock's scope check implies)
+* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier reads, each a
+  `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which Flock's scope check implies)
   and at registrations whose ports each have one name (`Registered.dupName`) and whose equal roots have one domain
   (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
   population of the game's `n` units in order (`Bridge.PopMatches`);
@@ -103,8 +132,8 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **A drawn unit's openings are canonical**, at `EndToEndHidden`'s session: in every satisfying witness of a drawn
-unit, the opening of each of its committed wires' commit strings (`lay.row`'s value) carries the constant at a constant
+/-- **A sampled proof block's openings are canonical**, at `EndToEndHidden`'s session: in every satisfying witness of a sampled
+proof block, the opening of each of its committed wires' commit strings (`lay.row`'s value) carries the constant at a constant
 wire (`Bridge.constsOf`: the single gates are pinned to 1 and 0, `HiddenExec.keyProgH_valPinned`), and at any other is
 a row of its wire's row's width with a salt (`lay.salt`) of `saltLen` bytes (`OpeningsCanon` at `Bridge.canonAt`). The game's rows are `(widthOf W (rowBits q), padBits b)`, canonical at
 `rowBits q = 16·words ≤ W` (`Bridge.rowShaped_rowOf`). -/
@@ -190,7 +219,7 @@ open Classical in
 commit string at the prover's registration that is canonical at `g` (`Bridge.canonOpen`: `g` has a row, the value is a
 row of its width, and the salt has `saltLen` bytes), at a wire that isn't a constant (`Bridge.constsOf`), some data
 opens `g`'s claims position to `o`'s bit there, under the registration's roots
-at SHA-512, at a circuit file whose ports are rows the verifier of record reads (`Bridge.RowsOk`: `sha512/row/v1`,
+at SHA-512, at a circuit file whose ports are rows the verifier reads (`Bridge.RowsOk`: `sha512/row/v1`,
 `sha512/row/v2` or `sha512/row-seg/v1`) and a registration whose ports each have one name and whose equal port roots
 have one domain (`Registered.dupName`, `PortRoots.RootFixesDomain`). -/
 def _root_.Flock.Bridge.TransportsLiveC : Prop :=
@@ -233,7 +262,7 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 open Classical in
-/-- **`SampledKSLive` at the circuit files the verifier of record reads**: `SampledKSLive`'s statement at a circuit
+/-- **`SampledKSLive` at the circuit files the verifier reads**: `SampledKSLive`'s statement at a circuit
 file whose ports are rows of `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` (`Bridge.RowsOk`, which
 `scopeOkH` implies: `Bridge.rowsOk_of_scopeOkH`), each row's leaf in the deployed sampling commitment hashing its
 port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schemaOf`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which

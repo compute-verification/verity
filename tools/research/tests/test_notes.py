@@ -37,6 +37,25 @@ def test_checkpoint_goes_under_the_front_matter_newest_first_and_sets_status(tmp
     assert (row["state"], row["commit"], row["checkpoint_at"], row["text"]) == ("blocked", "abc1234", "21:00Z", "waiting on the pod")
 
 
+def test_checkpoint_names_its_writer_in_origin_and_keeps_what_the_origin_already_names(tmp_path):
+    w, c, s = ("bc-11111111-1111-4111-8111-111111111111", "bc-22222222-2222-4222-8222-222222222222",
+               "bc-33333333-3333-4333-8333-333333333333")
+    p = _report(tmp_path, "lane-o", "# lane-o\n", 5)
+    notes.checkpoint(tmp_path, "lane-o", "open", "first", commit="abc1234", now=NOW, agent=w)
+    assert f"\norigin: {w}\n---\n" in p.read_text()
+
+    origin = f"origin: cloud worker zy (bc-11111111) of the coordinator ({c}), branch cursor/zy-1234"
+    p.write_text(FRONT.format(lane="lane-o", status="open").replace("---\n\n", f"{origin}\n---\n\n", 1) + "# lane-o\n")
+    notes.checkpoint(tmp_path, "lane-o", "open", "second", commit="abc1234", now=NOW, agent=w)
+    assert f"\n{origin}\n" in p.read_text()
+    notes.checkpoint(tmp_path, "lane-o", "open", "third", commit="abc1234", now=NOW, agent=s)
+    front = p.read_text().split("\n---\n", 1)[0]
+    assert front.count("origin:") == 1 and f"{origin}; checkpoint by {s}" in front
+    notes.checkpoint(tmp_path, "lane-o", "open", "fourth", commit="abc1234", now=NOW, agent=s)
+    notes.checkpoint(tmp_path, "lane-o", "open", "fifth", commit="abc1234", now=NOW)
+    assert p.read_text().count(s) == 1 and c in p.read_text() and "cursor/zy-1234" in p.read_text()
+
+
 def test_checkpoint_survives_the_store_mounts_eagain_without_doubling_its_line(tmp_path, monkeypatch):
     # the Project store's mount answers EAGAIN on rewrites of a recently written file, sometimes after the write landed
     p = _report(tmp_path, "lane-e", "# lane-e\n", 5)

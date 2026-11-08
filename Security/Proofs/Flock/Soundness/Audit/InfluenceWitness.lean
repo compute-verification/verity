@@ -17,8 +17,8 @@ others show only that the hypotheses can be met.
   the same value on `D`. `W.count` is the count `card_delivered_le` gives.
 * `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and law, with the exits as
   separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
-* `A.influence`, `A.accepts`: a law that draws nothing, a session that always accepts and the honest committed
-  transcript meet `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
+* `A.influence`, `A.accepts`: a sampling design that samples nothing, a session that always accepts and the honest committed
+  transcript meet `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
   accepts with probability `1`.
 * `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
   exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
@@ -136,7 +136,7 @@ theorem wrong_sub (Z : Fin C.N → Bool) (h1 : Z 1 = false) (h2 : Z 2 = true) : 
 def X : Fin C.N → Bool := ![false, false, true, false]
 def Y : Fin C.N → Bool := ![false, false, true, true]
 
-/-- **Lemma 4.7 is not vacuous**: two different transcripts, each with a wrong unit, agree on the delivered wire. -/
+/-- **Lemma 4.7 is not vacuous**: two different transcripts, each with an incorrect proof block, agree on the delivered wire. -/
 theorem lemma47 : X 2 = Y 2 ∧ X ≠ Y ∧ P.wrong X ≠ ∅ := by
   refine ⟨P.outputs_eq_of_separates hK hD hsep (inputs X rfl) (inputs Y rfl) (wrong_sub X rfl rfl)
     (wrong_sub Y rfl rfl) ?_ 2 (by simp [D]), ?_, ?_⟩
@@ -207,7 +207,7 @@ theorem hks : (P.analysis Xc ext).KnowledgeSound 0 := by
   rintro ok ⟨_, u, _, hu, _⟩
   exact notMem_empty u hu
 
-theorem hlink : (P.analysis Xc ext).LinkSound 0 := by
+theorem hlink : (P.analysis Xc ext).BindSound 0 := by
   intro R τ tgt
   refine (avg_mono fun ω => ?_).trans (avg_const (0 : ℝ≥0∞)).le
   refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le

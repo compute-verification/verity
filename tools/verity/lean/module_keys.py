@@ -58,7 +58,7 @@ def _load(name: str, path: Path):
 
 H = _load("headers", HERE / "headers.py")
 C = _load("contract", CONTRACT)
-parts, name, imports = H.parts, H.name, H.imports
+parts, components, name, imports = H.parts, H.components, H.name, H.imports
 #: the kind of a module's task: the cache's scope, which every key reads
 SCHEMA = "lean-module/v3"
 #: a module's task id is `lean-module:<its source's path>`, as the task graph names a module's own task
@@ -96,12 +96,12 @@ def digest(f: Path) -> str:
 
 def path_of(mod: str, ext: str) -> Path:
     """``mod``'s file under a source or build directory: `A/B.ext` for `A.B`."""
-    ps = parts(mod)
+    ps = components(mod)
     return Path(*ps[:-1], ps[-1] + ext)
 
 
 def _prefix(root: str, mod: str) -> bool:
-    r, m = parts(root), parts(mod)
+    r, m = components(root), components(mod)
     return m[: len(r)] == r
 
 

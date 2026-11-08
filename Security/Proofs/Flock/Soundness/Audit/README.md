@@ -10,7 +10,7 @@ prover's state at registration (its registration and its session strategy for ev
 its incorrect proof blocks; nobody computes it. A unit is **incorrect** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
-design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`LinkSound`) is the
+design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`BindSound`) is the
 Glossary's $\varepsilon_{bind}$.
 
 **Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`): each is stated in `../ASSUMPTIONS.md`.
@@ -18,7 +18,7 @@ Glossary's $\varepsilon_{bind}$.
 **What the reviewer checks here.** The theorems hold for every choice of committed trace `X` and extractor `ext`,
 so their meaning rests on `X` being the committed values. At the oracle layer `X` is the registration itself
 (`Partition.oracle`). At the compiled layer it is the plurality of what the extractor recovers behind each commit
-string, which the instantiation defines and `LinkSound` ties to the extractor. A consumer who opens values under the
+string, which the instantiation defines and `BindSound` ties to the extractor. A consumer who opens values under the
 roots gets `X`'s values up to that opening's own binding term, which the audit does not count.
 
 **Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the sample misses $B$:
@@ -51,11 +51,10 @@ $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
 `share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ periods, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
-escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
-$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
-reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`pooled_escape_log`, in `Claims.Pr`, which is outside the audit layer:
-`Claims/Sampling/PooledPr.lean`).
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier samples
+escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`pooled_escape`), at most
+$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`pooled_escape_prod`), both in `prCoin`; at $\delta$, the
+escaped total reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$, which no theorem states.
 These are instances of **the monitoring-period step** (`Audit/Periods.lean`, `FlockSoundness.Audit.Periods`): $T$
 periods of independent uniform coins, any coin space per period, and an event of period $t$ that may read the periods
 up to $t$ with probability at most $p_t$ given any history (`avg_prod_le`, the one induction). It holds in at least
@@ -74,12 +73,13 @@ over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theor
 (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
 (`ExecStrataOf.lean`): the strata of a sample file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
 stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
-neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
-(`liveStrata_of_ofJson`: non-empty at an accepted sample file's law). `drawOS_subset_escape_le`,
-`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**: `Flock.Draw.drawOS`,
-which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
-with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
-(`Assumptions.UniformRandomBytes`); `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
+neither: their sampling design is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
+(`liveStrata_of_ofJson`: non-empty at an accepted sample file's sampling design). `drawOS_subset_escape_le`,
+`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**:
+`Flock.Draw.drawWith` on the challenger's coins (`SampledProofs.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
+`IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
+the same acceptance probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
+`execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
 sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`),
 **the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.ml.randomness` stream, has
 no higher acceptance probability than the uniform $k$-subset. The window's per-call samples under one key form one
@@ -106,7 +106,7 @@ $\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A
 is `Stratified.miss` and discharges `audit_exfiltration`'s `hk` for a stratified sampling design.
 
 **Theorems, the work sampling design** (`Audit/Work.lean`, the default sampling design's second version;
-`../../PROTOCOL.md` §7.3): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
+`Flock.Draw`): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
 $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the PoUW work of each of its units,
 $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work table; every stratified and
 one-stage theorem holds of it as stated, and the theorems below hold for every such $f$. `floor_le_workK`, **the
@@ -160,7 +160,7 @@ It fixes each audit's sampling design in advance by its index, over one $n$; `ha
 choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
 the whole run.
 
-**Theorems, closure samples** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
+**Theorems, closure samples** (`Audit/Closure.lean`; `Flock.Draw`): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each sampled proof block proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
 whose closure meets $B$, so an incorrect proof block that is never sampled on its own is charged to the units above it. `unsoundWork`
@@ -254,7 +254,7 @@ The hypotheses are the lowerings.
   extractor**. Per sampled proof block, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
   probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
   on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
-  `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
+  `KnowledgeSound.toExtraction` and `BindSound.toExtraction`);
 - `flock_batched_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit in the protocol's batched session
   of several tables (`batchedSession`, `sessionB`), with the leaf layer registered. Each sampled proof block is read from one
   table of the plan (`tab`). The knowledge term is, after each sample, the largest over the plan's tables of the table's
@@ -271,8 +271,9 @@ The hypotheses are the lowerings.
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
 computed row. No hypothesis relates those rows to another circuit (the circuit is chosen on the untrusted side,
-and the lowering does no optimizing); what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
-`../Certificate.lean`; `../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
+and the lowering does no optimizing); what a correct unit computes beyond its rows is outside these theorems: rows
+derived from a gate circuit carry its outputs (`GateRows.rows_sound`), and no theorem carries that to a unit's committed
+values (`../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
 The compiled layer's named hypotheses are stated there too.

@@ -1,6 +1,6 @@
-"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
+"""A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
+A scan over the Lean under `verity/core/` (the verifiers and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
 range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
 array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
@@ -60,17 +60,22 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
-        "behind Tmpl.unitNet's thunks, built only where a check reads them, which none on the templated statement's "
-        "path does (benchmarks/verifier_cost/flock_tmpl stmt)",
+        "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
+        "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
+        "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
     "verity/core/service/flock/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
-        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT)",
+        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
+        "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
     "verity/core/service/flock/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
     "verity/core/service/flock/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
+    "verity/core/service/flock/Flock/Gate.lean":
+        "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
+        "layout.Gate to it; no verifier calls it",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
@@ -148,7 +153,7 @@ def test_the_scan_sees_each_form():
     def k (node : Node) := for m in [0:node.members] do pure ()
     def l (body : Body) := (List.range (body.nodes[k]!).members).map id ++ List.range node.membersOf
     def n (f : Files) := do
-      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub Coins.os 1
+      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub RecVStar.innerTree 1
       (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr

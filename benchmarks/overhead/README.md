@@ -54,9 +54,10 @@ with a 95% interval from the ratios' order statistics.
 - The stock arm is each linear's fastest by wall time; the least-SM-time arm's γ is beside it, and so is γ with the arm's
   weight side added, a bound.
 - The A/A control is the twinned stock kernel against its original, in every run: it is the `stock` scheme's γ.
-- The cross-check: each entry's busy SM-time may exceed its kernels' occupied SM-time (each kernel's duration times the
-  SMs its blocks occupy, the most SMs Active can read) by at most 5%. Below it, the ratio reads the SMs the kernels left
-  idle (a partial last wave, a persistent grid's uneven tiles), and stays in the record.
+- The cross-check: each entry's busy SM-time may exceed its kernels' occupied SM-time (each kernel's duration times
+  min(SMs, blocks), the most SMs Active can read: a block is resident on one SM, and the scheduler spreads a small grid
+  over as many SMs as it has blocks) by at most 5%. Below it, the ratio reads the SMs the kernels left idle (a partial
+  last wave, a persistent grid's uneven tiles), and stays in the record.
 - ε comes from the scheme's own function at the same point and card, in the same record. A kernel point runs no model, so
   its perplexity is a served point's; nor does it serve requests, so it has no load counts to keep on the node.
 - The scheme gate is γ ≤ 10 at each point, recorded beside γ.

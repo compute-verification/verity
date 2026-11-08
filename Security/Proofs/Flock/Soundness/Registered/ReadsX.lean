@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Registered.Binding
 public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # Registered reads of rows each hashed under its own encoding

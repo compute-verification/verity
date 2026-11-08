@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 `ofDeploy D iroots`: a frozen sampled record `D` (`Claims.Sampling.Deploy`) as a compiled sampled verifier over Flock
 at its deployed decoder (`Compiled _ (Arg.ofFlock D.flock)`), at the roots a run shows for a proof block's interior
 values (`iroots`, which the frozen record leaves to its hypotheses). Its verifier, parser, scope check, partition,
-commitment, draw layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
+commitment, sample layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
 are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots the frozen hypotheses read); a proof
 block's shape is the record's inner waits, truncation and `N₀` and its session's rounds (`sh`); and the bounds on its
 session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight (`κb`, `γb`). At every `D`:
@@ -65,7 +65,7 @@ section OfDeploy
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
 /-- **A frozen sampled record as a compiled sampled verifier over Flock**, at its deployed decoder and the roots a run
-shows for a proof block's interior values: `D`'s verifier, parser, scope check, partition, commitment, draw layout,
+shows for a proof block's interior values: `D`'s verifier, parser, scope check, partition, commitment, sample layout,
 sessions, reveal, opening count, reference prover and completeness error; its sample the checked units' first `n_PU`;
 a proof block's shape the record's inner waits, truncation and `N₀` and its session's rounds; the bounds on its
 session's errors `κ_F` and Flock's `γ` at those rounds and the record's weight. -/
@@ -183,11 +183,78 @@ theorem flock_check_of_R {parse : Msg → Option Claims.Flock.Stmt} {xS : Msg} {
   simp only [Claims.Flock.check, hs]
   exact decide_eq_true hrel
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **`fixed` from `DrawFixed`**: a sampled proof block's session's rounds are second-stage, and fresh coins on them keep the
+sample. -/
+theorem fixed_ofDeploy (hf : Claims.Sampling.DrawFixed D) (x : Msg) (r : Fin ((ofDeploy D iroots).V.k x) → Coin)
+    (u : ℕ) (hu : u ∈ (ofDeploy D iroots).checked x r) :
+    (ofDeploy D iroots).rounds x u ⊆ (ofDeploy D iroots).stage2 x ∧
+      ∀ d, (ofDeploy D iroots).checked x (forkOn ((ofDeploy D iroots).rounds x u) r d) =
+        (ofDeploy D iroots).checked x r := by
+  obtain ⟨hsub, hkeep⟩ := hf x r u ((mem_ofDeploy_checked D iroots).1 hu)
+  exact ⟨hsub, fun d => congrArg (List.take _) (hkeep d)⟩
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **`runs` from `SessionRuns` and `InnerNumbers`**: a session's rounds number Flock's at its statement and its
+embedding is `emb`, both from `SessionRuns`' order embedding onto them (`Finset.orderEmbOfFin_unique`); its shape and
+errors are within the block's from `InnerNumbers` at the session the run shows. -/
+theorem runs_ofDeploy (H : Msg → Msg) (hruns : Claims.Sampling.SessionRuns H D)
+    (hnum : Claims.Sampling.InnerNumbers D) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω)
+    (r : Fin ((ofDeploy D iroots).V.k x) → Coin) (u : ℕ) (hu : u ∈ (ofDeploy D iroots).checked x r) :
+    ∃ (xS : Msg) (P' : Prover Unit), (Arg.ofFlock D.flock).shape xS = (ofDeploy D iroots).sh x u ∧
+      (Arg.ofFlock D.flock).κ xS ≤ (ofDeploy D iroots).κb x u ∧
+      (Arg.ofFlock D.flock).γ xS ≤ (ofDeploy D iroots).γb x u ∧
+      (Arg.ofFlock D.flock).V.k xS = ((ofDeploy D iroots).rounds x u).card ∧
+      (∀ r' : Fin ((ofDeploy D iroots).V.k x) → Coin, (∀ t ∉ (ofDeploy D iroots).rounds x u, r' t = r t) →
+        (run H P (ofDeploy D iroots).V x ω r').out = .acc →
+          (run H P' (Arg.ofFlock D.flock).V xS () ((ofDeploy D iroots).coinsOf x u xS r')).out = .acc) ∧
+      ∀ r' : Fin ((ofDeploy D iroots).V.k x) → Coin, (∀ t ∉ (ofDeploy D iroots).rounds x u,
+          (∀ t' ∈ (ofDeploy D iroots).rounds x u, t < t') → r' t = r t) →
+        (ofDeploy D iroots).session x u (run H P (ofDeploy D iroots).V x ω r').seen =
+            some (xS, (run H P' (Arg.ofFlock D.flock).V xS () ((ofDeploy D iroots).coinsOf x u xS r')).seen) ∧
+          ∀ q ∈ (run H P' (Arg.ofFlock D.flock).V xS () ((ofDeploy D iroots).coinsOf x u xS r')).vLog,
+            q ∈ (run H P (ofDeploy D iroots).V x ω r').vLog := by
+  obtain ⟨xS, emb, P', hmono, hrange, hacc, hsess⟩ := hruns x Ω P ω r u ((mem_ofDeploy_checked D iroots).1 hu)
+  have hset : D.rounds x u = Finset.univ.map ⟨emb, hmono.injective⟩ := by
+    ext t
+    simp [hrange t]
+  have hcard : D.flock.V.k xS = (D.rounds x u).card := by
+    rw [hset, Finset.card_map, Finset.card_univ, Fintype.card_fin]
+  have hco : ∀ r', (ofDeploy D iroots).coinsOf x u xS r' = fun i => r' (emb i) := fun r' => funext fun i => by
+    have he : emb = (D.rounds x u).orderEmbOfFin hcard.symm :=
+      Finset.orderEmbOfFin_unique hcard.symm (fun i => (hrange _).2 ⟨i, rfl⟩) hmono
+    show (if h : D.flock.V.k xS = (D.rounds x u).card then r' ((D.rounds x u).orderEmbOfFin h.symm i)
+      else default) = r' (emb i)
+    rw [dite_eq_left hcard]
+    exact congrArg r' (congrFun he i).symm
+  obtain ⟨hw, hc, hN, he, hwt⟩ := hnum x u _ xS _ (hsess r fun _ _ _ => rfl).1
+  have hk : D.flock.k xS = D.innerK x := by
+    unfold Claims.Flock.Deploy.k Claims.Sampling.Deploy.innerK
+    rw [hN]
+  refine ⟨xS, P', ?_, ?_, ?_, hcard, fun r' hr' => ?_, fun r' hr' => ?_⟩
+  · show (D.flock.waits xS, D.flock.cap xS, D.flock.V.k xS, D.flock.N₀ xS) =
+      (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
+    rw [hw, hc, hcard, hN]
+  · show Claims.Flock.κ D.flock xS ≤ Claims.Sampling.κF D x
+    unfold Claims.Flock.κ Claims.Sampling.κF
+    rw [hk, hw, hc]
+    linarith
+  · show Claims.Flock.γ D.flock xS ≤
+      16 * (Real.sqrt (2 * ((D.rounds x u).card : ℝ) * D.weight x) + (D.rounds x u).card) ^ 2
+    unfold Claims.Flock.γ
+    rw [hcard]
+    gcongr
+  · rw [hco]
+    exact (hacc r' hr').mp
+  · rw [hco]
+    exact hsess r' fun t ht hlt => hr' t ht fun t' ht' => by
+      obtain ⟨i, rfl⟩ := (hrange t').1 ht'
+      exact hlt i
+
 omit [Nonempty Coin] in
 /-- **The contract from the frozen hypotheses**: `KS_of`'s, at `D`, give `ofDeploy`'s `Sessions`. The sample's members
-are the checked units at slots below `n_PU` (`mem_ofDeploy_checked`); a session's rounds number Flock's at its statement
-and its embedding is `emb`, both from `SessionRuns`' order embedding onto them (`Finset.orderEmbOfFin_unique`); its
-shape and errors are within the block's from `InnerNumbers` at the session the run shows. -/
+are the checked units at slots below `n_PU` (`mem_ofDeploy_checked`); `fixed` and `runs` are `fixed_ofDeploy`'s and
+`runs_ofDeploy`'s. -/
 theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr : Claims.Sampling.Refuses H D)
     (hi : Claims.Sampling.InteriorFixed H D iroots) (hf : Claims.Sampling.DrawFixed D)
     (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D)
@@ -202,46 +269,8 @@ theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr
   slots _ _ := List.length_take_le _ _
   refuses := hr
   interior := hi
-  fixed x r u hu := by
-    obtain ⟨hsub, hkeep⟩ := hf x r u ((mem_ofDeploy_checked D iroots).1 hu)
-    exact ⟨hsub, fun d => congrArg (List.take _) (hkeep d)⟩
-  runs x Ω P ω r u hu := by
-    obtain ⟨xS, emb, P', hmono, hrange, hacc, hsess⟩ := hruns x Ω P ω r u ((mem_ofDeploy_checked D iroots).1 hu)
-    have hset : D.rounds x u = Finset.univ.map ⟨emb, hmono.injective⟩ := by
-      ext t
-      simp [hrange t]
-    have hcard : D.flock.V.k xS = (D.rounds x u).card := by
-      rw [hset, Finset.card_map, Finset.card_univ, Fintype.card_fin]
-    have hco : ∀ r', (ofDeploy D iroots).coinsOf x u xS r' = fun i => r' (emb i) := fun r' => funext fun i => by
-      have he : emb = (D.rounds x u).orderEmbOfFin hcard.symm :=
-        Finset.orderEmbOfFin_unique hcard.symm (fun i => (hrange _).2 ⟨i, rfl⟩) hmono
-      show (if h : D.flock.V.k xS = (D.rounds x u).card then r' ((D.rounds x u).orderEmbOfFin h.symm i)
-        else default) = r' (emb i)
-      rw [dite_eq_left hcard]
-      exact congrArg r' (congrFun he i).symm
-    obtain ⟨hw, hc, hN, he, hwt⟩ := hnum x u _ xS _ (hsess r fun _ _ _ => rfl).1
-    have hk : D.flock.k xS = D.innerK x := by
-      unfold Claims.Flock.Deploy.k Claims.Sampling.Deploy.innerK
-      rw [hN]
-    refine ⟨xS, P', ?_, ?_, ?_, hcard, fun r' hr' => ?_, fun r' hr' => ?_⟩
-    · show (D.flock.waits xS, D.flock.cap xS, D.flock.V.k xS, D.flock.N₀ xS) =
-        (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
-      rw [hw, hc, hcard, hN]
-    · show Claims.Flock.κ D.flock xS ≤ Claims.Sampling.κF D x
-      unfold Claims.Flock.κ Claims.Sampling.κF
-      rw [hk, hw, hc]
-      linarith
-    · show Claims.Flock.γ D.flock xS ≤
-        16 * (Real.sqrt (2 * ((D.rounds x u).card : ℝ) * D.weight x) + (D.rounds x u).card) ^ 2
-      unfold Claims.Flock.γ
-      rw [hcard]
-      gcongr
-    · rw [hco]
-      exact (hacc r' hr').mp
-    · rw [hco]
-      exact hsess r' fun t ht hlt => hr' t ht fun t' ht' => by
-        obtain ⟨i, rfl⟩ := (hrange t').1 ht'
-        exact hlt i
+  fixed := fixed_ofDeploy D iroots hf
+  runs := runs_ofDeploy D iroots H hruns hnum
   opens x s P Ω Pv ω r u xS vS w hs hP hin hacc hu hsess hR :=
     hopens x s P Ω Pv ω r u xS vS w hs hP hin hacc ((mem_ofDeploy_checked D iroots).1 hu) hsess
       (flock_check_of_R hR)
@@ -262,15 +291,15 @@ The contract's clauses that read only the sampled verifier's code, as Props of `
 hypothesis of its name at `deployOf F c` (`Iff.rfl`):
 
 * `Code.DrawLaw` (`draws`): on a statement in scope, for each set `B` of proof blocks, a weight of the first-stage coins
-  bounds the probability over the second stage that no slot below the proof units holds a block of `B`, and averages
+  bounds the probability over the second stage that no slot below the proof blocks holds a block of `B`, and averages
   at most `P_a(B)`;
 * `Code.Refuses` (`refuses`): an accepted run's statement parses, its query evaluates, and the pair is in scope;
 * `Code.InteriorFixed` (`interior`): the roots a run shows for a proof block's interior values are the same at fresh
   second-stage coins;
-* `Code.DrawFixed` (`fixed`): a unit checked at a slot below the proof units has its session's rounds in the second
+* `Code.DrawFixed` (`fixed`): a unit checked at a slot below the proof blocks has its session's rounds in the second
   stage, and fresh coins on them keep the checked units. -/
 
-/-- **Draw law**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
+/-- **Sampling design**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
 def Code.DrawLaw (c : Code) : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ Finset.range Pt.blocks.length, ∃ esc : (Fin (c.V.k x) → FlockDeploy.Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
@@ -288,7 +317,7 @@ def Code.InteriorFixed (H : Msg → Msg) (c : Code) (iroots : Msg → Seen → �
   ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
     iroots x (run H P c.V x ω (forkOn (c.stage2 x) r d)).seen v = iroots x (run H P c.V x ω r).seen v
 
-/-- **Draw fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
+/-- **Sample fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
 def Code.DrawFixed (c : Code) : Prop :=
   ∀ x r u, (∃ p : Fin (units c x), (c.checked x r)[p.val]? = some u) →
     c.rounds x u ⊆ c.stage2 x ∧ ∀ d, c.checked x (forkOn (c.rounds x u) r d) = c.checked x r
