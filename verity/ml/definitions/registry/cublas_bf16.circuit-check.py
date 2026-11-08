@@ -6,10 +6,11 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The word Definitions: the gate's f32-out GEMM at GLM-5.3's K (6144) over two W rows, the batched GEMM at two members,
-    K = 32, N = 3, both default split-K output types, the bf16-workspace and the serial split-K at K = 64, N = 3, four
-    splits, the three grid.z split-Ks (a bf16 workspace, an f32 one and none) at K = 64, N = 3, three 8-aligned slices at
-    k-tile 16, and the padded GEMM at T = 40 of K = 48, N = 3."""
+    """The word Definitions: the padded GEMM at T = 40 of K = 48, N = 3, the three grid.z split-Ks (a bf16 workspace, an
+    f32 one and none) at K = 64, N = 3, three 8-aligned slices at k-tile 16, the gate's f32-out GEMM at GLM-5.3's K (6144)
+    over two W rows, the batched GEMM at two members,
+    K = 32, N = 3, and both default split-K output types, the bf16-workspace and the serial split-K at K = 64, N = 3, four
+    splits."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
@@ -18,16 +19,16 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     HOP = word_of(BG.HopperBF16WgmmaDot16)
     GRID_Z = {"K": 64, "N": 3, "SPLIT_K": 3, "ALIGN": 8, "TILE_K": 16}
     return [
+        ("GemmPad_v1", lambda: bind(CB.GemmPadWord, T=40, K=48, N=3, DOT=HOP)),
+        ("CublasSplitKGemmBf16PartialsAligned_v1", lambda: bind(CB.CublasSplitKGemmBf16PartialsAlignedWord, **GRID_Z, DOT=HOP)),
+        ("CublasSplitKGemmAligned_v1", lambda: bind(CB.CublasSplitKGemmAlignedWord, **GRID_Z, DOT=HOP)),
+        ("CublasSerialSplitKGemmAligned_v1", lambda: bind(CB.CublasSerialSplitKGemmAlignedWord, **GRID_Z, DOT=HOP)),
         ("GemmF32Out_v1", lambda: bind(CB.GemmF32OutWord, K=6144, N=2, DOT=HOP)),
         ("BatchedGemm_v1", lambda: bind(CB.BatchedGemmWord, B=2, K=32, N=3, DOT=HOP)),
         ("CublasSplitKGemmF32Out_v1", lambda: bind(CB.CublasSplitKGemmF32OutWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
         ("CublasSplitKGemm_v1", lambda: bind(CB.CublasSplitKGemmWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
         ("CublasSplitKGemmBf16Partials_v1", lambda: bind(CB.CublasSplitKGemmBf16PartialsWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
         ("CublasSerialSplitKGemm_v1", lambda: bind(CB.CublasSerialSplitKGemmWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
-        ("CublasSplitKGemmBf16PartialsAligned_v1", lambda: bind(CB.CublasSplitKGemmBf16PartialsAlignedWord, **GRID_Z, DOT=HOP)),
-        ("CublasSplitKGemmAligned_v1", lambda: bind(CB.CublasSplitKGemmAlignedWord, **GRID_Z, DOT=HOP)),
-        ("CublasSerialSplitKGemmAligned_v1", lambda: bind(CB.CublasSerialSplitKGemmAlignedWord, **GRID_Z, DOT=HOP)),
-        ("GemmPad_v1", lambda: bind(CB.GemmPadWord, T=40, K=48, N=3, DOT=HOP)),
     ]
 
 
