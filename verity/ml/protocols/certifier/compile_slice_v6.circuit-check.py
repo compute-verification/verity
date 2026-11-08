@@ -8,8 +8,8 @@ from typing import Any
 def _network_compile_slice_v6_roots() -> list[Any]:
     """Both units at CompileSlice_v5's small class (three steps at (R 2, W 1, A 1) on three blocks, one arrival of 4-bit
     tokens, one decision of advice, two stream slots, one M and one RB entry, a ragged row of one block). The compile
-    slice is CompileWindow (CompileSlice_v5's load and steps, CompileIds) and CallsVerdict, the records held to the calls
-    row; the pool window is CompileSlice_v5's stream, bus and ragged keys with PoolCounts, the two pool rows' digests
+    slice is CompileWindow (CompileSlice_v5's load and steps, CompileIds), CallsEq over its records and CallsVerdict, the
+    records held to the calls row; the pool window is CompileSlice_v5's stream, bus and ragged keys with PoolCounts, the two pool rows' digests
     (one segment each), their keys' prints, PoolOpen, PoolClose and PoolCopies over the rows and the M run, and
     PoolVerdict: the wiring their own checks can't reach is the opened row into the stream's initial values and the
     finals into the close. The pool window is past the default whole-lowering budget; its parts are each lowered."""

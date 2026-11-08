@@ -40,9 +40,9 @@ until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's 
 counts the advice and the checked rows of the units' inputs.
 
 **The compile slice**: `CompileWindow` (CompileSlice_v5's load, the arrivals' ids distinct, and its steps from ``res``,
-each running slot's request number carried in its slot row), then `CallsVerdict`: CompileSlice_v5's flags load, steps,
-cache, served and carry, and bit 5 ``calls``, 1 iff its records are ``calls`` and the padding of ``res`` and ``calls``
-is zero. It has no coin. `COMPILE_ACCEPT` = 0x3F.
+each running slot's request number carried in its slot row), `CallsEq` scanned over its records beside ``calls``', then
+`CallsVerdict`: CompileSlice_v5's flags load, steps, cache, served and carry, and bit 5 ``calls``, 1 iff its records are
+``calls`` and the padding of ``res`` and ``calls`` is zero. It has no coin. `COMPILE_ACCEPT` = 0x3F.
 
 **The pool window**'s verdict, `POOL_ACCEPT` = 0xF:
 - bit 0 ``pool``: the stream checks (`cache_step_v3.PoolEnd`), its bus product over ``calls`` is the stream's and its call
@@ -66,7 +66,8 @@ it. No witness about the previous pool is free: a wrong opening is a ``prow`` ot
 records) and 3·n(n − 1)/2^129 over δ for the n keys of ``nrow`` and the window's prints; a root opened to two rows is a
 SHA-512 collision.
 
-**Cost** (`size`, `parts`): the compile slice is CompileSlice_v5's load and steps, its ids' check and the calls row's;
+**Cost** (`size`, `parts`): the compile slice is CompileSlice_v5's load and steps, its ids' check and the calls row's (a
+`CallsEq` a record);
 the pool window is CompileSlice_v5's stream, bus and ragged keys, two row digests (`Sha512RowSeg_v1` over
 `data_bits` ``prow``), 2(NB − 1) KeyPrints, NB − 1 `PoolOpen` and `PoolClose` steps and NM `PoolCopies`; its M run lists
 the carried keys beside the touched ones.
@@ -108,6 +109,7 @@ CLASSES = {"adv": "advice", "ing": "ingress", "req": "registered", "srv": "regis
 PADDED = tuple(r for r in CLASSES if CLASSES[r] == "registered")
 IDS_STATICS = ("K", "IW")
 COUNTS_STATICS = ("K", "CU")
+REC_STATICS = ("K", "CU")
 LINKS = ("prev", "next", "cprev", "cnext")
 #: the close's record tag, past the memories'
 COPIES = 5
@@ -205,20 +207,36 @@ def _pad_width(S, r: str) -> int:
     return max(row_bits(S)[r] - data_bits(S)[r], 1)
 
 
-def _calls_forms(C, S, head, rows, cout, recs, calls, spad, rpad, xpad):
+def rec_width(S) -> int:
+    """A bus record's bits, from `REC_STATICS` alone: on, kind, r and a, b, x, y (`compile_slice_v5._rec_widths`)."""
+    return 1 + 3 + _bitlen(S.K) + 4 * (_bitlen(S.CU) + 1)
+
+
+def _calls_eq(C, S, ok, rec, call):
+    """One bus record: 1 in ok while each record so far is the calls row's."""
+    e = RC._eq(C, list(rec), list(call))
+    return [[C.AND(ok[0], e)], [e]]
+
+
+def _sig_calls_eq(S):
+    rec = Array(rec_width(S), BIT)
+    return (("carry", Array(1, BIT)), ("rec", rec), ("call", rec)), Tuple(Array(1, BIT), BIT)
+
+
+def _calls_forms(C, S, head, rows, cout, eq, spad, rpad, xpad, cpad):
     load, ids, oks = head[0], head[1], head[2:5]
     flags = [and_reduce(C, [load, ids, RC._zero(C, list(rpad))]), oks[0], oks[1],
              C.AND(oks[2], RC._zero(C, list(spad))), RC._eq(C, list(rows), list(cout)),
-             C.AND(RC._eq(C, list(recs), list(calls)), RC._zero(C, list(xpad)))]
+             and_reduce(C, [eq[0], RC._zero(C, list(xpad)), RC._zero(C, list(cpad))])]
     return flags + [ZERO] * (16 - len(flags))
 
 
 def _sig_calls(S):
     Sc, bits = CS.chain(S), row_bits(S)
     return ((("head", Array(5, BIT)), ("rows", Array(RC.width(Sc) + RC.window_width(Sc) + V5.pool_width(S), BIT)),
-             ("cout", Array(bits["cout"], BIT)), ("recs", Array(data_bits(S)["calls"], BIT)),
-             ("calls", Array(bits["calls"], BIT)), ("spad", Array(_pad_width(S, "srv"), BIT)),
-             ("rpad", Array(_pad_width(S, "req"), BIT)), ("xpad", Array(_pad_width(S, "res"), BIT))), Array(16, BIT))
+             ("cout", Array(bits["cout"], BIT)), ("eq", Array(1, BIT)), ("spad", Array(_pad_width(S, "srv"), BIT)),
+             ("rpad", Array(_pad_width(S, "req"), BIT)), ("xpad", Array(_pad_width(S, "res"), BIT)),
+             ("cpad", Array(_pad_width(S, "calls"), BIT))), Array(16, BIT))
 
 
 def _open_forms(C, S, carry, b, prt, cprev, mlast, alpha, gamma):
@@ -298,11 +316,14 @@ PoolCounts = _part(
     "PoolCounts", COUNTS_STATICS, _sig_counts, _counts,
     "one arrival slot of the pool window: its keyed block count's factor (α + (slot ‖ count)) where the count is nonzero, "
     "and the counts' sum")
+CallsEq = _part(
+    "CallsEq", REC_STATICS, _sig_calls_eq, _calls_eq,
+    "one bus record of the compile slice: 1 in ok while each record so far is the registered calls row's")
 CallsVerdict = _part(
     "CallsVerdict", STATICS, _sig_calls, _calls_forms,
     "the compile slice's verdict: the load (and the arrivals' ids distinct, and the padding zero), the steps' flags, the "
-    "last rows held to cout, and calls, 1 iff the steps' bus records are the registered calls row and the padding of "
-    "the calls and results rows is zero")
+    "last rows held to cout, and calls, 1 iff the steps' bus records are the registered calls row (CallsEq's scan) and "
+    "the padding of the calls and results rows is zero")
 PoolOpen = _part(
     "PoolOpen", V3S.SLOT_STATICS, _sig_open, _open_forms,
     "one block of the opened pool row: where its key's print is nonzero and it is the key's first copy, the key's M "
@@ -319,7 +340,7 @@ PoolVerdict = _part(
     "the pool window's verdict: pool, the stream's check with its bus product and call count the calls row's; open, the "
     "opened row's digest the input root; close, the left row's digest the output root, its queue ends the stream's, "
     "every block closed and R5 = W5; keys, the ragged runs well formed, all placed, and the slots' counts")
-PARTS = (CompileIds, PoolCounts, CallsVerdict, PoolOpen, PoolClose, PoolCopies, PoolVerdict)
+PARTS = (CompileIds, PoolCounts, CallsEq, CallsVerdict, PoolOpen, PoolClose, PoolCopies, PoolVerdict)
 
 
 def _statics(S, keys=STATICS) -> dict:
@@ -393,17 +414,26 @@ def _compile_sig(S):
     return tuple((r, Array(bits[r], BIT)) for r in COMPILE_ROWS), Array(16, BIT)
 
 
+def _records(refs, S) -> list[list]:
+    """Each bus record's bits, on through y, from the records field-major (`fields`' ``calls``)."""
+    f = RC._split(list(refs), fields(S)["calls"])
+    return [[x for name, _n, _w in fields(S)["calls"] for x in f[name][i]] for i in range(V5.nrec(S))]
+
+
 def _compile_body(B, S, adv, ing, req, srv, cout, res, calls):
     Kc = _Consts(B)
-    Sc, nb = CS.chain(S), data_bits(S)
+    Sc, nb, W = CS.chain(S), data_bits(S), rec_width(S)
     nrows = RC.width(Sc) + RC.window_width(Sc) + V5.pool_width(S)
     out = _refs(B.call(bind(CompileWindow, **_statics(S)), adv, ing, req, srv, res))
+    recs, regs = (_records(r, S) for r in (out[5 + nrows:], _refs(calls)[:nb["calls"]]))
+    eq = _refs(B.scan(bind(CallsEq, **_statics(S, REC_STATICS)), _coll(Array(1, BIT), Kc.bits(1, 1)),
+                      [_col(Array(W, BIT), recs), _col(Array(W, BIT), regs)], []))[:1]
 
     def pad(row, r):
         return _flat(None, _refs(row)[nb[r]:] or Kc.bits(0, 1))
 
     return B.call(bind(CallsVerdict, **_statics(S)), _flat(None, out[:5]), _flat(None, out[5:5 + nrows]), cout,
-                  _flat(None, out[5 + nrows:]), calls, pad(srv, "srv"), pad(req, "req"), pad(res, "res"))
+                  _flat(None, eq), pad(srv, "srv"), pad(req, "req"), pad(res, "res"), pad(calls, "calls"))
 
 
 def _pool_sig(S):
@@ -817,7 +847,8 @@ def parts(**st) -> dict[str, list[tuple[object, int]]]:
     op, cl, cp, ver = (bind(d, **{k: getattr(S3, k) for k in V3S.SLOT_STATICS})
                        for d in (PoolOpen, PoolClose, PoolCopies, PoolVerdict))
     return {"compile": [(bound(V5.CompileLoad, V5.LOAD_STATICS), 1), (bound(V5.CompileStep, V5.STEP_STATICS), S.P),
-                        (bound(CompileIds, IDS_STATICS), S.K), (bound(CallsVerdict, STATICS), 1)],
+                        (bound(CompileIds, IDS_STATICS), S.K), (bound(CallsEq, REC_STATICS), V5.nrec(S)),
+                        (bound(CallsVerdict, STATICS), 1)],
             "pool": [(bound(V4.CompileBus, V4.STATICS), V5.nrec(S)), (bound(PoolCounts, COUNTS_STATICS), S.K),
                      (RG.digest(data_bits(S)["prow"]), 2), (bind(BK.KeyPrint), 2 * n), (slot, S.NS), (op, n),
                      (entry, len(V5.dense(S)) + S.NM + S.NRB), (bound(V5.RaggedKey, V5.KEY_STATICS), S.NRK), (end, 1),

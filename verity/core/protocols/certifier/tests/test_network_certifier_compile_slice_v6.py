@@ -102,6 +102,7 @@ def test_the_free_inputs(request, which):
     assert V6.free_width(x.S, {r: bits[r] for r in V6.POOL_ROWS}) == bits["nrow"] + bits["chk"] and bits["coin"] == 384
     assert bits["pin"] == bits["pout"] == 512 and bits["prow"] == bits["nrow"] == V6.data_bits(x.S)["prow"]
     assert V6.data_bits(x.S)["res"] + V6.data_bits(x.S)["chk"] == V5.data_bits(x.S)["chk"]
+    assert V6.rec_width(x.S) == sum(V5._rec_widths(x.S)) and V6.data_bits(x.S)["calls"] == V5.nrec(x.S) * V6.rec_width(x.S)
     assert (V6.COMPILE_ACCEPT, V6.POOL_ACCEPT) == (0x3F, 0xF)
 
 
