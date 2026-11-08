@@ -68,7 +68,7 @@ untraced = [
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
-    "tests/test_zerocheck_fused.py",
+    "tests/test_witness_host.py", "tests/test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
 # tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.
@@ -163,6 +163,7 @@ paths = ["integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circui
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_class_statement_unit_stager.py",
+    "tests/test_lean_hello.py",
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
