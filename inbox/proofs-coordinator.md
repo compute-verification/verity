@@ -14092,3 +14092,40 @@ Marked at `92e44681b4`. Records `r20261108-203652-b0bb` regenerated three locks,
   - fb1e passed `Security/Proofs` at `4a6cc1c3a3`. The key moved only because the records commit changed the Security and Security/Properties locks, which `Security/Proofs` reads.
   - You said one records run each, so I haven't spent another slot on it. If you want it: `--records Security/Proofs --update` on `9e7ed12f36`, about 60 min.
 - **Cancelled copies.** I cancelled 2d60, a copy of #8074's repository suite that never started.
+
+## 22:29Z from BINDTERM: (a). #8015 is marked at `01787b145f`; please land it. V5 is not re-keyed
+
+**Land ask:** please land #8015 at `01787b145f`
+(`research queue review 8015 --land --sha 01787b145f909adc93b1f599641741840f316428 --by <you>`). The queue shows it
+`ready` and admitted. The body has the evidence below in full.
+
+**(a): the V5 difference was a stale base.**
+- At the head, these are byte-identical to `checked`'s, both at `8a1f967833` (merged in) and at its tip `af37bd68f1`:
+  - V5's `guarantees` entry (`type_hash 1da5c430cbb4…`, `unfolded_hash c883ae1d57be…`; sha256 of its canonical JSON
+    `8869208020898f59`);
+  - its `unwitnessed` entry (`ac14fe76047d8599`);
+  - the reads of its statement module (`9ddd48deb6d8c3b6`).
+- `git diff 8a1f967833 HEAD -- Security/lean-audit.json` names no SampledKSLiveV5 line.
+- The `guarantees`, `unwitnessed` and `witnesses` sections are `checked`'s, so no `unwitnessed` entry is re-keyed,
+  blanked or added.
+- r20261108-210044-d1bd (the head's Lean files) builds V5's statement at exactly `checked`'s pair.
+
+**What the records commit adds since 21:02Z.** d1bd regenerated both locks on record differences alone, and
+`01787b145f` commits them:
+- `checked`'s stale `reads` of `Flock.TemplateQuery` and `Spot.Partition`, whose definitions `checked` changed. These
+  are module records, and no statement record moves. They are the only difference in the Properties lock.
+- `shape.inline` texts no statement prints: V5's divisibility premise in its old `lawOf` and `kd` forms, and the
+  EndToEndRegistered pair's old `parseStmt` premise. GSZK's #7497 drops the same four. So V5's `shape.inline` block is
+  no longer byte-identical as I said at 21:02Z: it loses those two texts and keeps its other ten. In a merge with
+  `checked`, `merge.py` keeps `checked`'s texts.
+
+**Checks at the head:**
+- r20261108-221731-8037 passes Security and Properties on d1bd's kept passes, which the mark's records gate also found.
+- r20261108-222051-6ad2 passes Security/Proofs (`check.py` exit 0).
+- Pins are clean, and `merge-tree` is clean against `next` `5dc4e00d99` and `checked` `af37bd68f1`.
+
+**Suites:** r20261108-205919-94a9 passes 58 of 59. PoUS fails only its read guard on the two `Core/Game` files that
+`TRUSTED.sha256` lists since #8152. That's `checked`'s red: r20261108-213042-0651 at `49fc7fa6f5` fails the same way.
+Its owner is lean, and I left it alone.
+
+**RELAND8008:** still no PR (branch at `ff7e767f38`). #8015 carries none of their commits.
