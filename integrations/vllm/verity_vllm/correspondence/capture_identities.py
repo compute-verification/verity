@@ -218,7 +218,7 @@ class Segments:
 
 
 class LazyTranscript(dict):
-    """`ExecutionTranscript` whose missing entries are read from value segments (weights + captured leaves).
+    """A `Trace` whose missing entries are read from value segments (weights + captured leaves).
     Values computed by `evaluate_region` are stored in the dict and take precedence."""
 
     def __init__(self, *sources: Segments) -> None:

@@ -4,6 +4,7 @@ No GPU, node or store: the job's own records are made here."""
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 from pathlib import Path
 
@@ -217,7 +218,7 @@ def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path)
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     md = RP.markdown(doc)
-    table = [ln for ln in md.splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
+    table = [ln for ln in md.split("\nOuter")[0].splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
     assert len(table) == len(doc["rows"])
     assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
     assert "| 4.67 |" in md
@@ -278,7 +279,7 @@ def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path:
 
 def test_a_run_id_is_read_from_its_records_not_its_result_file(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("load ran a command"))
     out = tmp_path / ".research" / "runs" / "r20261024-000000-abcd"
     job(out)
     (out / "out" / "recursion_e2e.json").write_text(json.dumps({"schema": RP.SCHEMA, "rows": [], "stale": True}))
@@ -286,10 +287,21 @@ def test_a_run_id_is_read_from_its_records_not_its_result_file(tmp_path: Path, m
     assert "stale" not in doc and doc["run"] == "r20261024-000000-abcd" and row(doc, "inner M0")["ok"] is True
 
 
+def test_a_run_id_whose_records_arent_fetched_is_refused_with_the_fetch(tmp_path: Path, monkeypatch) -> None:
+    """`load` reads the records `research fetch` put under RESEARCH_RUNS_DIR and fetches nothing itself."""
+    monkeypatch.setenv("RESEARCH_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("load ran a command"))
+    with pytest.raises(SystemExit, match=r"r20261024-000000-beef: .*runs/r20261024-000000-beef/out holds neither "
+                                         r"recursion_e2e\.json nor steps/.*`research fetch --all r20261024-000000-beef`"):
+        RUN.load("r20261024-000000-beef")
+    job(tmp_path / "runs" / "r20261024-000000-beef")
+    assert RUN.load("r20261024-000000-beef")["run"] == "r20261024-000000-beef"
+
+
 def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, capsys) -> None:
     """`research cancel` ends the scope before job.sh's trap writes a result: `table RUN` reads the records it left."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("load ran a command"))
     o = job(tmp_path / ".research" / "runs" / "r20261024-000000-cafe")
     for step in ("icheck", "vstage", "lean"):
         shutil.rmtree(o / "steps" / step)
@@ -423,18 +435,29 @@ def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
 
 
+def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--steps", "oprove"]) == 0
+    plain = capsys.readouterr().out.split()
+    assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
+    limit = {c: int(x[x.index("--timeout") + 1][:-1]) for c, x in (("plain", plain), ("release", cmd))}
+    assert limit["release"] - RUN.RELEASE_LEAD_MIN > 1.9 * limit["plain"] - 2 * RUN.SETUP_MIN
+
+
 def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypatch, capsys) -> None:
     (tmp_path / "a.json").write_text(json.dumps(RP.read(job(tmp_path / "a")) | {"ref": "rA"}))
-    seen = {}
-
-    def put(cmd, **k):
-        t = Path(cmd[cmd.index("--tree") + 1])
-        seen["files"], seen["meta"] = sorted(p.name for p in t.iterdir()), json.loads(cmd[cmd.index("--meta") + 1])
-        return RUN.subprocess.CompletedProcess(cmd, 0, json.dumps({"id": "art:x"}), "")
-    monkeypatch.setattr(RUN.subprocess, "run", put)
-    assert RUN.main(["store", str(tmp_path / "a.json"), "--merge"]) == 0
-    assert capsys.readouterr().out.strip() == "art:x"
-    assert seen["files"] == ["merged.json", "rA.json", "table.md"] and seen["meta"]["benchmark"] == "recursion_e2e"
+    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("store ran a command"))
+    art = tmp_path / "art"
+    assert RUN.main(["store", str(tmp_path / "a.json"), "--merge", "--dir", str(art)]) == 0
+    cmd = shlex.split(capsys.readouterr().out)
+    assert cmd[:3] == ["research", "data", "put"] and cmd[cmd.index("--kind") + 1] == RUN.KIND
+    assert cmd[cmd.index("--tree") + 1] == str(art) and "--preserve" in cmd
+    assert sorted(p.name for p in art.iterdir()) == ["merged.json", "rA.json", "table.md"]
+    meta = json.loads(cmd[cmd.index("--meta") + 1])
+    assert meta["benchmark"] == "recursion_e2e" and meta["results"] == ["rA"]
+    with pytest.raises(SystemExit, match="not empty"):
+        RUN.main(["store", str(tmp_path / "a.json"), "--dir", str(art)])
 
 
 def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> None:
@@ -482,12 +505,29 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
     assert cmd[cmd.index("--timeout") + 1] == f"{RUN.SETUP_MIN + RUN.OTHER_MIN['lean'] + RUN.OTHER_MIN['forge-after']}m"
 
 
+def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statement(capsys) -> None:
+    def launched(*argv: str) -> list[str]:
+        assert RUN.main(["run", "--dry-run", *argv]) == 0
+        return capsys.readouterr().out.split()
+
+    def limit(*argv: str) -> int:
+        cmd = launched(*argv)
+        return int(cmd[cmd.index("--timeout") + 1][:-1])
+
+    assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")
+    big = max(RUN.FW_S.values())
+    assert limit("--env", "REC_LINKS=1") - limit() == pytest.approx(RUN.MARGIN * 2 * big / 60, abs=1)
+    assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
+        RUN.MARGIN * 3 * big / 60, abs=1)
+    assert limit("--env", "REC_LINKS=1", "--env", "REC_LINKS=0") == limit()
+
+
 def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:
     o = job(tmp_path)
     d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"
     d.mkdir(parents=True)
     stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
-    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop, 'prove_s': 1900.0})}\n")
+    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop})}\n")
     d = d.parent / "forged-dirs-L0-firewall"
     d.mkdir()
     (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")

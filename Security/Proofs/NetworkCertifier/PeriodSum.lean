@@ -1,17 +1,49 @@
 module
 
-public import Proofs.Flock.Claims.Prob
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Definitions.Core.Interaction
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The period sum: per-window leak bounds summed over a period
 
 A period `T` is a finite set of windows over one coin space `Ω` (the audit's samples over the period). Each window `w`
 has its own leak bound: except with probability `ε w`, an accepted audit of `w` leaves the sender at most `b w` bits
-through the wardens in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the per-window guarantee's conclusion, whose
-error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the per-window
-statement's form. `periodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except with
-probability `Σ_w ε w`, when every window's audit is accepted, the period's total is at most `a + Σ_w b w`. The total
+through the network certifiers in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the per-window guarantee's
+conclusion, whose error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the
+per-window statement's form. `periodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except
+with probability `Σ_w ε w`, when every window's audit is accepted, the period's total is at most `a + Σ_w b w`. The total
 is bounded by the period-level terms `a` (`log2 #Ss + Σ_c log2 (cap_c + 1)` and whatever else the period charges once)
 plus each window's own bits (`htotal`).
 -/

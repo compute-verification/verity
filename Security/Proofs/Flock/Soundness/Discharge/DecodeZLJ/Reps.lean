@@ -1,6 +1,20 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 
 /-!
 # flock-verify's acceptance at table `j`, rep by rep
@@ -94,7 +108,7 @@ theorem planJ_length (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) (S : F
     (planJ ht T₀ dj S R).length = I.count :=
   List.length_ofFn
 
-/-- **Table `j` where flock-verify sets it up**: `tableJ` at a draw with a `SetupJ` is the `SetupJ.spec` of one with
+/-- **Table `j` where flock-verify sets it up**: `tableJ` at a sample with a `SetupJ` is the `SetupJ.spec` of one with
 the same statement. -/
 theorem tableJ_of {T₀ : TabSpec mPts} {d : Json} {j : ℕ} (x : SetupJ I mPts j (partJson d I.count j)) :
     ∃ y : SetupJ I mPts j (partJson d I.count j), y.st = x.st ∧ tableJ ht T₀ d j = y.spec ht := by

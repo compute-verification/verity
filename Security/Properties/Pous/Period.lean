@@ -37,7 +37,7 @@ period's strategy take the place of the earlier per-run premise, which handed th
   `AnsweredOnTime`), each round's program stayed within `(D, Q, L)`. It says nothing of what `τ` answers.
 * `Instantiates`, the instantiation (`pous-ring-instantiation`, `prf/sha-512`) in reduction form: on a certified coin
   (`Certified`, which reads the challenger-signed `AnsweredOnTime`: every recorded answer the challenged block of `C*`),
-  the challenger's draw is the ring game's and `τ`'s answers in the ring model are the challenged blocks of `C`. It is
+  the challenger's sample is the ring game's and `τ`'s answers in the ring model are the challenged blocks of `C`. It is
   the step from the deployed device to the ring model, so no Lean theorem discharges it.
 
 Under the two, the extractor's server passes the ring game's session on every certified capacity coin where the account
@@ -71,7 +71,7 @@ set_option exponentiation.threshold 20000
 /-- **What the verifier reads of a period's PoUS audit**, at the joint run's coins: the verifier's list of
 memory-challenger keys and the session id the auditor designated, fixed for the period; the server's commitment and
 salt, its `C*` (`store`), setup's public outputs, the memory challenger's table of row digests and the payload as the
-ring game's bits (`W`), each fixed before the capacity coins are drawn, so a function of the compute and bandwidth audits'
+ring game's bits (`W`), each fixed before the capacity coins are flipped, so a function of the compute and bandwidth audits'
 coins alone; and the memory challenger's signed session and its device record (`MemoryChallenger.Properties.Challengers`), a
 function of all the run's coins. -/
 structure Audits (ΩW ΩQ : Type) where
@@ -90,7 +90,8 @@ structure Audits (ΩW ΩQ : Type) where
   /-- the payload `C*` decodes to, as the ring game's bits -/
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
-  session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → PousCheck.Run.Session
+  session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
+    PousCheck.Run.ChallengePhaseRecord
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
     MemoryChallenger.Properties.Challengers
@@ -106,7 +107,7 @@ structure Strategy (ΩW ΩQ : Type) where
   pre : ΩW × ΩQ → Bits sch.n → Bits sch.t → sch.Code → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω → List Bool
   /-- round `j`'s answer to index `i` from the state `σ`, shown the session commitment -/
   step : ΩW × ΩQ → MemoryChallenger.SessionCommitment → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
-    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
 
 namespace Audits
 
@@ -146,13 +147,13 @@ def OnTime (ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω �
     run.commitment = (P.session ω).commitment ∧ run.limitNs ≤ LIMIT_NS ∧ AnsweredOnTime run (P.store (ω.1, ω.2.1))
 
 /-- **The device's trace** of the period's session in the ring model, for the strategy `τ` at the other audits' coins
-`o`, the capacity coins `x` and the memory challenger's draw `(I, v)`: for each of the 105 rounds, the state `τ` starts
+`o`, the capacity coins `x` and the memory challenger's sample `(I, v)`: for each of the 105 rounds, the state `τ` starts
 it from and the program it runs on index `I j`, shown the session commitment (`commitmentOf`, at the designated id,
 bound to the published root), the first round starting from what survived setup. -/
 noncomputable def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
     (v : ByteArray × ByteArray) :
-    List (List Bool × Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
+    List (List Bool × OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
   seqRounds ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
     (τ.step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1) 0 (List.ofFn I)
     (τ.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
@@ -165,7 +166,7 @@ noncomputable def answers (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
 
 end Audits
 
-/-- **The memory challenger's draw, as the ring game reads it** (`Passes`'s): the code's sampler reads index `I j` from
+/-- **The memory challenger's sample, as the ring game reads it** (`Passes`'s): the code's sampler reads index `I j` from
 stream `j` at `2^19` blocks, and the code builds the coin tree over those indices under the session id `sid`,
 publishing `v` (`coinView`). -/
 def Drawn (sid : ByteArray) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
@@ -174,7 +175,7 @@ def Drawn (sid : ByteArray) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω 
     coinView sid x.2.1 I = some v
 
 /-- `pous-ring-device` and `pous-ring-speed`, per run: **the device model**, falsifiable by measurement. At every value
-`o` of the other audits' coins, every capacity coin `x` and every draw of the memory challenger (`Drawn`), the
+`o` of the other audits' coins, every capacity coin `x` and every sample of the memory challenger (`Drawn`), the
 strategy `τ` the device runs:
 
 * computes each round's answer within `(D, Q, L)` (at most `D` rounds with a multiplication, `Q` key queries and `L`
@@ -202,7 +203,7 @@ def DeviceModel {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ 
 /-- `pous-ring-instantiation` and `prf/sha-512`, per run, in reduction form: **in the ring model, the period's strategy
 answers what its certified session recorded.** On every capacity coin where the period is certified (`Certified`, which
 reads the memory challenger's signed `AnsweredOnTime`: every recorded answer is the challenged block of `C*`), the
-challenger's draw is the ring game's (`Drawn`, its streams as good as uniform bytes) and `τ`'s answers in the ring model
+challenger's sample is the ring game's (`Drawn`, its streams as good as uniform bytes) and `τ`'s answers in the ring model
 are the challenged blocks of `C`. It carries the challenger's record into the ring model and bounds no strategy's state
 or time; it is the step from the deployed device to the ring model, so no Lean theorem discharges it. -/
 def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) : Prop :=
@@ -212,16 +213,16 @@ def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) :
 
 /-- **The fixed extractor**: the ring game's server read from the strategy `τ` at the other audits' coins `o`. It packs
 `τ`'s state into `S₀` bits (`StateBits.pack`, read back by `StateBits.unpack`) and cuts each round's program to
-`(D, Q, L)` (`Prog.clip`, which ends a round past the budget with the all-`false` block), so it is an `S₀`-bit,
+`(D, Q, L)` (`OracleAlgorithm.clip`, which ends a round past the budget with the all-`false` block), so it is an `S₀`-bit,
 `(D, Q, L)`-bounded `Server` whatever `τ` is; on a trace whose states have fewer than `S₀` bits and whose programs stay
 within the budget, it answers as `τ` does. -/
 noncomputable def extract {ΩW ΩQ : Type} (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ) (D Q L : ℕ) :
     Server Pous.EndToEnd.S D Q L where
   pre W pp C ω := StateBits.pack (τ.pre o W pp C ω)
   step sc W pp j σ i :=
-    Prog.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
+    OracleAlgorithm.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
       (τ.step o sc W pp j (StateBits.unpack σ) i)
-  bounded _ _ _ _ _ _ := Prog.clip_ringBounded _ _ _ _ _ _
+  bounded _ _ _ _ _ _ := OracleAlgorithm.clip_ringBounded _ _ _ _ _ _
 
 /-- **PoUS's per-period guarantee, about the deployed check.** Given the coin commitments' hiding (`CoinCommitHides`)
 and P2's security in the ring model at `(D, Q, L)` (`P2RingAuditSecure`): for every joint run on every device whose

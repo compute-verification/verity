@@ -84,7 +84,7 @@ def test_a_negative_device_verdict_fails(tmp_path, field):
 
 def write_qk_gate(d: Path, head_rows: bool = True, seed: int = 0x9ABC) -> None:
     """Q K^T's tile (3, 1) of H = 2 heads at 256 tokens (head 1's second query tile against its second key tile), K'
-    drawn on head 1's rows (or, head_rows False, on head 0's, as a kernel that lost the head offset would)."""
+    sampled on head 1's rows (or, head_rows False, on head 0's, as a kernel that lost the head offset would)."""
     rng = np.random.default_rng(11)
     tokens, tm, tn, k = 256, 3, 1, 128
     inv_s = np.float32(1.0)
@@ -110,7 +110,7 @@ def write_qk_gate(d: Path, head_rows: bool = True, seed: int = 0x9ABC) -> None:
 
 
 def test_qk_gate_passes_and_needs_the_head_offset(tmp_path):
-    """Q K^T's mode: K'_h's bits are on head h's rows (h T + t), so a K' drawn on another head's rows fails."""
+    """Q K^T's mode: K'_h's bits are on head h's rows (h T + t), so a K' sampled on another head's rows fails."""
     (tmp_path / "right").mkdir()
     (tmp_path / "wrong").mkdir()
     write_qk_gate(tmp_path / "right")
@@ -123,7 +123,7 @@ def test_qk_gate_passes_and_needs_the_head_offset(tmp_path):
 
 def test_the_dither_bits_are_the_patch_layout():
     """b and c are bit e % 8 of digest byte e / 8 of block (row / 4) (k / 128) + col / 128, e = (row % 4) 128 + col % 128
-    (sha_noise.cuh's layout, which d2quant and d2wedit read), and the two tags draw different bits."""
+    (sha_noise.cuh's layout, which d2quant and d2wedit read), and the two tags sample different bits."""
     key = b"".join(struct.pack(">Q", w) for w in KEY)
     k = 384
     b = R.patch_bits(key, R.DITHER_TAG, 4, 8, k)

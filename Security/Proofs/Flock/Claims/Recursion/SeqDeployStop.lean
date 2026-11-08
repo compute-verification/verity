@@ -177,26 +177,26 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
   by_cases hg : Claims.Recursion.goesOn τ = true
   · obtain ⟨hl, hm⟩ := hτ hg
     have hh : (𝔇).halted H (kPre IV x) x τ =
-        Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.ZKMal.histOf τ) := by
-      rw [← halted_asRounds IV ivScope b VM iv T₀ NB ΩB pre wit PS SO H (kPre IV x) x (Claims.ZKMal.histOf τ),
+        Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.histOf τ) := by
+      rw [← halted_asRounds IV ivScope b VM iv T₀ NB ΩB pre wit PS SO H (kPre IV x) x (Claims.histOf τ),
         asRounds_histOf hm]
     rw [hh]
-    have hl' : (Claims.ZKMal.histOf τ).length = kPre IV x := by rw [Claims.ZKMal.histOf_length, hl]
-    by_cases hf : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.ZKMal.histOf τ) = true
+    have hl' : (Claims.histOf τ).length = kPre IV x := by rw [Claims.ZKMal.histOf_length, hl]
+    by_cases hf : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.histOf τ) = true
     · rw [if_pos hf, simRounds_interact H ask _ _ τ hm]
       have hfold : (List.finRange ((𝔇).nS x)).foldl
           (fun τ' (j : Fin ((𝔇).nS x)) => stepS H ask SO' x 𝔓 τ' j (cs j)) τ =
           (List.finRange ((𝔇).nS x)).foldl (fun τ' (j : Fin ((𝔇).nS x)) => if Claims.Recursion.goesOn τ' then
-            τ' ++ Claims.ZKMal.interact ask (fun _ => []) ((nums b.st x j).rounds + 1) (Claims.ZKMal.histOf τ')
+            τ' ++ Claims.interact ask (fun _ => []) ((nums b.st x j).rounds + 1) (Claims.histOf τ')
             else τ') τ := by
         refine Claims.ZKMal.foldl_congr_inv (fun τ' => ∃ r, τ' = τ ++ r) _ _ (fun τ' j hP => ?_) _ τ
           ⟨[], (List.append_nil τ).symm⟩
         obtain ⟨r, rfl⟩ := hP
         unfold stepS
         by_cases hg' : Claims.Recursion.goesOn (τ ++ r) = true
-        · have hfr : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.ZKMal.histOf (τ ++ r)) = true := by
+        · have hfr : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.histOf (τ ++ r)) = true := by
             rw [Claims.ZKMal.histOf_append, Claims.ZKMal.fired_append (sR IV ivScope b x) (kPre IV x)
-              (Claims.ZKMal.histOf τ) (Claims.ZKMal.histOf r) hl']
+              (Claims.histOf τ) (Claims.histOf r) hl']
             exact hf
           simp only [Claims.ZKMal.stopProgB]
           rw [if_pos hg', if_pos hg', if_pos hfr, Claims.ZKMal.silent_eval]
@@ -212,16 +212,16 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
         omega
       refine Eq.trans ?_ (hfold.trans (Claims.ZKMal.foldl_silent ask
         (fun j : Fin ((𝔇).nS x) => (nums b.st x j).rounds + 1) (List.finRange ((𝔇).nS x)) τ hm)).symm
-      exact congrArg (fun n => τ ++ Claims.ZKMal.interact ask (fun _ => []) n (Claims.ZKMal.histOf τ)) hcount.symm
+      exact congrArg (fun n => τ ++ Claims.interact ask (fun _ => []) n (Claims.histOf τ)) hcount.symm
     · rw [if_neg hf, Claims.ZKMal.simOuter_eval]
       refine Claims.ZKMal.foldl_congr_inv (fun τ' => ∃ r, τ' = τ ++ r) _ _ (fun τ' j hP => ?_) _ τ
         ⟨[], (List.append_nil τ).symm⟩
       obtain ⟨r, rfl⟩ := hP
       unfold stepS
       by_cases hg' : Claims.Recursion.goesOn (τ ++ r) = true
-      · have hfr : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.ZKMal.histOf (τ ++ r)) = false := by
+      · have hfr : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.histOf (τ ++ r)) = false := by
           rw [Claims.ZKMal.histOf_append, Claims.ZKMal.fired_append (sR IV ivScope b x) (kPre IV x)
-            (Claims.ZKMal.histOf τ) (Claims.ZKMal.histOf r) hl']
+            (Claims.histOf τ) (Claims.histOf r) hl']
           exact Bool.eq_false_iff.2 hf
         simp only [Claims.ZKMal.stopProgB]
         rw [if_pos hg', if_pos hg', hfr, if_neg Bool.false_ne_true, xsOf_of_goesOn IV b x j τ r hl hm]
@@ -270,7 +270,7 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
   dsimp only at hrhs
   have hpre : (Claims.SP.eval H ask ((Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b)
       (kPre IV)).prog x ((fun i => c₁ i ⟨0, Nat.zero_lt_one⟩), c₂))).1 =
-        Claims.ZKMal.interact ask (Claims.ZKMal.censor (sR IV ivScope b x) (kPre IV x)
+        Claims.interact ask (Claims.ZKMal.censor (sR IV ivScope b x) (kPre IV x)
           (pmZ b H x (I.V.k (xIOf x)) (fun i => c₁ i ⟨0, Nat.zero_lt_one⟩) (c₂ ⟨0, Nat.zero_lt_one⟩))) (kPre IV x) [] := by
     have hE := simPre_pm IV b ivScope I H ask x hI ((fun i => c₁ i ⟨0, Nat.zero_lt_one⟩), c₂)
     refine (Claims.ZKMal.censorSim_eval H ask (simPre (deployRec IV ivScope b) I) (sR IV ivScope b) (kPre IV) x
@@ -278,7 +278,7 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
     refine Eq.trans ?_ (Claims.ZKMal.interact_censor ask
       (pmZ b H x (I.V.k (xIOf x)) (fun i => c₁ i ⟨0, Nat.zero_lt_one⟩) (c₂ ⟨0, Nat.zero_lt_one⟩))
       (sR IV ivScope b x) (kPre IV x) (kPre IV x)).symm
-    exact congrArg (fun E => Claims.ZKServer.cutT ask [] (Claims.ZKMal.stopIdx (sR IV ivScope b x) (kPre IV x)
+    exact congrArg (fun E => Claims.cutT ask [] (Claims.ZKMal.stopIdx (sR IV ivScope b x) (kPre IV x)
       (kPre IV x) E) (kPre IV x) E) hE
   replace hrhs := hrhs.trans (congrArg (fun τ₀ => List.foldl (fun τ (j : Fin (nS x)) => stepS H ask SO' x 𝔓 τ j (cs j))
     τ₀ (List.finRange (nS x))) hpre)

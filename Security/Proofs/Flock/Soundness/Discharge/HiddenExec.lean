@@ -1,33 +1,35 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExecP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
@@ -49,7 +51,7 @@ headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.t
 * `CopiesP`: `Copies` at public inputs: kept rows read the flat twin's, a public leaf's bits its instance's public word.
 * `PlacedP`: `Placed` at public inputs: `AcceptedHP`, `SitesHP` and `ProgPlaces` for `Placed.keyProgP`.
 * `Ret`, `SiteH`: where the circuit computes each output word (the unit copy and port `HmOut.outCol` reads), and the
-  site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
+  site of a sampled proof block (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
 * `SiteHP`: `SiteH` at public inputs, through the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`): copies
   off a public leaf, returned outputs and the rows' `b ‖ c`.
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
@@ -66,7 +68,7 @@ headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.t
 * `LiveOnP`: the execution refinement for one-table sessions at `own` (`AcceptsP`, `DecodesOnP`,
   `Prog.flock_headline_live_onXP`).
 * `HeadlineExecP`: `flock_headline_exec_hiddenP`, `flock_headline_exec_hidden` at `own` and `Placed.keyProgP`.
-* `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and drawn public file, the
+* `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and sampled public file, the
   session's rounds and link points), and `drawSetupHP_of_setupHiddenI`.
 -/
 

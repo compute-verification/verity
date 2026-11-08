@@ -1,9 +1,45 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 public import Proofs.Flock.Claims.Complete.Runs
-public import Proofs.Flock.Claims.Complete.Json.Canon
 import all Init.Data.Array.Basic
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest masked session runs
@@ -13,7 +49,7 @@ import all Init.Data.Array.Basic
 table, on the masked level-0 commitment, the extra claims at the link's points (which return, the table's regions
 fitting by `readyZk`) and the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0`
 stopped (`repRunZk`), so
-each draws the case's coins at the session's rounds, where `¬ BadZk` passes the masked prover's coin checks. The table's
+each samples the case's coins at the session's rounds, where `¬ BadZk` passes the masked prover's coin checks. The table's
 `--zk` schedule returns (`zkSchedule_ok`), and through `Hashes.ofSha512` so do the masked level-0 commitment
 (`commitPZk_ok`) and the pads' commitment (`innerCommitP_ok`); the session walks its two rep streams in order
 (`Runs.forIn_idx`).

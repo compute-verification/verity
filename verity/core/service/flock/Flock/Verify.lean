@@ -1,11 +1,12 @@
 /-
-PROTOCOL.md §3: the verifier as one total function of its inputs, `Accept` or `Reject reason`.
-`verifyRep` is §9–§14 on one rep's replay transcript; `verify` adds the session checks S1–S18.
+The verifier as one total function of its inputs, `Accept` or `Reject reason`.
+`verifyRep` is `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` on one rep's replay transcript; `verify` adds the session checks S1–S18.
 -/
 module
 
 public import Flock.Statement
 public import Flock.Ligerito
+public import Flock.Opening
 
 @[expose] public section
 
@@ -13,7 +14,7 @@ namespace Flock
 
 open Transcript
 
-/-- One table's statement as the pipeline sees it (§16's `setup` output). -/
+/-- One table's statement as the pipeline sees it (`Flock.Statement`'s `setup` output). -/
 structure Setup where
   m : Nat
   kLog : Nat
@@ -23,10 +24,10 @@ structure Setup where
   extra : Array (Array F128) → V (Array Claim)
   /-- S8: the committed public words -/
   publics : ByteArray → V Unit
-  /-- the proof's Merkle trees (§14) -/
+  /-- the proof's Merkle trees (`Flock.Merkle`) -/
   merkle : MerkleScheme
   /-- every opening carries `opened_salts`, empty for an unsalted scheme, as the circuit prover writes it from `2908d078` on
-  (§16.16); its earlier unsalted openings carry none -/
+  (`Tags.withPlainLeaves`); its earlier unsalted openings carry none -/
   openedSalts : Bool := false
   deriving Inhabited
 

@@ -1,13 +1,48 @@
 module
 
+public import Flock.Firewall.Frame
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 public import Proofs.Flock.Claims.ZK.FrameRank
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # The frame's claim points are the session's (`FrameAdmits`)
 
 At the opening's label the deployed frame's rank check reads a rep's claim points off the algebraic phase's coins as the
 stream answered them, one flat array (`Frame.claimPoints`, `Masker.coins`); the session reads them off the rep's rounds
-(`MaskRank.claimPoints`, `coin j e` element `e` of round `j`). In the phase's draw order the array holds round `0`'s
+(`MaskRank.claimPoints`, `coin j e` element `e` of round `j`). In the phase's sample order the array holds round `0`'s
 `K_SKIP` coins, round `1`'s `m − 13` outer ones, `z`, the `m − 6` rounds of `ρ`, `α`, `β`, the `k_log − 6` rounds of the
 lincheck and `r'`, so:
 

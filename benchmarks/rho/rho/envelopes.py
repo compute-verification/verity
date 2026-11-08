@@ -3,11 +3,11 @@ working draft's §8).
 
 An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
 summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
-uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
+uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' samples and the
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no certified registered work: the host CPUs, the GPUs outside the floor credit `residual`
+  (monitored capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
@@ -49,7 +49,7 @@ from typing import Any, Protocol
 
 from rho.hardware import Fleet, Location, MonitoringPeriod, Units
 from rho.params import Registry
-from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
+from rho.theorem import Blocks, Budget, Cut, Partition, ServerBlock
 
 #: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
 #: Lean's `χ` as `exfil`)
@@ -119,7 +119,7 @@ class Pouw:
     #: `ε'`: the share of capacity whose certificates may be wrong (Markov over the windows)
     eps_agg: float
     #: a window's certificate is wrong with probability `p = δ_s + δ_bind + δ_ks` (`PouwSound`): `δ_s` from the coins'
-    #: draw, `δ_bind + δ_ks` from the cryptography (commitment binding, the proof system's knowledge soundness)
+    #: sample, `δ_bind + δ_ks` from the cryptography (commitment binding, the proof system's knowledge soundness)
     window_delta_coin: float = 0.0
     window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
@@ -156,8 +156,8 @@ class Detection:
     identities: float
     lag_s: float
     sampled: bool = False
-    #: the sampled proofs' compute share, proving cost per unit of step work, replay cost per drawn step, work and
-    #: output bits per step, failure probability `δ`, luck factor, and steps drawn at a floor of one
+    #: the sampled proofs' compute share, proving cost per unit of step work, replay cost per sampled step, work and
+    #: output bits per step, failure probability `δ`, luck factor, and steps sampled at a floor of one
     proof_share: float = math.nan
     overhead: float = math.nan
     replay: float = math.nan
@@ -181,7 +181,8 @@ class Detection:
             raise ValueError(f"sampled proofs need {unset}")
 
     def q(self) -> float:
-        """The detection probability per incorrect block: the proof share over the cost of proving a unit."""
+        """One minus the acceptance probability per incorrect block: the proof share over the cost of proving a
+        unit."""
         return self.proof_share / (self.overhead + self.replay) if self.sampled else 1.0
 
     def injected(self) -> float:
@@ -311,7 +312,7 @@ class Certifier:
     `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
-    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
+    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
     the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
@@ -387,7 +388,7 @@ class Certifier:
     @property
     def faulty_unit_bits(self) -> float:
         """Bits an incorrect ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
-        drawn: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
+        sampled: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""
         return 8 * self.cell_bytes * self.lanes * self.cell_rate + 2 * self.lanes * self.request_in
 
@@ -448,7 +449,7 @@ class Regime(Protocol):
 
 
 def _dark(ctx: Context) -> dict[str, float]:
-    return {"eps_dark": ctx.fleet.eps_dark, "dark_mfu": ctx.fleet.dark_mfu}
+    return {"eps_unreg": ctx.fleet.eps_unreg, "dark_mfu": ctx.fleet.dark_mfu}
 
 
 @dataclass(frozen=True)
@@ -459,7 +460,7 @@ class Unmonitored:
 
     def partition(self, ctx: Context) -> Partition:
         f, loc, h = ctx.fleet, ctx.location, ctx.period
-        return Partition((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
+        return Partition((ServerBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
 
     def delta(self, ctx: Context) -> Delta:
         return Delta({})
@@ -514,7 +515,7 @@ class Remote:
     def partition(self, ctx: Context) -> Partition:
         gates = ctx.location.phi * ctx.period.seconds
         layout = Cut("layout", (self.blocks(ctx, gates),), self.abiding(ctx, gates), self.CITES)
-        block = ServingBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
+        block = ServerBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
                              ctx.fleet.mfu_train)
         return Partition((block,), **_dark(ctx))
 
@@ -536,7 +537,7 @@ class Onsite(Remote):
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
     LINKS = ("Accounting.Guarantees.Actual.Windows", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
              "Accounting.Placed.Memory", "Accounting.Placed.Links")
-    #: `WindowsAt` at the wipes, its state term from the wipe and its link term from the certifier's ingress, which
+    #: `WindowsAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
     #: bounds information where `WindowsAt` reads width at line rate: the information form is a draft
     SERVING = ("Accounting.Guarantees.Actual.WindowsAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
                "Accounting.Placed.Links", "draft:windows-information-form")
@@ -580,7 +581,7 @@ class Onsite(Remote):
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},
                      self.cites())
         count = ctx.fleet.count * ctx.period.seconds / self.wipe.wipe_s
-        block = ServingBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
+        block = ServerBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)
         return Partition((block,), **_dark(ctx))
 

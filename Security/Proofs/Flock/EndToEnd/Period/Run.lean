@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Game.Prob
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A period of audits, run one after another (trusted)
@@ -12,7 +14,7 @@ saw in the sampling blocks before.
 
 `periodRun` is the period with the prover's choices fixed by its strategy: a game of coins only, whose output lists,
 for each sampling block in order, a record `rec i τ b` of the strategy `τ` that played sampling block `i` and the
-sampling block's output `b`. A record may read the strategy: C-Flock's wrong units are those of the transcript the
+sampling block's output `b`. A record may read the strategy: Flock's incorrect proof blocks are those of the transcript the
 prover is committed to at registration, which is a function of its strategy (`Flock.Guarantees.SamplingBlock.wrongSet`).
 An event of the period is a predicate on that list, and its probability is `value` of the run, which has no prover
 message left, so `value` is the exact probability over the verifier's coins. `compTo` is the period played up to one

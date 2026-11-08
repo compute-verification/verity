@@ -119,7 +119,7 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
 
 
 def certified(s: Scenario) -> dict | None:
-    """Where a certifier sets the serving cut's link term: the certified prompt ingress into a location (bit/s), as an
+    """Where a certifier sets the serving cut's binding error: the certified prompt ingress into a location (bit/s), as an
     intake (a multiple of `α Φ`), and with `declared` a server's declared inputs and outputs."""
     regime = operating._inner(s.regime)
     cert = getattr(regime, "certifier", None)
@@ -216,7 +216,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     prf = ", the wipe's PRF" if "wipe" in delta.by else ""
     unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
-               f"ε_dark {c.fleet.eps_dark:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
+               f"ε_dark {c.fleet.eps_unreg:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
                f"{c.period.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
                f"(T_0 = {s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     st = s.structure

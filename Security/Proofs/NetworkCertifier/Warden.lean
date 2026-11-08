@@ -1,8 +1,16 @@
 module
 
 public import Definitions.NetworkCertifier.Warden
-public import Mathlib.Data.Finset.Option
-public import Mathlib.Data.Fintype.BigOperators
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Nat.Basic
+import Mathlib.Order.Basic
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The warden's code is the client view
@@ -24,7 +32,7 @@ theorem cellView_of_lt {Cell : Type} (stream : List Cell) {o : Option ℕ} {j : 
   | none => rfl
   | some f => simp [cellView, h f rfl]
 
-/-- **The warden's lane is the client view of its first late cell.** -/
+/-- **The network certifier's lane is the client view of its first late cell.** -/
 theorem wardenLane_eq {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) (j k : ℕ) :
     wardenLane a t j k = (List.range' j k).map fun i =>
       (t i, cellView a.stream ((List.range' j k).find? fun i => decide (i ≤ a.stream.length ∧ t i < a.ready i)) i) := by

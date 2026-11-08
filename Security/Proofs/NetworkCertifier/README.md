@@ -148,7 +148,7 @@ status) and emit the wire. `Interaction.trace` builds the run by recursion; the 
 observed.
 
 **Acceptance is separate from emission.** `Accepted P op k o a` holds when, at every step before `k`, the recorded rows are
-the Program's rows for the ingress so far and the declared advice, and every status is complete. It reads only rows and
+the Program's rows for the ingress so far and the advice, and every status is complete. It reads only rows and
 statuses (W5's record). A violation is recorded and the run rejected, with no halt, so every theorem is about accepted
 runs, and no violation policy is modelled.
 
@@ -201,14 +201,14 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 20 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
-(`Guarantees/Period.lean`), the monitoring period's wrong units
+(`Guarantees/Period.lean`), the monitoring period's incorrect proof blocks
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
 last two by `horizonWrongUnits` and `horizonLeak`). All 27 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
-possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
+possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 20 through
 `AcceptedRunsAreProgramRuns`. Four are the
 theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
@@ -231,14 +231,14 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
-  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is sampled `all`, and the advice
-  holding the faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
+  `RAcc δ` on the statements whose layout fits the program: no incorrect proof block is sampled `all`, and the advice
+  holding the incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
   `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
   conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
   at the masked and plain records.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
-  `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible faulty set: the inputs other than the
-  ingress, the faulty proof blocks' committed bits and the choice of faulty set. `SampledLeakAccepted` is what an accepted
+  `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible incorrect set: the inputs other than the
+  ingress, the incorrect proof blocks' committed bits and the choice of incorrect set. `SampledLeakAccepted` is what an accepted
   sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Claims.Sampling.KS` at the deployment,
   the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
@@ -253,11 +253,11 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakTap`) with probability at most
-  `δ + ε_ks + ε_bind + Pr[B_tap]`. Every unit outside the faulty set is correct, so the extracted trace opens every
+  `δ + ε_ks + ε_bind + Pr[B_tap]`. Every proof block outside the incorrect set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
-  `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the faulty units'
+  `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect proof blocks'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
-  the server's uplink, and it functions as an active warden (`Definitions/NetworkCertifier/Tap.lean`):
+  the server's uplink, and it shapes what it forwards rather than only observing it (`Definitions/NetworkCertifier/Tap.lean`):
   one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
   the audits read, its record of those cells, so on every schedule its record format holds (`TapRecord.fits`) the
   cells read back from the observations (`tap_cells_read`, a lemma, not a premise). The format the Python network
@@ -270,25 +270,25 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
-- **The wrong units over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
+- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
   cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent
-  live coins (the period's coins are the product `Fin m → Ω`), window `i` drawing a uniform `k_i`-subset of its `n_i` units,
-  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its draw
+  live coins (their coins are the product `Fin m → Ω`), window `i` sampling a uniform `k_i`-subset of its `n_i` units,
+  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its sample
   meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the
-  monitoring period holds at least `F` wrong units with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
-  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
+  monitoring period holds at least `F` incorrect proof blocks with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
+  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sampling design and each window's error are hypotheses, which A3 and
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
-  the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the faulty set `W_i` of the
+  the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the incorrect set `W_i` of the
   witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
-  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `q` the design's per-window detection probability
+  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `1 − q` the design's per-window acceptance probability
   (no sample's form: a uniform `kd_i`-of-`n_i` sample meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
-  outside the monitoring period's good event (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units and
-  every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
+  outside the monitoring period's good event (`PooledGood`: the incorrect sets hold under `Fmax ≥ ln(1/δ)/q` units and
+  every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each sample the secrets
   meeting it number at most
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
-  faulty proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a
+  incorrect proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a
   proof block's output limit. The network certifier is one device, as in the period's bound: on every schedule its
   record format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named
   assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
@@ -365,7 +365,7 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
    interaction.
 4. **Jitter** is a free per-step class below D. The operator reads it, since it reads the whole observation.
-5. **The integrity term** (faulty proof blocks) is not modelled: this is the exact binding.
+5. **The integrity term** (incorrect proof blocks) is not modelled: this is the exact binding.
 6. **Statuses** cover every boundary link, ingress included, since an ingress status is an egress channel.
 7. **Counts** are `Set.encard` in `ℕ∞`, so a bound also says the set is finite.
 

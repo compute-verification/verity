@@ -1,6 +1,21 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
 /-!
 # The soundness half of one `--zk` sampled session of `J` tables
@@ -8,20 +23,20 @@ public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 `zk_session_soundJ`: `zk_session_sound` at any number of tables. For any live prover `τ` of a public-output `--zk`
 session of `J ≥ 1` tables (`flock-verify verify --zk --session-tables J`, `J = nTab I`),
 `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
-partition, each read at its site in the table it is drawn into (`sitesZJ`, `tabZJ`) and bound to the rows it commits
+partition, each read at its site in the table it is sampled into (`sitesZJ`, `tabZJ`) and bound to the rows it commits
 (`rsZJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the `J` tables `planZJ`.
 
 The same bound shape and assumptions as `zk_session_sound`, with two changes that `J > 1` forces:
 
-* the law is the live subset draw `Law.execOS src (.subset kd) n`, the one flock-verify takes at more than one table
+* the sampling design is the live subset sample `Law.execOS src (.subset kd) n`, the one flock-verify takes at more than one table
   (`accepts_tables`; at one table it takes either), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)`
   at `K ≤ n` (`Law.subset_miss`), under A3 at its one byte source;
-* the tags, the record and the draws are `TagsOk`, `RecordsLiveZK` and `DrawOkZK` at `J` tables (`TagsOkZJ`,
+* the tags, the record and the samples are `TagsOk`, `RecordsLiveZK` and `DrawOkZK` at `J` tables (`TagsOkZJ`,
   `RecordsLiveZKJ`, `DrawOkZKJ`): `TagsOk` without `count ≤ 1`, the record giving each table's `root_B` and rep streams,
-  and the coin server's draw setting each table up at its part.
+  and the challenger's live-coin part's sample setting each table up at its part.
 
-`ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the law's draws, and `δ_link` reads the plan
-only through the positions the draw reads and `ρ`, a bound on every table's rate, so neither grows with `J`.
+`ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the sampling design's samples, and `δ_link` reads the plan
+only through the positions the sample reads and `ρ`, a bound on every table's rate, so neither grows with `J`.
 -/
 
 @[expose] public section
@@ -45,12 +60,12 @@ theorem zk_session_soundJ
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

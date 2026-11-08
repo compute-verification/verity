@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.PipeModel
+public import Definitions.Pouw.Dimension.Lift
 
 /-!
 # The closed pipe's and the lifting's named assumptions

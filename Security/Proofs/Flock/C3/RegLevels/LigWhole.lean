@@ -1,11 +1,20 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.SrcTie
 public import Proofs.Flock.C3.Compose.LastRead
-public import Proofs.Flock.C3.RegLevels.Read
-public import Proofs.Flock.Soundness.Refine.LigeritoRun
-public import Proofs.Flock.Soundness.Refine.Final
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n9: R's Ligerito ends in a coin (H's `LigWhole`) from the source's tie

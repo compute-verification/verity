@@ -422,17 +422,12 @@ def block_reduce_sum(v) -> np.ndarray:
     return warp_reduce(np.concatenate([w, np.zeros_like(w)], axis=-1), add)
 
 
-def lpnorm_lane(c: int, aligned: bool) -> tuple[int, int]:
-    """(thread, accumulator) of a chunk's lane c, its elements 2048j + c: (c // 4, c % 4) on LpNormFunctor's 4-vector path,
-    else (c % 512, c // 512)."""
-    return (c // ILP, c % ILP) if aligned else (c % NORM_THREADS, c // NORM_THREADS)
-
-
 def lpnorm_chunks(x, aligned: bool | None = None) -> np.ndarray:
     """`LpNormFunctor<BFloat16, L2>`'s f32 partial of each 65536-element chunk of one tensor's bf16 words x. Chunk element
-    2048j + c is lane c's j-th; each lane's ``acc = fma(x, x, acc)`` from +0 in j's order is accumulator `lpnorm_lane` of its
-    thread, on the 4-vector path when numel % 4 == 0 and the pointer is 8-byte aligned (``aligned``, by default numel % 4 == 0:
-    the caching allocator's pointers are aligned); each thread's ((((0 + a0) + a1) + a2) + a3), then `block_reduce_sum`.
+    2048j + c is lane c's j-th; each lane's ``acc = fma(x, x, acc)`` from +0 in j's order is accumulator c % 4 of thread c // 4
+    on the 4-vector path, taken when numel % 4 == 0 and the pointer is 8-byte aligned (``aligned``, by default numel % 4 == 0:
+    the caching allocator's pointers are aligned), else accumulator c // 512 of thread c % 512; each thread's
+    ((((0 + a0) + a1) + a2) + a3), then `block_reduce_sum`.
     Elements past the end are +0: every partial is +0, positive, +inf or NaN, to which adding +0 changes nothing."""
     x = np.asarray(x, np.uint16).reshape(-1)
     n = x.size

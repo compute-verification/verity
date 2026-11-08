@@ -1,8 +1,14 @@
 module
 
 public import Flock.Zk
-public import Mathlib.Tactic.NormNum
 import all Init.Data.Nat.Power2.Basic
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The pads' domain: the length of the `--zk` inner code, pinned to the code

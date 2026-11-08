@@ -1,7 +1,6 @@
 module
 
 public import Flock.Bytes
-public import Flock.Field
 
 /-!
 # The record's hex round trips

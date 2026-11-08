@@ -1,15 +1,53 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.Wald
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The composed extractor: the outer extractor, then the inner one
 
 A recursion's prover proves, in an outer session, that the inner verifier accepts its hidden inner transcript. Its
-extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` draws, each stopping at `k` accepted
+extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` samples, each stopping at `k` accepted
 reruns), and each rerun it makes is served by the outer extractor `E₂` at that rerun's coins, whose output (the outer
-witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its draws are the prover's run coins
-with `E₂`'s coins; its judged draw is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
+witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its samples are the prover's run coins
+with `E₂`'s coins; its judged sample is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
 
 * **Cost** (`servedERep_runs_le`, `servedERep_runs_exp`): `E₂`'s reruns times the inner stage's, `(1 + m·K)·N₂` in the
   worst case and `(1 + m·k)·N₂` in expectation, for `E₂` within `N₂` (`ExtractRunsLe`, `ExtractRunsExpLe`); with
@@ -111,14 +149,14 @@ section Served
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The outer stage at a draw**: `E₂` at the draw's run coins and its own coins, its output read by `dec` as what the
+/-- **The outer stage at a sample**: `E₂` at the sample's run coins and its own coins, its output read by `dec` as what the
 inner stage sees. -/
 def outerStage {V : Verifier Coin} (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen)
     (x : Msg) (d : (Fin (V.k x) → Coin) × E₂.C x) : RP (Fin (V.k x) → Coin) Seen :=
   (E₂.ext x d.1 d.2).bind fun w₂ => .ret (dec x d.1 w₂)
 
-/-- **The served `E^rep`, the composed extractor**: `E^rep` over draws of the run's coins and `E₂`'s coins, its judged
-draw the judged run's coins `r₀` with coins `c.1` of its own, each draw's rerun served by `E₂` there (`outerStage`). -/
+/-- **The served `E^rep`, the composed extractor**: `E^rep` over samples of the run's coins and `E₂`'s coins, its judged
+flip the judged run's coins `r₀` with coins `c.1` of its own, each sample's rerun served by `E₂` there (`outerStage`). -/
 def servedERep (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) : Extractor Coin W V where

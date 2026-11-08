@@ -72,7 +72,8 @@ POLLS = (TIMEOUT_S + 1800) // POLL_S
 SLEEP = time.sleep
 ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
-#: the trailer of drive's lock commit (`Driver._land`: `Lock records regenerated for ...`), which names the files it regenerated
+#: the trailer of drive's lock commit (`Driver._commit_locks`: `Lock records regenerated for ...`), which names the files it
+#: regenerated
 LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 
@@ -118,7 +119,7 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     src = source_of(attempt)
     checked = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M)
     merged = checked and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd, check=False)
-    # drive's lock commit on top of a train it landed (`Lock records regenerated for ...`) names the train's check
+    # drive's lock commit (`Lock records regenerated for ...`) names the lock run, which ran on its parent
     locked = checked and LOCKS_RE.search(body) and git("rev-parse", "--verify", "-q", f"{sha}^1", cwd=cwd, check=False)
     if src and src in (sha, merged, locked):
         return attempt

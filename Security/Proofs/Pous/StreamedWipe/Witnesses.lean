@@ -1,8 +1,9 @@
 module
 
-public import Mathlib.Data.Fintype.BigOperators
 public import Definitions.Pous.Claims.StreamedWipeServer
 public import Proofs.Pous.StreamedWipe.Honest
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
 
 /-!
 # The streamed-label wipe per server: each claim's honest and nontrivial lemmas
