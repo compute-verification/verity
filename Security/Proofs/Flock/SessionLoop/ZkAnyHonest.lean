@@ -15,8 +15,9 @@ session's table witnesses are valid at `Rl`'s statements (`Complete`), that the 
 causal (`UnCausal`) and that the transport's trusts hold at `Rl`'s statements (`LeanRelease.TrustsStop`). All three hold
 at one instance:
 
-* `Loop.concreteRl`: the concrete `--zk` statement with its trace (`FlockDeploy.concreteStmt`, `FlockDeploy.wC`), which
-  are in the deployed relation (`FlockDeploy.concreteStmt_rel`) and in its scope (`FlockDeploy.concreteStmt_scope`);
+* the relation of one pair, the concrete `--zk` statement with its trace (`FlockDeploy.concreteStmt`,
+  `FlockDeploy.wC`), which are in the deployed relation (`FlockDeploy.concreteStmt_rel`) and in its scope
+  (`FlockDeploy.concreteStmt_scope`);
 * `Loop.tapeRel`: a release whose frames sample the tape's samples at that statement (`Loop.tapeDraws`), released as
   the session loop's own inner rounds (`withInner`, at the finish's honest rounds `finHonest` and with Rust's checks
   passing, `acceptCross`), link and `Finish` (`ofLoopLink`) on the source `Loop.tapeSrcHi`;
@@ -34,9 +35,6 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace Claims.ZKServer.Loop
 
 open Claims Claims.ZKMal
-
-/-- **The concrete statement with its trace**, and no other pair. -/
-def concreteRl : Rel Flock.Wit := fun x w => x = FlockDeploy.concreteStmt ∧ w = FlockDeploy.wC
 
 /-- A release whose frames sample the tape's samples at the concrete statement (`tapeDraws`), its other fields
 `LoopWitness.rel0`'s. -/
@@ -78,27 +76,27 @@ namespace Flock.SecurityProofs
 
 open Claims Claims.ZKMal Claims.ZKServer
 
-/-- **`SessionLoopZKAnyDeployed`'s premises hold at the honest session loop**: at the concrete statement and its trace
-(`Loop.concreteRl`, which holds there), the honest values and the honest worker at the loop's own release on the tape's
+/-- **`SessionLoopZKAnyDeployed`'s premises hold at the honest session loop**: at the relation of one pair, the
+concrete statement and its trace, the honest values and the honest worker at the loop's own release on the tape's
 samples, the session's table witnesses are valid, the values' unswitched round encoding is causal and the transport's
 trusts hold. -/
 theorem SessionLoopZKAnyDeployed_honest :
-    Loop.concreteRl FlockDeploy.concreteStmt FlockDeploy.wC ∧
-      (CoinLayer.session Loop.loopNr Masked.dataE).Complete Loop.concreteRl ∧
+    (CoinLayer.session Loop.loopNr Masked.dataE).Complete
+        (fun x w => x = FlockDeploy.concreteStmt ∧ w = FlockDeploy.wC) ∧
       (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal Loop.finS.honestVals ∧
       LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr Masked.dataE) Loop.finS.honestVals
         (LeanRelease.ofLoopLink Loop.tapeL₀ Loop.tapeSrcHi (Loop.realOf Loop.tapeSrcHi)) CoinOpen.shaH Loop.tapeWk
-        Loop.concreteRl := by
-  have hC : ∀ x w, Loop.concreteRl x w → x = FlockDeploy.concreteStmt ∧ w = FlockDeploy.wC := fun _ _ h => h
-  have hRZk : ∀ x w, Loop.concreteRl x w → Masked.RZk x w := fun x w h => by
-    obtain ⟨rfl, rfl⟩ := hC x w h
+        (fun x w => x = FlockDeploy.concreteStmt ∧ w = FlockDeploy.wC) := by
+  have hRZk : ∀ x w, x = FlockDeploy.concreteStmt ∧ w = FlockDeploy.wC → Masked.RZk x w := fun x w h => by
+    obtain ⟨rfl, rfl⟩ := h
     exact FlockDeploy.concreteStmt_rel
-  refine ⟨And.intro rfl rfl, Loop.finS_complete Loop.concreteRl hRZk, Loop.finS_unCausal, ?_⟩
-  exact LeanRelease.trustsStop_tape Loop.tapeRel FlockDeploy.concreteStmt rfl Loop.concreteRl
+  refine ⟨Loop.finS_complete _ hRZk, Loop.finS_unCausal, ?_⟩
+  exact LeanRelease.trustsStop_tape Loop.tapeRel FlockDeploy.concreteStmt rfl
+    (fun x w => x = FlockDeploy.concreteStmt ∧ w = FlockDeploy.wC)
     (fun x w h => by
-      obtain ⟨rfl, rfl⟩ := hC x w h
+      obtain ⟨rfl, rfl⟩ := h
       exact ⟨Loop.concreteServes, FlockDeploy.concreteStmt_scope _root_.Properties.Flock.Nets.fixedNetsBuild,
         FlockDeploy.concreteStmt_rel⟩)
-    (fun x w h => (hC x w h).1)
+    (fun x w h => h.1)
 
 end Flock.SecurityProofs
