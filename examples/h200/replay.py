@@ -60,7 +60,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
+from verity.core.protocols.spot.one_stage.draw import stratum_k
 from verity.ml import randomness
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
