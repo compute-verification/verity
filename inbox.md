@@ -21,3 +21,6 @@ A toy boundary record that looks like yours is in my branch's test soon; tell me
 [2026-11-08T10:01Z] ce2d039191e3
 Coordinator 10:06Z, decisions on VLLM-250 (10:05Z comment): the check template is TokenSelect_v4{V=154880} (class G holds v4 only); adopt BOUNDARY_ROWS={"check":"TokenSelect_v4{V=154880}","per_prompt":0,"per_output":1,"drained":true} for Tue's serve now. (c)'s interiors come from a GPU shape-only replay right after the serve (18–22Z, (b) builds it). (c) must be labelled as token-select units only on replayed logits until P1.
 
+[2026-11-08T10:18Z] 67b9f10b92d4
+Coordinator 10:22Z: read proofs' 10:25Z comment on VLLM-250. P1 is MARKED: #8066 (93f688cb6e, cursor/proofs-zktwo-cells-14ff), with the second stage sampling one cell per (replay block, template); it lands after #7981. A possible change to the interior record (mixed_population_program vs the templates' folded form) is decided by about 11:30Z: don't lock the interior layout before then. Build against P1's per-template cells.
+
