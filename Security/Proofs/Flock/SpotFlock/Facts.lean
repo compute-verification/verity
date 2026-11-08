@@ -19,7 +19,7 @@ public import Proofs.Flock.Bridge.Members
   round 2 checks the design evaluates and the design evaluates only in scope.
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
   the design evaluates only where the replay layout fits the members' files, whose replay partition has the layout's
-  shape and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
+  shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
 * `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and the reference statement's
   shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statement is in scope (`Held.xS₀_ok`).
 -/
@@ -312,6 +312,12 @@ theorem refusesTwo (H : Msg → Msg) :
     simp [OC.eval, hok] at hne
   | true => exact stmtOk_scope h hok
 
+/-- **The members' replay partition has the layout's shape**: its classes' strata are the layout partition's
+(`slotPartition`), size for size. -/
+theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.Layout) :
+    (filesReplay ms ns l).classes.map strataSizes = (slotPartition l).classes.map strataSizes := by
+  simp [filesReplay, slotPartition, strataSizes, Function.comp_def]
+
 /-- **The registration is the statement's two-stage design** at SPOT[Flock]'s code (`RegMatchesTwo`): the design
 evaluates only where the replay layout fits the members' files (`filesOk`); their replay partition has the layout's
 shape, request `ρ`'s cell of template `t` is the registration's blocks `blockOf ρ t` on `[0, n_t)`, and an input slot's
@@ -344,7 +350,7 @@ theorem regMatchesTwo :
   obtain ⟨hT, hk, hfit, hblk⟩ := filesOk_sound hfo
   have hnd := hin.2.1.1
   have hne := hin.2.1.2.2.2.1
-  refine ⟨h.reg, l, hreg, hl, by rw [hdpart]; exact Flock.Bridge.Members.shape_filesReplay h.ms h.reg.ns l,
+  refine ⟨h.reg, l, hreg, hl, by rw [hdpart]; exact shape_filesReplay h.ms h.reg.ns l,
     ok_of_toOption hr, by rw [hT, hlen], fun t ht => by rw [hdk]; exact hk t (hlen ▸ ht), fun ρ b hb => ?_⟩
   rcases hbu : b.unit with _ | u
   · refine Or.inr ⟨rfl, fun t v hv => ?_⟩

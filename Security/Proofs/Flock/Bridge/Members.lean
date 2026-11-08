@@ -6,7 +6,6 @@ public import Proofs.Properties.Spot.Bits
 public import Proofs.Flock.Bridge.BitsKeyProg
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Claims.Bridge.WrongSet
-public import Properties.Spot.Draw
 public import Proofs.Flock.SamplingGeneric.ReplayPartition
 import Proofs.Flock.SamplingBoundary
 
@@ -30,14 +29,14 @@ them, and `Q` returns one of them exactly when `P` returns it. Then:
   is slot `unitBase ms m + u` of `membersPart ms`, in stratum `m`, and its proof block is the member's own
   (`Bits.blockOf`, Bridge's `blockOf` of its key program's partition), `Bits.base ms m` later.
 * `membersConsts_base`: the members' constants at `Bits.base ms m + p` are member `m`'s at `p`.
-* `shape_filesReplay`: the members' replay partition (`filesReplay`) has the replay layout's shape (`slotPartition`).
-* `getElem?_blocks_filesReplay`: slot `ρ`'s block is its request's proof blocks' gates together (`slotFiles`).
+* `getElem?_blocks_filesReplay`: slot `ρ` of the members' replay partition (`filesReplay`) is its request's proof
+  blocks' gates together (`slotFiles`).
 * `cell_filesReplay`, `cell_filesReplay_input`: where the layout fits the members' files (`FilesFit`: request slot `ρ`
   is unit `ρ`, with room in each member for its units), request `ρ`'s cell of member `t` is `filesBlockOf ms ns ρ t`
   on `[0, n_t)`, injectively (`injective_filesBlockOf`), and an input slot's cells are empty
   (`Claims.Sampling.cell_eq_union`).
-* `replayOf_filesReplay`, `replayOf_filesReplay_unit`: there, proof block `v` replays in request `ρ` exactly when it is
-  one of `ρ`'s units, `filesBlockOf ms ns ρ t p` (`Claims.Sampling.replayOf_eq_some_iff_union`).
+* `replayOf_filesReplay`, `replayOf_filesReplay_iff_filesBlockOf`: there, proof block `v` replays in request `ρ`
+  exactly when it is one of `ρ`'s units, `filesBlockOf ms ns ρ t p` (`Claims.Sampling.replayOf_eq_some_iff_union`).
 -/
 
 @[expose] public section
@@ -533,12 +532,6 @@ theorem length_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) :
     (filesReplay ms ns l).blocks.length = l.blocks.size := by
   simp [blocks_filesReplay]
 
-/-- **The members' replay partition has the layout's shape**: its classes' strata are the layout partition's
-(`slotPartition`), size for size. -/
-theorem shape_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) :
-    (filesReplay ms ns l).classes.map strataSizes = (slotPartition l).classes.map strataSizes := by
-  simp [filesReplay, slotPartition, strataSizes, Function.comp_def]
-
 /-- Slot `ρ`'s proof blocks in the members' replay partition: its request's (`filesUnits`); none for an input slot or
 past the layout. -/
 def slotFiles (ns : Array ℕ) (l : Spot.Slots.Layout) (ρ : ℕ) : List ℕ :=
@@ -651,7 +644,7 @@ theorem replayOf_filesReplay (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u �
 
 /-- **Proof block `v` replays in request `ρ`'s unit slot** exactly when it is unit `p < n_t` of some member `t`:
 `v = filesBlockOf ms ns ρ t p`. -/
-theorem replayOf_filesReplay_unit (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+theorem replayOf_filesReplay_iff_filesBlockOf (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
     (hfit : FilesFit ms ns l) {v ρ : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b)
     (hbu : b.unit = some ρ) (hv : v < (membersPart ms).blocks.length) :
     replayOf (membersPart ms) (filesReplay ms ns l) v = some ρ ↔
