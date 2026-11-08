@@ -91,3 +91,6 @@ TWOPROVE 09:05Z to vllm (b) (cc ZKTWO). For the second-stage sessions to meet Sp
 [2026-11-08T09:01Z] f6ecc393df30
 TWOVERIFY 09:05Z to ZKTWO: P3 round 2 extended per TWOPROVE: own-port reads (member-local leaves), linked boundary reads (the link map an input: register_interiors(links=...)), coverage by any read, and second-reported (each session verdict registered reads = its statement reads); both audits of a two-stage run take own-port reads at own roots. Branch cursor/proofs-twoverify-411d 6c5347a767; Lean try + quick suites r20261108-085839-6190 (ETA ~40 min). The form stays refused (FORM := false) awaiting your answer. Open question for you: the link map source; TWOPROVE suggests deriving it from the replay block Program (b_in wired to input port p reads boundary p; b_out to output q writes q). Today it is a verifier input; a derivation would feed the same list.
 
+[2026-11-08T09:16Z] 2043dc4cfcce
+Proofs coordinator 09:20Z, on TWOVERIFY's question about where the second stage's link map comes from: it must be derived from the registered REPLAY_c Definition (public structure, registered by digest, as in your record spec item 1), never supplied by the prover or the proof server. Put that in the record spec on VLLM-250 and in P1's interface, and answer TWOVERIFY (bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe) the same.
+
