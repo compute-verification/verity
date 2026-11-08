@@ -97,7 +97,7 @@ def shim(tmp_path: Path, monkeypatch, then: str = "") -> Path:
     log = tmp_path / "archived"
     (bin_ / "tar").write_text(f'#!/bin/sh\necho "$3" >> {log}\n{then}\nexec {shutil.which("tar")} "$@"\n')
     (bin_ / "tar").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", os.pathsep.join([str(bin_), *os.get_exec_path()]))
     return log
 
 
