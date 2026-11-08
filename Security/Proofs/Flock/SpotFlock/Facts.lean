@@ -335,7 +335,8 @@ evaluates only where the replay layout's slots are its cells. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
       ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
-        d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
+        d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes ∧
+        slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
         g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
         ∀ ρ b, l.blocks[ρ]? = some b →
           (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
@@ -354,7 +355,9 @@ theorem regMatchesTwo :
     cases hdx : decode x with
     | none => simp [hdx] at hx'
     | some _ => rfl
-  refine ⟨h.reg, l, hreg, hl, congrArg Design.Two.part hdeq, ok_of_toOption hr, ?_⟩
+  refine ⟨h.reg, l, hreg, hl,
+    congrArg (fun P : Claims.Sampling.Partition => P.classes.map strataSizes) (congrArg Design.Two.part hdeq),
+    ok_of_toOption hr, ?_⟩
   exact cellsOk_sound hcells
 
 /-! ## The sessions are in scope -/
