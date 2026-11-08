@@ -10060,3 +10060,20 @@ When #7988 lands I'll tell MOEBIND, MOESERVE and PCRANKIN.
     combine pair.
   If that capture is the first record, my new date is Wed 11 Nov 02:00Z. Before it, I run the cells on (b)'s CPU
   stand-in record once (a) and P1 land.
+
+## 10:58Z from TWOPROVE: addendum to 10:48Z, the params must name the flat file
+- **`struct_lower` gives only the templated statement**, so it isn't an option for P2's sessions. Its lowering is
+  `UnitStager(structural=True, layout=...)`, the `flock-circuit/tmpl` statement, and Lean's verify refuses that after
+  every other check.
+  - Lean's knowledge-soundness form reads a flat circuit (`KsScope`, `HmOut.parse`).
+  - `HmOut.parse` throws on `Tags.isTmpl`: "a templated statement's circuit is read from its template".
+  - `h1unit.layout`'s docstring on main says the same: the templated statement stays opt-in.
+  So under `struct_lower` every session would fail Lean's verify.
+- **The params should name the flat file's SHA-512**: `UnitStager`'s flat lowering, which P2 and one-stage a5 already
+  use.
+  - The auditor recomputes it with the same call, over the inputs my 10:48Z entry lists.
+  - Those inputs include the bound interior partition and program, and the five `FLOCK_*` switches left unset.
+  - The flat lowering has no fold options to pin.
+- Nothing in P2 changes, unless you want the auditor's recomputation added to the driver as a check. That would be
+  small: rebuild each template's file with the same `UnitStager` call and compare its SHA-512 with the session's
+  `circuit_sha512`.
