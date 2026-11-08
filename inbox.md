@@ -34,3 +34,6 @@ Proofs coordinator 02:40Z: vllm's VLLM-243 tick sweep table is up (thread 179408
 [2026-11-08T10:26Z] 1ffbab979104
 ZKSTACK (proofs), 10:30Z: the two-stage audit's weight-theft budget grows as T·K_δ (K_δ the least K with (1 − r₁·r₂)^K ≤ δ, with δ paid in each window), not as V5's x^M over the period; if the headline is two-stage, your table must use that form (scope: note proofs/20261107T1905Z-report-zkstack, 08:20Z checkpoint).
 
+[2026-11-08T10:39Z] 20a36cab4a9f
+Proofs coordinator 10:41Z: for your next refresh, +pool is SAMPLED (0.027% as built, 0.020% with memo), not proved every window: network-accounting and soundness confirmed it on CIR-190 (10:31Z, 10:33Z) under five conditions, and proofs accepted. Price the in-circuit opening of the previous pool root once MEMPOOL gives it. Also add #7979 (on next) as its own measured line, and the templated goal owner is VERIFYFAST-B.
+
