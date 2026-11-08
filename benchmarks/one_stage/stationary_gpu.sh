@@ -20,6 +20,11 @@
 #      ST_MPS=1 (the provers through NVIDIA's MPS, one control daemon for the job: their kernels run at once, not time-sliced)
 #      ST_KEEP_BIN (a path the built prover is copied to)  ST_BIN (a prover built so: no build)
 #      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
+#      ST_STAGE_JOBS=N (at most N types staging at once; unset: every type)
+#      ST_SERVER=1,2,4 (a long-running proof server instead of the points: once every type is staged, proof_server.py run
+#      with K provers for each K, on ST_MIX's stream (each type's blocks a sampled replay block, type=blocks,...),
+#      ST_SESSIONS=120 timed sessions a prover after ST_SERVER_WARM warm ones, FC_VERIFY_AHEAD=ST_VERIFY_AHEAD; stage each
+#      type at quarter,half,full)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -31,9 +36,10 @@ log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 HOLD=${ST_HOLD:-}; DEADLINE=${ST_DEADLINE:-0}
 MINE="proofs stationary ${RESEARCH_RUN_ID:-local}: GPU ${ST_GPU:-0}$( [ "$DEADLINE" = 0 ] || date -u -d "@$DEADLINE" +' until %H:%MZ')"
 STAGERS=(); MPS=
+killtree() { local c; for c in $(pgrep -P "$1"); do killtree "$c"; done; kill "$1" 2>/dev/null; }
 cleanup() {
   [ -n "$MPS" ] && echo quit | nvidia-cuda-mps-control && log "MPS: control daemon stopped"
-  for p in "${STAGERS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done
+  for p in "${STAGERS[@]}"; do killtree "$p"; done
   [ -n "$HOLD" ] && [ "$(cat "$HOLD" 2>/dev/null)" = "$MINE" ] && rm -f "$HOLD" && log "released $HOLD"
   rm -rf "$W" "$X"
 }
@@ -52,15 +58,23 @@ uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "
 PY=$X/venv/bin/python
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$W/zk; mkdir -p "$Z/records"; echo '[]' > "$Z/plan.json"
-SPECS=()
+SPECS=(); JOBS=${ST_STAGE_JOBS:-0}
+stage_type() {
+  taskset -c "$SC" "$PY" benchmarks/served_units/stage.py "$1" "$2" "$3/c{n}/stage" > "$3/stage.log" 2>&1 \
+    && touch "$3/staged" || touch "$3/failed"
+}
 for spec in ${ST_UNITS:?}; do
   u=${spec%@*}; COUNTS=${ST_COUNTS:-half,full}; [ "$u" = "$spec" ] || COUNTS=${spec#*@}
   t=$(echo "$u" | tr ':,=' '---' | tr -d '-'); sd=$Z/$t; mkdir -p "$sd"
-  ( taskset -c "$SC" "$PY" benchmarks/served_units/stage.py "$u" "$COUNTS" "$sd/c{n}/stage" > "$sd/stage.log" 2>&1 \
-    && touch "$sd/staged" || touch "$sd/failed" ) &
+  if [ "$JOBS" -gt 0 ]; then
+    while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
+  fi
+  stage_type "$u" "$COUNTS" "$sd" &
   STAGERS+=($!); SPECS+=("$u|$t")
   log "$u: staging $COUNTS"
-done
+done &
+STAGERS+=($!)
+for spec in ${ST_UNITS:?}; do u=${spec%@*}; SPECS+=("$u|$(echo "$u" | tr ':,=' '---' | tr -d '-')"); done
 
 GPU=1; [ "${ST_CPU:-0}" = 1 ] && GPU=0
 # CUDA 13.3 unpacked without root, as zk_cost.sh does, then the prover (flock-circuit --features gpu)
@@ -163,6 +177,48 @@ keep() {
   (cd "$Z" && find . -type f -size -64M ! -name circuit.txt ! -name '*.bin' ! -path '*/sessions/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} "$O/")
 }
+if [ -n "${ST_SERVER:-}" ]; then
+  log "server: waiting for every type's staging"
+  while :; do
+    left=0
+    for e in "${SPECS[@]}"; do t=${e#*|}; [ -e "$Z/$t/staged" ] || [ -e "$Z/$t/failed" ] || left=1; done
+    [ $left = 0 ] && break
+    if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "server: past the deadline while staging"; break; fi
+    sleep 15
+  done
+  # a stream's prover loads every statement before its first session, so a type the device prover refuses is left out
+  TYPES=()
+  for e in "${SPECS[@]}"; do
+    t=${e#*|}; [ -e "$Z/$t/failed" ] && log "${e%|*}: stage refused or failed: $(grep -vE '^\s' "$Z/$t/stage.log" | tail -c 600)"
+    [ -e "$Z/$t/staged" ] || continue
+    log "${e%|*}: staged $("$PY" -c 'import glob, json, sys
+print(", ".join("%s at k_log %s (%s s)" % (r["n"], r["k_log"], r["seconds"]["total"])
+                for r in (json.load(open(f)) for f in sorted(glob.glob(sys.argv[1] + "/c*/stage/stage.json")))))' "$Z/$t")"
+    d=$(ls -dv "$Z/$t"/c*/stage | head -1)
+    if "$BIN" statement --zk --gpu --instances "$d/pub.bin" --circuit "$d/circuit.txt" > "$Z/$t/device-check.log" 2>&1; then
+      TYPES+=("${e%|*}")
+    else
+      log "${e%|*}: the device prover refuses it: $(tail -c 400 "$Z/$t/device-check.log")"
+    fi
+  done
+  OK=$(IFS=,; echo "${TYPES[*]}")
+  [ -n "$OK" ] || { log "server: no type to prove"; exit 1; }
+  rc=0; KS=(${ST_SERVER//,/ }); n=${#KS[@]}
+  for k in "${KS[@]}"; do
+    # each K its share of what is left before the deadline
+    left=$(( (DEADLINE == 0 ? 3 * 3600 * n : DEADLINE - $(date +%s)) / n )); n=$((n - 1))
+    [ "$left" -gt 300 ] || { log "server: K=$k not run: past the deadline"; rc=1; continue; }
+    FC_VERIFY_AHEAD=${ST_VERIFY_AHEAD:-1} taskset -c "$PC" "$PY" benchmarks/one_stage/proof_server.py run --bin "$BIN" \
+      --mix "${ST_MIX:?}" --staged "$Z" --types "$OK" --provers "$k" --sessions "${ST_SESSIONS:-120}" --warm "${ST_SERVER_WARM:-0}" \
+      --out "$O/server-k$k" --scratch "$W/server-k$k" --deadline "$left" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
+      | grep SERVER | tee -a "$O/job.log"
+    [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+    rm -rf "$W/server-k$k"
+  done
+  keep
+  log "server: done, rc $rc"
+  exit "$rc"
+fi
 rc=0; declare -A DONE
 while :; do
   ran=0; pending=0
