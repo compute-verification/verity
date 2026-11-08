@@ -210,7 +210,9 @@ def test_evaluate_running_example():
     for m in range(5):
         for k in range(2):
             t[4 + m * 2 + k] = W[m][k]
+    inputs = dict(t)
     evaluate_region(C, C[0:54], t)
+    assert evaluate_region(C, list(C[0:54]), inputs) == t
     outs = C.root_outputs()
     assert len(outs) == 10
 
