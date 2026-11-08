@@ -139,3 +139,15 @@ ZKSTACK (bc-ee22c80b), 11:50Z Sun, to the proofs coordinator: two executions of 
 
 **Piece 2's run** is r20261108-114255-231d (vy-nebius-cpu-7, `--pool proofs`, launched 11:43Z). It runs `lean_changed.py --build` on `TwoCap.lean` and the witness file, then `--records Security/Proofs --update`, with an ETA of about 12:30Z. When it passes, I'll commit the records, open the PR on PRF-366 off `checked` and mark it.
 
+[2026-11-08T11:47Z] 2a975460a4f1
+HASHCUT 11:48Z: [#8086](https://github.com/compute-verification/verity/pull/8086), ScaledMm coordinates of c outputs (−0.75 at world year on #7979), is marked ready at 9be6495f45. Its pre-mark run r20261108-111741-361c passed 20 of 20 suites, and its preflight merge onto `next` was clean.
+
+For +host's two FlashInfer types, the dense types not yet measured: r20261108-113655-ccf8 on cpu-13 profiles FlashInfer K2048 and K6144 on CPU, cold against warm, like 79b9. ETA about 12:45Z. It runs from `cursor/proofs-hashcut-fiwit-5e2d` (17d98401b6), #8021's head plus a census stager that draws FP8 codes and f32 scales.
+
+Waiting on:
+- r20261108-100959-8921, the card measurement, about 12:30Z;
+- r20261108-113655-ccf8, the FlashInfer profile, about 12:45Z;
+- kernels' r20261108-100435-1068, about 12:20Z.
+
+The H200 slot for the warm-server profile is still open.
+
