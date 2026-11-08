@@ -35,6 +35,21 @@
    "digest": "a2f9ca8ead083d11f9937e2fd80dc649424b2019e285152d33872bba4df794f4",
    "why": "The proof system for proof blocks is complete: `CompilerComplete` is stated for such a system and says the compiled verifier inherits its completeness. (met by `compilerComplete_honest`)"
   },
+  "Claims.Encodings.CodeScheme.ColBinds": {
+   "owner": "@proofs",
+   "digest": "157433c3e83ee999a64f3d452ed973c2ad40a38b813725cf713498dc884b573a",
+   "why": "`CodeBinds` is stated for a code whose column check binds, as a collision reduction: two different columns that pass at one position make colliding `H` calls. (met by `codeBinds_honest`)"
+  },
+  "Claims.Encodings.CodeScheme.Distance": {
+   "owner": "@proofs",
+   "digest": "4e51a00bae01ffe9a329fed2d0ff0cc16b7c9e36353e5fb48a41ce04f27aef02",
+   "why": "`CodeBinds` is stated for a code of distance `d`, decoded within the unique radius. (met by `codeBinds_honest`)"
+  },
+  "Claims.Encodings.Linked": {
+   "owner": "@proofs",
+   "digest": "0390b5ad3eeb7d91eccc07c56f944e1d3496823566bd1330d27ee5a0b6ce5ea5",
+   "why": "`RelinkR` is stated for pairs that link every encoded position. (met by `relinkR_honest`)"
+  },
   "Claims.Flock.R": {
    "owner": "@proofs",
    "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826",
@@ -49,6 +64,11 @@
    "owner": "@proofs",
    "digest": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
    "why": "Binding as a deterministic reduction to an explicit collision, a property of the scheme; the deployed scheme meets it. (met by `NetTiming.binds_deployOf`)"
+  },
+  "Claims.Sampling.RelS": {
+   "owner": "@proofs",
+   "digest": "33cd8ec6255a0a63bb4a6b0176309bf1929fa939087aec157093b63b954854ab",
+   "why": "`RelinkR` is stated for a trace in the sampling relation under the sum, which it carries to the record. (met by `relinkR_honest`)"
   },
   "Claims.SamplingGeneric.Compiled.CompleteSessions": {
    "owner": "@proofs",
@@ -3906,7 +3926,13 @@
    "Claims.RecGeneric.Proto.LastCoinFree": "a helper the claims read: Π_in's last step reading no last coin, which `CompositionKS` and `CompilerKS` take",
    "Claims.RecGeneric.Server.Binds": "a helper the claims read: the server's binding, which `CompositionKS` and `CompilerKS` take",
    "Claims.RecGeneric.RunFinder.ReadsLe": "a helper the claims read: a run finder's reads per bad run, which `Proto.WF` reads",
-   "Claims.Sampling.Prog.Reads": "a helper the claims read: a gate reads another through the program's gates"
+   "Claims.Sampling.Prog.Reads": "a helper the claims read: a gate reads another through the program's gates",
+   "Claims.Encodings.CodeScheme.Distance": "a helper the claims read: an encoding's distance, which `CodeBinds` reads",
+   "Claims.Encodings.CodeScheme.ColBinds": "a helper the claims read: an encoding's column check binds, as a collision reduction, which `CodeBinds` reads",
+   "Claims.Encodings.Linked": "a helper the claims read: pairs that link positions, which `RegLink.Opens`, `RelinkR` and `LinkBinds` read",
+   "Claims.Encodings.RegLink.Opens": "a helper the claims read: a registration link's contract, the code fact the linked compiler's statements take of a link",
+   "Claims.Encodings.CompilerKSLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -3924,7 +3950,11 @@
    "Claims.Guarantees.InfluenceTwoPatterns": "Claims.SecurityProofs.InfluenceTwoPatterns",
    "Claims.Sampling.AdmissibleTwoRankin": "Claims.Sampling.admissibleTwo_rankin",
    "Claims.Sampling.AdmissibleTwoRankinPatterns": "Claims.Sampling.admissibleTwo_rankin_patterns",
-   "Claims.Sampling.AdmissibleTwoRankinServed": "Claims.Sampling.admissibleTwo_rankin_served"
+   "Claims.Sampling.AdmissibleTwoRankinServed": "Claims.Sampling.admissibleTwo_rankin_served",
+   "Claims.Encodings.ByPosBinds": "Claims.Encodings.byPosBinds",
+   "Claims.Encodings.CodeBinds": "Claims.Encodings.codeBinds",
+   "Claims.Encodings.LinkBinds": "Claims.Encodings.linkBinds",
+   "Claims.Encodings.RelinkR": "Claims.Encodings.relinkR"
   }
  },
  "witnesses": {
@@ -4300,6 +4330,22 @@
   "WeightSecurity.SecurityProofs.TheftServed": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedNontrivial"
+  },
+  "Claims.Encodings.byPosBinds": {
+   "honest": ["Claims.Encodings.byPosBinds_honest"],
+   "nontrivial": "Claims.Encodings.byPosBinds_nontrivial"
+  },
+  "Claims.Encodings.codeBinds": {
+   "honest": ["Claims.Encodings.codeBinds_honest"],
+   "nontrivial": "Claims.Encodings.codeBinds_nontrivial"
+  },
+  "Claims.Encodings.linkBinds": {
+   "honest": ["Claims.Encodings.linkBinds_honest"],
+   "nontrivial": "Claims.Encodings.linkBinds_nontrivial"
+  },
+  "Claims.Encodings.relinkR": {
+   "honest": ["Claims.Encodings.relinkR_honest"],
+   "nontrivial": "Claims.Encodings.relinkR_nontrivial"
   }
  },
  "unwitnessed": {
@@ -10732,6 +10778,228 @@
     "reads": []
    },
    "type_hash": "e86b6a5c8d782b36c2d267a21922072d48ac66e3c6d0bf33243e0c456d4f4f7c"
+  },
+  "Claims.Encodings.byPosBinds": {
+   "owner": "@proofs",
+   "signature": ["Claims.Encodings.byPosBinds : Claims.Encodings.ByPosBinds"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2e7156653b1c0e149f333e40d584b6280ea27979b6026e6a39e5e7cce7fdd74e",
+   "unfolded_hash": "751a24ce6665dac0d834adb255946ef4e973f879600d8c90541d3fc67fdacab4"
+  },
+  "Claims.Encodings.byPosBinds_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.byPosBinds_honest :",
+    "  And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.Encodings.repCode.scheme)",
+    "    (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.SamplingGeneric.trueCm)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a53808dce83054186954f371c5c0c7fcb8c50192c277cc7693d6995acff7b5a1"
+  },
+  "Claims.Encodings.byPosBinds_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.byPosBinds_nontrivial :",
+    "  Not",
+    "    (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512",
+    "      (Claims.Encodings.byPos (fun x x_1 => Bool.true) Claims.Witness.Sampling.accCm Claims.Witness.Sampling.accCm))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d439fe13b116fbad9e3ec8bfccc3978ed0cc9810bdd7879bfb7eeee7940eeb9c"
+  },
+  "Claims.Encodings.codeBinds": {
+   "owner": "@proofs",
+   "signature": ["Claims.Encodings.codeBinds : Claims.Encodings.CodeBinds"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Encodings.CodeScheme.ColBinds", "Claims.Encodings.CodeScheme.Distance"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0805d8e39353f2e39a1ba5e692c0a1c17b4ab2c9ed9d75571431dfdd5d6d6187",
+   "unfolded_hash": "37b88c652f4daf9d2a664ee3e8894574e31e206878ffb4bb16809f6e71ce6346"
+  },
+  "Claims.Encodings.codeBinds_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.codeBinds_honest :",
+    "  And (Claims.Witness.Encodings.repCode.Distance fun x => 1)",
+    "    (And",
+    "      (∀ (roots : List Claims.Msg),",
+    "        instLTNat.lt",
+    "          (instHMul.hMul 2",
+    "            (instHSub.hSub (Claims.Witness.Encodings.repCode.len roots) (Claims.Witness.Encodings.repCode.agree roots)))",
+    "          1)",
+    "      (Claims.Encodings.CodeScheme.ColBinds FlockDeploy.sha512 Claims.Witness.Encodings.repCode))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "85c9ac851eed842de497cdb2ec7aa7d1ed492e65ddeb088512b8e86554f58165"
+  },
+  "Claims.Encodings.codeBinds_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.codeBinds_nontrivial :",
+    "  Not (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.Encodings.badCode.scheme)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b6966033b6c95d36057d39a5a1ce9f91047cde7e79f7048e245f4c10da5e89da"
+  },
+  "Claims.Encodings.linkBinds": {
+   "owner": "@proofs",
+   "signature": ["Claims.Encodings.linkBinds : Claims.Encodings.LinkBinds"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e1624c9c07211972e395b85885fde53edc42e826c05c93900f63923e85520dc5",
+   "unfolded_hash": "334926d6ee10fce96af281a325c11b8ac8197de5ca1ea211766e47d793af15ec"
+  },
+  "Claims.Encodings.linkBinds_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.linkBinds_honest :",
+    "  And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.SamplingGeneric.trueCm)",
+    "    (And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.Encodings.repCode.scheme)",
+    "      (Ne",
+    "        (Claims.Encodings.linkedAt FlockDeploy.sha512 Claims.Witness.SamplingGeneric.trueCm",
+    "          Claims.Witness.Encodings.repCode.scheme List.nil (List.cons Claims.Witness.Encodings.pair₀ List.nil) 0)",
+    "        Option.none))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "134b901f81e292d585240996739a26877213b367202b43d3a2cd235f89f5a55a"
+  },
+  "Claims.Encodings.linkBinds_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.linkBinds_nontrivial :",
+    "  Not",
+    "    (Claims.Sampling.LogColl",
+    "      (instHAppendOfAppend.hAppend",
+    "        (instHAppendOfAppend.hAppend",
+    "          (Claims.OC.eval FlockDeploy.sha512",
+    "              (Claims.Witness.Sampling.accCm.opens List.nil { pos := 0, val := Bool.true, data := List.nil })).snd",
+    "          (Claims.OC.eval FlockDeploy.sha512",
+    "              (Claims.Witness.Sampling.accCm.opens List.nil { pos := 0, val := Bool.false, data := List.nil })).snd)",
+    "        (Claims.Encodings.linkLog FlockDeploy.sha512 Claims.Witness.Sampling.accCm Claims.Witness.Sampling.accCm",
+    "          List.nil List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b689c6035c47423d749e234d21c5869aaced0259cd5f711dda68b62af811e1e3"
+  },
+  "Claims.Encodings.relinkR": {
+   "owner": "@proofs",
+   "signature": ["Claims.Encodings.relinkR : Claims.Encodings.RelinkR"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Encodings.Linked", "Claims.Sampling.CommitmentScheme.Binds", "Claims.Sampling.RelS"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "522cc165dd981b91f20c163f12113731dcebed59dff64aea126d8148e5fc5960",
+   "unfolded_hash": "f8c19b00ae980e6e1053bcfeffee7bfbabc43533efc10fcc59afaefce355031b"
+  },
+  "Claims.Encodings.relinkR_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.relinkR_honest :",
+    "  And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.Encodings.repCode.scheme)",
+    "    (And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 Claims.Witness.SamplingGeneric.trueCm)",
+    "      (And",
+    "        (Claims.Encodings.Linked FlockDeploy.sha512 Claims.Witness.SamplingGeneric.trueCm",
+    "          Claims.Witness.Encodings.repCode.scheme Claims.Witness.Sampling.toyStmt.roots",
+    "          (fun g => Eq (Claims.Witness.Encodings.enc₀ Claims.Witness.Sampling.toyStmt.roots g) Bool.true)",
+    "          (List.cons Claims.Witness.Encodings.pair₀ List.nil))",
+    "        (Claims.Sampling.RelS FlockDeploy.sha512",
+    "          (Claims.Encodings.byPos Claims.Witness.Encodings.enc₀ Claims.Witness.Encodings.repCode.scheme",
+    "            Claims.Witness.SamplingGeneric.trueCm)",
+    "          0 Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart Claims.Witness.Sampling.toyWit)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a9fefc4fc30b56f87f40dea4bd72c8c35e53f68fe12ad2724c45c596867b1f04"
+  },
+  "Claims.Encodings.relinkR_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Encodings.relinkR_nontrivial :",
+    "  Not",
+    "    (Or",
+    "      (Claims.Sampling.RelS FlockDeploy.sha512 Claims.Witness.Sampling.rejCm 0 Claims.Witness.Sampling.toyStmt",
+    "        Claims.Witness.Sampling.toyPart",
+    "        (Claims.Encodings.relink (fun x x_1 => Bool.false) Claims.Witness.Sampling.toyStmt.roots",
+    "          Claims.Witness.Sampling.toyWit List.nil))",
+    "      (Claims.Sampling.LogColl",
+    "        (instHAppendOfAppend.hAppend",
+    "          (List.flatMap",
+    "            (fun o =>",
+    "              (Claims.OC.eval FlockDeploy.sha512",
+    "                  ((Claims.Encodings.byPos (fun x x_1 => Bool.false) Claims.Witness.Sampling.rejCm",
+    "                        Claims.Witness.Sampling.rejCm).opens",
+    "                    Claims.Witness.Sampling.toyStmt.roots o)).snd)",
+    "            Claims.Witness.Sampling.toyWit.vals)",
+    "          (Claims.Encodings.linkLog FlockDeploy.sha512 Claims.Witness.Sampling.rejCm Claims.Witness.Sampling.rejCm",
+    "            Claims.Witness.Sampling.toyStmt.roots List.nil))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "59ace3b8d6e2e717ae5d0134637910ffdfc88932713cd410d25fc7b1cfa32f2a"
   },
   "Claims.Flock.Bits_fails": {
    "owner": "@proofs",
@@ -30544,6 +30812,32 @@
     "Claims.Flock.κ": "34e791e9371f7d89ca2ffc109f47585ae498acef78f0163f203068cf8ff736d4"
    }
   },
+  "Definitions.Claims.Encodings": {
+   "digest": "ec049d468e74772b0671ecf59e78ce23ef0451359f230d9af980c17fd3c73bd8",
+   "definitions": {
+    "Claims.Encodings.ByPosBinds": "e3c3cf5ca174840808020992d37f0560189ba51c1f20830cbb6a179c2832124c",
+    "Claims.Encodings.CodeBinds": "1509a48ec27066cfb80b28002a1fb99dab5c68af0fa72c3f739abdf17ca1b2ed",
+    "Claims.Encodings.CodeScheme": "685022080874a488e70458c3a6fa67b35ea9423f143b17225f88d5c34d14c4e2",
+    "Claims.Encodings.CodeScheme.ColBinds": "157433c3e83ee999a64f3d452ed973c2ad40a38b813725cf713498dc884b573a",
+    "Claims.Encodings.CodeScheme.Distance": "4e51a00bae01ffe9a329fed2d0ff0cc16b7c9e36353e5fb48a41ce04f27aef02",
+    "Claims.Encodings.CodeScheme.agree": "9f2febde14b9bddd4d4157c6eb6dc7c1cd7452360ae8186beced17ad090676de",
+    "Claims.Encodings.CodeScheme.bit": "eca0322d037ac5192c3a521a3c070c1099837764e170021eb1ce6929ad766642",
+    "Claims.Encodings.CodeScheme.colOK": "4adb042e696aacbfeea255d18f93615523c65a26121f638d57a4d660f6cf37fc",
+    "Claims.Encodings.CodeScheme.colsOK": "81589bf8fb62fd7c8da2db17645dbcce3102d56daf5b951d7e62571db6441921",
+    "Claims.Encodings.CodeScheme.encode": "906f390e8242b757139f98c5020717c8c5a7edbadabf444cdbf882087b2e0ae3",
+    "Claims.Encodings.CodeScheme.fits": "6169b4495994964d574b713ed6ca3a2c964adaaba909590e46f17bea0afd1593",
+    "Claims.Encodings.CodeScheme.len": "205f95eef7dbdd5ecd500ef787d93e1b29289aa779afd973c647d8848e01a7b0",
+    "Claims.Encodings.CodeScheme.parse": "94c3728bb46358abfeeaf3d56e28951051f336d3080f1f3bbd338983140fcb7a",
+    "Claims.Encodings.CodeScheme.scheme": "131e3dfe7c8526b2c82eb209d4d40588a495ca64a76f415ac28ca25387c32861",
+    "Claims.Encodings.LinkBinds": "7eb4ec69769b30c2d7df5e404d8e9b26acc113bd6bdb9595f79f31cc4061a935",
+    "Claims.Encodings.Linked": "0390b5ad3eeb7d91eccc07c56f944e1d3496823566bd1330d27ee5a0b6ce5ea5",
+    "Claims.Encodings.RelinkR": "3ad78fb2cf146314625cf5e213018289c96dbf5a0d67c715ed9c7302a6c9cc36",
+    "Claims.Encodings.byPos": "e1d2394f6e0570d4e0caa3155df617b39f5696e4dec3b403460c858c323028b5",
+    "Claims.Encodings.linkLog": "a6343484a40a795d0574ed45c6cebaa889ee7a58c6ba1da6424ab1cd1d617521",
+    "Claims.Encodings.linkedAt": "e108cf79d5e1596ab1696bf976ce92f0537afd2e5ef8922131888d975f35d567",
+    "Claims.Encodings.relink": "abc198f3d64416a9023e1de8ff504df9c2a4930021204da66007184154e33110"
+   }
+  },
   "Definitions.Claims.Guarantees.SamplingTwo": {
    "digest": "a70c588a448f60b50f714b0ec43c5ef6622c233a89a8a99297dd2f3ed2540fca",
    "definitions": {
@@ -46471,6 +46765,15 @@
     "Flock.Readable.zOf": "22cc65a58b05032c6f5eeba5592440dbe3276b1a24fa6aacfb28054e6fad8889"
    }
   },
+  "Proofs.Flock.Claims.Witnesses.Encodings": {
+   "digest": "560f458925db06655055f57a458fdb74d3b2e186ce3c4d82fede29d91bd4f7d8",
+   "definitions": {
+    "Claims.Witness.Encodings.badCode": "030afbb3fb0232324c3c8d0c0c8ed80e9d032391c2ba5051106b777ec3e7e20d",
+    "Claims.Witness.Encodings.enc₀": "6321d38ed79c21173da75e60eb9521678c4f689b069ec4e67931a620114ef6bd",
+    "Claims.Witness.Encodings.pair₀": "40f145389286d5e21f7059ad3e91b41853df7127f4916252b580abd82dd4044f",
+    "Claims.Witness.Encodings.repCode": "ad93cf6b34ffe84040d8f8b91c1b783fcd132b2567b8462d3053fb5863e18d61"
+   }
+  },
   "Proofs.Flock.Claims.Witnesses.Flock": {
    "digest": "64fc5a37e656be5cf9707d0898d98862a1da9e545a50af1edaa810fca33df3f5",
    "definitions": {
@@ -53010,8 +53313,9 @@
    }
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "b3feb2583eb137d45fc0575ad263ba89b6fc129b5a5bd28abd8d90faa1b9b566",
+   "digest": "a3e7c2be4136a06facc5bb2774683ed24d2bd6db91384ba4d0aac0864bc193e9",
    "definitions": {
+    "SampledProofs.Challenger.EXTRA_OPENING": "63641ef1b7831157804cf5d426e6dc54bca69556d77b67b980781dbcde21b59a",
     "SampledProofs.Challenger.LINK_ROOT_LEN": "1f8fe31e355f018a53a514f119ab08ada8488ed6acb6643ec9c8df82a7dc045a",
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
@@ -53043,10 +53347,11 @@
     "SampledProofs.Challenger.linkLine": "1c43c5cbc5e0405b6043bcaafede1833bd144b901ff999faed53e217bd553195",
     "SampledProofs.Challenger.openLine": "09d16a5e50d4e79db09f5449eebeadc0d8508e5db08e042c085f41accbd32433",
     "SampledProofs.Challenger.recordCoins?": "e0b5d72ec7b5b6e2b4ac1cc5739121ba32d466004d30d0cc62210f159f0daed6",
+    "SampledProofs.Challenger.recordRounds": "4d1fb3f6172fdcfbb5bc140cb0eb67058cd83356ea2e7ec6dc69f4b2db24a327",
     "SampledProofs.Challenger.rootOf": "c4d3c8b6790f148c96e38fcab9c4397ca2a945003ebcdb5744c521e1b9deef5b",
     "SampledProofs.Challenger.sampleLinkFirst": "40656b6be631ea6f9a640acc31340a2ed42770721553ba22f105a015d7ad3c05",
     "SampledProofs.Challenger.sampleLinkFirstFrom": "255274d7cc03d77c7fe2588909d98e5a073fa55f7b294c7bcc504f3cb0f0bd6e",
-    "SampledProofs.Challenger.sessionTreeReason": "6be4668e903ca6cd80b2ad63566fa313a290f14ee1a2ad9e46eaec0f6dca610d",
+    "SampledProofs.Challenger.sessionTreeReason": "0c48477f66a9bb5173d400e135b4a2b9e778c1a631918a3156c76892f154c593",
     "SampledProofs.Challenger.sessionsTreeReason": "c3e4f69c083dcf5e29e5c718e8b9d559d668b72ad652c9bc28f6d3e5878967e1",
     "SampledProofs.Challenger.trustedTreesOf": "b68a1fcd5206defc96c6413db71389f77ec1703dfc3f204a85d564ed1148d794",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "2dcd137ccdf67fb110c9b12c5c48d9cb3d84a940e1316b7093818f79c566d4cc",
@@ -53055,7 +53360,7 @@
    }
   },
   "SampledProofs.Draw": {
-   "digest": "83171ac42bb107150d5faa31e072021c5e1280d88e0d6358c3cdd6fbe484da5e",
+   "digest": "e9a6fb746a2d6412f2583c44085162f4a9e6e343f2d9bb1222dc913967b26c58",
    "definitions": {
     "SampledProofs.Draw.BERNOULLI": "e2c9adff20ef4d107fc4a91b10ad53dc1ffe2ba8c4407255086a717517db7ba4",
     "SampledProofs.Draw.bernoulli": "276ec3f2c4a63b0c5e760cc6ac4e51500d165a6af7b8fc1d8e46a93f5a9e3348",
@@ -53066,7 +53371,7 @@
     "SampledProofs.Draw.deriveLaw": "037f17a61be7d0c0db3be8df7550dc58de6fc692ba9556f7ba2643d59962e01b",
     "SampledProofs.Draw.drawFirstRead": "4f1b24e7b1eebe61ca78e82a4516e74d3224129d0cfc1dffb16f756f6c4cd11c",
     "SampledProofs.Draw.drawUnits": "9acd484c97afa785cb08b2f96e3f16f652133691588bf90ca9a0b22fe17ba3f2",
-    "SampledProofs.Draw.flockLaw": "5f2426561c22794e41fe091662543ddb6ec8e231d6515e81f98c2c51005c2d82",
+    "SampledProofs.Draw.flockLaw": "cf85fedf4b8faf6c165a923dbfed68d43b532fb0fb8dd77eed74f40a26ad9335",
     "SampledProofs.Draw.lawOf": "5e9f1cd98e9e3edae16e0e2bc0580a246fb14292f58970ddbe7acf485e2269c9",
     "SampledProofs.Draw.probability?": "218ab03fa02c33a5101ee45ece031299e9aa51f16ca54744eceaf1029bbc2d51",
     "SampledProofs.Draw.proved": "0760af8118a5c2ae8bb3112dbb5b528d6e527f930a3bd879737cb5d60f743e2e",

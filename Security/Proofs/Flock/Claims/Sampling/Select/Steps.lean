@@ -116,10 +116,10 @@ theorem throw_bind_ne {ε α β : Type} (e : ε) (f : α → Except ε β) (b : 
 theorem throw_ne {ε α : Type} (e : ε) (b : α) : (throw e : Except ε α) ≠ .ok b := by
   simp [throw, throwThe, MonadExceptOf.throw]
 
-/-- **The sampling design `flockLaw` accepts**: a subset of the sampling design object's `k` units, no more than the population, a Bernoulli law
-at a probability, or a sampling design of kind `stratified` or `work`. -/
+/-- **The sampling design `flockLaw` accepts**: a subset of the sampling design object's `k` units, at least one and no
+more than the population, a Bernoulli law at a probability, or a sampling design of kind `stratified` or `work`. -/
 theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Draw.flockLaw law n = .ok parsed) :
-    (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD law "k") = some k) ∨
+    (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD law "k") = some k ∧ 1 ≤ k) ∨
       (∃ a b, parsed = .bernoulli a b ∧ 0 < b ∧ a ≤ b) ∨ kindOf law = "stratified" ∨ kindOf law = "work" := by
   unfold Draw.flockLaw at h
   split at h
@@ -133,8 +133,10 @@ theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Dra
       · rename_i k hnat
         split at h
         · exact absurd h (throw_bind_ne _ _ _)
+        split at h
+        · exact absurd h (throw_bind_ne _ _ _)
         · obtain rfl := (Except.ok.inj h).symm
-          exact Or.inl ⟨_, rfl, by omega, hnat⟩
+          exact Or.inl ⟨_, rfl, by omega, hnat, by omega⟩
       · exact absurd h (throw_ne _ _)
     · split at h
       · exact absurd h (throw_bind_ne _ _ _)
