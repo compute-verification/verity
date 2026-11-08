@@ -7,7 +7,7 @@ public import Flock.Firewall
 public import Flock.HmRow
 public import Flock.Public
 public import Flock.Registered
-public import Proofs.Flock.EndToEndRegistered.Honest
+public import Proofs.Flock.EndToEndRegistered.Inputs
 public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Soundness.Binding.RowSeg
@@ -243,8 +243,6 @@ fwd_def drawnPub drawn_pubW : Flock.HmOut.drawn circW pubW drawW by
 theorem drawnPub_tables : drawnPub.tables = none := by kernel_rfl
 
 theorem unitIndices_drawnPub : Flock.Registered.unitIndices drawnPub = .ok #[0] := by kernel_rfl
-
-theorem ins_count : ins.count ≤ 1 := by decide
 
 theorem regPaths0 : regPathsHJ ins circW pubW tr0 rd0.port (Sum.inl (0, q0)) = ByteArray.empty :=
   regPaths_none recordDraw_tr0 (by rw [drawJ_one ins_count]; exact ofJson_drawW)

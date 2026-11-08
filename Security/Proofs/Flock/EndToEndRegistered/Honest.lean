@@ -1,11 +1,9 @@
 module
 
 public import Flock.Net
-public import Flock.Tags
-public import Flock.Zk
 public import Properties.Flock.Circuit.Rows
+public import Proofs.Flock.EndToEndRegistered.Inputs
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 public import Proofs.Flock.Soundness.Instance
@@ -14,6 +12,16 @@ import Proofs.Core.Game.Prob
 import Proofs.Flock.Soundness.CROnly.Link
 import Proofs.Flock.Soundness.ExtractWait
 import Proofs.Flock.Soundness.Refine.Walk
+import all Init.Data.Ord.Basic
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Fold
+import all Init.Data.Array.Attach
+import all Init.WF
 
 /-!
 # `EndToEndRegistered`'s premises hold together (its honest witness)
@@ -60,10 +68,14 @@ theorem crExpected_of_le {β Dh : Type} {H : List UInt8 → Dh} {g : Game β} {s
   rw [one_mul] at h3
   linarith
 
+theorem one_le_crBound : (1 : ℝ) ≤ (2 ^ 257) ^ 2 / 2 ^ (513 : ℝ) := by
+  rw [show (2 : ℝ) ^ (513 : ℝ) = 2 ^ 513 by norm_num, ← pow_mul, le_div_iff₀ (by positivity), one_mul]
+  exact pow_le_pow_right₀ (by norm_num) (by norm_num)
+
 /-- **`cr/sha-512` at budget `2^257` holds at every finder**: its bound `q²/2^513` is 2. -/
 theorem finder_cr_top {Dh : Type} (H : List UInt8 → Dh) (Fd : Finder Pair) : Fd.CR H (2 ^ 257) := fun _ =>
   (ENNReal.toReal_le_of_le_ofReal zero_le_one
-    ((Verity.Game.prob_le_one _ _ _).trans ENNReal.ofReal_one.ge)).trans (by norm_num)
+    ((Verity.Game.prob_le_one _ _ _).trans ENNReal.ofReal_one.ge)).trans one_le_crBound
 
 section Session
 
@@ -92,7 +104,7 @@ theorem le_finderCost_cTZC (c : vb.Pos) {t' : ℝ} (ht : 0 ≤ t')
     (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl)) :
     t' ≤ finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t') x := by
   classical
-  have hc : ∀ e, t' ≤ cTZC planZ R t' e := fun e => by
+  have hc : ∀ e : TrialOutZC F L D Sl, t' ≤ cTZC planZ R t' e := fun e => by
     unfold cTZC
     split_ifs
     · have := List.sum_nonneg (l := e.2.2.map (waitCost (accωZC planZ R e.1))) fun y hy => by
@@ -118,8 +130,6 @@ end FlockSoundness.Discharge.ZkLink
 
 namespace FlockSoundness.Discharge.ZkReg.Witness
 
-open Exec
-
 /-- **The witness's unit net**: one useful row, the constant, and one output group of one word. -/
 def unitNet : Flock.Net :=
   match Flock.Net.ofRows "unit" 1 0 #[] #[{ col := 0, words := 1, bits := #[1] }] #[#[0]] #[#[0]] with
@@ -128,16 +138,6 @@ def unitNet : Flock.Net :=
 
 theorem unitNet_built : Built unitNet :=
   ⟨"unit", 1, 0, #[], #[{ col := 0, words := 1, bits := #[1] }], #[#[0]], #[#[0]], by kernel_rfl⟩
-
-/-- **`verify --zk --registered`'s inputs at the templated statement**: `verity/flock-circuit/tmpl`'s tags, one table, no
-session tables, on the coin tree `verify --zk` samples. The files are empty: no premise the witnesses conclude reads
-them. -/
-def ins : Inputs :=
-  { tags := Flock.Tags.circuitTmpl, circuitFile := .empty, publicFile := .empty,
-    coins := .tree (Flock.Zk.coinSpec (Flock.Tags.circuitTmpl.tableNames 1)), count := 1, tables := [],
-    partition := none, program := none, work := none, stratified := none, closure := none }
-
-theorem ins_tagsOk : ZkHidden.TagsOkZHJ ins := ⟨rfl, rfl, rfl⟩
 
 end FlockSoundness.Discharge.ZkReg.Witness
 
@@ -161,9 +161,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
         (pre post : List ((Fin 2 → Fin mPts → FlockLevel3.GF128) → Game (OutZC FlockLevel3.GF128 Refine.Dig (List UInt8))))
         (cap₀ : Cap Refine.Dig) (σ : Strategy (sessAtZ pre post (tabAfterZC execArith ZkExec.hs512 T cap₀))),
         SessCRZ execArith ZkExec.hs512 T pre post cap₀ σ (2 ^ 257) (2 ^ 257) :=
-  ⟨ZkReg.Witness.unitNet_built, ZkReg.Witness.ins_tagsOk,
-    fun P planZ tab vb R τ k Rw M => linkCRZC_top _ _ P planZ tab vb R τ k Rw M,
-    fun T pre post cap₀ σ => sessCRZ_top _ _ T pre post cap₀ σ⟩
+  ⟨ZkReg.Witness.unitNet_built, ZkReg.Witness.ins_tagsOk, by intros; apply linkCRZC_top, by intros; apply sessCRZ_top⟩
 
 /-- **`EndToEndRegisteredDrawn`'s premises hold together**: they are `EndToEndRegistered`'s. -/
 theorem _root_.Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :

@@ -14,6 +14,7 @@ public import Proofs.Flock.EndToEnd.Joint.MT.Bound
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.Flock.EndToEndRegistered
 public import Proofs.Flock.EndToEndRegistered.Honest
+public import Proofs.Flock.EndToEndRegistered.Inputs
 public import Proofs.Flock.EndToEndRegistered.Nontrivial
 public import Proofs.Flock.EndToEndRegisteredRows
 public import Proofs.Flock.SoundAtBridge
