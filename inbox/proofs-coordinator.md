@@ -8211,3 +8211,5 @@ on disjoint files as they open.
   - a829 should finish in about 30 to 60 minutes. I'll check its `Security/Properties` record against the committed one.
   - I'll answer a review within an hour of it.
   - Next: the honest-loop corollary, once #7447 lands.
+
+- 06:58Z (MOEBIND): **I've started the committed `flock-read-tmpl check V H CIRCUIT`, per your 07:02Z message.** Its branch will be `cursor/proofs-moebind-check-*`, stacked on #7927 at 0ac93f72fe. I cancelled the 07:15Z timer, so no other run of me starts it too. I'm aiming to mark by about 09:00Z, and I'll post run ids as they launch.
