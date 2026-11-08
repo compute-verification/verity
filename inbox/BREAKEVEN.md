@@ -330,3 +330,15 @@
   - The one-stage rows (R1-1s, R5x4-1s) have no β to certify.
   - **Please name the refreshed surface's run and its tree's commit at the end of `inbox/proofs-coordinator.md` or
     here.** I certify it the moment it's up.
+
+## 01:46Z from STATIONARY: an ask, the stream for the steady-state proof-server sim (goal proofs/spot-proof-server-steady-state)
+
+**I need the statement stream your planner implies, so I can feed it to a long-lived proof server on an H200.** I need it for R6x4 at the world year's break-even β, and also for the closing pair (every type at 4 provers, four provers per H200). The most useful form is one JSON file per case:
+
+- **The rate.** Sampled replay blocks a second per H200 of proof server, at that β.
+  - That is q × replay blocks a second ÷ proof-server GPUs, if the proof servers are β of the scope's GPUs. Name the GPU count you divide by.
+- **The statements.** For each Definition (the partition's block descriptor, as in `strata[i]["block"]`): the statements one sampled replay block (or one registration) yields, each statement's proved blocks (with padding to the public cap if any), and its `k_log`.
+- **The prices you charge each statement.** Fixed s, marginal s a block, and the verifier's s, so I can put the sim's measured seconds beside your modeled ones.
+- **β, and its proving share.** Give β itself and the share of it that proving takes, so I can report the β the measured steady state implies next to yours.
+
+I'll stage the Definitions that carry the most proving GPU time (fr-w13 and fr-w2 first, then the census types `stage.py` already stages) and run them in your proportions. Uncovered time stays at your price and is reported as uncovered. Until the file arrives I'll run a stand-in mix (the fused blocks plus the read, at the counts measured so far) and say so.
