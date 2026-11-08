@@ -71,9 +71,9 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   `max_num_seqs`, or a request's row over its `long_prefill_token_threshold`;
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
   whose `output_len` and `finish` its `max_tokens` contradicts, or stochastic with a seed `reads.seed_of` refuses;
-- a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
-  request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
-  the hit (a resume's run of its own KV is I1's replay's to hold);
+- a cache hit where the registration states the prefix cache off (`reads.hits_off`), or whose `sources` don't hold the request's
+  own KV: through each run, the source's certified prompt must equal the request's (the KV at a position reads every token up to
+  it), in whole blocks of the engine's block size where the Program reads the hit (a resume's run of its own KV is I1's replay's);
 - what v0 doesn't compile: on a batch-invariant target, a prefix-cache hit on a stochastic request (the cached stochastic wrapper
   isn't ported), or on a request a window carries in (its prefix's producers are the admitting window's requests); positions
   past the model's (in class G, past the registered `max_model_len` too); in class G, a request whose Program wouldn't hold every
@@ -621,6 +621,8 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             prompts[i], params[i] = request_of(i, q, body, V)
         except Unexpressible as e:
             refuse(i, str(e))
+    for i, why in reads.hits_off(adv, phi0.engine or {}):
+        refuse(i, why)
     for s, step in enumerate(adv.steps):
         for row in step.rows:
             if row.sources:
@@ -642,9 +644,6 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                                         f"request {i}: positions to {LP + T - 1}, past the {max_pos} the model and the registered "
                                         f"max_model_len allow")
                 if not bi:
-                    if C and carry is None and not eng["enable_prefix_caching"]:
-                        raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens, and the registration states the "
-                                            f"prefix cache off")
                     C, T = segment_of(i, LP, T, rows[i], carry, i in left)
                 own = place(i, LP, T, C, rows[i], q.output_len, carry, i in left)
                 if C >= LP + T:

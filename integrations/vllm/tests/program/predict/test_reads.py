@@ -17,6 +17,7 @@ import pytest
 from verity.ml.circuits.types import Array, field_types
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
+from verity_vllm.program.predict.common import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered, RequestUnit, compile_steps, plan_steps, request_program
 from tests.program.predict.test_dsa_long_rows import I32, TOPK, _canonical, _short, _step
@@ -66,6 +67,12 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     (R.Field("body", "seed", "advice", role="policy"), "body.seed: a stochastic request's seed is certified, its body's seed or "
                                                        "derived from its id and the window's coin"),
     (R.Field("served", "seed", "output"), "served.seed: a stochastic request's seed is certified"),
+    (R.Field("row", "cache_hit", "advice"), "row.cache_hit: a prefix-cache hit is a row's advice, charged at its width, under "
+                                            "enable_prefix_caching: never derived by verifier-side Python"),
+    (R.Field("row", "sources", "certified", switch=R.PREFIX_CACHE), "row.sources: a prefix-cache hit is a row's advice"),
+    (R.Field("served", "cache_hit", "output"), "served.cache_hit: a prefix-cache hit is a row's advice"),
+    (R.Field("body", "stream", "certified", role="transport", switch=R.PREFIX_CACHE),
+     "body.stream: switched by enable_prefix_caching, so it is advice the registration can switch off, not 'certified'"),
     (R.Field("window", "salt", "certified"), "window.salt: of the window the compiler reads only its verifier coin"),
     (R.Field("window", "coin", "advice"), "window.coin: a stochastic request's seed is certified"),
 ])
@@ -117,6 +124,33 @@ def test_the_compiler_reads_every_field_the_gate_passes(monkeypatch, tmp_path):
     for session in ((A_MID_IN, A_BODY), _hit_chunked()):
         plan_steps(g, *session)
     assert seen == GATED
+
+
+def test_a_prefix_cache_hit_is_advice_under_the_switch_and_absent_where_the_registration_states_it_off(tmp_path):
+    """Both modes behind `enable_prefix_caching`: on, or unstated (vLLM's default), a hit compiles as the advice it is; stated off,
+    the registration's advice has no hit, and one is refused by name on a batch-invariant target and in class G alike, a row's
+    and a carried request's."""
+    hit = frozenset({("row", "cache_hit"), ("row", "sources"), ("carried", "C")})
+    assert R.off({}) == R.off({R.PREFIX_CACHE: True}) == frozenset() and R.off({R.PREFIX_CACHE: False}) == hit
+    assert compile_steps(_registered(), *_hit(16)).requests[1].C == 16
+    assert plan_steps(_registered(engine={R.PREFIX_CACHE: True}), *_hit(16)).requests[1].C == 16
+    off = _registered(engine={R.PREFIX_CACHE: False})
+    plan_steps(off, *_mixed())
+    why = "request 1: a prefix-cache hit of 16 tokens, and the registration states the prefix cache off (enable_prefix_caching False)"
+    with pytest.raises(Unexpressible, match=re.escape(why)):
+        plan_steps(off, *_hit(16))
+    assert plan_steps(off, *_hit(16), partial=True).refused[1].startswith(why)
+    g = _class_g(tmp_path, engine={R.PREFIX_CACHE: False})
+    with pytest.raises(Unexpressible, match=re.escape("request 1: a prefix-cache hit of 16 tokens, and the registration states")):
+        plan_steps(g, *_hit_chunked())
+    carried = WA.Advice((WA.RequestAdvice("a", 20, 4, "length"),),
+                        tuple(WA.StepAdvice((WA.Row(0, "decode", p, 1, 0, False, ()),)) for p in (21, 22)), (0, 1),
+                        (WA.Carried(16, 21, 2, ((16, 21),)),))
+    body = {"a": {**GREEDY, "prompt": list(range(1, 21))}}
+    assert plan_steps(_class_g(tmp_path, engine=CACHE_ON), carried, body).requests[0].carried_in
+    with pytest.raises(Unexpressible, match=re.escape("request 0: carried in on a prefix-cache hit of 16 tokens, and the registration "
+                                                      "states the prefix cache off")):
+        plan_steps(g, carried, body)
 
 
 def _window(advice) -> WA.Advice:
