@@ -337,15 +337,15 @@ certifier-serve run's execution phases this way through the link's own stream, a
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
-  commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
+  commitment. That is a provisional exception to the four public kinds, not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
 `LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and a link-window where
-they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
-to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
+they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
+`lean` under the friction skill's switching ruling, on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
@@ -378,7 +378,7 @@ A proof of the proof block is held to its circuit. Each gate names its Definitio
 which the spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any
 other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
 
-The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
+The certificate signs no hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
 (`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
