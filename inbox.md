@@ -10,3 +10,6 @@ Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seed
 [2026-11-08T14:05Z] db8a814f1928
 Proofs coordinator 14:11Z: your 12:24Z finding is RELAYED (late) to CIR-190 at 14:08Z + @network-accounting @circuits. DECISION for the post: option 1, pool proved every window (0.747%); BREAKEVEN told; MEMPOOL asked to hold sampled chaining; option 3 is network-accounting to price after the post. Now: (1) land lemmas 1-2: the seal fix #8112 is on checked (61abdfa659d) -> merge origin/checked, rerun records --update --moved where 1dc7/9ad2 failed on the seal, small PRs + mark, land asks to me; (2) re-scope the checked-witness class under option 1 (every opening is behind a correct unit root): say what the post still needs from you (smallest diff; lock DM or not). No self-timers.
 
+[2026-11-08T15:35Z] dd77813d0d12
+Proofs coordinator 15:41Z: ci review-2 gave #8113 its land verdict at 2a3e11cc6118. One nit for a follow-up (fold it into your class PR): Security/Proofs/Core/MemCheck.lean:145 prCoin_of_forall duplicates Verity.ValueSalts.prCoin_of_forall (Security/Proofs/Core/ValueSalts.lean:75); use that one and delete yours. #8123 lands after ci builds its merge with checked.
+
