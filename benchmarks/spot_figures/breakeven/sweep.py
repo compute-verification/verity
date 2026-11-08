@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from levers import (MACHINE_GPUS, WEIGHTS, bound, floor_bits, fuse_reads, make_line, priced_strata,
-                    scale_proving, tb)
+                    scale_proving, split_cols, tb)
 
 from common import SCOPES, c, sc, tc
 import reprice
@@ -85,13 +85,19 @@ class Case:
     server: bool = False
     k4: bool = False
     front: bool = False
-    quant_floor: bool = True
+    quant6144: float | None = None
+    k_gain: str = "measured"
+    dense_k: int = 2
+    fi_warm: bool = False
+    verify_cut: float = 1.0
     column: str = "fast"
     tmpl: bool | str = False
     fused_busy: float | None = None
     advice_window_bits: float = 0.0
     prefix_off: bool = False
     compile_core_h: float = 0.0
+    budget_form: str = ""
+    split: tuple[tuple[str, int], ...] = ()
 
     def tax(self) -> float:
         """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
@@ -109,7 +115,8 @@ def build(case: Case):
     strata = None
     per_type = (case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain or case.verify
                 or case.server)
-    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type:
+    if (case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type
+            or case.split):
         strata = priced_strata(case.line)
         if case.fuse:
             strata = fuse_reads(strata, fixed="sum" if case.fixed_sum or case.fused else "read")
@@ -117,20 +124,26 @@ def build(case: Case):
                 strata = reprice.price_fused(strata, case.fused)
         if case.server:
             strata = reprice.apply_server(strata, prover=case.prover, k4=case.k4, front=case.front,
-                                          quant_floor=case.quant_floor, host=case.host, plain=case.plain,
+                                          quant6144=case.quant6144, host=case.host, plain=case.plain,
                                           verify=case.verify, column=case.column, tmpl=case.tmpl,
-                                          fused_busy=case.fused_busy, verify_other=case.verify_other)
+                                          fused_busy=case.fused_busy, verify_other=case.verify_other,
+                                          k_gain=case.k_gain, dense_k=case.dense_k, fi_warm=case.fi_warm,
+                                          verify_cut=case.verify_cut)
         elif per_type:
             strata = reprice.apply(strata, cache=case.cache, overlap=case.overlap, prover=case.prover,
                                    full=case.full, host=case.host, plain=case.plain, verify=case.verify,
                                    verify_expert=case.verify_expert, verify_other=case.verify_other)
         bm, bf = BUSY[case.line] if case.busy else (1.0, 1.0)
         strata = scale_proving(strata, marginal=case.marginal * bm, fixed=case.fixed * bf, cap=case.cap)
+        for pattern, n in case.split:
+            strata = split_cols(strata, pattern, n)
     L = make_line(case.line, strata, replay_gpu_s=case.replay, registration=case.registration)
     if case.ctx:
         L = reprice.workload(L, {"c343": reprice.C343, "c343-served": reprice.C343_SERVED}[case.ctx])
     if case.form == "one-stage":
         L = (*L[:7], (L[7] if len(L) > 7 else {}) | {"point": "every_block"})
+    if case.budget_form:
+        L = (*L[:7], (L[7] if len(L) > 7 else {}) | {"budget_form": case.budget_form})
     return L
 
 
@@ -356,11 +369,18 @@ def repriced() -> dict[str, Case]:
     return out | served_line()
 
 
+#: #7979's column blocks: the all-reduces and MoeSum cut 32 ways, ResidualAdd 16
+COLS_7979 = ((r"^(AllReduce|MoeSum)", 32), (r"^ResidualAdd", 16))
+#: kernels' marked prover PRs over main's prover, over old main's (2.088 s), and their modeled target over main's
+PROVER_MARKED = reprice.PROVE_MAIN / reprice.PROVE_MARKED
+PROVER_OLD_MAIN = reprice.PROVE_OLD_MAIN / reprice.PROVE_MARKED
+PROVER_GOAL = reprice.PROVE_MAIN / reprice.PROVE_TARGET
+
+
 def served_line() -> dict[str, Case]:
     """(A′) at 128k priced as the long-running proof server proves it (`N0`..`N5`): today's measured server prices,
-    main's verifier and the quant K6144 at its floor, then each lever in turn, each type's overlap set by its device's
-    busy share; the extras on `N5`, and the advice charged two ways."""
-    hash4 = 1 - 0.5 * (1 - 1 / 4)
+    main's verifier and #8103's card, then each lever in turn; the measured levers alone (`N5m`); the extras on `N5`,
+    the path from it (`P1`..`P5`), the per-window budget form on both, and the advice charged two ways."""
     life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
     n0 = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K, fuse=True, fused=FUSED, server=True,
               verify=1.0, column="today", compile_core_h=1.0)
@@ -369,23 +389,26 @@ def served_line() -> dict[str, Case]:
     steps["N2"] = steps["N1"] | life
     steps["N3"] = steps["N2"] | dict(k4=True)
     steps["N4"] = steps["N3"] | dict(front=True)
-    steps["N5"] = steps["N4"] | dict(prover=4.0)
+    steps["N5"] = steps["N4"] | dict(prover=PROVER_MARKED)
+    steps["N5m"] = steps["N1"] | dict(k4=True, prover=PROVER_MARKED)
+    goals = dict(k_gain="model", dense_k=4, prover=PROVER_GOAL)
+    steps["P1"] = steps["N5"] | dict(split=COLS_7979)
+    steps["P2"] = steps["P1"] | dict(fi_warm=True, verify_cut=reprice.VERIFY_CUT)
+    steps["P3"] = steps["P2"] | dict(k_gain="mps")
+    steps["P4"] = steps["P2"] | goals
+    steps["P5"] = steps["P4"] | dict(tmpl="goal")
     out = {n: Case(**kw) for n, kw in steps.items()}
-    extras = {"host": dict(host=3.5), "hash4": dict(marginal=hash4), "plain": dict(plain=True),
-              "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"),
-              "vfloor": dict(verify_other=reprice.VERIFY_COLUMNS["fast"][1]),
-              "fusedfront": dict(fused_busy=0.55), "card": dict(quant_floor=False),
-              "host+hash4": dict(host=3.5, marginal=hash4),
-              "host+tmplgoal": dict(host=3.5, tmpl="goal"),
-              "host+hash4+tmplgoal": dict(host=3.5, marginal=hash4, tmpl="goal"),
-              "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True),
-              "host+tmplgoal+prefixoff": dict(host=3.5, tmpl="goal", prefix_off=True)}
+    extras = {"7979": dict(split=COLS_7979), "fiwarm": dict(fi_warm=True), "8101": dict(verify_cut=reprice.VERIFY_CUT),
+              "mps": dict(k_gain="mps"), "dense4": dict(dense_k=4), "kgoal": dict(k_gain="model"),
+              "provergoal": dict(prover=PROVER_GOAL), "prover2.8": dict(prover=PROVER_OLD_MAIN),
+              "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"), "host": dict(host=3.5),
+              "plain": dict(plain=True), "q20": dict(quant6144=0.020),
+              "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True)}
     for e, kw in extras.items():
         out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
-    for s in ("N2", "N3"):
-        out[f"{s}+hits"] = Case(**(steps[s] | dict(advice_window_bits=HITS_WINDOW_BITS)))
-        out[f"{s}+prefixoff"] = Case(**(steps[s] | dict(prefix_off=True)))
-    out["N2+tmplgoal"] = Case(**(steps["N2"] | dict(tmpl="goal")))
+    for s in ("N5", "P5"):
+        out[f"{s}+zk"] = Case(**(steps[s] | dict(budget_form="zkstack")))
+        out[f"{s}+zkmachine"] = Case(**(steps[s] | dict(budget_form="zkstack-machine")))
     return out
 
 

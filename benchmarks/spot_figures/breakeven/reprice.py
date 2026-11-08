@@ -13,16 +13,20 @@ from dataclasses import replace
 
 from common import SCOPES, c, f1, tc
 
-#: The statement cache on the H200: (fixed after over before, host share of after) by block prefix, five types priced
-#: from their H200 splits and two (quant K1536, combine N5) from their CPU shares.
+#: The statement cache on the H200: (fixed after over before, host share of after) by block prefix: quant K2048
+#: measured warm on one H200 (2.04 s a statement at 2 blocks, 0.115 s of it proving, against the card's 47.8 s fixed),
+#: three types priced from their uncached H200 splits and two (quant K1536, combine N5) from their CPU shares.
 CACHE = {
     "Fp8GroupQuantUe8m0_v1{K=6144,": (13.3 / 97.7, 12.8 / 13.3),
     "FlashInferFp8Linear_v1{K=2048,": (11.1 / 112.3, 10.8 / 11.1),
     "AllReduceMultimem_v1{": (3.0 / 42.6, 0.27 / 3.0),
-    "Fp8GroupQuantUe8m0_v1{K=2048,": (4.7 / 47.8, 4.4 / 4.7),
+    "Fp8GroupQuantUe8m0_v1{K=2048,": (2.04 / 47.8, (2.04 - 0.115) / 2.04),
     "Fp8GroupQuantUe8m0_v1{K=1536,": (6.3 / 39.6, 6.0 / 6.3),
     "SparseMlaCombine_v1{": (7.7 / 42.7, 7.0 / 7.7),
 }
+#: FlashInfer K2048 warm (`fi_warm`), modeled: CPU's warm session's host parts (2.50 s of 4.3 s, against 170.9 s cold)
+#: and its proving scaled by quant K2048's H200-to-CPU ratio (0.115 s against 0.85 s) to about 0.25 s
+CACHE_FI_WARM = {"FlashInferFp8Linear_v1{K=2048,": (2.75 / 112.3, 2.50 / 2.75)}
 #: the priced type whose factors a type the cache wasn't priced on takes, by prefix (assumed)
 FAMILY = (("AllReduce", "AllReduceMultimem_v1{"), ("RmsNormMnnvl", "AllReduceMultimem_v1{"),
           ("Fp8GroupQuant", "Fp8GroupQuantUe8m0_v1{K=2048,"), ("FlashInferFp8Linear", "FlashInferFp8Linear_v1{K=2048,"),
@@ -67,13 +71,11 @@ FUSED_H200 = {"w13": {"one": (0.7374, 2.8488e-3), "four": (128 / 219 - 128 * (25
                                                           (256 / 307 - 128 / 217) / 128)}}
 
 #: the Lean verifier (`verify --zk --partition --program`), one core, one statement, setup included: seconds by block
-#: prefix, measured on today's flat statement
-VERIFY = {"FlashInferFp8Linear_v1{K=2048,": 2474.0, "Fp8GroupQuantUe8m0_v1{K=6144,": 2100.0,
-          "SparseMlaCombine_v1{NSPLIT=12,": 1634.0, "RMSNormFusedCudaVector8_v1{N=6144,": 769.0,
-          "Fp8GroupQuantUe8m0_v1{K=2048,": 681.0, "Fp8GroupQuantUe8m0_v1{K=1536,": 508.0,
-          "SparseMlaCombine_v1{NSPLIT=2,": 324.0, "AllReduceMultimem_v1{": 314.0, "MoeExpertFp8GemmW_v1{": 15.0}
-#: its fixed part; the rest grows with the unit's matrix entries
-VERIFY_FIXED = 10.0
+#: prefix, measured on today's flat statement (the verifier_cost card), and its fixed part; the rest grows with the
+#: unit's matrix entries
+_VERIFIER_CARD = tc.spot_cards.load("verifier_cost", "GLM-5.3")["value"]
+VERIFY = {t["block"]: t["core_seconds"] for t in _VERIFIER_CARD["types"]}
+VERIFY_FIXED = _VERIFIER_CARD["fixed_seconds"]
 #: (types, measured member, size parameter, the member's size): a family's other types scale linearly in the size
 #: above VERIFY_FIXED, or take the member's seconds when the size is None (assumed)
 VERIFY_FAMILY = ((("Fp8GroupQuantUe8m0_v1",), "Fp8GroupQuantUe8m0_v1{K=2048,", "K", 2048),
@@ -91,61 +93,94 @@ VERIFY_TEMPLATED = 125.0 / 2100.0
 #: (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa
 #: core, two vCPUs at $0.015 a vCPU-hour, with its 8 GiB at $0.0045 a GiB-hour
 CORE_PER_GPU = 5.40 / (2 * 0.015 + 8 * 0.0045)
-#: the flat Lean verifier with its proved twins (`fast`): today's column times the after-over-before ratio measured in
-#: one job a type on FlashInfer K2048 (0.207), quant K6144 (0.217) and the MoE GEMM (0.577); the other six by a
-#: fixed-plus-per-entry fit to those two (0.21 to 0.23, assumed)
-VERIFY_FAST = {"FlashInferFp8Linear_v1{K=2048,": 513.0, "Fp8GroupQuantUe8m0_v1{K=6144,": 456.0,
-               "SparseMlaCombine_v1{NSPLIT=12,": 359.0, "RMSNormFusedCudaVector8_v1{N=6144,": 169.0,
+#: the flat Lean verifier with its proved twins (`fast`): in the proof server's verdict pool at K = 1, a full statement,
+#: on the fused blocks (w13 48.2 s, w2 52.7 s), RMSNorm v8 (255.2 s) and the all-reduce (91.96 s); today's column times
+#: the after-over-before ratio measured in one job a type on FlashInfer K2048 (0.207), quant K6144 (0.217) and the MoE
+#: GEMM (0.577); the other four by a fixed-plus-per-entry fit to those two (0.21 to 0.23, assumed)
+VERIFY_FAST = {"Fused[EmbeddingRead_v1{V=256,H=3072}": 48.2, "Fused[EmbeddingRead_v1{V=256,H=4096}": 52.7,
+               "FlashInferFp8Linear_v1{K=2048,": 513.0, "Fp8GroupQuantUe8m0_v1{K=6144,": 456.0,
+               "SparseMlaCombine_v1{NSPLIT=12,": 359.0, "RMSNormFusedCudaVector8_v1{N=6144,": 255.2,
                "Fp8GroupQuantUe8m0_v1{K=2048,": 150.0, "Fp8GroupQuantUe8m0_v1{K=1536,": 112.0,
-               "SparseMlaCombine_v1{NSPLIT=2,": 75.0, "AllReduceMultimem_v1{": 72.0, "MoeExpertFp8GemmW_v1{": 8.7}
-VERIFY_FAST_MEASURED = ("FlashInferFp8Linear_v1{K=2048,", "Fp8GroupQuantUe8m0_v1{K=6144,", "MoeExpertFp8GemmW_v1{")
+               "SparseMlaCombine_v1{NSPLIT=2,": 75.0, "AllReduceMultimem_v1{": 91.96, "MoeExpertFp8GemmW_v1{": 8.7}
+VERIFY_FAST_MEASURED = ("Fused[EmbeddingRead_v1{V=256,H=3072}", "Fused[EmbeddingRead_v1{V=256,H=4096}",
+                        "RMSNormFusedCudaVector8_v1{N=6144,", "AllReduceMultimem_v1{", "FlashInferFp8Linear_v1{K=2048,",
+                        "Fp8GroupQuantUe8m0_v1{K=6144,", "MoeExpertFp8GemmW_v1{")
+#: the flat column's cut a statement (`verify_cut`): measured on FlashInfer K2048 and quant K6144 and taken for every
+#: other type but the MoE family's, which it leaves unchanged
+VERIFY_CUT = 0.85
+VERIFY_CUT_KEEPS = ("MoeExpertFp8", "Fused[")
 #: the types whose templated session check measured costlier than the flat verifier, which keep the flat
 VERIFY_FLAT_CHEAPER = ("RMSNorm", "DsaRMSNorm", "RmsNormMnnvl")
-VERIFY_COLUMNS = {"today": (VERIFY, VERIFY_FIXED), "fast": (VERIFY_FAST, min(VERIFY_FAST.values()))}
+#: today's column with the fused blocks at their fast seconds over the MoE GEMM's after over before (assumed), where
+#: the card takes its MoE member's
+VERIFY_TODAY = VERIFY | {p: VERIFY_FAST[p] / 0.577 for p in VERIFY_FAST if p.startswith("Fused[")}
+VERIFY_COLUMNS = {"today": (VERIFY_TODAY, VERIFY_FIXED), "fast": (VERIFY_FAST, min(VERIFY_FAST.values()))}
 #: the templated (structural) session check over the flat one, both before the flat verifier's proved twins, by family:
 #: Lean verify's CPU-seconds under --zk with the Program on FlashInfer K2048 (1,382 against 1,751) and RMSNorm v3
 #: N=6144 (454.9 against 713.5); any other type the smaller ratio (assumed)
 TMPL_MEASURED = ((("FlashInferFp8Linear_v1", "ScaledMmFp8BlockSharedScale_v1"), 1382.0 / 1751.0),
                  (("RMSNorm", "DsaRMSNorm", "ResidualAdd", "RmsNormMnnvl"), 454.9 / 713.5))
 
-#: the long-running proof server on one H200, one prover, the statement cache warm: (fixed GPU-seconds a statement,
-#: GPU-seconds a block, the device's busy share, blocks a full statement) by block prefix, a two-point fit at full and a
-#: quarter of a statement (rmsnorm and the all-reduce at full and half), host work and stalls included; the fused
-#: blocks' w13 from its sessions a second at full statements, split as the server's fit splits it, and w2 by the
-#: server's w2 over w13 (assumed)
-SERVER = {"ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": (0.98, 1.41e-3, 0.28, 2048),
-          "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": (0.79, 0.74e-3, 0.28, 4096),
-          "DsaMqaLogits_v3{N=1,H=32,D=128}": (0.96, 0.71e-3, 0.28, 4096),
-          "ResidualAdd_v1{N=6144}": (1.95, 5.33e-3, 0.28, 512),
-          "RMSNormFusedCudaVector8_v1{N=6144,": (5.11, 10.38e-3, 0.27, 256),
-          "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": (3.79, 9.40e-3, 0.27, 256)}
+#: the long-running proof server on one H200, one prover, the statement cache warm, on the final driver (each session
+#: timed when its verifier files it): (seconds a full statement, its proving share 1 - front/e2e) by block prefix
+SERVER_K1 = {"ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": (1 / 0.500, 1 - 0.79 * 0.500),
+             "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": (1 / 0.483, 1 - 0.91 * 0.483),
+             "DsaMqaLogits_v3{N=1,H=32,D=128}": (1 / 0.363, 1 - 0.80 * 0.363),
+             "ResidualAdd_v1{N=6144}": (1 / 0.405, 1 - 0.48 * 0.405),
+             "RMSNormFusedCudaVector8_v1{N=6144,": (1 / 0.2525, 1.19 / 3.88),
+             "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": (1 / 0.1152, 7.78 / 8.64)}
+#: each type's split of a statement into fixed seconds and seconds a block, an earlier driver's two-point fit at full
+#: and a quarter of a statement (rmsnorm and the all-reduce at full and half), and blocks a full statement
+SERVER_FIT = {"ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}": (0.98, 1.41e-3, 2048),
+              "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}": (0.79, 0.74e-3, 4096),
+              "DsaMqaLogits_v3{N=1,H=32,D=128}": (0.96, 0.71e-3, 4096),
+              "ResidualAdd_v1{N=6144}": (1.95, 5.33e-3, 512),
+              "RMSNormFusedCudaVector8_v1{N=6144,": (5.11, 10.38e-3, 256),
+              "AllReduceMultimem_v1{WORLD=8,SIZE=3072,": (3.79, 9.40e-3, 256)}
+#: (fixed GPU-seconds a statement, GPU-seconds a block, proving share, blocks a full statement): the fit scaled to the
+#: final driver's seconds a full statement
+SERVER = {p: (f * (s / (f + n * m)), m * (s / (f + n * m)), share, n)
+          for p, (s, share) in SERVER_K1.items() for f, m, n in [SERVER_FIT[p]]}
+#: the fused blocks on node A, one prover at full statements: sessions a second, and prove_total's share of a session
+#: (M1's 1.101 s at main's prover times its 0.570 sessions a second); w13's fit scaled to those sessions, and w2 by
+#: the server's w2 over w13 (assumed)
 FUSED_SESSIONS_S = (0.53 + 0.59) / 2
-FUSED_SERVER = {e: (f * k, m * k, 0.87, 1 << (35 - FUSED_K_LOG))
+FUSED_PROVE_SHARE = 1.101 * 0.570
+FUSED_SERVER = {e: (f * k, m * k, FUSED_PROVE_SHARE, 1 << (35 - FUSED_K_LOG))
                 for e, (f, m), k in (("w13", (1.24, 2.77e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)),
                                      ("w2", (1.30, 2.93e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)))}
-#: the types whose prover and verifier need 100 GiB or more of host memory a copy: one prover an H200
-HOST_BOUND = ("Fp8GroupQuantUe8m0_v1{K=6144,", "FlashInferFp8Linear_v1{K=2048,", "FlashInferFp8Linear_v1{K=6144,",
-              "SparseMlaSplitPart_v1")
-#: K provers' chains overlap at this efficiency: the light types' statements a second at K = 4 over K = 1 (2.87) over 4
+#: the types kept at one prover an H200: the split part's host memory is unmeasured
+ONE_PROVER = ("SparseMlaSplitPart_v1",)
+#: K provers on one H200, sessions a second over one prover's, measured on M1 (the fused w13 at full statements) on
+#: node A; four under MPS; the dense types fit two provers a GPU in host memory today (`dense_k`)
+K_GAIN = {2: 0.768 / 0.570, 4: 0.903 / 0.570}
+K_GAIN_MPS = 1.77
+#: the busy-share model K provers' gain is held to as its goal: chains overlapping at the light types' statements a
+#: second at K = 4 over K = 1 (2.87) over 4, on an earlier driver
 OVERLAP_EFFICIENCY = 2.87 / 4
+#: the GPU prover: M1's prove_total at main's prover (1.101 s), with kernels' marked prover PRs (0.747 s), and their
+#: modeled target, 4x the prover main had before its first prover PRs (2.088 s)
+PROVE_OLD_MAIN = 2.088
+PROVE_MAIN, PROVE_MARKED, PROVE_TARGET = 1.101, 0.747, PROVE_OLD_MAIN / 4
 #: the quant K6144's price a block at the floor its K2048 sibling's runs show
 QUANT_FLOOR = 0.003532
 
 
-def gpu_factor(busy: float, prover: float = 1.0, k: int = 1, front: bool = False) -> float:
-    """A statement's GPU time over one prover's: the device share `busy` sped up `prover` times, the host share never;
-    the next session's front run beside this one's device work (`front`), and `k` provers sharing the GPU, their chains
-    overlapping at OVERLAP_EFFICIENCY."""
+def gpu_factor(busy: float, prover: float = 1.0, k: int = 1, front: bool = False, gain: float | None = None) -> float:
+    """A statement's GPU time over one prover's: the proving share `busy` sped up `prover` times, the host share never;
+    the next session's front run beside this one's device work (`front`), and `k` provers sharing the GPU at `gain`
+    times one prover's sessions a second (the busy-share model's k·OVERLAP_EFFICIENCY when None), never past the
+    device's share."""
     device, host = busy / prover, 1.0 - busy
     chain = max(device, host) if front else device + host
-    return chain if k == 1 else max(device, chain / (k * OVERLAP_EFFICIENCY))
+    return chain if k == 1 else max(device, chain / (gain or k * OVERLAP_EFFICIENCY))
 
 
 def templated_seconds(x, how: str) -> float:
     """The templated session check's core-seconds a statement of `x`'s type: `measured`, today's column times its
     family's measured ratio (TMPL_MEASURED); `goal`, quant K6144's estimate over today's for every type but the
     RMSNorm family, which keeps the flat."""
-    today = verifier_seconds(x)[0]
+    today = verifier_seconds(x, VERIFY_TODAY, VERIFY_FIXED)[0]
     if how == "goal":
         return math.inf if x["block"].startswith(VERIFY_FLAT_CHEAPER) else VERIFY_TEMPLATED * today
     ratio = next((r for types, r in TMPL_MEASURED if x["block"].startswith(types)),
@@ -169,16 +204,20 @@ def server_price(x) -> tuple[float, float, float, int] | None:
     return next((v for p, v in SERVER.items() if x["block"].startswith(p)), None)
 
 
-def apply_server(strata, prover=1.0, k4=False, front=False, quant_floor=True, host=1.0, plain=False, verify=0.0,
-                 column="fast", tmpl=False, fused_busy=None, verify_other=None):
+def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host=1.0, plain=False, verify=0.0,
+                 column="fast", tmpl=False, fused_busy=None, verify_other=None, k_gain="measured", dense_k=2,
+                 fi_warm=False, verify_cut=1.0):
     """The strata priced as the long-running proof server proves them, with the statement cache warm: the measured
-    types at their server prices and full statements, the rest at the card with the cache's factor; then a GPU prover
-    `prover` times faster on device shares, four provers an H200 on full statements (`k4`, none on HOST_BOUND types),
-    the next session's front beside this one's device work (`front`), the dense types' host witness `host` times
-    lower, Flock without --zk, and the Lean verifier's core-seconds a statement from `column` times `verify` (the
-    templated check where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at
-    `verify_other` when given)."""
+    types at their server prices and full statements, the rest at the card with the cache's factor (FlashInfer K2048's
+    warm model with `fi_warm`, quant K6144 at `quant6144` seconds a block when given); then a GPU prover `prover` times
+    faster on proving shares, K provers an H200 on full statements (`k4`: four, `dense_k` on the dense types, one on
+    ONE_PROVER's; at K_GAIN, K_GAIN_MPS with `k_gain="mps"`, or the busy-share model with `"model"`), the next session's
+    front beside this one's device work (`front`), the dense types' host witness `host` times lower, Flock without
+    --zk, and the Lean verifier's core-seconds a statement from `column` times `verify` and `verify_cut` (the MoE
+    family's uncut; the templated check where it is cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`;
+    the assumed types at `verify_other` when given)."""
     table, floor = VERIFY_COLUMNS[column]
+    cache = CACHE | CACHE_FI_WARM if fi_warm else CACHE
     out = []
     for x in strata:
         fixed, marginal, cap = x["fixed_seconds"], x["seconds_per_block"], x["statement_blocks"]
@@ -189,18 +228,21 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant_floor=True, ho
                 b = fused_busy
             bf = bm = b
         else:
-            if quant_floor and x["block"].startswith("Fp8GroupQuantUe8m0_v1{K=6144,"):
-                marginal = QUANT_FLOOR
+            if quant6144 is not None and x["block"].startswith("Fp8GroupQuantUe8m0_v1{K=6144,"):
+                marginal = quant6144
             e = expert(x)
-            f, hs, _ = (EXPERT[e]["cache"], 0.0, "") if e else cache_factor(x)
+            f, hs, _ = (EXPERT[e]["cache"], 0.0, "") if e else cache_factor(x, cache)
             fixed *= f
             host_s = hs * fixed
             if host != 1.0 and x["block"].startswith(DENSE):
                 fixed, host_s = fixed - host_s * (1 - 1 / host), host_s / host
             bf, bm = (1 - host_s / fixed if fixed else 1.0), 1.0
-        k = 4 if k4 and not x["block"].startswith(HOST_BOUND) else 1
-        fixed *= gpu_factor(bf, prover, k, front)
-        marginal *= gpu_factor(bm, prover, k, front)
+        k = 1
+        if k4 and not x["block"].startswith(ONE_PROVER):
+            k = dense_k if x["block"].startswith(DENSE) else 4
+        gain = None if k_gain == "model" or k == 1 else K_GAIN_MPS if k_gain == "mps" and k == 4 else K_GAIN[k]
+        fixed *= gpu_factor(bf, prover, k, front, gain)
+        marginal *= gpu_factor(bm, prover, k, front, gain)
         if plain:
             p = 1 - share(PLAIN, x)
             fixed, marginal = fixed * p, marginal * p
@@ -210,6 +252,8 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant_floor=True, ho
                 v = min(v, templated_seconds(x, "goal" if tmpl is True else tmpl))
             if how == "assumed" and verify_other is not None:
                 v = verify_other
+            if not x["block"].startswith(VERIFY_CUT_KEEPS):
+                v *= verify_cut
             fixed += verify * v / CORE_PER_GPU
         out.append(x | {"fixed_seconds": fixed, "seconds_per_block": marginal, "statement_blocks": int(cap),
                         "priced": "measured" if sp else x["priced"]})
@@ -225,15 +269,15 @@ def expert(x) -> str | None:
     return None
 
 
-def cache_factor(x) -> tuple[float, float, str]:
+def cache_factor(x, table=CACHE) -> tuple[float, float, str]:
     """(fixed after over before, host share of after, label) for a census type."""
     b = x["block"]
-    for p, f in CACHE.items():
+    for p, f in table.items():
         if b.startswith(p):
             return (*f, "measured" if "1536" not in p and "Combine" not in p else "CPU share")
     for fam, p in FAMILY:
         if b.startswith(fam):
-            return (*CACHE[p], "family")
+            return (*table[p], "family")
     return (*DEFAULT, "assumed")
 
 
