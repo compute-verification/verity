@@ -1024,6 +1024,50 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
 
 
+def test_r7_holds_a_windows_history_to_the_previous_records_port():
+    """A window's history (`outputs: {value: {"port": P}}`, the earlier windows' outputs it reads) is port P of the log's
+    last record, the one R6 holds `previous` to, whose digest the verifier takes from the log (`last_digest`): the entry
+    takes that port's domain and root, so a fresh root is `R7-held` and the value's own domain `R7-domain` too; a port of
+    other leaves, a port the last record lacks, one only an older record holds, and no previous record are `R7-output`;
+    and a port that isn't a string, another key, a pinned value, or no declaration at all for a value the last record
+    registered under the same name and domain (`unwindowed`) is refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    dom = "da" * 64
+    port = {"port": "W", "root": "cd" * 64, "leaves": len(TABLE), "domain": dom}
+    last = R.record(prog, Q, LAW, SCHEME, [*first["roots"], port], {**SERVED, "row": 6}, registered=[reg.entry()])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(last),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [last]}
+    hist = {"W": {"port": "W"}}
+    assert R.last_digest([first, last]) == R.digest(last) and R.last_digest([]) == ""
+    assert R.check(rec, prog, Q, **kw, outputs=hist).ok
+    assert R.check(rec, prog, Q, **kw, outputs={"W": {"record": R.digest(last), "port": "W"}}).ok
+    with pytest.raises(ValueError):
+        R.check(rec, prog, Q, **kw)
+    assert R.check({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=hist).codes == ("R7-held",)
+    assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=hist).codes == ("R7-domain", "R7-held")
+    assert R.check(rec, prog, Q, **kw, outputs={"W": {"port": "nope"}}).codes[0] == "R7-output"
+    short = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {**port, "leaves": 4}], {**SERVED, "row": 6},
+                     registered=[reg.entry()])
+    assert R.check({**rec, "previous": R.digest(short)}, prog, Q, **{**kw, "log": [short]},
+                   outputs=hist).codes[0] == "R7-output"
+    after = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 7}, previous=R.digest(last),
+                     registered=[reg.entry()])
+    assert R.check({**rec, "previous": R.digest(after)}, prog, Q, **{**kw, "log": [last, after]},
+                   outputs=hist).codes[0] == "R7-output"
+    assert R.check({**rec, "previous": R.digest(after)}, prog, Q, **{**kw, "log": [last, after]},
+                   outputs={"W": {"record": R.digest(last), "port": "W"}}).ok
+    assert R.check({**rec, "previous": None}, prog, Q, **{**kw, "log": []}, outputs=hist).codes[0] == "R7-output"
+    for bad in ({"W": {"port": 1}}, {"W": {"port": "W", "value": "W"}}, {"W": {}}):
+        with pytest.raises(ValueError):
+            R.check(rec, prog, Q, **kw, outputs=bad)
+    with pytest.raises(ValueError):
+        R.check(rec, prog, Q, **kw, outputs=hist, pinned={"W": "cd" * 64})
+
+
 def test_r7_reuses_an_earlier_records_registered_value():
     """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the

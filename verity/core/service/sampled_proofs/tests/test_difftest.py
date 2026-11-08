@@ -1601,8 +1601,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
     if output:
-        params["outputs"] = {"W": {**({"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}),
-                                   "record": R.digest(log[-1])}}
+        kind = {"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}
+        params["outputs"] = {"W": kind if not reuse and draw(st.booleans()) else {**kind, "record": R.digest(log[-1])}}
     elif pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
     if values and s.formats and draw(st.integers(0, 3)):
@@ -1839,11 +1839,13 @@ def _earlier_value(a: dict, x: int) -> None:
 
 
 def _repoint(a: dict) -> None:
-    """`outputs`, if any, naming the log's last record in the form it had (a port, else a registered value)."""
+    """`outputs`, if any, naming the log's last record in the form it had (a port, else a registered value; a port alone
+    names the last record already)."""
     if "outputs" in a["params"]:
         o = a["params"]["outputs"]
         kind = {"value": EARLIER_VALUE} if isinstance(o, dict) and "value" in (o.get("W") or {}) else {"port": EARLIER_OUT}
-        a["params"]["outputs"] = {"W": {**kind, "record": _earlier(a)}}
+        last = isinstance(o, dict) and isinstance(o.get("W"), dict) and set(o["W"]) == {"port"}
+        a["params"]["outputs"] = {"W": kind if last else {**kind, "record": _earlier(a)}}
 
 
 def _earlier(a: dict) -> str:
@@ -1885,7 +1887,8 @@ REGISTERED_PARAMS = [
         {"W": {"value": "W", "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE, "record": _earlier(a)}},
         {"W": {"value": EARLIER_VALUE, "record": R.digest(a["record"])}}, {"W": {"value": 1, "record": _earlier(a)}},
         {"W": {"value": EARLIER_VALUE, "port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE}},
-        {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}][x % 24]),
+        {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}, {"W": {"port": "nope"}}, {"W": {"port": 1}},
+        {"S": {"port": EARLIER_OUT}}, {"W": {"port": "x"}}][x % 28]),
     lambda a, x: a["params"].pop("outputs"),
     _earlier_out,
     _earlier_value,

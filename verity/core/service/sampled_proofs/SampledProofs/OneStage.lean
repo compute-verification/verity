@@ -16,7 +16,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), and `outputs`, the ones that are
   outputs of an earlier run or reuse an earlier record's registered value (`{value: {"record", "port" | "value"}}`, each
   of a value it expects registered and neither fills nor pinned, `record` lowercase hex of 64 bytes and `port` or `value`
-  a string), each refused with any other form or when it expects
+  a string; or `{value: {"port"}}`, a window's history: that port of the previous record, the log's last, whose digest
+  the verifier takes from the log, `Registration.lastDigest`), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
   expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
   other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
@@ -203,8 +204,12 @@ def paramsParsed (j : Json) : V Params := do
         throw "output values are registered values' earlier ports: the verifier expects none registered"
       kvs.toArray.mapM fun (v, o) => do
         let fail := s!"output value {v}: not a registered value it neither fills nor pinned, with an earlier record's " ++
-          "digest and a port or a value"
+          "digest and a port or a value, or a port of the previous record"
         if !(registered.any (·.1 == v) && !supplied.any (·.1 == v) && !pinned.any (·.1 == v)) then throw fail
+        if keys? o == some #["port"] then
+          match getD o "port" with
+          | .str p => return (v, Registration.lastDigest log, Registration.Earlier.port p)
+          | _ => throw fail
         let (key, mk) ← if keys? o == some #["port", "record"] then pure ("port", Registration.Earlier.port)
           else if keys? o == some #["record", "value"] then pure ("value", Registration.Earlier.value) else throw fail
         match getD o "record", getD o key with
