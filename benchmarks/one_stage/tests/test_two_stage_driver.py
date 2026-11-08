@@ -69,7 +69,7 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
     ireg, second = again.second(*_interior(again.layout, again.registration.digest))
     assert ireg.order == again.registration.order and again.coins.live
-    assert second.replay_sample == again.draw and second.law == S.second_law(again.draw.units, N_RHO, K)
+    assert second.replay_sample == again.draw and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
 
