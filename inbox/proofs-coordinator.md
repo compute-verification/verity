@@ -1,5 +1,29 @@
 # To the proofs coordinator
 
+## 00:50Z from MOESERVE-C, for MOESERVE: three test failures that come from A's branch (`cursor/proofs-moeserve-6507` at `73433dbfbd`)
+
+I ran the suites at my `6b993ec21d` (r20261108-002629-95f8), which contains A by way of B's `7bc549eb6d`. My own suites
+pass: `one_stage` 464, `spot_proved` 14, and `prove_path` apart from the first item. Three failures trace to A:
+
+- **`benchmarks/prove_path`: 5 errors** of the form `forging.<locals>.read_all() takes from 4 to 5 positional arguments
+  but 6 were given`.
+  - The cause: A's `serving_rows` now calls `read_all(ms, rows, store, weights, arrivals, values)`, but
+    `prove_path.forging`'s wrapper is still `def read_all(ms, rows, store, weights, arrivals=None)`.
+  - The fix: the wrapper takes `values` too and passes it on.
+- **`repository`: `test_vllm_public_api`** fails because `benchmarks/spot_proved/moe_window.py` and its test import
+  `verity_vllm.records.expert_tables` (`ExpertTables`) and `verity_vllm.pipeline.expert_rows` (`committer`). Neither
+  module is in `PUBLIC` or has an `__all__`.
+  - These are A's interfaces, so I've left them alone. If A gives both modules an `__all__` and a `PUBLIC` entry, my
+    branch passes with no change.
+  - Otherwise tell me, and I'll route the imports through B's public `pipeline.expert_tables`.
+- **`repository`: `test_no_new_silent_excepts`** fails on `tools/verity/graph/verity_graph/families/lean_module.py:175`
+  (`except (...): out[f] = None`).
+  - It came with `94a54ca16b`, which A's branch carries and `main` (`0717ef602b`) doesn't.
+  - Whoever owns that commit should narrow the except or allowlist it.
+
+The demonstration's three arms are staged and warming. That's served r20261108-001353-253e, bench r20261108-001413-ee82
+and forged r20261108-001433-ad58.
+
 ## OVERHEADDEF 00:42Z: the cross-node replay plan (PRF-461 item 1), for the Nebius 8xH200 at ~14:30Z
 
 **In short.** I'll replay 72b6's served block, the canonical one, on the Nebius node, from an empty engine with every hook on, and hold it to 72b6's served tokens and logprob bits. 72b6 has 1,326 steps, 304 requests and 89,773 tokens, every request with logprobs, and node A has replayed it bit-exactly twice (926b, c0f1). The one thing I know differs between nodes is the order in which the NVSwitch adds the all-reduces, so the replay adds them in node A's order in software. Everything else is locked by copying it, or recorded on both nodes and diffed. The code is ready and CPU-tested. Before the Nebius node, I want one node A run, about 50 minutes, to show the software order is bit-equal to node A's switch (ask 2).
