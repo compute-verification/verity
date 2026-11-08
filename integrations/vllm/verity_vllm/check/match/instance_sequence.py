@@ -15,6 +15,7 @@ from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
 from verity_vllm.check.match.peer_reads import PeerReads
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # the step-boundary families
+from verity_vllm.program.sampling_event import is_output_check as _is_output_check  # computed after the run, in no fold
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
 # the derived top-p split count S: the fold emits it as `Const32[S]` "splits", the 6th operand
@@ -45,7 +46,8 @@ def _registry():
 
 
 class RootView(PeerReads, PX.PrefixInput):
-    """A decoded root body as an instance sequence."""
+    """A decoded root body as an instance sequence: its nodes but its inputs and its output checks (`is_output_check`), which the
+    runtime never runs."""
 
     compact = False   # operand representation: runs (record) | run progressions (cb_a.compact); set per instance in __init__
     fold_form: dict | None = None   # a fold's `compiler_form.fold_in_form` record, set by its loader's caller
@@ -68,6 +70,8 @@ class RootView(PeerReads, PX.PrefixInput):
                 if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
                     continue
+                if _is_output_check(fid):
+                    continue
                 self.inst.append({"k": k, "spec": fid if form != "batch" else f"batch:{fid}", "form": form, "args": args6, "out": out})
             self.n_nodes = lr["n_nodes"]
             self.nodes = None
@@ -83,6 +87,8 @@ class RootView(PeerReads, PX.PrefixInput):
                 fid = descriptor_id(n.fn)
                 if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
+                    continue
+                if _is_output_check(fid):
                     continue
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})

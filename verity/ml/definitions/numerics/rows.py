@@ -766,7 +766,7 @@ _row("MoeSum_v1", moe_sum, ("sum",))
 from verity.ml.definitions.numerics import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
 from verity.ml.definitions.numerics import (  # noqa: E402
     act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, dsv4_rows, glm53_rows, int8_rows, moe_align_rows,
-    softcap_rows,
+    softcap_rows, stop_rows,
 )
 
 
@@ -776,9 +776,9 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dic
     return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
 
 
-EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_rows, batched_gemm_rows)}
+EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_rows, batched_gemm_rows, stop_rows)}
 for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_expf), (dsa_norm_rows, dsa_norm_rows.row),
-              (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
+              (batched_gemm_rows, batched_gemm_rows.batched_gemm), (stop_rows, stop_rows.stop_rule)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
 register_rows(int8_rows, EVALUATORS, _row)

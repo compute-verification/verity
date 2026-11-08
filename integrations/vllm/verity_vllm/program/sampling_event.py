@@ -32,6 +32,15 @@ def is_sampling_event(spec: str) -> bool:
     return family_of(spec) in SAMPLING_EVENT_FAMILIES
 
 
+#: the Program's checks over its outputs, after its last sampling event (`StopRule_v1`, the length rule): the runtime never runs
+#: them, so they open no engine step and aren't in a fold; the replay evaluates them (`check.replay.checks`)
+OUTPUT_CHECK_FAMILIES = ("StopRule_v1",)
+
+
+def is_output_check(spec: str) -> bool:
+    return family_of(spec) in OUTPUT_CHECK_FAMILIES
+
+
 #: the token id's width in the circuit: a select's output and an ingress parse's ids are 32-bit words.  vLLM serves and commits int64
 #: ids, each of which must be that word zero-extended.
 TOKEN_ID_BITS = 32
