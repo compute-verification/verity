@@ -1,5 +1,5 @@
-"""The repriced break-even's tables from sweep.py's surfaces: the main line step by step, the extras on its last two
-steps, the one-stage and plain columns, and the advice's charge.
+"""The repriced break-even's tables from sweep.py's surfaces: the served line step by step over all six scopes, its
+extras and its advice, then the earlier main line, its extras, the one-stage and plain columns.
 
     python benchmarks/spot_figures/breakeven/reprice_table.py SURFACE.json... [--json OUT]
 """
@@ -8,6 +8,42 @@ import sys
 from pathlib import Path
 
 SCOPES = ("world year", "datacenter year")
+ALL_SCOPES = ("world week", "world month", "world year", "datacenter week", "datacenter month", "datacenter year")
+#: compiling one sampled request's Programs, the core-hours the line's total takes and its upper reading
+COMPILE = ("3.8", "14.0")
+#: the long-running proof server, the statement cache warm, each lever in turn
+SERVED = [
+    ("N0", "(A′) at 128k on the proof server today: one prover an H200, 600 s replay blocks, main's Lean verifier, the "
+     "quant K6144 at its sibling's floor", "measured: 6 light types and the fused blocks on the server; the rest the "
+     "cards × the cache's factor", "STATIONARY, @kernels"),
+    ("N1", "+ the Lean verifier with its proved twins", "measured on 3 types (×0.21, ×0.22, ×0.58); ×0.21–0.23 "
+     "assumed on 6; the median elsewhere", "VERIFYFAST"),
+    ("N2", "+ lifetime replay, no edge pause, pages committed when written", "modeled from the 128k serve's trace",
+     "LIFETIME"),
+    ("N3", "+ four provers an H200 on full statements, each type by its device's busy share",
+     "measured: light types 2.3–3.9× at a quarter statement, the fused blocks 1.12×; host-bound types one prover",
+     "STATIONARY, @kernels"),
+    ("N4", "+ the next session's front beside this one's device work", "modeled", "@kernels"),
+    ("N5", "+ a GPU prover 4× on device parts, the witness build undivided", "modeled", "@kernels"),
+]
+SERVED_EXTRAS = [
+    ("host", "the dense types' host witness 3.5× lower", "assumed (CPU's 2–4×)", "HILLCLIMB"),
+    ("hash4", "in-proof hashing 4× (half the marginal)", "assumed", "no owner"),
+    ("plain", "Flock without --zk", "fused blocks' shares measured on H200; the rest CPU's", "HILLCLIMB"),
+    ("tmpl", "the templated session check where cheaper (RMSNorm types flat)", "estimate (quant K6144's ratio)",
+     "VERIFYFAST"),
+    ("vfloor", "the types the median prices at the fast column's floor (8.7 s)", "a lower bound", ""),
+    ("fusedfront", "the fused blocks' front overlap at the kernels' split (device 0.55 of the session)",
+     "modeled, unmeasured under contention", "@kernels"),
+    ("card", "the quant K6144 at its card's 0.233 s a block (load)", "superseded", "HASHCUT"),
+    ("host+tmpl", "host + tmpl", "assumed", ""),
+    ("host+hash4+tmpl", "host + hash4 + tmpl", "assumed", ""),
+]
+#: the advice when it is not closed: every prefix-cache hit sent whole, or caching off
+ADVICE = [
+    ("hits", "+ the prefix-cache hits as advice, 5,181 bits a machine's window", "measured on 2k traces"),
+    ("prefixoff", "+ prefix caching off: the hits' prefill recomputed, +13.86% in the serve tax", "measured at 128k"),
+]
 #: each step's lever, how it is priced, and its owner
 MAIN = [
     ("R0", "(A′) the per-expert cut as Figure 1 prices it, at 128k over vLLM's 128k plan, 600 s replay blocks",
@@ -82,18 +118,60 @@ def pct(x):
     return "never" if x is None else (f"{x:.3g}×" if x >= 1 else f"{x:.2%}")
 
 
-def cells(rows, case):
+def cells(rows, case, scopes=SCOPES, beta=True):
     out, data = [], {}
-    for s in SCOPES:
+    for s in scopes:
         r = rows.get((case, s))
         if r is None:
-            out += ["–", "–"]
+            out += ["–", "–"] if beta else ["–"]
             continue
         b = r["beta"]["FP4"]
-        out += [pct(b), pct(None if b is None else r["tax"] + b)]
+        out += ([pct(b)] if beta else []) + [pct(None if b is None else r["tax"] + b)]
         data[s] = {"beta_fp4": b, "beta_fp8": r["beta"]["FP8"], "tax": r["tax"],
-                   "total_fp4": None if b is None else r["tax"] + b, "bound_at_10pct_bits": r["bound"]["0.1"]}
+                   "total_fp4": None if b is None else r["tax"] + b, "bound_at_10pct_bits": r["bound"]["0.1"],
+                   "advice_bits": r.get("advice_bits", 0.0)}
+        if "compile" in r:
+            data[s]["compile"] = r["compile"]
     return out, data
+
+
+def served(rows, data):
+    """The served line's tables over all six scopes: the total FP4 compute a step, then the compiling line at the
+    last step's plan, the extras on it and the advice."""
+    head = ("| case | lever | priced | owner | " + " | ".join(ALL_SCOPES) + " |\n|---|---|---|---|"
+            + "---:|" * len(ALL_SCOPES))
+    print("Served line, total FP4 compute (serve tax + proving + verifying; 376.7 GB):\n" + head)
+    for case, lever, label, owner in SERVED:
+        c, d = cells(rows, case, ALL_SCOPES, beta=False)
+        data[case] = d | {"lever": lever, "priced": label, "owner": owner}
+        print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
+    last = SERVED[-1][0]
+    for h in COMPILE:
+        c = [pct(rows[(last, s)]["compile"]["share"][h]) if "compile" in rows.get((last, s), {}) else "–"
+             for s in ALL_SCOPES]
+        print(f"| compile | + compiling each sampled request's Programs, {h} core-h on 8 ranks, at {last}'s plan | "
+              f"{'measured a step; 256-step span modeled' if h == COMPILE[0] else 'upper reading'} | @vllm, @circuits "
+              "| " + " | ".join(c) + " |")
+    c = []
+    for s in ALL_SCOPES:
+        r = rows.get((last, s))
+        c.append("–" if r is None or "compile" not in r or r["beta"]["FP4"] is None
+                 else pct(r["tax"] + r["beta"]["FP4"] + r["compile"]["share"][COMPILE[0]]))
+    data["total"] = {"case": last, "compile_core_h": COMPILE[0], "cells": dict(zip(ALL_SCOPES, c))}
+    print(f"| total | {last} + compiling at {COMPILE[0]} core-h | | | " + " | ".join(c) + " |")
+    print(f"\nExtras on {last}:\n" + head)
+    for e, lever, label, owner in SERVED_EXTRAS:
+        case = f"{last}+{e}"
+        c, d = cells(rows, case, ALL_SCOPES, beta=False)
+        data[case] = d | {"lever": lever, "priced": label, "owner": owner}
+        print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
+    print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)
+    for base in ("N2", "N3", last):
+        for e, lever, label in ADVICE:
+            case = f"{base}+{e}"
+            c, d = cells(rows, case, ALL_SCOPES, beta=False)
+            data[case] = d | {"lever": lever, "priced": label}
+            print(f"| {case} | {lever} | {label} | | " + " | ".join(c) + " |")
 
 
 def main(argv=None):
@@ -103,9 +181,15 @@ def main(argv=None):
         k = argv.index("--json")
         out_json, argv = Path(argv[k + 1]), argv[:k] + argv[k + 2:]
     rows = load(argv)
-    head = "| case | lever | priced | owner | world year β | total | datacenter year β | total |\n|---|---|---|---|---:|---:|---:|---:|"
     data = {}
-    print("Main line (FP4, 376.7 GB; total = serve tax + β):\n" + head)
+    if any(c == SERVED[0][0] for c, _ in rows):
+        served(rows, data)
+    if not any(c == MAIN[0][0] for c, _ in rows):
+        if out_json:
+            out_json.write_text(json.dumps(data, indent=1) + "\n")
+        return
+    head = "| case | lever | priced | owner | world year β | total | datacenter year β | total |\n|---|---|---|---|---:|---:|---:|---:|"
+    print("\nMain line (FP4, 376.7 GB; total = serve tax + β):\n" + head)
     for case, lever, label, owner in MAIN:
         c, d = cells(rows, case)
         data[case] = d | {"lever": lever, "priced": label, "owner": owner}

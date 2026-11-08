@@ -1,4 +1,20 @@
-{"steps": [
+{"served": [
+ {"label": "(A′) at 128k on the long-running proof server, the statement cache warm", "status": "measured",
+  "cases": {"two-stage": "N0"},
+  "note": "one prover an H200; six light types and the fused blocks at the server's prices a statement, the rest the cards times the cache's factor; 600 s replay blocks; main's Lean verifier; the quant K6144 at its K2048 sibling's floor"},
+ {"label": "the Lean verifier with its proved twins", "status": "measured", "cases": {"two-stage": "N1"},
+  "note": "after over before measured on FlashInfer K2048, quant K6144 and the MoE GEMM, applied to the line's column; six types at 0.21-0.23 by a fixed-plus-per-entry fit (assumed); the median elsewhere"},
+ {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "N2"},
+  "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
+ {"label": "four provers an H200, by each type's busy share", "status": "measured",
+  "cases": {"two-stage": "N3"},
+  "note": "the light types' K=4 over K=1 measured at a quarter statement (2.3-3.9x), taken at full; the fused blocks 1.12x at full; the four host-bound types keep one prover"},
+ {"label": "the next session's front beside this one's device work", "status": "modeled",
+  "cases": {"two-stage": "N4"}, "note": "the period max(device, host) a prover; unmeasured under contention"},
+ {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "N5"},
+  "note": "device shares only; the witness build undivided"}
+],
+ "steps": [
  {"label": "(A′) per-expert cut at 128k, as Figure 1 prices it", "status": "measured",
   "cases": {"two-stage": "R0"},
   "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer modeled)"},
@@ -18,15 +34,17 @@
   "note": "each statement's Lean verify (measured on 9 types; families scaled; the median 681 s elsewhere) at 81.8 core-seconds a GPU-second, Nebius's on-demand list prices; total compute = serve tax + proving + verifying"},
  {"label": "4 provers on every type, four provers per H200", "status": "assumed",
   "cases": {"two-stage": "R6x4+all+4perH200"},
-  "note": "the experts' overlap factor taken for every type, and full statements under four provers once each prover's peak is about 33 GiB (@kernels' four-provers-per-h200, its H200 number due Sun 20:00Z)"},
+  "note": "the experts' overlap factor taken for every type, and full statements under four provers once each prover's peak is about 33 GiB"},
  {"label": "the dense types' host witness 3.5x lower", "status": "assumed",
   "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
  {"label": "hashing cut 4x", "status": "assumed", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
   "note": "no owner: in-proof hashing at a half share of the marginal, cut 4x"}
 ],
  "unpriced": [
-  {"label": "compile-slice proving", "status": "unmeasured",
-   "note": "network-accounting proves every window's CompileSlice_v3, never sampled; their estimate is due Sun 18:00Z, not in any total"},
+  {"label": "compiling each sampled request's Programs", "status": "measured a step",
+   "cases": {"two-stage": "N5"},
+   "note": "135 s a Program a rank; a 256-step span 3.1-3.8 core-hours over 8 ranks until a one-layer template; its share at the plan's sampled requests, beside the total"},
   {"label": "the advice charge", "status": "charged",
-   "note": "until StopRule_v1 checks length and finish in-circuit, the advice line charges log2(max_tokens)+1 bits a request, which no beta covers at either scope"}
+   "cases": {"two-stage": "N5+hits"},
+   "note": "with the length closed in-circuit, the advice is the prefix-cache hits (about 5,200 bits a machine's window) and the small rest; while the hits are advice no year scope and no world scope breaks even; prefix caching off removes them at +13.86% FLOPs (N5+prefixoff)"}
  ]}
