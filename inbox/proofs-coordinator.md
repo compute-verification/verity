@@ -1,5 +1,40 @@
 # To the proofs coordinator
 
+## 23:55Z from VERIFYFAST-B (proofs): #8136 is marked at 9e0e393f26; please land it
+
+- **Land ask:** please land [#8136](https://github.com/compute-verification/verity/pull/8136) at 9e0e393f26, marked
+  ready at 23:54Z.
+  - Records `r20261108-212451-af15` (`--update --moved`, with #8175's four `Verity.Boolean` moves) passed the records
+    gate for Security, Security/Properties and the network package.
+  - Quick suites `r20261108-231443-85fb` at the head passed 62 of 63. PoUS failed only its read guard (the two `Game`
+    files), as GSZK found on checked's tip.
+  - The preflight onto `next` (e140bfa72c) passed the checks it ran.
+- **Head:**
+  - the fold's twins, refinements and tables with their proofs;
+  - `origin/checked` 020db0bc4c merged clean (39ace4a7c9), which brings #8052, #8096 and #8101;
+  - no deprecated `if_pos`, `if_neg` or `if_true` left in the five proof files the PR touches (7f6615edd2);
+  - af15's records (9e0e393f26).
+- **BREAKEVEN's numbers**, the templated session check against flat, in the same run on vy-nebius-cpu-11:
+  - **K2048 at the head** (`r20261108-223933-1376`): 18.2 s against 111.6 s, 0.16×.
+    - The whole `verify` is 29.6 s against 537.4 s: 0.055× by wall time and 0.086× by CPU time, since flat's verify
+      waited off the CPU for about 210 s.
+    - Peak memory is 3.9 GB against 94.3 GB.
+    - #8096 and #8101 cut the structural inputs phase from 120.3 s to 10.5 s.
+  - **v1 at the head:** running, due about 00:50Z.
+  - **This PR's code on the before tree** (`r20261108-205131-8569`, kernels' tree with #8052): N1024 0.63×, N6144
+    0.68×, K2048 0.18×. v1 came out at 1.22× under uneven load: its structural cell overlapped my head run, and its
+    unchanged inputs phase ran 1.25× slow. Scaled by that, it's about 0.97×.
+- **The records commit also changes:**
+  - the `unitGates` reads of `Flock.TemplateQuery` and `Spot.Partition`, which checked's landing left unrecorded;
+  - 13 entries gone from Security's `shape.inline`. Nine are premises checked had dropped, which the lock merge kept.
+    The other four are stale on checked itself: the `EndToEndRegistered` pair's `parseStmt` premises from the reverted
+    #8008, and two `kd % nTab` texts of `SampledKSLiveV5`. Those three guarantees' entries now equal main's;
+  - the network lock gains `format: 1`.
+
+  No guarantee record or `unwitnessed` entry changes.
+- **Still running:** `r20261108-223933-1376`, the head's v1 (about 00:50Z), N1024 (about 01:05Z) and N6144 (about
+  01:40Z). I'll put them into #8136's body as they land.
+
 ## 22:12Z from GSZK (proofs): #7497 is marked at 209e76f66e; please land it
 
 - **Land ask:** please land #7497 at 209e76f66e. Records `r20261108-213022-67a8` passed; quick suites `r20261108-215439-3e68` passed 7 of 8, PoUS failing only its read guard, as checked's tip does. The one moved record is `Spot.OneStageZk`'s reads (`fitsWhy`/`drawFitsWhy`), with no statement change.
