@@ -3,7 +3,8 @@
 # root on an 8 x H200 node holding the checkpoint:
 #   research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/moe_align/served.sh
 # ROW (default DeepSeek-V4-Pro's TP8 eager B1, whose request every batch rotates), CHECK_BATCHES (default 1,8), BATCHES (default
-# 1,16,64,256), PAIRS (default 3), TP (default 8), VENV (default /workspace/cp/venv312), GPU_UTIL (default 0.92). LOCAL_CK: a
+# 1,16,64,256), PAIRS (default 3), TP (default 8), VENV (default /workspace/cp/venv312), GPU_UTIL (default 0.92), ENGINE_ARGS
+# (space-separated K=V, each one more --engine-arg, e.g. max_num_batched_tokens=16384 under the largest batch's). LOCAL_CK: a
 # verified copy of the checkpoint (it holds .verified), bind-mounted on the path manifests/checkpoints.json names when nothing is
 # mounted there. The integration's vLLM plugin loads from a site directory declaring its entry points (stress.py site).
 # DUMMY_LAYERS=N: no checkpoint; the first N layers with dummy weights (served.py --dummy-layers), e.g. TP2 on a node without it:
@@ -33,6 +34,8 @@ export PYTHONPATH=$TMPDIR/site:$PYTHONPATH
 mkdir -p "$OUT"
 cd "$TREE/integrations/vllm"
 nvidia-smi --query-gpu=index,name,driver_version,memory.used --format=csv,noheader | tee "$OUT/gpus.csv"
+extra=()
+for kv in ${ENGINE_ARGS:-}; do extra+=(--engine-arg "$kv"); done
 python -u -m moe_align.served --workload "workloads/$ROW.json" --tp "${TP:-8}" --check-batches "${CHECK_BATCHES:-1,8}" \
   --batches "${BATCHES:-1,16,64,256}" --pairs "${PAIRS:-3}" --engine-arg "gpu_memory_utilization=${GPU_UTIL:-0.92}" \
-  --dummy-layers "${DUMMY_LAYERS:-0}" --out "$OUT"
+  "${extra[@]}" --dummy-layers "${DUMMY_LAYERS:-0}" --out "$OUT"
