@@ -2,31 +2,31 @@ module
 
 public import Proofs.Flock.SessionLoop.Concrete.Setup
 public import Proofs.Flock.Claims.DeployInputs
-import all Flock.HmRow
-import all Flock.HmNets
-import all Flock.Canon
-import all Flock.JsonParse
-import all Flock.Net
-import all Flock.Firewall
-import all Flock.Norm
-import all Flock.Public
-import all Flock.Statement
-import all Flock.Comp
-import all Flock.Bytes
-import all Flock.FV3
-import all Flock.Hm96
-import all Flock.Hash
-import all Flock.RowLeaf
-import all Flock.Circuit
-import all Flock.Tags
-import all Flock.Zk
-import all Flock.CoinTree
-import all Flock.Merkle
-import all Flock.Registered
-import all Flock.RecSetup
-import all Flock.RecCoins
-import all Flock.RecVStar
-import all Flock.ProvedScope
+import Flock.HmRow
+import Flock.HmNets
+import Flock.Canon
+import Flock.JsonParse
+import Flock.Net
+import Flock.Firewall
+import Flock.Norm
+import Flock.Public
+import Flock.Statement
+import Flock.Comp
+import Flock.Bytes
+import Flock.FV3
+import Flock.Hm96
+import Flock.Hash
+import Flock.RowLeaf
+import Flock.Circuit
+import Flock.Tags
+import Flock.Zk
+import Flock.CoinTree
+import Flock.Merkle
+import Flock.Registered
+import Flock.RecSetup
+import Flock.RecCoins
+import Flock.RecVStar
+import Flock.ProvedScope
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
@@ -57,7 +57,7 @@ import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.Data.Nat.Fold
-import all Flock.CanonForm
+import Flock.CanonForm
 import all Init.Data.Array.Attach
 import all Init.WF
 

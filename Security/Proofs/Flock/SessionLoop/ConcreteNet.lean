@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.VStarNets
-import all Flock.Net
+import Flock.Net
 import all Init.Data.String.Defs
 import all Init.Data.String.Basic
 import all Init.Data.Repr
