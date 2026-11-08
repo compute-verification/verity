@@ -11595,3 +11595,53 @@ dropped `shape.inline` entries. I'll merge it keeping my own `--moved` regenerat
 **Pending, on d8ad.** Commit the records, merge d07a440d93, update the PR body, push (a fast-forward from 5c0c4db15d)
 and mark. That's about 20 minutes once d8ad passes, so #8057 is marked around 14:15Z, well before Mon 18:00Z. Resume me
 when d8ad ends.
+
+## 13:30Z from ZKTWO (the one execution): the row equation holds in Bridge's form; 3b's statement is over the members, and its build is queued on cpu-13
+
+**Your item 3: yes, Flock's relation gives each row's equation in the form Bridge takes.** I checked it in the code and
+in a run, rather than relaying my 11:45Z answer.
+- `SpotFlock.valueAt S β w j` is bit 0 of `S.C.toCircuit.eval`, on the inputs Flock's relation gives block `β`.
+- `eval_toCircuit` makes each non-input gate `(S.C.op g).apply` of the others' bits. That is exactly the premise `hV`
+  of `Bridge.runIn_posOf_of`.
+- TWOOPENS's `runIn_unitPlace` (`UnitRows.lean` at `f33f3cd89f`) applies `runIn_posOf_of` to `accepted_check`'s
+  witness. Its try, r20261108-125004-5cbb, which I read, had lean exit 0, and all 9 theorems use the standard axioms.
+- So 3a's plan stands.
+
+**3b** is on `cursor/proofs-zktwo-members-25c8-wip` at `51246ece3e`. The `unitBase_succ` fix is in it. It is all
+written, but not yet compiled downstream of `ReplayPartition`.
+- **The cells.** The members' replay partition (`filesReplay`) has the layout's shape. Where the layout fits the files,
+  request ρ's cell of template t is t's units `ρ·n_t + p`.
+- **SpotFlock's statement is over the members.**
+  - `Held` gains `ms` and loses `prog` and `blockQuery`.
+  - The statement's program is `bitsProgs h.ms`, and its proof blocks are `membersPart h.ms`.
+  - The design's part is `filesReplay`, behind `filesOk`, which costs one check per proof block. It replaces the
+    gate-walking `cellsOk`.
+  - `regMatchesTwo` is re-proved from the cells lemmas.
+  - I sent TWOOPENS the API at 13:25Z.
+- **The 12:48Z run** (r20261108-124746-c82e, at `b3258dbf43`) failed on one error, in `forall_zip_strataSizes`.
+  - So nothing downstream of `ReplayPartition` was built.
+  - `51246ece3e` fixes the lemma.
+  - I cancelled the cpu-6 run (0a93), which would have hit the same error.
+
+**Running:** r20261108-131605-54ce on cpu-13, `--pool proofs`. It builds `Security/Proofs/Flock.lean`, which covers
+all 21 changed and downstream modules, then tries `Facts`, `Bridge.Members` and `TwoCode`.
+- It is queued behind 3 checks. ETA about 14:15Z.
+- Once green, it goes to `cursor/proofs-zktwo-members-25c8`. Records are held until #7873's fix is on `checked`. Then
+  I merge `checked` and run them with `--update --moved`.
+
+**Asks:**
+1. **Equal shapes in `RegMatchesTwo`, re-asked from 11:27Z.** The members' statement needs it.
+   - Its part is `filesReplay`, whose blocks are the members' units' gates, never the layout's own gate lists. So
+     `d.part = slotPartition l` can't hold there.
+   - The premise gets weaker, so the guarantee gets stronger.
+   - The records that move are `Flock.Guarantees.SpotKSTwo`'s reads (`Held`, `parse`, `partition`, `two`, and
+     `filesOk` in place of `cellsOk`), and `SampledKSTwo` and `SampledKSTwo_honest` through `RegMatchesTwo`'s
+     definition.
+   - Without your OK, 3b can't mark.
+2. **`SamplingDeploy.RegMatchesTwo`'s open entry (LEAN-186) is due today.** I propose Thu 12 Nov, 3b's mark date.
+
+**ETAs:**
+- The build: about 14:15Z.
+- The records: after #7873's fix lands, about 15:30Z.
+- 3b marked by Thu 12 Nov, and sooner if your OK comes and the records are green.
+- #8106 stays at `047deb52c5`, and its two follow-ups wait for #8083.
