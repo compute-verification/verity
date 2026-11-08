@@ -3,7 +3,8 @@ A templated statement's template section, right after META: `HmOut.tmplOf` reads
 template's `n` lines off the file's head alone, so bytes past the section that aren't UTF-8 still give the template, and a
 file without the section, with a malformed header or with fewer lines than its header names gives none.
 `HmRow.tmplLines`, what `HmRow.parse` passes over before the sections, is the header and those lines under the templated
-tags, and nothing under any other's or in a file without the section.
+tags, and nothing under any other's or in a file without the section. `HmOut.parseTmpl` refuses a META `definition`, a
+unit class's, before it reads the template.
 -/
 module
 
@@ -35,5 +36,10 @@ def two : ByteArray := file "TEMPLATE 2\na b\nc d\n"
 #guard (linesOf two)[2 + HmRow.tmplLines Tags.circuitTmpl (linesOf two)]! == "CIRCUIT x 0"
 #guard HmRow.tmplLines Tags.circuit (linesOf two) == 0
 #guard HmRow.tmplLines Tags.circuitTmpl (linesOf (file "")) == 0
+
+def classMeta : ByteArray := "flock-circuit/tmpl u\nMETA {\"definition\":\"d\",\"layout\":\"iv\"}\nTEMPLATE 0\n".toUTF8
+
+#guard HmOut.parseTmpl Tags.circuitTmpl classMeta matches
+  .error "META definition: a unit class has no templated statement"
 
 end Flock.Test.TmplSection

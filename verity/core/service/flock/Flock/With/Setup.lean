@@ -678,6 +678,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
 def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
     M Circuit := do
   let mj ← metaOf bytes
+  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
   let ctx := "templated statement META"
   let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)

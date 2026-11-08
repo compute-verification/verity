@@ -1817,9 +1817,11 @@ circuit where a flat file's `CIRCUIT unit` section is (`HmRow.parse`'s `pre`, pa
 the circuit (`Circuit.tmpl`). META and the template are read off the file's head first (`metaOf`, `tmplOf`), so the
 file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows itself is refused: none of
 the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit is a recursion unit
-(`recUnit`). -/
+(`recUnit`), and a META `definition`: a unit class has no templated statement, so `queryTemplate` reads none as one.
+-/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
+  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
   let ctx := "templated statement META"
   let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)

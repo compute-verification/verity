@@ -321,6 +321,7 @@ def main (args : List String) : IO UInt32 := do
     report "read" t0 [("bytes", toJson bytes.size)]
     let t0 ← IO.monoNanosNow
     let .ok mj := HmOut.metaOf bytes | report "meta" t0 [("error", Json.str "refused")]; return 1
+    if J.has mj "definition" then report "meta" t0 [("error", Json.str "refused")]; return 1
     report "meta" t0
     let t0 ← IO.monoNanosNow
     let .ok lines := HmOut.tmplOf bytes | report "template_lines" t0 [("error", Json.str "refused")]; return 1
