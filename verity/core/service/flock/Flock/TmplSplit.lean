@@ -133,15 +133,46 @@ def Tab.binds (bind : Tab → Nat → Tab → (Nat → Nat × F128) → (Nat →
     (count : Nat) (ch : Tab) (rm : Nat → Nat × F128) (wk : Nat → Nat → List (Nat × F128)) : Tab :=
   (List.range count).foldl (fun o j => bind o j ch rm wk) o
 
-/-- Definition `d`'s own rows: copy `k`'s references through `ref`, an `A` reference weighted `α`. -/
-def Tab.rows (ref : Tab → Nat → Nat → F128 → Nat → Tab) (rowLow : Nat → Nat → F128) (alpha : F128) (nk A : Nat)
-    (pos : Nat → Nat) (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) : Tab :=
+/-- Add a run's sums `acc` for a row of chunk `cx` and column chunk `cy`, weight `w`: `w · acc[s]` at slot `s < 64`
+while explicit, `w · acc[0]` summed, each nonzero sum once. -/
+def Tab.flush (summed : Bool) (o : Tab) (cx cy : Nat) (w : F128) (acc : Array F128) : Tab :=
+  if summed then
+    let x := acc.getD 0 0
+    if x.isZero then o else { o with S := bump o.S (cx, cy) (w * x) }
+  else
+    { o with P := (List.range 64).foldl (fun m s =>
+        let x := acc.getD s 0
+        if x.isZero then m else bump m (cx, cy, s) (w * x)) o.P }
+
+/-- Copy `k`'s references `vs` of a row of chunk `cx`, weight `w`, as `Tab.ref` adds them one at a time, but an own
+column's factor is summed into `acc` (by slot while explicit) along each run of references in one column chunk `cy`, and
+each run's sums reach the table once (`Tab.flush`): a table read's row of thousands of references costs a sum per
+reference and at most 64 table entries. -/
+def Tab.refs (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (o : Tab) (k cx : Nat) (w : F128) (vs : Array Nat) : Tab :=
+  let a := as.getD k 0
+  let (o, cy, acc) := vs.foldl (fun (st : Tab × Nat × Array F128) v =>
+    let (o, cy, acc) := st
+    if v < D.cols then
+      let P := pos v
+      let (i, g) := if summed then (0, gL.at (P % A)) else
+        let q := a + B * (P % A)
+        (q % 64, gL.at (q / 64))
+      if P / A == cy then (o, cy, acc.modify i (· + g))
+      else (Tab.flush summed o cx cy w acc, P / A, (Array.replicate 64 0).modify i (· + g))
+    else (Tab.ref D pt summed A B as gL pos o k cx w v, cy, acc)) (o, 0, Array.replicate 64 0)
+  Tab.flush summed o cx cy w acc
+
+/-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`. -/
+def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat) (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) :
+    Tab :=
   rows.foldl (fun o (x, ra, rb) =>
     let P := pos x
     let o := (List.range nk).foldl (fun o k =>
       let ex := rowLow k P
-      let o := ra.foldl (fun o v => ref o k (P / A) (alpha * ex) v) o
-      rb.foldl (fun o v => ref o k (P / A) ex v) o) o
+      let o := Tab.refs D pt summed A B as gL pos o k (P / A) (alpha * ex) ra
+      Tab.refs D pt summed A B as gL pos o k (P / A) ex rb) o
     { o with work := o.work + nk * (ra.size + rb.size) }) o
 
 /-- A run of lanes from an explicit class into a summed one: the child's summed entries spread over the 64 slots by `W`
@@ -256,8 +287,8 @@ def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     let eL ← half pt true lo n
     let gL ← half pt false lo n
     let pos := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
-    let o := Tab.rows (Tab.ref D pt summed (2 ^ al) (2 ^ β) as gL pos) (Tab.rowLow pt summed (2 ^ al) (2 ^ β) as eL)
-      pt.alpha (if summed then 1 else as.size) (2 ^ al) pos D.rows {}
+    let o := Tab.rows D pt summed (2 ^ al) (2 ^ β) as gL pos (Tab.rowLow pt summed (2 ^ al) (2 ^ β) as eL)
+      pt.alpha (if summed then 1 else as.size) D.rows {}
     (List.range D.calls.size).foldlM
       (walkCall t lays pt (walkChild lays multi pt (walk t lays multi pt fuel)) d β as off al gL) o
 
