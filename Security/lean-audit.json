@@ -3307,8 +3307,6 @@
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
   ],
   "Flock.SecurityProofs.SampledKSLiveV3": [
-   "FlockSoundness.Assumptions.LinkCRZCAt",
-   "FlockSoundness.Assumptions.TableCRZAt",
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
    "FlockSoundness.Built",
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
@@ -3316,9 +3314,7 @@
   "Flock.SecurityProofs.SampledKSLiveV5": [
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
    "FlockSoundness.Built",
-   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-   "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-   "FlockSoundness.Discharge.ZkLink.SessCRZ"
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
   ],
   "Flock.SecurityProofs.SessionLoopZKDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
@@ -16289,7 +16285,7 @@
     "reads": []
    },
    "type_hash": "1edf01c475351d5490d257570d1a73c214ddb9b6375f903838bbe27787147056",
-   "unfolded_hash": "ab3e2bec07d962dceaa2a24384f9a9c2c39ed36b1cefcd7f54575339c62c32e4"
+   "unfolded_hash": "e19a809e59d692fd78f4fdd5bd9ce4e7332ac70ab1096b1030f0f1f69abd1014"
   },
   "Nci.SecurityProofs.DampenerRemote": {
    "owner": "@lean",
@@ -16312,7 +16308,7 @@
     "reads": []
    },
    "type_hash": "9feae5d9e2ff364afe60468502cf1a03c68b15c84d81616e07a03ee4b35a3f5d",
-   "unfolded_hash": "58bb51c3afb5dfd06f05967b02ca27785edd4542d722f4c03ef934fd1c5a2a7d"
+   "unfolded_hash": "584c7a2e59609fc098320a2920a92a71e24fbb62d25248acc7a4d8dd43aae04b"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod": {
    "owner": "@training",
@@ -16336,7 +16332,7 @@
     "reads": []
    },
    "type_hash": "f2167e10c1f3bdadfee41a7346dd05b7cbb25383842da21f1accda19d252e145",
-   "unfolded_hash": "fdd8d5301d43094180fe1099a5c69c5e1e9e93c56cf5a10322f5764a7f7fc699"
+   "unfolded_hash": "ce1d7ed58e3eadc3d004c4b55de2139140159c27c6a4ba6dbfeaef7b5c2978f1"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod_honest": {
    "owner": "@training",
@@ -16349,7 +16345,7 @@
     "reads": ["Nci.Assumptions.TerminalDetection"]
    },
    "type_hash": "758484026aef0f1c121e7249b351b8116d2c0fbc16b87918a12b4b151206b701",
-   "unfolded_hash": "ebcf7e5ce0005c9c3950efc3af594da2bc5f0c9d7b19c1e9dadde3e8a70c1784"
+   "unfolded_hash": "c9095590028c7f9f85efe95429e04334b5cfdd0690e4c96e19346f520cfb1f70"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
    "owner": "@training",
@@ -16373,7 +16369,7 @@
     ]
    },
    "type_hash": "37a9dd20dbd9846c0fa2704730c0843e97677106f446caa801d2970bb88b856c",
-   "unfolded_hash": "e20523b19b4610c8f3b6243a314bc463a35dc8c5e506049b38e7bfc4d3e12634"
+   "unfolded_hash": "8ed4ff7ac69b377e24ca9f0be22312a3febddfe24c84f3684314a1e66870d526"
   },
   "Nci.SecurityProofs.DampenerRemote_honest": {
    "owner": "@lean",
@@ -16415,7 +16411,7 @@
     ]
    },
    "type_hash": "8d8d86ab63dec04a4216de3cab9e9164344c12b1f43e18dfa5630a071b5604e3",
-   "unfolded_hash": "4010f697c555cb8112b5dbb7533d423a3c9ea1c72f7338248294bf40bbd97885"
+   "unfolded_hash": "9337d3f95a7fc31260f64bfb9849fc87608d2d5bb88fc27a5b60760f5b6f50fa"
   },
   "Nci.SecurityProofs.DampenerThreaded": {
    "owner": "@lean",
@@ -16435,7 +16431,7 @@
     "reads": []
    },
    "type_hash": "4fd21ded7cc9bd15239bbcd454dc5f3d7d590c1923912e1d440f0f531161d980",
-   "unfolded_hash": "2d9b554d6dc454dcabcd48ff94c9a50248926b7b36ff8406c493c67aea0a68d0"
+   "unfolded_hash": "d815ddda570476350dfed53eb11017aa91522c9fe5b30ff702b7ba0ea92e4914"
   },
   "Nci.SecurityProofs.DampenerThreadedSlots": {
    "owner": "@lean",
@@ -16455,7 +16451,7 @@
     "reads": []
    },
    "type_hash": "e8346706182fa61d97a4af8d0935c5bdfd04e45e4be9f86df1f08685d00b3333",
-   "unfolded_hash": "7ea16a15a99932de2ab37f6a16e9d9f6ea38777cb54784f2ed027780810fbbb9"
+   "unfolded_hash": "f35e7c231f397c73e7b71f33191665b3975a5e12fcf7cd75822183d04487ea5b"
   },
   "Nci.SecurityProofs.DampenerThreadedSlots_honest": {
    "owner": "@lean",
@@ -16491,7 +16487,7 @@
     ]
    },
    "type_hash": "87c86dc61dc2622991e8c334b198849f20356cad0a4128cec1c9b5c920e7ec1b",
-   "unfolded_hash": "0fe0f374433ec1339befc7d54b4e27f0123347654abf1bac5d01b18b46a03b4d"
+   "unfolded_hash": "82431a8e9929ff46d2eebd0f7197e7b78eb292065284fbfc7f040a436dc849d0"
   },
   "Nci.SecurityProofs.DampenerThreaded_honest": {
    "owner": "@lean",
@@ -16527,7 +16523,7 @@
     ]
    },
    "type_hash": "16c6246de15d032f8b5e2456fa4c38402938d37389bf96574d6b333b62e96227",
-   "unfolded_hash": "ad1443f4d7cd752cb4f62a0ea19a7a8db39ac246f1423868aef963345f290a6f"
+   "unfolded_hash": "f93cbca1db65dc740c5afb2be58e959990a5e5c45c1798ae740aa5054ec3c2e7"
   },
   "Nci.SecurityProofs.DampenerWindows": {
    "owner": "@lean",
@@ -16540,7 +16536,7 @@
     "reads": []
    },
    "type_hash": "c714b31cf1728e65cfbbe0a9d2beaf55916ed0f231856ba07ec443f505fde314",
-   "unfolded_hash": "d1c6917ffeb4db84491e2da2cd6e1c88a495640ecfdf67460b87f4bb6d744295"
+   "unfolded_hash": "f45760bdee32b3d5a3dcd642250ba60e9726b604036db749b8bfae4f35322d9c"
   },
   "Nci.SecurityProofs.ExpandComplies": {
    "owner": "@lean",
@@ -26293,8 +26289,7 @@
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -33677,15 +33672,15 @@
    }
   },
   "Definitions.Nci.Dampener": {
-   "digest": "e5dad4dc76b5026f011b5c83ca7eee70e03027ad9074635e22ecfb9e4a274d7e",
+   "digest": "10ff4e39c71586e6646e5ec44e8d2287b3715fbbdebdd38d4ed4d5f020b0c6fd",
    "definitions": {
     "Nci.Dampener.Lambda": "5b962f6fbbd8e6fca541ccc81159c65e97a947adc15c6d9caf3d33f4ffb57b29",
-    "Nci.Dampener.declaredShare": "6b0f914585abee02ecd6bcc183b38ab9b98584df2050f99e3877cabdc6b8abea",
+    "Nci.Dampener.declaredShare": "8ec0340a0d7fe5adcba6f74acb205c217a69a61d6dca0f103647b8cbc2126039",
     "Nci.Dampener.efficiency": "e78e624fcdb157efd6b790ca99dcf1d7e686db41da5b1457a4ab1b72bd9a3708",
     "Nci.Dampener.memoryCap": "c68b67af682fa4beccd0d7ac24c08cb2e8912ba8c4565970284f0e8dc5756e50",
     "Nci.Dampener.residualShare": "7d8a763f9d42496bca5c824943d40cee8e9bc9998244ab1b930a38acb2d6869a",
     "Nci.Dampener.rhoT": "6302d31b765d7595479735cb16765e75561d310e1eb3ae5614ac2a2c861bdefb",
-    "Nci.Dampener.unmonitoredShare": "44e99813f78fd4d8963b37d58aee437551d98e0581915d4f43a0e021509eceb0"
+    "Nci.Dampener.unregisteredShare": "76653ba93502b955f38c456f030624418d0f04aed7bd466bfe32505dcfb6ba4e"
    }
   },
   "Definitions.Nci.Dark": {
@@ -33872,12 +33867,12 @@
    }
   },
   "Definitions.Nci.Guarantees.Dampener": {
-   "digest": "a43542d035b2ccfaec9592a35985c6d403503baa1092188e6e6a4dad42dd19af",
+   "digest": "bd3b35881874e536d52e668368e9d5c12efbec674de2bdc30ad2b6c8a8026095",
    "definitions": {
-    "Nci.Guarantees.Dampener": "ea163c69bcc2434674b5fb7743824426c790c616f63a2b0559d6160f19b314da",
-    "Nci.Guarantees.DampenerThreaded": "85ec407deab0a856202bf7ed79b39b3dd2e11bc1e8cadcbf7bffb9498154a95a",
-    "Nci.Guarantees.DampenerThreadedSlots": "899c2db6c444816f83f520fdf6e70ed85d97fb3805260089ff1f1883576f395b",
-    "Nci.Guarantees.DampenerWindows": "f186d408527590f988131db4f2c1469fdcc8706704e8a9370a0a966cf68004d0"
+    "Nci.Guarantees.Dampener": "1539f2bc25bf4e7e9f4c7f2feb550500b9c3a7267b9d7961d27b1042c7b8c887",
+    "Nci.Guarantees.DampenerThreaded": "043259ae3085958d31af0a8364eff3ad1911462c8f5f97ba5d3ecd4f26d09762",
+    "Nci.Guarantees.DampenerThreadedSlots": "a553e140bf402b45f0b23f47574cc1fef46498fc4bad3b7aa7473ddd616225c1",
+    "Nci.Guarantees.DampenerWindows": "8114a8955d3d88b0efb832fdc0a06a4099406e0df62cf967c15eee1862c9f6a5"
    }
   },
   "Definitions.Nci.Guarantees.Fit": {
@@ -33959,15 +33954,15 @@
    }
   },
   "Definitions.Nci.Guarantees.Remote": {
-   "digest": "a91938ec70f0ddcf53b0795a6d7c7273a5a68db128a35f4df3274b1a6b69aa9b",
+   "digest": "f12ecdddd80cfd265ecac1ce91e206da68d0a431450c90fafb11784c8f8d67f2",
    "definitions": {
     "Nci.Guarantees.CertificateSlack": "db00537aef2be53dbb14e44ec20e1f1751ed6af6dcd6e357096c79b9af84eeea",
-    "Nci.Guarantees.DampenerRemote": "72402daf67954db6366586dfef7d2d91039bc6f8ae89cd611d90fa6ce586847f",
+    "Nci.Guarantees.DampenerRemote": "703fc1ab3890adeefabcbf6af8b058c777c5da4a9b2474c8f3a2506c1e007288",
     "Nci.Guarantees.VerdictLag": "44fb4be0cee1807d457934dea23c74775a2e7d4f2df6aa5be058c1f79e539b4b"
    }
   },
   "Definitions.Nci.Guarantees.RemotePeriod": {
-   "digest": "37ca1dbecb275960e0b83c2ed435569dc20a944b7c471cbdb4c933f1404add28",
+   "digest": "00ca6169a6afc529286bc13d83310476378279d3142a51100d3b5a97ca294918",
    "definitions": {
     "Nci.Guarantees.AcceptAll.M": "771e864b134e001692837fee85a97de1bfdbb2751851e60e23b10c97b690fa6b",
     "Nci.Guarantees.AcceptAll.Mr": "d3385e459d29bb36959e0d2607841b099ffe100ff4a57d684f1077247b9f8daa",
@@ -33987,9 +33982,9 @@
     "Nci.Guarantees.AcceptAll.win": "82a8312c5a33ddf6faeac04984b3283b77ff12eb98fec3683ba44b4220421ddd",
     "Nci.Guarantees.AcceptAll.wrong": "1e5ddf7fa1367604f7452e2ecd4aeb0bbf734aec60fc5e0f409772e3438750f4",
     "Nci.Guarantees.AcceptAll.τw": "96a76f9ed7a14255caf7642a0794fdedd108ca8ea15120de407df40d037be6b7",
-    "Nci.Guarantees.DampenerRemotePeriod": "739a7aec114c5cb02fa9df995d667a6050635b27ce875a82d62e1ffd4f8ca91f",
-    "Nci.Guarantees.DampenerRemotePeriod_honest": "a31e1ecc605c30ca6629525750ffcb8e2a73e5e0fc93263b2af2af56814f3a7f",
-    "Nci.Guarantees.DampenerRemotePeriod_nontrivial": "22735557f32ab680259a84242689df22781c8d261590a154efdba395dc7496a2"
+    "Nci.Guarantees.DampenerRemotePeriod": "205d32dd8d4a0c33e0b67734d81b45ca4e271d250738bb0ba3f7ba46e615a77c",
+    "Nci.Guarantees.DampenerRemotePeriod_honest": "7adfbf3ab66af3a2c6ecd642bfd016d7c55069560854a66989df59b65b1bda7d",
+    "Nci.Guarantees.DampenerRemotePeriod_nontrivial": "17c770d9d233fdc8048e373f1a9330e0eb187295dd6cf7b789b42d688082a5d7"
    }
   },
   "Definitions.Nci.Guarantees.Threads": {
@@ -34018,7 +34013,7 @@
    }
   },
   "Definitions.Nci.Guarantees.Witnesses": {
-   "digest": "dcfb9574edc47ace55c2767c81df7e8635a78105f057a9e825ec8c44b827566f",
+   "digest": "c1d526e2e98bb434b6b7112760857090ba8e1fc1dc934892a253b84ea0940587",
    "definitions": {
     "Nci.Cover.Guarantees.CoverTraining_honest": "c9a43a55ce63a654a6dcb28e8e48317d4ff824f9c2820aabf171d806476cf95e",
     "Nci.Cover.Guarantees.CoverTraining_nontrivial": "09d1c7e6bb0ca1f34ff0dcf754bda1e8331e0931631a96ed9086f03345266359",
@@ -34027,11 +34022,11 @@
     "Nci.Guarantees.ActivationsTrainingOn_honest": "f73b7b5f4c552f56518e003a5bc6732326ec6e84e3aefef2378351d7dcc43cf3",
     "Nci.Guarantees.ActivationsTrainingOn_nontrivial": "65b53d3af9dc0a4ca9a40bb28c998a8f71080df92107011dd0b60e95635a77da",
     "Nci.Guarantees.DampenerRemote_honest": "ee4c31ca9c2efe298f4ca20661cb7cd0e8a027d05232cba9bc4f77d47091ad0b",
-    "Nci.Guarantees.DampenerRemote_nontrivial": "11be6056cf16c1da613267d8d46eb47a535a3026ceb5506585beff9dc5c76b1a",
+    "Nci.Guarantees.DampenerRemote_nontrivial": "3c8992ece285049b8ee58341825382b1f50312fbfa55e9a378d0f286d73f5524",
     "Nci.Guarantees.DampenerThreadedSlots_honest": "b252aa7f9bb6d759a5248361ba0f0de1b94b683eecfcc9afcc50cf48eae8e413",
-    "Nci.Guarantees.DampenerThreadedSlots_nontrivial": "afbd0fcde49094f7d8e37e85593a8505a5de59ae0d3b51b1c24b9645095372a3",
+    "Nci.Guarantees.DampenerThreadedSlots_nontrivial": "49e1b0041a2b042d6d8b6af0341015f5f84534551915090448492fe543e2e7a5",
     "Nci.Guarantees.DampenerThreaded_honest": "22893ad09f41544dbb7dda0d8041c9d453388dfcfbc750c0f7a0865c0cb0e5c6",
-    "Nci.Guarantees.DampenerThreaded_nontrivial": "fb6c6e6f3e92c5ac696a25f7e5884783cc42f46189ae811888dc9b9417d19f44",
+    "Nci.Guarantees.DampenerThreaded_nontrivial": "0e9a60d90063b9801e06151e34a20fbdbbfddf7851b317bf92b2881f70c575e6",
     "Nci.Guarantees.IncompressibleContainedMatMulOn_honest": "9fdb4e55d3937ddf4610e3c6caaaf81a8868fb28a7f5f512c80dbdac38de833b",
     "Nci.Guarantees.IncompressibleContainedMatMulOn_nontrivial": "8e7a46fec0b6b6c9c2177982bcaf5aa5ee030927fb1cf76f8660e5d91fc9873f",
     "Nci.Guarantees.IncompressibleContainedTrainingOn_honest": "c83822a0db8c143a05a5362fa193be2b80c9c55fbff50aab0ab5fd6bdaa0f7cd",
