@@ -225,7 +225,6 @@ class Align:
                 "tile": self.tile, "long_tile": self.long_tile, "cols": self.cols, "fast_launch": self.fast_launch}
 
 
-
 def wrapper(align: Align) -> Callable[..., tuple[Any, Any, Any]]:
     """vLLM's wrapper (fused_moe/moe_align_block_size.py) with ``align`` for its op: the buffers it allocates, at the lengths it
     allocates them (`sorted_len`), and the expert map passed to the op when invalid experts are ignored, else applied to
