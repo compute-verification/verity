@@ -336,8 +336,7 @@ class Ctx:
 
     # -- emitting ----------------------------------------------------------------------------------------
     def kind(self, role: str, node=None, **statics):
-        """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered`
-        if the vocabulary has no kind for it."""
+        """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered` if the vocabulary has no kind for it."""
         fn = self.vocab.kind(role, **statics)
         if fn is None:
             refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
@@ -760,8 +759,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
 
 
 def _flat_definition(name: str, body, src_static: dict, mode: str) -> SpecializedDefinition:
-    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified
-    family match."""
+    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified family match."""
     params, ret = tuple(body.params), body.ret_type
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (params, ret), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
