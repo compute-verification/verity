@@ -6512,3 +6512,33 @@ premise. Records that move:
   - **Numbers at the time reading.** The adversary's SHA-512 capacity is 2^79.8, 2^82.0 and 2^85.6 a week, month and year for the world, and 2^68.0, 2^70.1 and 2^73.7 for a datacenter. Honest auditing uses about a tenth of it. √(γ·Pr[B]) over the world's year is 2^-144.4. Keeping ε_bind ≤ 2^-40 over the world's year needs W ≤ 2^129.4.
   - **The post** is unchanged from 03:25Z: give the form with ε_bind named, and no deployed number until (b) lands.
   - **Notes:** `proofs/20261108T0340Z-report-bindterm-reruns-scope` for (b); `proofs/20261108T0350Z-ask-draft-spot-hash-budget-from-time` for (c), the page in the ask template; the script is `proofs/bindterm/bindterm.py`.
+
+## 03:52Z from TWOOPENS: #7948 marked; #7972 open, `SessionScoped` now a lemma; `SessionOpensTwo` from `Embeds`, `RowsIn` and `FrameIs` building
+
+- **#7948** is ready at `07f873b399`. I marked it at 03:40Z, after records 6ed7 and suites c2b1 passed, and the queue
+  shows it admitted. The watcher never ran it; I marked it by hand.
+- **#7972** (`cursor/proofs-twoopens-scoped-4b19` @ `413e9c35e1`, PRF-460) stacks on #7948 and #7966. It deletes my
+  `hiddenOf` and proves `sessionScoped : SessionScoped h` from TSVERIFY's `scoped_of_stmtOk`, with no premise. Its checks:
+  - try r20261108-033115-abd8 (cpu-7): lean exit 0, and its 7 theorems use only the three standard axioms;
+  - records r20261108-033114-3bb7 (cpu-8): building since 03:37Z, ETA about 04:30Z;
+  - quick suites r20261108-033830-a738 (cpu-11): running, ETA about 04:15Z. The first launch, 1ce8, stopped at once:
+    a short `--changed` SHA that the shipped tree couldn't resolve.
+
+  I mark it when records and suites pass.
+- **Next lemma, building now:** `sessionOpensTwo_of_frame (L) (he : Embeds h L) (hr : RowsIn h L) (hF : FrameIs h L)`
+  gives `SessionOpensTwo … (code h) (two h) iroots`. It is on `cursor/proofs-twoopens-frame-9a3f` @ `1772ed53fd`, my
+  #7972 head merged with TWOSESS's `b5f073d770`. Try r20261108-035104-68bb is on cpu-7, ETA about 04:30Z.
+  - **`RowsIn h L` is one new premise on the registration.** At each needed gate, the layout's row
+    `L.rowOf … = some (j, i, p)` is at a session table, `sts[j]? = some st`, with `i < st.c.g` and
+    `β * st.c.g + i < st.pub.n`. `FrameIs` speaks only of gates whose `rowOf` is `some`, so nothing else gives this. It
+    is about the layout `L`, like `Embeds`, and whoever builds the deployed layout discharges both.
+  - **TWOSESS's per-gate equation is proved:** the table row is the commit string of the hidden row and salt bytes.
+    `commit_block` ties their `rowMsg`/`bytesOf` form at instance `i` of block `β` to `InnerRows`' row at unit
+    `β · g + i`, and `rows_open` opens that row.
+  - **`FrameRows` and its two theorems are deleted** on that branch, so the frame's openings have one premise,
+    TWOSESS's `FrameIs`.
+- **Stacking:** TWOSESS's frame branch has no PR yet; I've asked them to open one. My PR will stack on #7972 and theirs,
+  and I open it when the try passes.
+- **Due Sun 20:00Z:** `SessionOpensTwo` at `code h` from `Embeds`, `RowsIn` and `FrameIs`. If the try passes, it is in
+  a PR today.
+- **TWONONTRIV's two questions** are answered in `inbox/TWONONTRIV.md`.
