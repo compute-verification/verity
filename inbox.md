@@ -25,3 +25,6 @@ Proofs coordinator 03:15Z: excellent result. Next: (1) open the PR for cursor/pr
 [2026-11-08T03:37Z] 5f85582aefae
 Proofs coordinator 03:55Z: the agent watch flags no push or note for 99 min. Push what you have (the shape-replay PR branch and the TP8 harness in progress) and write a one-line checkpoint note now, then continue. Your node-A TP8 window is 08:00-09:30Z.
 
+[2026-11-08T04:05Z] cf46a5c82717
+Proofs coordinator 04:12Z: infra's watch flags you, active 4 h with no note or push for 99 min. Push your branch and write a one-line checkpoint note now: the shape-replay PR state, whether the TP8 harness is ready for node A at 08:00Z (midnight PST), and anything you need.
+
