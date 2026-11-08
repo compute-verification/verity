@@ -1246,42 +1246,41 @@ def test_a_chain_restarts_from_the_empty_pool_after_a_failed_window():
 
 # -- cut and continue ---------------------------------------------------------------------------------------------------
 
-#: three windows' requests as the network certifier saw them: each one's id, its prompt's tokens, the window it arrives
-#: in, and the outputs the certifier released of it in each window from then on. It finishes in its last window, and at
-#: the edge of each window before that it is open: it is cut there and continues in the next window.
+#: three windows' arrivals as the network certifier saw them: each one's id, the values it arrives with, the window it
+#: arrives in, and the outputs the certifier released of it in each window from then on. It closes in its last window,
+#: and at the edge of each window before that it is open: it is cut there and continues in the next window.
 ARRIVALS = ((7, (11, 12, 13, 14, 15), 0, ((21, 22, 23), (24, 25))), (8, (31, 32), 0, ((41,),)),
             (9, (51, 52, 53), 0, ((), (61,), (62,))), (10, (71,), 1, ((), (72, 73))))
-#: a window's arrival slots, and a request row's tokens: its prompt, then its outputs, zero past them
-SLOTS, TOKENS = 4, 10
+#: a window's arrival slots, and the values of an arrival's row: those it arrived with, then its outputs, zero past them
+SLOTS, VALUES = 4, 10
 
 
-def _cut_rows(w: int, engine=None) -> tuple[list[list[int]], list[list[int]]]:
-    """Window `w`'s certified arrivals (`ing`: each slot's valid bit, id and prompt length) and request rows (`req`: each
-    slot's outputs in the window, its cut bit, then its tokens), from `ARRIVALS`. The requests open at window w − 1's
-    edge come first, in release order, each an ordinary arrival whose prompt is the cut request's prompt and the e
-    outputs the certifier released of it, so its length is P + e. `engine`: for an id, how many outputs the engine had
-    emitted past those released when it was cut, which a continuation counted from the engine (P + n) takes into its
-    prompt."""
+def _cut_rows(w: int, served=None) -> tuple[list[list[int]], list[list[int]]]:
+    """Window `w`'s certified arrivals (`ing`: each slot's valid bit, id and input length) and its rows (`req`: each
+    slot's outputs in the window, its cut bit, then its values), from `ARRIVALS`. The arrivals open at window w − 1's
+    edge come first, in release order, each a fresh arrival whose input is the cut one's and the e outputs the
+    certifier released of it, so its length is P + e. `served`: for an id, how many outputs serving had computed past
+    those released when it was cut, which a continuation counted from serving (P + n) takes into its input."""
     continued, arriving = [], []
-    for rid, prompt, at, outs in ARRIVALS:
+    for ident, given, at, outs in ARRIVALS:
         k = w - at
         if not 0 <= k < len(outs):
             continue
-        extra = (engine or {}).get(rid, 0) if k else 0
-        head = [*prompt, *(t for o in outs[:k] for t in o), *outs[k][:extra]]
-        tokens = [*head, *outs[k][extra:]]
-        row = [len(outs[k]) - extra, int(k + 1 < len(outs)), *tokens, *[0] * (TOKENS - len(tokens))]
-        (continued if k else arriving).append(([1, rid, len(head)], row))
+        extra = (served or {}).get(ident, 0) if k else 0
+        head = [*given, *(t for o in outs[:k] for t in o), *outs[k][:extra]]
+        values = [*head, *outs[k][extra:]]
+        row = [len(outs[k]) - extra, int(k + 1 < len(outs)), *values, *[0] * (VALUES - len(values))]
+        (continued if k else arriving).append(([1, ident, len(head)], row))
     rows = continued + arriving
-    rows += [([0, 0, 0], [0] * (2 + TOKENS))] * (SLOTS - len(rows))
+    rows += [([0, 0, 0], [0] * (2 + VALUES))] * (SLOTS - len(rows))
     return [a for a, _ in rows], [r for _, r in rows]
 
 
 def _continued() -> Program:
-    """`_pooled` with the window's certified arrivals `ing` and its request rows `req`, which no unit here reads."""
+    """`_pooled` with the window's certified arrivals `ing` and its rows `req`, which no unit here reads."""
     def sig(S):
         return (("x", Array(len(POS), Array(2, Value(8)))), ("W", Array(len(TABLE), Array(2, Value(8)))),
-                ("ing", Array(SLOTS, Array(3, Value(16)))), ("req", Array(SLOTS, Array(2 + TOKENS, Value(16)))),
+                ("ing", Array(SLOTS, Array(3, Value(16)))), ("req", Array(SLOTS, Array(2 + VALUES, Value(16)))),
                 ("pin", POOL_ROOT), ("pout", POOL_ROOT)), Array(len(POS), Value(8))
 
     def body(B, S, x, W, ing, req, pin, pout):
@@ -1298,10 +1297,10 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
     window or not (`accepted`)."""
     d = P.program_digest(prog)
     base, ports = _record(prog, w)
-    arrivals, requests = _cut_rows(i)
+    arrivals, rows = _cut_rows(i)
     stamped = G.Registered.commit(d, "ing", arrivals)
     entries = [G.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i]).entry(), w.entry(), ing or stamped.entry(),
-               G.Registered.commit(d, "req", requests, window=POOL_WINDOWS[i]).entry(),
+               G.Registered.commit(d, "req", rows, window=POOL_WINDOWS[i]).entry(),
                G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i]).entry()]
 
     def record(pin_entry):
@@ -1312,22 +1311,22 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
     if pin is None:
         pin = G.supplied_value(prog, "pin", [[("bytes", GENESIS)]], record(None), ["pin"]).entry()
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports,
-          "registered": {"x": 2, "W": 2, "ing": 3, "req": 2 + TOKENS, "pin": 16, "pout": 16},
+          "registered": {"x": 2, "W": 2, "ing": 3, "req": 2 + VALUES, "pin": 16, "pout": 16},
           "pinned": {"ing": stamped.root.hex()}, "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"],
           "pool": {"pin": "pin", "pout": "pout", "genesis": GENESIS, "accepted": accepted}}
     return record(pin), kw
 
 
-def test_a_request_open_at_a_windows_edge_continues_in_the_next_from_the_pool_it_left():
-    """Cut and continue: a request open at a window's edge is cut there, at the e outputs the network certifier released
-    of it, and continues in the next window as an ordinary arrival, (its id, P + e), whose token row is its prompt then
-    those outputs, first among that window's arrivals in release order. The record needs nothing new for it. The
+def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_it_left():
+    """Cut and continue: an arrival open at a window's edge is cut there, at the e outputs the network certifier released
+    of it, and continues in the next window as a fresh arrival, (its id, P + e), whose row is the values it arrived with
+    then those outputs, first among that window's arrivals in release order. The record needs nothing new for it. The
     window's arrivals are a certified input, the root the certifier signed for the window, which the verifier pins
-    (`ing`); its request rows (`req`: each one's outputs in the window and its cut bit) are its own values, under its
-    open root; and its pool chains, `pin` the previous window's `pout`. So window 0 cuts two requests, windows 1 and 2
-    each open the pool the one before left and serve the continuations, and a continuation counted from the outputs the
-    engine emitted (P + n) instead of those released, or the previous window's arrivals again, is not the certifier's
-    root (`R7-held`). A window opening the empty pool where the chain carries is refused by name (`R7-pool-chain`)."""
+    (`ing`); its rows (`req`: each arrival's outputs in the window and its cut bit) are its own values, under its open
+    root; and its pool chains, `pin` the previous window's `pout`. So window 0 cuts two arrivals, windows 1 and 2 each
+    open the pool the one before left and serve the continuations, and a continuation counted from the outputs serving
+    computed (P + n) instead of those released, or the previous window's arrivals again, is not the certifier's root
+    (`R7-held`). A window opening the empty pool where the chain carries is refused by name (`R7-pool-chain`)."""
     prog = _continued()
     w = _registered(prog)
     first, kw = _cut_window(prog, w, 0, [])
@@ -1341,21 +1340,21 @@ def test_a_request_open_at_a_windows_edge_continues_in_the_next_from_the_pool_it
     assert ing1[:3] == [[1, 7, 8], [1, 9, 3], [1, 10, 1]] and [r[:2] for r in req1[:3]] == [[2, 0], [1, 1], [0, 1]]
     assert ing2[:2] == [[1, 9, 4], [1, 10, 1]] and [r[:2] for r in req2[:2]] == [[1, 0], [2, 0]]
     assert req1[0][2:10] == req0[0][2:10] and req2[0][2:6] == req1[1][2:6]
-    engine = _cut_rows(1, {7: 1})[0]
-    assert engine[0] == [1, 7, 9]
-    for ing in (_entry(first, "ing"), G.Registered.commit(P.program_digest(prog), "ing", engine).entry()):
+    served = _cut_rows(1, {7: 1})[0]
+    assert served[0] == [1, 7, 9]
+    for ing in (_entry(first, "ing"), G.Registered.commit(P.program_digest(prog), "ing", served).entry()):
         wrong, kw_wrong = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, ing)
         assert R.check(wrong, prog, Q, **kw_wrong).codes == ("R7-held",)
     empty, kw_empty = _cut_window(prog, w, 1, [first])
     assert R.check(empty, prog, Q, **kw_empty).codes == ("R7-domain", "R7-held", "R7-pool-chain")
 
 
-def test_after_a_refused_window_its_open_requests_continue_from_the_empty_pool():
+def test_after_a_refused_window_its_open_arrivals_continue_from_the_empty_pool():
     """After a window the verifier refused, the next opens the empty pool (`genesis`) and still serves the continuations
-    of the requests open at the refused window's edge: its certified arrivals list them first, at the outputs released
-    through the refused window, as after an accepted one. They find the pool empty and recompute their prefixes, which
-    costs more and is correct. Only the empty pool is accepted there, and the refused window's pool is refused by name
-    (`R7-pool-chain`); the arrivals are held to the certifier's root as in any window."""
+    of the arrivals open at the refused window's edge: its certified arrivals list them first, at the outputs released
+    through the refused window, as after an accepted one. They find the pool empty and recompute what it held of them,
+    which costs more and is correct. Only the empty pool is accepted there, and the refused window's pool is refused by
+    name (`R7-pool-chain`); the arrivals are held to the certifier's root as in any window."""
     prog = _continued()
     w = _registered(prog)
     first, _ = _cut_window(prog, w, 0, [])

@@ -300,7 +300,7 @@ POOLED = RegisteredSetup(_registered_program("CoreSpotPooled", 2, (
     ("pin", Array(1, Array(16, Value(32)))), ("pout", Array(1, Array(16, Value(32))))), ("pin", "pout")),
     [{"pin": 16, "pout": 16}])
 #: `POOLED` whose window also reads its certified arrivals `ing` (four slots of a valid bit, an id and a length) and its
-#: request rows `req`, which no unit reads.
+#: rows `req`, which no unit reads.
 CONTINUED = RegisteredSetup(_registered_program("CoreSpotContinued", 2, (
     ("ing", Array(4, Array(3, Value(16)))), ("req", Array(4, Array(12, Value(16)))),
     ("pin", Array(1, Array(16, Value(32)))), ("pout", Array(1, Array(16, Value(32))))), ("ing", "req", "pin", "pout")),
@@ -4404,13 +4404,13 @@ def test_a_window_opens_the_pool_its_chain_left(pieces):
         assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
 
 
-def test_a_request_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces):
+def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces):
     """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
-    network certifier signed for it, which the verifier pins (`ing`: the requests open at the last window's edge first,
-    each at its prompt and the outputs released of it); its request rows (`req`) are its own, under its open root; and
-    its pool chains. Three windows that carry the pool are accepted, arrivals with a continuation counted from the
-    engine's outputs or the last window's arrivals again are `R7-held`, and after a refused window the next is accepted
-    from the empty pool alone, its carried pool refused by name."""
+    network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
+    each at the values it arrived with and the outputs released of it); its rows (`req`) are its own, under its open
+    root; and its pool chains. Three windows that carry the pool are accepted, arrivals with a continuation counted
+    from the outputs serving computed or the last window's arrivals again are `R7-held`, and after a refused window the
+    next is accepted from the empty pool alone, its carried pool refused by name."""
     s, law = CONTINUED, {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     windows, wroots = (EARLIER, WINDOW, {**WINDOW, "row": 102}), (EARLIER_WROOT, WROOT, "a8" * 64)
@@ -4453,8 +4453,8 @@ def test_a_request_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces)
     third = record(2, carried(second), [first, second])
     for i, rec in enumerate((first, second, third)):
         assert codes(params(i, [first, second][:i]), rec) == [], i
-    engine = stamp([[1, 7, 9], [1, 9, 3], [1, 10, 1], [0, 0, 0]], "engine")
-    for ing in (engine, stamps[0]):
+    served = stamp([[1, 7, 9], [1, 9, 3], [1, 10, 1], [0, 0, 0]], "served")
+    for ing in (served, stamps[0]):
         assert codes(params(1, [first]), record(1, carried(first), [first], ing)) == ["R7-held"], ing
     assert codes(params(1, [first]), record(1, None, [first])) == ["R7-domain", "R7-held", "R7-pool-chain"]
     refused = params(2, [first, second], accepted=False)
