@@ -18,8 +18,8 @@ queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each h
 - a compute's threshold stamp at the queue's (e − 1)-th, (e + 1)-th or last queued copy, or between the e-th and the
   next. With e = 0 it is the oldest queued stamp (a made-up eviction);
 - a free's returns one either side.
-`drive` also checks, from `BlockPool` alone, that vLLM evicts a hash's last block only when no descendant of it is cached
-(`dropped_with_descendant`), the fact `cache_step_v2`'s N = NB − 1 rests on.
+`drive` also checks, from `BlockPool` alone, that vLLM evicts a hash's last block only when no child of it is cached
+(`dropped_with_descendant`; never at any drop means never a descendant), the fact `cache_step_v2`'s N = NB − 1 rests on.
 
     python3 cache_pool_vectors.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
         [--out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json]
@@ -261,19 +261,16 @@ class _Driver:
     # the pool against BlockPool's
 
     def _hashes(self, kv, pool: C2.Pool) -> list[int | None]:
-        ids = self.hashes._ids
-        out: list[int | None] = [None] * self.S.N
-
-        def of(x: int) -> int:
-            if out[x] is None:
-                ent = pool.table[x]
-                p = 0 if ent.parent == self.S.N else of(ent.parent)
-                out[x] = ids[(p, ent.tokens)]
-            return out[x]
-
+        ids, N = self.hashes._ids, self.S.N
+        out: list[int | None] = [None] * N
         for x, ent in enumerate(pool.table):
-            if ent:
-                of(x)
+            chain, y = [], x
+            while ent and y != N and out[y] is None:
+                chain.append(y)
+                y = pool.table[y].parent
+            p = 0 if y == N else out[y]
+            for z in reversed(chain):
+                out[z] = p = ids[(p, pool.table[z].tokens)]
         return out
 
     def check(self, kv) -> None:
@@ -380,7 +377,7 @@ def _tapped(drv: _Driver):
             drv.alloc["evicted"][h] += 1
             if len(self.by_hash[h]) == 1:
                 drv.counts["entries dropped"] += 1
-                drv.counts["dropped_with_descendant"] += any(drv.descends(x, h) for x in self.by_hash if x != h)
+                drv.counts["dropped_with_descendant"] += any(drv.parent.get(x) == h for x in self.by_hash if x != h)
         return orig["_pop_hash"](self, b)
 
     taps = {"allocate_slots": allocate_slots, "cache_blocks": cache_blocks, "free_request": free_request,
@@ -403,15 +400,7 @@ def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True
     S = SimpleNamespace(**st)
     drv = _Driver(S, inp, record, every, progress)
     parent: dict[int, int] = {}
-
-    def descends(x: int, h: int) -> bool:
-        while x:
-            x = parent.get(x, 0)
-            if x == h:
-                return True
-        return False
-
-    drv.descends = descends  # type: ignore[attr-defined]
+    drv.parent = parent  # type: ignore[attr-defined]
     H = RP.BlockHashes
     intern = H.__call__
 
