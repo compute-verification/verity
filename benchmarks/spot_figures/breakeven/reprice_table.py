@@ -1,5 +1,6 @@
-"""The repriced break-even's tables from sweep.py's surfaces: the served line step by step over all six scopes, its
-extras and its advice, then the earlier main line, its extras, the one-stage and plain columns.
+"""The repriced break-even's tables from sweep.py's surfaces: the served line step by step over all six scopes with
+each line's status and owner from `reprice_path.json`, its totals, the path from it, its extras, the per-window budget
+form and the advice, then the earlier main line, its extras, the one-stage and plain columns.
 
     python benchmarks/spot_figures/breakeven/reprice_table.py SURFACE.json... [--json OUT]
 """
@@ -11,42 +12,13 @@ SCOPES = ("world year", "datacenter year")
 ALL_SCOPES = ("world week", "world month", "world year", "datacenter week", "datacenter month", "datacenter year")
 #: compiling one sampled request's Programs, the core-hours the line's total takes and its upper reading
 COMPILE = ("3.8", "14.0")
-#: the long-running proof server, the statement cache warm, each lever in turn
-SERVED = [
-    ("N0", "(A′) at 128k on the proof server today: one prover an H200, 600 s replay blocks, main's Lean verifier, the "
-     "quant K6144 at its sibling's floor", "measured: 6 light types and the fused blocks on the server; the rest the "
-     "cards × the cache's factor", "STATIONARY, @kernels"),
-    ("N1", "+ the Lean verifier with its proved twins", "measured on 3 types (×0.21, ×0.22, ×0.58); ×0.21–0.23 "
-     "assumed on 6; the median elsewhere", "VERIFYFAST"),
-    ("N2", "+ lifetime replay, no edge pause, pages committed when written", "modeled from the 128k serve's trace",
-     "LIFETIME"),
-    ("N3", "+ four provers an H200 on full statements, each type by its device's busy share",
-     "measured: light types 2.3–3.9× at a quarter statement, the fused blocks 1.12×; host-bound types one prover",
-     "STATIONARY, @kernels"),
-    ("N4", "+ the next session's front beside this one's device work", "modeled", "@kernels"),
-    ("N5", "+ a GPU prover 4× on device parts, the witness build undivided", "modeled", "@kernels"),
-]
-SERVED_EXTRAS = [
-    ("host", "the dense types' host witness 3.5× lower", "assumed (CPU's 2–4×)", "HASHCUT scopes it"),
-    ("hash4", "in-proof hashing 4× (half the marginal)", "assumed", "HASHCUT scopes it"),
-    ("host+hash4", "host + hash4", "assumed", "HASHCUT"),
-    ("plain", "Flock without --zk", "fused blocks' shares measured on H200; the rest CPU's", "HILLCLIMB"),
-    ("tmpl", "the templated session check where cheaper", "measured on FlashInfer K2048 and RMSNorm v3: slower than "
-     "flat on every type", "@kernels"),
-    ("tmplgoal", "the templated check at quant K6144's estimate (RMSNorm types flat)", "goal of VERIFYFAST-C's fixes",
-     "VERIFYFAST-C"),
-    ("vfloor", "the types the median prices at the fast column's floor (8.7 s)", "a lower bound", ""),
-    ("fusedfront", "the fused blocks' front overlap at the kernels' split (device 0.55 of the session)",
-     "modeled, unmeasured under contention", "@kernels"),
-    ("card", "the quant K6144 at its card's 0.233 s a block (load)", "superseded", "HASHCUT"),
-    ("host+tmplgoal", "host + tmplgoal", "assumed; goal", "HASHCUT, VERIFYFAST-C"),
-    ("host+hash4+tmplgoal", "host + hash4 + tmplgoal", "assumed; goal", "HASHCUT, VERIFYFAST-C"),
-]
-#: the memory-checked KV pool, priced on the last step: proved every window (the design), or only on the windows the
-#: plan samples
-POOL = [("every", "walked", "proved every window, every lookup walking (as built)"),
-        ("every", "memo", "proved every window, with the head-of-line memo (not built)"),
-        ("sampled", "walked", "proved only on the windows the plan samples (not the design)")]
+#: the served line's levers, statuses and owners, which OPTMODES reads too
+PATH = json.loads((Path(__file__).parent / "reprice_path.json").read_text())
+#: the memory-checked KV pool beside a step: sampled like the other units (as built, or with the head-of-line memo),
+#: and proved every window for comparison
+POOL = [("sampled", "walked", "sampled like the other units, every lookup walking (as built)"),
+        ("sampled", "memo", "sampled like the other units, with the head-of-line memo (not built)"),
+        ("every", "walked", "proved every window, as built (superseded)")]
 #: the advice when it is not closed: every prefix-cache hit sent whole, or caching off
 ADVICE = [
     ("hits", "+ the prefix-cache hits as advice, 5,181 bits a machine's window", "measured on 2k traces"),
@@ -143,47 +115,75 @@ def cells(rows, case, scopes=SCOPES, beta=True):
     return out, data
 
 
-def served(rows, data):
-    """The served line's tables over all six scopes: the total FP4 compute a step, then the compiling line at the
-    last step's plan, the extras on it and the advice."""
-    head = ("| case | lever | priced | owner | " + " | ".join(ALL_SCOPES) + " |\n|---|---|---|---|"
-            + "---:|" * len(ALL_SCOPES))
-    print("Served line, total FP4 compute (serve tax + proving + verifying; 376.7 GB):\n" + head)
-    for case, lever, label, owner in SERVED:
+def total(rows, case, pool=("sampled", "walked"), delta=None):
+    """Each scope's total FP4 compute at `case`: serve tax + proving + verifying + compiling at COMPILE[0] + the pool,
+    plus `delta`'s points where given; None where the case never breaks even or wasn't run."""
+    out = {}
+    for s in ALL_SCOPES:
+        r = rows.get((case, s))
+        if r is None or "pool" not in r or r["beta"]["FP4"] is None:
+            out[s] = None
+            continue
+        out[s] = (r["tax"] + r["beta"]["FP4"] + r["compile"]["share"][COMPILE[0]] + r["pool"][pool[0]][pool[1]]
+                  + (delta["delta"][s] if delta else 0.0))
+    return out
+
+
+def entries(rows, data, items, head, title):
+    print(f"\n{title}\n{head}")
+    for x in items:
+        case = x["cases"]["two-stage"]
         c, d = cells(rows, case, ALL_SCOPES, beta=False)
-        data[case] = d | {"lever": lever, "priced": label, "owner": owner}
-        print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
-    last = SERVED[-1][0]
+        data[case] = d | {k: x[k] for k in ("label", "status", "owner", "note")}
+        print(f"| {case} | {x['label']} | {x['status']} | {x['owner']} | " + " | ".join(c) + " |")
+
+
+def served(rows, data):
+    """The served line's tables over all six scopes, as total FP4 compute: each step, the measured levers alone, what
+    sits beside the line (compiling, the pool, #8086's delta) and the totals today; the path from the last step and its
+    total; the extras on the last step, the per-window budget form and the advice."""
+    head = ("| case | lever | status | owner | " + " | ".join(ALL_SCOPES) + " |\n|---|---|---|---|"
+            + "---:|" * len(ALL_SCOPES))
+    last = PATH["served"][-1]["cases"]["two-stage"]
+    entries(rows, data, PATH["served"] + PATH["served_measured"], head,
+            "Served line, total FP4 compute (serve tax + proving + verifying; FP4 weights 376.7 GB):")
     for h in COMPILE:
         c = [pct(rows[(last, s)]["compile"]["share"][h]) if "compile" in rows.get((last, s), {}) else "–"
              for s in ALL_SCOPES]
         print(f"| compile | + compiling each sampled request's Programs, {h} core-h on 8 ranks, at {last}'s plan | "
-              f"{'measured a step; 256-step span modeled' if h == COMPILE[0] else 'upper reading'} | @vllm, @circuits "
-              "| " + " | ".join(c) + " |")
+              f"{'measured a step; span modeled' if h == COMPILE[0] else 'upper reading'} | @vllm, @circuits | "
+              + " | ".join(c) + " |")
     for how, load, what in POOL:
         c = [pct(rows[(last, s)]["pool"][how][load]) if "pool" in rows.get((last, s), {}) else "–" for s in ALL_SCOPES]
-        print(f"| pool | + the memory-checked KV pool, {what} | --zk rate; the verifier at the line's median an AND "
-              "(assumed) | MEMPOOL | " + " | ".join(c) + " |")
-    c = []
-    for s in ALL_SCOPES:
-        r = rows.get((last, s))
-        c.append("–" if r is None or "pool" not in r or r["beta"]["FP4"] is None
-                 else pct(r["tax"] + r["beta"]["FP4"] + r["compile"]["share"][COMPILE[0]] + r["pool"]["every"]["walked"]))
-    data["total"] = {"case": last, "compile_core_h": COMPILE[0], "pool": "every, walked", "cells": dict(zip(ALL_SCOPES, c))}
-    print(f"| total | {last} + compiling at {COMPILE[0]} core-h + the pool every window | | | " + " | ".join(c) + " |")
-    print(f"\nExtras on {last} (serve tax + proving + verifying; add compiling and the pool from above):\n" + head)
-    for e, lever, label, owner in SERVED_EXTRAS:
+        print(f"| pool | + the memory-checked KV pool, {what} | measured ANDs, --zk rate; verifier assumed | MEMPOOL | "
+              + " | ".join(c) + " |")
+    delta = PATH["deltas"][0]
+    print(f"| delta | {delta['label']}, {delta['base']}'s points | {delta['status']} | {delta['owner']} | "
+          + " | ".join(f"{delta['delta'][s] * 100:+.2f} pt" for s in ALL_SCOPES) + " |")
+    measured = PATH["served_measured"][0]["cases"]["two-stage"]
+    final = PATH["path"][-1]["cases"]["two-stage"]
+    totals = [(f"{last} total", last, ("sampled", "walked"), None,
+               f"{last} + compiling at {COMPILE[0]} core-h + the pool sampled, as built"),
+              (f"{measured} total", measured, ("sampled", "walked"), None,
+               f"{measured} + compiling + the pool sampled, as built: the measured levers alone"),
+              (f"{final} total", final, ("sampled", "memo"), delta,
+               f"{final} + compiling + the pool sampled with the memo + {delta['label'].split(' ')[0]}'s delta")]
+    for name, case, pool, d, what in totals:
+        t = total(rows, case, pool, d)
+        data[name] = {"case": case, "compile_core_h": COMPILE[0], "pool": " ".join(pool),
+                      "delta": d["label"] if d else None, "cells": t}
+        print(f"| {name} | {what} | | | " + " | ".join(pct(t[s]) if t[s] is not None else "–" for s in ALL_SCOPES)
+              + " |")
+    entries(rows, data, PATH["path"], head, f"The path from {last} to 10% (total FP4; each step adds to the one above "
+            "it, but P3 and P4 each add to P2):")
+    entries(rows, data, PATH["extras"], head, f"Extras on {last}, each alone (total FP4 before compiling and the pool):")
+    entries(rows, data, PATH["zk"], head, "The per-window budget form, T windows of K_delta (total FP4):")
+    print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)
+    for e, lever, label in ADVICE:
         case = f"{last}+{e}"
         c, d = cells(rows, case, ALL_SCOPES, beta=False)
-        data[case] = d | {"lever": lever, "priced": label, "owner": owner}
-        print(f"| {case} | {lever} | {label} | {owner} | " + " | ".join(c) + " |")
-    print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)
-    for base in ("N2", "N3", last):
-        for e, lever, label in ADVICE:
-            case = f"{base}+{e}"
-            c, d = cells(rows, case, ALL_SCOPES, beta=False)
-            data[case] = d | {"lever": lever, "priced": label}
-            print(f"| {case} | {lever} | {label} | | " + " | ".join(c) + " |")
+        data[case] = d | {"label": lever, "status": label}
+        print(f"| {case} | {lever} | {label} | | " + " | ".join(c) + " |")
 
 
 def main(argv=None):
@@ -194,7 +194,7 @@ def main(argv=None):
         out_json, argv = Path(argv[k + 1]), argv[:k] + argv[k + 2:]
     rows = load(argv)
     data = {}
-    if any(c == SERVED[0][0] for c, _ in rows):
+    if any(c == PATH["served"][0]["cases"]["two-stage"] for c, _ in rows):
         served(rows, data)
     if not any(c == MAIN[0][0] for c, _ in rows):
         if out_json:

@@ -1,53 +1,64 @@
-{"served": [
- {"label": "(A′) at 128k on the long-running proof server, the statement cache warm", "status": "measured",
-  "cases": {"two-stage": "N0"},
-  "note": "one prover an H200; six light types and the fused blocks at the server's prices a statement, the rest the cards times the cache's factor; 600 s replay blocks; main's Lean verifier; the quant K6144 at its K2048 sibling's floor"},
- {"label": "the Lean verifier with its proved twins", "status": "measured", "cases": {"two-stage": "N1"},
-  "note": "after over before measured on FlashInfer K2048, quant K6144 and the MoE GEMM, applied to the line's column; six types at 0.21-0.23 by a fixed-plus-per-entry fit (assumed); the median elsewhere"},
- {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "N2"},
-  "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
- {"label": "four provers an H200, by each type's busy share", "status": "measured",
-  "cases": {"two-stage": "N3"},
-  "note": "the light types' K=4 over K=1 measured at a quarter statement (2.3-3.9x), taken at full; the fused blocks 1.12x at full; the four host-bound types keep one prover"},
- {"label": "the next session's front beside this one's device work", "status": "modeled",
-  "cases": {"two-stage": "N4"}, "note": "the period max(device, host) a prover; unmeasured under contention"},
- {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "N5"},
-  "note": "device shares only; the witness build undivided"}
-],
- "steps": [
- {"label": "(A′) per-expert cut at 128k, as Figure 1 prices it", "status": "measured",
-  "cases": {"two-stage": "R0"},
-  "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer modeled)"},
- {"label": "the fused per-expert cut", "status": "measured", "cases": {"two-stage": "R1", "one-stage": "R1-1s"},
-  "note": "each expert's table read fused into its GEMM at k_log 25, priced on one H200 with the cache (512 and 1024 blocks); its fixed cost before the cache is modeled"},
- {"label": "the statement cache", "status": "measured", "cases": {"two-stage": "R2"},
-  "note": "fixed seconds a statement 8-10x lower on the H200 (experts measured; 5 types priced from H200 splits)"},
- {"label": "4 provers on one H200, verify-ahead", "status": "measured", "cases": {"two-stage": "R3"},
-  "note": "on the expert types: the fused blocks measured at 128 and 256 blocks a statement, a quarter-statement each"},
- {"label": "a 3.5x GPU prover", "status": "modeled", "cases": {"two-stage": "R4"},
-  "note": "device parts only; the host witness stays"},
- {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "R5"},
-  "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
- {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "R5x4"},
-  "note": "device parts only"},
- {"label": "the Lean verifier's CPU", "status": "measured", "cases": {"two-stage": "R6x4", "one-stage": "R6x4-1s"},
-  "note": "each statement's Lean verify (measured on 9 types; families scaled; the median 681 s elsewhere) at 81.8 core-seconds a GPU-second, Nebius's on-demand list prices; total compute = serve tax + proving + verifying"},
- {"label": "4 provers on every type, four provers per H200", "status": "assumed",
-  "cases": {"two-stage": "R6x4+all+4perH200"},
-  "note": "the experts' overlap factor taken for every type, and full statements under four provers once each prover's peak is about 33 GiB"},
- {"label": "the dense types' host witness 3.5x lower", "status": "assumed",
-  "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
- {"label": "hashing cut 4x", "status": "assumed", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
-  "note": "in-proof hashing at a half share of the marginal, cut 4x; its magnitude is being scoped"}
-],
+{
+ "served": [
+  {"label": "(A′) at 128k on the long-running proof server today, the statement cache warm", "status": "measured", "owner": "STATIONARY, @kernels, HASHCUT", "cases": {"two-stage": "N0"}, "note": "one prover an H200 at full statements; six light types at the final driver's K=1 rates and the fused blocks at node A's sessions a second; quant K2048's warm witness measured on the H200 (2.04 s against 58.4 s cold); the rest the card times the cache's factor, quant K6144 at #8103's 5.6 ms a block (older H200 runs); 600 s replay blocks; main's Lean verifier (the verifier_cost card) at 81.8 core-s a GPU-s"},
+  {"label": "the Lean verifier with its proved twins", "status": "measured", "owner": "VERIFYFAST, STATIONARY", "cases": {"two-stage": "N1"}, "note": "measured on seven types: the fused w13 and w2 (48.2 and 52.7 CPU-s), rmsnorm-v8 (255.2), the all-reduce (92.0), FlashInfer K2048, quant K6144 and the MoE GEMM; quant K2048 and K1536 and the two SparseMla combines assumed; the median elsewhere"},
+  {"label": "lifetime replay", "status": "modeled", "owner": "LIFETIME", "cases": {"two-stage": "N2"}, "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
+  {"label": "K provers an H200 on full statements", "status": "measured", "owner": "@kernels", "cases": {"two-stage": "N3"}, "note": "four on the light types and the fused blocks, two on the dense quant and FlashInfer types (four need about 400 GiB of host memory against about 252 a GPU), one on the split part; M1 on node A: 0.570, 0.768 and 0.903 sessions a second at K=1, 2 and 4, so 1.35x and 1.58x, never past the device's share"},
+  {"label": "the next session's front beside this one's device work", "status": "modeled", "owner": "@kernels", "cases": {"two-stage": "N4"}, "note": "the period max(device, host) a prover; unmeasured under contention"},
+  {"label": "kernels' marked prover PRs", "status": "measured", "owner": "@kernels", "cases": {"two-stage": "N5"}, "note": "M1's prove_total 1.101 -> 0.747 s against main's prover: 1.47x on proving shares, the host witness undivided (2.8x against old main's 2.088 s; the server's rates already hold main's first 1.9x)"}
+ ],
+ "served_measured": [
+  {"label": "the measured levers alone: N1, N3 and N5", "status": "measured", "owner": "", "cases": {"two-stage": "N5m"}, "note": "N5 without lifetime replay and the front: 600 s replay blocks and the edge pause"},
+  {"label": "N5m with each type's own gain under K provers", "status": "measured", "owner": "STATIONARY", "cases": {"two-stage": "N5m+ktypes"}, "note": "K=4 over K=1 on the final driver: rmsnorm 2.60x, fr-w2 2.02x, fr-w13 1.65x, residual-add 1.20x, sm-fp8 1.10-1.16x, dsa-logits 1.13x, the all-reduce 1.00x; the rest at M1's"}
+ ],
+ "path": [
+  {"label": "+ #7979's column blocks (on checked)", "status": "modeled", "owner": "HASHCUT", "cases": {"two-stage": "P1"}, "note": "the all-reduces and MoeSum cut 32 ways, ResidualAdd 16, each type's measured cost split evenly"},
+  {"label": "+ FlashInfer K2048's warm witness on the H200, and #8101's verifier cut", "status": "modeled", "owner": "HASHCUT, VERIFYFAST-A", "cases": {"two-stage": "P2"}, "note": "FlashInfer K2048 at 2.75 s warm on the H200, a model from CPU's 4.3 s against 170.9 s cold; the flat verifier at 0.85 a statement, measured on FlashInfer K2048 and quant K6144, assumed elsewhere but the MoE family"},
+  {"label": "P2 + K provers under MPS", "status": "measured", "owner": "@kernels", "cases": {"two-stage": "P3"}, "note": "1.77x at K=4 on M1; MPS is off on node A today"},
+  {"label": "P2 + kernels' goals", "status": "goal", "owner": "@kernels", "cases": {"two-stage": "P4"}, "note": "K provers at the busy-share model (2.87x at K=4), four provers on the dense types (after kernels' two memory cuts, about 221 GiB with one verifier; owned, no date), the prover at 4x old main's (0.522 s; modeled)"},
+  {"label": "+ the templated session check at its target", "status": "goal", "owner": "VERIFYFAST-B", "cases": {"two-stage": "P5"}, "note": "quant K6144's estimate over today's for every type but the RMSNorm family; unmeasured, and FlashInfer K2048's profile shows the templated session check at 7.2x flat's cycles today"}
+ ],
+ "extras": [
+  {"label": "#7979's column blocks", "status": "modeled", "owner": "HASHCUT", "cases": {"two-stage": "N5+7979"}, "note": "as P1"},
+  {"label": "FlashInfer K2048's warm witness on the H200", "status": "modeled", "owner": "HASHCUT", "cases": {"two-stage": "N5+fiwarm"}, "note": "as P2"},
+  {"label": "#8101's verifier cut", "status": "assumed", "owner": "VERIFYFAST-A", "cases": {"two-stage": "N5+8101"}, "note": "0.85 a statement measured on two types, taken for every type but the MoE family"},
+  {"label": "K provers under MPS", "status": "measured", "owner": "@kernels", "cases": {"two-stage": "N5+mps"}, "note": "1.77x at K=4 on M1"},
+  {"label": "each type's own gain under K provers", "status": "measured", "owner": "STATIONARY", "cases": {"two-stage": "N5+ktypes"}, "note": "as N5m+ktypes"},
+  {"label": "four provers on the dense types", "status": "goal", "owner": "@kernels", "cases": {"two-stage": "N5+dense4"}, "note": "after the two memory cuts"},
+  {"label": "K provers at the busy-share model, 2.87x at K=4", "status": "goal", "owner": "@kernels", "cases": {"two-stage": "N5+kgoal"}, "note": ""},
+  {"label": "the prover at 4x old main's", "status": "goal", "owner": "@kernels", "cases": {"two-stage": "N5+provergoal"}, "note": "0.522 s, 2.11x main's; modeled"},
+  {"label": "the prover at 2.8x main's", "status": "comparison", "owner": "@kernels", "cases": {"two-stage": "N5+prover2.8"}, "note": "PRF-459's ratio against old main applied to today's rates, which counts main's first 1.9x twice"},
+  {"label": "the templated session check where cheaper, as measured", "status": "measured", "owner": "VERIFYFAST-B", "cases": {"two-stage": "N5+tmpl"}, "note": "slower than the fast column's flat check on every type, so no type takes it"},
+  {"label": "the templated session check at its target", "status": "goal", "owner": "VERIFYFAST-B", "cases": {"two-stage": "N5+tmplgoal"}, "note": "as P5"},
+  {"label": "the dense types' host witness 3.5x lower", "status": "assumed", "owner": "HASHCUT", "cases": {"two-stage": "N5+host"}, "note": "CPU's cache cut it 2-4x"},
+  {"label": "Flock without --zk", "status": "measured", "owner": "HILLCLIMB", "cases": {"two-stage": "N5+plain"}, "note": "the fused blocks' shares measured on the H200, the rest CPU's; soundness alone, not the post's line"},
+  {"label": "quant K6144 at 20 ms a block", "status": "sensitivity", "owner": "HASHCUT", "cases": {"two-stage": "N5+q20"}, "note": "its device witness scaled from K2048's instead of the card's 5.6 ms"}
+ ],
+ "deltas": [
+  {"label": "#8086's FP8 GEMM coordinate split, which replaces +hash4 (marked)", "status": "modeled", "owner": "HASHCUT", "base": "HASHCUT's N5", "delta": {"world week": -0.0069, "world month": -0.0071, "world year": -0.0075, "datacenter week": -0.0055, "datacenter month": -0.0057, "datacenter year": -0.0061}, "note": "HASHCUT's delta on their base, added to the totals as given: re-pricing it needs their hashing-record layouts"}
+ ],
+ "zk": [
+  {"label": "N5 under the per-window budget form", "status": "modeled", "owner": "ZKSTACK", "cases": {"two-stage": "N5+zk"}, "note": "Pr[steal] at M = T(K_delta - 1) + 1 replay blocks of E_rho served slots, K_delta at delta/(c^2 T), c = 1; T the period's 600 s windows fleet-wide"},
+  {"label": "N5 under the per-window form, each machine's windows counted apart", "status": "modeled", "owner": "ZKSTACK", "cases": {"two-stage": "N5+zkmachine"}, "note": ""},
+  {"label": "P5 under the per-window budget form", "status": "modeled", "owner": "ZKSTACK", "cases": {"two-stage": "P5+zk"}, "note": ""},
+  {"label": "P5 under the per-window form, each machine's windows counted apart", "status": "modeled", "owner": "ZKSTACK", "cases": {"two-stage": "P5+zkmachine"}, "note": ""}
+ ],
  "unpriced": [
-  {"label": "compiling each sampled request's Programs", "status": "measured a step",
-   "cases": {"two-stage": "N5"},
-   "note": "135 s a Program a rank; a 256-step span 3.1-3.8 core-hours over 8 ranks until a one-layer template; its share at the plan's sampled requests, beside the total"},
-  {"label": "the memory-checked KV pool, proved every window", "status": "measured ANDs; the verifier's rate assumed",
-   "cases": {"two-stage": "N5"},
-   "note": "MemCheck_v1 + BlockKey_v1 under CacheStep_v3, inside CompileSlice_v4: the busiest window's ANDs (POOL_WINDOW_ANDS, walked as built or with the head-of-line memo) on every window, since its carry chain binds only proved blocks; proving at the --zk rate (1e12 ANDs take 10% of a machine's window), verifying at the line's median rate an AND; beside the total, at the same share in every scope; it charges no advice, so prefix caching stays on"},
-  {"label": "the advice charge", "status": "charged",
-   "cases": {"two-stage": "N5+hits"},
-   "note": "with the length closed in-circuit and without the pool, the advice is the prefix-cache hits (about 5,200 bits a machine's window) and the small rest; while the hits are advice no year scope and no world scope breaks even; the pool removes them at its line above, prefix caching off at +13.86% FLOPs (N5+prefixoff)"}
- ]}
+  {"label": "compiling each sampled request's Programs", "status": "measured a step", "owner": "@vllm, @circuits", "cases": {"two-stage": "N5"}, "note": "135 s a Program a rank; a 256-step span 3.1-3.8 core-hours over 8 ranks until a one-layer template; its share at the plan's sampled requests, beside the total"},
+  {"label": "the memory-checked KV pool, sampled like the other units", "status": "measured ANDs; the verifier's rate assumed", "owner": "MEMPOOL", "cases": {"two-stage": "N5"}, "note": "MemCheck_v1 + BlockKey_v1 under CacheStep_v3: the busiest window's ANDs (walked as built, or with the head-of-line memo) on the windows the plan samples, under CIR-190's conditions 1-5; proving at the --zk rate, verifying at the line's median rate an AND; it charges no advice, so prefix caching stays on"},
+  {"label": "the advice charge", "status": "charged", "owner": "", "cases": {"two-stage": "N5+hits"}, "note": "without the pool, the advice is the prefix-cache hits (about 5,200 bits a machine's window); prefix caching off instead costs +13.86% FLOPs (N5+prefixoff)"}
+ ],
+ "steps": [
+  {"label": "(A′) per-expert cut at 128k, as Figure 1 prices it", "status": "measured", "cases": {"two-stage": "R0"}, "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer modeled)"},
+  {"label": "the fused per-expert cut", "status": "measured", "cases": {"two-stage": "R1", "one-stage": "R1-1s"}, "note": "each expert's table read fused into its GEMM at k_log 25, priced on one H200 with the cache (512 and 1024 blocks); its fixed cost before the cache is modeled"},
+  {"label": "the statement cache", "status": "measured", "cases": {"two-stage": "R2"}, "note": "fixed seconds a statement 8-10x lower on the H200 (experts measured; 5 types priced from H200 splits)"},
+  {"label": "4 provers on one H200, verify-ahead", "status": "measured", "cases": {"two-stage": "R3"}, "note": "on the expert types: the fused blocks measured at 128 and 256 blocks a statement, a quarter-statement each"},
+  {"label": "a 3.5x GPU prover", "status": "modeled", "cases": {"two-stage": "R4"}, "note": "device parts only; the host witness stays"},
+  {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "R5"}, "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
+  {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "R5x4"}, "note": "device parts only"},
+  {"label": "the Lean verifier's CPU", "status": "measured", "cases": {"two-stage": "R6x4", "one-stage": "R6x4-1s"}, "note": "each statement's Lean verify (measured on 9 types; families scaled; the median 681 s elsewhere) at 81.8 core-seconds a GPU-second, Nebius's on-demand list prices; total compute = serve tax + proving + verifying"},
+  {"label": "4 provers on every type, four provers per H200", "status": "assumed", "cases": {"two-stage": "R6x4+all+4perH200"}, "note": "the experts' overlap factor taken for every type, and full statements under four provers once each prover's peak is about 33 GiB"},
+  {"label": "the dense types' host witness 3.5x lower", "status": "assumed", "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
+  {"label": "hashing cut 4x", "status": "assumed", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"}, "note": "in-proof hashing at a half share of the marginal, cut 4x; its magnitude is being scoped"}
+ ]
+}
