@@ -622,7 +622,7 @@ def _word_vectors(word: Any, pw: Sequence, opts: Options) -> tuple[int, int]:
     least ``opts.min_vectors``, at most half of them all-edge; and at least `WORD_RANDOM_FLOOR` of them random either way, so a
     Definition too large for the full count is still compared on random vectors."""
     full = 16 * opts.vectors
-    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(word))))
+    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(resolve(word)))))
     return n, min(edge_count(pw), n if n == full else n // 2, n - WORD_RANDOM_FLOOR)
 
 
