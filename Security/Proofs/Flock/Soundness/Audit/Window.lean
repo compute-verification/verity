@@ -299,7 +299,7 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s
 /-- **The window audit** (oracle layer): the audit accepts while the unsound work is at least `T` or the unsound weight at
 least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + δ_link`. -/
 theorem audit_window (A : Analysis ((Law.stratified σ k hk).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K) (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky)
     (T Ty : ℕ) (σ' : Strategy (audit ((Law.stratified σ k hk).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -315,7 +315,7 @@ theorem audit_window (A : Analysis ((Law.stratified σ k hk).closure cl) Reg ses
 at most the stratified sampling design's, sampled with closures, such as an executable sample proved against it. -/
 theorem audit_window_of_le {L : Law n} (hL : ∀ B, L.escape B ≤ (Law.stratified σ k hk).escape B)
     (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
+    (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
     (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky) (T Ty : ℕ)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -331,7 +331,7 @@ theorem audit_window_of_le {L : Law n} (hL : ∀ B, L.escape B ≤ (Law.stratifi
 `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_window (A : ExtractionAnalysis ((Law.stratified σ k hk).closure cl) Reg session)
     {εks δlink : (R : Reg) → Cont ((Law.stratified σ k hk).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K) (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky)
     (T Ty : ℕ) (σ' : Strategy (audit ((Law.stratified σ k hk).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -351,7 +351,7 @@ theorem extraction_audit_window (A : ExtractionAnalysis ((Law.stratified σ k hk
 /-- **The window audit at the sizing of record**: with `K = K_y = 27,713`, the audit accepts while the unsound work is at
 least 0.1% of the window's, or the unsound weight at least 0.1% of `N`, with probability at most `2^-40 + ε_ks + δ_link`. -/
 theorem audit_window_of_record (A : Analysis ((Law.stratified σ k hk).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) {w v : Fin m → ℕ}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ}
     (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w 27713) (hN : 0 < Law.totalWork σ v)
     (hcy : Law.Covers σ k v 27713) (σ' : Strategy (audit ((Law.stratified σ k hk).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -370,7 +370,7 @@ theorem audit_window_of_record (A : Analysis ((Law.stratified σ k hk).closure c
 its own work sampling design at its share of `K = 27,713`, each stratum's floor covering `v` at `K_y = 27,713`, with closures. -/
 theorem audit_window_split_of_record {C : ℕ} {call : Fin m → Fin C} {w v f : Fin m → ℕ}
     (A : Analysis ((Law.stratified σ (Law.windowK σ call w f 27713) (Law.windowK_le σ call w f 27713)).closure cl)
-      Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)
+      Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)
     (hW : 0 < Law.totalWork σ w)
     (hone : ∀ s, 0 < w s → Law.callWork σ call w (call s) = w s * (Law.stratum σ s).card)
     (hN : 0 < Law.totalWork σ v) (hfy : ∀ s, 27713 * v s * (Law.stratum σ s).card ≤ f s * Law.totalWork σ v)
@@ -389,7 +389,7 @@ escapes are at most the stratified sampling design's plus `η`, sampled with clo
 assumption. The bound gains `η`; at `η = 0` it is `audit_window_of_le`. -/
 theorem audit_window_of_le_slack {L : Law n} {η : ℝ≥0∞} (hL : ∀ B, L.escape B ≤ (Law.stratified σ k hk).escape B + η)
     (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
+    (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
     (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky) (T Ty : ℕ)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -404,7 +404,7 @@ theorem audit_window_of_le_slack {L : Law n} {η : ℝ≥0∞} (hL : ∀ B, L.es
 /-- At `η = 0`, `audit_window_of_le_slack` is `audit_window_of_le`. -/
 example {L : Law n} (hL : ∀ B, L.escape B ≤ (Law.stratified σ k hk).escape B)
     (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
+    (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
     (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky) (T Ty : ℕ)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -421,7 +421,7 @@ most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + η + ε_ks(σ) + δ_link(σ)
 theorem extraction_audit_window_of_le_slack {L : Law n} {η : ℝ≥0∞}
     (hL : ∀ B, L.escape B ≤ (Law.stratified σ k hk).escape B + η) (A : ExtractionAnalysis (L.closure cl) Reg session)
     {εks δlink : (R : Reg) → Cont (L.closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K) (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky)
     (T Ty : ℕ) (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
@@ -446,7 +446,7 @@ theorem extraction_audit_window_split_of_record_of_le_slack {C : ℕ} {call : Fi
       (Law.stratified σ (Law.windowK σ call w f 27713) (Law.windowK_le σ call w f 27713)).escape B + η)
     (A : ExtractionAnalysis (L.closure cl) Reg session)
     {εks δlink : (R : Reg) → Cont (L.closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < Law.totalWork σ w)
     (hone : ∀ s, 0 < w s → Law.callWork σ call w (call s) = w s * (Law.stratum σ s).card)
     (hN : 0 < Law.totalWork σ v) (hfy : ∀ s, 27713 * v s * (Law.stratum σ s).card ≤ f s * Law.totalWork σ v)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
@@ -478,7 +478,7 @@ theorem audit_window_split_of_record_of_le_slack {C : ℕ} {call : Fin m → Fin
     (hL : ∀ B, L.escape B ≤
       (Law.stratified σ (Law.windowK σ call w f 27713) (Law.windowK_le σ call w f 27713)).escape B + η)
     (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w)
+    (hlink : A.BindSound δlink) (hW : 0 < Law.totalWork σ w)
     (hone : ∀ s, 0 < w s → Law.callWork σ call w (call s) = w s * (Law.stratum σ s).card)
     (hN : 0 < Law.totalWork σ v) (hfy : ∀ s, 27713 * v s * (Law.stratum σ s).card ≤ f s * Law.totalWork σ v)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :

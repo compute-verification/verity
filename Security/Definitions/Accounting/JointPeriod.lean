@@ -23,7 +23,7 @@ functions of all of them, and so is each verdict.
 Each audit's per-period guarantee (`PeriodRun.Sound`) is stated in the shape of `Accounting.Run.ComputeSoundPerRun`:
 at any value of the other coins, the probability over the audit's own coins that it accepts while its claim fails on
 that run is at most its error. That is the form each protocol's own per-period guarantee is to give for a run that
-realizes its audit: `Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod` for PoUW, `Bandwidth.Guarantees.AuditRO`
+realizes its audit: `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` for PoUW, `Bandwidth.Guarantees.AuditRO`
 for PoUB, `Pous.Guarantees.ContinuousAudit` for PoUS, the network certifier's leak over a period of sampled audits for
 communication, and the sampled audit's live knowledge soundness for integrity.
 

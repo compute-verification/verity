@@ -139,7 +139,7 @@ def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
 
 /-- **The binding error at the fine level** (named hypothesis `δ_link`): extraction of the picked fine
 unit disagrees with the fine committed transcript. -/
-def LinkSound (δlink : ℝ≥0∞) : Prop :=
+def BindSound (δlink : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (c : Cont₁ L₁ L₂ Reg Int session R) (tgt : L₁.Ω → (∀ u, (L₂ u).Ω) → Option (Fin nf)),
     avg (fun ω₁ => avg fun ω₂ => prob (fun ok => ok = true ∧ ∃ v, tgt ω₁ ω₂ = some v ∧
       v ∈ fineDraw L₁ L₂ ω₁ ω₂ ∧
@@ -157,7 +157,7 @@ noncomputable def effAcceptProb (L₁ : Law nc) (L₂ : Fin nc → Law nf) (pare
 
 /-- **The two-stage profile, variant (b)**, over the coarse partition. -/
 theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin nc) → Prop)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (𝓑 : Finset (Fin nc) → Prop)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (A.wrongC (A.committedCOf σ))) (twoStage L₁ L₂ Reg Int session) σ ≤
       (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effAcceptProb L₁ L₂ A.parent B) + εks + δlink := by
@@ -254,7 +254,7 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
 
 /-- **The two-stage count curve**, variant (b). -/
 theorem twoStage_count (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (K : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (K : ℕ)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.wrongC (A.committedCOf σ)).card) (twoStage L₁ L₂ Reg Int session) σ ≤
       (⨆ (B : Finset (Fin nc)) (_ : K ≤ B.card), effAcceptProb L₁ L₂ A.parent B) + εks + δlink :=
@@ -281,7 +281,7 @@ theorem effAcceptProb_full (parent : Fin nf → Fin nc) (hfull : ∀ u ω v, par
 
 /-- **(b1)'s profile is one-stage's over the coarse partition.** -/
 theorem twoStage_full_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)
     (hfull : ∀ u ω v, A.parent v = u → v ∈ (L₂ u).draw ω) (𝓑 : Finset (Fin nc) → Prop)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (A.wrongC (A.committedCOf σ))) (twoStage L₁ L₂ Reg Int session) σ ≤
@@ -311,7 +311,7 @@ theorem two_stage_a_coarse (r : Refines Pf Pc) {L : Law nf} {Reg : Type}
     {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin nf)) → (R : Reg) → Strategy (session S R) → Fin nf →
       Option (Fin C.N → Bool)} {εks δlink : ℝ≥0∞}
-    (hks : (Pf.analysis X ext).KnowledgeSound εks) (hlink : (Pf.analysis X ext).LinkSound δlink)
+    (hks : (Pf.analysis X ext).KnowledgeSound εks) (hlink : (Pf.analysis X ext).BindSound δlink)
     (K : ℕ) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ K ≤ (Pc.wrong (X (reg σ) (cont σ))).card) (audit L Reg session) σ ≤
       L.miss K + εks + δlink :=
@@ -411,7 +411,7 @@ theorem Refines.oracle₂_knowledgeSound (r : Refines Pf Pc) {L₁ : Law nc} {L�
 theorem Refines.oracle₂_linkSound (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
     {Int : Finset (Fin nc) → Type} {ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)}
     {session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool} :
-    (r.oracle₂ (L₁ := L₁) (L₂ := L₂) ext session).LinkSound 0 := by
+    (r.oracle₂ (L₁ := L₁) (L₂ := L₂) ext session).BindSound 0 := by
   intro R c tgt
   refine le_of_eq ((congrArg avg (funext fun ω₁ => (congrArg avg (funext fun ω₂ => ?_)).trans
     (avg_const 0))).trans (avg_const 0))
