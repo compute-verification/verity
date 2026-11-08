@@ -1456,6 +1456,11 @@
    "unfolded_hash": "49d11a4dc9c098650eded0616de009de0659264effc14bccd1569b2442c1390f"
   },
   "Properties.NetworkPeriod.rowsStateTied_nontrivial": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70",
+  "Properties.NetworkPeriod.rowsTiedSampled": {
+   "type_hash": "42b4689990c88250db3d83f31bafc5da246a077a615127495f52158eecaa5b54",
+   "unfolded_hash": "0bd09e652d27289cca3f2ae9d0fcfe22f623eb3e755f548c28dbfb1c7da98930"
+  },
+  "Properties.NetworkPeriod.rowsTiedSampled_nontrivial": "2c8f43eae324fe3c8e6afeffbff2ac862c24976a4b079b7b7f1aebb3065a1b48",
   "Properties.NetworkRecords.acceptMeans": {
    "type_hash": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
    "unfolded_hash": "e46253e695f1e33aacb647002aa9d21cbfd7fff4daeaec61dde92d32662eae71"
@@ -1734,6 +1739,30 @@
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680",
    "unfolded_hash": "2285439dfcc19865351bcde4fa8527006d304fcbbc0da3468e97c9ac43d23f04"
   },
+  "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
+   "type_hash": "59afc5f62f7084ed1d08eb8098c537d877d5669db75840144a1bbaa47c87120f",
+   "unfolded_hash": "894ebd2a140ad427d3007a1ffbae3c1d4b1ae6721e81b6468f2f6b86d8b2cb94"
+  },
+  "Properties.RemoteAudit.Shared.acceptedSamplesOpenable": {
+   "type_hash": "494a55e1aaa32cfb75483b6703f3bc06c30ef52fa0fc38453dc55e8ed6a2967f",
+   "unfolded_hash": "fd6df678f1fb995b8c8c648711ea29c7b6cc1cff0bd0e8ce5fdf25aa3dc733b0"
+  },
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled": {
+   "type_hash": "79f9bb5f15adc4fa29ab204bad8d9386d1d72d9d0b996f337cd9932b82ba55a5",
+   "unfolded_hash": "2489d31cd84b0dea5a2d2b40ffb131a8fd395a5def37ff194d369cfbc4dc23da"
+  },
+  "Properties.RemoteAudit.Shared.recordKeptAfterSample": {
+   "type_hash": "2d8e4dd85b70e15922b853cab5e8287d41ff99fb4bd23abe23edb607e9c2c6e6",
+   "unfolded_hash": "785660831753d1f061fd3e0b07ef62a8221269136fb333e8a27d4b5af73acc2d"
+  },
+  "Properties.RemoteAudit.Shared.sampleIsSubset": {
+   "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
+   "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
+  },
+  "Properties.RemoteAudit.Shared.sessionSamplesRecords": {
+   "type_hash": "e6c1a140775c818676c1428038f19e1852570407e6bddb50429dc1ced57f56dc",
+   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
+  },
   "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
    "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
    "unfolded_hash": "7418dc9a88e2afee55638d86639cf55583a134b9dd44fe2cbad0e4fdd78b1d43"
@@ -1745,6 +1774,14 @@
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "type_hash": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad",
    "unfolded_hash": "4c8aa2f7d176b4dbff773df5d9d7326e721d48b3c7d74649345a584ef1a8c289"
+  },
+  "Properties.RemoteAudit.acceptOpensSamples": {
+   "type_hash": "e50e6b242d6d661a67005b2309999140cec3cbdc70b33896694a93e6ff3b6d38",
+   "unfolded_hash": "fe9208377e0acfd76e5d25f3acab78d17c77dab07e67560cf3c3186f99d0dc5c"
+  },
+  "Properties.RemoteAudit.acceptSamplesOpenable": {
+   "type_hash": "de3b1d253eacc79573a9527a059f677bb81750ecfab1c9a247e08573561c8d91",
+   "unfolded_hash": "1cc1cef99be514715b9c86ee4b9c0262f135710481c459c962efe5285ff5c4c8"
   },
   "Properties.RemoteAudit.acceptedMinPasses": {
    "type_hash": "0d529f21b51d610996e67758bd106ab06354a700bbb13590c9f87df83e25cb88",
@@ -1774,6 +1811,10 @@
    "type_hash": "f590e7328b4bf6c7dbfb8362da3e8a235c1e21eed5f61a86e741e80cdda95ec5",
    "unfolded_hash": "2c1e77489b725db690bef00720e15230389a414945c47509172c37f449aaad6b"
   },
+  "Properties.RemoteAudit.openingsUnreadUntilSampled": {
+   "type_hash": "a0fb728124f4ead76943ef04dde84c6375038edb19ba2eb4c9555cc58a089141",
+   "unfolded_hash": "6197b94faf9ce78ccad923df7ca365395e6527aebadf3ff0c3975bc963c1324b"
+  },
   "Properties.RemoteAudit.passesChained": {
    "type_hash": "18a77f61543a7fe37e2288837a3854e9bea3524905d25b92dca9b06d4b3bed57",
    "unfolded_hash": "5d85e29ab4d77a29efd26c9eb2c615a0ddc0f0479360032294e6725a7e3bbe84"
@@ -1802,9 +1843,17 @@
    "type_hash": "80b7bc07dd0a13d6afe9f84c7dbeddf1510a7f018442f3fc995a863b3c69d1d1",
    "unfolded_hash": "14b9d50fa16462dd13c4cba81e6a5bd73ba73ceaf4a3e92dfe27dd2e9ad3a533"
   },
+  "Properties.RemoteAudit.recordKeptAfterSample": {
+   "type_hash": "780c46766dc991c84b18e65a1c710fb04a1539bbf060260c2d3250eb8fe8c79d",
+   "unfolded_hash": "a737bc92a5da43c3afbf10241c2a57860004a1f348025b91ece3d8d749bb1ca5"
+  },
   "Properties.RemoteAudit.releasedStayOut": {
    "type_hash": "9a969c04fe8d92c87062758f2b1063d15e60fe0db11e774427db2f8f9d45b6ce",
    "unfolded_hash": "31dc5d801029d2379fe24f33570128116d8d44dcadaf189197fb8cbccf79b84b"
+  },
+  "Properties.RemoteAudit.sampleIsSubset": {
+   "type_hash": "a6bba8f7375d3184bdaa63b8c02f391e00a72dfeb1cd5020589a4b28cb741dc8",
+   "unfolded_hash": "06b4994cd21b1b744b72a405683d1b5fe1df4b2678e7a0ddceccd16cca545512"
   },
   "Properties.RemoteAudit.scheduleChecked": {
    "type_hash": "7d24cf63d2813c8aadbbcdeb5bcb4efc9f33c59451af0dae591fd359ca0e8e1e",
@@ -1850,55 +1899,6 @@
   "Properties.Spot.noAcceptAfterHalt": {
    "type_hash": "0f8b2d89ec524d62964511f87a23864eacc612e51d9b331978880e16cfe01502",
    "unfolded_hash": "1f21b6df5fa96097fb3a6c6c3364bd53addbd00548769bc4ed2429919ffb7ede"
-  },
-  "Properties.NetworkPeriod.rowsTiedSampled": {
-   "type_hash": "42b4689990c88250db3d83f31bafc5da246a077a615127495f52158eecaa5b54",
-   "unfolded_hash": "0bd09e652d27289cca3f2ae9d0fcfe22f623eb3e755f548c28dbfb1c7da98930"
-  },
-  "Properties.NetworkPeriod.rowsTiedSampled_nontrivial": "2c8f43eae324fe3c8e6afeffbff2ac862c24976a4b079b7b7f1aebb3065a1b48",
-  "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
-   "type_hash": "59afc5f62f7084ed1d08eb8098c537d877d5669db75840144a1bbaa47c87120f",
-   "unfolded_hash": "894ebd2a140ad427d3007a1ffbae3c1d4b1ae6721e81b6468f2f6b86d8b2cb94"
-  },
-  "Properties.RemoteAudit.Shared.acceptedSamplesOpenable": {
-   "type_hash": "494a55e1aaa32cfb75483b6703f3bc06c30ef52fa0fc38453dc55e8ed6a2967f",
-   "unfolded_hash": "fd6df678f1fb995b8c8c648711ea29c7b6cc1cff0bd0e8ce5fdf25aa3dc733b0"
-  },
-  "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled": {
-   "type_hash": "79f9bb5f15adc4fa29ab204bad8d9386d1d72d9d0b996f337cd9932b82ba55a5",
-   "unfolded_hash": "2489d31cd84b0dea5a2d2b40ffb131a8fd395a5def37ff194d369cfbc4dc23da"
-  },
-  "Properties.RemoteAudit.Shared.recordKeptAfterSample": {
-   "type_hash": "2d8e4dd85b70e15922b853cab5e8287d41ff99fb4bd23abe23edb607e9c2c6e6",
-   "unfolded_hash": "785660831753d1f061fd3e0b07ef62a8221269136fb333e8a27d4b5af73acc2d"
-  },
-  "Properties.RemoteAudit.Shared.sampleIsSubset": {
-   "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
-   "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
-  },
-  "Properties.RemoteAudit.Shared.sessionSamplesRecords": {
-   "type_hash": "e6c1a140775c818676c1428038f19e1852570407e6bddb50429dc1ced57f56dc",
-   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
-  },
-  "Properties.RemoteAudit.acceptOpensSamples": {
-   "type_hash": "e50e6b242d6d661a67005b2309999140cec3cbdc70b33896694a93e6ff3b6d38",
-   "unfolded_hash": "fe9208377e0acfd76e5d25f3acab78d17c77dab07e67560cf3c3186f99d0dc5c"
-  },
-  "Properties.RemoteAudit.acceptSamplesOpenable": {
-   "type_hash": "de3b1d253eacc79573a9527a059f677bb81750ecfab1c9a247e08573561c8d91",
-   "unfolded_hash": "1cc1cef99be514715b9c86ee4b9c0262f135710481c459c962efe5285ff5c4c8"
-  },
-  "Properties.RemoteAudit.openingsUnreadUntilSampled": {
-   "type_hash": "a0fb728124f4ead76943ef04dde84c6375038edb19ba2eb4c9555cc58a089141",
-   "unfolded_hash": "6197b94faf9ce78ccad923df7ca365395e6527aebadf3ff0c3975bc963c1324b"
-  },
-  "Properties.RemoteAudit.recordKeptAfterSample": {
-   "type_hash": "780c46766dc991c84b18e65a1c710fb04a1539bbf060260c2d3250eb8fe8c79d",
-   "unfolded_hash": "a737bc92a5da43c3afbf10241c2a57860004a1f348025b91ece3d8d749bb1ca5"
-  },
-  "Properties.RemoteAudit.sampleIsSubset": {
-   "type_hash": "a6bba8f7375d3184bdaa63b8c02f391e00a72dfeb1cd5020589a4b28cb741dc8",
-   "unfolded_hash": "06b4994cd21b1b744b72a405683d1b5fe1df4b2678e7a0ddceccd16cca545512"
   }
  },
  "layers": {
@@ -24813,7 +24813,7 @@
    }
   },
   "VStarRecursive.Protocol": {
-   "digest": "0a17cb463e2500ff46d4821014a2f6c1271bf80685cdebca90c4d2ba63f860e6",
+   "digest": "24c25e7e86c7a9b3f7c1147bc75bef036012f248ffa0b1416223d26adf00d5f5",
    "definitions": {
     "VStar.Recursive.Evidence": "750759ed94774839b812282e5b64d4c4f9cdff16ee8b980a1089dba40596a8f0",
     "VStar.Recursive.Evidence.base": "db902052c681ca06403b69f02d5091eed593f4c0c161181bf30e9200f949177a",
@@ -24835,6 +24835,7 @@
     "VStar.Recursive.Own.program": "402eb05f034b89f904a0ae804d9153429a63294ea1b83a5bdc11719a486eff1a",
     "VStar.Recursive.Own.pub": "6e065fd248540f5546728a5b055af1db43c8259a2fdd67f2ba837a5a5cb643a1",
     "VStar.Recursive.Own.registration": "517d9b9b4a2f51dddf9606c7265f9dac1dc9bb39a0753a3a40dde370348f1a0d",
+    "VStar.Recursive.PROTOCOL": "9d943c4be2ddd7e6503b4b54185fe3b9c34b6aeb1a0de06720f8db2221f15939",
     "VStar.Recursive.Params": "c6cbbf694bb41f184f78152af6dc62296479b3902810809c3eff2d5a84d2bace",
     "VStar.Recursive.Params.base": "b851d9e98f6e24ba79f1eebe109ac9b4587ecb5ff39c573b7effd6fda910c184",
     "VStar.Recursive.Params.own": "22671db69954dd4fb354c3165737685ca4b94f54a0372d91710fb794a66a4332",
@@ -24868,8 +24869,6 @@
     "VStar.Recursive.lineEnd": "08f3f8a6ca79ec9bca18488856b517e63e59d445c0c104326b8a1e6e81bb0634",
     "VStar.Recursive.metaOf": "b1cd47a27ca618b941c7a55749e37e8fc56eed12c7ef8d76c4aa12f9c9f9fe81",
     "VStar.Recursive.need": "e7bbdffdbbf61828d6e4cae5344342cf93a279518aabe5cc4bd6bd9c1156ce99",
-    "VStar.Recursive.ownOf": "45ef3a0b151027350c296b151763da10548b0be97f8beddec701fe130acb3c63",
-    "VStar.Recursive.paramsOfJson": "87a1af87757f02b2b059ca4bc9dd76186afe8bbf493b8178282b460b99d681aa",
     "VStar.Recursive.partJson": "452868b110da42c2a36e59b70306043f4419be7f0168553f4b3e15d6a62ae991",
     "VStar.Recursive.partSize": "bba29da2eb4498c27560023d6477c2156c8d12efbab323ce500575ffed313d4e",
     "VStar.Recursive.partVerdict": "6757670436457cf08b27409d36c277b44acc622be26fb44a2c8613c3aa9fec7a",
@@ -24885,28 +24884,25 @@
     "VStar.Recursive.unitsOf": "1ac56180a10b3f59a7a09fd66c857197d7d0f96081cd0bf29a99269ba5c857be",
     "VStar.Recursive.verdictJson": "ee73afff0412295619bd04583edf21c5af64465e286f94065bd907de60d83ead",
     "VStar.Recursive.verdicts": "fb3d7ab677e334abd3741e820a42faf2215d79f5d858f3dad0a0a3a5f7b056c4",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digest?": "21bdb14c6beac7349c4b1596861198c501e75061ce1955b293ef0bb6dec8bfca",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digestOf": "f46d435b2fde345172ee5bea4d6948dec6ce2e8c96f420b7330c0ad7e5bb128f",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.exactly": "903935d4309baf2ea88e41a7c42a4fe4dc1945065d2a7db985f49fa394525981",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob": "6f8e9fb8ffa84e5477f396939d92ce6a6e9341e213e26df3718b14b136b1d9ba",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.objOrNull": "0e719dbf38d6f6d012f16cd6d54d6643495cf92ba92637719777a62741c7a4dc",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.partOwnOf": "61c6ae30ef7aee88b184da29c2d3828e18f0ef9248a15942817782c636067c51",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.partProofOf": "73fd5f16476bffe5b7a6caee2ab9e0bbbf9f4715e3fd66bf37bd3d671020b981",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.without": "e2879b3c2871574cfbe19031f9caeece45e8e1bd54ea26ae2049eaa9af1cb652"
    }
   },
   "VStarRecursive.Sampled": {
-   "digest": "28af4e26d715e2e27c10255581e3ec59a194dd043c04ec73c53d97dd3ffad574",
+   "digest": "f6a66dd422175274dc446036dd7e00c6367a1706b4d1889ed2857f783a20f312",
    "definitions": {
     "VStar.Recursive.Sampled.Evidence": "9e5a16253407eec1c6ca0f36164f8936716429deb7d7398f3515df84d530f8d0",
     "VStar.Recursive.Sampled.ONE_STAGE": "38de5ee291b3ce3bc8d92944644a4311dc9b5c9c7af11099f319cedb5e1c63c4",
     "VStar.Recursive.Sampled.PROTOCOL": "864b6227a733d9017c62194051f38742936289e55ac9dca64a27de2a06d978f2",
     "VStar.Recursive.Sampled.Params": "4a41405c6894c50695c5a28cacf9dd13151b5a0e63fdde476bd29c7c29f9d492",
     "VStar.Recursive.Sampled.RECURSIVE": "0e0f5176c046495c1e5c505a4aafca31c82848dd35b65af82d5b2b79a1a02fbf",
-    "VStar.Recursive.Sampled.V1_REFUSED": "ce5df2bfb1ab2a1384c0b21d02eab5be6740eb4331f36f6deec475d0b954e7b9",
+    "VStar.Recursive.Sampled.RECURSIVE_REFUSED": "11e0467fabbb68135f583a0660be4cc54e90d443fc814905dde6fe6acfca12e4",
+    "VStar.Recursive.Sampled.V1_REFUSED": "59c5948429cf3e265f187e70dbee4275d48d3930cd2e0ac425d84341cd5b3631",
     "VStar.Recursive.Sampled.checkBlobs": "72fc3297ca9d99dfb22def633f245cab42c28d288cfc9b8fc17127cd0e47871b",
     "VStar.Recursive.Sampled.evidenceOf": "d546a38acabac0eeef32e780cfbe60b3bb7ab7e5a3ef1a2f8e566747abf8a013",
-    "VStar.Recursive.Sampled.paramsOfJson": "6e32801bffd2b2fd65f250dac5679c905a334ef45b781a76b329f50aad6bf956",
+    "VStar.Recursive.Sampled.paramsOfJson": "dd435d4ac37f6c4cdbe5094596095ab0a23f02d7647191d6a8352a8ea289d3bd",
     "VStar.Recursive.Sampled.protocol": "4cc3d013094fddfff0ab5a07b45af785c60e32f5d68a462a562ddadae3950d03",
     "_private.VStarRecursive.Sampled.0.VStar.Recursive.Sampled.split": "57f3dbade984377ba3211a61a3f62f588bdaea4ee60b941e1fc5d1e08a180d24"
    }
