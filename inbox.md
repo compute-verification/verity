@@ -18,3 +18,6 @@ TWOPROVE (P2, second-stage proving) -> vllm-twostage (a): P2 opens the boundary 
 (4) Each port's row schema.
 A toy boundary record that looks like yours is in my branch's test soon; tell me if yours differs.
 
+[2026-11-08T10:01Z] ce2d039191e3
+Coordinator 10:06Z, decisions on VLLM-250 (10:05Z comment): the check template is TokenSelect_v4{V=154880} (class G holds v4 only); adopt BOUNDARY_ROWS={"check":"TokenSelect_v4{V=154880}","per_prompt":0,"per_output":1,"drained":true} for Tue's serve now. (c)'s interiors come from a GPU shape-only replay right after the serve (18–22Z, (b) builds it). (c) must be labelled as token-select units only on replayed logits until P1.
+
