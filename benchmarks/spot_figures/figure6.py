@@ -112,7 +112,9 @@ def caption(out: dict) -> str:
     c = (f"(c) The advice's term in the bound is a window's bits times the scope's machine windows "
          f"({out['windows'][p]:.3g} over a {p}, {out['windows'][s]:.3g} over a {s}), against {t['label']}: "
          + "; ".join(rows) + ". The tick's 0 takes the certifier's release buckets as the arrivals: without them the "
-         "server could hold a request back by whole ticks, which is advice again.")
+         "server could hold a request back by whole ticks, which is advice again. It also takes the prefix-cache hits "
+         "as the registered pool model derives them: the verifier recomputes them in Python, which the advice claim "
+         "trusts; Lean doesn't check that step.")
     return a + b + c
 
 
