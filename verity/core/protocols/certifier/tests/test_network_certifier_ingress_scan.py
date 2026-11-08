@@ -238,7 +238,8 @@ def test_the_state_is_the_layout_neg_sized():
     assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
     for bad, fix in (({"delay": 28}, "= D = 27"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
                      ({"ingress_cells": 48}, "<= C = 47"), ({"lanes": 5}, "= lanes = 4"),
-                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16")):
+                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16"),
+                     ({"egress": "bytes"}, "egress = id, the egress record's form (it is bytes)")):
         with pytest.raises(ValueError, match=re.escape(fix)):
             w63.serves(replace(served, **bad))
 

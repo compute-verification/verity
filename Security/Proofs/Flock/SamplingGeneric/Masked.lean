@@ -82,12 +82,6 @@ namespace SamplingDeploy
 
 variable (c : Code) (iroots : Claims.Msg → Claims.Seen → ℕ → List Claims.Msg)
 
-/-- **The deployed trace commitment binds**, at every hash: hm96 leaves of rows that place the value (`row_places`)
-under the registered path check (`pathCommit_binds`). -/
-theorem commit_binds (H : Claims.Msg → Claims.Msg) : (commit c).Binds H :=
-  Claims.Sampling.pathCommit_binds (Claims.Sampling.hm96Leaf_binds H (row_places c.place c.bits) c.salt)
-    (Claims.Sampling.regPath_binds H c.own)
-
 /-- **The deployed sampled verifier over Flock's masked record is knowledge sound at SHA-512**: `ks_compiled` at
 `deployZk`, at its deployed decoder, with Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
 `commit_binds` and the inner numbers by `innerNumbers_deploy`. It takes the sampled verifier's four code facts and its

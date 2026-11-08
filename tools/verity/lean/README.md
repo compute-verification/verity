@@ -109,9 +109,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   deployed record or a field of it; not `True` or Init or Mathlib alone), is no reflexivity nor one of its hypotheses,
   and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
   `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
-- a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses of the form `witness_failures`
-  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`); `nontrivial` is one theorem or a list,
-  each past the first in the exclusion form and dropping a premise no earlier one drops;
+- a guarantee of an acceptance or an exclusion, unless it states `a = a` (`reflexive`), has `honest` and `nontrivial`
+  witnesses of the form `witness_failures` states, or an `unwitnessed` entry, which only shrinks; `nontrivial` is one
+  theorem or a list, each past the first in the exclusion form and dropping a premise no earlier one drops;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -159,11 +159,10 @@ unchecked), and imports the rest. By induction over the import DAG every declara
 the kernel, with its imports present, under a key that covers them: cold, the whole closure goes through the kernel in
 one process, `leanchecker --fresh`'s check of every root at once; warm, nothing outside the package does, and a change to
 an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
-`Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
-`Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
-that two modules each declare (an equation lemma realized in both) once per module, taking a reused module's public
-part's axiom copy as Lean's import does (`subsumesInfo`), and requires the quotient's constants to be the ones the
-kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+`Security` reuses the Mathlib modules `Security/Proofs` checked. So that a module's verdict is a function of its key,
+`Replay.lean` pins what the kernel loads: no constant from outside the module's imports, an equation lemma two modules
+realize checked once each, a reused public part's axiom copy taken as Lean's import does (`subsumesInfo`), and the
+quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the

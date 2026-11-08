@@ -20,7 +20,7 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.ml.windows import rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW
@@ -101,7 +101,7 @@ def window(row_tables: bool = True) -> tuple[CS.Binding, Served, list]:
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables,
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_design("stratified:2"), RUN, tuple(ms), tables,
                   CTX.hex() if row_tables else "")
     return w, s, ms
 

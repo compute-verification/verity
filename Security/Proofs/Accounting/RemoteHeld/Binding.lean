@@ -138,7 +138,7 @@ theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = pro
 theorem card_opened_le (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
   unfold Session.opened openings
-  exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Session.draws; exact min_le_left _ _))
+  exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Session.samples; exact min_le_left _ _))
 
 /-- **Window `t`'s share of the binding term** is at most `√(|L_t|·s_t·(fork_t + split_t))`. -/
 theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)

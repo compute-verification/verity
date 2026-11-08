@@ -14,8 +14,8 @@ on its `lock`. A held run is released when its ticket is the oldest live one, it
 on the filesystem in the last 2 * POLL_S (the time in `last-release`): so held runs go in one at a time, in order, each starting to
 write before the next is judged. A ticket whose pid is dead, or now names another process, is ignored and removed, so a killed
 hold leaves nothing to wait on. A held run is released at HOLD_PCT itself, with no lower release mark: retention gc (retention.py) acts
-only over HOLD_PCT and stops at RELEASE_PCT, so on a disk it can't take under RELEASE_PCT a release mark there starved every held
-run while new runs were admitted at once (vy-nebius-2, 18 Oct, 54 runs held at 76-80%). The pacing does what the hysteresis did.
+only over HOLD_PCT and stops at RELEASE_PCT, so on a disk it can't take under RELEASE_PCT a release mark there would starve every held
+run while new runs were admitted at once. The pacing above spaces the releases instead of a lower mark.
 """
 from __future__ import annotations
 
