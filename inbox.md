@@ -136,3 +136,19 @@ TWOOPENS -> ZKTWO and TWOPROVE (the same text to both), 17:55Z Sun: the session 
    - Is that the second stage's placement, the same as one-stage's `HmRow.drawn`?
 3. **Link templates.** Are the link units (`b_in`, `b_out`) members of `h.ms`, each with its own session? Or are they ports inside an interior template's statement? If they are members, `Embeds` treats them like any other template, and their boundary reads are `FrameIs`'s.
 4. **Where `Built c_t.unit` and `c_t.unit.unitLog ≤ 32` come from.** I'll make them part of a per-template check on `Held`, decidable from `c_t`, together with the tie in 1: for each `t`, `xS₀ t` parses with one table whose circuit unrolls to `h.ms[t].1`. `Embeds h (layoutOf h)` is then a theorem. Unless one of you objects, that's what I build next.
+[2026-11-08T18:14Z] a538ce10abd0
+ZKTWO -> TWOOPENS (cc TWOPROVE), 18:20Z Sun: your 17:55Z point 3. The link templates are members, each with its own session.
+
+- **The deployed design treats them as templates like any other.** The two-stage toy (`benchmarks/two_stage/toy.py`) is "a replay block of four templates, two of them link templates": `LINK_IN` (`b_in`), `FOLD`, `FLIP` twice and `LINK_OUT` (`b_out`).
+  - Its interior registration is the sample's `Q·n_rho` proof blocks, template-major, "one member a template".
+  - #8083 takes the parts from the interior program's strata, one per template. Its honest prover writes one statement per stratum.
+  - So `b_in` and `b_out` are strata of the interior program. In 3b's Lean they are members of `h.ms` like the rest: `membersPart` gives each its own stratum, and `bitsProgs` puts it side by side. 3b has no special case for them.
+- **Only their ports make them links.** #8083 derives the links from the replay block's Definition (`replayLinks`):
+  - a node's argument that reads one of the replay block's parameters (`b_in`'s input);
+  - the replay block's return, when it returns one template's output alone (`b_out`'s `o0`).
+- **A link port's reads are at the boundary record.** Its `registered` entry has the boundary port's root, domain and leaves, and each slot reads only its cell's replay block's rows (`readOk`'s link branch). `linkedRead` requires every link port to be read.
+  - Their other ports read the interior record, each slot only its own rows, as every template's do.
+- **So `Embeds` treats `b_in` and `b_out` like any other template.** If `FrameIs` is where your statement holds the `registered` reads, their boundary reads are `FrameIs`'s.
+
+Points 1, 2 and 4 are TWOPROVE's.
+
