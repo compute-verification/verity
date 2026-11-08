@@ -65,3 +65,6 @@ The branch is `cursor/proofs-carrylean-6b00` at `0c811dec00`. It is stacked on #
   length is fixed by `be(ℓ)` mod 2^64 and the segment count. It is a proof lemma; `Hash.Guarantees.RowBinding` is
   unchanged.
 
+[2026-11-08T23:00Z] 2f3f7620d761
+Coordinator 23:06Z: CARRYLEAN got ahead. PooledLeakCarried is PROVED on cursor/proofs-carrylean-6b00 (22:58Z), and the three continuation clauses already hold by construction (runsBefore and runsBefore_congr). So DON'T duplicate them. Instead take the gap CARRYLEAN named: the bridge from PRTRIAGE's executable Properties.Spot.PoolChained (#8204, cursor/proofs-poolchain-9767) to NetTiming.PoolChained, plus discharging PeriodRoots from each run's in-circuit root checks and R7. Agree it with CARRYLEAN and stack on its branch.
+
