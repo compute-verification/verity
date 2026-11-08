@@ -4,7 +4,11 @@
     (`uv run --with transformers ...`);
   - a cached decode against one full forward;
   - a fault at a site's honest value changes nothing, and a fault after the last layer's attention leaves every later
-    position's cache, so every later served token, as honest.
+    position's cache, so every later served token, as honest;
+  - a joint fault writing a whole group at its honest values changes nothing, and neither do boxes no honest value
+    reaches;
+  - an `Edit` of one down-projection weight matches the model with that weight changed, and a forward started from a
+    layer's residual stream (x_in) matches the full one.
 
   uv run --extra torch-cpu --with tokenizers [--with transformers] python benchmarks/leverage/check.py --model gpt2 --out DIR
 """
@@ -18,7 +22,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import LM, MODELS, Cache, Fault, fetch
+from lm import GROUP, LM, MODELS, Boxes, Cache, Edit, Fault, fetch
 from prompts import PROMPTS
 
 
@@ -88,6 +92,39 @@ def main() -> int:
     res["first_token_changed"] = [bool(lf[i, -1].argmax() != lh[i, -1].argmax()) for i in range(len(rows))]
     res["next_position_logit_diff"] = dict(zip([f"{s}{l}" for s, l, _, _ in rows], later))
     ok &= max(later[:5]) == 0.0 and later[5] > 0.0
+
+    taps = {("mlph", 2): None, ("ln1", 1): None}
+    honest = lm.forward(ids[:, t0:], pre.expand(1), taps=taps)
+    joint = []
+    for (s, l), x in taps.items():
+        g = list(range(GROUP, 2 * GROUP))
+        f = Fault.of(t0, [(s, l, g, x[0, 0, g].tolist())], dtype=torch.float32)
+        joint.append(max_abs(lm.forward(ids[:, t0:], pre.expand(1), fault=f), honest))
+    res["joint_fault_at_honest_values"] = joint
+    ok &= max(joint) < 1e-4
+
+    lm.boxes = Boxes({k: torch.full((2, lm.width(k[0])), 2.0 ** 60) for k in lm.sites()})
+    res["wide_boxes"] = max_abs(lm.forward(ids, Cache()), full)
+    res["wide_boxes_cut"] = sum(lm.boxes.cut.values())
+    lm.boxes = None
+    ok &= res["wide_boxes"] == 0.0 and res["wide_boxes_cut"] == 0
+
+    l, i, j, delta = 2, 7, 11, 0.05
+    W = lm.down_proj(l)
+    e = lm.forward(ids.expand(2, -1), Cache(), edit=Edit(l, i, j, torch.tensor([0.0, delta])))
+    w0 = float(W[i, j])
+    W[i, j] = w0 + delta
+    changed = lm.forward(ids, Cache())
+    W[i, j] = w0
+    res["edit_vs_changed_weight"] = max_abs(e[1], changed[0])
+    res["edit_zero_vs_honest"] = max_abs(e[0], full[0])
+    ok &= res["edit_vs_changed_weight"] < 1e-3 and res["edit_zero_vs_honest"] < 1e-5
+
+    k = 3
+    taps = {("resid", k - 1): None}
+    lm.forward(ids, Cache(), taps=taps)
+    res["x_in_vs_full"] = max_abs(lm.forward(None, Cache(), x_in=taps[("resid", k - 1)], first_layer=k, pos0=0), full)
+    ok &= res["x_in_vs_full"] < 1e-3
 
     res["ok"] = bool(ok)
     (a.out / "check.json").write_text(json.dumps(res, indent=1))

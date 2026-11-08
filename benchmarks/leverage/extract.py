@@ -42,7 +42,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import LM, MODELS, Cache, Fault, served_logprobs
+from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Fault, position_class, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
 
 LOGPROB_BITS = 32  # a served logprob, as the fp32 float an OpenAI-style API returns
@@ -204,13 +204,35 @@ def part_honest(lm: LM, tok, a) -> dict:
     return {"part": "honest", "states": int(H.shape[0]), "rows": rows}
 
 
-def target_row(lm: LM, site: str, l: int, j: int) -> torch.Tensor:
-    """The residual-stream direction unit j of site feeds: a row of the projection after it, or for the residual stream
-    the unit vector itself, which makes the readout the final-site attack and leaves only its contamination to read."""
+def unit_rows(lm: LM, site: str, l: int) -> torch.Tensor:
+    """(width, d): row k is the residual-stream direction unit k of site feeds per unit of its value, a row of the
+    projection after it, or for the residual stream the unit vector itself, which makes the readout the final-site
+    attack and leaves only its contamination to read."""
     if site == "resid":
-        return torch.eye(lm.spec.d)[j]
-    w = target_matrix(lm, site, l)
-    return (w[j] if lm.spec.arch == "gpt2" else w[:, j]).float()
+        return torch.eye(lm.spec.d)
+    w = target_matrix(lm, site, l).float()
+    return w if lm.spec.arch == "gpt2" else w.T
+
+
+def fault_values(spec: str, j: int, x: torch.Tensor, rms: float, hi: torch.Tensor | None,
+                 gen: torch.Generator) -> tuple[list[int], list[float]]:
+    """The coordinates and values of the fault `spec` names at unit j, x the site's honest value there: a number, a
+    multiple of the RMS ("8rms"), or under --boxes an in-range fault (reach.py's kinds): "box", "own", "scale", "codes"
+    (the last three on unit j's group)."""
+    g = list(range(j // GROUP * GROUP, (j // GROUP + 1) * GROUP))
+    if spec.endswith("rms"):
+        return [j], [float(spec[:-3]) * rms]
+    if spec == "box":
+        return [j], [float(hi[j])]
+    if spec == "own":
+        return [j], [min(E4M3_MAX * float(ue8m0_scale(x[g].abs().max())), float(hi[j]))]
+    if spec == "scale":
+        f = float(hi[j]) / E4M3_MAX / float(ue8m0_scale(x[g].abs().max()))
+        return g, (x[g] * f).tolist()
+    if spec == "codes":
+        sign = torch.randint(0, 2, (GROUP,), generator=gen).float() * 2 - 1
+        return g, (sign * hi[j]).tolist()
+    return [j], [float(spec)]
 
 
 def target_matrix(lm: LM, site: str, l: int) -> torch.Tensor:
@@ -248,26 +270,36 @@ def part_rows(lm: LM, tok, a) -> dict:
     pre, last, t0 = prefix(lm, tok, PROMPTS[0])
     taps0 = {(site, l): None for l in layers}
     lm.forward(last, pre.expand(1), taps=taps0)
+    amax = torch.load(a.boxes)["amax"] if a.boxes is not None else None
     for l in layers:
-        units = torch.randperm(width, generator=gen)[:a.units].tolist()
-        rms = float(taps0[(site, l)][0, 0].pow(2).mean().sqrt())
+        x0 = taps0[(site, l)][0, 0].float()
+        rms = float(x0.pow(2).mean().sqrt())
+        hi = lm.boxes.hi[(site, l)][int(position_class(torch.tensor(t0)))].float() if lm.boxes is not None else None
+        if a.pick == "widest":
+            by_amax = amax[f"{site}:{l}"][1].argsort(descending=True, stable=True)
+            units = by_amax[hi[by_amax].argsort(descending=True, stable=True)][:a.units].tolist()
+        else:
+            units = torch.randperm(width, generator=gen)[:a.units].tolist()
+        U = unit_rows(lm, site, l)
         for v_spec in a.values:
-            v = float(v_spec[:-3]) * rms if v_spec.endswith("rms") else float(v_spec)
+            faults, deltas = [], []
+            for j in units:
+                cs, vs = fault_values(v_spec, j, x0, rms, hi, gen)
+                faults.append((site, l, cs, vs))
+                deltas.append((torch.tensor(vs) - x0[cs]) @ U[cs])
             taps = {("final", lm.spec.layers): None}
-            z = faulted_logits(lm, pre, last, t0, [(site, l, j, v) for j in units], taps=taps)
+            z = faulted_logits(lm, pre, last, t0, faults, taps=taps)
             h = taps[("final", lm.spec.layers)][:, 0].float()
             print(f"rows {site} layer {l} value {v_spec}: {int((~torch.isfinite(z)).sum())} non-finite logits, "
                   f"{time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
             for prec in a.precisions:
                 zs = z.float().to(torch.bfloat16).float() if prec == "bf16" else z.float()
                 for bi, j in enumerate(units):
-                    tru = norm_dir(lm, target_row(lm, site, l, j))
-                    s = 1.0 if v - float(taps0[(site, l)][0, 0, j]) > 0 else -1.0
-                    best = s * (h[bi] - b) / g
-                    best = norm_dir(lm, best)
+                    tru = norm_dir(lm, deltas[bi])
+                    best = norm_dir(lm, (h[bi] - b) / g)
                     r_c = float((best - tru).pow(2).mean())
                     for m in reads:
-                        r, mi = read_row(E, g, b, zs[bi], torch.randperm(V, generator=gen)[:m], prec, s, tru, lm)
+                        r, mi = read_row(E, g, b, zs[bi], torch.randperm(V, generator=gen)[:m], prec, 1.0, tru, lm)
                         out.append((l, v_spec, prec, m, j, r_c, r, mi))
     rows = []
     groups = {}
@@ -335,7 +367,11 @@ def main() -> int:
     ap.add_argument("--row-site", default="mlph", choices=("mlph", "attnh", "resid"),
                     help="rows: the MLP's hidden units (down-projection rows), the attention context (output-projection "
                          "rows) or the residual stream (contamination only)")
-    ap.add_argument("--values", nargs="+", default=["1e6", "1e3", "64rms", "8rms"])
+    ap.add_argument("--values", nargs="+", default=["1e6", "1e3", "64rms", "8rms"],
+                    help="rows: a value, a multiple of the site's RMS, or under --boxes box, own, scale or codes")
+    ap.add_argument("--boxes", type=Path, help="clamp every read to clamp.py's calibrated boxes.pt")
+    ap.add_argument("--pick", default="random", choices=("random", "widest"),
+                    help="rows: random units, or those with the widest boxes (then the largest calibrated values)")
     ap.add_argument("--read-over-d", type=float, nargs="+", default=[1.25, 4.0], help="rows: logits read per row, over d")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--threads", type=int, default=0)
@@ -345,6 +381,8 @@ def main() -> int:
         torch.set_num_threads(a.threads)
     a.out.mkdir(parents=True, exist_ok=True)
     lm = LM(a.model)
+    if a.boxes is not None:
+        lm.boxes = Boxes.load(a.boxes)
     if a.fp4:
         q, lm.fp4_grid = nvfp4(lm.E)
         lm.E.copy_(q)
@@ -354,7 +392,8 @@ def main() -> int:
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": lm.spec.vocab, "d": lm.spec.d,
                 "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
                 "seconds": time.time() - t})
-    (a.out / f"extract-{a.part}{'-fp4' if a.fp4 else ''}.json").write_text(json.dumps(res, indent=1))
+    tag = ("-fp4" if a.fp4 else "") + ("-clamped" if a.boxes is not None else "")
+    (a.out / f"extract-{a.part}{tag}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res, indent=1))
     return 0
 
