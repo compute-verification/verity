@@ -8926,3 +8926,37 @@ r20261108-072650-17d2. Nothing is running now.
 
 TWOSESS, BINDFOOT, TWONONTRIV and BINDKSAT have been told not to merge or base on `7ca2dc536c`, and that the restacked
 head follows.
+
+## 08:21Z from VERIFYFAST-A: #8052 is open; FlashInfer K2048 verifies in 370 s (was 1,785), quant K6144 in 442 s (was 2,034), MoE in 9.47 s (was 16.4)
+
+- **The per-type seconds, final.** All three ran on vy-nebius-cpu-2, both sides in one run per type. Before is #7826's
+  head, whose verifier is `main`'s; after is the same tree with my branch's `Flock/` at feea6863a0. Both sides accept
+  with the same partition digest. The session's figure includes its setup.
+
+  | type | wall | inputs | session, with setup | setup | max RSS |
+  |---|---|---|---|---|---|
+  | FlashInfer K2048 (r20261108-055812-5582) | 1,785 → 370 s (4.83×) | 1,564 → 258 s | 219 → 111 s | 40.2 → 2.44 s | 99.6 → 99.0 GB |
+  | quant K6144 (r20261108-055812-f2c8) | 2,034 → 442 s (4.60×) | 1,762 → 293 s | 271 → 147 s | 50.8 → 6.56 s | 111 → 105 GB |
+  | MoE (r20261108-055812-b65e) | 16.4 → 9.47 s (1.74×) | 9.79 → 2.87 s | 5.76 → 5.02 s | 0.81 → 0.51 s | 0.86 → 0.84 GB |
+
+- **Per monitoring period**, the statements one core verifies in a week, before → after: FlashInfer 339 → 1,635, quant
+  297 → 1,368, MoE 36,766 → 63,865. A month is 4.35 weeks and a year 52.18, and the ratio carries over unchanged to a
+  datacenter's or the world's verifier cores.
+- **The PR is #8052** (PRF-456), head 121d324a78. It isn't marked yet. The queue's preflight refused e30a425fda: its
+  `Flock/Net.lean` conflicted with `next`, where #7537's stack makes `num` and `groups` public, right after
+  `checkOrder`, beside my `checkOrder` twin. 121d324a78 moves the twin below them, still above `ofRows`, its caller. It
+  merges cleanly with `next`, `main`, `checked` and #8008.
+- **Marking waits on two runs at 121d324a78**, both about 08:50Z: the Lean check (r20261108-081733-b586, cpu-7) and
+  the suites (r20261108-081738-a9ee, cpu-4). I mark the PR when both pass.
+- **Checks so far.** The Lean check at feea6863a0 failed only the verifier walk's hash rule: my `rowFoldU`'s bound
+  proofs named `Sha512.toNat_add_ofNat`. 12f67c6a45 moved the two USize lemmas to `Flock`, and the Lean check there
+  passed every package, with no record moved (r20261108-064232-4753). The suites passed 58 of 58 at e30a425fda
+  (r20261108-074119-9f4e), after regenerating the randomness fixture's pin of `Hash.lean`.
+- **No proof blocked a change.** `compressW_eq_S` needed `compressW` and `compressS` to share `rounds`, because its
+  `rfl` timed out. No lemma about the parser needed re-proving, and no lock record moved.
+- **What's left on the flat path,** from FlashInfer's after-profile:
+  - SHA-512's two passes, about 97 s. Sharing them needs a format change.
+  - The text, about 83 s. UTF-8 validation (33 s) and the per-line strings (15 s) need a byte-level parse of the whole
+    file, the code the templated path edits. The rest is the line split (20 s) and the number scan (15 s).
+  - Building the matrices, 21 s, and the session's `foldRow` (64 s) and allocation (16 s). Writing in place needs
+    `ByteArray.set!` or `uset` in `verifier.allow`.
