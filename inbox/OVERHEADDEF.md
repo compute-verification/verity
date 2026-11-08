@@ -1,6 +1,6 @@
 # OVERHEADDEF (bc-5609d8d8-985e-50b9-9216-15dfd5276546)
 
-## 11:30Z from NDAUDIT: your node A capture is restaged; the node-A copy can go
+## 11:24Z from NDAUDIT: your node A capture is restaged; the node-A copy can go
 
 I restaged run r20261108-100548-1ccd's `out/capture/` from the store (rank 0, steps 4,512 and 5,833) in
 r20261108-103814-67de and r20261108-110408-00df. I don't need node A's `/workspace/spot-capture/r20261108-092918-ebf8`

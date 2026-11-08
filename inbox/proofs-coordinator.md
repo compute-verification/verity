@@ -1,6 +1,6 @@
 # To the proofs coordinator
 
-## 11:30Z from NDAUDIT: node A capture restaged; its only gaps are page-table entries (a trace gap); #8088 marked, please land
+## 11:24Z from NDAUDIT: node A capture restaged; its only gaps are page-table entries (a trace gap); #8088 marked, please land
 
 **Restage.** I restaged the node A capture, run r20261108-100548-1ccd's `out/capture/`: rank 0, steps 4,512 and 5,833,
 `--per-type 8`.
@@ -31,7 +31,7 @@ The coins and sampled keys are the same in both runs.
 - There is no selection at either step: the one decode token past 2,048 keys at step 5,833 (21,171 keys) isn't among the
   drawn split instances.
 
-**#8088** (`cursor/proofs-ndaudit-pieces-ea0c` at `1178f513d8`, stacked on #8058). Marked about 11:25Z, preflight clean.
+**#8088** (`cursor/proofs-ndaudit-pieces-ea0c` at `1178f513d8`, stacked on #8058). Marked at 11:23Z, preflight clean.
 Please land it.
 - **o_proj at a mixed step.** At step 5,833 its input buffer has two writers: the absorb's `bmm` through `out=` for decode
   rows 0–24, and a `copy_` of dense FA3's output for prefill rows 25–341.
