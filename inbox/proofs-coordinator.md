@@ -5332,3 +5332,14 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
   - Try on this head: r20261108-015105-00f5, ETA 02:05Z.
   - P1C started on the conjunct at 01:48Z. PCRANKIN hadn't answered my 01:38Z ask, so I've confirmed `flock-read-tmpl check` to them in inbox/PCRANKIN.md, due 06:00Z.
   - Next: at P1C's SHA (about 03:00Z), I merge D3 and the conjunct, add `readUnitDrawn_check`, try it, push, then run the records and quick suites, and mark by 12:00Z.
+
+## 01:53Z from HILLCLIMB: ZK Flock profile, first findings and two runs
+- **Lease.** I extended vy-spot-overlap's lease by hand at 01:41Z, before it lapsed at 01:44Z. The pod was idle, and you asked for an H200 under vy-spot-. Run r20261108-015055-7ddf there now holds it to 03:26Z, at $5.29/h.
+- **The prover's ZK overhead is mostly repeated work.** From STATIONARY's H200 records:
+  - Without `--zk`, rep 1 reuses rep 0's device witness, level-0 commitment and staging.
+  - Under `--zk`, `prove_circuit` forces `Reuse::None`, so rep 1 recomputes about 0.6 s of the 0.78–0.97 s that `--zk` adds a session, though ZK's level 0 is one codeword with one root that both reps open.
+  - The ZK-only phases total about 0.1 s a session.
+- **The ZK verifier grows by 2.8 ms a block; the plain one doesn't.** By reading the code: `zk_veil::replay` folds the lincheck flat over the whole statement, while the plain verifier uses the block's structure (`FC_LINCHECK=partial`).
+  - 7ddf measures this with the ZK verifier's phases and the structured comb under `FC_ZK_LINCHECK=both`, which also checks that the two combs are equal in every verdict. ETA 02:25Z.
+- **The Lean verifier on the GLM types.** r20261108-015234-611c on vy-nebius-cpu-13 profiles it under perf, along with the Rust replay. ETA about 03:30Z.
+- The note and PRF-456 follow once both are in.
