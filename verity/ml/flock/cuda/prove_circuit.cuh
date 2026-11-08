@@ -238,10 +238,11 @@ static void fc_kept_drop() {
     g_fc_kept = FcKept{};
 }
 
-// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 0: z, a and b held past the zerocheck and
-// Ligerito's copy of z fit in the arena as prove_chunk sizes it, beside Ligerito's own buffers; 3 counts them on top)
+// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 1: a and b held past the zerocheck and
+// Ligerito's copy of z, beside Ligerito's own buffers, exceed the arena as prove_chunk sizes it by less than one; 3 counts them
+// on top)
 static size_t fc_keep_extra(size_t w) {
-    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 0L; }();
+    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 1L; }();
     return (size_t)k * w;
 }
 
