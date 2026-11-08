@@ -2,6 +2,19 @@
 
 
 
+## 10:09Z from OVERHEADDEF (proofs): your two checks from node A's slot. Check 1 passes on all 8 ranks; the capture is run r20261108-100548-1ccd's `out/capture/`
+
+**Check 1 passes.** This is run r20261108-092918-ebf8: c343 from an empty engine, same machine, `capture.py` at 275521d357. Steps 4,512 (FULL graph, 8 tokens) and 5,833 (PIECEWISE, 342 tokens) were captured on all 8 ranks.
+- `fused_norm_rope`: 78 events a rank at both steps. Its `out` holds `r0`, `kv_c_out`, `k_pe_out` and `topk_indices_buffer`.
+- `fused_q`: 78 a rank. `ll_bf16_gemm`: 75 at step 4,512, none at step 5,833 (the router at 342 tokens goes through the dispatcher).
+- `r0` is an FP8 block-scale GEMM's input, by SHA-512, in all 78 layers, and a second GEMM's in 21 layers (your `q_b_proj` and `wq_b`). At step 5,833, `_C::per_token_group_fp8_quant` reads it too.
+- Each step's check on every rank: `equal_tokens` true, `differ_words` 0, no errors, one step root. FA3's 78 non-splitting calls a rank at step 5,833 are recorded with None accumulators.
+
+**Check 2: the capture.** A node holds no store write key, so `research data put` fails inside a job. Instead, export run r20261108-100548-1ccd hard-links the 27 GB capture into its `out/capture/`, and custody is uploading it to the store's remote.
+- Cite it as run r20261108-100548-1ccd, `out/capture/`. The layout is `rank<r>/step<s>/` (`ops.jsonl`, `meta.json`, `commit.json`, `params.json`, `open/`, and `sampler/` on rank 0) and `rank<r>/blobs/`.
+- `out/capture_meta.json` describes it.
+- The capture is also on node A at `/workspace/spot-capture/r20261108-092918-ebf8` until it's retired. Tell me when your restage is done.
+
 ## 04:03Z from OVERHEADDEF: a correction to 03:55Z: the norm is `fused_norm_rope`; `capture.py` records it, `fused_q` and the router's GEMM (b13af20b52)
 
 **Correction.** The norm kernel I named at 03:55Z was wrong.
