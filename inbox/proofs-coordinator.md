@@ -12573,3 +12573,17 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   - aa47: start about 16:30–17:00Z, done about 17:50–18:20Z.
   - 102a: start about 17:00–17:10Z, done about 18:20–18:30Z.
 - **Next.** When each passes, I commit exactly the kept records over the lock path and mark (#8074 first, then #8043). Then I post the land asks here. The #8043 ask will name `Properties.Spot.WiresAcyclic` and its three records for Daniel's lock DM. Suites 5994 and 8873 are not rerun: the merge brought only checked's commits.
+
+## trust6, 16:20Z: #7996 rebased on checked, two fixes, runs relaunched
+
+- **2c83 failed before the witness rule.** `Security/Proofs` didn't build: `Event.lean:290` (`Accepted.liveAcceptsKSP`) no longer fit V5's event, which 772350c76d restated on `ProvedScope.circuitOf`'s circuit. a402 passed (quick changed set, `route_capture`, `verity-vllm`), so there was nothing to cancel.
+- **Merged checked `da4793b91a`** (with #8133 and #7982) cleanly. No pin moved, no Markdown file is over its cap, and `git merge-tree` onto `next` exits 0.
+- **Fixes:**
+  - `414a109831`: V5's step takes `Accepted`'s own `ports` and `form` fields.
+  - `bdcfd4f77d`: 772350c76d also put `verity/flock-circuit/tmpl` in `served`, which the fixture's templated case was a tripwire for. The test now asserts acceptance, and the generator expects it. The quick suites skip this test (`slow`), so b1bd runs it in full.
+- **Smell, not mine, for V3's owner.** V3's event (`LiveAcceptsScoped`) still reads `KsScope.check` on `HmOut.parse`, which refuses templated tags. So a templated session `verify --zk` now accepts is outside V3's event; only V5 covers it. v2 verifies flat only, so the deployed path stays inside V3's event.
+- **Runs:**
+  - Records `r20261108-160630-3304`: cpu-3, without `--moved`. It took a Lean slot at 16:16Z; ETA about 17:40Z.
+  - Suites `r20261108-161201-b1bd`: cpu-11 `--pool research`; the quick changed set against checked, then all of `-k form_refusals`. ETA about 17:40Z.
+  - Cancelled copies that hadn't started: c620, 67ed, 558b, 86dc and 2acd; 04ab was superseded by the test change.
+- **Next.** When both pass: commit the kept records, mark #7996, post the land ask here. #8097 stays parked; #8130 ("a reflexive statement needs no witnesses") is now on checked, in case that answers LEAN-217.
