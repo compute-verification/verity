@@ -23,7 +23,7 @@ import numpy as np
 
 from verity_vllm.records.logits_capture import LogitsCapture
 
-__all__ = ["CAPTURE", "Capture", "install", "launch", "spans", "take", "write"]
+__all__ = ["CAPTURE", "Capture", "install", "launch", "piece_rows", "spans", "take", "write"]
 
 #: a capture's record, beside its rows' files
 CAPTURE = "capture.json"
@@ -59,6 +59,42 @@ class Capture:
                 self.rows[b.req_ids[i]].append(rows[k].copy())
                 self.ids[b.req_ids[i]].append(int(ids[k]))
         return out
+
+
+def piece_rows(logits: Any, ids: Any, c: int | None = None) -> dict[str, dict[str, Any]]:
+    """A token select's pieces' rows on the logits' device, as `pipeline.interior_rows.pieces` lays them out on the host:
+    ``logits`` the n kept rows (bf16, or their int16 bits), ``ids`` the n sampled ids, ``c`` `TokenSelect_v4`'s chunk
+    (``min(CHUNK, V)``). By template, its ports' u16 words as int16: each token's V / c `TokenSelectChunk_v2` units (a
+    chunk of its row in, its first maximum above -inf and that maximum's index out, a NaN never taken), then its
+    `TokenSelectCombine_v2` unit (logits[0] and the chunks' outputs in, the token out). Refused unless the combine
+    selects every id."""
+    import torch
+
+    from verity.ml.definitions.registry.b1 import NEG_INF_BF16
+    from verity.ml.definitions.registry.dead_free import CHUNK
+    x = logits.view(torch.int16) if logits.dtype == torch.bfloat16 else logits
+    n, V = x.shape
+    c = min(CHUNK, V) if c is None else int(c)
+    if not 1 <= c <= V or V % c:
+        raise ValueError(f"{V} logits in chunks of {c} are not whole chunks")
+    k = V // c
+    f = x.view(torch.bfloat16).float()
+    f = torch.where(torch.isnan(f), float("-inf"), f).view(n * k, c)
+    idx = f.argmax(dim=1)
+    none = ~(f > float("-inf")).any(dim=1)
+    best = torch.where(none, NEG_INF_BF16 - (1 << 16), x.reshape(n * k, c).gather(1, idx[:, None])[:, 0])
+    idx = torch.where(none, 0, idx)
+    fb = best.view(torch.bfloat16).float().view(n, k)
+    j = fb.argmax(dim=1)
+    take = fb.gather(1, j[:, None])[:, 0] > x[:, 0].view(torch.bfloat16).float()
+    tok = torch.where(take, j * c + idx.view(n, k).gather(1, j[:, None])[:, 0], 0)
+    ids = torch.as_tensor(ids, device=x.device).to(torch.int64)
+    if not torch.equal(tok, ids):
+        raise ValueError(f"the chunks and combine select {tok.tolist()[:8]}..., the sampler {ids.tolist()[:8]}...")
+    i32 = idx.to(torch.int32).view(torch.int16)
+    return {f"TokenSelectChunk_v2{{C={c}}}": {"in0": x.reshape(n * k, c), "o0": best[:, None], "o1": i32.view(n * k, 2)},
+            f"TokenSelectCombine_v2{{V={V},C={c}}}": {"in0": x[:, :1], "in1": best.view(n, k), "in2": i32.view(n, 2 * k),
+                                                      "o0": ids.to(torch.int32).view(torch.int16).view(n, 2)}}
 
 
 def install(worker: Any, targets: Sequence[str]) -> int:

@@ -232,6 +232,29 @@ def test_the_interior_is_one_shared_row_member_of_its_word_rows_roots(spans):
     assert plain.public_body(0) != it.committed.public_body(0)
 
 
+def test_a_commitment_made_on_the_rows_device_registers_as_the_hosts_would(world, spans):
+    """A GPU commit hands `interior` each port's root, every row's b || c and the salts it drew: from spans that hold no
+    rows, it registers the record, ports and leaf layer the host's commitment of the rows makes under the same salts, and
+    the stream accepts it. A commitment missing a port, or with a short root, b || c or salts, is refused by name."""
+    stream, reg, first = _first(world, spans)
+    host = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
+    c = host.committed
+    device = IR.DeviceCommit(c.roots, c.bc, c.salts)
+    bare = [replace(spans[r], data={}) for r in ("r0", "r2")]
+    gpu = IR.interior(bare, N_RHO, reg.digest, first.units, row=ROW, device=device)
+    assert (gpu.record, gpu.ports, gpu.leaf_layer) == (host.record, host.ports, host.leaf_layer)
+    assert not gpu.committed.rows and IR.register(stream, first, gpu).record == host.record
+    q = next(iter(c.roots))
+    for bad, why in (({k: v for k, v in c.roots.items() if k != q}, "not the window's"),
+                     ({**c.roots, q: c.roots[q][:32]}, "a 32-byte root")):
+        with pytest.raises(ValueError, match=why):
+            IR.interior(bare, N_RHO, reg.digest, first.units, row=ROW, device=replace(device, roots=bad))
+    with pytest.raises(ValueError, match="bytes of b \\|\\| c, for its"):
+        IR.committed(c.window, replace(device, bc={**c.bc, q: c.bc[q][:-1]}))
+    with pytest.raises(ValueError, match="bytes of salts, for its"):
+        IR.committed(c.window, replace(device, salts={**c.salts, q: c.salts[q] + b"\0"}))
+
+
 def test_an_interior_registration_is_refused_by_name(world, spans):
     """Against the challenger's copies: a leaf forged after the replay (`R4-leaf-layer`, the record's leaf layer not
     the one of the bodies it released), a record not chained after the boundary (`R6-previous`), spans committed at
@@ -351,6 +374,23 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
         IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}), c)
     with pytest.raises(ValueError, match="are not whole chunks"):
         IR.pieces(s, 3)
+
+
+@pytest.mark.parametrize("V,c", [(128, None), (64, 16)])
+def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(tmp_path, V, c):
+    """`sampler_capture.piece_rows`, on the device the sampler's logits are on (CPU torch here), lays every piece's rows out
+    word for word as `pieces` does from the captured span, NaN, ±0, ±inf and ties across chunks included; ids the combine
+    doesn't select are refused."""
+    import torch
+    for s in _selects(tmp_path, V).values():
+        ids = s.data["outs"][f"out.{SAMPLED_MEMBER}"].view("<u4")[:, 0].astype(np.int64)
+        logits = torch.from_numpy(s.data["rows"]["in0"].view(np.int16).copy()).view(torch.bfloat16)
+        got = SC.piece_rows(logits, torch.from_numpy(ids), c)
+        for piece in IR.pieces(s, c):
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in piece.data[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in got[piece.member.template].items()} == want
+        with pytest.raises(ValueError, match="the chunks and combine select"):
+            SC.piece_rows(logits, torch.from_numpy(ids ^ 1), c)
 
 
 def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piece(tmp_path):

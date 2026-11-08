@@ -24,7 +24,8 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   under the window ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and the
   replay sample, so every port's domain binds which replay block each cell of units is; the challenger derives the same
   ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
-  replay Definition.
+  replay Definition. A commitment made on the replayed rows' device (`DeviceCommit`: a GPU commit's roots, every row's
+  b || c and its salts) registers in place of committing the rows on the host (`committed`).
 * `register`: the record on the two-stage stream after its first stage.
 
 A `span` reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
@@ -355,19 +356,53 @@ class Interior:
     entries: list[list[list[list[Any]]]]
 
 
+@dataclass(frozen=True)
+class DeviceCommit:
+    """An interior commitment made on the device the replayed rows are on (a GPU commit), by port of `interior_ports`: its
+    root, every row's b || c, and the salt each row was hashed under, drawn as `interior` draws them. The rows never reach
+    the host."""
+    roots: Mapping[str, bytes]
+    bc: Mapping[str, bytes]
+    salts: Mapping[str, bytes]
+
+
+def _refs(m: CS.Member, ports: int) -> np.ndarray:
+    return np.tile(np.arange(m.n, dtype=np.int64)[:, None], (1, ports))
+
+
+def committed(window: CS.Binding, device: DeviceCommit) -> CS.Committed:
+    """``window``'s commitment from ``device``, as `ml.windows.rows.commit` would make it from the rows under the same salts,
+    without its rows (pass 2 replays the sampled ones). Refused unless it holds every port of the window, each a 64-byte root
+    and one b || c and one salt a leaf."""
+    want = {m.port(p): (m, p, n) for m in window.members for p, n in CS.port_leaves(m).items()}
+    if set(device.roots) != set(want) or set(device.bc) != set(want) or set(device.salts) != set(want):
+        raise ValueError(f"a device commit of ports {sorted(device.roots)[:4]}..., not the window's {sorted(want)[:4]}...")
+    for q, (_m, _p, n) in want.items():
+        why = [w for w, bad in ((f"a {len(device.roots[q])}-byte root", len(device.roots[q]) != 64),
+                                (f"{len(device.bc[q])} bytes of b || c", len(device.bc[q]) != n * CS.BC_BYTES),
+                                (f"{len(device.salts[q])} bytes of salts", len(device.salts[q]) != n * CS.SALT_BYTES)) if bad]
+        if why:
+            raise ValueError(f"{q}: a device commit of {', '.join(why)}, for its {n} leaves")
+    return CS.Committed(window, {q: bytes(device.roots[q]) for q in want},
+                        {q: window.domain(q, m.schema(p), n) for q, (m, p, n) in want.items()},
+                        {q: bytes(device.bc[q]) for q in want}, {q: bytes(device.salts[q]) for q in want}, {},
+                        {"device": True}, {k: _refs(m, len(m.all_rows)).astype(np.uint32) for k, m in enumerate(window.members)})
+
+
 def _layout(m: CS.Member) -> tuple[Any, ...]:
     return m.template, m.rows, m.outs, m.schemas
 
 
 def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str, sample: Sequence[int], *, row: str,
              replay: str | None = None, previous: str | None = None, kind: str = "served",
-             salt_key: bytes | None = None) -> Interior:
+             salt_key: bytes | None = None, device: DeviceCommit | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it), committed template-major and registered after ``previous`` (the boundary registration's
     digest ``boundary`` by default) under the window ``{kind, run, row, interior: true}``: ``row`` the served workload's
     row, ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS; ``salt_key``: tests only, the salts
-    derived from it (`ml.windows.rows.commit`)."""
+    derived from it (`ml.windows.rows.commit`). ``device``: the commitment made on the rows' device (`committed`), registered
+    in place of committing the spans' rows, which it never reads."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -379,14 +414,18 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         raise ValueError("the spans' units are not the same templates' in one layout and one order")
     window = interior_window([s.member for s in per[0]], n_rho, boundary, sample)
     ports, cells = CS.expected_ports(window), _cells(window.members, n_rho)[1]
-    data = []
-    for t, (m, n) in enumerate(zip(window.members, cells, strict=True)):
-        padded = [p[t].padded(n) for p in per]
-        d: dict[str, Any] = {k: {q: np.concatenate([x[k][q] for x in padded]) for q in padded[0][k]} for k in ("rows", "outs")}
-        d["refs"] = np.tile(np.arange(m.n, dtype=np.int64)[:, None], (1, len(m.rows)))
-        data.append(d)
-    fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
-    c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
+    if device is not None:
+        c = committed(window, device)
+    else:
+        data = []
+        for t, (m, n) in enumerate(zip(window.members, cells, strict=True)):
+            padded = [p[t].padded(n) for p in per]
+            d: dict[str, Any] = {k: {q: np.concatenate([x[k][q] for x in padded]) for q in padded[0][k]}
+                                 for k in ("rows", "outs")}
+            d["refs"] = _refs(m, len(m.rows))
+            data.append(d)
+        fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
+        c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
     provenance = {"row": row, "interior": True, **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R)
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
@@ -400,5 +439,5 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["Interior", "Replay", "Span", "captured", "interior", "interior_ports", "interior_run", "interior_window", "pieces",
-           "register", "span"]
+__all__ = ["DeviceCommit", "Interior", "Replay", "Span", "captured", "committed", "interior", "interior_ports", "interior_run",
+           "interior_window", "pieces", "register", "span"]
