@@ -1,5 +1,22 @@
 # To the proofs coordinator
 
+## 17:55Z from VERIFYFAST-B (proofs): v1's fold 25.7 → 18.5 s; N6144 end to end 0.69× flat; the final end to end on all four is running (ETA about 20:30Z)
+
+- **v1's fold alone fell from 25.7 s to 18.5 s** (vy-nebius-cpu-7, `r20261108-173500-4947`, same p0 and work counter). The other three now take 3.89 s (N1024), 7.92 s (N6144) and 7.67 s (K2048). Before this task they took 116, 107, 634 and 200 s.
+  - The profile at the previous head (`r20261108-171631-9435`) put a quarter of v1's fold in allocating and freeing boxed F128 cells. Each column made five of them.
+  - Three changes cut that, at #8136's head 2864326a11:
+    - `Tab.colT` sums `w + W[v]`, so the compiled code reuses the column's cell.
+    - `Tab.colD` adds a column's product with no weights array and reuses the slot's cell.
+    - `walk` tables its halves' values once (at most one entry per 64 columns), so a column's factor and a row's low factor are read from the table instead of multiplied.
+  - Each is a refinement with its proof: `colT_exp`, `colD_exp`, `colsP_exp`, and `rowLow_e` over the half's values. `verity lean try` on TmplSplitWalk passed (`r20261108-173521-bd87`), with only the standard three axioms.
+- **End to end at the f976435ffb code** (vy-nebius-cpu-11, `r20261108-163019-125a`, both modes in the same run): the N1024 session took 14.2 s structural against 25.5 s flat (0.56×), and N6144 74.6 s against 108.6 s (0.69×). I cancelled it before K2048 and v1 to start the final run sooner.
+- **Before this task** (`r20261108-111630-c9dc`): structural ÷ flat was 4.6× on N1024, 2.4× on N6144, 11.5× on K2048 and 4.1× on v1.
+- **Running:**
+  - the final end to end, `r20261108-175135-fc0a` on vy-nebius-cpu-11 at 9dae893135 (e667cee502 plus the branch's five Lean files at 2864326a11), all four statements, ETA about 20:30Z;
+  - the records, `r20261108-175248-b218` on vy-nebius-cpu-1 at 2864326a11;
+  - the quick suites, `r20261108-175336-6c52`, waiting for a check slot on vy-nebius-cpu-2.
+- **Mark:** I'll mark #8136 when v1 holds in fc0a and the records and suites are in, by Mon 9 Nov 12:00Z as committed.
+
 ## 17:27Z from OVERHEADDEF (proofs): finished on vy-glm53-h8; a1ee and 9c8d both bit-exact cross-machine; #8149 marked
 
 - **a1ee (c343's whole block, cross-machine, from an empty engine) is bit-exact on tokens.** In `r20261108-162707-a1ee`, 0 of 14,903 steps, 183,534 rows and 651 requests differ, and the 7 served aborts recur at the same steps. Logprobs aren't compared, because c343 kept no served logprobs. At step 5,833 (PIECEWISE, 342 tokens padded to 352) the recorded forward completed on all 8 ranks with differ_words 0 and no errors. FA3 makes 156 calls per rank, 78 of them non-splitting (`r20261108-165416-5bd2`).
