@@ -207,13 +207,14 @@ def rootDef (V H : Nat) (defs : Array Tmpl.Def) : Tmpl.Def :=
          segs := ((inputs V H L i).map fun r => ({ len := 1, at_ := r, step := 0, reps := 1, rstride := 0 } : Tmpl.Seg)).toArray }
         : Tmpl.Call)).toArray }
 
-/-- **The read's template** for a table of `V` rows of `H` 16-bit words: the parts' Definitions, then the root. -/
+/-- **The read's template** for a table of `V` rows of `H` 16-bit words: the parts' Definitions, then the root. Its
+outputs are `H + 1` ports of 16 bits, one output leaf each: the row's words, then the verdict in its port's low bit. -/
 def readTmpl (V H : Nat) : Tmpl.Tmpl :=
   let defs := partDefs V H
   let L := layout V H defs
   { name := s!"EmbeddingRead_v1(V={V},H={H})", root := ROOT,
     inGroups := #[⟨0, L.inW, portBits V H⟩],
-    outGroups := #[⟨L.oStart / WORD, L.outW, #[16 * H, 16]⟩],
+    outGroups := #[⟨L.oStart / WORD, L.outW, Array.replicate (H + 1) 16⟩],
     defs := defs.push (rootDef V H defs) }
 
 /-- A port group's fields. -/

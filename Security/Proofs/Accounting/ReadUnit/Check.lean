@@ -55,12 +55,13 @@ theorem unrolled_outGroups {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.t
   obtain ⟨-, -, -, -, -, -, ho, -⟩ := Flock.Net.ofRows_ok hn
   exact ho
 
-theorem checked_outCol {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
-    (t.outGroups.getD 0 default).col = (lay V H).oStart / Flock.WORD := by
+theorem checked_outGroup {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
+    groupKey (t.outGroups.getD 0 default) =
+      ((lay V H).oStart / Flock.WORD, (lay V H).outW, Array.replicate (H + 1) 16) := by
   have h := congrArg (fun a : Array (ℕ × ℕ × Array ℕ) => a[0]?) hc.outG
   simp only [Array.getElem?_map] at h
   have hr0 : (readTmpl V H).outGroups[0]? =
-      some ⟨(lay V H).oStart / Flock.WORD, (lay V H).outW, #[16 * H, 16]⟩ := rfl
+      some ⟨(lay V H).oStart / Flock.WORD, (lay V H).outW, Array.replicate (H + 1) 16⟩ := rfl
   rw [hr0, Option.map_some] at h
   rw [Array.getD_eq_getD_getElem?]
   cases hg : t.outGroups[0]? with
@@ -68,7 +69,23 @@ theorem checked_outCol {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
   | some g =>
     rw [hg, Option.map_some, Option.some.injEq] at h
     rw [Option.getD_some]
-    exact congrArg Prod.fst h
+    exact h
+
+theorem checked_outCol {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
+    (t.outGroups.getD 0 default).col = (lay V H).oStart / Flock.WORD :=
+  congrArg Prod.fst (checked_outGroup hc)
+
+theorem checked_outPorts {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
+    (t.outGroups.getD 0 default).bits.size = H + 1 :=
+  (congrArg (fun p : ℕ × ℕ × Array ℕ => p.2.2.size) (checked_outGroup hc)).trans Array.size_replicate
+
+/-- **The unrolled unit returns `H + 1` outputs**: its output group's ports, the row's `H` words and then the verdict's
+word, which `ExecCheck`'s `leavesOut` makes each copy's output leaves where the unit returns the outputs. -/
+theorem unrolled_outPorts {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
+    (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true) :
+    ((Flock.HmOut.unrolled ct).unit.outGroups.getD 0 default).bits.size = H + 1 := by
+  rw [unrolled_outGroups ht hsz]
+  exact checked_outPorts (checked_of_check hcheck)
 
 theorem lay_oStart_dvd (V H : ℕ) : (lay V H).oStart / Flock.WORD * Flock.WORD = (lay V H).oStart := by
   refine Nat.div_mul_cancel ?_
