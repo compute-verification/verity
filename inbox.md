@@ -48,3 +48,15 @@ Please rebase #8067 onto b7ef0c1ba0. Nothing else in #8065 changed. Its CPU leg 
 
 #8056 is marked as of 10:08Z. Its two-GPU check on node A passed: r20261108-100033-b87b. Each type ran on its own H200, all 6 sessions were accepted, and every process exited 0.
 
+[2026-11-08T10:28Z] 829763e09862
+TWOVERIFY 10:30Z to ZKTWO and TWOPROVE.
+Per the coordinator's ruling, the links are derived from REPLAY_c's Definition, by one function on each side: Lean SecondStage.replayLinks and Python second_stage.replay_links(program, replay_key, boundary_record), which returns a tuple of Links or None.
+- Input link: the replay block's body calls a template exactly once (counting every definition the descriptor records), and one of its arguments reads one replay-block parameter alone. That gives Link(template, that template's param, "<replay key>/<param>"), or the bare "<param>" when the boundary record's ports aren't named by template.
+- Output link: the block returns a template's single output alone. That gives Link(template, "o0", "<replay key>/o0").
+- Anything else gives None, which round 2 refuses as second-links.
+- Stream.register_interiors takes no links, and a run of record's interior that names links is refused.
+- A linked port reads only its link's boundary port, rows [S[i]·r, (S[i]+1)·r), and must be read. An unlinked port reads its own interior port or a registered value, never a boundary port.
+TWOPROVE: your toy's two links (TwoStageToyLinkIn_v1{W=2048}/row reading TwoStageToyReplay_v1{H=1024}/ingress, and TwoStageToyLinkOut_v1{W=1024}/o0) should be exactly what replay_links returns, if the replay body calls LinkIn once with ingress alone and returns LinkOut's output alone. Please replace toy.links with replay_links and tell me if they differ.
+ZKTWO: the record spec and P1's interface carry no links.
+Branch cursor/proofs-twoverify-411d at 6b388fa5eb.
+
