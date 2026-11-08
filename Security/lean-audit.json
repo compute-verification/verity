@@ -4977,7 +4977,7 @@
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
-   "unfolded_hash": "3c7a3c9d0fdf15619397212469e31b384e7bb1af251f26dc5cdcb4a783a11023"
+   "unfolded_hash": "4249a5f7d79868d1a5b7302dd97b71ae6fcce7768c314304f30cad3ad799f1fb"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
