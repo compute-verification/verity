@@ -10,12 +10,6 @@ runs, under the same names in `NetworkCertifier.WindowCharge`, on `NetworkCertif
 core only: a bin is `AdviceV1.bitlen` where the reference reads Mathlib's `Nat.size`, and `charges` takes the windows as
 a list where the reference takes them as a function on `Fin W`. `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`)
 proves `charges` equal to the reference's.
-
-**What is left.** `ChargeCount_v2` doesn't count the length terms. While advice v1 sends each request's output_len and
-finish (the registration's `send_lengths`, on until a proof holds the length rule), they go as a plain tail after the
-segment of the window the request's body lands in: output_len in `⌈log2(max_tokens + 1)⌉` bits, then finish in 1.
-`window` charges the segment alone, so it undercounts each such window by those bits, about 9 a request, until the
-length rule is proved and the tail goes.
 -/
 
 @[expose] public section
@@ -35,6 +29,9 @@ def INDEX_CAP : Nat := 2 ^ 24
 
 /-- `ZIG_CAP`. -/
 def ZIG_CAP : Nat := 2 * INDEX_CAP + 1
+
+/-- `MT_CAP`. -/
+def MT_CAP : Nat := 2 ^ 32 - 1
 
 /-- `_CHUNK`. -/
 def CHUNK : Nat := 15
@@ -93,12 +90,13 @@ structure Carry where
   pos : Nat
   rank : Nat
 
-/-- One window's advice: its decisions, its hits' values and its order entries `(p, r)`, each of the slots that hold
-one, in order. -/
+/-- One window's advice: its decisions, its hits' values, its order entries `(p, r)` and its length terms
+`(max_tokens, output_len)`, each of the slots that hold one, in order. -/
 structure Window where
   ds : List Bool
   hits : List Nat
   order : List (Nat × Nat)
+  lens : List (Nat × Nat)
 
 /-- The decisions' symbols, and the carry after them. -/
 def decSyms : AdviceV1.Carry → List Bool → Option (List Sym × AdviceV1.Carry)
@@ -133,22 +131,29 @@ def syms (bk : Book) (N H O : Nat) (cy : Carry) (x : Window) : Option (List Sym 
           (hs ++ (binned bk.resumes 0 0 ++ (binned bk.nOrder (countHi O) x.order.length ++
             (e.1 ++ binned bk.lag 0 0)))))), ⟨d.2, e.2.1, e.2.2⟩)
 
-/-- One window's charge (`reference_window`, `ChargeCount_v2{N, H, O}`), and the next window's carry. -/
-def window (bk : Book) (N H O : Nat) (cy : Carry) (x : Window) : Option (Nat × Carry) :=
-  if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧ cy.rank ≤ INDEX_CAP + 1 then
-    (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).map fun L => (L, q.2)
+/-- The length terms' tail (`length_bits`): each term an output_len in `bitlen m` bits and a finish in 1. -/
+def tailBits : List (Nat × Nat) → Option Nat
+  | [] => some 0
+  | t :: ts => if t.1 ≤ MT_CAP ∧ t.2 < 2 ^ bitlen t.1 then (tailBits ts).map fun b => bitlen t.1 + 1 + b else none
+
+/-- One window's charge (`reference_window`, `ChargeCount_v2{N, H, O, L}`), and the next window's carry. -/
+def window (bk : Book) (N H O L : Nat) (cy : Carry) (x : Window) : Option (Nat × Carry) :=
+  if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
+      cy.rank ≤ INDEX_CAP + 1 then
+    (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).bind fun c =>
+      (tailBits x.lens).bind fun t => if c + t < 2 ^ AdviceV1.CW then some (c + t, q.2) else none
   else none
 
 /-- A run's charges: each window's, the carry passed along. -/
-def session (bk : Book) (N H O : Nat) : Carry → List Window → Option (List Nat)
+def session (bk : Book) (N H O L : Nat) : Carry → List Window → Option (List Nat)
   | _, [] => some []
-  | cy, x :: ws => (window bk N H O cy x).bind fun p => (session bk N H O p.2 ws).map fun ls => p.1 :: ls
+  | cy, x :: ws => (window bk N H O L cy x).bind fun p => (session bk N H O L p.2 ws).map fun ls => p.1 :: ls
 
 /-- The session's first carry (`first_carry`). -/
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- The run's charges per window, from the session's first carry. -/
-def charges (bk : Book) (N H O : Nat) (ws : List Window) : Option (List Nat) :=
-  session bk N H O bk.first ws
+def charges (bk : Book) (N H O L : Nat) (ws : List Window) : Option (List Nat) :=
+  session bk N H O L bk.first ws
 
 end NetworkCertifier.WindowCharge
