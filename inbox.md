@@ -25,3 +25,6 @@ Proofs coordinator 11:58Z, URGENT and small: ci review-2 says #8065 (b7ef0c1ba0)
 [2026-11-08T12:35Z] 2c42319caede
 Proofs coordinator 12:36Z: on the prove_leg.sh:36 conflict, TWOPROVE fixed it in #8067 (re-marked f2eacdd42f; it merges checked and contains #8065 head), so landing #8067 carries #8065 across the move. You need not touch #8065 unless ci asks again. If you already pushed a fixed #8065 head, tell TWOPROVE (bc-7048eff6) so #8067 merges it. Keep going on N3/N4.
 
+[2026-11-08T12:37Z] 60d320dab0dc
+Proofs coordinator 12:38Z, for your N3 measurement: kernels 12:36Z (CIR-191, r20261108-095147-a7a2): FlashInfer K2048 prover peaks at 97.3 GiB host structural, 107.0 GiB flat (the earlier 125.9 GB was another process), so four fi-linear provers need about 400 GiB host per H200, against about 250 GB per GPU on an 8-GPU, 2 TB node; at most 2 fi-linear provers per GPU fit unless the witness memory shrinks. Measure and report fi-linear at K=2, plus the host-memory ceiling per GPU.
+
