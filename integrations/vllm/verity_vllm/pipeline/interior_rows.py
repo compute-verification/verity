@@ -43,7 +43,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.spot.one_stage import registration as R
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER, token_select_chunk_bests
 from verity.ml.definitions.registry.dead_free import CHUNK
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
@@ -52,7 +52,6 @@ from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex,
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.predict.window_rows import chunk_bests
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.logits_capture import LogitsCapture
 
@@ -279,7 +278,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
     logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`serving_rows.unit_member`). The chunks' outputs are computed here (`window_rows.chunk_bests`), and the combine's must
+    (`serving_rows.unit_member`). The chunks' outputs are computed here (`numerics.rows.token_select_chunk_bests`), and the combine's must
     be ``s``'s tokens, or nothing is committed.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs
@@ -288,7 +287,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
         raise ValueError(f"{s.member.template}: {V} logits in chunks of {c} are not whole chunks, and a narrower last chunk "
                          "is a third template")
     n, k, x = s.n, V // c, s.data["rows"][port]
-    best, idx = chunk_bests(x.reshape(n * k, c))
+    best, idx = token_select_chunk_bests(x.reshape(n * k, c))
     tok, want = _combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
     if not np.array_equal(tok, want):
         raise ValueError(f"request {s.rid}: its chunks and combine select {tok.tolist()[:8]}..., its span {want.tolist()[:8]}...")

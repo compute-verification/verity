@@ -23,6 +23,8 @@ import numpy as np
 
 from verity_vllm.records.logits_capture import LogitsCapture
 
+__all__ = ["CAPTURE", "Capture", "install", "launch", "spans", "take", "write"]
+
 #: a capture's record, beside its rows' files
 CAPTURE = "capture.json"
 
@@ -94,7 +96,7 @@ def launch(rid: str, steps: Sequence[Mapping[str, Any]]) -> str:
 
 
 def spans(takes: Sequence[Mapping[str, Any]], steps: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-    """`write_capture`'s spans from every rank's `take` and the replay's own step trace: each target's rows from rank 0,
+    """`write`'s spans from every rank's `take` and the replay's own step trace: each target's rows from rank 0,
     held to every other rank's that sampled it, cut to the tokens its steps emitted (``emitted``), each with its step."""
     at: dict[str, list[int]] = {}
     for s in steps:

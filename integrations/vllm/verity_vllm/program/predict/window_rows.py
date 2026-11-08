@@ -50,9 +50,8 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.numerics.rows import ROWS
+from verity.ml.definitions.numerics.rows import ROWS, token_select_chunk_bests
 from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
@@ -124,21 +123,9 @@ def _be_words(b: bytes) -> np.ndarray:
     return np.frombuffer(bytes(b), ">u8").astype("<u8").view("<u2")
 
 
-def chunk_bests(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`TokenSelectChunk_v2{C}` on each row of bf16 words ``x`` (its last axis): (best, its index), the first maximum above
-    -inf, a NaN never taken, and (-inf, 0) where there is none."""
-    x = np.asarray(x, dtype=np.uint16)
-    f = (x.astype(np.uint32) << 16).view(np.float32)
-    f = np.where(np.isnan(f), -np.inf, f)
-    i = np.argmax(f, axis=-1)
-    none = ~(f > -np.inf).any(axis=-1)
-    best = np.take_along_axis(x, i[..., None], axis=-1)[..., 0]
-    return np.where(none, np.uint16(NEG_INF_BF16), best).astype(np.uint16), np.where(none, 0, i)
-
-
 def chunk_best(x: np.ndarray) -> tuple[int, int]:
-    """`chunk_bests` of one chunk."""
-    best, i = chunk_bests(x)
+    """`TokenSelectChunk_v2{C}` on one chunk of bf16 words (`numerics.rows.token_select_chunk_bests`)."""
+    best, i = token_select_chunk_bests(x)
     return int(best), int(i)
 
 
