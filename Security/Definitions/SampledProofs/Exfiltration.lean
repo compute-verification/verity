@@ -1,5 +1,6 @@
 module
 
+public import Definitions.SampledProofs.Coins
 public import Mathlib.Analysis.Complex.Exponential
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
@@ -16,14 +17,14 @@ window's values; the commitment fixes which units are wrong, and so what the win
 run. Then the challenger flips the window's coins, live and fresh, and a sampled incorrect proof block fails visibly. The egress of
 a window leaves before its verdict (detection, not prevention), and the deployment halts at the first failure.
 
-This file is the vocabulary for that game, over a finite coin space with weights `μ`, with no measure theory.
+This file is the vocabulary for that game, over a finite coin space with a distribution `μ`, with no measure theory.
 
 * A `Strategy` is adaptive: at a window it has seen every earlier window's coins (the history `h`, newest first). It
   fixes the window's leak `leak h` (in a population, the egress slots in its incorrect proof blocks' cones, `Dataflow.coneEgress`)
   and the coins on which the window escapes detection, `esc h`. Neither depends on the window's own coin: that is what
   live coins, flipped after the commitment, mean.
 * `ex μ n F` and `prob μ n E` are the expectation and the probability over `n` windows' coins, each window's coin flipped
-  independently from `μ`: an explicit sum over coin paths with product weights.
+  independently from `μ` (`iid μ n`). `prob` is core's probability, `Verity.Game.prPMFReal`.
 * `Strategy.cum` is what leaves up to and including the first detection (its egress left before its verdict);
   `Strategy.cumPrev` what leaves when a caught window's egress is withheld (egress waits for the verdict);
   `Strategy.cumUpTo j` what leaves before the `j`-th detection, for a deployment that tolerates `j - 1` failures.
@@ -37,10 +38,10 @@ The named assumptions:
   from `ρ`) succeeds with probability above `g`. It is what trusted training buys: a model with a trigger that makes its
   honest outputs carry weight bits fails it.
 
-`indepSample a` is the sample that catches unit `u` independently with probability `a u`, and `acceptCoins B` its coins that
-miss the wrong set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
-slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
-detection.
+`indepSample p` is the sample that catches unit `u` independently, when its coin `p u` comes up `true`, and
+`acceptCoins B` its coins that miss the wrong set `B`. A deployment's egress is its honest egress with a deviation
+(`Dev`, `Dev.apply`) applied: the slots that differ, and their values. `changedThrough` collects the slots each window
+changes, through the first detection.
 
 When a guarantee states these, they move to a `Definitions/SampledProofs/Assumptions` module with their records.
 -/
@@ -61,17 +62,14 @@ structure Strategy (Ω : Type) where
 
 variable {Ω : Type}
 
-/-- The weight of a path of coins, one per window, each sampled independently from `μ`. -/
-def pathWeight (μ : Ω → ℝ) {n : ℕ} (cs : Fin n → Ω) : ℝ := ∏ i, μ (cs i)
+/-- The expectation of `F` over `n` windows' coins, each flipped independently from `μ`. -/
+noncomputable def ex [Fintype Ω] (μ : PMF Ω) (n : ℕ) (F : (Fin n → Ω) → ℝ) : ℝ :=
+  ∑ cs, (iid μ n cs).toReal * F cs
 
-/-- The expectation of `F` over `n` windows' coins. -/
-noncomputable def ex [Fintype Ω] (μ : Ω → ℝ) (n : ℕ) (F : (Fin n → Ω) → ℝ) : ℝ :=
-  ∑ cs, pathWeight μ cs * F cs
-
-open Classical in
-/-- The probability of the event `E` over `n` windows' coins. -/
-noncomputable def prob [Fintype Ω] (μ : Ω → ℝ) (n : ℕ) (E : (Fin n → Ω) → Prop) : ℝ :=
-  ex μ n fun cs => if E cs then 1 else 0
+/-- The probability of the event `E` over `n` windows' coins, each flipped independently from `μ`: core's
+`Verity.Game.prPMFReal` under their law `iid μ n`. -/
+noncomputable abbrev prob [Fintype Ω] (μ : PMF Ω) (n : ℕ) (E : (Fin n → Ω) → Prop) : ℝ :=
+  Verity.Game.prPMFReal (iid μ n) E
 
 /-- **What leaves up to and including the first detection**, over `n` windows from the history `h`: each window's leak,
 until the first window whose coin catches an incorrect proof block. That window's egress left before its verdict. -/
@@ -94,27 +92,24 @@ noncomputable def Strategy.cumUpTo [DecidableEq Ω] (A : Strategy Ω) : (n j : �
   | n + 1, j + 1, h, cs => A.leak h + if cs 0 ∈ A.esc h then A.cumUpTo n (j + 1) (cs 0 :: h) (Fin.tail cs)
       else A.cumUpTo n j (cs 0 :: h) (Fin.tail cs)
 
-/-- The window's coins are flipped from a probability distribution. -/
-def IsDist [Fintype Ω] (μ : Ω → ℝ) : Prop := (∀ c, 0 ≤ μ c) ∧ ∑ c, μ c = 1
-
 /-- **Detection pressure** (`DetectionPressure`): whatever the prover has seen, a window whose egress leaks `ℓ` escapes
 detection with probability at most `exp (-κ ℓ)`. Live coins and a sample that includes each unit with probability at
 least proportional to its cone egress give it. -/
-def DetectionPressure (μ : Ω → ℝ) (κ : ℝ) (A : Strategy Ω) : Prop :=
-  ∀ h, ∑ c ∈ A.esc h, μ c ≤ Real.exp (-(κ * A.leak h))
+def DetectionPressure (μ : PMF Ω) (κ : ℝ) (A : Strategy Ω) : Prop :=
+  ∀ h, Verity.Game.prPMFReal μ (· ∈ A.esc h) ≤ Real.exp (-(κ * A.leak h))
 
 /-- Every window leaks between `0` and `ℓ`: `ℓ` is the most one window's egress can carry beyond the honest run. -/
 def LeakBounded (ℓ : ℝ) (A : Strategy Ω) : Prop := ∀ h, 0 ≤ A.leak h ∧ A.leak h ≤ ℓ
 
-open Classical in
 /-- **Trusted model** (`TrustedModel`): with the weights sampled from `ρ`, no guess of the target `S` from the honest
 egress `hon` succeeds with probability above `g`. A trigger that makes the honest model emit weight bits fails it. -/
-def TrustedModel {W H T : Type} [Fintype W] (ρ : W → ℝ) (S : W → T) (hon : W → H) (g : ℝ) : Prop :=
-  ∀ γ : H → T, ∑ w, ρ w * (if γ (hon w) = S w then 1 else 0) ≤ g
+def TrustedModel {W H T : Type} (ρ : PMF W) (S : W → T) (hon : W → H) (g : ℝ) : Prop :=
+  ∀ γ : H → T, Verity.Game.prPMFReal ρ (fun w => γ (hon w) = S w) ≤ g
 
-/-- The sample that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether a wrong
-`u` would be caught (sampled, and not lucky). -/
-def indepSample {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
+/-- The sample that catches each unit `u` independently, when its coin `p u` comes up `true`: a coin says, per unit,
+whether a wrong `u` would be caught (sampled, and not lucky). -/
+noncomputable abbrev indepSample {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) : PMF (U → Bool) :=
+  piLaw p
 
 /-- The coins of the independent sample on which the wrong set `B` escapes: none of its units is caught. -/
 def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=

@@ -54,25 +54,25 @@ theorem maxRule_le {I U : Type} {claims : Finset I} {κ : I → ℝ} {harm : I �
 leak `leak i h`, at most its harm over the window's wrong set `B h`. A sample whose window escapes with probability at
 most `Π_{u ∈ B h} (1 - a u)`, with catch probabilities `a u` at least the max rule, meets `DetectionPressure (κ i)` for
 every claim. -/
-theorem pressure_maxRule {Ω U I : Type} [Fintype Ω] {μ : Ω → ℝ} {claims : Finset I} {κ : I → ℝ}
+theorem pressure_maxRule {Ω U I : Type} {μ : PMF Ω} {claims : Finset I} {κ : I → ℝ}
     (hκ : ∀ i ∈ claims, 0 ≤ κ i) (harm : I → U → ℝ) (leak : I → List Ω → ℝ) (esc : List Ω → Finset Ω)
     (B : List Ω → Finset U) (a : U → ℝ) (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hmax : ∀ u, maxRule claims κ harm u ≤ a u)
     (hleak : ∀ i ∈ claims, ∀ h, leak i h ≤ ∑ u ∈ B h, harm i u)
-    (hesc : ∀ h, ∑ c ∈ esc h, μ c ≤ ∏ u ∈ B h, (1 - a u)) :
+    (hesc : ∀ h, Verity.Game.prPMFReal μ (· ∈ esc h) ≤ ∏ u ∈ B h, (1 - a u)) :
     ∀ i ∈ claims, DetectionPressure μ (κ i) ⟨leak i, esc⟩ := fun i hi =>
   pressure_of_sample (hκ i hi) ⟨leak i, esc⟩ B (harm i) a ha
     (fun u => (le_maxRule hi κ harm u).trans (hmax u)) (hleak i hi) hesc
 
 /-! ## The union bound -/
 
-variable {Ω : Type} [Fintype Ω] {μ : Ω → ℝ}
+variable {Ω : Type} [Fintype Ω] {μ : PMF Ω}
 
 open Classical in
 /-- **The union bound**: some event of a family happens with probability at most the sum of their probabilities. -/
-theorem prob_exists_le {I : Type} (hμ : ∀ c, 0 ≤ μ c) (n : ℕ) (s : Finset I) (E : I → (Fin n → Ω) → Prop) :
+theorem prob_exists_le {I : Type} (n : ℕ) (s : Finset I) (E : I → (Fin n → Ω) → Prop) :
     prob μ n (fun cs => ∃ i ∈ s, E i cs) ≤ ∑ i ∈ s, prob μ n (E i) := by
-  unfold prob
-  calc ex μ n _ ≤ ex μ n (fun cs => ∑ i ∈ s, if E i cs then (1 : ℝ) else 0) := ex_mono hμ fun cs => by
+  simp only [prob_eq_ex]
+  calc ex μ n _ ≤ ex μ n (fun cs => ∑ i ∈ s, if E i cs then (1 : ℝ) else 0) := ex_mono fun cs => by
           split_ifs with h
           · obtain ⟨i, hi, he⟩ := h
             refine le_trans (le_of_eq ?_) (single_le_sum (f := fun j => if E j cs then (1 : ℝ) else 0)
@@ -88,24 +88,24 @@ theorem prob_exists_le {I : Type} (hμ : ∀ c, 0 ≤ μ c) (n : ℕ) (s : Finse
 /-- **Every claim's bound through the first detection, at once.** Under one sample and one halt, each claim with
 detection pressure `κ i ≥ 0` and per-window leak at most `ℓ i` keeps what it leaks through the first detection below
 `x i`, all together, except with probability at most `Σ_i exp (-κ_i (x_i - ℓ_i))`. -/
-theorem joint_tail {I : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims : Finset I} {κ ℓ : I → ℝ}
+theorem joint_tail {I : Type} [DecidableEq Ω] {claims : Finset I} {κ ℓ : I → ℝ}
     (hκ : ∀ i ∈ claims, 0 ≤ κ i) (leak : I → List Ω → ℝ) (esc : List Ω → Finset Ω)
     (hP : ∀ i ∈ claims, DetectionPressure μ (κ i) ⟨leak i, esc⟩)
     (hL : ∀ i ∈ claims, LeakBounded (ℓ i) ⟨leak i, esc⟩) (n : ℕ) (h : List Ω) (x : I → ℝ) :
     prob μ n (fun cs => ∃ i ∈ claims, x i ≤ Strategy.cum ⟨leak i, esc⟩ n h cs)
       ≤ ∑ i ∈ claims, Real.exp (-(κ i * (x i - ℓ i))) :=
-  (prob_exists_le hμ.1 n claims _).trans
-    (sum_le_sum fun i hi => tail_cum hμ (hκ i hi) (hP i hi) (hL i hi) n h (x i))
+  (prob_exists_le n claims _).trans
+    (sum_le_sum fun i hi => tail_cum (hκ i hi) (hP i hi) (hL i hi) n h (x i))
 
 /-- **The δ form**: with `κ i > 0`, every claim leaks at most `ℓ_i + ln (1/δ_i) / κ_i` through the first detection,
 all together, except with probability at most `Σ_i δ_i`. -/
-theorem joint_tail_delta {I : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims : Finset I} {κ ℓ δ : I → ℝ}
+theorem joint_tail_delta {I : Type} [DecidableEq Ω] {claims : Finset I} {κ ℓ δ : I → ℝ}
     (hκ : ∀ i ∈ claims, 0 < κ i) (hδ : ∀ i ∈ claims, 0 < δ i) (leak : I → List Ω → ℝ) (esc : List Ω → Finset Ω)
     (hP : ∀ i ∈ claims, DetectionPressure μ (κ i) ⟨leak i, esc⟩)
     (hL : ∀ i ∈ claims, LeakBounded (ℓ i) ⟨leak i, esc⟩) (n : ℕ) (h : List Ω) :
     prob μ n (fun cs => ∃ i ∈ claims, ℓ i + Real.log (1 / δ i) / κ i ≤ Strategy.cum ⟨leak i, esc⟩ n h cs)
       ≤ ∑ i ∈ claims, δ i := by
-  refine (joint_tail hμ (fun i hi => (hκ i hi).le) leak esc hP hL n h _).trans (le_of_eq (sum_congr rfl ?_))
+  refine (joint_tail (fun i hi => (hκ i hi).le) leak esc hP hL n h _).trans (le_of_eq (sum_congr rfl ?_))
   intro i hi
   have hk := (hκ i hi).ne'
   rw [show -(κ i * (ℓ i + Real.log (1 / δ i) / κ i - ℓ i)) = Real.log (δ i) by
@@ -122,51 +122,60 @@ noncomputable def claimCum [DecidableEq Ω] {I : Type} (withheld : I → Prop) [
 
 /-- **Every claim at once, a withheld claim without the per-window term**: as `joint_tail`, with a claim whose count
 waits for the verdict bounded by `tail_cumPrev`, so its tail is `exp (-κ_i x_i)`. -/
-theorem joint_tail_withheld {I : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims : Finset I} {κ ℓ : I → ℝ}
+theorem joint_tail_withheld {I : Type} [DecidableEq Ω] {claims : Finset I} {κ ℓ : I → ℝ}
     (withheld : I → Prop) [DecidablePred withheld] (hκ : ∀ i ∈ claims, 0 ≤ κ i) (leak : I → List Ω → ℝ)
     (esc : List Ω → Finset Ω) (hP : ∀ i ∈ claims, DetectionPressure μ (κ i) ⟨leak i, esc⟩)
     (hL : ∀ i ∈ claims, LeakBounded (ℓ i) ⟨leak i, esc⟩) (n : ℕ) (h : List Ω) (x : I → ℝ) :
     prob μ n (fun cs => ∃ i ∈ claims, x i ≤ claimCum withheld leak esc i n h cs)
       ≤ ∑ i ∈ claims, Real.exp (-(κ i * (x i - if withheld i then 0 else ℓ i))) :=
-  (prob_exists_le hμ.1 n claims _).trans (sum_le_sum fun i hi => by
+  (prob_exists_le n claims _).trans (sum_le_sum fun i hi => by
     by_cases hw : withheld i
     · simp only [claimCum, hw, ↓reduceIte, sub_zero]
-      exact tail_cumPrev hμ (hκ i hi) (hP i hi) n h (x i)
+      exact tail_cumPrev (hκ i hi) (hP i hi) n h (x i)
     · simp only [claimCum, hw, ↓reduceIte]
-      exact tail_cum hμ (hκ i hi) (hP i hi) (hL i hi) n h (x i))
+      exact tail_cum (hκ i hi) (hP i hi) (hL i hi) n h (x i))
 
 /-- **One sample certifies every claim**: catch probabilities at least the max rule, a window escaping with probability at
 most `Π_{u ∈ B h} (1 - a u)`, and each claim's leak at most its harm over the wrong set and at most `ℓ_i` a window. Then
 every claim leaks at most `ℓ_i + ln (1/δ_i) / κ_i` through the first detection, all together, except with probability
 at most `Σ_i δ_i`. -/
-theorem joint_of_maxRule {I U : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims : Finset I} {κ ℓ δ : I → ℝ}
+theorem joint_of_maxRule {I U : Type} [DecidableEq Ω] {claims : Finset I} {κ ℓ δ : I → ℝ}
     (hκ : ∀ i ∈ claims, 0 < κ i) (hδ : ∀ i ∈ claims, 0 < δ i) (harm : I → U → ℝ) (leak : I → List Ω → ℝ)
     (esc : List Ω → Finset Ω) (B : List Ω → Finset U) (a : U → ℝ) (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1)
     (hmax : ∀ u, maxRule claims κ harm u ≤ a u) (hleak : ∀ i ∈ claims, ∀ h, leak i h ≤ ∑ u ∈ B h, harm i u)
-    (hesc : ∀ h, ∑ c ∈ esc h, μ c ≤ ∏ u ∈ B h, (1 - a u))
+    (hesc : ∀ h, Verity.Game.prPMFReal μ (· ∈ esc h) ≤ ∏ u ∈ B h, (1 - a u))
     (hL : ∀ i ∈ claims, LeakBounded (ℓ i) ⟨leak i, esc⟩) (n : ℕ) (h : List Ω) :
     prob μ n (fun cs => ∃ i ∈ claims, ℓ i + Real.log (1 / δ i) / κ i ≤ Strategy.cum ⟨leak i, esc⟩ n h cs)
       ≤ ∑ i ∈ claims, δ i :=
-  joint_tail_delta hμ hκ hδ leak esc
+  joint_tail_delta hκ hδ leak esc
     (pressure_maxRule (fun i hi => (hκ i hi).le) harm leak esc B a ha hmax hleak hesc) hL n h
 
 /-! ## A stratum sampled as a uniform k-subset -/
 
-/-- The uniform sample of a `k`-subset of the units: each subset of `k` units with weight `1 / C(N, k)`. -/
-noncomputable def subsetSample (U : Type) [Fintype U] (k : ℕ) (S : Finset U) : ℝ :=
-  if S.card = k then 1 / ((Fintype.card U).choose k : ℝ) else 0
+/-- The uniform sample of a `k`-subset of the units: each subset of `k` units with probability `1 / C(N, k)`. -/
+noncomputable def subsetSample (U : Type) [Fintype U] (k : ℕ) (hk : k ≤ Fintype.card U) : PMF (Finset U) :=
+  PMF.uniformOfFinset (powersetCard k univ) (powersetCard_nonempty.2 (by rwa [card_univ]))
+
+theorem subsetSample_toReal {U : Type} [Fintype U] (k : ℕ) (hk : k ≤ Fintype.card U) (S : Finset U) :
+    (subsetSample U k hk S).toReal = if S.card = k then 1 / ((Fintype.card U).choose k : ℝ) else 0 := by
+  rw [subsetSample, PMF.uniformOfFinset_apply]
+  simp only [mem_powersetCard, subset_univ, true_and, card_powersetCard, card_univ]
+  split_ifs <;> simp
 
 /-- The subsets that miss the given units `B`. -/
 def misses {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (Finset U) :=
   univ.filter fun S => Disjoint S B
 
 /-- **A uniform `k`-subset misses `b` given units** with probability `C(N - b, k) / C(N, k)`. -/
-theorem subsetSample_acceptProb {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (B : Finset U) :
-    ∑ S ∈ misses B, subsetSample U k S = ((Fintype.card U - B.card).choose k : ℝ) / (Fintype.card U).choose k := by
+theorem subsetSample_acceptProb {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (hk : k ≤ Fintype.card U)
+    (B : Finset U) :
+    Verity.Game.prPMFReal (subsetSample U k hk) (· ∈ misses B) =
+      ((Fintype.card U - B.card).choose k : ℝ) / (Fintype.card U).choose k := by
   have hset : (misses B).filter (fun S => S.card = k) = Bᶜ.powersetCard k := by
     ext S
     simp [misses, mem_powersetCard, subset_compl_iff_disjoint_right]
-  unfold subsetSample
+  rw [Verity.Game.prPMFReal_mem]
+  simp only [subsetSample_toReal]
   rw [← sum_filter, hset, sum_const, card_powersetCard, card_compl, nsmul_eq_mul, mul_one_div]
 
 /-- `C(M - 1, k) / C(M, k) = (M - k) / M`, one unit fewer. -/
@@ -209,7 +218,7 @@ theorem choose_ratio_le (N k : ℕ) (hk : k ≤ N) (hN : 0 < N) :
 /-- **A uniform `k`-subset escapes `b` given units with probability at most `(1 - k/N)^b`.** -/
 theorem subsetSample_acceptProb_le {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (hk : k ≤ Fintype.card U)
     (hN : 0 < Fintype.card U) (B : Finset U) :
-    ∑ S ∈ misses B, subsetSample U k S ≤ ∏ _u ∈ B, (1 - (k : ℝ) / Fintype.card U) := by
+    Verity.Game.prPMFReal (subsetSample U k hk) (· ∈ misses B) ≤ ∏ _u ∈ B, (1 - (k : ℝ) / Fintype.card U) := by
   rw [subsetSample_acceptProb, prod_const]
   exact choose_ratio_le _ k hk hN B.card
 
@@ -220,7 +229,7 @@ theorem pressure_subsetSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} 
     (hk : k ≤ Fintype.card U) (hN : 0 < Fintype.card U) (E : U → ℝ)
     (hκE : ∀ u, κ * E u ≤ (k : ℝ) / Fintype.card U) (A : Strategy (Finset U)) (B : List (Finset U) → Finset U)
     (hA : ∀ h, A.esc h = misses (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
-    DetectionPressure (subsetSample U k) κ A := by
+    DetectionPressure (subsetSample U k hk) κ A := by
   have hNr : (0 : ℝ) < Fintype.card U := by exact_mod_cast hN
   refine pressure_of_sample hκ A B E (fun _ => (k : ℝ) / Fintype.card U)
     (fun _ => ⟨div_nonneg (Nat.cast_nonneg k) hNr.le, by rw [div_le_one hNr]; exact_mod_cast hk⟩) hκE hleak
