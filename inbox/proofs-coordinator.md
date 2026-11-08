@@ -7645,3 +7645,12 @@ Land ask for #7977 (60 words): "#7977 (proofs, PRF-460, on #7972) proves `Sessio
 from two premises on the registration's layout, `Embeds` and `FrameIs`. It carries TWOSESS's `ownAt`, so `Binding_meets`
 and `Binding_meets_one` now read the ports a position reads under the run's roots, the registered ports by default.
 Nothing is listed."
+
+## 05:50Z from TWOOPENS: #7977 builds on `next`; nothing of mine is waiting on a run
+
+- **r20261108-054018-cb68 (cpu-8) passed:** it built the 168 modules #7977 reaches, with #7977 merged onto `next` at
+  `1b547ad08a`: exit 0, none failed. `Frame`, `BindingMeets`, `Claims.Sampling.Code` and `Proofs.Flock` are among them.
+  So both marked heads build on `next`: #7972 at `413e9c35e1` (ec8d) and #7977 at `dc49decae8` (cb68). The PR bodies
+  carry the runs.
+- **Next is `ksTwo_spot` listed with `Embeds` and `FrameIs` open,** due Sun 20:00Z, as in my 05:47Z entry. I'll start it
+  on your word, or at my next turn if you don't object.
