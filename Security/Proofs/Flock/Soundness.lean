@@ -121,8 +121,6 @@ public import Proofs.Flock.Soundness.Audit.Law
 public import Proofs.Flock.Soundness.Audit.Pooled
 public import Proofs.Flock.Soundness.Audit.Circuit
 public import Proofs.Flock.Soundness.Audit.OneStage
-public import Proofs.Flock.Soundness.Audit.TwoStage
-public import Proofs.Flock.Soundness.Audit.Examples
 public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Audit.FlockCompiled
