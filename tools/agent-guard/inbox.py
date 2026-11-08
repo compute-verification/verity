@@ -16,7 +16,8 @@ in (`--repo`). Wherever AGENT_ID runs, its shell hook starts `pull` in the backg
 seconds (default 30): `pull` appends the branch's new messages to this VM's inbox and pushes a commit that empties the file,
 so a message reaches one VM once. A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`, and
 messages sent before delivery queue up in it. The agent's next shell command is refused once with them as the refusal's text,
-and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands.
+and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands. An
+agent whose turn has ended (FINISHED or IDLE) runs no command and takes nothing until it is resumed, with Task or a follow-up.
 `--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
 
 AGENT_ID is the agent's conversation id: a cloud agent's or a subagent's is the `bc-…` id its Task call returned.
@@ -140,8 +141,15 @@ def age_s(stamp: str, now: float | None = None) -> float:
 
 def stale_note(agent: str, n: int, oldest: str) -> str:
     return (f"{n} message(s) on origin's inbox/{agent} are still unpulled, the oldest from {oldest}: its VM's shell hook isn't "
-            f"polling (a hook older than the inbox, or no shell command since). The agent reads them with "
-            f"`git fetch origin inbox/{agent} && git show FETCH_HEAD:{FILE}`, and `inbox.py check {agent}` on its VM says why")
+            f"polling (its turn ended, FINISHED or IDLE, so it runs no shell command until resumed with Task; or a hook older "
+            f"than the inbox). The agent reads them with `git fetch origin inbox/{agent} && git show FETCH_HEAD:{FILE}`, and "
+            f"`inbox.py check {agent}` on its VM says why")
+
+
+#: a target that ended its turn runs no shell command, so its hook never pulls (INF-608: MEMPOOL finished and marked #8132
+#: before circuits' two stop messages reached it); a sender without the Cursor API can't see that, so `send` always says it
+UNTIL_RESUMED = ("it arrives only while {agent}'s turn runs shell commands: if {agent} has ended its turn (FINISHED or IDLE), "
+                 "resume it with Task (or a follow-up), which delivers at once")
 
 
 def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
@@ -208,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError:
             before = (0, None)
         print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
-              "shell hook delivers it within a poll interval")
+              f"shell hook delivers it within a poll interval, but {UNTIL_RESUMED.format(agent=a.agent)}")
         if before[1] and age_s(before[1]) > STALE_S:
             print(f"inbox: NOT DELIVERED YET: {stale_note(a.agent, before[0], before[1])}", file=sys.stderr)
         return 0

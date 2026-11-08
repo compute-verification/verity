@@ -331,7 +331,8 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
 
 def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
     """INF-608: BINDKSAT's branch held every message from 04:33Z to 07:32Z while each `send` said only "pushed". `status` and
-    a later `send` say a message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls."""
+    a later `send` say a message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls.
+    Every `send` says a target whose turn ended (MEMPOOL, finished before circuits' stop messages) takes nothing until resumed."""
     origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
     env = {**os.environ, **GIT_ENV}
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
@@ -344,7 +345,8 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
                               capture_output=True, text=True)
 
     assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
-    tool("send", W, "--text", "fresh", "--repo", str(coord))
+    sent = tool("send", W, "--text", "fresh", "--repo", str(coord))
+    assert "FINISHED or IDLE" in sent.stdout and "resume it with Task" in sent.stdout   # MEMPOOL: a finished target never pulls
     fresh = tool("status", W, "--repo", str(coord))
     assert fresh.returncode == 0 and "within its hook's poll interval" in fresh.stdout
     spec = importlib.util.spec_from_file_location("inbox_tool", INBOX_TOOL)
@@ -360,6 +362,7 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
     inbox.commit(coord, W, old, inbox.tip(coord, W), "an old message")
     stale = tool("status", W, "--repo", str(coord))
     assert stale.returncode == 1 and "NOT DELIVERED" in stale.stdout and "2026-01-01T00:00Z" in stale.stdout
+    assert "resumed with Task" in stale.stdout
     again = tool("send", W, "--text", "one more", "--repo", str(coord))
     assert again.returncode == 0 and "NOT DELIVERED YET: 1 message(s)" in again.stderr
     box = tmp_path / "worker-inbox"
