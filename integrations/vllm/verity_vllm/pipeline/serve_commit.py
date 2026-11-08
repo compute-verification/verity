@@ -55,15 +55,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
-from verity.ml.protocols.certifier import compile_slice_v4 as CSL
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
-#: The compile slice the served windows are proved by: CompileSlice_v1's rows and schedule, charging the window's
-#: decisions and each certified arrival's output length (`compile_slice_v4`). Its ``srv`` rows are the ones committed here.
-SERVED_SLICE = CSL.CompileSlice.id
+#: The compile slice the served windows are proved by, `compile_slice_v4.CompileSlice`'s id: CompileSlice_v1's statics,
+#: rows and schedule, charging the window's decisions and each certified arrival's output length. Its ``srv`` rows are the
+#: ones committed here.
+SERVED_SLICE = "CompileSlice_v4"
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 
@@ -181,12 +182,12 @@ def ingress_of(brought: Mapping[str, Any], params: Any) -> dict[str, Any]:
 
 
 def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> dict[str, int]:
-    """`SERVED_SLICE`'s statics (`compile_slice_v4.statics`) for the served engine's scheduler configuration
+    """`SERVED_SLICE`'s statics, CompileSlice_v1's (`compile_slice.statics`), for the served engine's scheduler configuration
     (`engine.step_trace.scheduler_config`) and the slice's size class (every name of `SERVED_CLASS`)."""
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
         raise ValueError(f"the served rows' size class needs {missing}")
     c = {k: int(size_class[k]) for k in SERVED_CLASS}
-    return CSL.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
+    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
 
 
 def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,

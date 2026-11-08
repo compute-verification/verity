@@ -114,17 +114,17 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
 
 @pytest.mark.slow
 def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails(recs):
-    """With the length terms sent (`lengths`: each request's output_len in width(max_tokens + 1) bits, then its finish),
-    code_v1's window costs its decisions' segment plus its requests' tails. The certifier's window chain
+    """With the length terms sent (`lengths.widths`: each request's output_len in width(max_tokens + 1) bits, then its
+    finish in 1), code_v1's window costs its decisions' segment plus its requests' tails. The certifier's window chain
     (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's max_tokens and
     output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v4 on w212 at its own statics
     (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's carry and
-    refuses one bit less."""
+    refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v4``)."""
     from types import SimpleNamespace
 
     from verity.core.protocols.certifier import served_rows as SR
     from verity.ml.protocols.certifier import compile_slice_v4 as V4, window_charge as WC
-    from verity_vllm.pipeline.advice_code import lengths as LN
+    from verity_vllm.pipeline.advice_code.arith import width
 
     book = next(s for s in json.loads(ARITH.read_text())["streams"]
                 if s["source"].startswith("async-light"))["decisions"]["book"]
@@ -142,7 +142,7 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
 
     ses = WC.session(D, 0, 0, L, book, [slots(d, rq) for d, rq in zip(per, reqs)])
     seg = CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens
-    tails = [sum(LN.widths(rq, [range(len(rq))])[0]) for rq in reqs]
+    tails = [sum(width(r.max_tokens + 1) + 1 for r in rq) for rq in reqs]
     assert [s[0] for s in ses] == [a + b for a, b in zip(seg, tails)]
 
     fx = json.loads(SLICE.read_text())
@@ -158,6 +158,7 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     assert tuple(honest.rows["cout"]) == tuple(ses[212][2])
     low = V4.case(S, sl, book, charge=honest.length - 1, **kw)
     assert V4.evaluate(st, [honest, low]) == [V4.ACCEPT, V4.ACCEPT & ~(1 << 3)]
+    assert V4.CompileSlice.id == "CompileSlice_v4"
 
 
 def test_a_window_on_a_busy_engine_is_refused(recs):
