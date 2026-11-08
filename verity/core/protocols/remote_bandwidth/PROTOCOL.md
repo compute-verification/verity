@@ -66,7 +66,7 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
+receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledSample`'s): \(\sum_t s'_t/2^{64}\) for
 a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
 under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
@@ -1329,11 +1329,11 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 - **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
-  `Accounting.Guarantees.RateWindowDraw`, a window's pooled sample over its passes' receipts, and `RateSessionDraw`,
-  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
+  `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
+  the horizon and every window at once, both from `PooledSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ in \(U_t\), and its samples are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
+  size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each sample's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
@@ -1432,7 +1432,7 @@ registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's o
 tiles. A Fiat–Shamir sample would multiply all of this by 1.5–2.6 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
-windows' samples pool (`RateSessionDraw`, §8). Each window samples its \(s_t\) after its own roots from its own openings
+windows' samples pool (`RateSessionSample`, §8). Each window samples its \(s_t\) after its own roots from its own openings
 coin, so however the prover adapts each window to the samples before it, every sample passes while
 \(\sum_t s_t g_t \le (1-\bar d) \sum_t s_t\) with probability at most \((1-\bar d)^{\sum_t s_t}\), where \(g_t\) is
 window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wrong shares \(f_t = 1 - g_t\) have

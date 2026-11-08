@@ -301,8 +301,8 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 
 **Assumes.** Parts 1 to 4's assumptions.
 
-**Lean.** `Accounting.Guarantees.JointHorizonLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
+(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
