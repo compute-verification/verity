@@ -112,7 +112,7 @@ noncomputable def plur {U : Type} [Fintype U] (g : U → Prop) (f : U → Msg) :
 
 theorem Pr_eq_card {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = ((Finset.univ.filter p).card : ℝ) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   congr
 
 /-- **The plurality is a value `f` takes where `g` holds, and no value is taken more often**, when `g` ever holds. -/

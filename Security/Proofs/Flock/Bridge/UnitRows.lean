@@ -148,7 +148,7 @@ theorem constGate_mem_io (u : Fin n) (hupv : 0 < D.unroll.upv) : constGate D hU 
       ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset := by
     intro g hg
     rw [(unitInst D hU n u).op ⟨0, h0⟩]
-    simp only [coreOp, Audit.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
+    simp only [coreOp, Verity.Boolean.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
     exact Or.inl ⟨_, hrow, hg.symm⟩
   rw [Verity.Partition.io, Finset.mem_filter]
   exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread _ rfl⟩⟩

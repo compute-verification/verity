@@ -1107,6 +1107,175 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_from_judges_from_a_stored_document_as_a_full_audit_does(tmp_path):
+    """Stage B of the lock run (`--facts-from`, `audit_from_facts`) gives the full audit's verdict and record from the
+    stored facts document alone, with no build: the control fixture passes both, each lock violation fails both the same,
+    and an `--update` writes the same lock byte for byte. The document is schema-versioned and position-free, so no file's
+    bytes, a declaration's line or a module's build path leaks into what drive's after-landing lock run reuses."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)
+    recorded = A.load(pkg)
+
+    doc = tmp_path / A.FACTS_DOC
+    full = A.audit(pkg, tmp_path / "full", build=False, replay=False, runs=False, facts_out=doc, log=noop)
+    assert full["failures"] == [], full["failures"]
+
+    body = json.loads(gzip.decompress(doc.read_bytes()))
+    assert body["schema"] == A.FACTS_SCHEMA and "spans" not in body["facts"] and "oleans" not in body["facts"]
+    main = body["facts"]["pins"]["Control.main_thm"]
+    assert "at" not in main and len(main["type_sha256"]) == 64 and main["hypotheses"], "the augmented facts, position-free"
+    assert all("olean" not in g for g in body["facts"]["graph"].values()) and "/.elan/" not in json.dumps(body)
+    assert doc.read_bytes()[4:8] == bytes(4), "no timestamp in the gzip, so equal facts are equal bytes"
+
+    assert A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)["failures"] == []
+
+    # an --update from the document writes the lock an --update from the build writes, byte for byte, from the same start
+    stripped = json.loads(json.dumps(recorded))
+    for g in stripped["guarantees"].values():
+        for k in ("type_hash", "signature", "premises", "assumptions"):
+            g.pop(k, None)
+    stripped.pop("dependencies", None)
+    for a in stripped.get("assumptions", {}).values():
+        a.pop("digest", None)
+    A.dump(pkg, stripped)
+    before = (pkg / A.POLICY).read_text()
+    A.audit(pkg, tmp_path / "uf", build=False, replay=False, runs=False, update=True, log=noop)
+    from_build = (pkg / A.POLICY).read_text()
+    A.dump(pkg, stripped)
+    A.audit_from_facts(pkg, tmp_path / "us", doc, update=True, log=noop)
+    assert (pkg / A.POLICY).read_text() == from_build != before, "the record from the document is the record from the build"
+
+    # each lock violation fails stage B exactly as the full audit, with the document (the facts) untouched
+    mutations = {
+        "a guarantee's recorded type hash": lambda l: l["guarantees"]["Control.main_thm"].__setitem__("type_hash", "0" * 64),
+        "a guarantee with no owner": lambda l: l["guarantees"]["Control.main_thm"].pop("owner"),
+        "a recorded assumption's digest": lambda l: l["assumptions"]["Control.Hyp"].__setitem__("digest", "0" * 64),
+        "a witness naming a guarantee that is gone": lambda l: l["claims"]["witnesses"]["Control.Small"].__setitem__("fails", "Control.Nope"),
+        "the dependencies' recorded toolchain digest": lambda l: l["dependencies"].__setitem__("toolchain", "0" * 64),
+    }
+    for name, mutate in mutations.items():
+        bad = json.loads(json.dumps(recorded))
+        mutate(bad)
+        A.dump(pkg, bad)
+        fb = A.audit(pkg, tmp_path / "mb", build=False, replay=False, runs=False, log=noop)["failures"]
+        sb = A.audit_from_facts(pkg, tmp_path / "ms", doc, log=noop)["failures"]
+        assert fb, f"the full audit itself missed {name}"
+        assert list(map(str, sb)) == list(map(str, fb)), f"stage B differs from the full audit on {name}"
+        assert [f.code for f in sb] == [f.code for f in fb], f"the codes differ on {name}"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_from_applies_the_reflexive_witness_exemption_as_the_full_audit_does(tmp_path):
+    """The reflexive exemption lives in `judge` (`witness_scope` -> `reflexive`), which `--facts-from` runs, so a reflexive
+    guarantee (the claims tuples' `claims = claims`) is held to no witnesses in stage B exactly as in a full audit, and a
+    non-reflexive `Eq` that stays in scope fails both the same. Stage B reads the reflexivity from the stored facts
+    (`body`), never from a build."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Claims.lean").write_text(REFLEXIVE)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Claims\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["Control.SecurityProofs.Stated", "Control.statedAt", "Control.same"]
+    policy = unclaimed(A.load(pkg))
+    policy["guarantees"] = policy["guarantees"] | {n: {"owner": "@lean"} for n in names}
+    A.dump(pkg, policy)
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)
+
+    doc = tmp_path / A.FACTS_DOC
+    full = A.audit(pkg, tmp_path / "full", build=False, replay=False, runs=False, facts_out=doc, log=noop)
+    sb = A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)
+    assert list(map(str, sb["failures"])) == list(map(str, full["failures"]))
+    # the two reflexive guarantees are exempt and the non-reflexive `Holds (f n) = Holds (g n)` is not, in stage B as in full
+    body = json.loads(gzip.decompress(doc.read_bytes()))["facts"]["pins"]
+    assert [A.reflexive(body[n]) for n in names] == [True, True, False]
+    assert [f.entry for f in sb["failures"] if (f.code or "").startswith("witnesses")] == ["Control.same"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_only_writes_the_document_facts_from_judges_under_its_build_s_key(tmp_path):
+    """Stage A (`--facts-only`, `audit(facts_cache=)`) writes the package's facts document under its content address
+    (`facts_key`), so `--facts-from` judges from it with no build and gives the full audit's verdict. The key names the
+    build the facts were read from: a second read of the same `.olean` files writes the identical document under the same
+    key, and a change to the lock slice `Facts.lean` reads moves it. A lock failure does not fail stage A, which has
+    still written the document for `--facts-from` to judge."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+    recorded = A.load(pkg)
+
+    cache = tmp_path / "facts-cache"
+    a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    key = a["facts_key"]
+    doc = cache / f"{key}.json.gz"
+    assert a["failures"] == [] and a["facts_document"] == str(doc) and doc.is_file(), a["failures"]
+    body = json.loads(gzip.decompress(doc.read_bytes()))
+    assert body["schema"] == A.FACTS_SCHEMA and "oleans" not in body["facts"] and "proved_keys" not in body["facts"]
+
+    assert A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)["failures"] == [], "stage B on stage A's document"
+    assert A.main([str(pkg), "--facts-from", str(doc), "--out", str(tmp_path / "cli")]) == 0
+
+    # the key names the build: a second read of the same .olean files is the identical document under the same key
+    b = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert b["facts_key"] == key and (cache / f"{key}.json.gz").read_bytes() == doc.read_bytes()
+    assert [p.name for p in cache.iterdir()] == [f"{key}.json.gz"], "one document, not one per read"
+
+    # a change to the lock slice Facts.lean reads (a guarantee name) moves the key to a different address
+    grown = json.loads(json.dumps(recorded))
+    grown["guarantees"]["Control.unused"] = {"owner": "@lean"}
+    A.dump(pkg, grown)
+    c = A.audit(pkg, tmp_path / "c", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert c["facts_key"] != key
+    A.dump(pkg, recorded)
+
+    # stage A writes the document even when the lock fails; the CLI passes, and --facts-from reports the failure the
+    # full audit does, from that very document
+    bad = json.loads(json.dumps(recorded))
+    bad["guarantees"]["Control.main_thm"]["type_hash"] = "0" * 64
+    A.dump(pkg, bad)
+    fresh = tmp_path / "fresh-cache"
+    assert A.main([str(pkg), "--facts-only", str(fresh), "--out", str(tmp_path / "fo")]) == 0, \
+        "stage A passes once it has written the document, whatever the lock says"
+    (stored,) = list(fresh.glob("*.json.gz"))
+    sb = A.audit_from_facts(pkg, tmp_path / "sbx", stored, log=noop)["failures"]
+    fb = A.audit(pkg, tmp_path / "fb", build=False, replay=False, runs=False, log=noop)["failures"]
+    assert sb and list(map(str, sb)) == list(map(str, fb)), "stage B on the stored document is the full audit's verdict"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_key_folds_source_digests_so_a_scanned_source_edit_with_the_same_olean_misses(tmp_path):
+    """`facts_key` folds the digest of every source file the document records and of the lakefile, so an edit the source
+    scans read changes the key even when it leaves the `.olean` bytes unchanged. Lean's own example is a `set_option
+    maxHeartbeats`, which `heartbeats` reads into a finding the document carries: without the fold the key would match and
+    the stored finding would be reused against a source it no longer describes. The edit here is not rebuilt, so the facts
+    (the `.olean` files) are identical and only the source digest moves, giving a different key and a cache miss."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+
+    cache = tmp_path / "facts-cache"
+    key = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, log=noop)["facts_key"]
+
+    # a top-level line the heartbeats scan reads, appended without a rebuild: the .olean is untouched
+    rel = sorted(A.lean_modules(pkg).values())[0]
+    (pkg / rel).write_text((pkg / rel).read_text() + "\nset_option maxHeartbeats 400000\n")
+
+    after = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert after["facts_key"] != key, "a scanned source edit with the same .olean must change the key"
+    assert {p.name for p in cache.iterdir()} == {f"{key}.json.gz", f"{after['facts_key']}.json.gz"}, "a new address: a cache miss"
+    # the finding the edit changes is in the new document, so reusing the old one would have been stale
+    body = json.loads(gzip.decompress((cache / f"{after['facts_key']}.json.gz").read_bytes()))
+    assert any(h["option"] == "maxHeartbeats" and h["value"] == 400000 for h in body["findings"]["heartbeats"])
+
+
 def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
     """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
     kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
@@ -1207,7 +1376,7 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
         seen.append(keep)
         return {"modules": [], "oleans": [], "pins": {}}
 
-    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None):
+    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None, keys=False):
         seen.append(keep)
         raise RuntimeError("stop after the provers' facts")
 
@@ -3326,9 +3495,11 @@ def test_a_restated_definition_a_guarantee_is_stated_as_changes_its_record():
 
 def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     """Of a guarantee stated as a definition, the `unwitnessed` entry holds the statement unfolded once (`unfolded_hash`)
-    beside its type hash: a restated body fails it as a changed statement does, and `--update` drops it. `--update` writes
-    the hash into an entry without one (a whole exemption becomes {type_hash, unfolded_hash}, a half keeps its `missing` and
-    `why`)."""
+    beside its type hash: a restated body fails it as a changed statement does, and `--update` drops it. An entry without
+    `unfolded_hash` exempts it only at the hash of its statement unfolded (its text before a lift), which `--update` keys
+    (a whole exemption becomes {type_hash, unfolded_hash}, a half keeps its `missing` and `why`). At its type hash, the
+    constant's, which a restated body leaves as it is, it fails with or without `--update`, which drops it: a bare entry
+    written at the type hash was keyed by `--update` at whatever the body had become."""
     body = wbody("P.Holds", binders=["∀", "→", "→"])
     pol, f = witnessed({"lift": lifted_pin("P.Holds, first")["lift"], "body": body})
     _, g = witnessed({"lift": lifted_pin("P.Holds, restated")["lift"], "body": body})
@@ -3339,10 +3510,27 @@ def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     assert A.unwitnessed_kept(keyed, f, {}) == keyed["unwitnessed"]
     assert witness_codes(keyed, g) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(keyed, g, {}) == {}
-    assert A.unwitnessed_kept({**bare, "unwitnessed": {"P.sound": h}}, f, {}) == keyed["unwitnessed"]
+    unkeyed = {**bare, "unwitnessed": {"P.sound": h}}
+    assert A.witness_failures(unkeyed, f, WOWN)[0].startswith(
+        "witnesses: `unwitnessed` lists P.sound without `unfolded_hash`, and its statement is the definition "
+        "P.Guarantees.G, whose body its type hash doesn't cover, so the entry can't show the statement is the one it was "
+        "listed with, and the rule holds it to witnesses (it reads the claim P.Holds), so it carries them now: prove "
+        "`P.sound_honest")
+    assert witness_codes(unkeyed, g) == ["witnesses.unwitnessed-changed"]
+    assert A.unwitnessed_kept(unkeyed, f, {}) == A.unwitnessed_kept(unkeyed, g, {}) == {}
+    fails, out = A.judge({**pol, "witnesses": {}, "unwitnessed": {"P.sound": h}}, g, FILES, update=True)
+    assert [x.code for x in fails if x.code.startswith("witnesses")] == ["witnesses.unwitnessed-changed"]
+    assert "P.sound" not in out["unwitnessed"]
+    before = {**bare, "unwitnessed": {"P.sound": u}}
+    assert witness_codes(before, f) == [] and A.unwitnessed_kept(before, f, {}) == keyed["unwitnessed"]
+    assert witness_codes(before, g) == ["witnesses.unwitnessed-changed"] and A.unwitnessed_kept(before, g, {}) == {}
     half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212: not yet closed"}
     honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
-    assert A.unwitnessed_kept(honest_only, f, {}) == {"P.sound": half | {"unfolded_hash": u}}
+    assert witness_codes(honest_only, f) == ["witnesses.unwitnessed-changed"]
+    assert A.unwitnessed_kept(honest_only, f, {}) == {}
+    half_before = {**honest_only, "unwitnessed": {"P.sound": half | {"type_hash": u}}}
+    assert witness_codes(half_before, f) == []
+    assert A.unwitnessed_kept(half_before, f, {}) == {"P.sound": half | {"unfolded_hash": u}}
     keyed_half = {**honest_only, "unwitnessed": {"P.sound": half | {"unfolded_hash": u}}}
     assert witness_codes(keyed_half, f) == []
     assert witness_codes(keyed_half, g) == ["witnesses.unwitnessed-changed"]
@@ -4776,7 +4964,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None, keys=False):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 

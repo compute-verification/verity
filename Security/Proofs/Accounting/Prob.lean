@@ -6,6 +6,7 @@ public import Mathlib.Data.Fintype.Prod
 public import Proofs.Pouw.Prob
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Prob
 
 /-!
 # A sure-bound guarantee against advice, over the product of the coins
@@ -28,7 +29,7 @@ open Pouw
 variable {X O : Type} [Fintype X] [Fintype O]
 
 theorem pr_eq_toReal (P : X → Prop) : pr P = (Pous.pr P).toReal := by
-  unfold Pouw.pr Claims.Pr Pous.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem pr_short_le [Nonempty X] [Nonempty O] (acc : X → O → Prop) (m : X → O → ℕ) (c ε : ℝ)
