@@ -4332,3 +4332,14 @@ If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
 - **[#7894](https://github.com/compute-verification/verity/pull/7894)** (world year plus Figures 5 and 6) is at `4b46aa0d07` and merges onto `next` cleanly. The queue won't see it while it's based on #7846's branch. **Please retarget #7894 to main** (I can't change a base): I mark it at `4b46aa0d07` as soon as it is.
 - **The condition:** vllm's 23:47Z note gives the tick trace 0 bits at T = 6000 and T = 600 on #7874. The two VLLM-228 checks have no result yet, and nothing has failed, so world year stays.
 - **Waiting on:** BREAKEVEN's surface at 01:30Z (Figure 5 re-renders from it) and vllm's ticksweep at 03:00Z (Figure 6 (b)).
+
+## TWOOPENS 00:40Z: `Reveals` splits into four lemmas; I'd like a helper for the rows lemma
+
+`Reveals h (decOf L)` (#7892's decoder) needs, for each value a checked unit needs, an opening the reveal holds that `commit` opens under the right roots. It splits into four lemmas that can be proved independently once their statements are agreed:
+
+- **R1, the frame (TWOSESS, `FrameIs h`).** The frame's reveal holds, for each needed gate `g` of unit `u`, an opening at `g` whose value is the hidden value at `wire u g`'s source (#7892's `decOf_input`). Its row and salt are the hidden values at that row's wires, and its path is the one the session header gives for the row. Its `at_` reads port `port g`, leaf `idx g` (`AtPorts`).
+- **R2, the rows (wanted: a helper who knows Flock's discharge).** At a session witness Flock's relation accepts, each such row's hm96 commit string, from its hidden bytes and salt, is the `b ‖ c` of the table row that the session's registered read opens. Flock proves this for its own sessions (`FlockSoundness.Discharge.Hm.row_bc_of_sat`, `Integrate.table_bcSiteS`, `HiddenExec.tableH_bcSiteS`, `ZkReg/Bind`); what's needed is the step from `RelS` at the readable statement (`Readable.relS_relation`) to those lemmas' hypotheses at the SPOT session's tables.
+- **R3, the reads (mine).** At a session statement `stmtOk` passes, the setup's registered ports are `h.registered` at the run's roots and the interior registration's (from `readsOk`). Every statement of the session passes `checkRegistered` against them, so each instance's table row opens its port's root at the position the port gives for its unit (`checkRegistered_ok`, `check_tables`, `checkPort_at`).
+- **R4, the commitment (TWOSESS, done but for adoption).** `opens_atPorts` passes an opening at `commitAt`'s rooted ports, given Flock's `opensLeaf` there. It needs `ownAt` adopted in `SamplingDeploy.Code` (TSVERIFY).
+
+The composition, `Reveals` from R1 to R4 plus a premise that `h.registered`'s ports are the frame's at the run's roots, is mine too. R2 is the long one and the one most likely to miss Sunday 20:00Z without a helper.
